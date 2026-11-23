@@ -473,6 +473,13 @@
       "kernel.foundation.contracts": {
         "type": "Project"
       },
+      "kernel.foundation.inmemory": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Durable": "[1.0.0, )",
+          "Kernel.Foundation.Contracts": "[1.0.0, )"
+        }
+      },
       "kernel.graph": {
         "type": "Project"
       },
@@ -508,7 +515,9 @@
         "type": "Project",
         "dependencies": {
           "Kernel.EntityFramework": "[1.0.0, )",
-          "Kernel.Native.Legacy": "[1.0.0, )"
+          "Kernel.Foundation.InMemory": "[1.0.0, )",
+          "Kernel.Native.Legacy": "[1.0.0, )",
+          "Kernel.WorkflowActor": "[1.0.0, )"
         }
       },
       "kernel.runtime": {
@@ -518,6 +527,13 @@
         "type": "Project",
         "dependencies": {
           "Kernel.Workflows": "[1.0.0, )"
+        }
+      },
+      "kernel.workflowactor": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )",
+          "Kernel.Model.Contracts": "[1.0.0, )"
         }
       },
       "kernel.workflows": {

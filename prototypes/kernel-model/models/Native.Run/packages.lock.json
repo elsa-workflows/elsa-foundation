@@ -473,6 +473,13 @@
       "kernel.foundation.contracts": {
         "type": "Project"
       },
+      "kernel.foundation.inmemory": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Durable": "[1.0.0, )",
+          "Kernel.Foundation.Contracts": "[1.0.0, )"
+        }
+      },
       "kernel.graph": {
         "type": "Project"
       },
@@ -506,6 +513,13 @@
       },
       "kernel.runtime": {
         "type": "Project"
+      },
+      "kernel.workflowactor": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )",
+          "Kernel.Model.Contracts": "[1.0.0, )"
+        }
       },
       "kernel.workflows": {
         "type": "Project",
