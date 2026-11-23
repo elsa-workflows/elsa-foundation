@@ -85,6 +85,8 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
     await page.goto(`/workflows/instances/${result.workflowExecutionId}?selected=${step.activityExecutionId}`);
     await inspector().getByRole("tab", { name: "Activity", exact: true }).click();
     await expect(inspector()).toContainText(expected);
+    await inspector().getByRole("tablist", { name: "Activity execution views", exact: true }).getByRole("tab", { name: "Data", exact: true }).press("Enter");
+    await expect(inspector().locator(".wf-activity-outcomes")).toHaveAttribute("data-state", /^(recorded|empty)$/);
     return { path, step, details: await api<{ instance: { correlationId: string | null; instanceName: string | null }; outputs: Record<string, unknown> }>(path) };
   }
   const nativeDefinition = await seed("Native state", native, [literal("Mode", "complete")]);
@@ -129,10 +131,11 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   await capture(page, info, "current-state");
   await inspector().getByRole("region", { name: "Workflow outputs", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "current-outputs");
-  await inspector().getByRole("tab", { name: "Timeline", exact: true }).press("Enter");
-  await expect(inspector()).toContainText("Completion accepted");
-  await fullyVisibleText(inspector().getByText(/^Committed changes:/).first());
-  await fullyVisibleText(inspector().getByText(/^Completion accepted/).first());
+  await page.getByRole("navigation", { name: "Run workspace views", exact: true }).getByRole("button", { name: "Timeline", exact: true }).press("Enter");
+  const timeline = page.getByRole("region", { name: "Run timeline", exact: true });
+  await expect(timeline).toContainText("Completion accepted");
+  await fullyVisibleText(timeline.getByText(/^Committed changes:/).first());
+  await fullyVisibleText(timeline.getByText(/^Completion accepted/).first());
   await capture(page, info, "accepted-timeline");
   const clearDefinition = await seed("Cleared state", native, [literal("Mode", "clear")], { activityVersionId: native, inputs: [literal("Mode", "complete")] });
   const cleared = await run(clearDefinition.version.id, "Completed");

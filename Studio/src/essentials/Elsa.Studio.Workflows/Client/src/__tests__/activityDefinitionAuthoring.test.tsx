@@ -2055,7 +2055,7 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   });
 
-  it("reveals the mapped output before focusing its source when a frame precedes React's deferred render", async () => {
+  it.each([false, true])("reveals the mapped output before focusing its source when a frame precedes React's deferred render (delayed host: %s)", async delayedHost => {
     const draft = fullDraft({ revision: 3 });
     draft.contract.outputs = ["First", "Second"].map(name => ({
       referenceKey: name.toLowerCase(), name,
@@ -2063,9 +2063,17 @@ describe("Activity Definition authoring", () => {
       isRequired: false, isNullable: true, storageDriverKey: "elsa.json", durability: "Required"
     }));
     draft.provider.payload = { outputMappings: [{ outputReferenceKey: "second", source: null }] };
+    let revealHost: (() => void) | undefined;
+    const contribution = graphContribution();
+    if (delayedHost) contribution.component = function DelayedGraphHost() {
+      const host = React.useContext(ActivityDefinitionAuthoringTabsHostContext);
+      const [ready, setReady] = React.useState(false);
+      React.useEffect(() => { revealHost = () => setReady(true); }, []);
+      return <><div ref={host?.setTablistHost} /><div ref={host?.setCenterViewHost} className="ad-graph-authoring-view-host" hidden={host?.activeView === "designer" || !ready} /></>;
+    };
     const rendered = renderPage({
       path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
-      contributions: [graphContribution()],
+      contributions: [contribution],
       getJson: async url => {
         if (url === "/capabilities") return capabilities();
         if (url === "/design/activities/drafts/activity-draft-1") return draft;
@@ -2090,11 +2098,15 @@ describe("Activity Definition authoring", () => {
     const originalFocus = HTMLElement.prototype.focus;
     const focus = vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (this: HTMLElement, options) {
       if (this === source) hiddenAtFocus = Boolean(this.closest("[hidden]"));
+      // JSDOM permits focus inside hidden elements; real browsers refuse it.
+      if (this.closest("[hidden]")) return;
       originalFocus.call(this, options);
     });
     // A frame is allowed to arrive before React commits an async continuation's state update.
+    let hostRevealTimer: number | undefined;
     const frame = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
       queueMicrotask(() => callback(performance.now()));
+      if (delayedHost && hostRevealTimer === undefined) hostRevealTimer = window.setTimeout(() => flushSync(() => revealHost?.()), 50);
       return 1;
     });
     try {
@@ -2109,6 +2121,7 @@ describe("Activity Definition authoring", () => {
       click(buttonByText(rendered.container, "Return to diagnostic"));
       expect(document.activeElement).toBe(diagnostic);
     } finally {
+      window.clearTimeout(hostRevealTimer);
       frame.mockRestore();
       focus.mockRestore();
       await rendered.unmount();
@@ -3152,7 +3165,7 @@ function graphContribution(providerSchemaVersion = "1"): StudioActivityDefinitio
         <div ref={authoringTabsHostRef?.setTablistHost} className="wf-canvas-tabs ad-authoring-canvas-tabs" />
         <div className="ad-graph-center-content">
           <section id={authoringTabsHostRef?.designerPanelId} className="ad-graph-designer-panel" role="tabpanel" aria-label="Designer" aria-labelledby={authoringTabsHostRef?.designerTabId} hidden={authoringTabsHostRef?.activeView !== "designer"}>Graph implementation editor</section>
-          <div ref={authoringTabsHostRef?.setCenterViewHost} className="ad-graph-authoring-view-host" />
+          <div ref={authoringTabsHostRef?.setCenterViewHost} className="ad-graph-authoring-view-host" hidden={authoringTabsHostRef?.activeView === "designer"} />
         </div>
       </main>;
     }

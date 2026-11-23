@@ -3453,17 +3453,6 @@
   background: var(--wf-canvas);
 }
 
-.wf-breadcrumb {
-  min-height: 40px;
-  flex: 0 0 auto;
-  gap: 6px;
-  padding: 0 12px;
-}
-
-.wf-instance-breadcrumb {
-  border-top: 0;
-}
-
 .wf-canvas {
   position: relative;
   min-height: 0;
@@ -3731,6 +3720,63 @@
 .wf-properties-cell-center {
   text-align: center;
   width: 48px;
+}
+
+.wf-arguments-section {
+  container: workflow-arguments / inline-size;
+  min-width: 0;
+}
+
+@container workflow-arguments (max-width: 600px) {
+  .wf-properties-table,
+  .wf-properties-table tbody {
+    display: block;
+  }
+
+  .wf-properties-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .wf-properties-table tbody > tr:not(.wf-properties-empty-row) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid var(--wf-border);
+    border-radius: var(--wf-radius);
+  }
+
+  .wf-properties-table td {
+    display: grid;
+    align-content: start;
+    gap: 4px;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .wf-properties-table td[data-label]::before {
+    content: attr(data-label);
+    color: var(--wf-muted-text);
+    font-size: var(--studio-label-size);
+  }
+
+  .wf-properties-table td[data-label="Name"],
+  .wf-properties-table td[data-label="Default"],
+  .wf-properties-table td[data-label="Storage"],
+  .wf-properties-table td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .wf-properties-table td:last-child {
+    justify-items: end;
+    width: auto;
+  }
 }
 
 .wf-properties-cell-center input[type="checkbox"] {

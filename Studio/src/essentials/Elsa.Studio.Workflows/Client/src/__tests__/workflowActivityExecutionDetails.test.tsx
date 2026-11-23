@@ -1874,6 +1874,8 @@ describe("buildInstanceCanvas", () => {
     };
     const exactInspection = {
       ...inspection([]),
+      workflowStateEffects: ["outputs"],
+      workflowStateEffectReceipts: [{ attemptId: "accepted-attempt", acceptedAt: "2026-07-09T10:00:01Z", transition: "Completion" as const, kinds: ["outputs"] }],
       activityExecutionId: "older-execution",
       workflowExecutionId: "wf-1",
       executableNodeId: "compiled-wl-1",
@@ -1889,6 +1891,8 @@ describe("buildInstanceCanvas", () => {
       }))
     };
     expect(activityExecutionSummaryFromInspection(exactInspection)).toMatchObject({
+      workflowStateEffects: exactInspection.workflowStateEffects,
+      workflowStateEffectReceipts: exactInspection.workflowStateEffectReceipts,
       bookmarkCount: 2,
       bookmarkIds: ["bookmark-1", "bookmark-2"]
     });

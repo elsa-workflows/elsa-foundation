@@ -1,6 +1,8 @@
 import React from "react";
+import { Home } from "lucide-react";
 import { StudioBreadcrumbs } from "@elsa-workflows/studio-ui";
 import type { ScopeFrame } from "../workflowAdapter";
+import "./ScopeBreadcrumb.css";
 
 // Breadcrumb trail over the scope frame path, shared by the editor and the run viewer. Unlabelled
 // frames are descent hops planSlotNavigation tucks under the next crumb (entering a slot through its
@@ -12,7 +14,7 @@ export function ScopeBreadcrumb({ frames, onNavigate, className }: {
   className?: string;
 }) {
   const crumbs = [
-    { label: "Root", onClick: () => onNavigate([]) },
+    { label: <><Home className="wf-scope-root-icon" size={16} aria-hidden="true" /><span className="wf-scope-root-label">Root</span></>, onClick: () => onNavigate([]) },
     ...frames.flatMap((frame, index) => frame.label
       ? [{ label: frame.label, onClick: () => onNavigate(frames.slice(0, index + 1)) }]
       : [])

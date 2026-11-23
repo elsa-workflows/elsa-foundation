@@ -702,8 +702,15 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
         if (key) flushSync(() => contractEditorHandle.current?.revealMember("output", key));
         await waitForAuthoringView();
         if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
-        const target = key ? [...(contractEditorRef.current?.querySelectorAll<HTMLElement>(".ad-output-value-source") ?? [])].find(element => element.dataset.outputReferenceKey === key) : contractEditorRef.current;
-        if (target) { target.tabIndex = -1; target.focus(); target.scrollIntoView?.({ block: "center" }); result = { kind: "focused", announcement: key ? "Focused the output value source." : "Focused Outputs. Select an output to review its value source; this diagnostic does not identify a single output." }; }
+        const target = await waitForSettingTarget(() => {
+          const candidate = key ? [...(contractEditorRef.current?.querySelectorAll<HTMLElement>(".ad-output-value-source") ?? [])].find(element => element.dataset.outputReferenceKey === key) : contractEditorRef.current;
+          if (!candidate?.isConnected || candidate.closest("[hidden], [inert]")) return null;
+          candidate.tabIndex = -1;
+          candidate.focus();
+          return candidate.ownerDocument.activeElement === candidate ? candidate : null;
+        }, () => request === diagnosticFocusRequestRef.current);
+        if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
+        if (target) { target.scrollIntoView?.({ block: "center" }); result = { kind: "focused", announcement: key ? "Focused the output value source." : "Focused Outputs. Select an output to review its value source; this diagnostic does not identify a single output." }; }
         else result = unsupportedDiagnosticFocus();
       } else {
         await waitForSettingTarget(() => providerPublicInterfaceRef.current?.querySelector<HTMLElement>("[data-output-source], .ad-graph-outcome-mappings") ?? null, () => request === diagnosticFocusRequestRef.current);

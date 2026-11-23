@@ -405,7 +405,7 @@ function defaultInputError(input: WorkflowInput, editor: string, enabled: boolea
   return parseWorkflowInputDefault(input, readWorkflowInputDefault(input.defaultValue), editor).error;
 }
 
-export function WorkflowPropertySection({ title, headingLevel = 3, description, addLabel, addDisabled, emptyLabel, headers, isEmpty, keepMountedChildren, onAdd, children, afterTable }: {
+export function WorkflowPropertySection({ title, headingLevel = 3, description, addLabel, addDisabled, emptyLabel, headers, isEmpty, keepMountedChildren, onAdd, children, afterTable, className }: {
   title: string;
   headingLevel?: 2 | 3;
   description?: ReactNode;
@@ -418,10 +418,11 @@ export function WorkflowPropertySection({ title, headingLevel = 3, description, 
   onAdd(): void;
   children: ReactNode;
   afterTable?: ReactNode;
+  className?: string;
 }) {
   const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
-    <section className="wf-properties-section">
+    <section className={`wf-properties-section${className ? ` ${className}` : ""}`}>
       <div className="wf-properties-section-head">
         <div><Heading>{title}</Heading>{description ? <p className="wf-muted">{description}</p> : null}</div>
         <StudioButton variant="default" size="md" className="wf-properties-add" onClick={onAdd} disabled={addDisabled}><Plus size={14} aria-hidden="true" />{addLabel}</StudioButton>
@@ -531,6 +532,7 @@ function ArgumentsEditor({
 
   return (
     <EditorSection
+      className="wf-arguments-section"
       title={title}
       addLabel={addLabel}
       emptyLabel={emptyLabel}
@@ -551,7 +553,7 @@ function ArgumentsEditor({
           : argType.collectionKind === "Single" || typeEditor === "json" ? typeEditor : "text";
         return (
           <tr key={index} data-variable-index={columns.default && !columns.workflowInputDefault ? index : undefined}>
-            <td>
+            <td data-label="Name">
               <input
                 type="text"
                 aria-label={`${namePrefix} name`}
@@ -566,7 +568,7 @@ function ArgumentsEditor({
               />
               {warning ? <span className="wf-properties-warning" role="note" title={warning}>{warning}</span> : null}
             </td>
-            <td>
+            <td data-label="Type">
               <PickerCell
                 ariaLabel={`${namePrefix} type`}
                 value={argType.alias}
@@ -575,7 +577,7 @@ function ArgumentsEditor({
                 onChange={value => update(index, { type: { alias: value, collectionKind: argType.collectionKind } })}
               />
             </td>
-            <td>
+            <td data-label="Collection">
               <CollectionKindCell
                 ariaLabel={`${namePrefix} collection kind`}
                 value={argType.collectionKind}
@@ -583,7 +585,7 @@ function ArgumentsEditor({
               />
             </td>
             {columns.default ? (
-              <td data-variable-default={!columns.workflowInputDefault || undefined} data-workflow-input-default={columns.workflowInputDefault || undefined}>
+              <td data-label="Default" data-variable-default={!columns.workflowInputDefault || undefined} data-workflow-input-default={columns.workflowInputDefault || undefined}>
                 {columns.workflowInputDefault ? (
                   <WorkflowInputDefaultCell
                     input={item as unknown as WorkflowInput}
@@ -605,7 +607,7 @@ function ArgumentsEditor({
               </td>
             ) : null}
             {columns.storage ? (
-              <td>
+              <td data-label="Storage">
                 <PickerCell
                   ariaLabel={`${namePrefix} storage driver`}
                   value={readStringField(item, storageDriverKeys)}
@@ -618,7 +620,7 @@ function ArgumentsEditor({
               </td>
             ) : null}
             {columns.required ? (
-              <td>
+              <td data-label="Required">
                 <RequiredCell
                   ariaLabel={`${namePrefix} required`}
                   checked={item.isRequired === true}

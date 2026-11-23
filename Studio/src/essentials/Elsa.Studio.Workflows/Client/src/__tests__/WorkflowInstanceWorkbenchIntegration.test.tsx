@@ -281,7 +281,7 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector(".wf-activity-overview")).toBeNull();
   });
 
-  it("keeps pending exact-execution ancestry when the active Activity tab is activated again", async () => {
+  it.each(["activity", "timeline"] as const)("keeps pending exact-execution ancestry when the active Activity tab is activated again (%s)", async initialTab => {
     api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
     api.browseActivityExecutions.mockImplementation(async (_context, _run, request: { anchorActivityExecutionId?: string }) => ({
       items: [{ execution: request.anchorActivityExecutionId === "slow-parent" ? { ...activityExecution(), activityExecutionId: "slow-parent" } : activityExecution(), position: 1 }],
@@ -290,7 +290,7 @@ describe("workflow run workbench incident navigation", () => {
     const pending = deferred<ActivityExecutionInspection>();
     api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => id === "slow-parent" ? pending.promise
       : activityInspection({ provenance: { parentActivityExecutionId: "slow-parent" } as ActivityExecutionInspection["provenance"] }));
-    renderWorkbench("activity", "execution-target");
+    renderWorkbench(initialTab, "execution-target");
     await vi.waitFor(() => expect(container.textContent).toContain("Resolving execution scope"));
     const activeTab = container.querySelector<HTMLButtonElement>("[data-tab-id='activity']");
     expect(activeTab?.getAttribute("aria-selected")).toBe("true");
@@ -303,6 +303,21 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.textContent).not.toContain("interrupted");
     expect(container.textContent).not.toContain("Resolving execution scope");
     expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("retains accepted workflow changes on the current run timeline without inventing history events", async () => {
+    const effects = { workflowStateEffects: ["outputs", "correlationId"], workflowStateEffectReceipts: [{
+      attemptId: "accepted-attempt", acceptedAt: "2026-07-09T10:00:01Z", transition: "Completion" as const, kinds: ["outputs", "correlationId"]
+    }] };
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [{ ...activityExecution(), ...effects }], incidents: [] }));
+    api.getActivityExecutionInspection.mockResolvedValue({ ...activityInspection(), ...effects });
+    renderWorkbench("activity", "execution-target", "timeline");
+    await vi.waitFor(() => expect(container.querySelector('[aria-label="Accepted workflow changes"]')).toBeTruthy());
+    const accepted = container.querySelector('[aria-label="Accepted workflow changes"]')!;
+    expect(accepted.textContent).toContain("Committed changes: workflow outputs, correlation");
+    expect(accepted.textContent).toContain("Completion accepted");
+    expect(accepted.textContent).toContain("Current values may differ");
+    expect(accepted.querySelectorAll(".wf-history-event")).toHaveLength(0);
   });
 
   it.each(["Timeline", "Collapse run details panel", "Restore run details panel", "Back to workflow run canvas"])("makes pending ancestry retryable after %s", async action => {

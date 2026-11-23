@@ -3,6 +3,8 @@ import { ListTree, RefreshCw } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, StudioButton, StudioCollectionToolbar, StudioField, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import type { RuntimeHistoryEvent } from "../../runtimeHistoryTypes";
+import type { ActivityExecutionStateSummary } from "../../workflowTypes";
+import { AcceptedWorkflowChanges } from "./AcceptedWorkflowChanges";
 import { HistoryCoverage, HistoryEventList, historyClock, historyEventLabel, historyZone, isHistoryHighlight } from "./historyPresentation";
 import { useRunHistory } from "./useRunHistory";
 import { defaultHistoryFilters, type RunHistoryFilters } from "./historyLocation";
@@ -13,13 +15,15 @@ const categories = [["WorkflowLifecycle", "Run lifecycle"], ["ActivityLifecycle"
   ["OperationalLifecycle", "Operations"], ["ValueLifecycle", "Value observations"]];
 
 export function RunHistoryTimeline({ context, workflowExecutionId, filters, onFiltersChange, selectedActivityExecutionId,
-  selectedActivityLabel, selectedEventId, selectedEvent, onSelectEvent, labelForEvent, enabled = true, onManualNavigation }: {
+  selectedActivityLabel, selectedEventId, selectedEvent, onSelectEvent, labelForEvent, enabled = true, onManualNavigation, activities = [], labelForActivity }: {
   context: StudioEndpointContext; workflowExecutionId: string; filters: RunHistoryFilters;
   onFiltersChange(filters: RunHistoryFilters): void; selectedActivityExecutionId?: string | null; selectedActivityLabel?: string;
   selectedEventId?: string | null; onSelectEvent(event: RuntimeHistoryEvent): void;
   selectedEvent?: RuntimeHistoryEvent;
   labelForEvent?(event: RuntimeHistoryEvent): string | null; enabled?: boolean;
   onManualNavigation?(): void;
+  activities?: readonly ActivityExecutionStateSummary[];
+  labelForActivity?(activity: ActivityExecutionStateSummary): string;
 }) {
   const history = useRunHistory(context, workflowExecutionId, { activityExecutionId: filters.activityExecutionId,
     includeDescendants: filters.includeDescendants, category: filters.category, name: filters.name, search: filters.search }, enabled);
@@ -80,6 +84,7 @@ export function RunHistoryTimeline({ context, workflowExecutionId, filters, onFi
       <StudioButton type="button" aria-pressed="true" data-history-event-id={outsideSelection.historyEventId}
         onClick={() => onSelectEvent(outsideSelection)}>{historyEventLabel(outsideSelection)} · {labelForEvent?.(outsideSelection) ?? "Recorded activity"} · #{outsideSelection.sequence} · {historyClock(outsideSelection.occurredAtKnown === false ? null : outsideSelection.occurredAt)}</StudioButton>
     </aside> : null}
+    <AcceptedWorkflowChanges activities={activities} selectedActivityExecutionId={selectedActivityExecutionId} labelForActivity={labelForActivity ?? (() => "Activity")} />
     {window ? <>
       <HistoryCoverage coverage={window.page.coverage} readAt={window.page.readAt} scopeComplete={window.page.scopeComplete} scopeLimitation={window.page.scopeLimitation} />
       <p className="wf-history-count" title={`Snapshot through #${window.snapshotUpperSequence}; searched through #${window.snapshotScannedThroughSequence}`}>{visible.length} shown · {items.length} loaded · {window.scannedCount} snapshot records searched{window.next ? " · more history not loaded" : ""}</p>

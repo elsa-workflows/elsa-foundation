@@ -176,8 +176,14 @@ export async function userTaskGroupedInputsJourney(page: Page, info: TestInfo, c
   expect(reopened.state.variables[0]).toMatchObject(assignedPerson);
   const expectedValues = { ...values, FormVersion: "2" };
   for (const [key, value] of Object.entries(expectedValues)) {
-    expect(taskInputs(reopened).find(input => input.referenceKey === key)?.value, `Persisted ${key}`)
-      .toEqual(key === "AssigneeId" ? { expressionType: "JavaScript", value: source } : literal(value));
+    const persisted = taskInputs(reopened).find(input => input.referenceKey === key)?.value;
+    if (value !== null && typeof value === "object") {
+      expect(persisted, `Canonical structured carrier for ${key}`).toEqual({ expressionType: "Object", value: JSON.stringify(value) });
+      expect(JSON.parse(persisted!.value as string), `Exact persisted structure for ${key}`).toEqual(value);
+    } else {
+      expect(persisted, `Persisted ${key}`)
+        .toEqual(key === "AssigneeId" ? { expressionType: "JavaScript", value: source } : literal(value));
+    }
   }
   const validation = await api<{ errors: unknown[] }>(`${draftPath}/validations`);
   expect(validation.errors, "The completed grouped-input draft has no validation findings").toEqual([]);

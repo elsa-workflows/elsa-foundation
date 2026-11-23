@@ -1432,7 +1432,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   };
 
   const selectInspectorTab = (tab: InstanceInspectorTab) => {
-    if (tab === activeInspectorTab) return;
+    if (tab === (activeInspectorTab === "timeline" ? "activity" : activeInspectorTab)) return;
     beginEvidenceNavigation();
     // Peer inspector tabs retain the exact history target; entity navigation and Back change it explicitly.
     if (tab === "timeline") setHistoryLocation(value => ({ ...value, view: "timeline" }));
@@ -2076,6 +2076,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
               activities={currentData.details.activities} labelForActivity={labelForExecution} activitiesLimited={!!currentData.details.activityNextContinuationToken} enabled={historyLocation.view === "timeline"}
               onBookmark={id => selectHistoryTarget({ kind: "bookmark", id })} />
             <RunHistoryTimeline context={context} workflowExecutionId={workflowExecutionId} filters={historyLocation.filters}
+              activities={associationActivities} labelForActivity={labelForExecution}
               onFiltersChange={filters => { beginEvidenceNavigation(true); setHistoryLocation(value => ({ ...value, filters })); }}
               onManualNavigation={() => playback.pause()}
               selectedActivityExecutionId={selectedActivity?.activityExecutionId} selectedActivityLabel={selectedActivity ? labelForExecution(selectedActivity) : undefined}
