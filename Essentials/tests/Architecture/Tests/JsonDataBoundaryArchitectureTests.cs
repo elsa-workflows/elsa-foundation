@@ -225,8 +225,8 @@ public sealed class JsonDataBoundaryArchitectureTests
             {
                 if (info.Type != typeof(EnumDocument)) return;
                 var property = info.Properties.Single(property => property.Name == (nullable ? "optional" : "state"));
-                var factory = new JsonStringEnumConverter<WireState>(naming);
-                property.CustomConverter = expanded ? factory.CreateConverter(typeof(WireState), options) : factory;
+                JsonConverterFactory factory = nullable ? new NullableWireStateConverterFactory(naming) : new JsonStringEnumConverter<WireState>(naming);
+                property.CustomConverter = expanded ? factory.CreateConverter(property.PropertyType, options) : factory;
             });
             options.TypeInfoResolver = resolver;
             options.MakeReadOnly();
@@ -236,8 +236,8 @@ public sealed class JsonDataBoundaryArchitectureTests
         var right = Options(JsonNamingPolicy.SnakeCaseLower);
         var before = InspectFixture(left, [typeof(EnumDocument)]);
         var after = InspectFixture(right, [typeof(EnumDocument)]);
-        Assert.Empty(before.Errors);
-        Assert.Empty(after.Errors);
+        Assert.True(before.Errors.Count == 0, string.Join('\n', before.Errors));
+        Assert.True(after.Errors.Count == 0, string.Join('\n', after.Errors));
         var key = "shape|fixture|" + JsonBoundaryContractGraph.Name(typeof(EnumDocument));
         Assert.NotEqual(before.Pins[key], after.Pins[key]);
         var unchangedEnum = "shape|fixture|" + JsonBoundaryContractGraph.Name(typeof(WireState));
@@ -295,6 +295,22 @@ public sealed class JsonDataBoundaryArchitectureTests
     }
     public enum WireState { FirstChoice, [JsonStringEnumMemberName("ready")] ReadyChoice }
     public sealed class EnumDocument { public WireState State { get; init; } public WireState? Optional { get; init; } }
+    private sealed class NullableWireStateConverterFactory(JsonNamingPolicy naming) : JsonConverterFactory
+    {
+        public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(WireState?);
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) =>
+            new NullableWireStateConverter((JsonConverter<WireState>)new JsonStringEnumConverter<WireState>(naming).CreateConverter(typeof(WireState), options));
+    }
+    private sealed class NullableWireStateConverter(JsonConverter<WireState> inner) : JsonConverter<WireState?>
+    {
+        public override WireState? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+            reader.TokenType == JsonTokenType.Null ? null : inner.Read(ref reader, typeof(WireState), options);
+        public override void Write(Utf8JsonWriter writer, WireState? value, JsonSerializerOptions options)
+        {
+            if (value.HasValue) inner.Write(writer, value.Value, options);
+            else writer.WriteNullValue();
+        }
+    }
     public sealed class ScalarDocument { public ScalarRows? Scalar { get; init; } }
     [JsonConverter(typeof(ScalarRowsConverter))]
     public sealed class ScalarRows : System.Collections.ArrayList;
