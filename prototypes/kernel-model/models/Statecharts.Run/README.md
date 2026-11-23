@@ -15,6 +15,18 @@ The original spike's four historical controls rejected accepting an input during
 
 The engine takes no dependency on the kernel. The native composite stores its settled configuration, selected reaction and per-step prerequisites/completion/ordinary child frames. Independent regional work can run concurrently within a phase. Child-first exits and parent-first entries order each hierarchy chain; all exits finish before actions and all actions before entries. There is no global depth barrier between regions. Sender-facing inputs target an exact live frame. A stale or unsupported frame receives a rejection entry. Held signals wake when deliverable; a waiting child does not cause a continuation loop.
 
+## Order StateMachine on the public Actor Foundation
+
+From `prototypes/kernel-model`:
+
+```sh
+dotnet run -c Release --project models/Statecharts.Run -- --public-order
+```
+
+The Embedded example starts a Native order workflow through `WorkflowRuntime`. It reserves stock, books a shipment and waits for payment. A replacement owner loads the same workflow. Approved orders fulfill. Declined orders enter explicit shipment and stock release states and wait for each acknowledgement. Local activity output shows the work, and the public journal shows one ordered state path after replaying the payment operation. The declined case retries that operation with a shipment acknowledgement and verifies that it appends no journal entry. Sending the acknowledgement with a fresh operation ID then enters the stock release state, visible from the same saved bookmark. Both paths run in Balanced and Durable.
+
+Append `--omit-stock-release` to remove the ordinary stock release activity. The assertion fails before the order can close. Provider-backed and Cluster qualification have separate K7 acceptance cases.
+
 ## Phase concurrency witness
 
 Use `--phases-list` to discover56 cases and `--phases` to execute them. Forty-eight normal workflow schedules cross both modes, root/Flowchart placement, Exit/Action/Entry, regional completion order and one/two waiting children. They use ordinary Sequence/Event/value activities at unequal hierarchy depths, observe actual registered event deliveries, and reload under a new owner while phase work waits. Both children may remain waiting across reload; completing one cannot advance the phase or lose the other's wait. Additional parent entry/exit waits expose hierarchy ordering. Completed writes run once in the committed history, and ordinary shared values survive the controlled completion orders. These are selected business-input reactions, not publication-cohort proof.

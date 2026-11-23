@@ -58,6 +58,10 @@ unchanged and the surviving owner completes the workflow after the second approv
 The Embedded Flowchart demo restarts from a persisted approval wait and advances the selected branch through its join
 once. [Flowchart run instructions](../../prototypes/kernel-model/README.md#flowchart-restart-on-the-public-postgresql-preview)
 
+The in-memory Embedded order StateMachine waits for payment, resumes under a replacement owner, and follows
+the approved or declined path in Balanced and Durable. The declined path waits for separate shipment and stock release
+acknowledgements. [StateMachine run instructions](../../prototypes/kernel-model/models/Statecharts.Run/README.md#order-statemachine-on-the-public-actor-foundation)
+
 A later operator increment can demonstrate inspecting and recovering a parked workflow. Publish demo readiness and
 milestone acceptance separately. Full Flowchart, provider and operator qualification follow the milestones below.
 The owner decides the default switch and approves the retirement inventory at their respective gates.
