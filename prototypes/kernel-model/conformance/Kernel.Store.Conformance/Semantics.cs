@@ -148,6 +148,7 @@ public static class Semantics
     [
         RetirementJournalChecks.Case,
         PhysicalRetirementChecks.Case,
+        .. JobTrialClearChecks.Cases,
         MarkerInsertChecks.Case,
         BatchIntegrityChecks.Atomic,
         DeleteShapeChecks.Case,
