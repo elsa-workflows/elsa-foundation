@@ -106,6 +106,22 @@ In two before-and-after runs on PostgreSQL 17, schema setup on an empty database
 the format check and 37 with the marker table, seed and read. Both the first and restarted process took 13 TCP
 turns for ownership, up from 12. The five workflow operations above kept their measured counts.
 
+To run two tenants' Native approvals on the same Embedded worker, use a fresh dedicated database. After building
+`models/Native.Run` in Release, run the following commands from `prototypes/kernel-model`. Supply the three
+references printed by the first process to the second. The third identifies a root outside the owner's set.
+
+```bash
+dll=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+birth=$(dotnet "$dll" pg-multi-root owned in-batch birth)
+read -r label first_ref second_ref outside_ref <<< "$(printf '%s\n' "$birth" | awk '$1 == "multi-references"')"
+dotnet "$dll" pg-multi-root owned in-batch restart "$first_ref" "$second_ref" "$outside_ref"
+```
+
+The fixture checks the PostgreSQL transaction IDs for two journal rows at different actor revisions, replays a
+direct input after restart, and checks that a terminal refusal on one root rolls back both turns. The second
+tenant issues its public requests in a separate process bound to that tenant. The writer choices
+are `owned` and `ef`. The fence choices are `in-batch` and `checked`.
+
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
 ```bash
