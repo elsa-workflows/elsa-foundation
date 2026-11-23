@@ -40,6 +40,18 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
         _cursorScope = cursorScope;
     }
 
+    /// <summary>
+    /// Inserts a state directly into the store without checkpoint or liveness validation.
+    /// Used for read-only filtering scenarios where states are copied from a primary store
+    /// into a temporary store for authorization filtering.
+    /// </summary>
+    internal void Insert(WorkflowExecutionState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
+        Save(state.WorkflowExecutionId, state);
+    }
+
     public async ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
