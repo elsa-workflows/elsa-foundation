@@ -311,6 +311,13 @@ if (args.Contains("--native-migration-validation"))
     return failed ? 1 : 0;
 }
 
+if (args.Contains("--native-migration-apply"))
+{
+    var failed = false;
+    await NativeMigrationApplyChecks.RunAsync((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+
 if (args.Contains("--migration-plan-reads"))
 {
     try { await MigrationPlanReadChecks.RunAsync(); return 0; }
