@@ -33,6 +33,35 @@ plan: the ADR's non-goals for release 1, and anything not named there.
 - Proof: the store and runtime conformance suites on every engine, the simulation and its mutations, process-kill and
   two-writer tests on the commit, and deterministic command and round-trip budgets. No timing gate.
 
+## Runnable delivery increments
+
+The **Built-in Actor Foundation** provides actor turns, durability, delivery and recovery. The **Elsa Workflow Runtime**
+uses the Actor Foundation contract to run workflow instances and execution models. Deliver these capabilities as runnable
+increments, in parallel where their dependencies allow. Each increment names its run instructions, verified revision,
+acceptance evidence and outstanding work on [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229).
+
+The first opt-in increment is the **Core Preview**. One Embedded host runs a Native workflow on PostgreSQL through the
+public Actor Foundation contract. Start the workflow, commit a wait, restart the host, and resume it. Replay the same
+input and check that the actor advances once and that replay leaves the saved state and journal unchanged. Record the
+measured PostgreSQL round trips for each phase. The [public-path preview](https://github.com/elsa-workflows/elsa-foundation/pull/5485)
+includes runnable restart and replay steps, with [TCP measurements](https://github.com/elsa-workflows/elsa-foundation/pull/5487)
+and a separate [abrupt owner loss demo](https://github.com/elsa-workflows/elsa-foundation/pull/5497) for a fixed Embedded
+partition. The program issue records the verified revisions and the remaining release work.
+[Owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7091776914)
+
+A separate two-process PostgreSQL Cluster demo runs a public Native workflow over 1,024 virtual partitions. It
+checkpoints roots on different partitions in one transaction. After the peer stops, replay leaves the journal
+unchanged and the surviving owner completes the workflow after the second approval.
+[Graceful handover](https://github.com/elsa-workflows/elsa-foundation/pull/5517#issuecomment-7104130045)
+· [Abrupt peer exit](https://github.com/elsa-workflows/elsa-foundation/pull/5519#issuecomment-7104274136)
+
+The Embedded Flowchart demo restarts from a persisted approval wait and advances the selected branch through its join
+once. [Flowchart run instructions](../../prototypes/kernel-model/README.md#flowchart-restart-on-the-public-postgresql-preview)
+
+A later operator increment can demonstrate inspecting and recovering a parked workflow. Publish demo readiness and
+milestone acceptance separately. Full Flowchart, provider and operator qualification follow the milestones below.
+The owner decides the default switch and approves the retirement inventory at their respective gates.
+
 ## Milestones
 
 Each milestone closes when its acceptance holds on main. K1 to K12 are gate 3 (release 1); K13 is gate 4; K14 is
@@ -482,6 +511,11 @@ trial refuses the whole clear. Lose the answer before and after the clear. A tak
 and leaves a cleared trial's count as it was. In both cases the authorized command retains its normal inbox order.
 The provider also runs the inline promotion and same-actor deadline schedule. Mutations clear against the wrong
 epoch and release isolation while a callback is still active.
+
+SQLite, PostgreSQL, SQL Server and MySQL support the counted clear on EF and owned SQL with either fence mode. The store conformance cases named
+`job trial clear` cover the selected ticket group, refusals, an ordinary input with the same wire id and takeover
+after a transport failure before or after commit. Owned SQL also checks a group across two partition epochs.
+MongoDB, Worker inline promotion and the same-actor deadline keep their K4 qualification.
 
 ### K11 foundation contract cases
 
