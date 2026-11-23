@@ -18,11 +18,22 @@ public sealed partial class BpmnDirectExecutionTests
     public async Task A_current_writer_publishes_format2_material_without_inventing_a_fault_policy()
     {
         await using var host = await OpenAsync();
-        var worker = new WorkflowExecutable(WorkflowExecutionHarness.Identity, WorkflowExecutionHarness.NewFaultingNode("v2-worker", "Expected failure"),
+        var seed = new WorkflowExecutable(WorkflowExecutionHarness.Identity, WorkflowExecutionHarness.NewFaultingNode("v2-worker", "Expected failure"),
             new Dictionary<string, WorkflowExecutableResumeTarget>(), WorkflowExecutionHarness.Timestamp, new Dictionary<string, string>(),
             inputContract: new(1, []), dependencies: null, incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
-        await host.PublishAsync(worker, "v2-material-worker");
+        await host.PublishAsync(seed, "v2-material-seed");
         await using var scope = await ScopeAsync(host);
+        var store = scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+        var closed = (await store.FindAsync(seed.Identity.ArtifactId))!;
+        var hasher = scope.ServiceProvider.GetRequiredService<IWorkflowExecutableHasher>();
+        var hash = hasher.ComputeHash(closed.RootActivity, closed.InputContract!, closed.Dependencies,
+            closed.PersistenceMode, closed.WorkflowVariables, closed.IncidentStrategy);
+        var worker = new WorkflowExecutable(closed.Identity with { ArtifactId = hasher.CreateArtifactId("artifact-", hash), ArtifactHash = hash },
+            closed.RootActivity, closed.ResumeTargets, closed.CreatedAt, closed.CompatibilityMetadata, closed.InputContract,
+            closed.Dependencies, closed.RuntimeRequirements, closed.StorageDriverRequirements, closed.IncidentStrategy,
+            closed.PersistenceMode, closed.WorkflowVariables);
+        await host.PublishAsync(worker, "v2-material-worker");
+        Assert.True(hasher.MatchesHash((await store.FindAsync(worker.Identity.ArtifactId))!));
         var runtime = scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
         var caller = new BpmnModelCaller("operator", null);
         var process = new BpmnProcessDefinition("current-format2", Elements:
@@ -30,8 +41,7 @@ public sealed partial class BpmnDirectExecutionTests
             SequenceFlows: [new("start-work", "start", "work"), new("work-end", "work", "end")]);
         var published = await runtime.PublishAsync(new(2, JsonSerializer.SerializeToElement(process, Web), [],
             [new("worker", worker.Identity, "worker.business-error")]), "current-format2-publish", caller);
-        var material = (await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>()
-            .FindMaterialAsync(published.Executable.ArtifactId))!.Model!;
+        var material = (await store.FindMaterialAsync(published.Executable.ArtifactId))!.Model!;
         Assert.Equal(2, material.Definition.GetProperty("formatVersion").GetInt32());
         Assert.False(material.Definition.GetProperty("serviceBindings")[0].TryGetProperty("faultPolicy", out _));
         Assert.Equal(published.Executable.ArtifactHash, material.ComputeContentHash());
@@ -44,6 +54,7 @@ public sealed partial class BpmnDirectExecutionTests
             schemaVersion = 1, kind = "current-writer-format2-material", capturedAt = DateTimeOffset.UtcNow,
             captureProvenance = source, identity = material.Identity, protocol = material.Protocol,
             profile = material.Profile, definition = material.Definition, dependencies = material.Dependencies,
+            inputContract = material.InputContract, outputs = material.Outputs, runtimeRequirements = material.RuntimeRequirements,
             expectedContentHash = material.ComputeContentHash(),
             scope = "Current ordinary publication with a freshly closed worker; material/hash witness, not execution or old-writer upgrade recovery."
         }, Web);
