@@ -97,6 +97,12 @@ any reserved `!kernel-state/` family/version prefix escape once and round-trip l
 paths. Unknown/malformed physical controls refuse without rewriting bytes; this is not a mixed-binary
 migration promise. Retired markers are distinct, canonical plain `null` with IdentityOnly false.
 
+A public actor checkpoint can contain an absent state or the four-character value `null`.
+The physical codec writes `!kernel-state/3:absent` for absence. An opaque value with those
+exact bytes uses the existing escape. The version-2 identity controls and existing values
+keep their encodings. A rollout must upgrade readers before an actor writes its first absent-state
+control. The provider conformance cases named `state envelope` cover this distinction.
+
 ## Evidence, costs and remaining boundaries
 
 The executable covers competing starts/retries, equality at the reuse boundary without a memory sweep,

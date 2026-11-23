@@ -7,24 +7,30 @@ public static class StoredState
     public const string Family="!kernel-state/";
     public const string Identity="!kernel-state/2:identity-only";
     public const string MetadataIdentity="!kernel-state/2:identity-metadata";
+    internal const string Absent = "!kernel-state/3:absent";
     public const string Data="!kernel-state/1:data:";
     public static string Encode(InstanceRow row)
     {
         StoreBatchRules.ValidateIdentity(row);
+        if (row.FoundationNullState) return Absent;
         return row.IdentityOnly?(row.IdentityMetadataRequired?MetadataIdentity:Identity):row.State.StartsWith(Family,StringComparison.Ordinal)?Data+row.State:row.State;
     }
     public static InstanceRow Restore(InstanceRow physical)
     {
         var state=Decode(physical.State);
+        var absent = physical.State == Absent;
+        if (physical.FoundationNullState && !absent)
+            throw new StoreException(Failure.Definite, "Contradictory physical and logical absent-state markers.");
         if(physical.IdentityOnly && !state.IdentityOnly || physical.IdentityMetadataRequired && !state.IdentityMetadataRequired)
             throw new StoreException(Failure.Definite,"Contradictory logical and physical state-free identity headers.");
-        var row=physical with{State=state.State,IdentityOnly=state.IdentityOnly,IdentityMetadataRequired=state.IdentityMetadataRequired};
+        var row=physical with{State=state.State,IdentityOnly=state.IdentityOnly,IdentityMetadataRequired=state.IdentityMetadataRequired, FoundationNullState = absent};
         StoreBatchRules.ValidateIdentity(row);
         return row;
     }
     public static (string State,bool IdentityOnly,bool IdentityMetadataRequired) Decode(string stored)
     {
         if(!stored.StartsWith(Family,StringComparison.Ordinal))return(stored,false,false);
+        if (stored == Absent) return ("null", false, false);
         if(stored==Identity)return("null",true,false);
         if(stored==MetadataIdentity)return("null",true,true);
         if(stored.StartsWith(Data,StringComparison.Ordinal) && stored[Data.Length..].StartsWith(Family,StringComparison.Ordinal))
