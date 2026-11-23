@@ -403,10 +403,14 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Partitions" SET "Owner" = NULL WHERE "Id" = {0} AND "Epoch" = {1}"""), [partition, epoch], cancellationToken);
     }
 
-    public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
-        _ordinaryRoots is { } root ? CommitWorkerRootAsync(root, batch, cancellationToken) : CommitAsync(batch, null, cancellationToken);
+    public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
+    {
+        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        return _ordinaryRoots is { } roots ? CommitWorkerRootAsync(roots, batch, sentAt, cancellationToken)
+            : CommitAsync(batch, null, sentAt, cancellationToken);
+    }
 
-    private async ValueTask<Committed> CommitAsync(CommitBatch batch, QualifiedRootCheckpoint? root, CancellationToken cancellationToken)
+    private async ValueTask<Committed> CommitAsync(CommitBatch batch, QualifiedRootCheckpoint? root, long sentAt, CancellationToken cancellationToken)
     {
         if (postgres && Engine is null && (batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials)
             .Concat(batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])))
@@ -430,8 +434,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             throw new NotSupportedException("This provider cannot enforce the requested commit window.");
         var waits = Waits(batch);
         var careful = false;
-        // The commit-step deadline counts from the first send: the careful retry below is the same batch, sent again.
-        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        // Both attempts use the original commit-step deadline, including any scoped preparation reads.
         while (true)
         {
             try { return await CommitOnceAsync(batch, waits, careful, sentAt, root, cancellationToken); }
