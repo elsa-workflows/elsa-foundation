@@ -43,9 +43,10 @@ acceptance evidence and outstanding work on [#4229](https://github.com/elsa-work
 The first opt-in increment is the **Core Preview**. One Embedded host runs a Native workflow on PostgreSQL through the
 public Actor Foundation contract. Start the workflow, commit a wait, restart the host, and resume it. Replay the same
 input and check that the actor advances once and that replay leaves the saved state and journal unchanged. Record the
-measured PostgreSQL round trips for each phase. The [runnable prototype proof](https://github.com/elsa-workflows/elsa-foundation/pull/5467)
-uses the legacy Native adapter. The public-path preview requires durable admission, opaque actor references, fenced
-actor checkpoints and scoped journal reads in PostgreSQL.
+measured PostgreSQL round trips for each phase. The [public-path preview](https://github.com/elsa-workflows/elsa-foundation/pull/5485)
+includes runnable restart and replay steps, with [TCP measurements](https://github.com/elsa-workflows/elsa-foundation/pull/5487)
+and a separate [abrupt owner loss demo](https://github.com/elsa-workflows/elsa-foundation/pull/5497) for a fixed Embedded
+partition. The program issue records the verified heads and the remaining landing work.
 [Owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7091776914)
 
 Subsequent increments can demonstrate two-node failover, Flowchart execution, or inspecting and recovering a parked
