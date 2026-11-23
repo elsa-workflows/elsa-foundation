@@ -50,6 +50,9 @@ internal sealed partial class ActorAdapter
         }
 
         public Contract.ActorHeader Header { get; }
+        public Contract.ActorStartSettings? StartSettings => _input.Spec is { } start
+            ? new(start.Ephemeral, (Contract.History)start.History)
+            : null;
         public long Now => _input.Services.Now;
         public IReadOnlyList<Contract.Message> Inbox { get; }
         public string? State { get; set; }

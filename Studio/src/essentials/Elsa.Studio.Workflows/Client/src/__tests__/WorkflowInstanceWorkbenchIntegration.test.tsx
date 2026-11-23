@@ -1902,9 +1902,15 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   });
   renderWorkbench("activity", "write4");
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  if (initialScopePage) {
+    // The scope occurrence chooser stays hidden while its initial page is pending so singletons never flash.
+    await vi.waitFor(() => expect(api.browseActivityExecutions).toHaveBeenCalledWith(
+      expect.anything(), "run-1", expect.objectContaining({ executableNodeId: "compiled-nested-sequence" }), expect.any(AbortSignal)
+    ));
+    expect(container.querySelector(".wf-execution-scope-occurrence .wf-execution-choice")).toBeNull();
+    initialScopePage.resolve();
+  }
   await vi.waitFor(() => expect(container.querySelector(".wf-execution-scope-occurrence .wf-execution-choice")).toBeTruthy());
-  // The chooser mounts before its initial page enables occurrence navigation.
-  initialScopePage?.resolve();
   await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']")?.disabled).toBe(false));
   await showActivityData();
   const overview = container.querySelector(".wf-activity-overview")!;
@@ -2844,4 +2850,124 @@ it("displays custom activity presentation names on the Sequence diagram, Activit
   // Selecting the timeline row shows the custom name in the inspector.
   click(timelineRow);
   await vi.waitFor(() => expect(container.querySelector(".wf-instance-inspector")?.textContent).toContain("Crony"));
+});
+
+it("does not flash scope loading text or singleton occurrence controls in the scope strip when selecting timeline rows", async () => {
+  observedWidth = 1400;
+  window.localStorage.removeItem("elsa-studio-run-detail-inspector-maximized");
+
+  const pinned = executable();
+  const nested = pinned.rootActivity.childSlots[0]!.activities[0]!;
+  nested.childSlots[0]!.activities.push({
+    ...nested.childSlots[0]!.activities[0]!,
+    executableNodeId: "compiled-second",
+    authoredActivityId: "second-node"
+  });
+  api.getExecutable.mockResolvedValue(pinned);
+  api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
+  api.supportsActivityExecutionInspection.mockResolvedValue(true);
+
+  const rootExec = {
+    ...activityExecution(),
+    activityExecutionId: "exec-root",
+    executableNodeId: "compiled-root-sequence",
+    authoredActivityId: "root-sequence",
+    parentActivityExecutionId: null,
+    executionSequence: 1,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  const nestedExec = {
+    ...activityExecution(),
+    activityExecutionId: "exec-nested",
+    executableNodeId: "compiled-nested-sequence",
+    authoredActivityId: "nested-sequence",
+    parentActivityExecutionId: "exec-root",
+    executionSequence: 2,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  const firstLeaf = {
+    ...activityExecution(),
+    activityExecutionId: "exec-first",
+    executableNodeId: "compiled-target",
+    authoredActivityId: "target-node",
+    parentActivityExecutionId: "exec-nested",
+    executionSequence: 3,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  const secondLeaf = {
+    ...activityExecution(),
+    activityExecutionId: "exec-second",
+    executableNodeId: "compiled-second",
+    authoredActivityId: "second-node",
+    parentActivityExecutionId: "exec-nested",
+    executionSequence: 4,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  const allExecutions = [rootExec, nestedExec, firstLeaf, secondLeaf];
+  api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: allExecutions, incidents: [] }));
+
+  const pendingScopeBrowse = deferred<ActivityExecutionBrowsePage>();
+  api.browseActivityExecutions.mockImplementation(async (_context, _run, request) => {
+    if (request.executableNodeId === "compiled-nested-sequence" && request.anchorActivityExecutionId === "exec-nested") {
+      return pendingScopeBrowse.promise;
+    }
+    const matches = allExecutions.filter(item =>
+      (!request.executableNodeId || item.executableNodeId === request.executableNodeId)
+      && (!request.parentActivityExecutionId || item.parentActivityExecutionId === request.parentActivityExecutionId)
+      && (!request.ancestorActivityExecutionId || item.parentActivityExecutionId === request.ancestorActivityExecutionId)
+      && (!request.anchorActivityExecutionId || item.activityExecutionId === request.anchorActivityExecutionId));
+    return { items: matches.map((execution, index) => ({ execution, position: index + 1 })), totalCount: matches.length, previousCursor: null, nextCursor: null };
+  });
+  api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => {
+    const found = allExecutions.find(item => item.activityExecutionId === id) ?? firstLeaf;
+    return activityInspection({
+      ...found,
+      outcomeNames: ["Done"],
+      incidents: [],
+      provenance: { parentActivityExecutionId: found.parentActivityExecutionId ?? null } as ActivityExecutionInspection["provenance"]
+    });
+  });
+
+  renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelector("[data-activity-execution-id='exec-first']")).toBeTruthy());
+
+  // Selecting the first leaf sets the execution scope synchronously without flashing scope loading or occurrence picker chrome.
+  click(container.querySelector<HTMLButtonElement>("[data-activity-execution-id='exec-first']")!);
+  await vi.waitFor(() => expect(container.querySelector(".wf-execution-scope")).toBeTruthy());
+  const scopeStrip = container.querySelector(".wf-instance-scope-strip")!;
+  expect(scopeStrip.textContent).not.toContain("Resolving execution scope");
+  expect(scopeStrip.textContent).not.toContain("Loading recorded executions");
+  expect(scopeStrip.querySelector(".wf-execution-choice")).toBeNull();
+
+  // Resolve the singleton scope browse: still no occurrence picker.
+  pendingScopeBrowse.resolve({
+    items: [{ execution: nestedExec, position: 1, previousActivityExecutionId: null, nextActivityExecutionId: null }],
+    totalCount: 1,
+    previousCursor: null,
+    nextCursor: null
+  });
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  expect(scopeStrip.querySelector(".wf-execution-choice")).toBeNull();
+
+  // Switching to a sibling timeline row keeps the scope steady with zero scope-loading flash and no ancestor inspection calls.
+  api.getActivityExecutionInspection.mockClear();
+  click(container.querySelector<HTMLButtonElement>("[data-activity-execution-id='exec-second']")!);
+  expect(scopeStrip.textContent).not.toContain("Resolving execution scope");
+  expect(scopeStrip.textContent).not.toContain("Loading recorded executions");
+  expect(scopeStrip.querySelector(".wf-execution-choice")).toBeNull();
+  await vi.waitFor(() => expect(window.location.search).toContain("exec-second"));
+  expect(api.getActivityExecutionInspection).not.toHaveBeenCalledWith(expect.anything(), "run-1", "exec-nested", expect.anything());
+  expect(api.getActivityExecutionInspection).not.toHaveBeenCalledWith(expect.anything(), "run-1", "exec-root", expect.anything());
 });

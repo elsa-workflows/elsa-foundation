@@ -29,10 +29,16 @@ public interface IActorType
 /// <summary>A durable lifecycle entry an actor can record while handling the corresponding command.</summary>
 public enum ActorLifecycle { Migrated }
 
+/// <summary>The persistence settings accepted by the foundation for a new actor.</summary>
+public readonly record struct ActorStartSettings(bool Ephemeral, History History);
+
 /// <summary>The state, inbox, and effects available to one invocation of the actor type.</summary>
 public interface IActorTurn
 {
     ActorHeader Header { get; }
+
+    /// <summary>The admitted settings on the creator turn.</summary>
+    ActorStartSettings? StartSettings { get; }
 
     /// <summary>The foundation's reading in Unix milliseconds, fixed for the turn.</summary>
     long Now { get; }
