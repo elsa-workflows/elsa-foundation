@@ -23,6 +23,11 @@ internal static class RootSetChecks
         var original = (await store.TakeAsync([0, 1], "sets", time)).Taken;
         var a = roots[0].InboxKey;
         var b = roots[1].InboxKey;
+        var eligible = await store.PollAsync(original, TimeSpan.Zero, admitted.Count);
+        Check(eligible.Messages.Select(m => m.Message.Target.Partition).ToHashSet().SetEquals([0, 1]),
+            "each partition has an eligible creator before marking");
+        Check((await store.PollAsync(original, TimeSpan.Zero, 1)).Messages.Count == 1,
+            "the shared limit admits one row when both partitions have eligible creators");
         Check((await store.CommitAsync(CommitBatch.Owned(original, time, false, [], admitted, []))).Landed &&
             await Marks(a, original[0].Epoch, 0) && await Marks(b, original[1].Epoch, 0),
             "the initial epoch marks every admitted creator seen");
