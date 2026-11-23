@@ -79,6 +79,10 @@ if (args is ["pg-root-job-preview", var rootJobRestartFence and ("checked" or "i
     long.TryParse(jobEpoch, out var priorJobEpoch) && priorJobEpoch > 0 && long.TryParse(jobPosition, out var priorJobPosition) && priorJobPosition > 0)
     return await PostgresRootJobPreview.RunAsync(rootJobRestartFence == "in-batch",
         new(jobActor, jobNeighbor, jobFreeApproval, priorJobEpoch, priorJobPosition, jobBookmark, neighborJobBookmark), finish: rootJobPhase == "restart");
+if (args is ["pg-write-budget", var budgetWriter and ("owned" or "ef"), var budgetFence and ("checked" or "in-batch"), .. var budgetOptions] &&
+    budgetOptions is [] or ["--require-budget"])
+    return await PostgresWriteBudget.RunAsync(budgetWriter == "owned" ? CommitSql.Owned : CommitSql.EntityFramework,
+        budgetFence == "in-batch", budgetOptions.Length != 0);
 if (args is ["pg-timed-job-worker", var jobFence and ("checked" or "in-batch")])
     return await PostgresTimedJobChecks.RunAsync(jobFence == "in-batch");
 if (args is ["pg-root-timed-job-issuance", var timedFence and ("checked" or "in-batch"), .. var timedPhase])
@@ -195,7 +199,7 @@ if (args is ["cost", "postgres", var connection])
     return failures;
 }
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
-Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | memory [runs] | pg-runtime-cluster [partitions] [wake]");
+Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | pg-write-budget <owned|ef> <checked|in-batch> [--require-budget] | memory [runs] | pg-runtime-cluster [partitions] [wake]");
 return 2;
 
 static class Cost
