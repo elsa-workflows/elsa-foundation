@@ -39,7 +39,7 @@ public sealed class JsonHostEntrypointTests
             stdout = process.StandardOutput.ReadToEndAsync();
             stderr = process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(2));
-            var log = await stdout + await stderr;
+            var log = await stdout.WaitAsync(TimeSpan.FromSeconds(10)) + await stderr.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.True(process.ExitCode == 0, log);
             Assert.True(File.Exists(receipt), "No HostBuilt receipt.\n" + log);
             var text = await File.ReadAllTextAsync(receipt);
