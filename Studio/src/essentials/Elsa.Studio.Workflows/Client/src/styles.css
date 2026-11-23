@@ -3686,6 +3686,12 @@
   cursor: pointer;
 }
 
+@container workflow-arguments (max-width: 20rem) {
+  .wf-properties-table tbody > tr:not(.wf-properties-empty-row) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .wf-properties-remove {
   display: inline-flex;
   align-items: center;

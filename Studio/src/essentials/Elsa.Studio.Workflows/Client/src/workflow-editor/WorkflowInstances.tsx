@@ -1783,9 +1783,16 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     return null;
   };
   const preparePlaybackSelection = useCallback(async (entry: PlaybackOccurrence, target: PlaybackTarget, operation: PlaybackOperation): Promise<PreparedPlaybackSelection> => {
-    const navigation = ++incidentNavigationRequest.current, generation = loadGeneration.current;
-    scopeRequest.current?.abort(); historyTargetRequest.current?.abort();
-    setHistoryTargetPending(false);
+    const retainInspection = target.preserveInspector === true && target.preserveSelection === true;
+    const navigation = retainInspection ? incidentNavigationRequest.current : ++incidentNavigationRequest.current;
+    const generation = loadGeneration.current;
+    if (!retainInspection) {
+      scopeRequest.current?.abort(); historyTargetRequest.current?.abort();
+      setHistoryTargetPending(false);
+      setScopeNavigation(previous => previous.context === browserContext && previous.loading
+        ? { context: browserContext, loading: false, error: previous.retaining ? "" : "Execution scope navigation was interrupted. Retry the scope.", retaining: previous.retaining }
+        : previous);
+    }
     const current = () => operation.isCurrent() && navigation === incidentNavigationRequest.current
       && generation === loadGeneration.current && observationIsCurrent();
     const eventId = target.historyEventId ?? entry.historyEventId;
@@ -1832,6 +1839,12 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     if (!current()) throw new DOMException("Obsolete playback selection", "AbortError");
     return { limitation, commit: () => {
       if (!current()) return;
+      if (retainInspection) {
+        const selection = currentHistoryLocation.current.selection;
+        if (selection?.kind === "event" && selection.id === eventId)
+          setPreparedHistoryEvent({ contextIdentity: runtimeValueContextId(context), workflowExecutionId, historyEventId: eventId, value });
+        return;
+      }
       if (!target.inspectActivity) timelineReturn.current = null;
       const controller = new AbortController();
       operation.signal.addEventListener("abort", () => controller.abort(), { once: true });

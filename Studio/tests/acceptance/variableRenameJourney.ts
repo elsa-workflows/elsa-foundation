@@ -89,6 +89,8 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
   await expect(renderedEditor).toBeFocused();
   // Go to moves focus into the flagged input's editor.
   await expect(text.locator("[data-studio-code-editor] :focus")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - innerHeight),
+    { message: "Focused inspection must not create blank document overflow" }).toBeLessThanOrEqual(1);
   await capture(page, info, "flagged-reference");
 
   // Keep validation navigation after rename's focus proof: a retained validation request must never supply rename focus.
@@ -133,6 +135,8 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
   await expect(validationEditor).toContainText(script.replace("variables.order.total", "variables.purchase.total"));
   await expect(validationEditor).toBeFocused();
   await expect(validationInput.locator("[data-studio-code-editor] :focus")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - innerHeight),
+    { message: "Validation focus must retain the bounded document height" }).toBeLessThanOrEqual(1);
   await capture(page, info, "validation-input-focused");
 
 }

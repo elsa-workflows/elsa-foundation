@@ -128,6 +128,7 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   await expect(inspector()).toContainText("Ready for review");
   await expect(inspector()).toContainText("order-42");
   await expect(inspector().getByRole("region", { name: "Workflow outputs", exact: true })).toContainText("Count");
+  await inspector().getByText("Correlation", { exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "current-state");
   await inspector().getByRole("region", { name: "Workflow outputs", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "current-outputs");
@@ -143,6 +144,7 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   await inspector().getByRole("tab", { name: "Details", exact: true }).press("Enter");
   await expect(inspector().locator("dl")).toContainText("Instance nameNone");
   await expect(inspector().locator("dl")).toContainText("CorrelationNone");
+  await inspector().getByText("Correlation", { exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "cleared-state");
 
   const source = JSON.parse(readFileSync(new URL("../../../extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/script-workflow-state.json", import.meta.url), "utf8"));

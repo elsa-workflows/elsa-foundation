@@ -1756,6 +1756,12 @@ export function WorkflowEditor({
             confirmType="button" onConfirm={() => { void confirmUnavailableExpressionValidation(); }} />} />
       ) : null}
 
+      <VariableRenameNotice
+        outcome={variableRename.outcome}
+        labelFor={variableRenameLabel}
+        onSelectReference={goToRenamedReference}
+        onDismiss={dismissVariableRename}
+      />
       <GraphAuthoringWorkbench
         resourceKind="workflow-definition"
         layout={sidePanelLayout}
@@ -1776,12 +1782,6 @@ export function WorkflowEditor({
               compact
             />
           </div>
-          <VariableRenameNotice
-            outcome={variableRename.outcome}
-            labelFor={variableRenameLabel}
-            onSelectReference={goToRenamedReference}
-            onDismiss={dismissVariableRename}
-          />
           {canvasView === "code" ? (
             <WorkflowCodeView draft={editableDraft ?? draft} inspectionSnapshot={editorDoc.pinned ? draft : undefined} onApply={applyEditedJson} />
           ) : canvasView === "properties" ? (

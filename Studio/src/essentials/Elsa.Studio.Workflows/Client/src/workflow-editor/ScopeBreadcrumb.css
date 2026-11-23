@@ -3,6 +3,7 @@
 }
 
 .wf-breadcrumb {
+  position: relative;
   min-height: 40px;
   flex: 0 0 auto;
   gap: 6px;

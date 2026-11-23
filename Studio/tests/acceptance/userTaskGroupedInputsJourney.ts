@@ -157,6 +157,14 @@ export async function userTaskGroupedInputsJourney(page: Page, info: TestInfo, c
   await expect(formPicker.getByRole("button", { name: `Select ${formName} version 2`, exact: true })).toHaveAttribute("aria-pressed", "true");
   await formPicker.getByRole("button", { name: "Other versions", exact: true }).click();
   await expect(formPicker.getByRole("button", { name: `Select ${formName} version 1`, exact: true })).toBeVisible();
+  const formRow = formPicker.locator(".user-task-form-picker__form-row").filter({ has: page.getByRole("button", { name: `Select ${formName} version 2`, exact: true }) });
+  await expect.poll(() => formRow.evaluate(row => {
+    const name = row.querySelector(".studio-button:first-child > span")!;
+    const versions = row.querySelector(".studio-button:last-child")!.getBoundingClientRect();
+    const range = document.createRange(); range.selectNodeContents(name);
+    const lines = [...range.getClientRects()];
+    return lines.length > 0 && lines.every(line => line.right <= versions.left + 1);
+  }), { message: "The complete form name must remain readable beside Other versions" }).toBe(true);
   await capture(page, info, "selected-form-version");
   await page.keyboard.press("Escape");
   await expect(formPicker.locator(".user-task-form-picker__disclosure")).toHaveJSProperty("open", false);

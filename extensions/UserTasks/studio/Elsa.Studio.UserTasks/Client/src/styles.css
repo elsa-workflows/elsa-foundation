@@ -67,6 +67,7 @@
 .user-task-form-picker__form { display: grid; min-width: 0; gap: var(--studio-space-1); }
 .user-task-form-picker__form-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--studio-space-2); }
 .user-task-form-picker__form-row > .studio-button:first-child { display: grid; min-width: 0; justify-items: start; text-align: left; }
+.user-task-form-picker__form-row > .studio-button:first-child > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
 .user-task-form-picker__form-row small { overflow-wrap: anywhere; color: var(--studio-text-muted); }
 .user-task-form-picker__versions { display: grid; gap: var(--studio-space-1); padding-inline-start: var(--studio-space-3); }
 .user-task-form-picker__versions > .studio-button { justify-self: start; }

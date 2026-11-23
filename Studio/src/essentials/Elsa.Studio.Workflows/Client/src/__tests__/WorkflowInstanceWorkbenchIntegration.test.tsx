@@ -1940,6 +1940,41 @@ function enableRecordedPlayback() {
   return { rows, readPage };
 }
 
+it.each(["pointerdown", "keydown", "wheel"] as const)("preserves independent exact ancestry when %s pauses initial playback preparation", async interaction => {
+  const { rows, readPage } = enableRecordedPlayback();
+  const occurrences = deferred<ReturnType<typeof readPage>>();
+  playbackApi.readActivityPlayback.mockReturnValueOnce(occurrences.promise);
+  const ancestry = deferred<ActivityExecutionInspection>();
+  const preparation = deferred<unknown>();
+  historyApi.getWorkflowHistoryEvent.mockReturnValue(preparation.promise);
+  api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => id === "slow-parent" ? ancestry.promise
+    : activityInspection({ ...rows[0], provenance: { parentActivityExecutionId: "slow-parent" } as ActivityExecutionInspection["provenance"] }));
+  api.browseActivityExecutions.mockImplementation(async (_context, _run, request: { anchorActivityExecutionId?: string }) => ({
+    items: [{ execution: request.anchorActivityExecutionId === "slow-parent" ? { ...rows[0], activityExecutionId: "slow-parent" } : rows[0], position: 1 }],
+    totalCount: 1, previousCursor: null, nextCursor: null
+  }));
+  renderWorkbench("timeline", rows[0].activityExecutionId, "timeline");
+  await vi.waitFor(() => expect(api.getActivityExecutionInspection.mock.calls.some(call => call[2] === "slow-parent")).toBe(true));
+  expect(container.textContent).toContain("Resolving execution scope");
+  const request = playbackApi.readActivityPlayback.mock.calls[0];
+  occurrences.resolve(readPage(request[0], request[1], request[2]));
+  await vi.waitFor(() => expect(historyApi.getWorkflowHistoryEvent).toHaveBeenCalled());
+  const activeTab = container.querySelector<HTMLButtonElement>("[data-tab-id='activity']")!;
+  expect(activeTab.getAttribute("aria-selected")).toBe("true");
+  flushSync(() => activeTab.dispatchEvent(interaction === "keydown"
+    ? new KeyboardEvent(interaction, { key: "Enter", bubbles: true })
+    : interaction === "wheel" ? new WheelEvent(interaction, { deltaY: 1, bubbles: true })
+      : new Event(interaction, { bubbles: true })));
+  click(activeTab);
+  expect(historyApi.getWorkflowHistoryEvent.mock.calls.at(-1)?.[3]?.aborted).toBe(true);
+  expect(api.getActivityExecutionInspection.mock.calls.find(call => call[2] === "slow-parent")?.[3]?.aborted).toBe(false);
+  ancestry.resolve(activityInspection({ ...rows[0], activityExecutionId: "slow-parent", provenance: {} as ActivityExecutionInspection["provenance"] }));
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  expect(container.textContent).not.toContain("Resolving execution scope");
+  expect(buttonByText(container, "Retry execution scope")).toBeFalsy();
+  preparation.resolve({ event: historyEvent({ activityExecutionId: rows[0].activityExecutionId }) });
+});
+
 it("keeps the chosen Diagram canvas visible when advancing playback on a phone", async () => {
   observedWidth = 320;
   const { rows } = enableRecordedPlayback(); renderWorkbench("activity", rows[0].activityExecutionId, "timeline");
