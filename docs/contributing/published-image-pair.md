@@ -83,6 +83,9 @@ and run the following from the repository root with the published digest and the
 producer URL (`https://github.com/elsa-workflows/elsa-foundation/actions/runs/<id>`):
 
 ```bash
+python3 -m venv .image-evidence
+. .image-evidence/bin/activate
+python3 -m pip install --no-deps --only-binary=:all: --require-hashes -r tools/ci/image_evidence_requirements.txt
 curl -fsSLo spdx-schema.json https://raw.githubusercontent.com/spdx/spdx-spec/6f2cb47d13db19b12c23885573b22ef32ec1ada5/schemas/spdx-schema.json
 export ELSA_IMAGE_SPDX_SCHEMA="$PWD/spdx-schema.json"
 image=docker.io/elsaworkflows/elsa-foundation-host

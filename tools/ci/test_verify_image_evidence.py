@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import unittest
 
-from verify_image_evidence import SLSA, SPDX, package_identities, verify
+from verify_image_evidence import BUILDKIT, SLSA, SPDX, package_identities, verify
 
 
 class ImageEvidenceTests(unittest.TestCase):
@@ -25,7 +25,7 @@ class ImageEvidenceTests(unittest.TestCase):
         self.blobs[digest] = data
         return {"digest": digest}
 
-    def index(self, missing=False, swap=False, swap_platforms=False):
+    def index(self, missing=False, swap=False, swap_platforms=False, attestation_arch="unknown", build_type=BUILDKIT):
         descriptors = []
         for arch, child in self.children.items():
             platform_arch = ({"amd64": "arm64", "arm64": "amd64"}[arch] if swap_platforms else arch)
@@ -34,7 +34,7 @@ class ImageEvidenceTests(unittest.TestCase):
             for kind in [SPDX, SLSA]:
                 if missing and kind == SPDX and arch == "arm64":
                     continue
-                predicate = {"buildDefinition": {"buildType": "fixture", "externalParameters": {}}, "runDetails": {"builder": {"id": "fixture/attempts/1"}}}
+                predicate = {"buildDefinition": {"buildType": build_type, "externalParameters": {}}, "runDetails": {"builder": {"id": "fixture/attempts/1"}}}
                 if kind == SPDX:
                     packages = [
                         {"name": name, "versionInfo": "1", "externalRefs": [
@@ -48,6 +48,7 @@ class ImageEvidenceTests(unittest.TestCase):
                 layer["annotations"] = {"in-toto.io/predicate-type": kind}
                 layers.append(layer)
             attestation = self.store({"subject": {"digest": child}, "layers": layers})
+            attestation["platform"] = {"os": "unknown", "architecture": attestation_arch}
             attestation["annotations"] = {"vnd.docker.reference.digest": child,
                                           "vnd.docker.reference.type": "attestation-manifest"}
             descriptors.append(attestation)
@@ -75,6 +76,15 @@ class ImageEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Image config disagrees"):
             verify(self.index(swap_platforms=True), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
 
+    def test_attestation_platform_cannot_be_runnable(self):
+        with self.assertRaisesRegex(ValueError, "selectable"):
+            verify(self.index(attestation_arch="amd64"), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
+
+    def test_build_type_must_identify_buildkit(self):
+        for kind in (True, "https://example.invalid/other"):
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "SLSA build definition"):
+                verify(self.index(build_type=kind), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
+
     def test_other_producer(self):
         with self.assertRaisesRegex(ValueError, "Unexpected SLSA builder"):
             verify(self.index(), self.fetch, None, "another-run", "Elsa.Test", self.validate_spdx)
@@ -86,6 +96,7 @@ class ImageEvidenceTests(unittest.TestCase):
     def test_versioned_purls_must_match_their_package(self):
         for locator in ("pkg:deb/", "pkg:deb//os@1", "pkg:nuget/Elsa.Test@",
                         "pkg:nuget/Elsa.Test@bad%20version", "pkg:nuget/Elsa.Test@1%XX",
+                        "pkg:nuget/Elsa.Test@1?broken", "pkg:nuget/Elsa.Test@1?arch=one&arch=two",
                         "pkg:nuget/Other@1", "pkg:nuget/Elsa.Test@2"):
             with self.subTest(locator=locator):
                 package = {"name": "Elsa.Test", "versionInfo": "1", "externalRefs": [

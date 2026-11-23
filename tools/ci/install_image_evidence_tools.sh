@@ -2,6 +2,10 @@
 # Release jobs run on Linux x64. Keep this verifier independent of mutable installer scripts.
 set -euo pipefail
 dest=$(mktemp -d "$RUNNER_TEMP/elsa-image-tools.XXXXXX")
+python3 -m pip install --disable-pip-version-check --no-deps --only-binary=:all: --require-hashes \
+  --target "$dest/python" -r "$(dirname "$0")/image_evidence_requirements.txt"
+echo "PYTHONPATH=$dest/python${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+
 archive="$dest/oras.tar.gz"
 curl --fail --location --retry 3 --output "$archive" \
   https://github.com/oras-project/oras/releases/download/v1.4.0/oras_1.4.0_linux_amd64.tar.gz

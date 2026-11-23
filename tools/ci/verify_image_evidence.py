@@ -7,10 +7,11 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from urllib.parse import unquote
+from packageurl import PackageURL
 
 SPDX = "https://spdx.dev/Document"
 SLSA = "https://slsa.dev/provenance/v1"
+BUILDKIT = "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md"
 
 
 def require(condition, message):
@@ -25,23 +26,19 @@ def package_identities(packages):
             if ref.get("referenceType") != "purl":
                 continue
             locator = ref.get("referenceLocator", "")
-            if re.search(r"\s|%(?![0-9a-fA-F]{2})", locator):
+            try:
+                identity = PackageURL.from_string(locator)
+            except ValueError:
                 continue
-            match = re.fullmatch(r"pkg:(deb|rpm|apk|nuget)/([^?#@]+)@([^?#@/]+)(?:\?[^#]+)?", locator)
-            if not match:
+            if identity.to_string() != locator or identity.subpath:
                 continue
-            kind, path, version = match.groups()
-            parts = [unquote(part) for part in path.split("/")]
-            if not all(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]*", part) for part in parts):
-                continue
-            version = unquote(version)
-            name = parts[-1].casefold()
-            if name != package.get("name", "").casefold() or version != package.get("versionInfo"):
+            kind, name, version = identity.type, identity.name.casefold(), identity.version
+            if not version or name != package.get("name", "").casefold() or version != package.get("versionInfo"):
                 continue
             if kind == "nuget":
-                if len(parts) != 1 or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,3}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", version):
+                if identity.namespace or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,3}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", version):
                     continue
-            elif not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.+~:_^-]*", version):
+            elif kind not in {"deb", "rpm", "apk"}:
                 continue
             yield kind, name
 
@@ -66,6 +63,9 @@ def verify(reference, fetch, output, builder_run, application, validate_spdx):
     for descriptor in index["manifests"]:
         annotations = descriptor.get("annotations", {})
         if annotations.get("vnd.docker.reference.type") == "attestation-manifest":
+            platform = descriptor.get("platform", {})
+            require(platform.get("os") == "unknown" and platform.get("architecture") == "unknown",
+                    "An attestation must not be selectable as a runnable platform")
             child = annotations["vnd.docker.reference.digest"]
             attestations.setdefault(child, []).append(descriptor["digest"])
         else:
@@ -118,7 +118,7 @@ def verify(reference, fetch, output, builder_run, application, validate_spdx):
         require(("nuget", application.casefold()) in identities,
                 f"Missing {application} inventory for {platform}")
         definition = predicates[SLSA].get("buildDefinition", {})
-        require(definition.get("buildType") and isinstance(definition.get("externalParameters"), dict),
+        require(definition.get("buildType") == BUILDKIT and isinstance(definition.get("externalParameters"), dict),
                 f"Incomplete SLSA build definition for {platform}")
         builder = predicates[SLSA].get("runDetails", {}).get("builder", {}).get("id", "")
         require(re.fullmatch(re.escape(builder_run.rstrip("/")) + r"/attempts/[1-9][0-9]*", builder),

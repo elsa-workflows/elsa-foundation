@@ -399,8 +399,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    environment:
-      name: ${{ github.event_name == 'workflow_run' && 'studio-images' || 'studio-publish' }}
+    # The build job already passed its deployment approval. Use the existing Docker
+    # organization secrets only after staging, inventory verification and signature verification.
     steps:
       - uses: actions/checkout@v4
         with:
