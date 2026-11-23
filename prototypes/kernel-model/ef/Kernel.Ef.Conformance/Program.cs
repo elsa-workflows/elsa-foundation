@@ -40,6 +40,12 @@ switch (args)
     case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "version-services", .. var options]:
         await new EfProvider(engine, connection, options).CheckServiceVersionsAsync();
         return 0;
+    case ["sqlite", "format-migration", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckFormatMigrationAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "format-migration", .. var options]:
+        await new EfProvider(engine, connection, options).CheckFormatMigrationAsync();
+        return 0;
     case ["sqlite", .. var rest]:
         return await Cli.RunAsync(new EfProvider("sqlite", null, rest), rest.Where(a => !flags.Contains(a)).ToArray());
     case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, .. var rest]:
@@ -111,6 +117,12 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     {
         await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
         await VersionServiceChecks.Run(fixture.CreateAdmin(), fixture.Store);
+    }
+
+    internal async Task CheckFormatMigrationAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
+        await FormatMigrationChecks.Run(fixture.CreateAdmin(), (EfStore)fixture.Store, (EfStore)fixture.NewClient());
     }
 
     public async Task<ProvidedStore> CreateAsync(int partitions, StoreSetup setup)

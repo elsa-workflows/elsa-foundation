@@ -18,6 +18,17 @@ internal sealed class StoreVersionEntity
     public int StoreSchema { get; set; }
     public int MessageProtocol { get; set; }
     public int JournalCodec { get; set; }
+
+    internal StoreFormat Format => new(StoreSchema, MessageProtocol, JournalCodec);
+}
+
+internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol, int JournalCodec)
+{
+    internal static StoreFormat Current { get; } = new(StoreVersionEntity.StoreSchemaVersion,
+        StoreVersionEntity.MessageProtocolVersion, StoreVersionEntity.JournalCodecVersion);
+
+    public override string ToString() =>
+        $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
 }
 
 // The same parameters are part of every relational node upsert. A readable family currently has one
@@ -39,13 +50,26 @@ internal static class NodeAdvertisement
 
 public sealed partial class EfStore
 {
-    private static async Task RequireStoreVersionsAsync(KernelDb db, CancellationToken cancellationToken)
+    private enum FormatLock { None, Shared, Exclusive }
+
+    private static async Task RequireStoreVersionsAsync(KernelDb db, CancellationToken cancellationToken,
+        FormatLock formatLock = FormatLock.None)
+    {
+        var stored = await ReadStoreFormatAsync(db, formatLock, cancellationToken);
+        if (stored != StoreFormat.Current)
+            throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {StoreFormat.Current}.");
+    }
+
+    private static async Task<StoreFormat> ReadStoreFormatAsync(KernelDb db, FormatLock formatLock, CancellationToken cancellationToken)
     {
         StoreVersionEntity? stored;
         try
         {
-            stored = await db.StoreVersions.AsNoTracking()
-                .SingleOrDefaultAsync(row => row.Id == StoreVersionEntity.MarkerId, cancellationToken);
+            var sql = FormatReadSql(db, formatLock);
+            stored = sql is null
+                ? await db.StoreVersions.AsNoTracking().SingleOrDefaultAsync(row => row.Id == StoreVersionEntity.MarkerId, cancellationToken)
+                : (await db.StoreVersions.FromSqlRaw(sql, StoreVersionEntity.MarkerId).AsNoTracking()
+                    .ToListAsync(cancellationToken)).SingleOrDefault();
         }
         catch (Exception error) when (MissingVersionTable(error))
         {
@@ -54,13 +78,18 @@ public sealed partial class EfStore
 
         if (stored is null)
             throw new StoreFormatException("The kernel store version marker is missing.");
+        return stored.Format;
+    }
 
-        if (stored.StoreSchema != StoreVersionEntity.StoreSchemaVersion ||
-            stored.MessageProtocol != StoreVersionEntity.MessageProtocolVersion ||
-            stored.JournalCodec != StoreVersionEntity.JournalCodecVersion)
-            throw new StoreFormatException(
-                $"Unsupported kernel store versions. Stored schema={stored.StoreSchema}, message protocol={stored.MessageProtocol}, journal codec={stored.JournalCodec}. " +
-                $"This build reads schema={StoreVersionEntity.StoreSchemaVersion}, message protocol={StoreVersionEntity.MessageProtocolVersion}, journal codec={StoreVersionEntity.JournalCodecVersion}.");
+    // Ownership and the marker advance take their locks in the same order. SQLite holds its writer transaction.
+    private static string? FormatReadSql(KernelDb db, FormatLock formatLock)
+    {
+        if (formatLock == FormatLock.None || db.Database.IsSqlite()) return null;
+        var exclusive = formatLock == FormatLock.Exclusive;
+        if (db.Database.IsSqlServer())
+            return $"""SELECT * FROM "KernelStoreVersions" WITH ({(exclusive ? "XLOCK, " : "")}HOLDLOCK, ROWLOCK) WHERE "Id" = {"{0}"}""";
+        var sql = $"""SELECT * FROM "KernelStoreVersions" WHERE "Id" = {"{0}"} FOR {(exclusive ? "UPDATE" : "SHARE")}""";
+        return db.Database.IsNpgsql() ? sql : sql.Replace('"', '`');
     }
 
     private static bool MissingVersionTable(Exception error) => error switch
