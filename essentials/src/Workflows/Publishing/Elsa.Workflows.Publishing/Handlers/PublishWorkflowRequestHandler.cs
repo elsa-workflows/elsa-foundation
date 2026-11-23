@@ -132,6 +132,7 @@ public sealed class PublishWorkflowRequestHandler(
 
         var resolved = plan.ResolvedAction;
         var slot = plan.Slot;
+        var reference = await BuildSourceReferenceAsync(executable, publicationId, resolved.SlotName, request.TenantId, now, cancellationToken);
         if (slot is { ActiveActivationId: { } activePublicationId, Source: { } activeSource } &&
             activeSource.IsSameOwnerAs(PublicationActivator.Source))
         {
@@ -140,12 +141,11 @@ public sealed class PublishWorkflowRequestHandler(
                 StringComparer.Ordinal.Equals(current.ArtifactId, identity.ArtifactId) &&
                 plan.Result.Changes.All(change => change.Change == PublicationTriggerChangeKind.Retained))
             {
-                if (await AlreadyPublishedAsync(executable, current, resolved.SlotName, request.TenantId, cancellationToken) is { } answer)
+                if (await AlreadyPublishedAsync(executable, current, resolved.SlotName, request.TenantId, cancellationToken, reference) is { } answer)
                     return answer;
             }
         }
 
-        var reference = await BuildSourceReferenceAsync(executable, publicationId, resolved.SlotName, request.TenantId, now, cancellationToken);
         var candidate = new PublicationRecord(
             publicationId,
             WorkflowActivationSlotIdentity.Create(identity.DefinitionId, resolved.SlotName),
@@ -193,12 +193,15 @@ public sealed class PublishWorkflowRequestHandler(
         PublicationRecord publication,
         string slotName,
         string? tenantId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WorkflowExecutableSourceReference? candidateReference = null)
     {
         var reference = publication.SourceReferenceId is { } sourceReferenceId
             ? await sourceReferenceStore.FindAsync(sourceReferenceId, cancellationToken)
             : null;
-        return reference is { DeletedAt: null } && StringComparer.Ordinal.Equals(reference.TenantId, tenantId)
+        return reference is { DeletedAt: null } &&
+               StringComparer.Ordinal.Equals(reference.TenantId, tenantId) &&
+               (candidateReference is null || WorkflowExecutableSourceReferenceComparer.SameInspectionSidecars(reference, candidateReference))
             ? PublishedWorkflowView.From(
                 executable,
                 reference,

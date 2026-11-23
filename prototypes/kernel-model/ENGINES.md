@@ -64,6 +64,21 @@ that retries. Its end-state properties are the ones FINDINGS section 4 lists. Do
 engine while a stress test runs there: the stress test kills the suite's `kernel-worker` sessions too (two suite runs
 were discarded for that).
 
+### SQLite owner process loss
+
+From `prototypes/kernel-model`, run these commands on a POSIX host:
+
+```bash
+ef/Kernel.Ef.Run/run-sqlite-process-loss.py checked /tmp/kernel-sqlite-loss-checked
+ef/Kernel.Ef.Run/run-sqlite-process-loss.py batch /tmp/kernel-sqlite-loss-batch
+```
+
+Each run creates a temporary WAL database and starts the 5,000-input producer in a separate process.
+The fixture waits for the first worker process to advance both partition journals, ends that worker
+abruptly, and verifies that a new process takes both partitions at later epochs and advances both
+journals again. It checks the regular stress invariants and runs SQLite's integrity check after all
+workers exit. The output directory keeps each process's log.
+
 ## Results on the merged kernel (`a4f7c49b65` merged, fixes applied). Run
 
 40 s and 5,000 outside messages unless the row says otherwise. Resets are fenced commits plus commits with an unknown

@@ -2,7 +2,7 @@ import React, { Activity } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AnonymousAuthProvider, StudioWorkspaceTabProvider, reviewStudioNavigation, type ElsaStudioModuleApi, type StudioNavigationIntent, type StudioWorkspaceTabHandle } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, AuthProvider, StudioWorkspaceTabProvider, reviewStudioNavigation, type AuthProviderManager, type AuthSession, type ElsaStudioModuleApi, type StudioNavigationIntent, type StudioWorkspaceTabHandle } from "@elsa-workflows/studio-sdk";
 import { createDashboardAuthoringController, type DashboardAuthoringController } from "../authoring";
 import { NamedDashboardsRoute } from "../NamedDashboards";
 import { initialDefinition, type DashboardResource, type DatasetDeclaration, type QueryResult } from "../types";
@@ -44,15 +44,31 @@ function navigation(intent: StudioNavigationIntent = "navigate", from = "/questi
 }
 function unloadAllowed() { return window.dispatchEvent(new Event("beforeunload", { cancelable: true })); }
 
+function authenticatedManager(permissions: string[]): AuthProviderManager {
+  const session: AuthSession = { status: "authenticated", subject: "owner", tenantId: "tenant", roles: [], permissions };
+  return {
+    getSession: () => session,
+    getCapabilities: async () => ({ ownershipMode: "foundation-owned", providers: [] }),
+    initialize: async () => session,
+    login: async () => undefined,
+    handleCallback: async () => session,
+    logout: async () => undefined,
+    getAccessToken: async () => "token",
+    refresh: async () => session
+  };
+}
+
 /** Actual React Activity cleanup/restart, with the same retained tab handle the host supplies. */
-function mount(api: ElsaStudioModuleApi, controller: DashboardAuthoringController, view: "detail" | "create" | "edit" = "detail", navigate = vi.fn<(path: string) => void>(), kind: "question" | "dashboard" = "question") {
+function mount(api: ElsaStudioModuleApi, controller: DashboardAuthoringController, view: "detail" | "create" | "edit" = "detail", navigate = vi.fn<(path: string) => void>(), kind: "question" | "dashboard" = "question", permissions?: string[]) {
   const path = view === "detail" ? `/${kind}s/${kind === "question" ? "q1" : "d1"}` : view === "edit" ? "/dashboards/d1/edit" : `/${kind}s/new`;
   window.history.replaceState({}, "", path);
   const container = document.createElement("div"); document.body.append(container); const root = createRoot(container);
   let active = true;
+  const manager = permissions ? authenticatedManager(permissions) : undefined;
   const draw = () => {
     const tab: StudioWorkspaceTabHandle = { id: "question-tab", active, location: path, isActive: () => active, markPendingWork: vi.fn(), setTitle: vi.fn() };
-    flushSync(() => root.render(<Activity mode={active ? "visible" : "hidden"}><StudioWorkspaceTabProvider value={tab}><AnonymousAuthProvider><NamedDashboardsRoute api={api} kind={kind} view={view} authoring={controller} navigate={navigate} /></AnonymousAuthProvider></StudioWorkspaceTabProvider></Activity>));
+    const content = <NamedDashboardsRoute api={api} kind={kind} view={view} authoring={controller} navigate={navigate} />;
+    flushSync(() => root.render(<Activity mode={active ? "visible" : "hidden"}><StudioWorkspaceTabProvider value={tab}>{manager ? <AuthProvider manager={manager}>{content}</AuthProvider> : <AnonymousAuthProvider>{content}</AnonymousAuthProvider>}</StudioWorkspaceTabProvider></Activity>));
   };
   draw();
   disposers.push(() => { flushSync(() => root.unmount()); container.remove(); });
@@ -98,11 +114,48 @@ describe("dashboard viewer and editor routes", () => {
   it("shows a useful empty state for dashboards without saved questions", async () => {
     const empty = dashboard(); empty.tiles = [];
     const { api, controller } = dashboardFixture(empty);
-    const viewer = mount(api, controller, "detail", vi.fn(), "dashboard");
+    const navigate = vi.fn();
+    const viewer = mount(api, controller, "detail", navigate, "dashboard");
     await waitUntil(() => viewer.container.querySelector("h2")?.textContent === "Operations");
     expect(viewer.container.textContent).toContain("No questions on this dashboard");
     expect(viewer.container.querySelector(".named-result")).toBeNull();
     expect(viewer.container.querySelector(".named-definition-meta")).toBeNull();
+    button(viewer.container, "Add questions");
+    expect(navigate).toHaveBeenCalledWith("/dashboards/d1/edit");
+  });
+
+  it("offers a New question shortcut from the dashboard editor only when permitted", async () => {
+    const empty = dashboard(); empty.tiles = [];
+    const { api, controller } = dashboardFixture(empty);
+    const navigate = vi.fn();
+    const restricted = mount(api, controller, "edit", navigate, "dashboard");
+    await waitUntil(() => restricted.container.textContent?.includes("No questions on this dashboard") === true);
+    expect([...restricted.container.querySelectorAll("button")].some(item => item.textContent?.trim() === "New question")).toBe(false);
+    disposers.splice(0).forEach(dispose => dispose());
+
+    const permitted = mount(api, controller, "edit", navigate, "dashboard", ["studio/questions:create"]);
+    await waitUntil(() => permitted.container.textContent?.includes("No questions on this dashboard") === true);
+    button(permitted.container, "New question");
+    expect(navigate).toHaveBeenCalledWith("/questions/new");
+  });
+
+  it("pre-seeds a new dashboard draft when opened with a questionId query parameter", async () => {
+    const { api, controller } = dashboardFixture();
+    const navigate = vi.fn();
+    const path = "/dashboards/new?questionId=q1";
+    window.history.replaceState({}, "", path);
+    const container = document.createElement("div"); document.body.append(container); const root = createRoot(container);
+    const manager = authenticatedManager(["studio/dashboards:create"]);
+    flushSync(() => root.render(<AuthProvider manager={manager}><NamedDashboardsRoute api={api} kind="dashboard" view="create" authoring={controller} navigate={navigate} /></AuthProvider>));
+    disposers.push(() => { flushSync(() => root.unmount()); container.remove(); });
+    await beginNamedDraft("Seeded dashboard");
+    await waitUntil(() => document.body.textContent?.includes("Question q1") === true);
+    const post = vi.fn(async (_url: string, body: { tiles: { questionId?: string; size: string }[] }) => ({ ...dashboard(), id: "d-seeded", name: "Seeded dashboard", tiles: body.tiles }));
+    api.backend.http.postJson = post as typeof api.backend.http.postJson;
+    button(document.body, "Save");
+    await waitUntil(() => post.mock.calls.length === 1);
+    expect(post.mock.calls[0][1].tiles).toHaveLength(1);
+    expect(post.mock.calls[0][1].tiles[0]).toMatchObject({ questionId: "q1", size: "medium" });
   });
 
   it("does not grant editor controls through a direct edit URL without current edit access", async () => {
@@ -571,6 +624,77 @@ describe("current native disclosure and reuse review", () => {
     expect(api.dialogs.prompt).toHaveBeenCalledOnce(); expect(navigate).toHaveBeenCalledWith("/dashboards/d-private");
     expect(post.mock.calls.filter(call => call[0].includes("/questions/q1/copies"))).toHaveLength(1);
     expect(post.mock.calls.filter(call => call[0].includes("/dashboards/d1/copies"))).toHaveLength(1);
+  });
+
+  it("adds a saved question to an editable dashboard while preserving unavailable tiles and keeping the question clean", async () => {
+    const { api, controller } = fixture();
+    const editableDashboard: DashboardResource = {
+      ...dashboard(),
+      id: "d-edit",
+      name: "Operations",
+      revision: "dash-r3",
+      tiles: [{ id: "tile-hidden", size: "small", referenceState: "unavailable" }]
+    };
+    const readOnlyDashboard: DashboardResource = {
+      ...dashboard(),
+      id: "d-view",
+      name: "Read-only executive",
+      capabilities: { ...dashboard().capabilities, canEdit: false, canShare: false, canDelete: false }
+    };
+    api.backend.http.getJson = vi.fn(async (url: string) => {
+      if (url.includes("dashboard-datasets")) return { items: [dataset] };
+      if (url.includes("/dashboards?")) return { items: url.includes("ownership=mine") ? [editableDashboard] : [readOnlyDashboard] };
+      if (url.includes("/dashboards/d-edit")) return editableDashboard;
+      return { ...resource(), uses: [] };
+    }) as typeof api.backend.http.getJson;
+    const put = vi.fn(async (_url: string, body: { tiles: DashboardResource["tiles"] }, _options?: unknown) => ({
+      ...editableDashboard,
+      revision: "dash-r4",
+      tiles: body.tiles
+    }));
+    api.backend.http.putJson = put as typeof api.backend.http.putJson;
+
+    const navigate = vi.fn();
+    const editor = mount(api, controller, "detail", navigate, "question");
+    await waitUntil(() => controller.snapshots.size === 1);
+
+    selectResourceAction(editor.container, "More question actions", "Add to dashboard…");
+    await waitUntil(() => editor.container.textContent?.includes("Add to Operations") === true);
+    expect(editor.container.textContent).not.toContain("Read-only executive");
+
+    button(editor.container, "Add to Operations");
+    await waitUntil(() => put.mock.calls.length === 1);
+    expect(put.mock.calls[0][2]).toMatchObject({ headers: { "If-Match": '"dash-r3"' } });
+    expect(put.mock.calls[0][1].tiles).toEqual([
+      { id: "tile-hidden", size: "small", preserveReference: true },
+      expect.objectContaining({ questionId: "q1", size: "medium" })
+    ]);
+
+    await waitUntil(() => editor.container.textContent?.includes('Added to "Operations".') === true);
+    expect(editor.container.textContent).toContain("Dashboards using this question");
+    expect(editor.container.textContent).toContain("Operations — 1 tile");
+    expect(navigation("probe")).toBe(true);
+
+    button(editor.container, "Open Operations");
+    expect(navigate).toHaveBeenCalledWith("/dashboards/d-edit");
+  });
+
+  it("navigates to a pre-seeded new dashboard from the Add to dashboard dialog when permitted", async () => {
+    const { api, controller } = fixture();
+    api.backend.http.getJson = vi.fn(async (url: string) => {
+      if (url.includes("dashboard-datasets")) return { items: [dataset] };
+      if (url.includes("/dashboards?")) return { items: [] };
+      return resource();
+    }) as typeof api.backend.http.getJson;
+
+    const navigate = vi.fn();
+    const editor = mount(api, controller, "detail", navigate, "question", ["studio/dashboards:create"]);
+    await waitUntil(() => controller.snapshots.size === 1);
+
+    selectResourceAction(editor.container, "More question actions", "Add to dashboard…");
+    await waitUntil(() => editor.container.textContent?.includes("New dashboard with this question") === true);
+    button(editor.container, "New dashboard with this question");
+    expect(navigate).toHaveBeenCalledWith("/dashboards/new?questionId=q1");
   });
 
 });

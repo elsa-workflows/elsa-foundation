@@ -1,5 +1,6 @@
 import { getNotifications } from "../workflow-editor/notifications";
 import React from "react";
+import { Zap } from "lucide-react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
@@ -180,7 +181,7 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-templates", label: "Templates", path: "/workflows/templates", placement: "build", parentId: "library" }),
       expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", placement: "runtime", parentId: undefined }),
       expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability", placement: "authoring", parentId: undefined }),
-      expect.objectContaining({ id: "workflows-triggers", label: "Triggers", path: "/workflows/triggers", parentId: undefined, placement: "operate" })
+      expect.objectContaining({ id: "workflows-triggers", label: "Triggers", path: "/workflows/triggers", icon: Zap, parentId: undefined, placement: "operate" })
     ]);
     expect(api.routes.list()).toEqual([
       expect.objectContaining({ id: "workflows-triggers-list", path: "/workflows/triggers" }),
@@ -3923,7 +3924,7 @@ describe("workflows module", () => {
     rerender();
     await vi.waitFor(() => expect(container.querySelector('[aria-label="Bookmark lifecycle"]')?.textContent).toContain("route-bookmark-C"));
     expect(fetchMock).toHaveBeenCalledWith(`${runPath}/history/bookmarks/route-bookmark-C`, expect.any(Object));
-    expect(buttonByText(container, "Diagram")?.getAttribute("aria-pressed")).toBe("true");
+    expect(buttonByText(container, "Diagram")?.getAttribute("aria-selected")).toBe("true");
     if (narrow) expect(container.querySelector(".narrow-inspector-view")).toBeTruthy();
     else expect(buttonByLabel(container, "Collapse run details panel")).toBeTruthy();
     expect(new URLSearchParams(window.location.search).get("returnTo")).toBe("/workflows/instances?status=Completed");
