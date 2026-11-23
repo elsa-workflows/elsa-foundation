@@ -10,6 +10,15 @@ internal static class ParkDeleteChecks
         await Delete(protectedAtOpen: false, protectedAtEnd: false, check);
         await Delete(protectedAtOpen: true, protectedAtEnd: true, check);
         await Delete(protectedAtOpen: false, protectedAtEnd: true, check);
+        await AttachToDrain(ParkClearKind.Discard, check);
+        await AttachToDrain(ParkClearKind.Expiry, check);
+        await AttachToDrain(ParkClearKind.Terminate, check);
+        await AttachToDrain(ParkClearKind.Terminate, check, beforeFirstPage: true);
+        await AttachToDrain(ParkClearKind.Terminate, check, parentTerminate: true);
+        await AttachToDrain(ParkClearKind.Terminate, check, parentTerminate: true, beforeFirstPage: true);
+        await AttachToDrain(ParkClearKind.Terminate, check, protectsAtComplete: true);
+        await AttachToDrain(ParkClearKind.Terminate, check, protectsAtOpen: true);
+        await AttachToDrain(ParkClearKind.Terminate, check, protectsAtOpen: true, thenDelete: true);
     }
 
     private static async Task Delete(bool protectedAtOpen, bool protectedAtEnd, Action<bool, string> check)
@@ -145,6 +154,214 @@ internal static class ParkDeleteChecks
         }
     }
 
+    private static async Task AttachToDrain(ParkClearKind kind, Action<bool, string> check,
+        bool parentTerminate = false, bool beforeFirstPage = false, bool protectsAtComplete = false,
+        bool protectsAtOpen = false, bool thenDelete = false)
+    {
+        const long initial = 1_702_310_083_000;
+        var now = initial;
+        var scope = new Contract.BoundScope("delete-takeover");
+        var store = new InMemoryStore(1, () => now)
+        {
+            ParkedRetentionWindow = kind == ParkClearKind.Expiry ? TimeSpan.FromMilliseconds(1) : null
+        };
+        var probe = new Probe { Protect = protectsAtOpen };
+        var requests = new Requests("delete-takeover");
+        var edge = new InMemoryIngress(store, requests, "delete-takeover", (_, _) => true);
+        var reads = new ActorList(store, 5);
+        var commits = new List<TurnCommit>();
+        Action? admit = null;
+        var scenario = thenDelete ? "ThenDelete, protected" : parentTerminate ? "parent Terminate" :
+            protectsAtOpen ? "Terminate, protected at Open" : protectsAtComplete ? "Terminate, protected at Complete" : kind.ToString();
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (landed) commits.AddRange(batch.Turns);
+            else if (admit is { } submit && batch.Turns.Any(turn => beforeFirstPage
+                ? turn.Row?.ParkDiscard is { Cursor: null }
+                : turn.FoundationParkClear is not null))
+            {
+                admit = null;
+                submit();
+            }
+        });
+        var first = Owner("attach-first");
+        await using var initialOwner = await Activate(first);
+        var born = await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "parent")), "parent", Contract.Kinds.Start);
+        var parent = born.Actor!.Value;
+        await Step(first, parent);
+        await Send(parent, "spawn", "spawn");
+        await Step(first, parent);
+        var child = new Contract.ActorRef(Row(parent).State);
+        await Step(first, child);
+        var id = Row(child).Id;
+        await Send(child, "park", "park");
+        await Step(first, child);
+        await Step(first, parent); // Settle the Park notice before isolating the child after takeover.
+        for (var index = 0; index <= 2 * InMemoryStore.ParkPageLimit; index++)
+            await Send(child, $"kept-{index:D4}", "pending");
+        await Step(first, child);
+        var selection = (await reads.GetAsync(scope, child))!.Selection!;
+        var payload = Json.Write(new Contract.OperatorCommand(selection));
+        Request? request = null;
+        Request? competing = null;
+        Request? retention = null;
+        if (beforeFirstPage) admit = AdmitCompetingDeletes;
+        switch (kind)
+        {
+            case ParkClearKind.Discard:
+                await Send(child, "original-discard", Contract.Kinds.Discard, payload);
+                break;
+            case ParkClearKind.Terminate when parentTerminate:
+                await Send(parent, "cancel-parent", "cancel");
+                await Step(first, parent);
+                break;
+            case ParkClearKind.Terminate:
+                var command = new Contract.OperatorCommand(selection, ThenDelete: thenDelete, ExpectedTarget: thenDelete ? child : null);
+                await Send(child, "original-terminate", Contract.Kinds.Terminate, Json.Write(command));
+                break;
+            case ParkClearKind.Expiry:
+                now++;
+                break;
+        }
+        await Step(first, child);
+        var opened = Row(child).ParkDiscard;
+        check(opened?.Kind == kind && opened.Deletion is null && opened.Cursor is null && opened.ThenDelete == thenDelete,
+            $"{scenario}: the original drain opens with its own kind and first control");
+        if (opened?.Kind != kind) return;
+
+        if (!beforeFirstPage)
+        {
+            admit = AdmitCompetingDeletes;
+            await Step(first, child);
+        }
+        var prefixed = Row(child);
+        var retainedBefore = Kept();
+        var firstEpoch = first.Fences.Single().Epoch;
+        check(request is not null && prefixed.ParkDiscard?.Cleared == (beforeFirstPage ? 0 : InMemoryStore.ParkPageLimit) &&
+              retainedBefore.Length > 0,
+            $"{scenario}: Delete is queued before the next clear page");
+        if (request is null) return;
+
+        var attaching = beforeFirstPage ? first : Owner("attach-middle");
+        if (!beforeFirstPage) await initialOwner.DisposeAsync();
+        now++;
+        await using var attachOwner = beforeFirstPage ? null : await Activate(attaching);
+        if (beforeFirstPage && retention is not null)
+        {
+            await DriveUntil(attaching, retention);
+            check(retention.Answer is CreationResult { Result: "NotEligible" } && Row(child) == prefixed,
+                $"{scenario}: Retention Delete cannot take over the unresolved Park");
+        }
+
+        await DriveUntil(attaching, request);
+        var attached = Row(child);
+        if (protectsAtOpen)
+        {
+            var refused = thenDelete ? request.Answer is CreationResult { Result: "InProgress", OwningOperation: "original-terminate" }
+                : request.Answer is CreationResult { Result: "Protected" };
+            check(refused && attached == prefixed,
+                $"{scenario}: Delete is refused by the owning operation or the protection check");
+        }
+        else
+        {
+            var expected = prefixed.ParkDiscard! with { Deletion = new("takeover-delete", selection) };
+            var accepted = request.Answer is "started" && attached == (prefixed with
+            {
+                Revision = prefixed.Revision + 1, ParkDiscard = expected
+            });
+            check(accepted && retainedBefore.SequenceEqual(Kept()),
+                $"{scenario}: takeover preserves the cursor, deletion selection and exact control");
+            if (!accepted) return;
+            probe.Protect = protectsAtComplete;
+            await DriveUntil(attaching, competing!);
+            check(competing!.Answer is CreationResult { Result: "InProgress", OwningOperation: "takeover-delete" } &&
+                  Row(child) == attached && retainedBefore.SequenceEqual(Kept()),
+                $"{scenario}: a competing Delete reports the owning operation before protection");
+            if (!beforeFirstPage && retention is not null)
+            {
+                await DriveUntil(attaching, retention);
+                check(retention.Answer is CreationResult { Result: "InProgress", OwningOperation: "takeover-delete" } &&
+                      Row(child) == attached && retainedBefore.SequenceEqual(Kept()),
+                    $"{scenario}: Retention Delete reports the attached operation and preserves the pending page");
+            }
+        }
+        if (attachOwner is not null) await attachOwner.DisposeAsync();
+        else await initialOwner.DisposeAsync();
+
+        now++;
+        var cold = Owner("attach-cold");
+        await using var successor = await Activate(cold);
+        for (var pass = 0; pass < 12 && store.Instances[id].ParkDiscard is not null; pass++) await Step(cold, child);
+        await Step(cold, parent);
+        var final = store.Instances[id];
+        var status = kind == ParkClearKind.Terminate ? InstanceStatus.Cancelled : InstanceStatus.Faulted;
+        var notices = commits.SelectMany(turn => turn.Sent).Where(message => message.Kind == Kinds.ChildFinished && message.Sender == id)
+            .Select(message => message.Read<FoundationChildNotice>()).ToArray();
+        var journals = store.Journal.Values.Where(row => row.Instance == id).ToArray();
+        var operation = protectsAtOpen ? "original-terminate" : "takeover-delete";
+        var finish = journals.SingleOrDefault(row => row.Entries.Contains($"\"{operation}\"", StringComparison.Ordinal));
+        var preservedNotice = notices.Count(notice => notice.Final) == 1 && notices.Single(notice => notice.Final).Status == status &&
+            Row(parent).Children is null;
+        var pages = commits.Where(turn => turn.Instance == id && turn.FoundationParkClear is not null)
+            .SelectMany(turn => turn.FoundationParkClear!.Rows.Select(row => row.Cursor)).ToArray();
+        var currentMark = store.ReadFoundationActor(scope.Tenant, child.Id).Actor?.Terminal;
+        var validOutcome = protectsAtOpen || protectsAtComplete
+            ? final is { Retired: false, ParkDiscard: null } && final.Status == status && currentMark?.At == now &&
+              (!thenDelete && !protectsAtComplete || finish?.Entries.Contains("protected", StringComparison.Ordinal) == true)
+            : final.Retired && final.Status == status && journals.Length == 1 && finish?.Revision == -1;
+        check(cold.Fences.Single().Epoch > firstEpoch && Kept().Length == 0 && preservedNotice && finish is not null &&
+              finish.Entries.Contains(InMemoryStore.ParkClearOutcome(kind), StringComparison.Ordinal) && validOutcome &&
+              pages.Length == 2 * InMemoryStore.ParkPageLimit + 2 && pages.Distinct().Count() == pages.Length &&
+              pages.SequenceEqual(pages.Order()),
+            $"{scenario}: the cold owner clears each key once and completes the original disposition with one notice");
+
+        ParkPageCursor[] Kept() => store.Messages.Values.Where(row => row.Message.Target.Id == id && row.KeptBy is not null)
+            .Select(row => new ParkPageCursor(row.Seq, row.Message.InboxKey)).Order().ToArray();
+        void AdmitCompetingDeletes()
+        {
+            if (beforeFirstPage) AdmitRetention();
+            request = Ask("takeover-delete");
+            if (protectsAtOpen) return;
+            competing = Ask("later-delete");
+            if (!beforeFirstPage) AdmitRetention();
+        }
+        void AdmitRetention()
+        {
+            retention = requests.OpenBound("retention", now + 1_000, scope.Tenant, null);
+            var accepted = store.AdmitRetentionDelete(scope.Tenant, child.Id, selection,
+                replyTo: retention.ReplyAddress("delete-takeover"));
+            check(accepted.Outcome == InMemoryStore.OperatorAdmission.Accepted,
+                $"{scenario}: Retention Delete reaches the owner for the selected mark");
+        }
+
+        Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial, Transport = new Replies(requests) });
+        async Task<IScopeActivation> Activate(Worker worker) => (await new DurableHost([worker]).ActivateAsync(0))!;
+        InstanceRow Row(Contract.ActorRef actor) => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row;
+        ValueTask<Contract.Admission> Send(Contract.ActorRef actor, string op, string messageKind, string? body = null) =>
+            edge.SendAsync(scope, new Contract.Target.Ref(actor), op, messageKind, body);
+        Request Ask(string op)
+        {
+            var open = requests.OpenBound(op, now + 1_000, scope.Tenant, null);
+            var admitted = store.AdmitFoundationOperator(scope.Tenant, child.Id, null, op, Contract.Kinds.Delete,
+                payload, null, null, selection, open.ReplyAddress("delete-takeover"));
+            check(admitted.Outcome == InMemoryStore.OperatorAdmission.Accepted, $"{scenario}: {op} is admitted for the current mark");
+            return open;
+        }
+        async Task DriveUntil(Worker worker, Request pending)
+        {
+            for (var pass = 0; pass < 5 && pending.Answer is null; pass++) await Step(worker, child);
+        }
+        async Task Step(Worker worker, Contract.ActorRef actor)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(store.FoundationTarget(scope.Tenant, actor.Id)!.Id);
+            await worker.FlushAsync();
+        }
+    }
+
     private static void CheckRetirementGuards(InMemoryStore store, CommitBatch batch, TurnCommit complete, Action<bool, string> check)
     {
         var before = store.Instances[complete.Instance];
@@ -188,6 +405,7 @@ internal static class ParkDeleteChecks
             {
                 if (message.Kind == "spawn") turn.State = turn.Start(new(Type, "child")).Id;
                 if (message.Kind == "park") throw new InvalidOperationException("Park the child.");
+                if (message.Kind == "cancel") turn.End(Contract.ActorStatus.Cancelled);
             }
             return default;
         }

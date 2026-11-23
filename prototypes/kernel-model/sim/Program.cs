@@ -69,6 +69,17 @@ if (args.Contains("--held-job-result-check"))
     await HeldJobResultChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; }, flaws);
     return failed ? 1 : 0;
 }
+if (args.Contains("--park-control-identity-check"))
+{
+    var failed = false;
+    await ParkHandoffCreditChecks.CheckControlIdentities((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-rotating-waits-check"))
+{
+    await ParkRotatingWaitChecks.Run();
+    return 0;
+}
 if (args.Contains("--park-coverage-budget-check"))
 {
     var failed = false;
@@ -85,6 +96,12 @@ if (args.Contains("--park-large-drain-check"))
 {
     var failed = false;
     await ParkLargeDrainChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-cached-release-check"))
+{
+    var failed = false;
+    await ParkCachedReleaseChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
 if (args.Contains("--park-kept-check"))
@@ -134,6 +151,12 @@ if (args.Contains("--private-kinds-check"))
 {
     var failed = false;
     await PrivateKindsChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--sequential-cascade-check"))
+{
+    var failed = false;
+    await SequentialCascadeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
 if (args.Contains("--cascade-pages-check"))
@@ -224,6 +247,12 @@ if (args.Contains("--event-byte-budget-check"))
 {
     var failed = false;
     await EventByteBudgetChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--broadcast-cardinality-check"))
+{
+    var failed = false;
+    await EventIdentityChecks.CheckLargeBroadcast((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
 if (args.Contains("--event-identity-check"))

@@ -53,7 +53,7 @@ public sealed partial class InMemoryStore
         }
     }
 
-    private (long At, bool Due)? ValidateRecoveryOpen(TurnCommit turn, InstanceRow? previous,
+    private void ValidateRecoveryOpen(TurnCommit turn, InstanceRow? previous,
         IReadOnlyDictionary<int, long> epochs, long now)
     {
         if (previous is not { Status: InstanceStatus.Faulted, Retired: false, ParkDiscard: null, ParkDiscarded: false } ||
@@ -124,10 +124,6 @@ public sealed partial class InMemoryStore
         foreach (var message in jobs.Writes)
             if (!message.HasIssuedTicket || Messages.ContainsKey(message.InboxKey)) throw InvalidDrain();
         if (jobs.DeadlineRearms.Any(rearm => !rearm.Envelope.HasIssuedTicket)) throw InvalidDrain();
-        if (expiry is null) return null;
-        if (now >= expiry.At)
-            throw new StoreException(Failure.WindowExpired, "The Park expiry became due before recovery opened.");
-        return (expiry.At, false);
 
         static ParkTimerRearm WithoutAuthority(ParkTimerRearm row) => row with { Envelope = row.Envelope.WithoutTicketAuthority() };
     }

@@ -213,6 +213,11 @@
           "WorkflowsRuntimeResumption": {},
           "WorkflowsRuntimeScheduling": {},
           "WorkflowsRuntimeRecurringTriggers": {},
+          "StandaloneTriggersApi": {},
+          "StandaloneHttpTriggerAuthoring": {},
+          "StandaloneEventTriggerAuthoring": {},
+          "StandaloneScheduleTriggerAuthoring": {},
+          "StandaloneScheduleTriggers": {},
           "WorkflowsRuntimeHttp": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Balanced",

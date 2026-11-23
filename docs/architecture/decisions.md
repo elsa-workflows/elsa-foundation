@@ -365,6 +365,12 @@ Each wait receives broadcasts in the order their match pages commit. Two overlap
 different waits in different orders. A publication receipt acknowledges acceptance. Direct messages retain
 FIFO from one sender to one target. [Owner decision on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7080391053)
 
+## Owner decisions on recovery ordering (23 November)
+
+A finite Park deadline makes expiry eligible. The first resolution to open in a fenced commit owns the Park. Recovery may open after the deadline and recalls the outstanding expiry in that same commit.
+
+A job restarted at Open becomes eligible after recovery completes. The D-2(a) case follows its completion, reuse of the same job key at a higher generation, and recovery from a later Park. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7091685100)
+
 ## Process
 
 | Date | Rule | Source |

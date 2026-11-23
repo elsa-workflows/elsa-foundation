@@ -420,6 +420,7 @@ internal static class EventIdentityChecks
         var probe = new Probe(Enumerable.Range(0, count).Select(index => ("Order-7", $"wait-{index:D3}")).ToArray(), restoreKeep: true);
         var lost = false;
         var failSteps = loseAfter is null;
+        using var measurements = new EventTicketMeasurements("publish");
         CommitBatch? lostCommit = null;
         var initialSequence = 0L;
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
@@ -464,6 +465,8 @@ internal static class EventIdentityChecks
         if (loseAfter is null)
         {
             await Pump(active);
+            check(measurements.Failures == 2,
+                "two failed authored steps emit two publish measurements and terminal settlement adds none");
             var parked = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
             if (endPublisher)
             {
@@ -762,6 +765,100 @@ internal static class EventIdentityChecks
         {
             await ingress.SendAsync(scope, target, "recover", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)));
             await Step(restored);
+        }
+    }
+
+    internal static async Task CheckLargeBroadcast(Action<bool, string> check)
+    {
+        const long start = 1_702_803_000_000;
+        const int actors = 100, waitsPerActor = 1_000;
+        var now = start;
+        var heartbeatDue = start;
+        var expectedWaits = Enumerable.Range(0, waitsPerActor).Select(i => $"wait-{i:D4}").ToArray();
+        var waits = expectedWaits.Select(wait => ("Order-7", wait)).ToArray();
+        var probe = new Probe(waits, restoreKeep: false, separatePublisher: true);
+        var scope = new Contract.BoundScope("large-broadcast");
+        var store = new InMemoryStore(1, () => now);
+        var sizes = new List<int>();
+        var before = 0;
+        var failures = 0;
+        var smallestSlack = long.MaxValue;
+        var allOnFirstAttempt = true;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (batch.Turns is not [{ FoundationPublicationSequence: not null } step]) return;
+            if (step.FoundationCatchUpFailed is not null)
+            {
+                if (landed) failures++;
+                return;
+            }
+            if (!landed) now++;
+            else
+            {
+                smallestSlack = Math.Min(smallestSlack, step.FoundationCatchUpBefore.GetValueOrDefault() - now);
+                allOnFirstAttempt &= step.FoundationCatchUpExpected == 0;
+            }
+            var pending = store.Messages.Values.Count(row => !row.Done && row.Message.Kind == Kinds.Event);
+            if (landed) sizes.Add(pending - before);
+            else before = pending;
+        });
+        var worker = new Worker("broadcast", 0, wire, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - start });
+        var edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
+        var host = new DurableHost([worker]);
+        await using var owner = (await host.ActivateAsync(0))!;
+        var subscribers = new List<Contract.ActorRef>();
+        for (var i = 0; i < actors; i++)
+            subscribers.Add(await Start($"sub-{i}", "subscriber"));
+        var publisher = await Start("publisher", "publisher");
+        await AdvanceUntil(() => store.Subscriptions.Count == actors * waitsPerActor);
+        check(store.Subscriptions.Count == 100_000 && store.Subscriptions.All(wait => !wait.FoundationKeepsEvents),
+            "SB-7 run 5 registers 100,000 non-keeping waits on the broadcast key");
+        if (store.Subscriptions.Count != 100_000) return;
+
+        foreach (var authored in new[] { true, false })
+        {
+            sizes.Clear();
+            failures = 0;
+            smallestSlack = long.MaxValue;
+            allOnFirstAttempt = true;
+            var payload = authored ? "from turn" : "from outside";
+            Contract.Admission admitted;
+            if (authored) admitted = await edge.SendAsync(scope, new Contract.Target.Ref(publisher), "emit", "publish");
+            else admitted = await edge.SendAsync(scope, new Contract.Target.Event("Order-7"), "outside", Contract.Kinds.Event, payload);
+            int[] expected = authored ? [0, .. Enumerable.Repeat(170, 588), 40] : [.. Enumerable.Repeat(170, 588), 40];
+            await AdvanceUntil(() => sizes.Count >= expected.Length &&
+                !store.Messages.Values.Any(row => !row.Done && row.Message.Kind is Kinds.Publish or Kinds.Event));
+            var name = authored ? "authored" : "outside";
+            check(admitted.Outcome == Contract.AdmissionOutcome.Accepted && sizes.SequenceEqual(expected) && allOnFirstAttempt && failures == 0 && smallestSlack > 0,
+                $"SB-7 {name} broadcast lands {expected.Length} steps with a short final page and no failed attempts (actual {sizes.Count}, failures {failures}, minimum deadline margin {smallestSlack} ms)");
+            var complete = subscribers.All(subscriber =>
+                Observed(store, scope, subscriber).Where(item => item.Payload == payload).Select(item => item.Wait)
+                    .Order(StringComparer.Ordinal).SequenceEqual(expectedWaits));
+            check(complete && store.ReadFoundationActor(scope.Tenant, publisher.Id).Actor!.Row.Status == InstanceStatus.Running &&
+                  store.FoundationEvents.Values.All(evt => !evt.FoundationPublishFailed),
+                $"SB-7 {name} broadcast reaches every registered wait exactly once and leaves its publisher running");
+        }
+
+        async Task<Contract.ActorRef> Start(string operation, string definition)
+        {
+            var admission = await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, definition)), operation, Contract.Kinds.Start);
+            return admission.Actor!.Value;
+        }
+        async Task AdvanceUntil(Func<bool> done)
+        {
+            for (var pass = 0; pass < 10_000 && !done(); pass++)
+            {
+                now += 11;
+                if (now >= heartbeatDue)
+                {
+                    if (await host.HeartbeatAsync(TimeSpan.FromMinutes(1)) is null)
+                        throw new InvalidOperationException("The broadcast host could not renew its node lease.");
+                    heartbeatDue = now + 1_000;
+                }
+                await owner.WokenAsync(null);
+                await owner.RunAsync();
+            }
         }
     }
 

@@ -97,8 +97,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "TargetMismatch");
         if (input.Row is { ParkDiscard: not null } draining)
         {
-            if (message is { Kind: Contract.Kinds.Delete, Operator: not null } && draining.ParkDiscard.DeletesAtComplete)
-                return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "InProgress", draining.ParkDiscard.Operation);
+            if (message is { Kind: Contract.Kinds.Delete, Operator.Selection: { } deleteSelection })
+                return TakeOverParkClear(input, draining, deleteSelection);
             return RefuseDuringResolution(input, draining);
         }
         if (message.Kind == Contract.Kinds.Terminate &&
@@ -122,8 +122,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return OpenRecover(input);
         if (input.Row is { } terminalParent && SettlesEndedChildNotice(terminalParent, message))
         {
-            if (!IsChildNotice(terminalParent, message) || message.Payload is null)
-                return Durable.CreationProtocol.Refuse(input.Actor, terminalParent, input.Taken, "InvalidChildCompletion");
+            if (ChildNoticeError(terminalParent, message) is { } noticeError)
+                return Durable.CreationProtocol.Refuse(input.Actor, terminalParent, input.Taken, noticeError);
+            if (message.Payload is null) return Durable.CreationProtocol.Refuse(input.Actor, terminalParent, input.Taken, "InvalidChildCompletion");
             try
             {
                 if (message.Read<Durable.FoundationChildNotice>() is not { Final: true })
@@ -213,14 +214,14 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         }
         if (message.Kind != Contract.Kinds.ChildFinished) return null;
 
-        if (!IsChildNotice(input.Row, message))
-            return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "InvalidChildCompletion");
+        if (ChildNoticeError(input.Row, message) is { } error)
+            return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, error);
         return null;
     }
 
     private Durable.TurnOutcome? RetentionRefusal(Durable.TurnInput input, Durable.InstanceRow row)
     {
-        var operation = row.ParkDiscard is { DeletesAtComplete: true } drain ? drain.Operation : row.ParkRecovery?.Deletion?.Operation;
+        var operation = row.ParkDiscard is { DeletesAtComplete: true } drain ? drain.DeleteOperation : row.ParkRecovery?.Deletion?.Operation;
         if (operation is not null)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InProgress", operation);
 
@@ -272,10 +273,23 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         return outcome;
     }
 
-    private static bool IsChildNotice(Durable.InstanceRow? parent, Durable.Message message) =>
-        parent is not null && message.Target.Id == parent.Id && message.TargetCreation == parent.Creation &&
-        message.Sender is { } child && Durable.CreationProtocol.HasTerminalNoticeId(message, child, message.SenderCreation) &&
-        Durable.ChildRegistry.Read(parent.Children).Contains(new(child, message.SenderCreation));
+    private static string? ChildNoticeError(Durable.InstanceRow? parent, Durable.Message message)
+    {
+        if (parent is null || message.Target.Id != parent.Id || message.TargetCreation != parent.Creation ||
+            message.Sender is not { } child || !Durable.CreationProtocol.HasTerminalNoticeId(message, child, message.SenderCreation))
+            return "InvalidChildCompletion";
+        if (Durable.ChildRegistry.Read(parent.Children).Contains(new(child, message.SenderCreation))) return null;
+        if (message.Payload is null) return "InvalidChildCompletion";
+        try
+        {
+            var notice = message.Read<Durable.FoundationChildNotice>();
+            if (notice is { Final: true, Status: Durable.InstanceStatus.Finished or Durable.InstanceStatus.Cancelled or Durable.InstanceStatus.Faulted } &&
+                notice.Child == child && notice.Creation == message.SenderCreation)
+                return "UnknownChildCreation";
+        }
+        catch (System.Text.Json.JsonException) { }
+        return "InvalidChildCompletion";
+    }
 
     public async ValueTask<Durable.TurnOutcome> TurnAsync(Durable.TurnInput input)
     {

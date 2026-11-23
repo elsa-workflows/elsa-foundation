@@ -4,7 +4,7 @@ using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Sim;
 
-internal static class ParkHandoffCreditChecks
+internal static partial class ParkHandoffCreditChecks
 {
     internal static async Task Run(Action<bool, string> check)
     {
@@ -19,6 +19,134 @@ internal static class ParkHandoffCreditChecks
         await HeldCohortAfterTake(check, suspend: false);
         await HeldCohortAfterTake(check, suspend: true);
         await HeldRunner(check);
+    }
+
+    internal static async Task CheckControlIdentities(Action<bool, string> check)
+    {
+        await AcrossParks(discard: false, check);
+        await AcrossParks(discard: true, check);
+        await AcrossParks(discard: true, check, sameOwner: true);
+        const long start = 1_702_610_019_000;
+        var now = start;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe();
+        var scope = new Contract.BoundScope("drain-controls");
+        var ingress = new InMemoryIngress(store, new Requests("drain-controls"), "drain-controls",
+            (_, kind) => kind == Contract.Kinds.Recover);
+        var issued = new List<(Message Control, long Serial)>();
+        var pages = 0;
+        var faultArmed = false;
+        ParkRecoveryDrain? beforeLoss = null;
+        InboxKey? lostKey = null;
+        InboxKey? replayedKey = null;
+        var onePending = true;
+        var repeatedProposal = false;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            foreach (var turn in batch.Turns)
+            {
+                if (turn.Row?.ParkRecovery is not { } state ||
+                    turn.Sent.FirstOrDefault(message => message.Kind == Kinds.Drain) is not { } control) continue;
+                if (!landed) repeatedProposal |= issued.Any(entry => entry.Control.InboxKey == control.InboxKey);
+                if (!landed && faultArmed && lostKey is null && turn.FoundationRecoveryPage is not null && pages == 2)
+                {
+                    beforeLoss = store.Instances[turn.Instance].ParkRecovery;
+                    lostKey = control.InboxKey;
+                    throw new StoreException(Failure.Unknown, "The third recovery page did not return an answer.");
+                }
+                if (!landed) continue;
+                issued.Add((control, state.Serial));
+                if (turn.FoundationRecoveryPage is not null) pages++;
+                onePending &= store.Messages.Values.Count(row => row.Message.Kind == Kinds.Drain && !row.Done &&
+                    row.Message.InboxKey != replayedKey) == 1 && state.Control == control.InboxKey;
+            }
+        });
+        var first = MakeWorker("controls-first");
+        await using var owner = await Activate(first);
+        var startResult = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "")), "birth", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(startResult.Actor!.Value);
+        var actor = store.FoundationTarget(scope.Tenant, target.Actor.Id)!.Id;
+        await Step(first);
+        await Send("fault", "fault");
+        await Step(first);
+        var arrivals = Enumerable.Range(0, 3 * InMemoryStore.ParkPageLimit).Select(index => $"arrival-{index:D4}").ToArray();
+        // A cold owner can take one restored input per driven pass. Budget each arrival and the intervening controls.
+        var driveLimit = 3 * arrivals.Length;
+        foreach (var input in arrivals) await Send(input, "input");
+        for (var pass = 0; pass < 8 && store.Messages.Values.Count(row => row.KeptBy is not null) != arrivals.Length + 1; pass++)
+            await Step(first);
+        var selection = (await new ActorList(store, 8).GetAsync(scope, target.Actor))!.Selection;
+        await Send("resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)));
+        for (var pass = 0; pass < 12 && (pages == 0 || issued.All(entry => entry.Control.Due is null)); pass++)
+            await Step(first);
+        var atTake = pages == 1 && issued.Any(entry => entry.Control.Due is not null) &&
+            Row().ParkRecovery is not null && issued.Count >= 3 && onePending && !repeatedProposal;
+        check(atTake, "P-11 first page and delayed gate retry commit before changing owners " +
+            $"(pages {pages}; repeated proposal {repeatedProposal})");
+        if (!atTake) return;
+        var consumed = issued[0].Control;
+        var generation = Row().ParkResolutionGeneration;
+        var firstEpoch = first.Fences.Single().Epoch;
+        await owner.DisposeAsync();
+        now += 11;
+        var second = MakeWorker("controls-second");
+        await using var takeover = await Activate(second);
+        var takeoverEpoch = second.Fences.Single().Epoch;
+        replayedKey = consumed.InboxKey;
+        var replay = new InMemoryStore.MessageRow(consumed, store.Messages.Values.Max(row => row.Seq) + 1, 0)
+            { Scoped = true, Tenant = scope.Tenant };
+        store.Messages.Add(consumed.InboxKey, replay);
+        faultArmed = true;
+        for (var pass = 0; pass < driveLimit && lostKey is null; pass++)
+        {
+            if (pass % 3 == 2) now += 11;
+            await Step(second);
+        }
+        var dropped = replay.Seen == takeoverEpoch && !store.Messages.ContainsKey(consumed.InboxKey);
+        var delays = issued.Count(entry => entry.Control.Due is not null);
+        var abandoned = takeoverEpoch > firstEpoch && lostKey is not null && !second.Owns && pages == 2 &&
+            beforeLoss is { } prior && Row().ParkRecovery == prior && store.Messages.ContainsKey(prior.Control) &&
+            !store.Messages.ContainsKey(lostKey.Value) && dropped && delays >= 2;
+        check(abandoned, $"P-11 the stale control is dropped and the unlanded page leaves the previous serial outstanding " +
+            $"(dropped {dropped}; seen {replay.Seen}; delays {delays}; pages {pages}; lost {lostKey is not null}; " +
+            $"owns {second.Owns}; ready {second.Ready.Count()}; applied {probe.HandedHere.Count})");
+        if (!abandoned) return;
+        var before = beforeLoss!;
+        await takeover.DisposeAsync();
+        now += (long)Defaults.Lease.TotalMilliseconds + 1;
+        var third = MakeWorker("controls-third");
+        await using var replacement = await Activate(third);
+        var retakeEpoch = third.Fences.Single().Epoch;
+        for (var pass = 0; pass < driveLimit && Row().ParkRecovery is not null; pass++)
+        {
+            if (pass % 3 == 2) now += 11;
+            await Step(third);
+        }
+        check(retakeEpoch > takeoverEpoch && issued.Where(entry => entry.Serial == before.Serial + 1).Select(entry => entry.Control.InboxKey)
+                .SequenceEqual([lostKey!.Value]),
+            "P-11 the retaken unlanded page mints the same key from the committed serial");
+        check(pages >= 3 && onePending && Row().ParkRecovery is null && Row().ParkResolutionGeneration == generation &&
+            issued.Select(entry => entry.Serial).SequenceEqual(Enumerable.Range(1, issued.Count).Select(index => (long)index)) &&
+            issued.All(entry => entry.Control.Read<ParkDrainEnvelope>().Generation == generation) &&
+            issued.Select(entry => entry.Control.InboxKey).Distinct().Count() == issued.Count &&
+            store.Messages.Values.All(row => row.KeptBy is null && row.Message.Kind != Kinds.Drain) &&
+            Json.Read<List<string>>(Row().State).SequenceEqual(arrivals),
+            $"P-11 {issued.Count} controls have unique full keys and one pending control throughout {pages} pages");
+
+        InstanceRow Row() => store.Instances[actor];
+        Worker MakeWorker(string node) => new(node, 0, wire, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - start, PollLimit = 1_024 });
+        static async Task<IScopeActivation> Activate(Worker worker) => (await new DurableHost([worker]).ActivateAsync(0))!;
+        ValueTask<Contract.Admission> Send(string id, string kind, string? payload = null) =>
+            ingress.SendAsync(scope, target, id, kind, payload);
+        async Task Step(Worker worker)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(actor);
+            await worker.FlushAsync();
+        }
     }
 
     private static async Task HeldCohortAfterTake(Action<bool, string> check, bool suspend, bool secondInput = false)
@@ -591,6 +719,7 @@ internal static class ParkHandoffCreditChecks
         public string Type => "handoff-credit";
         internal bool HoldInputs { get; set; }
         internal string? HoldOnly { get; set; }
+        internal bool FaultOnSuspend { get; init; }
         internal bool KeepsJob { get; init; }
         internal int JobEntries { get; private set; }
         internal int JobResults { get; private set; }
@@ -602,7 +731,8 @@ internal static class ParkHandoffCreditChecks
             var releasesHeld = turn.Inbox.Any(message => message.Kind == "release-held");
             foreach (var message in turn.Inbox)
             {
-                if (message.Kind == "fault") throw new InvalidOperationException("Park the drain-credit fixture.");
+                if (message.Kind == "fault" || FaultOnSuspend && message.Kind == Contract.Kinds.Suspend)
+                    throw new InvalidOperationException("Park the drain-credit fixture.");
                 if (message.Kind is Contract.Kinds.Suspend or Contract.Kinds.Resume)
                     turn.SetHeader(message.Kind == Contract.Kinds.Suspend ? "suspended" : "", turn.Header.Labels);
                 if (message.Kind == "arm") turn.StartJob("credit-job");
