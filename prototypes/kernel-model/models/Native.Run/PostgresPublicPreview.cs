@@ -11,13 +11,16 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresPublicPreview
 {
-    internal static async Task<int> RunAsync(string phase, string? suppliedReference = null, string? suppliedBookmark = null)
+    internal static async Task<int> RunAsync(string phase, string? suppliedReference = null, string? suppliedBookmark = null, long priorEpoch = 0, int priorPid = 0, long originalUntil = 0)
     {
-        var birth = phase == "birth";
+        var birth = phase is "birth" or "hold-owner";
         var tenantProbe = phase == "tenant-probe";
-        if (!birth && (suppliedReference is null || !tenantProbe &&
-            (phase is not ("restart" or "terminal") || suppliedBookmark is null)))
-            throw new ArgumentException("Supply birth, restart or terminal with its reference and bookmark, or tenant-probe with its reference.");
+        if ((phase, suppliedReference, suppliedBookmark, priorEpoch, priorPid, originalUntil) is not
+            (("birth" or "hold-owner", null, null, 0, 0, 0) or
+             ("tenant-probe", not null, null, 0, 0, 0) or
+             ("restart" or "terminal", not null, not null, 0, 0, 0) or
+             ("standby", not null, not null, > 0, > 0, > 0)))
+            throw new ArgumentException("Invalid PostgreSQL Core Preview phase arguments.");
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var stop = timeout.Token;
@@ -89,8 +92,13 @@ internal static class PostgresPublicPreview
         }
 
         Reset();
-        await using var owner = await PostgresNativeRootOwner.ActivateAsync(store, $"preview-{Environment.ProcessId}",
-            scope.Tenant, actor.Id, registry, stop);
+        var node = $"preview-{Environment.ProcessId}";
+        List<string[]>? standbyTurns = phase == "standby" ? [] : null;
+        var prepared = await PostgresNativeRootOwner.PrepareAsync(store, node, scope.Tenant, actor.Id, registry, stop,
+            standbyTurns is null ? null : (_, inputs, _) => standbyTurns.Add(inputs.Select(input => input.Id).ToArray()));
+        await using var owner = phase == "standby" ?
+            await PostgresPreviewFailover.TakeAfterExitAsync(prepared, store, data, node, priorEpoch, priorPid, originalUntil, stop) :
+            await prepared.TryActivateAsync(stop) ?? throw new InvalidOperationException("The partition is already owned.");
         Console.WriteLine($"owner {Environment.ProcessId}");
         Report("ownership");
 
@@ -120,6 +128,8 @@ internal static class PostgresPublicPreview
             Report("read journal through revision 2");
             Console.WriteLine($"reference {actor.Id}");
             Console.WriteLine($"bookmark {bookmark!.Value.Value}");
+            if (phase == "hold-owner")
+                await PostgresPreviewFailover.HoldAsync(prepared, (Worker)owner, data, node, stop);
         }
         else
         {
@@ -137,6 +147,8 @@ internal static class PostgresPublicPreview
                 "public ingress recognized the replay with changed payload");
             await owner.WokenAsync(null, stop);
             await owner.RunAsync(stop);
+            if (standbyTurns is not null)
+                Check(standbyTurns.Count == 0, "the duplicate started zero public actor turns on the standby");
             Report("replay including admission");
             var same = await ReadCheckpoint();
             Check(same.Revision == before.Revision && same.State == before.State, "replay preserved the serialized workflow state and checkpoint revision");
@@ -188,6 +200,8 @@ internal static class PostgresPublicPreview
                     "a rowless terminal disposition cannot consume the running root's approval");
             }
             var finished = await Drive(3);
+            if (standbyTurns is not null)
+                Check(standbyTurns is [["approval-2"]], "the standby ran one public actor turn for approval-2");
             Check(finished is { Status: InstanceStatus.Finished, TerminalRevision: 3, TerminalAt: not null } &&
                 Json.Read<NativeState>(finished.State!).Results["approve"]!.AsArray()
                     .Select(n => n!.GetValue<string>()).SequenceEqual(["Ada", "Grace"]),
