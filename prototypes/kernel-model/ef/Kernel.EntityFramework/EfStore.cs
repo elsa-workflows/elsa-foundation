@@ -119,13 +119,17 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     // same creation transaction as the schema. An existing database keeps its original marker.
     private sealed class RootSelfDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootTimerDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootOperatorDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     internal StoreFormat RequiredFormat => this switch
     {
+        RootOperatorDb => StoreFormat.RootOperators,
         RootTimerDb => StoreFormat.RootTimers,
         RootSelfDb => StoreFormat.RootSelf,
         _ => StoreFormat.Current
     };
     internal bool UsesRootSelfProtocol => this is RootSelfDb or RootTimerDb;
+    internal bool UsesRootOperatorProtocol => this is RootOperatorDb;
+    internal static KernelDb ForPostgresRootOperators(DbContextOptions<KernelDb> options) => new RootOperatorDb(options);
     internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => new RootTimerDb(options);
     internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => new RootSelfDb(options);
 
@@ -160,6 +164,8 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     {
         if (UsesRootSelfProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The continuation profile requires PostgreSQL.");
+        if (UsesRootOperatorProtocol && !Database.IsNpgsql())
+            throw new NotSupportedException("The operator command profile requires PostgreSQL.");
         model.Entity<StoreVersionEntity>(entity =>
         {
             entity.ToTable(StoreVersionEntity.Table);

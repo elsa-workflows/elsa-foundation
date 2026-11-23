@@ -12,11 +12,12 @@ internal static class PostgresMultiRootClient
 {
     internal const string Primary = "preview-a", Secondary = "preview-b";
 
-    internal static Func<KernelDb> Database(bool durable = false)
+    internal static Func<KernelDb> Database(bool durable = false, bool operators = false)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a dedicated PostgreSQL preview database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        if (operators) return () => KernelDb.ForPostgresRootOperators(options);
         return () => durable ? KernelDb.ForPostgresRootSelf(options) : new KernelDb(options);
     }
 
@@ -54,7 +55,7 @@ internal static class PostgresMultiRootClient
     internal static async Task<int> SecondaryAsync(string[] args)
     {
         var scope = FixedTenantScope.Bind(Secondary);
-        var open = Database(durable: args is ["missing-durable", _]);
+        var open = Database(durable: args is ["missing-durable", _], operators: args is ["operator-start"] or ["operator-resume", _]);
         var store = new EfStore(open, postgres: true);
         var ingress = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));

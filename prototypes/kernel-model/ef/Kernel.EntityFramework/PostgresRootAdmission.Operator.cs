@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kernel.EntityFramework;
@@ -30,7 +31,9 @@ internal sealed partial class PostgresRootAdmission
         var windowMs = (long)window.TotalMilliseconds;
         var digest = FoundationRootCreator.OperationDigest(operation);
         await using var db = create();
+        if (!db.UsesRootOperatorProtocol) return null;
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
+        await EfStore.RequireStoreVersionsAsync(db, token);
         var address = await RootAddressAsync(db, tenant, reference, token);
         if (address is null)
         {
@@ -82,6 +85,8 @@ internal sealed partial class PostgresRootAdmission
     internal async Task<Message?> ReadDueRootOperatorAsync(string tenant, string reference, CancellationToken token)
     {
         await using var db = create();
+        if (!db.UsesRootOperatorProtocol) return null;
+        await EfStore.RequireStoreVersionsAsync(db, token);
         var row = await db.Messages.FromSqlInterpolated($"""
             SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1
@@ -93,8 +98,11 @@ internal sealed partial class PostgresRootAdmission
             row.EventMatch is not null || row.Payload is not null || row.ReplyTo is not null || row.Sender is not null ||
             row.JobGeneration != 0 || row.KeepUntil is not { } until)
             throw new StoreException(Failure.Definite, "Unexpected stored one-way operator envelope.");
-        var header = DurableKeyJson.Read<StoredOperator>(row.Start![OperatorPrefix.Length..]);
-        if (header.Reference != reference || header.Creation != 1 || header.Kind != row.Kind ||
+        StoredOperator? header;
+        try { header = DurableKeyJson.Read<StoredOperator>(row.Start![OperatorPrefix.Length..]); }
+        catch (JsonException error) { throw new StoreException(Failure.Definite, "Invalid stored operator framing.", error); }
+        if (header is null) throw new StoreException(Failure.Definite, "Invalid stored operator framing.");
+        if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != row.Kind ||
             header.ExplicitZeroDue && row.Due != 0 || !MatchesDirectOccurrence(reference, header.Operation, row.Id["operator/".Length..]))
             throw new StoreException(Failure.Definite, "The operator occurrence differs from its bound reference and operation.");
         var suffix = row.Id.LastIndexOf('/');

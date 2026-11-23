@@ -16,7 +16,7 @@ internal static class PostgresRootOperatorChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a fresh dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => new(options);
+        KernelDb Open() => KernelDb.ForPostgresRootOperators(options);
         EfStore NewStore() => new(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         var store = NewStore();
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
@@ -144,6 +144,28 @@ internal static class PostgresRootOperatorChecks
             finally
             {
                 await exact.ExecuteUpdateAsync(change => change.SetProperty(m => m.JobGeneration, 0L), ct);
+            }
+            var header = await exact.Select(m => m.Start).SingleAsync(ct);
+            var prefix = header![..(header.IndexOf(':') + 1)];
+            try
+            {
+                foreach (var invalid in new[] { "null", "{" })
+                {
+                    await exact.ExecuteUpdateAsync(change => change.SetProperty(m => m.Start, prefix + invalid), ct);
+                    try
+                    {
+                        _ = await admission.ReadDueRootOperatorAsync("blue", refs[0].Id, ct);
+                        throw new InvalidOperationException("The cold reader accepted invalid operator framing.");
+                    }
+                    catch (StoreException error) when (error.Failure == Failure.Definite && error.Message == "Invalid stored operator framing.")
+                    {
+                        Console.WriteLine("ok the cold reader refuses invalid operator framing");
+                    }
+                }
+            }
+            finally
+            {
+                await exact.ExecuteUpdateAsync(change => change.SetProperty(m => m.Start, header), ct);
             }
         }
         await store.BindWorkerPartitionAsync(0, ct);

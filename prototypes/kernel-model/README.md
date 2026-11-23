@@ -398,6 +398,8 @@ recovery fall outside this case.
 ### PostgreSQL operator admission preview
 
 On a fresh dedicated PostgreSQL database, set `KERNEL_PREVIEW_POSTGRES` and run `models/Native.Run/run-root-operator-preview.sh [owned|ef] [checked|in-batch]`.
+This preview creates an opt-in operator message profile with protocol 5. Existing databases keep their
+original profile, and an owner using a predecessor profile refuses the operator database at startup.
 The first process starts real Native workflows, admits one-way Suspend and Resume commands through an explicitly
 authorized host, and races two requests using the same operation ID. The receipt is per tenant and operation. Replaying
 against another valid reference returns the original target. A second process reads the due commands from the stored
