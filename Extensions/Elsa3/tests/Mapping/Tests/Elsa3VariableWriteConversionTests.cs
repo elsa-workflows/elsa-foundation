@@ -20,6 +20,33 @@ public sealed class Elsa3VariableWriteConversionTests
     private static readonly Elsa3Variable Order = new() { Id = "order-id", Name = "Order", TypeName = "Object" };
     private static readonly Elsa3Variable OrderTotal = new() { Id = "order-total-id", Name = "order-total", TypeName = "Int32" };
 
+    [Theory]
+    [InlineData("function f(item) { item.Status = 'Paid'; var item; } f(getVariable('Order')); return 1;", false)]
+    [InlineData("function f(item) { var item; item.Status = 'Paid'; } f(getVariable('Order')); return 1;", false)]
+    [InlineData("function f(item = getVariable('Order')) { item.Status = 'Paid'; var item; } f(); return 1;", false)]
+    [InlineData("function f(item, read = () => item) { var item = {}; read().Status = 'Paid'; } f(getVariable('Order')); return 1;", false)]
+    [InlineData("function f(write) { write(); var write; } f(() => { getVariable('Order').Status = 'Paid'; }); return 1;", false)]
+    [InlineData("function f(write = () => { getVariable('Order').Status = 'Paid'; }) { var write; write(); } f(); return 1;", false)]
+    [InlineData("switch (0) { default: const item = getVariable('Order'); item.Status = 'Paid'; } return 1;", false)]
+    [InlineData("const item = getVariable('Order'); switch (0) { default: let item = {}; } item.Status = 'Paid'; return 1;", false)]
+    [InlineData("switch (0) { case 0: const item = getVariable('Order'); case 1: item.Status = 'Paid'; } return 1;", false)]
+    [InlineData("function f(item) { var item; item.Status = 'Local'; } f({}); return 1;", true)]
+    [InlineData("function f(item = {}) { var item; item.Status = 'Local'; } f(); return 1;", true)]
+    [InlineData("switch (0) { default: const setVariable = () => 1; setVariable(); } return 1;", true)]
+    [InlineData("switch (0) { default: const getVariable = () => ({}); const item = getVariable(); item.Status = 'Local'; } return 1;", true)]
+    [InlineData("const item = getVariable('Order'); switch (0) { default: let item = {}; item.Status = 'Local'; } return 1;", true)]
+    [InlineData("function f(item) { item = {}; var item; item.Status = 'Local'; } f(getVariable('Order')); return 1;", true)]
+    [InlineData("function f(item, read = () => item) { var item = {}; item.Status = 'Local'; } f(getVariable('Order')); return 1;", true)]
+    public async Task Reusable_scope_analysis_preserves_parameter_values_and_switch_bindings(string source, bool succeeds)
+    {
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Total, Order]), isReusable: true);
+        Assert.Equal(succeeds, result.Succeeded);
+        if (!succeeds)
+            Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
+                item.Guidance.Contains("reusable workflow", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task SetVariable_with_a_literal_name_becomes_a_whole_assignment()
     {
