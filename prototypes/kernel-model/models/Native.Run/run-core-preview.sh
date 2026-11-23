@@ -22,6 +22,8 @@ bookmark="$(awk '$1 == "bookmark" { print $2 }' <<< "$birth")"
 first_pid="$(awk '$1 == "owner" { print $2 }' <<< "$birth")"
 test -n "$reference" && test -n "$bookmark" && test -n "$first_pid"
 
+dotnet "$dll" pg-core-preview tenant-probe "$reference"
+
 if ! restart="$(dotnet "$dll" "$preview" restart "$reference" "$bookmark")"; then
   printf '%s\n' "$restart"
   exit 1

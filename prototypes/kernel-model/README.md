@@ -65,14 +65,24 @@ models/Native.Run/run-core-preview.sh
 The first Embedded host starts a Native approval workflow through the public Foundation contract, records Ada's approval,
 and exits at the second wait. The next process opens the same database and reads from the first process's journal bookmark.
 It sends Ada's operation ID again with a different payload, then sends Grace's approval with a new ID. The stored
-checkpoint stays byte for byte through replay. The journal and final result verify that each approval applied once.
+serialized workflow state and checkpoint revision stay unchanged through replay. The journal and final result verify that each approval applied once.
+Between the two owner processes, a separate diagnostic process bound to another tenant checks that it cannot
+send to the workflow or read its checkpoint or journal. This probe uses no measured connection.
 
 The default receipt estimates round trips by adding EF commands and explicit transaction completions. It excludes connection setup. Setup, ownership and journal reads have their own rows.
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 
+On a fresh PostgreSQL database, `pg-root-history <owned|ef> <checked|in-batch>` on the same runner
+exercises two ordinary turns with no journal entries. The Minimal workflow saves its first approval. The Full
+workflow consumes an unmatched input admitted while its scheduled start was pending. The owner offers the
+creator at its deadline and releases the input after the first checkpoint. Each workflow reaches revisions
+1, 2 and 3. Its journal has two contiguous positions for revisions 1 and 3. The public tail resumes from
+the start bookmark and returns the recorded entries in revision 3.
+
 To measure TCP turns as well, use a dedicated loopback database with `Host=127.0.0.1`, its published port and
-`SSL Mode=Disable` in `KERNEL_PREVIEW_POSTGRES`:
+`SSL Mode=Disable` in `KERNEL_PREVIEW_POSTGRES`. The meter disables optional GSS encryption for its connection
+and refuses `GSS Encryption Mode=Require`.
 
 ```bash
 KERNEL_PREVIEW_MEASURE_WIRE=1 models/Native.Run/run-core-preview.sh
@@ -98,7 +108,8 @@ models/Native.Run/run-core-preview-failover.py
 ```
 
 The fixture starts two Embedded host processes for the same root. The first keeps renewing its lease at the second
-wait. After PostgreSQL refuses the standby's take, the fixture sends SIGKILL to its first child. The same standby
+wait. It drives idle Worker passes and heartbeat renewals beyond the original database lease deadline. The standby
+checks the same node and epoch still have a live renewed lease. After PostgreSQL refuses its take, the fixture sends SIGKILL to its first child. The same standby
 acquires a later epoch after the stored deadline, resumes the journal bookmark, replays Ada's input and records
 Grace's approval. This exercises one fixed partition. K5 covers Cluster placement and balancing across partitions.
 
@@ -117,6 +128,25 @@ journal records one completion revision.
 
 This is a runnable K7 case on the public Embedded preview. The full Flowchart corpus and Cluster qualification
 remain part of K7.
+
+## Built-in Cluster redistribution on PostgreSQL
+
+Set `KERNEL_PREVIEW_POSTGRES` to the connection string of a fresh, empty PostgreSQL database, then run from
+`prototypes/kernel-model`:
+
+```bash
+dotnet restore models/Native.Run --locked-mode
+dotnet run -c Release --no-restore --project models/Native.Run -- pg-runtime-cluster
+```
+
+Two operating-system processes run the built-in `RuntimeNode` and a durable Worker per node. PostgreSQL shows
+eight partitions on the first node, four each when the second joins, and all eight back on the first after the
+second stops gracefully. A Native workflow waits twice for approval events. The departing node records Ada, and
+its successor records Grace at the next journal position.
+
+This fixture uses the general PostgreSQL durable workflow path and the Native compatibility adapter. Public
+Foundation use across an owned set, grouped partition transfers, and qualification of the 1,024-partition release
+profile remain K5 work.
 
 ## The simulation
 
