@@ -131,7 +131,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         var (release, take) = Balancer.Plan(partitions, cluster, scopes.Where(Owns).ToList(), scopes.Where(Activating).ToList(), flaws);
         if (release.Count > 1 && _host is IScopeSetRelease { SupportsSetRelease: true } setHost)
         {
-            if (release.Any(scope => _passing[scope])) return;     // the set moves together once its passes have ended
+            if (release.Any(scope => _passing[scope] || _activating[scope])) return;     // hand the set over when every surplus scope is idle
             cancellationToken.ThrowIfCancellationRequested();     // a process that goes away mid-round gives nothing more up
             var activations = release.Select(Activation).OfType<IScopeActivation>().ToArray();
             if (activations.Length > 0)
