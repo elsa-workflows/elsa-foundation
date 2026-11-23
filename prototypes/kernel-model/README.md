@@ -106,7 +106,8 @@ models/Native.Run/run-core-preview-failover.py
 ```
 
 The fixture starts two Embedded host processes for the same root. The first keeps renewing its lease at the second
-wait. After PostgreSQL refuses the standby's take, the fixture sends SIGKILL to its first child. The same standby
+wait. It drives idle Worker passes and heartbeat renewals beyond the original database lease deadline. The standby
+checks the same node and epoch still have a live renewed lease. After PostgreSQL refuses its take, the fixture sends SIGKILL to its first child. The same standby
 acquires a later epoch after the stored deadline, resumes the journal bookmark, replays Ada's input and records
 Grace's approval. This exercises one fixed partition. K5 covers Cluster placement and balancing across partitions.
 

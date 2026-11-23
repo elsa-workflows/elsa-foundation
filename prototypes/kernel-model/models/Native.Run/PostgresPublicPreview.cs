@@ -10,7 +10,7 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresPublicPreview
 {
-    internal static async Task<int> RunAsync(string phase, string? suppliedReference = null, string? suppliedBookmark = null, long priorEpoch = 0)
+    internal static async Task<int> RunAsync(string phase, string? suppliedReference = null, string? suppliedBookmark = null, long priorEpoch = 0, int priorPid = 0, long originalUntil = 0)
     {
         var birth = phase is "birth" or "hold-owner";
         if (!birth && (phase is not ("restart" or "terminal" or "standby") || suppliedReference is null || suppliedBookmark is null))
@@ -78,7 +78,7 @@ internal static class PostgresPublicPreview
         var prepared = await PostgresNativeRootOwner.PrepareAsync(store, node, scope.Tenant, actor.Id, registry, stop,
             standbyTurns is null ? null : (_, inputs, _) => standbyTurns.Add(inputs.Select(input => input.Id).ToArray()));
         await using var owner = phase == "standby" ?
-            await PostgresPreviewFailover.TakeAfterExitAsync(prepared, store, data, node, priorEpoch, stop) :
+            await PostgresPreviewFailover.TakeAfterExitAsync(prepared, store, data, node, priorEpoch, priorPid, originalUntil, stop) :
             await prepared.TryActivateAsync(stop) ?? throw new InvalidOperationException("The partition is already owned.");
         Console.WriteLine($"owner {Environment.ProcessId}");
         Report("ownership");
@@ -110,14 +110,7 @@ internal static class PostgresPublicPreview
             Console.WriteLine($"reference {actor.Id}");
             Console.WriteLine($"bookmark {bookmark!.Value.Value}");
             if (phase == "hold-owner")
-            {
-                Console.WriteLine($"owner-ready {((Worker)owner).Fences.Single().Epoch}");
-                while (true)
-                {
-                    await prepared.HeartbeatAsync(stop);
-                    await Task.Delay(Defaults.Lease / 4, stop);
-                }
-            }
+                await PostgresPreviewFailover.HoldAsync(prepared, (Worker)owner, data, node, stop);
         }
         else
         {
