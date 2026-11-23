@@ -53,6 +53,23 @@ for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conform
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
+## Inspect and retry parked work
+
+From `prototypes/kernel-model`, run:
+
+```bash
+dotnet restore sim --locked-mode
+dotnet run -c Release --no-restore --project sim -- --park-operator-demo
+```
+
+An approval actor parks when its service is unavailable. The operator lists parked actors through
+`IActorReads`, opens the actor's inbox, and sees a consumed approval and an update that arrived
+during Park on separate pages. A retry command uses the consumed approval's opaque handle.
+After the service is available, the actor resumes and the journal confirms that each input
+applied once. A second Park is discarded. The example shows the inbox rows that remain in
+each open resolution. The fixture uses the in-memory Actor Foundation. Provider projections,
+Studio integration and the remaining operator operations have their own milestone acceptance.
+
 ## Migration plan outcomes from the journal
 
 From `prototypes/kernel-model`, run:
