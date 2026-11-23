@@ -13,7 +13,8 @@ public sealed class S13IntegrationHashGoldenTests
     {
         using var stream = typeof(S13IntegrationHashGoldenTests).Assembly.GetManifestResourceStream("s13-integration-hash-vectors.json")!;
         using var document = JsonDocument.Parse(stream);
-        return document.RootElement.EnumerateArray().Select(item => new object[] { item.Clone() }).ToArray();
+        return document.RootElement.EnumerateArray().Where(item => !item.GetProperty("family").GetString()!.StartsWith("template-", StringComparison.Ordinal))
+            .Select(item => new object[] { item.Clone() }).ToArray();
     }
 
     [Theory]

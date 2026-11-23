@@ -31,6 +31,7 @@ def pin(value):
 
 def generate():
     vectors = []
+    template_contracts = []
     for mask in range(8):
         contract = dict(activityTypeKey='test.activity', contractVersion='1', descriptorKind='test',
                         descriptorPayload=dict(x=1), inputs=[], outcomes=[],
@@ -46,6 +47,12 @@ def generate():
                 contract[name] = True
                 node[name[0].lower() + name[1:]] = True
         contract_pin = pin(contract)
+        wire = dict(activityTypeKey='test.activity', contractVersion='1', schemaFingerprint='sha256:' + contract_pin['sha256'],
+                    descriptorKind='test', descriptorPayload=dict(x=1), inputs={}, outcomes=[], activation=contract['activation'],
+                    result=dict(type=contract['result']['Type'], isRequired=False, policy=contract['result']['Policy'], projections={}))
+        for name in ['SupportsBackgroundExecution', 'AccessesUndeclaredVariables', 'AccessesWorkflowState']:
+            if name in contract: wire[name[0].lower() + name[1:]] = True
+        template_contracts.append((mask, wire))
         node_frame = 'node\nnode:test.activity:1:test:1:{"x":1e0}::::contract:sha256:' + contract_pin['sha256']
         behavior = dict(schemaVersion=2, rootNodeId='node', incidentStrategy=dict(alias='Fault', version='1'),
                         nodes=[node], inputContract=dict(version=1, inputs=[]), dependencies=[])
@@ -130,6 +137,42 @@ def generate():
                       workflowExecutionId=opaque('workflow'), occurredAt='1970-01-01T00:00:00+00:00', activityExecutionIds=[], metadata={}),
                       stateChanges=changes, postCommitIntents=[], metadata={})
         vectors.append(dict(family='activity-metadata', name=name, key=key, payload=raw, revision=pin(state), **pin(commit)))
+
+    def template_root(metadata, payload=None, child=None, contract=None):
+        parent = child is not None
+        return dict(executableNodeId='parent' if parent else 'node', authoredActivityId='parent' if parent else 'authored',
+                    activityType='test.container' if parent else 'test.activity', activityTypeVersion='1', descriptorType='test',
+                    descriptorSchemaVersion='1', descriptorPayload={} if payload is None else payload, inputBindings={}, outputCaptures={},
+                    metadata=metadata, childSlots=[] if child is None else [dict(name='body', activities=[child], operatorSchedulingCapability=None)],
+                    structure=None, activityContract=contract, intrinsicKind=None, intrinsicVariable=None)
+
+    def template_behavior(root):
+        return dict(schemaVersion='1', root=root, resumeTargets=[], directDependencies=[], closedTemplates=[], runtimeRequirements=[],
+                    storageDriverRequirements=[], providerFingerprint='provider', compatibilityMetadata=[])
+
+    for mask, contract in template_contracts:
+        root = template_root({}, payload=dict(x=1), contract=contract)
+        vectors.append(dict(family='template-capability', mask=mask, **pin(template_behavior(root))))
+
+    template_cases = [
+        ('effects-a', 'workflowStateEffects', '{"writesInstanceName":true,"outputNames":["Ren\\u00e9"]}'),
+        ('effects-b', 'workflowStateEffects', '{ "outputNames":["René"], "writesInstanceName":true }'),
+        ('effects-changed', 'workflowStateEffects', '{"writesInstanceName":false,"outputNames":["René"]}'),
+        ('effects-null', 'workflowStateEffects', 'null'), ('effects-missing', 'workflowStateEffects', None),
+        ('variables-a', 'runtime.mayWriteVariables', '[{"key":"x","name":"X"}]'),
+        ('variables-b', 'runtime.mayWriteVariables', '[ {"name":"X", "key":"x"} ]'),
+        ('variables-order-a', 'runtime.mayWriteVariables', '[1,2]'), ('variables-order-b', 'runtime.mayWriteVariables', '[2,1]'),
+        ('ordinary-a', 'ordinary', '{}'), ('ordinary-b', 'ordinary', '{ }')]
+    for name, key, raw in template_cases:
+        metadata = {} if raw is None else {key: raw if key == 'ordinary' else helper.load_json(raw)}
+        for scope in ['root', 'child']:
+            root = template_root(metadata)
+            if scope == 'child': root = template_root({}, child=root)
+            vectors.append(dict(family='template-metadata', name=name, key=key, payload=raw, scope=scope, **pin(template_behavior(root))))
+
+    for text in ['{}', '{ }']:
+        root = template_root({}, payload=dict(metadata=dict(workflowStateEffects=text)))
+        vectors.append(dict(family='template-data-string', payload=text, **pin(template_behavior(root))))
     return vectors
 
 

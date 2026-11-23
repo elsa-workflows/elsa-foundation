@@ -30,6 +30,7 @@ class S13IntegrationVectorsTests(unittest.TestCase):
             flags = [row for row in rows if row['family'] == 'flag' and row['key'] == key]
             self.assertEqual(3, len({row['sha256'] for row in flags}))
             self.assertEqual(3, len({row['nodeSha256'] for row in flags}))
+        self.assertEqual(8, len({row['sha256'] for row in rows if row['family'] == 'template-capability'}))
 
     def test_exact_json_and_opaque_UTF16_causal_controls(self):
         rows = generator.generate()
@@ -43,6 +44,16 @@ class S13IntegrationVectorsTests(unittest.TestCase):
                 self.assertEqual(selector(metadata[left]), selector(metadata[right]))
             for left, right in [('effects-a', 'effects-order'), ('effects-null', 'effects-missing'), ('receipts-a', 'receipts-number'), ('receipts-null', 'receipts-missing'), ('ordinary-a', 'ordinary-b')]:
                 self.assertNotEqual(selector(metadata[left]), selector(metadata[right]))
+
+    def test_template_root_and_child_owner_protocols_leave_data_strings_exact(self):
+        rows = generator.generate()
+        for scope in ['root', 'child']:
+            templates = {row['name']: row['sha256'] for row in rows if row['family'] == 'template-metadata' and row['scope'] == scope}
+            for left, right in [('effects-a', 'effects-b'), ('variables-a', 'variables-b')]:
+                self.assertEqual(templates[left], templates[right])
+            for left, right in [('effects-a', 'effects-changed'), ('effects-null', 'effects-missing'), ('variables-order-a', 'variables-order-b'), ('ordinary-a', 'ordinary-b')]:
+                self.assertNotEqual(templates[left], templates[right])
+        self.assertEqual(2, len({row['sha256'] for row in rows if row['family'] == 'template-data-string'}))
 
 
 if __name__ == '__main__':

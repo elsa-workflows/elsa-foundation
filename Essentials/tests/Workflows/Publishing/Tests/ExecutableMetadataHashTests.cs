@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
@@ -8,6 +10,45 @@ namespace Elsa.Workflows.Publishing.Tests;
 
 public sealed class ExecutableMetadataHashTests
 {
+    public static IEnumerable<object[]> Vectors()
+    {
+        using var stream = typeof(ExecutableMetadataHashTests).Assembly.GetManifestResourceStream("s13-integration-hash-vectors.json")!;
+        using var document = JsonDocument.Parse(stream);
+        return document.RootElement.EnumerateArray().Where(row => row.GetProperty("family").GetString()!.StartsWith("template-", StringComparison.Ordinal))
+            .Select(row => new object[] { row.Clone() }).ToArray();
+    }
+
+    [Theory]
+    [MemberData(nameof(Vectors))]
+    public void Actual_template_consumer_pins_independent_owner_preimages(JsonElement vector)
+    {
+        ExecutableNode root;
+        if (vector.GetProperty("family").GetString() == "template-capability")
+        {
+            var mask = vector.GetProperty("mask").GetInt32();
+            var contract = new ActivityContract("test.activity", "1", "test", Json("{\"x\":1.0}"), [],
+                new ActivityResultContract(new ValueTypeDescriptor("Int32"), false, ActivityValuePolicy.Default, []), [],
+                new ActivityActivationRequirement("test", "execute"), SideEffectProfile.External,
+                (mask & 1) != 0, (mask & 2) != 0, (mask & 4) != 0);
+            root = Node(new Dictionary<string, string>(), "{\"x\":1.0}", contract);
+        }
+        else if (vector.GetProperty("family").GetString() == "template-data-string")
+        {
+            var payload = new { metadata = new { workflowStateEffects = vector.GetProperty("payload").GetString() } };
+            root = Node(new Dictionary<string, string>(), JsonSerializer.Serialize(payload));
+        }
+        else
+        {
+            var metadata = new Dictionary<string, string>();
+            if (vector.GetProperty("payload").GetString() is { } raw) metadata[vector.GetProperty("key").GetString()!] = raw;
+            root = Node(metadata);
+            if (vector.GetProperty("scope").GetString() == "child") root = Parent(root);
+        }
+        var expected = "sha256:" + vector.GetProperty("sha256").GetString();
+        var actual = Template(root);
+        Assert.True(expected == actual, $"First-stable hash freeze: changes require an explicit identity/migration decision. Expected={expected}; actual={actual}");
+    }
+
     [Theory]
     [InlineData("workflowStateEffects", "{\"writesInstanceName\":true,\"outputNames\":[\"Ren\\u00e9\"]}", "{ \"outputNames\":[\"René\"],\"writesInstanceName\":true }", true)]
     [InlineData("workflowStateEffects", "{\"accessesState\":false}", "{\"accessesState\":true}", false)]
@@ -82,8 +123,8 @@ public sealed class ExecutableMetadataHashTests
         Assert.Equal(3, nodes.Select(Template).Distinct(StringComparer.Ordinal).Count());
     }
 
-    private static ExecutableNode Node(IReadOnlyDictionary<string, string> metadata, string payload = "{}") =>
-        new("node", "authored", "test.activity", "1", "test", Json(payload), new Dictionary<string, RuntimeInputBinding>(), metadata);
+    private static ExecutableNode Node(IReadOnlyDictionary<string, string> metadata, string payload = "{}", ActivityContract? contract = null) =>
+        new("node", "authored", "test.activity", "1", "test", Json(payload), new Dictionary<string, RuntimeInputBinding>(), metadata, activityContract: contract);
 
     private static ExecutableNode Parent(ExecutableNode child) =>
         new("parent", "parent", "test.container", "1", "test", Json("{}"), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(),

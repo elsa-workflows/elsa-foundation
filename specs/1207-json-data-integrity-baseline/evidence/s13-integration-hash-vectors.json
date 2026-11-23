@@ -383,5 +383,263 @@
     },
     "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"aggregateFaultCount\":0,\"attempt\":null,\"attempts\":null,\"bookmarkIds\":[],\"branchId\":null,\"callStackDepth\":null,\"completedAt\":null,\"completion\":null,\"contractIdentity\":null,\"documentVersion\":3e0,\"enclosingExecutionScopeId\":null,\"execution\":{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"activityType\":\"dABlAHMAdAAuAGEAYwB0AGkAdgBpAHQAeQA=\",\"activityTypeVersion\":\"MQA=\",\"authoredActivityId\":\"YQB1AHQAaABvAHIAZQBkAA==\",\"executableNodeId\":\"bgBvAGQAZQA=\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"executionScopeId\":null,\"executionSequence\":1e0,\"fault\":null,\"faultCount\":0,\"incidentIds\":[],\"inputSnapshot\":null,\"invocationId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"iterationFrameRequest\":null,\"iterationId\":null,\"iterationVariableFrame\":null,\"metadata\":{\"aQBkAGUAbgB0AGkAdAB5AADY\":\"dgBhAGwAdQBlAAHY\",\"bwByAGQAaQBuAGEAcgB5AA==\":\"ewAgAH0A\"},\"parentActivityExecutionId\":null,\"privateState\":null,\"provenance\":{\"attempt\":null,\"branchId\":null,\"executionPathId\":null,\"executionScopeId\":null,\"iterationId\":null,\"metadata\":{},\"parentActivityExecutionId\":null,\"schedulingActivityExecutionId\":null,\"schedulingCause\":null,\"schedulingWorkflowExecutionId\":null},\"scheduledAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"schedulingActivityExecutionId\":null,\"startedAt\":null,\"status\":\"Completed\",\"subStatus\":null,\"supersededAt\":null,\"supersededByActivityExecutionId\":null,\"triggerDeliveries\":null,\"triggerRegistrations\":null,\"valueFlowCompatibility\":null,\"variableFrame\":null},\"stateId\":\"YQBjAHQAaQB2AGkAdAB5AA==\"}],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
     "sha256": "024128c75d6cf45236b1c3dccf41c378169315cbd6b25d2018d92ceb445bc561"
+  },
+  {
+    "family": "template-capability",
+    "mask": 0,
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":{\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":{},\"outcomes\":[],\"result\":{\"isRequired\":false,\"policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"projections\":{},\"type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null}},\"schemaFingerprint\":\"sha256:df61383dae06c3a47743012fd6808ec99ae314d03f8ab3b54264f3da84dec0cf\"},\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{\"x\":1e0},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "4dc8dbfae05b8a5d443878956b976af24ab7dcce81ba82650b53f2ae359231c0"
+  },
+  {
+    "family": "template-capability",
+    "mask": 1,
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":{\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":{},\"outcomes\":[],\"result\":{\"isRequired\":false,\"policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"projections\":{},\"type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null}},\"schemaFingerprint\":\"sha256:b62fdd3e75b479ec69fe50f7c5c2afaedfd53066f445d691601cfbb28a8682af\",\"supportsBackgroundExecution\":true},\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{\"x\":1e0},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "f7b62d400a5986edc078b05bedb20c5a46accc042bba869cdefa1adb00e3cf16"
+  },
+  {
+    "family": "template-capability",
+    "mask": 2,
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":{\"accessesUndeclaredVariables\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":{},\"outcomes\":[],\"result\":{\"isRequired\":false,\"policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"projections\":{},\"type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null}},\"schemaFingerprint\":\"sha256:545c149dfc868e4f38b4226999c327f6e316c87cc491dce074099711c8449650\"},\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{\"x\":1e0},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "10a47bf4d979ab56b457222b58b5b0227cd296a6d4f6c25c11df3099ea5356b9"
+  },
+  {
+    "family": "template-capability",
+    "mask": 3,
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":{\"accessesUndeclaredVariables\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":{},\"outcomes\":[],\"result\":{\"isRequired\":false,\"policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"projections\":{},\"type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null}},\"schemaFingerprint\":\"sha256:d9bc8b6b6001582f9f56a3a3c7c6e3b10ae970f72c5e4446c920c038ec3ad885\",\"supportsBackgroundExecution\":true},\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{\"x\":1e0},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "4720617dd3c24d3c2a3f3aa9b1ffdf899278ab3894705b2482c6ed6d7cd01981"
+  },
+  {
+    "family": "template-capability",
+    "mask": 4,
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":{\"accessesWorkflowState\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":{},\"outcomes\":[],\"result\":{\"isRequired\":false,\"policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"projections\":{},\"type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null}},\"schemaFingerprint\":\"sha256:6ee085ab0e96b65739f69aa468d475a97f7d3edb20a70d12b96b7521d051249e\"},\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{\"x\":1e0},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "a60aee3b8e6a8f8a4a70e024b99b77c440098c3621cbe5c6e7e6e5c4659b1759"
+  },
+  {
+    "family": "template-capability",
+    "mask": 5,
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":{\"accessesWorkflowState\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":{},\"outcomes\":[],\"result\":{\"isRequired\":false,\"policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"projections\":{},\"type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null}},\"schemaFingerprint\":\"sha256:e0b8305fa2808ec6340d092714561898db6cf326036ff23b0693555a6d9d734f\",\"supportsBackgroundExecution\":true},\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{\"x\":1e0},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "79d455a4b84b58b77558175ec357bfe2546ae49242f531ed6951e0bc43e0c8a3"
+  },
+  {
+    "family": "template-capability",
+    "mask": 6,
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":{\"accessesUndeclaredVariables\":true,\"accessesWorkflowState\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":{},\"outcomes\":[],\"result\":{\"isRequired\":false,\"policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"projections\":{},\"type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null}},\"schemaFingerprint\":\"sha256:9afb55fe47bd7b1ecb495552dfcd1d7ddfca244ca741568ef47d7f0b46d0eaee\"},\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{\"x\":1e0},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "3c981220a753370ab0a08ce8d0b231b990bb7abe50ab1404e28b03d9d72f888d"
+  },
+  {
+    "family": "template-capability",
+    "mask": 7,
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":{\"accessesUndeclaredVariables\":true,\"accessesWorkflowState\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":{},\"outcomes\":[],\"result\":{\"isRequired\":false,\"policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"projections\":{},\"type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null}},\"schemaFingerprint\":\"sha256:76dcfd8570ef483fd1f49bc0e8339898e63ef5ab5b07dce250a162512ca8503e\",\"supportsBackgroundExecution\":true},\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{\"x\":1e0},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "0363ea5317423c9e7881de69dcdafa51ef2c8a6745fe15fc90443ca9548c4513"
+  },
+  {
+    "family": "template-metadata",
+    "name": "effects-a",
+    "key": "workflowStateEffects",
+    "payload": "{\"writesInstanceName\":true,\"outputNames\":[\"Ren\\u00e9\"]}",
+    "scope": "root",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"workflowStateEffects\":{\"outputNames\":[\"Ren\\u00E9\"],\"writesInstanceName\":true}},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "c45e76b4c84cfc0f751ad1583d1f4adeb81933088f7518fe82854382918a89e2"
+  },
+  {
+    "family": "template-metadata",
+    "name": "effects-a",
+    "key": "workflowStateEffects",
+    "payload": "{\"writesInstanceName\":true,\"outputNames\":[\"Ren\\u00e9\"]}",
+    "scope": "child",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.container\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"parent\",\"childSlots\":[{\"activities\":[{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"workflowStateEffects\":{\"outputNames\":[\"Ren\\u00E9\"],\"writesInstanceName\":true}},\"outputCaptures\":{},\"structure\":null}],\"name\":\"body\",\"operatorSchedulingCapability\":null}],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"parent\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "8c0dd220cf4dcf223847196118015272a06523a955b11ad31483ec03228996f2"
+  },
+  {
+    "family": "template-metadata",
+    "name": "effects-b",
+    "key": "workflowStateEffects",
+    "payload": "{ \"outputNames\":[\"René\"], \"writesInstanceName\":true }",
+    "scope": "root",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"workflowStateEffects\":{\"outputNames\":[\"Ren\\u00E9\"],\"writesInstanceName\":true}},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "c45e76b4c84cfc0f751ad1583d1f4adeb81933088f7518fe82854382918a89e2"
+  },
+  {
+    "family": "template-metadata",
+    "name": "effects-b",
+    "key": "workflowStateEffects",
+    "payload": "{ \"outputNames\":[\"René\"], \"writesInstanceName\":true }",
+    "scope": "child",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.container\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"parent\",\"childSlots\":[{\"activities\":[{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"workflowStateEffects\":{\"outputNames\":[\"Ren\\u00E9\"],\"writesInstanceName\":true}},\"outputCaptures\":{},\"structure\":null}],\"name\":\"body\",\"operatorSchedulingCapability\":null}],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"parent\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "8c0dd220cf4dcf223847196118015272a06523a955b11ad31483ec03228996f2"
+  },
+  {
+    "family": "template-metadata",
+    "name": "effects-changed",
+    "key": "workflowStateEffects",
+    "payload": "{\"writesInstanceName\":false,\"outputNames\":[\"René\"]}",
+    "scope": "root",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"workflowStateEffects\":{\"outputNames\":[\"Ren\\u00E9\"],\"writesInstanceName\":false}},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "856c476999f633fd4d4f45a2f2c6eed19ca4993be122fd9150da714875005c87"
+  },
+  {
+    "family": "template-metadata",
+    "name": "effects-changed",
+    "key": "workflowStateEffects",
+    "payload": "{\"writesInstanceName\":false,\"outputNames\":[\"René\"]}",
+    "scope": "child",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.container\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"parent\",\"childSlots\":[{\"activities\":[{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"workflowStateEffects\":{\"outputNames\":[\"Ren\\u00E9\"],\"writesInstanceName\":false}},\"outputCaptures\":{},\"structure\":null}],\"name\":\"body\",\"operatorSchedulingCapability\":null}],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"parent\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "f00a8dce15487bb25d288bf9a1982270898d10722e6ee516af6bb108b70c1b8e"
+  },
+  {
+    "family": "template-metadata",
+    "name": "effects-null",
+    "key": "workflowStateEffects",
+    "payload": "null",
+    "scope": "root",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"workflowStateEffects\":null},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "12b63650ad376ab7bd9f93696f48e0ce07d4415b6b5ced9bd0b03028add55c0d"
+  },
+  {
+    "family": "template-metadata",
+    "name": "effects-null",
+    "key": "workflowStateEffects",
+    "payload": "null",
+    "scope": "child",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.container\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"parent\",\"childSlots\":[{\"activities\":[{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"workflowStateEffects\":null},\"outputCaptures\":{},\"structure\":null}],\"name\":\"body\",\"operatorSchedulingCapability\":null}],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"parent\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "9662006bb2d40351483316e43db738ecc4715af22bfc40e408d5fbea742aa124"
+  },
+  {
+    "family": "template-metadata",
+    "name": "effects-missing",
+    "key": "workflowStateEffects",
+    "payload": null,
+    "scope": "root",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "ea7dbd1f81919af6628ef41038c5a619659f245250278c771aee6afee4803963"
+  },
+  {
+    "family": "template-metadata",
+    "name": "effects-missing",
+    "key": "workflowStateEffects",
+    "payload": null,
+    "scope": "child",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.container\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"parent\",\"childSlots\":[{\"activities\":[{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null}],\"name\":\"body\",\"operatorSchedulingCapability\":null}],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"parent\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "76b8a07b13c4ced0d3bb3665874c24e340168287d45ada2cb4eccae8fcaa005c"
+  },
+  {
+    "family": "template-metadata",
+    "name": "variables-a",
+    "key": "runtime.mayWriteVariables",
+    "payload": "[{\"key\":\"x\",\"name\":\"X\"}]",
+    "scope": "root",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"runtime.mayWriteVariables\":[{\"key\":\"x\",\"name\":\"X\"}]},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "7c389c5a9f0f455f10d69477edb370c98341e8f14cc1c440fde4fa7d74210c42"
+  },
+  {
+    "family": "template-metadata",
+    "name": "variables-a",
+    "key": "runtime.mayWriteVariables",
+    "payload": "[{\"key\":\"x\",\"name\":\"X\"}]",
+    "scope": "child",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.container\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"parent\",\"childSlots\":[{\"activities\":[{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"runtime.mayWriteVariables\":[{\"key\":\"x\",\"name\":\"X\"}]},\"outputCaptures\":{},\"structure\":null}],\"name\":\"body\",\"operatorSchedulingCapability\":null}],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"parent\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "6a8c3c45ddded5fc692e232d69f4b1a48cc19867ee74502bd9e14cafd500d48e"
+  },
+  {
+    "family": "template-metadata",
+    "name": "variables-b",
+    "key": "runtime.mayWriteVariables",
+    "payload": "[ {\"name\":\"X\", \"key\":\"x\"} ]",
+    "scope": "root",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"runtime.mayWriteVariables\":[{\"key\":\"x\",\"name\":\"X\"}]},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "7c389c5a9f0f455f10d69477edb370c98341e8f14cc1c440fde4fa7d74210c42"
+  },
+  {
+    "family": "template-metadata",
+    "name": "variables-b",
+    "key": "runtime.mayWriteVariables",
+    "payload": "[ {\"name\":\"X\", \"key\":\"x\"} ]",
+    "scope": "child",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.container\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"parent\",\"childSlots\":[{\"activities\":[{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"runtime.mayWriteVariables\":[{\"key\":\"x\",\"name\":\"X\"}]},\"outputCaptures\":{},\"structure\":null}],\"name\":\"body\",\"operatorSchedulingCapability\":null}],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"parent\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "6a8c3c45ddded5fc692e232d69f4b1a48cc19867ee74502bd9e14cafd500d48e"
+  },
+  {
+    "family": "template-metadata",
+    "name": "variables-order-a",
+    "key": "runtime.mayWriteVariables",
+    "payload": "[1,2]",
+    "scope": "root",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"runtime.mayWriteVariables\":[1e0,2e0]},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "ae63489d35ebd05ef7a8ab34fee081eb07f6c01d2888324ba47c1c1214c836c0"
+  },
+  {
+    "family": "template-metadata",
+    "name": "variables-order-a",
+    "key": "runtime.mayWriteVariables",
+    "payload": "[1,2]",
+    "scope": "child",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.container\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"parent\",\"childSlots\":[{\"activities\":[{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"runtime.mayWriteVariables\":[1e0,2e0]},\"outputCaptures\":{},\"structure\":null}],\"name\":\"body\",\"operatorSchedulingCapability\":null}],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"parent\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "10ab4757397dd569a1714a3fa41cdf7268baed0c25627d26becb6ed0910324d5"
+  },
+  {
+    "family": "template-metadata",
+    "name": "variables-order-b",
+    "key": "runtime.mayWriteVariables",
+    "payload": "[2,1]",
+    "scope": "root",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"runtime.mayWriteVariables\":[2e0,1e0]},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "52584b93880635fb06c429d2095e6ec4179485193ff969de13d08240daf510e6"
+  },
+  {
+    "family": "template-metadata",
+    "name": "variables-order-b",
+    "key": "runtime.mayWriteVariables",
+    "payload": "[2,1]",
+    "scope": "child",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.container\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"parent\",\"childSlots\":[{\"activities\":[{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"runtime.mayWriteVariables\":[2e0,1e0]},\"outputCaptures\":{},\"structure\":null}],\"name\":\"body\",\"operatorSchedulingCapability\":null}],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"parent\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "cf82ab09c1cd400ef037d926edbf3b3844b372e5c7f8ff0555ccbbeac3afb931"
+  },
+  {
+    "family": "template-metadata",
+    "name": "ordinary-a",
+    "key": "ordinary",
+    "payload": "{}",
+    "scope": "root",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"ordinary\":\"{}\"},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "78e7d636dc948ce69dcb642828b0816cb3bef26ca0e2ffcb245c815e9ce657d1"
+  },
+  {
+    "family": "template-metadata",
+    "name": "ordinary-a",
+    "key": "ordinary",
+    "payload": "{}",
+    "scope": "child",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.container\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"parent\",\"childSlots\":[{\"activities\":[{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"ordinary\":\"{}\"},\"outputCaptures\":{},\"structure\":null}],\"name\":\"body\",\"operatorSchedulingCapability\":null}],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"parent\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "142e729222ff823e967813f5e955952bdbbf565ad6839e8dac2aa2cebc76cdc1"
+  },
+  {
+    "family": "template-metadata",
+    "name": "ordinary-b",
+    "key": "ordinary",
+    "payload": "{ }",
+    "scope": "root",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"ordinary\":\"{ }\"},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "af2feafb01c8ebb620cbc3faef75a4582ecc6ef25fb1df141669869b2d3e4bcc"
+  },
+  {
+    "family": "template-metadata",
+    "name": "ordinary-b",
+    "key": "ordinary",
+    "payload": "{ }",
+    "scope": "child",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.container\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"parent\",\"childSlots\":[{\"activities\":[{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{\"ordinary\":\"{ }\"},\"outputCaptures\":{},\"structure\":null}],\"name\":\"body\",\"operatorSchedulingCapability\":null}],\"descriptorPayload\":{},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"parent\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "f13530adbbe02a688a48eb6cc805b731597e91c2baf8a21c51ed275a0fb8fc7a"
+  },
+  {
+    "family": "template-data-string",
+    "payload": "{}",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{\"metadata\":{\"workflowStateEffects\":\"{}\"}},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "07b56bb619ca019630148f1768c210aebd27dc7a444a4bf942f253f83250ad4c"
+  },
+  {
+    "family": "template-data-string",
+    "payload": "{ }",
+    "canonical": "{\"closedTemplates\":[],\"compatibilityMetadata\":[],\"directDependencies\":[],\"providerFingerprint\":\"provider\",\"resumeTargets\":[],\"root\":{\"activityContract\":null,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"authoredActivityId\":\"authored\",\"childSlots\":[],\"descriptorPayload\":{\"metadata\":{\"workflowStateEffects\":\"{ }\"}},\"descriptorSchemaVersion\":\"1\",\"descriptorType\":\"test\",\"executableNodeId\":\"node\",\"inputBindings\":{},\"intrinsicKind\":null,\"intrinsicVariable\":null,\"metadata\":{},\"outputCaptures\":{},\"structure\":null},\"runtimeRequirements\":[],\"schemaVersion\":\"1\",\"storageDriverRequirements\":[]}",
+    "sha256": "0ec645f920bcb54a0c2248a186563d38ad1faf0f690b22b143830edff51dc238"
   }
 ]
