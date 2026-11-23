@@ -61,6 +61,8 @@ internal sealed class OperatorIngress(Durable.InMemoryStore store, Func<BoundSco
             Durable.InMemoryStore.OperatorAdmission.Accepted => new Admission(AdmissionOutcome.Accepted, new ActorRef(receipt.Reference!)),
             Durable.InMemoryStore.OperatorAdmission.Duplicate => new Admission(AdmissionOutcome.Duplicate, new ActorRef(receipt.Reference!)),
             Durable.InMemoryStore.OperatorAdmission.StaleSelection => new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.StaleSelection),
+            Durable.InMemoryStore.OperatorAdmission.Unavailable when kind == Kinds.Migrate && target is Target.Ref =>
+                new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.TargetMismatch),
             Durable.InMemoryStore.OperatorAdmission.TargetMismatch => new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.TargetMismatch),
             _ => refused
         });

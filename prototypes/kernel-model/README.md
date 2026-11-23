@@ -73,6 +73,22 @@ The example stores its view and bookmark in memory and uses a fixture to write t
 The persisted view and its paging are separate K9 work. K11 supplies the migration plan actor, exact-ref dispatch
 and operator controls.
 
+### Dispatch a committed migration batch
+
+From `prototypes/kernel-model`:
+
+```sh
+dotnet run -c Release --project sim -- --migration-plan-dispatch
+```
+
+This K11 dispatch example reads a committed batch and sends `Migrate` outside actor turns to its exact actor refs.
+A lost admission reply leaves the batch pending. A new runner sends the same operation IDs and receives deduplication
+receipts. A deleted selection stays unanswered even when the caller key has been reused. The journal displays
+one result from each responding life, and an authorization refusal leaves the batch pending.
+
+The fixture uses the real in-memory public command route and a small actor that changes its selected definition.
+The product plan actor, Native migration validation and operator scheduling remain separate K11 work.
+
 ## The simulation
 
 ```
