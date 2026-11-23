@@ -44,7 +44,7 @@ internal static class PostgresRuntimeCluster
             var joined = await WaitForOwners(rows => rows.Count(p => p.Owner == first.Node) == Partitions / 2 &&
                 rows.Count(p => p.Owner == b) == Partitions / 2);
             foreach (var p in joined)
-                Check(!p.Died && (p.Owner == first.Node ? p.Epoch == alone[p.Id].Epoch : p.Epoch > alone[p.Id].Epoch),
+                Check(!p.Died && (p.Owner == first.Node ? p.Epoch == alone[p.Id].Epoch : p.Epoch == alone[p.Id].Epoch + 1),
                     "the join moves only the surplus partitions through orderly give-up");
             var target = joined.First(p => p.Owner == b);
             Console.WriteLine($"second PID {second.Id} joined: {Partitions / 2} partitions each; target partition {target.Id} moved to its epoch {target.Epoch}");
@@ -81,7 +81,7 @@ internal static class PostgresRuntimeCluster
             Check(second.ExitCode == 0, "second runtime exited after its graceful stop");
             var reunited = await WaitForOwners(rows => rows.All(p => p.Owner == first.Node));
             foreach (var p in reunited)
-                Check(!p.Died && (joined[p.Id].Owner == first.Node ? p.Epoch == joined[p.Id].Epoch : p.Epoch > joined[p.Id].Epoch),
+                Check(!p.Died && (joined[p.Id].Owner == first.Node ? p.Epoch == joined[p.Id].Epoch : p.Epoch == joined[p.Id].Epoch + 1),
                     "departure returns each moved partition through an orderly give-up");
             Console.WriteLine($"second runtime left: first owns all {Partitions}; target advanced to epoch {reunited[target.Id].Epoch}");
 
