@@ -1,3 +1,4 @@
+using Kernel.Ef.Conformance;
 using System.Data.Common;
 using Kernel.EntityFramework;
 using Kernel.Store.Conformance;
@@ -21,6 +22,12 @@ using Npgsql;
 string[] flags = ["--fence-in-batch", "--checked-fence", "--m5", "--rcsi-off", "--rc", "--ef-commit", "--owned-commit", "--fence-ignores-count"];
 switch (args)
 {
+    case ["sqlite", "version-take", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckTakeVersionsAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "version-take", .. var options]:
+        await new EfProvider(engine, connection, options).CheckTakeVersionsAsync();
+        return 0;
     case ["sqlite", .. var rest]:
         return await Cli.RunAsync(new EfProvider("sqlite", null, rest), rest.Where(a => !flags.Contains(a)).ToArray());
     case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, .. var rest]:
@@ -76,6 +83,12 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         _ => null,
     };
 
+    internal async Task CheckTakeVersionsAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
+        await VersionTakeChecks.Run(fixture.CreateAdmin(), fixture.Store, fixture.NewClient());
+    }
+
     public async Task<ProvidedStore> CreateAsync(int partitions, StoreSetup setup)
     {
         var counter = setup.Counting ? new Counting(Pg) : null;
@@ -126,6 +139,7 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         public override IKernelStore NewClient() => outside;
         public override ICostCounter? Counter => counter;
         public override Func<int, Task>? Reopen => partitions => outside.CreateAsync(partitions);
+        internal Func<KernelDb> CreateAdmin() => provider.Factory(admin);
 
         // PostgreSQL refuses a NUL in text (22021), every time. SQLite, SQL Server and MySQL store any string the
         // instance row can hold: no refused row (the case is skipped).
