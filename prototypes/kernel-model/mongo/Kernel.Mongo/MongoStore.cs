@@ -38,7 +38,9 @@ public sealed partial class MongoStore : IKernelStore
 
     private readonly IMongoClient _client;
     private readonly MongoStoreOptions _options;
-    private readonly IMongoCollection<BsonDocument> _partitions, _clocks, _instances, _messages, _subscriptions, _events, _journal, _nodes, _projections, _views;
+    private static readonly string[] DataCollections =
+        ["partitions", "clocks", "instances", "messages", "subscriptions", "events", "journal", "nodes", "projections", "views"];
+    private readonly IMongoCollection<BsonDocument> _meta, _partitions, _clocks, _instances, _messages, _subscriptions, _events, _journal, _nodes, _projections, _views;
     private readonly ConcurrentDictionary<(int Partition, long Epoch), long> _known = new();     // FenceInBatch: the clock at (partition, epoch)
 
     public MongoStore(IMongoClient client, string database, MongoStoreOptions? options = null)
@@ -48,6 +50,7 @@ public sealed partial class MongoStore : IKernelStore
         // Reads use majority by default. The take reads leases from the primary, where a rolled-back renewal can only delay a take.
         var db = client.GetDatabase(database, new MongoDatabaseSettings { ReadConcern = ReadConcern.Majority, WriteConcern = WriteConcern.WMajority, ReadPreference = ReadPreference.Primary });
         Database = db;
+        _meta = db.GetCollection<BsonDocument>("meta");
         _partitions = db.GetCollection<BsonDocument>("partitions");
         _clocks = db.GetCollection<BsonDocument>("clocks");
         _instances = db.GetCollection<BsonDocument>("instances");
@@ -71,7 +74,7 @@ public sealed partial class MongoStore : IKernelStore
     public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
     {
         var rows = (int)await _partitions.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
-        if (await Database.GetCollection<BsonDocument>("meta").Find(new BsonDocument("_id", "partitions")).FirstOrDefaultAsync(cancellationToken) is not { } meta) return rows;
+        if (await _meta.Find(new BsonDocument("_id", "partitions")).FirstOrDefaultAsync(cancellationToken) is not { } meta) return rows;
         var count = meta["count"].ToInt32();
         return rows == count ? count
             : throw new StoreException(Failure.Definite, $"Initialization incomplete: {rows} of {count} partition documents exist. Re-run CreateAsync at the same count.");
@@ -81,7 +84,8 @@ public sealed partial class MongoStore : IKernelStore
     public async Task CreateAsync(int partitions = Defaults.ServerPartitions)
     {
         var existing = await (await Database.ListCollectionNamesAsync()).ToListAsync();
-        foreach (var name in new[] { "meta", "partitions", "clocks", "instances", "messages", "subscriptions", "events", "journal", "nodes", "projections", "views" })
+        await OpenVersionsAsync(existing, partitions);
+        foreach (var name in DataCollections)
             if (!existing.Contains(name)) await Database.CreateCollectionAsync(name);
         await _messages.Indexes.CreateManyAsync([
             new CreateIndexModel<BsonDocument>(new BsonDocument { { "partition", 1 }, { "done", 1 }, { "seq", 1 }, { "_id", 1 } }, new CreateIndexOptions { Name = "poll" }),
@@ -94,18 +98,6 @@ public sealed partial class MongoStore : IKernelStore
         await _journal.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument { { "partition", 1 }, { "instance", 1 } }));
         await _events.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument("key", 1)));
         await _journal.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument { { "partition", 1 }, { "position", 1 } }, new CreateIndexOptions { Unique = true }));
-        // The count is fixed when the database is created (K1 slice 7): another count would address partitions with no
-        // document, or leave some unserved. Nothing is migrated: recreate the database. The first open records the count
-        // before it writes a partition document, one at a time and outside a transaction, so an open cut short is
-        // finished by the next open at the same count, and refused at another.
-        var meta = Database.GetCollection<BsonDocument>("meta");
-        var rows = await _partitions.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty);
-        if (await meta.Find(new BsonDocument("_id", "partitions")).FirstOrDefaultAsync() is null && rows > 0 && rows != partitions)
-            throw new StoreException(Failure.Definite, $"The database has {rows} partitions and was opened with {partitions}. The count is fixed at creation: recreate the database.");
-        var recorded = await meta.FindOneAndUpdateAsync(new BsonDocument("_id", "partitions"), new BsonDocument("$setOnInsert", new BsonDocument("count", partitions)),
-            new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After });
-        if (recorded["count"].ToInt32() != partitions)
-            throw new StoreException(Failure.Definite, $"The database has {recorded["count"].ToInt32()} partitions and was opened with {partitions}. The count is fixed at creation: recreate the database.");
         for (var p = 0; p < partitions; p++)
         {
             await _partitions.UpdateOneAsync(new BsonDocument("_id", p), new BsonDocument("$setOnInsert", new BsonDocument

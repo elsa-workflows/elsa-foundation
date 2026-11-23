@@ -14,7 +14,9 @@ public static class SetReleaseChecks
         var expired = await ExpiredAsync();
         var cancelled = await CancelledAsync();
         var busy = await BusySurplusAsync();
-        return owned && fixedWorkers && expired && cancelled && busy ? 0 : 1;
+        var fixedBusy = await FixedBusySurplusAsync(passStartsDuringRelease: false);
+        var fixedInterleaved = await FixedBusySurplusAsync(passStartsDuringRelease: true);
+        return owned && fixedWorkers && expired && cancelled && busy && fixedBusy && fixedInterleaved ? 0 : 1;
     }
 
     private static async Task<bool> CheckAsync(bool ownedSets)
@@ -127,6 +129,58 @@ public static class SetReleaseChecks
         var expected = deferred && wire.SetReleases == 1 && watcher.Violations.Count == 0
             && Enumerable.Range(0, Count).All(partition => runtime.Owns(partition) == (partition < 4));
         Console.WriteLine($"{(expected ? "ok" : "FAIL")} a running surplus pass defers the group until a later round, " +
+            $"seam violations [{string.Join(", ", watcher.Violations)}]");
+        await runtime.StopAsync();
+        return expected;
+    }
+
+    private static async Task<bool> FixedBusySurplusAsync(bool passStartsDuringRelease)
+    {
+        var watcher = new Watcher();
+        var (store, wire, _, runtime) = await ReadyToReleaseAsync(ownedSets: false, () => 1_000L, watcher);
+        var busy = passStartsDuringRelease ? 6 : 7;
+        var poll = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        wire.HoldScalarPoll = (busy, poll.Task);
+        await runtime.Activation(busy)!.WokenAsync(null);
+
+        Task? balance = null;
+        Task<IScopeActivation?>? competingTake = null;
+        var releaseWaiting = true;
+        if (passStartsDuringRelease)
+        {
+            wire.Stall(TimeSpan.FromMinutes(1));
+            balance = runtime.BalanceAsync();
+            var nextRound = runtime.BalanceAsync();
+            var nextPass = runtime.PassAsync(7);
+            competingTake = runtime.ActivateAsync(7);
+            releaseWaiting = wire.ReleaseBegan(7) is not null && !balance.IsCompleted && nextRound.IsCompletedSuccessfully &&
+                nextPass.IsCompletedSuccessfully && nextPass.Result is null && competingTake.IsCompletedSuccessfully && competingTake.Result is null;
+        }
+        var pass = runtime.PassAsync(busy).AsTask();
+        var passWaiting = !pass.IsCompleted;
+        balance ??= runtime.BalanceAsync();
+        wire.Resume();
+        bool gaveUpIdle;
+        try
+        {
+            await balance.WaitAsync(TimeSpan.FromSeconds(3));
+            if (competingTake is not null) await competingTake.WaitAsync(TimeSpan.FromSeconds(3));
+            gaveUpIdle = !pass.IsCompleted && Enumerable.Range(0, Count).All(p =>
+                runtime.Owns(p) == (p < 4 || p == busy) &&
+                store.Partitions[p].Owner == (p < 4 || p == busy ? "first" : null) &&
+                (wire.ReleaseBegan(p) is not null) == (p >= 4 && p != busy));
+        }
+        finally
+        {
+            poll.SetResult();
+            await pass.WaitAsync(TimeSpan.FromSeconds(3));
+        }
+        await runtime.BalanceAsync();
+        var expected = releaseWaiting && passWaiting && gaveUpIdle && watcher.Violations.Count == 0 &&
+            wire.SetReleases == 0 && Enumerable.Range(0, Count).All(p =>
+                runtime.Owns(p) == (p < 4) && store.Partitions[p].Owner == (p < 4 ? "first" : null));
+        Console.WriteLine($"{(expected ? "ok" : "FAIL")} fixed workers released the idle surplus while scope {busy} was passing " +
+            $"({(passStartsDuringRelease ? "pass began during release of 7" : "pass began before the round")}); " +
             $"seam violations [{string.Join(", ", watcher.Violations)}]");
         await runtime.StopAsync();
         return expected;

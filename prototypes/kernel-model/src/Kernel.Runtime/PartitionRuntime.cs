@@ -80,7 +80,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// </summary>
     public async Task<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
     {
-        if (_activating[scope]) return null;
+        if (_activating[scope] || _releasing[scope]) return null;
         _activating[scope] = true;
         IScopeActivation? activation;
         try { activation = await (_host ?? throw new InvalidOperationException("The runtime has not started.")).ActivateAsync(scope, cancellationToken); }
@@ -129,9 +129,9 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         }
         var scopes = Enumerable.Range(0, partitions).ToList();
         var (release, take) = Balancer.Plan(partitions, cluster, scopes.Where(Owns).ToList(), scopes.Where(Activating).ToList(), flaws);
-        if (release.Any(scope => _passing[scope])) return;     // the next round can give up the whole surplus after its pass
         if (release.Count > 1 && _host is IScopeSetRelease { SupportsSetRelease: true } setHost)
         {
+            if (release.Any(scope => _passing[scope])) return;     // the set moves together once its passes have ended
             cancellationToken.ThrowIfCancellationRequested();     // a process that goes away mid-round gives nothing more up
             var activations = release.Select(Activation).OfType<IScopeActivation>().ToArray();
             if (activations.Length > 0)
@@ -154,7 +154,11 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             foreach (var surplus in release)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                await DeactivateAsync(surplus, cancellationToken);
+                // Earlier give-ups may have awaited the store while a pass started on this worker.
+                if (_passing[surplus] || _activating[surplus] || !Owns(surplus)) continue;
+                _releasing[surplus] = true;
+                try { await DeactivateAsync(surplus, cancellationToken); }
+                finally { _releasing[surplus] = false; }
             }
         }
         if (take.Count > 1 && _host is IScopeSetGain { SupportsSetGain: true } gains)
