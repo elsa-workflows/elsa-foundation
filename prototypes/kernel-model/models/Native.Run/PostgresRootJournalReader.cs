@@ -4,9 +4,8 @@ using Bookmark = Kernel.Durable.FoundationJournalPaging.Bookmark;
 
 namespace Kernel.Native.Run;
 
-internal sealed class PostgresRootJournalReader(EfStore store, int pageSize)
+internal sealed class PostgresRootJournalReader(EfStore store, FoundationReadCursor cursor, int pageSize)
 {
-    private readonly FoundationReadCursor _cursor = new();
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
 
@@ -16,7 +15,7 @@ internal sealed class PostgresRootJournalReader(EfStore store, int pageSize)
         ArgumentNullException.ThrowIfNull(scope);
         var context = FoundationJournalPaging.Context(scope.Tenant, actor.Id);
         Span<byte> bookmark = stackalloc byte[Bookmark.Size];
-        if (from is { } token && !_cursor.TryOpen(context, token.Value, bookmark))
+        if (from is { } token && !cursor.TryOpen(context, token.Value, bookmark))
             throw new ArgumentException("The continuation does not match this actor journal.", nameof(from));
         var after = from is null ? default : Bookmark.Read(bookmark);
 
@@ -32,7 +31,7 @@ internal sealed class PostgresRootJournalReader(EfStore store, int pageSize)
         {
             Span<byte> landing = stackalloc byte[Bookmark.Size];
             last.Write(landing);
-            next = new(_cursor.Seal(context, landing));
+            next = new(cursor.Seal(context, landing));
         }
         return new(entries.Select(entry => new JournalEntry(entry.Revision, entry.Entry)).ToArray(), next, snapshot.AsOf);
     }

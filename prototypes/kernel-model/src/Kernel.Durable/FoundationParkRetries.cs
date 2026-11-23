@@ -16,7 +16,7 @@ public sealed partial class InMemoryStore
     private const ushort DigestKey = ushort.MaxValue - 1;
     private const int RetryHeaderBytes = 2 * sizeof(long) + 2 * sizeof(ushort);
     private const int MaxRetryPlainBytes = RetryHeaderBytes + 2 * (MaxRetryKeyUnits + MaxRetryMatchUnits);
-    internal const int MaxRetryTokenChars = (MaxRetryPlainBytes + CursorNonceBytes + CursorTagBytes + 2) / 3 * 4;
+    internal const int MaxRetryTokenChars = (MaxRetryPlainBytes + FoundationReadCursor.Overhead + 2) / 3 * 4;
 
     // This is the store issuer for the K3 harness. A public Kept view can call it for the rows it projects.
     internal string? SealFoundationKeptHandle(string tenant, string reference, InboxKey key)

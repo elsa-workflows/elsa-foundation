@@ -24,15 +24,16 @@ public sealed partial class InMemoryStore
     internal bool TryOpenReadCursor(ReadOnlySpan<byte> context, string? token, Span<byte> plain) => _readCursor.TryOpen(context, token, plain);
 }
 
-internal sealed class FoundationReadCursor
+internal sealed class FoundationReadCursor(byte[]? key = null)
 {
     private const int NonceBytes = 12;
     private const int TagBytes = 16;
-    private readonly Lazy<byte[]> _key = new(() => RandomNumberGenerator.GetBytes(32));
+    internal const int Overhead = NonceBytes + TagBytes;
+    private readonly Lazy<byte[]> _key = new(() => key ?? RandomNumberGenerator.GetBytes(32));
 
     internal string Seal(ReadOnlySpan<byte> context, ReadOnlySpan<byte> plain)
     {
-        Span<byte> bytes = stackalloc byte[plain.Length + NonceBytes + TagBytes];
+        Span<byte> bytes = stackalloc byte[plain.Length + Overhead];
         var nonce = bytes[..NonceBytes];
         var tag = bytes.Slice(NonceBytes, TagBytes);
         var cipher = bytes[(NonceBytes + TagBytes)..];
@@ -44,7 +45,7 @@ internal sealed class FoundationReadCursor
 
     internal bool TryOpen(ReadOnlySpan<byte> context, string? token, Span<byte> plain)
     {
-        var bytesCount = plain.Length + NonceBytes + TagBytes;
+        var bytesCount = plain.Length + Overhead;
         if (token is null || token.Length != (bytesCount + 2) / 3 * 4) return false;
         Span<byte> bytes = stackalloc byte[bytesCount];
         if (!Convert.TryFromBase64String(token, bytes, out var written) || written != bytes.Length) return false;

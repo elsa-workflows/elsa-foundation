@@ -13,6 +13,14 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     private sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput, bool ExplicitZeroDue = false);
     private const string CreatorPrefix = "!kernel-root/1:";
 
+    internal async Task<FoundationReadCursor> OpenJournalCursorAsync(CancellationToken cancellationToken)
+    {
+        await using var db = create();
+        var issuerKey = await db.Database.SqlQueryRaw<byte[]>("""SELECT "Key" AS "Value" FROM "FoundationRootIssuer" """)
+            .SingleAsync(cancellationToken);
+        return new(HMACSHA256.HashData(issuerKey, "elsa-preview/journal-cursor/1"u8));
+    }
+
     internal async Task InstallAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
