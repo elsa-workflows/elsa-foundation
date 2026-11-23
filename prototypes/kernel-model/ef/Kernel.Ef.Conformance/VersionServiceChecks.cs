@@ -34,6 +34,16 @@ internal static class VersionServiceChecks
             ("sweep", () => store.SweepAsync().AsTask())
         })
             await VersionTakeChecks.Refuses(call, "journal codec=2", operation);
+        await VersionTakeChecks.Refuses(() => new Projector(store, 0).CatchUpAsync(), "journal codec=2", "requested projection");
+        var reports = new List<StoreFormatException>();
+        var background = new NodeProjection(store, reportFormatFailure: reports.Add);
+        background.Nudge([0, 1]);
+        await background.Idle.WaitAsync(TimeSpan.FromSeconds(10));
+        Check(reports is [var reported] && ReferenceEquals(reported, background.FormatFailure) &&
+            reported.Message.Contains("journal codec=2", StringComparison.Ordinal),
+            "scheduled projection reports the stored format to its host");
+        background.Nudge([0, 1]);
+        Check(background.Idle.IsCompletedSuccessfully && background.Rounds == 1, "scheduled projection stops on an incompatible format");
         await using (var db = create())
         {
             Check((await db.Projections.SingleAsync(row => row.Partition == 0)).Position == 0 &&
