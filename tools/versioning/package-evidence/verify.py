@@ -43,7 +43,7 @@ class NoAttestations(ValueError):
     """The lookup completed with no attestations of the requested type."""
 
 
-def signed_inventory(path):
+def signed_inventory(path, *, digest=None):
     release = subprocess.check_output(["gh", "--version"], text=True, timeout=15)
     parsed = re.match(r"gh version (\d+)\.(\d+)\.(\d+)\b", release)
     if not parsed or tuple(map(int, parsed.groups())) < (2, 102, 0):
@@ -74,7 +74,7 @@ def signed_inventory(path):
 
     provenance = {invocation for predicate, invocation in statements("https://slsa.dev/provenance/v1")
                   if invocation == predicate["runDetails"]["metadata"]["invocationId"]}
-    digest = sha256(path)
+    digest = digest or sha256(path)
     matched = []
     for bom, certificate_run in statements("https://cyclonedx.org/bom"):
         meta = bom["metadata"]
@@ -169,9 +169,12 @@ if __name__ == "__main__":
         elif args.destination:
             verify_destination(args.package, args.destination == "recovered", args.feed)
         else:
-            inventory = signed_inventory(args.package)
+            if args.output and args.output.exists() and args.output.samefile(args.package):
+                raise ValueError("Inventory output refers to the input package")
+            digest = sha256(args.package)
+            inventory = signed_inventory(args.package, digest=digest)
             if args.output:
                 args.output.write_text(json.dumps(inventory, indent=2) + "\n")
-            print(f"Verified {args.package.name} sha256:{sha256(args.package)}")
+            print(f"Verified {args.package.name} sha256:{digest}")
     except (ValueError, OSError, subprocess.SubprocessError, zipfile.BadZipFile) as error:
         parser.exit(1, f"Package evidence verification failed: {error}\n")

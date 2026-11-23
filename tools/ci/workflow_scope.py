@@ -65,7 +65,7 @@ def select(event_name: str, event: dict, changed: list[str] | None, patterns: di
     heavy = heavy_now(event_name, event, changed, every_push)
     for suite, filters in patterns.items():
         affected = changed is None or any(matches(path, pattern) for path in changed for pattern in filters)
-        if suite == 'studio':
+        if suite in {'studio', 'package-evidence'}:
             result[suite] = affected
         elif suite == 'weaver':
             result[suite] = affected and not draft and heavy

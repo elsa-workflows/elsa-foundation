@@ -105,9 +105,12 @@ try
         return 0;
     }
 
-    var apiKey = Environment.GetEnvironmentVariable(Required("--api-key-env")) is { Length: > 0 } key
+    var keyVariable = Required("--api-key-env");
+    var apiKey = Environment.GetEnvironmentVariable(keyVariable) is { Length: > 0 } key
         ? key
-        : throw new ArgumentException($"The environment variable {options["--api-key-env"]} holds no API key.");
+        : throw new ArgumentException($"The environment variable {keyVariable} holds no API key.");
+    // Only NuGetFeed needs the write credential. Git and public attestation verification start child processes.
+    Environment.SetEnvironmentVariable(keyVariable, null);
     using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
     var report = await PublishCommand.RunAsync(
         new PublishOptions(repository, Required("--ref"), options.GetValueOrDefault("--commit") ?? "HEAD", Required("--plan-dir"), options.GetValueOrDefault("--summary"),

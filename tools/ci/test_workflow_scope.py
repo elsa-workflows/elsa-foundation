@@ -70,6 +70,13 @@ class WorkflowScopeTests(unittest.TestCase):
     def test_docs_ready_event_does_not_start_unrelated_proofs(self):
         self.assertFalse(any(self.selected(paths=['docs/README.md'], action='ready_for_review').values()))
 
+    def test_release_evidence_uses_the_full_changed_set_on_push_and_merge_queue(self):
+        for event in ('push', 'pull_request', 'merge_group'):
+            self.assertTrue(self.selected(event, ['tools/versioning/package-evidence/generate.mjs',
+                                                  'docs/README.md'])['package-evidence'])
+            self.assertFalse(self.selected(event, ['docs/README.md'])['package-evidence'])
+            self.assertTrue(self.selected(event, None)['package-evidence'])
+
     def test_push_scopes_studio_and_weaver_like_a_pull_request(self):
         self.assertFalse(any(self.selected('push', ['docs/README.md']).values()))
         self.assertTrue(self.selected('push', ['essentials/src/Feature.cs'])['weaver'])

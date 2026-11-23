@@ -1,5 +1,8 @@
 """Offline tests for package read-back, recovery and the clean-reader CLI."""
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -123,6 +126,18 @@ class DestinationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, '2.102.0'):
                 verify.signed_inventory(self.file)
             gh.assert_called_once_with(['gh', '--version'], text=True, timeout=15)
+
+    def test_output_aliases_preserve_the_package(self):
+        hard_link = self.file.with_name("linked-package")
+        os.link(self.file, hard_link)
+        original = self.file.read_bytes()
+        for output in (self.file, hard_link):
+            with self.subTest(output=output):
+                result = subprocess.run([sys.executable, verify.__file__, str(self.file), "--output", str(output)],
+                                        capture_output=True, text=True)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("Inventory output refers to the input package", result.stderr)
+                self.assertEqual(original, self.file.read_bytes())
 
     def test_sealed_subjects_require_the_exact_set_and_bytes(self):
         plan = self.file.parent

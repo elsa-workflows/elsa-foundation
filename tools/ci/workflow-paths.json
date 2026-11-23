@@ -1,4 +1,14 @@
 {
+  "package-evidence": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/packages.yml",
+    "tools/ci/workflow-paths.json",
+    "tools/ci/workflow_scope.py",
+    "tools/versioning/package-evidence/**",
+    "tools/versioning/Elsa.Versioning.Publisher/**",
+    "essentials/src/Caching/Core/**",
+    "essentials/src/Caching/Memory/**"
+  ],
   "studio": [
     "Studio/**",
     "extensions/*/studio/**",
