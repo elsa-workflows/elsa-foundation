@@ -38,13 +38,23 @@ sealed class Wire
 
     public static Wire Start(string engine, string connection)
     {
-        var match = engine == "sqlserver"
-            ? System.Text.RegularExpressions.Regex.Match(connection, @"Server=([^,;]+),(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-            : System.Text.RegularExpressions.Regex.Match(connection, @"(?:Host|server)=([^;]+);.*?Port=(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var match = Endpoint(engine, connection);
         var wire=Start(match.Groups[1].Value, int.Parse(match.Groups[2].Value));
         wire._postgres=engine=="postgres";
         return wire;
     }
+
+    public static bool HasLocalEndpoint(string engine, string connection)
+    {
+        var match = Endpoint(engine, connection);
+        return match.Groups[1].Value is "127.0.0.1" or "localhost" &&
+            ushort.TryParse(match.Groups[2].Value, out var port) && port != 0;
+    }
+
+    private static System.Text.RegularExpressions.Match Endpoint(string engine, string connection) =>
+        engine == "sqlserver"
+            ? System.Text.RegularExpressions.Regex.Match(connection, @"Server=([^,;]+),(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            : System.Text.RegularExpressions.Regex.Match(connection, @"(?:Host|server)=([^;]+);.*?Port=(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     public string Rewrite(string connection)
     {

@@ -29,9 +29,10 @@ static class EngineRun
         if (args.Length < 3) return 2;
         var referenceCost = args[0] == "reference-cost";
         if (referenceCost && (args[1] is not ("postgres" or "sqlserver" or "mysql" or "sqlite") ||
-            args.Length != 4 || args[3] != "disposable=1"))
+            args.Length != 4 || args[3] != "disposable=1" || args[1] != "sqlite" && !Wire.HasLocalEndpoint(args[1], args[2])))
         {
             Console.Error.WriteLine("Usage: x reference-cost postgres|sqlserver|mysql|sqlite <disposable connection> disposable=1");
+            Console.Error.WriteLine("Network engines require 127.0.0.1 or localhost and an explicit port for the wire meter.");
             Console.Error.WriteLine("Use a disposable database and an isolated MySQL server. The MySQL fixture provisions a server-wide worker account.");
             return 2;
         }
