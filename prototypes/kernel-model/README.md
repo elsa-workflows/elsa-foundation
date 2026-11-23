@@ -114,7 +114,8 @@ read. The independent `inspect` process reads three stable pages with one migrat
 and one unanswered actor from the closed plan. A separately tenant-bound reader checks the populated neighboring scope.
 
 This verifies the physical SQLite view and local keyset reads. The journal producer in the fixture uses the
-in-memory Actor Foundation. Other view providers and K11 migration orchestration remain open.
+in-memory Actor Foundation. Connecting this persisted view to the existing in-memory K11 migration plan runner
+remains open, along with support for other view providers.
 
 To page the persisted result through the operator read contract, use the same file and printed plan reference:
 

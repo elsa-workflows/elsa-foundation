@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Kernel.EntityFramework;
 using Kernel.Native;
 using Kernel.Native.Run;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 // Usage:
@@ -32,14 +33,26 @@ if (args is ["sqlite-plan-projection", "enable-paging", var viewFile])
 {
     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
     try { await SqliteMigrationPlanReads.EnableAsync(viewFile, timeout.Token); return 0; }
-    catch (InvalidOperationException error) { Console.Error.WriteLine(error.Message); return 1; }
+    catch (Exception error) when (error is InvalidOperationException or SqliteException)
+    { Console.Error.WriteLine(error.Message); return 1; }
 }
 if (args is ["sqlite-plan-projection", "list", var listFile, var listPlan, var limit, .. var continuation] &&
-    int.TryParse(limit, out var pageSize) && continuation.Length <= 1)
+    int.TryParse(limit, out var pageSize) && pageSize is >= 1 and <= 500 && continuation.Length <= 1)
 {
     try { return await SqlitePlanProjectionChecks.ListAsync(listFile, listPlan, pageSize, continuation.SingleOrDefault()); }
-    catch (Exception error) when (error is ArgumentException or InvalidOperationException)
+    catch (Exception error) when (error is ArgumentException or InvalidOperationException or SqliteException)
     { Console.Error.WriteLine(error.Message); return 1; }
+}
+if (args is ["sqlite-plan-projection", ..])
+{
+    Console.Error.WriteLine("""
+        Usage
+          sqlite-plan-projection build <file>
+          sqlite-plan-projection inspect <file> <plan-ref> <digest>
+          sqlite-plan-projection enable-paging <file>
+          sqlite-plan-projection list <file> <plan-ref> <page-size 1-500> [continuation]
+        """);
+    return 2;
 }
 if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flowchart-peer"), var flowSize] && int.TryParse(flowSize, out var flowPartitions))
     return await PostgresClusterChecks.RunAsync(flowPartitions, flowClusterMode == "pg-cluster-flowchart-peer", flowchart: true);
