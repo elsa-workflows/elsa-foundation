@@ -53,6 +53,7 @@ internal static class PostgresRootTimedJobSettlement
         await using var first = await Take(firstStore, First);
         await Drive(first, () => Task.FromResult(ControlledJob.Attempts.Count == 1));
         var initial = (await firstStore.ReadFirstRootAsync(Tenant, actor.Id, stop))!;
+        await RefuseLegacyCheckpointReads();
         try
         {
             await issuingFormat.ReadFirstRootAsync(Tenant, actor.Id, stop);
@@ -105,6 +106,7 @@ internal static class PostgresRootTimedJobSettlement
         await oldCallback.WaitAsync(stop);
         await Drive(second, async () => (await secondStore.ReadFirstRootAsync(Tenant, actor.Id, stop))?.Revision == 2);
         var settlement = (await secondStore.ReadFirstRootAsync(Tenant, actor.Id, stop))!;
+        await RefuseLegacyCheckpointReads();
         var resultRow = (await Rows(before.Id)).Single();
         var selected = Json.Read<JobFinished>(resultRow.Payload!);
         var expected = timeoutWins ? "timeout" : "completed";
@@ -133,6 +135,7 @@ internal static class PostgresRootTimedJobSettlement
         await second.RunAsync(stop);
         await third.RunAsync(stop);
         var end = (await thirdStore.ReadFirstRootAsync(Tenant, actor.Id, stop))!;
+        await RefuseLegacyCheckpointReads();
         var history = await thirdStore.ReadJournalOfAsync(0, before.Id, 0, stop);
         var entries = history.SelectMany(entry => Json.Read<string[]>(entry.Entries)).ToArray();
         Check(end is { Revision: 3, Status: InstanceStatus.Finished, NextJobGeneration: 1, Jobs: null } &&
@@ -144,6 +147,25 @@ internal static class PostgresRootTimedJobSettlement
             "The fresh Native model must apply the same actor's stored result once, with one end and an empty inbox.");
         Console.WriteLine($"ok Native timed job {(inBatch ? "in-batch" : "checked")} {expected}, epochs {old.Epoch}->{settling.Epoch}->{third.Fences.Single().Epoch}, revisions 1->2->3");
         return 0;
+
+        async Task RefuseLegacyCheckpointReads()
+        {
+            (int Protocol, Func<KernelDb> Open)[] olderProfiles =
+            [
+                (2, () => new KernelDb(options)),
+                (6, () => KernelDb.ForPostgresRootJobs(options))
+            ];
+            foreach (var (protocol, open) in olderProfiles)
+            {
+                var oldStore = new EfStore(open, postgres: true);
+                try
+                {
+                    await oldStore.ReadFirstRootAsync(Tenant, actor.Id, stop);
+                    throw new InvalidOperationException($"The protocol-{protocol} point reader accepted a populated settlement checkpoint.");
+                }
+                catch (StoreException error) when (error.Failure == Failure.Definite && error.Message == "Unsupported qualified actor checkpoint.") { }
+            }
+        }
 
         EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
         async Task<Worker> Take(EfStore store, string name)

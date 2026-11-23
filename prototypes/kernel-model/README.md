@@ -653,7 +653,8 @@ recovery still need qualification.
 Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database for each run. Use
 `pg-root-timed-job-settlement checked complete` with the Native runner. The other fence is `in-batch`, and
 `timeout` runs the deadline-first case. This fixed-root fixture uses schema 3, message protocol 9 and journal
-codec 1. A protocol-7 client refuses both ownership and root checkpoint reads against this database.
+codec 1. Settlement checkpoints use a dedicated state encoding. Protocol-2 ordinary and protocol-6 job
+point readers refuse that encoding. A protocol-7 client refuses ownership and point reads at the format check.
 
 The first owner commits a real Native job and deadline. A fresh owner then settles the pair under its own
 fence. In the completion case the callback publishes before the deadline and the owner settles after it.

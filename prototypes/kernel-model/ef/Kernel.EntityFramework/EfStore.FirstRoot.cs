@@ -8,8 +8,12 @@ public sealed partial class EfStore
 {
     // The generic load treats this as an unknown state family and leaves its bytes intact.
     private const string PublicRootState = StoredState.Family + "4:public-root:";
-    private static string RootStateFamily(KernelDb db) => db.UsesRootValueProtocol
-        ? StoredState.Family + "5:public-root-values:" : PublicRootState;
+    private static string RootStateFamily(KernelDb db) => db switch
+    {
+        { UsesRootValueProtocol: true } => StoredState.Family + "5:public-root-values:",
+        { UsesRootTimedJobSettlement: true } => StoredState.Family + "6:public-root-timed-jobs:",
+        _ => PublicRootState
+    };
 
     internal sealed record RootImage(CreationAddress Actor, string Model, string Definition, string TypeData,
         IReadOnlyDictionary<string, string> Labels, string? State, int StateVersion, long Revision)
