@@ -6,6 +6,7 @@ namespace Kernel.EntityFramework;
 internal sealed partial class PostgresRootAdmission
 {
     private const string DirectPrefix = "!kernel-direct/1:";
+    private const string HeldDirectPrefix = "!kernel-held-direct/1:";
     private sealed record StoredDirect(string Operation, long Creation, bool EscapedPayload, bool ExplicitZeroDue,
         string? EscapedKind = null);
 
@@ -19,7 +20,10 @@ internal sealed partial class PostgresRootAdmission
             CREATE INDEX IF NOT EXISTS "IX_FoundationDirectReceipts_Until" ON "FoundationDirectReceipts" ("Until");
             """, cancellationToken);
 
-    internal static bool IsStoredDirect(string? value) => value?.StartsWith(DirectPrefix, StringComparison.Ordinal) == true;
+    internal static bool IsStoredDirect(string? value) => value?.StartsWith(DirectPrefix, StringComparison.Ordinal) == true ||
+        IsHeldDirect(value);
+
+    private static bool IsHeldDirect(string? value) => value?.StartsWith(HeldDirectPrefix, StringComparison.Ordinal) == true;
 
     internal enum DirectResult { Accepted, Duplicate, Refused, MissingTarget }
 
@@ -105,7 +109,7 @@ internal sealed partial class PostgresRootAdmission
         var escaped = payload is not null && (payload.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(payload));
         var body = escaped ? DurableKeyJson.Write(payload) : payload;
         var escapedKind = kind.Contains('\0') ? kind : null;
-        var header = DirectPrefix + DurableKeyJson.Write(new StoredDirect(id, address.Creation, escaped, due == 0, escapedKind));
+        var header = (reply is null ? DirectPrefix : HeldDirectPrefix) + DurableKeyJson.Write(new StoredDirect(id, address.Creation, escaped, due == 0, escapedKind));
         if (Encoding.UTF8.GetByteCount(header) + (body is null ? 0L : Encoding.UTF8.GetByteCount(body)) +
             (reply is null ? 0 : Encoding.UTF8.GetByteCount(reply.Address)) >
             16 * 1024 * 1024 - 24 * 1024)
@@ -185,11 +189,13 @@ internal sealed partial class PostgresRootAdmission
 
     internal static Message DecodeDirect(MessageEntity row, string reference, bool replies = false)
     {
-        if (row.ReplyTo is not null && (!replies || ReplyTo.Parse(row.ReplyTo) is not { Node.Length: > 0, Request.Length: > 0, Deadline: > 0 }))
+        var held = IsHeldDirect(row.Start);
+        if (held != (row.ReplyTo is not null) || held &&
+            (!replies || ReplyTo.Parse(row.ReplyTo!) is not { Node.Length: > 0, Request.Length: > 0, Deadline: > 0 }))
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public reply route.");
         if (row.JobGeneration != 0 || !IsStoredDirect(row.Start))
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
-        var header = DurableKeyJson.Read<StoredDirect>(row.Start![DirectPrefix.Length..]);
+        var header = DurableKeyJson.Read<StoredDirect>(row.Start![(held ? HeldDirectPrefix.Length : DirectPrefix.Length)..]);
         if (header.Creation != 1 || !MatchesDirectOccurrence(reference, header.Operation, row.Id))
             throw new StoreException(Failure.Definite, "Public input occurrence differs from its admitted identity.");
         var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;

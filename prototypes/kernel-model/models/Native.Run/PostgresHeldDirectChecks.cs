@@ -16,7 +16,7 @@ internal static class PostgresHeldDirectChecks
     private const string Receiver = "approval-receiver";
     private const string Operation = "approve";
 
-    internal static async Task<int> RunAsync(bool inBatch)
+    internal static async Task<int> RunAsync(bool inBatch, bool afterDeadline)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         var stop = deadline.Token;
@@ -71,10 +71,8 @@ internal static class PostgresHeldDirectChecks
             catch (StoreException error) when (error.Failure == Failure.Definite) { }
 
             var signal = Json.Write(new CompositeSignal(frame, Operation, "Ada"));
-            var now = await db.Database.SqlQueryRaw<long>("""
-                SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value"
-                """).SingleAsync(stop);
-            request = requests.OpenBound(Operation, now + 30_000, Tenant, null);
+            var now = await DatabaseNow();
+            request = requests.OpenBound(Operation, now + (afterDeadline ? 4_000 : 30_000), Tenant, null);
             answer = requests.CompletionOf(request);
             var expired = requests.OpenBound("expired", now - 1, Tenant, null);
             Check(await admission.AdmitDirectRequestAsync(Tenant, actor.Id, CompositeSignal.Kind, signal, Receiver, expired, false, stop)
@@ -92,9 +90,17 @@ internal static class PostgresHeldDirectChecks
             Check(pending is { Id: Operation } && pending.ReplyTo == request.ReplyAddress(Receiver) && pending.Payload == signal &&
                 !answer.IsCompleted && (await api.TailAsync(scope, actor, bookmark, stop)).Items.Count == 0,
                 "The route must be durable with the admitted input while the receiver still waits.");
+            var oldAdmission = new PostgresRootAdmission(() => new KernelDb(options), TimeSpan.FromHours(1));
+            try
+            {
+                await oldAdmission.ReadPendingDirectAsync(Tenant, actor.Id, stop);
+                throw new InvalidOperationException("The ordinary reader must refuse the pending held-reply envelope.");
+            }
+            catch (StoreException error) when (error.Failure == Failure.Definite) { }
         }
 
         var successorStore = Store();
+        transport.CheckLanded = () => ResponseHasCommitted().GetAwaiter().GetResult();
         var prepared = 0;
         await using var successor = await Take(successorStore, "successor", (turn, _, _) =>
         {
@@ -106,27 +112,55 @@ internal static class PostgresHeldDirectChecks
             (await admission.ReadPendingDirectAsync(Tenant, actor.Id, stop)).SequenceEqual([pending]),
             "A new epoch must find the same durable occurrence and registration.");
         var final = await Drive(successor, successorStore, 2);
+        Check(prepared == 1 && transport.Attempts == 1 && transport.Landed && !answer.IsCompleted,
+            "The outgoing reply must first observe the committed revision and settled input on an independent connection.");
+        var receivedAt = await DatabaseNow();
+        Check(receivedAt < request.Deadline, "The response must be ready on the wire while the original registration is open.");
+        if (afterDeadline)
+        {
+            do
+            {
+                await Task.Delay(20, stop);
+                receivedAt = await DatabaseNow();
+            } while (receivedAt < request.Deadline);
+        }
+        transport.Deliver(receivedAt);
         var response = await answer.WaitAsync(stop);
         var suffix = await api.TailAsync(scope, actor, bookmark, stop);
-        Check(prepared == 1 && transport.Accepted == 1 && transport.Attempts == 1 && request.Responses == 1 &&
-            response is { Channel: "response", Tenant: Tenant, Request: var registration, Item: JsonNode output } &&
-            registration == request.Registration && Values.To<HttpResponse>(output) is { StatusCode: 202, Body: JsonValue body } &&
-            body.GetValue<string>() == "approved", "The original bound receiver must get one real Native response after the commit.");
+        if (afterDeadline)
+            Check(response.Error == "timeout" && transport.Accepted == 0 && request.Responses == 0,
+                "A response delivered after the database deadline must close the receiver with timeout.");
+        else
+            Check(transport.Accepted == 1 && request.Responses == 1 &&
+                response is { Channel: "response", Tenant: Tenant, Request: var registration, Item: JsonNode output } &&
+                registration == request.Registration && Values.To<HttpResponse>(output) is { StatusCode: 202, Body: JsonValue body } &&
+                body.GetValue<string>() == "approved", "The original bound receiver must get one real Native response after the commit.");
         Check(final is { Revision: 2, Status: InstanceStatus.Finished } && suffix.Items.Count > 0 &&
             suffix.Items.All(entry => entry.Revision == 2), "The successor must commit exactly one final revision.");
         var row = await db.Messages.AsNoTracking().SingleAsync(m => m.Id == pending.InboxKey.Id, stop);
         Check(row.Done && row.ReplyTo is null && (await admission.ReadPendingDirectAsync(Tenant, actor.Id, stop)).Count == 0,
             "Settling the input must clear the reply route while retaining the receipt.");
-        var replay = requests.OpenBound(Operation, request.Deadline, Tenant, null);
+        var replay = requests.OpenBound(Operation, await DatabaseNow() + 30_000, Tenant, null);
         Check(await admission.AdmitDirectRequestAsync(Tenant, actor.Id, CompositeSignal.Kind, "changed", Receiver, replay, false, stop)
             == PostgresRootAdmission.DirectResult.Duplicate, "A new registration cannot reopen a settled operation.");
         await Pass(successor);
-        Check(transport.Accepted == 1 && requests.IsOpen(replay) &&
+        Check(transport.Attempts == 1 && transport.Accepted == (afterDeadline ? 0 : 1) && requests.IsOpen(replay) &&
             (await api.TailAsync(scope, actor, bookmark, stop)).Items.SequenceEqual(suffix.Items),
             "The replay must add no reply or journal revision.");
         requests.Disconnect(replay);
-        Console.WriteLine($"ok PostgreSQL held direct request {(inBatch ? "in-batch" : "checked")}: epochs {oldEpoch}->{successor.Fences.Single().Epoch}, revision 2, one response, replay Duplicate.");
+        Console.WriteLine($"ok PostgreSQL held direct request {(inBatch ? "in-batch" : "checked")}: epochs {oldEpoch}->{successor.Fences.Single().Epoch}, revision 2, {(afterDeadline ? "timeout at receiver" : "one response")}, replay Duplicate.");
         return 0;
+
+        Task<long> DatabaseNow() => db.Database.SqlQueryRaw<long>("""
+            SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value"
+            """).SingleAsync(stop);
+
+        async Task<bool> ResponseHasCommitted()
+        {
+            await using var cold = Open();
+            return await cold.Instances.AsNoTracking().AnyAsync(row => row.Id == waiting.Actor.Id && row.Revision == 2, stop) &&
+                await cold.Messages.AsNoTracking().AnyAsync(row => row.Id == pending.InboxKey.Id && row.Done && row.ReplyTo == null, stop);
+        }
 
         EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
 
@@ -184,11 +218,22 @@ internal static class PostgresHeldDirectChecks
     {
         internal int Attempts { get; private set; }
         internal int Accepted { get; private set; }
+        internal bool Landed { get; private set; }
+        internal Func<bool>? CheckLanded { get; set; }
+        private Reply? response;
 
         public void Send(string node, Reply reply)
         {
-            if (reply.Channel == "response") Attempts++;
-            if (node == Receiver && requests.TryReceive(reply)) Accepted++;
+            if (node != Receiver || reply.Channel != "response") return;
+            Attempts++;
+            Landed = CheckLanded?.Invoke() == true;
+            response = reply;
+        }
+
+        internal void Deliver(long receivedAt)
+        {
+            if (response is { } outgoing && requests.TryReceive(outgoing, receivedAt)) Accepted++;
+            response = null;
         }
     }
 

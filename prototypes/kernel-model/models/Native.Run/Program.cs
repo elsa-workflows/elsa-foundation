@@ -55,7 +55,9 @@ if (args is ["sqlite-plan-projection", ..])
     return 2;
 }
 if (args is ["pg-root-held-direct", var replyFence and ("checked" or "in-batch")])
-    return await PostgresHeldDirectChecks.RunAsync(replyFence == "in-batch");
+    return await PostgresHeldDirectChecks.RunAsync(replyFence == "in-batch", afterDeadline: false);
+if (args is ["pg-root-held-direct", var delayedReplyFence and ("checked" or "in-batch"), "after-deadline"])
+    return await PostgresHeldDirectChecks.RunAsync(delayedReplyFence == "in-batch", afterDeadline: true);
 if (args is [var chartMode and ("pg-cluster-statechart" or "pg-cluster-statechart-peer"), var chartSize] &&
     int.TryParse(chartSize, out var chartPartitions))
     return await PostgresClusterChecks.RunAsync(chartPartitions, chartMode == "pg-cluster-statechart-peer", statechart: true);
