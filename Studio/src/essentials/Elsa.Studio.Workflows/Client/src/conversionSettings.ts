@@ -28,16 +28,19 @@ export const conversionModeDescriptors: ConversionModeDescriptor[] = [
   { mode: "auto", displayName: "Auto", description: "Deterministic default conversions only." },
   { mode: "none", displayName: "None", description: "Require an exact source and target contract match." },
   { mode: "json", displayName: "JSON", description: "Decode formatted content with the built-in elsa.json@1 profile." },
+  { mode: "jsonString", displayName: "Serialize to JSON", description: "Serialize a typed or structured value as JSON text with elsa.json-string@1." },
   { mode: "xml", displayName: "XML", description: "Decode formatted content with the built-in elsa.xml@1 profile." },
   { mode: "profile", displayName: "Profile", description: "Use a registered named conversion profile." }
 ];
 
-const conversionModes = new Set<string>(conversionModeDescriptors.map(descriptor => descriptor.mode));
+const conversionModes = new Map<string, ConversionMode>(conversionModeDescriptors.map(descriptor =>
+  [descriptor.mode.toLowerCase(), descriptor.mode] as const
+));
 
 export function readConversionMode(request: unknown): ConversionMode {
   if (!isRecord(request)) return "auto";
   const mode = typeof request.mode === "string" ? request.mode.trim().toLowerCase() : "";
-  return conversionModes.has(mode) ? mode as ConversionMode : "auto";
+  return conversionModes.get(mode) ?? "auto";
 }
 
 /**

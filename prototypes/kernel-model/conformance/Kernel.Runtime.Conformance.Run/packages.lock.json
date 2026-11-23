@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "kernel.durable": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Runtime": "[1.0.0, )"
+        }
+      },
+      "kernel.foundation.contracts": {
+        "type": "Project"
+      },
+      "kernel.model.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )"
+        }
+      },
+      "kernel.runtime": {
+        "type": "Project"
+      },
+      "kernel.runtime.conformance": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Runtime.Hosting": "[1.0.0, )",
+          "Kernel.Store.Conformance": "[1.0.0, )"
+        }
+      },
+      "kernel.runtime.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )",
+          "Kernel.Runtime": "[1.0.0, )"
+        }
+      },
+      "kernel.store.conformance": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Workflows": "[1.0.0, )"
+        }
+      },
+      "kernel.workflowactor": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )",
+          "Kernel.Model.Contracts": "[1.0.0, )"
+        }
+      },
+      "kernel.workflows": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Durable": "[1.0.0, )",
+          "Kernel.Model.Contracts": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

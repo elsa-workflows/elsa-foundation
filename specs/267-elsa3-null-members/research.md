@@ -115,3 +115,143 @@ inputs (R3) and restrictions (R6) already handle null.
 
 **Decision**: the same throwaway import-host test as the baseline (import each of the 36 definitions on its own,
 publish each that converts, start each published one without an HTTP trigger), run on this branch and deleted.
+
+## R-12 #3281 source audit and shape boundary
+
+This follow-up's source baseline is tag `3.6.3` at `7eac7de6955718aea35870be125d54f080fc55dc`, checked against
+`3.5.3` at `7646867ac5365af35f0507fde72b2df98790bec9`. Exact source files were read from the existing local
+`elsa-core` Git objects; no historical build or runtime execution is claimed by this audit.
+
+- `src/modules/Elsa.Workflows.Core/Serialization/Converters/InputJsonConverter.cs`: a supported empty wrapper with
+  no resolvable expression returns a null Input; a Literalnull is an actual wrapped expression. Do not treat arbitrary
+  malformed expression metadata as a supported empty wrapper.
+- `Extensions/ActivityExecutionContextExtensions.InputEvaluation.cs` in that module: a declared default replaces
+  only a null wrapped Input. A present wrapped expression is evaluated, even when its result is null. The generic
+  `ExpressionExecutionContextExtensions.Get`/`ObjectConverter.ConvertTo<T>` path then returns the type default.
+- `src/modules/Elsa.Expressions/Helpers/ObjectConverter.cs`: blank strings remain strings for a String target;
+  conversion to other types can return null, while enum parsing can fail before the blank-string fallback. Thus a
+  literal blank string and a missing input are not interchangeable, and a blank status enum is not assumed to be zero.
+- `src/modules/Elsa.Http/Activities/SendHttpRequestBase.cs`: Method additionally falls back to GET on null, while a
+  non-null blank method reaches `HttpMethod`. Content is attached only when ContentType and Content are non-null;
+  `SelectContentWriter` selects `JsonContentFactory` for a whitespace ContentType. An explicit blank string is not
+  the no-body behavior of an absent/null ContentType.
+- `src/modules/Elsa.Http/Activities/FlowSendHttpRequest.cs`: the input default provider supplies `[200]`; evaluated
+  null/empty ExpectedStatusCodes instead produce no numeric outcome. Preserve explicit empty lists.
+- `src/modules/Elsa.Scheduling/Activities/Delay.cs`/`Timer.cs`: declared defaults are one minute; a deliberate null
+  reads as zero TimeSpan. Elsa 4's recurring interval calculator requires a positive interval, so zero must be refused
+  instead of silently selecting one minute.
+- `src/modules/Elsa.Http/Activities/WriteHttpResponse.cs`: status is read from the typed input and assigned to the
+  actual HTTP response. Elsa 4's current WriteHttpResponse explicitly normalizes values below one to 200; blindly
+  emitting zero would therefore not preserve the legacy invalid-status behavior.
+- `src/modules/Elsa.Scheduling/Activities/Cron.cs`: 3.6.3 completes and registers no trigger for blank expressions.
+  3.5.3 lacks that disabled-path handling. This difference is recorded rather than described as identical behavior;
+  the follow-up keeps the already selected 3.6.3 baseline.
+- `src/modules/Elsa.Expressions.JavaScript/Activities/RunJavaScript/RunJavaScript.cs` (3.6.3) is under
+  `src/modules/Elsa.JavaScript/Activities/RunJavaScript/RunJavaScript.cs` in 3.5.3. Both treat no script as no work.
+
+The earlier 267 research deliberately retained literal-null/default conflation and deferred it to #3281. The follow-up
+overrides only those named built-in cases; the bare JSON-null table remains delivered. Fault.Message's accepted
+silent difference remains unchanged. Current runtime/native/corpus acceptance is NOT RUN at this planning checkpoint.
+
+## R-13 Current source recheck and initiative integration
+
+Exact legacy sources were rechecked at 3.6.3 `7eac7de6955718aea35870be125d54f080fc55dc` and
+3.5.3 `7646867ac5365af35f0507fde72b2df98790bec9`. Current-target comparisons use initiative
+`18dd3aefb98bb0d3c8916ad6b71be69a9fc3699f`. These primary-source reads are not historical runtime execution.
+
+### Loader and effective values
+
+Both tagged InputJsonConverter implementations return a null Input for `{}`, `{"typeName":"…"}` and a typed wrapper
+with `expression:{}`. A resolved Literal descriptor constructs an expression even when `value` is omitted; that
+expression evaluates null. Null/primitive expression metadata is not the empty-object path. Unsupported metadata
+must not be silently repaired. The input-evaluation extension supplies a declared default only for a null wrapped
+Input, not for a present expression result. Generic Get/conversion then supplies the CLR zero value for a null
+value-type result. String blanks remain strings for String targets. Enum parsing precedes the whitespace fallback,
+so blank HTTP-status text is not assumed to become zero.
+
+The tagged loader also ignores a serialized `memoryReference` property: the resolved expression descriptor creates
+the wrapped Input's reference. A typeName/memoryReference wrapper with no expression returns a null Input, rather
+than reading that variable. Corrected built-ins refuse that unsupported binding shape; their valid expressions
+discard this ignored metadata so a JSON Literal cannot be replaced by a memory read. A proper Variable expression
+still uses declaration-ID lowering. Non-string payloads for unknown/script syntaxes are refused before they can
+bypass shared text-expression validation. The generic lowerer and unconfigured custom maps remain unchanged.
+
+Sources: [input converter, 3.6.3](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Workflows.Core/Serialization/Converters/InputJsonConverter.cs),
+[input converter, 3.5.3](https://github.com/elsa-workflows/elsa-core/blob/7646867ac5365af35f0507fde72b2df98790bec9/src/modules/Elsa.Workflows.Core/Serialization/Converters/InputJsonConverter.cs),
+[input evaluation](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Workflows.Core/Extensions/ActivityExecutionContextExtensions.InputEvaluation.cs),
+[ObjectConverter](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Expressions/Helpers/ObjectConverter.cs).
+
+### HTTP corrections to the earlier proposal
+
+Both tags attach request Content only when ContentType **and Content are non-null**. Empty String Content belongs in
+that boundary. Blank ContentType selects the JSON writer/application-json fallback; absent/null ContentType does not.
+Both writers send String content unchanged; 3.6.3 uses RawStringContent and 3.5.3 StringContent. Method also falls back
+to GET for null, while non-null whitespace reaches HttpMethod without the target's normalization.
+
+The implementation recheck follows the 3.6.3 JSON factory into
+[RawStringContent](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Http/ContentWriters/RawStringContent.cs).
+It preserves the media type with no charset parameter. The current target uses StringContent and appends
+`charset=utf-8`. Therefore blank ContentType with potentially non-null Content is refused under FR-012's
+faithful-or-refuse boundary, including nonempty text; emitting application/json alone would not preserve the header.
+The target also omits empty String Content and its headers. A nonliteral/referenced String body has no established
+nonempty guarantee, so that use is refused rather than accepting the same possible omission. Known-null/unbound
+Content retains its no-body path. These are source-inspection findings, not historical runtime executions.
+
+Both FlowSendHttpRequest implementations supply `[200]` for a null wrapped ExpectedStatusCodes Input. A present
+null/empty result selects **Done for every response**, including 404/500; a nonempty list adds numeric/unmatched
+alongside Done. The target's empty-list path instead selects Done for 2xx and Failed for non-2xx. The merged converter
+maps legacy Done through ValueOutcomes, whose empty case is only Done; Failed represents connection failure.
+**Decision:** the earlier proposed typed-null/empty-list emission is insufficient. Preserve the source distinction
+and refuse these cleared-list uses under the existing faithful-or-refuse rule. Emit `[200]` only for defaulted
+shapes. Add 200/404/500 controls and change no target outcome behavior.
+
+Both legacy response activities assign the raw integer status. Literal null becomes enum zero; authored 0/negative
+literals also stay raw. The target normalizes values below one to 200. **Decision:** refuse these values, invalid
+blank enum text and unproven computed ranges; retain supported positive values. No specific historical HTTP-server
+exception is claimed without a host witness.
+
+Sources: [request execution](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Http/Activities/SendHttpRequestBase.cs#L253),
+[FlowSend, 3.6.3](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Http/Activities/FlowSendHttpRequest.cs#L25),
+[FlowSend, 3.5.3](https://github.com/elsa-workflows/elsa-core/blob/7646867ac5365af35f0507fde72b2df98790bec9/src/modules/Elsa.Http/Activities/FlowSendHttpRequest.cs),
+[JSON writer](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Http/ContentWriters/JsonContentFactory.cs#L20),
+[response status assignment](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Http/Activities/WriteHttpResponse.cs#L111).
+Target checks: `Essentials/src/Activities/Http/Activities/SendHttpRequest.cs`, `WriteHttpResponse.cs`,
+`Elsa3BuiltInActivityMap.Entries.cs` and `Conversion/Elsa3FlowchartGraphBuilder.cs`.
+
+### Scheduling and scripts
+
+Both tags initialize For.OuterBoundInclusive true, but only 3.6.3 declares true as an input default. Missing means
+true in both; a null/empty wrapped Input means true in 3.6.3 and false in 3.5.3; deliberate literal-null means false
+in both. The reference remains 3.6.3.
+
+Delay's declared default is one minute; deliberate null/typed blank reads as zero duration. Timer null/blank likewise
+reads zero; nonpositive values reach legacy scheduling without a positive-interval validation. Default non-strict
+conversion can turn invalid TimeSpan text into zero; strict mode can reject it. Neither licenses substituting the
+target's one-minute default. The 3.6.3 recurring task clamps nonpositive due delays to 1 ms; 3.5.3 differs, so the
+proposal does not claim a common legacy fault.
+
+Cron 3.6.3 completes/schedules nothing for blank text; 3.5.3 lacks those blank guards. Both RunJavaScript versions
+return without evaluating blank Script. The current Elsa 4 runtime also has a blank-script path; the converted/catalog
+input is required and the importer rejects it as unbound. Keep a truthful conversion-contract refusal rather than
+claiming that the target runtime lacks no-work behavior.
+
+Sources: [Delay](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Scheduling/Activities/Delay.cs),
+[Timer](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Scheduling/Activities/Timer.cs),
+[recurring task, 3.6.3](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Scheduling/ScheduledTasks/ScheduledRecurringTask.cs),
+[recurring task, 3.5.3](https://github.com/elsa-workflows/elsa-core/blob/7646867ac5365af35f0507fde72b2df98790bec9/src/modules/Elsa.Scheduling/ScheduledTasks/ScheduledRecurringTask.cs),
+[Cron](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Scheduling/Activities/Cron.cs),
+[RunJavaScript, 3.6.3](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Expressions.JavaScript/Activities/RunJavaScript/RunJavaScript.cs),
+[RunJavaScript, 3.5.3](https://github.com/elsa-workflows/elsa-core/blob/7646867ac5365af35f0507fde72b2df98790bec9/src/modules/Elsa.JavaScript/Activities/RunJavaScript/RunJavaScript.cs).
+
+### S-2 boundary and evidence
+
+The [active spec1232 proposal](https://github.com/elsa-workflows/elsa-foundation/pull/3726) was checked at
+`15799ee0aea6d32ef5c81bc8f964c21643f5f6e3`. Its policies, requiredness, nullable-null rules and pins/hash remain
+separate from named legacy effective values. Its supported type-default policy does not supply TimeSpan/Guid/date
+defaults; zero Delay is explicit authored conversion data. This proposal changes no policy fields, variable
+initialization, computed-name rule or S-2-owned null-intrinsic behavior.
+
+At proposal preparation, the established local/Linux path and authorized read-only corpus were available but new
+production/native/import/runtime/corpus checks were NOT RUN. The separate implementation's fresh receipt is now
+recorded in spec.md; it does not relabel these historical source reads as runtime execution. S-2 policy integration
+remains NOT RUN, and CI waits remain deferred with no disabled checks or inferred CI success.

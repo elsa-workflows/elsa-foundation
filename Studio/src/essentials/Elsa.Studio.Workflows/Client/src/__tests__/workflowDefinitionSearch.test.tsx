@@ -62,7 +62,7 @@ describe("workflow definition search refresh", () => {
     expect(previousRow?.querySelector("button")).toBeNull();
     expect(previousRow?.getAttribute("aria-label") ?? "").not.toMatch(/open workflow definition/i);
     expect(button(container, "Next")).toBeNull();
-    expect(container.querySelector(".wf-page-size")).toBeNull();
+    expect(container.querySelector(".studio-collection-page-size")).toBeNull();
     expect(new URLSearchParams(window.location.search).get("search")).toBe("invoice approval");
     expect(requests.filter(url => new URL(url).searchParams.get("searchTerm") === "invoice approval")).toHaveLength(0);
 

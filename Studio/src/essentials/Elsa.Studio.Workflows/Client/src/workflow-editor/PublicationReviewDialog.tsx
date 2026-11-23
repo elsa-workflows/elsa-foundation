@@ -16,7 +16,7 @@ import {
   type PublicationReviewState,
   type PublicationVersionSelection
 } from "./publicationReview";
-import { StudioDialogFooter } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, TechnicalDetails, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { useDialogFocus } from "./useDialogFocus";
 import "./publicationReview.css";
 
@@ -28,7 +28,9 @@ export function PublicationReviewDialog({
   onReview,
   onPublish,
   onCancel,
-  onOpenPublishedExecutable = () => undefined
+  onOpenPublishedExecutable = () => undefined,
+  canOpenValidationIssue,
+  onOpenValidationIssue
 }: {
   review: PublicationReviewState;
   busy: boolean;
@@ -40,6 +42,8 @@ export function PublicationReviewDialog({
   onPublish(intent: PublicationIntent, versionSelection?: PublicationVersionSelection): Promise<void>;
   onCancel(): void;
   onOpenPublishedExecutable?(): void;
+  canOpenValidationIssue?(message: string): boolean;
+  onOpenValidationIssue?(message: string): void;
 }) {
   const dialogRef = useRef<HTMLElement>(null);
   const channelNames = useMemo(
@@ -233,7 +237,14 @@ export function PublicationReviewDialog({
                 {review.validationErrors.length ? (
                   <div className="wf-publication-risks" role="alert">
                     <strong>Fix these issues before publishing</strong>
-                    <ul>{review.validationErrors.map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}</ul>
+                    <ul>{review.validationErrors.map((message, index) => <li key={`${index}-${message}`}>
+                      <span>{message}</span>
+                      {onOpenValidationIssue && canOpenValidationIssue?.(message) ? (
+                        <button type="button" className="wf-publication-validation-jump" onClick={() => onOpenValidationIssue(message)}>
+                          Open in validation panel
+                        </button>
+                      ) : null}
+                    </li>)}</ul>
                   </div>
                 ) : null}
 
@@ -323,8 +334,7 @@ export function PublicationReviewDialog({
                   {!reviewedPreflight || !changes ? <p className="wf-publication-change-summary">{reviewedPreflight ? `Trigger changes: ${triggerSummary}` : "Trigger changes have not been checked."}</p> : null}
                 </div>
 
-                <details className="wf-publication-disclosure">
-                  <summary>Review changes</summary>
+                <AdvancedSection label="Review changes">
                   <div className="wf-publication-disclosure-body">
                     <p className="wf-publication-baseline">
                       Compared with <strong>{publicationBaselineFor(review, selectedChannel)}</strong>
@@ -336,14 +346,11 @@ export function PublicationReviewDialog({
                       <div><dt>Triggers</dt><dd>{triggerSummary}</dd></div>
                     </dl>
                   </div>
-                </details>
+                </AdvancedSection>
 
-                <details className="wf-publication-disclosure">
-                  <summary>Publishing options</summary>
+                <AdvancedSection label="Publishing options">
                   <div className="wf-publication-disclosure-body wf-publication-decision">
-                    <label className="wf-form-field">
-                      <span>Publication channel</span>
-                      <select
+                    <StudioField className="wf-form-field" label={<><span>Publication channel</span></>}><select
                         aria-label="Publication channel"
                         value={channelMode === "create" ? createChannelValue : existingChannel}
                         disabled={!editableReview || busy}
@@ -363,22 +370,17 @@ export function PublicationReviewDialog({
                           </option>
                         ))}
                         <option value={createChannelValue}>Create new channel…</option>
-                      </select>
-                      <small>Use a named channel for a separate publication of this workflow.</small>
-                    </label>
+                      </select><small>Use a named channel for a separate publication of this workflow.</small></StudioField>
 
                     {channelMode === "create" ? (
-                      <label className="wf-form-field">
-                        <span>New channel name</span>
-                        <input
+                      <StudioField className="wf-form-field" label={<><span>New channel name</span></>}><input
                           aria-label="New publication channel"
                           value={newChannel}
                           disabled={!editableReview || busy}
                           onChange={event => setNewChannel(event.target.value)}
                           placeholder="canary"
                           aria-invalid={!channelIsValid}
-                        />
-                      </label>
+                        /></StudioField>
                     ) : null}
 
                     {review.exactVersionSupported ? (
@@ -413,9 +415,7 @@ export function PublicationReviewDialog({
                           <span><strong>Exact version</strong><small>Must be unused and newer than the latest promoted version.</small></span>
                         </label>
                         {versionSelection.mode === "exact" ? (
-                          <label className="wf-form-field">
-                            <span>Exact semantic version</span>
-                            <input
+                          <StudioField className="wf-form-field" label={<><span>Exact semantic version</span></>}><input
                               aria-label="Exact semantic version"
                               value={versionSelection.requestedVersion}
                               disabled={!editableReview || busy}
@@ -425,15 +425,13 @@ export function PublicationReviewDialog({
                                 requestedVersion: event.target.value
                               })}
                               placeholder="2.1.0 or 2.1.0-rc.1"
-                            />
-                          </label>
+                            /></StudioField>
                         ) : null}
                       </fieldset>
                     ) : null}
                   </div>
-                </details>
-                <details className="wf-publication-disclosure wf-publication-technical">
-                  <summary>Technical details</summary>
+                </AdvancedSection>
+                <TechnicalDetails>
                   <dl className="wf-publication-detail-grid">
                     <DecisionFact label="Trigger changes" value={preflightChanges.length
                       ? preflightChanges.map(change => `${change.change} ${change.key} (${change.cardinality})`).join("; ")
@@ -461,7 +459,7 @@ export function PublicationReviewDialog({
                       {" "}· channel {conflict.slotName} · publication <code>{conflict.publicationId}</code>
                     </li>)}</ul>
                   </div> : null}
-                </details>
+                </TechnicalDetails>
               </>
             )}
           </div>
@@ -505,14 +503,13 @@ function PublicationSuccess({ review }: { review: PublicationReviewState }) {
           Version {review.proposedVersion} is active in {review.published?.slotName}.
         </h4>
       </div>
-      <details className="wf-publication-disclosure">
-        <summary>Technical details</summary>
+      <TechnicalDetails>
         <dl className="wf-publication-detail-grid">
           <DecisionFact label="Executable" value={review.published?.artifactId ?? "—"} />
           <DecisionFact label="Source Reference" value={review.published?.sourceReferenceId ?? "—"} />
           <DecisionFact label="Promoted version ID" value={review.promotedVersionId ?? "—"} />
         </dl>
-      </details>
+      </TechnicalDetails>
     </section>
   );
 }

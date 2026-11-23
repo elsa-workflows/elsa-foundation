@@ -147,3 +147,32 @@ export function activityTestRunWorkbenchUrl(view: ActivityDraftTestRunView) {
     ? `${base}?activityExecutionId=${encodeURIComponent(view.outerActivityExecutionId)}`
     : base;
 }
+
+export function activityTestRunWorkflowUrl(view: ActivityDraftTestRunView) {
+  if (!hasInspectableActivityTestRunEvidence(view) || !view.workflowExecutionId.trim()) return null;
+  return `/workflows/instances/${encodeURIComponent(view.workflowExecutionId)}`;
+}
+
+export function activityTestRunActivityUrl(view: ActivityDraftTestRunView) {
+  if (!view.outerActivityExecutionId || !activityTestRunWorkflowUrl(view)) return null;
+  return activityTestRunWorkbenchUrl(view);
+}
+
+export function activityTestRunExecutableUrl(view: ActivityDraftTestRunView) {
+  if (!hasInspectableActivityTestRunEvidence(view) || !view.artifactId?.trim()) return null;
+  if (!view.sourceReferenceId || !view.expiration.sourceReferenceRetained || view.expiration.sourceReferenceExpired) return null;
+  return `/workflows/executables/${encodeURIComponent(view.artifactId)}?ref=${encodeURIComponent(view.sourceReferenceId)}`;
+}
+
+export function shortenActivityTestRunIdentifier(value: string, maxLength = 36) {
+  if (value.length <= maxLength || maxLength < 4) return value;
+  const visibleLength = maxLength - 1;
+  const prefixLength = Math.ceil(visibleLength / 2);
+  const suffixLength = Math.floor(visibleLength / 2);
+  return `${value.slice(0, prefixLength)}…${value.slice(-suffixLength)}`;
+}
+
+function hasInspectableActivityTestRunEvidence(view: ActivityDraftTestRunView) {
+  const stage = classifyActivityTestRun(view);
+  return stage !== "validation-rejected" && stage !== "dispatch-rejected" && stage !== "dispatch-ambiguous" && stage !== "expired";
+}

@@ -39,15 +39,15 @@ describe("publication channel UX", () => {
     }));
     expect(container.querySelector("h3")?.textContent).toBe("Publish workflow");
     expect(container.querySelector(".wf-publication-header p")?.textContent).toBe("Update the published workflow with your latest changes.");
-    expect(container.querySelectorAll(".wf-publication-body > details")).toHaveLength(3);
-    const options = summary(container, "Publishing options")!.parentElement as HTMLDetailsElement;
-    const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
-    const technical = summary(container, "Technical details")!.parentElement as HTMLDetailsElement;
-    expect(options.open).toBe(false);
-    expect(changes.open).toBe(false);
-    expect(technical.open).toBe(false);
-    expect(container.querySelector("select[aria-label='Publication channel']")?.closest("details")).toBe(options);
-    expect(container.querySelector(".wf-publication-baseline")?.closest("details")).toBe(changes);
+    expect(container.querySelectorAll(".wf-publication-body > .studio-disclosure-fold")).toHaveLength(3);
+    const options = summary(container, "Publishing options")!.parentElement!;
+    const changes = summary(container, "Review changes")!.parentElement!;
+    const technical = summary(container, "Technical details")!.parentElement!;
+    expect(options.dataset.open).toBe("false");
+    expect(changes.dataset.open).toBe("false");
+    expect(technical.dataset.open).toBe("false");
+    expect(container.querySelector("select[aria-label='Publication channel']")?.closest(".studio-disclosure-fold")).toBe(options);
+    expect(container.querySelector(".wf-publication-baseline")?.closest(".studio-disclosure-fold")).toBe(changes);
     expect(text(container)).toContain("Version 2.0.0");
     expect(container.querySelector(".wf-publication-change-summary")?.textContent).toBe("Changes: 1 activity · 1 trigger");
     expect(container.querySelector("#publication-review-status")?.getAttribute("data-visible")).toBe("false");
@@ -71,10 +71,10 @@ describe("publication channel UX", () => {
       })
     }));
 
-    const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
-    const technical = summary(container, "Technical details")!.parentElement as HTMLDetailsElement;
-    expect(technical.open).toBe(false);
-    expect(technical.parentElement?.closest("details")).toBeNull();
+    const changes = summary(container, "Review changes")!.parentElement!;
+    const technical = summary(container, "Technical details")!.parentElement!;
+    expect(technical.dataset.open).toBe("false");
+    expect(technical.parentElement?.closest(".studio-disclosure-fold")).toBeNull();
     expect(technical.textContent).toContain("Policy");
     expect(technical.textContent).toContain("host · revision 7");
     expect(technical.textContent).toContain("http:orders (exclusive)");
@@ -97,8 +97,8 @@ describe("publication channel UX", () => {
       })
     }));
 
-    const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
-    const technical = summary(container, "Technical details")!.parentElement as HTMLDetailsElement;
+    const changes = summary(container, "Review changes")!.parentElement!;
+    const technical = summary(container, "Technical details")!.parentElement!;
     const conflictAlert = container.querySelector<HTMLElement>(".wf-publication-risks[role='alert']")!;
     expect(conflictAlert.textContent).toContain("1 trigger conflicts with channel default.");
     expect(conflictAlert.textContent).toContain("Trigger conflict");
@@ -108,7 +108,7 @@ describe("publication channel UX", () => {
     expect(changes.textContent).toContain("1 added");
     expect(changes.textContent).not.toContain(triggerKey);
     expect(changes.textContent).not.toContain(publicationId);
-    expect(technical.open).toBe(false);
+    expect(technical.dataset.open).toBe("false");
     expect(technical.textContent).toContain(triggerKey);
     expect(technical.textContent).toContain(publicationId);
   });
@@ -162,7 +162,7 @@ describe("publication channel UX", () => {
     const container = render(reviewWithLocalTrigger({ preflight: preflightValue }));
     const summaryLines = [...container.querySelectorAll<HTMLElement>(".wf-publication-change-summary")]
       .map(line => line.textContent);
-    const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
+    const changes = summary(container, "Review changes")!.parentElement!;
     const triggerRow = [...changes.querySelectorAll("dt")].find(term => term.textContent === "Triggers");
 
     expect(summaryLines).toEqual(["Changes: 1 activity", "Trigger changes have not been checked."]);
@@ -193,7 +193,7 @@ describe("publication channel UX", () => {
       })
     }));
     const compactSummary = container.querySelector<HTMLElement>(".wf-publication-change-summary")!;
-    const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
+    const changes = summary(container, "Review changes")!.parentElement!;
     const triggerRow = [...changes.querySelectorAll("dt")].find(term => term.textContent === "Triggers");
 
     expect(compactSummary.textContent).toBe("Changes: 1 activity");
@@ -292,8 +292,8 @@ describe("publication channel UX", () => {
 
     expect(text(container)).toContain("These triggers are already in use");
     expect(text(container)).toContain("1 trigger conflicts with channel default.");
-    const technical = summary(container, "Technical details")!.parentElement as HTMLDetailsElement;
-    expect(technical.open).toBe(false);
+    const technical = summary(container, "Technical details")!.parentElement!;
+    expect(technical.dataset.open).toBe("false");
     expect(technical.textContent).toContain("http:orders");
     expect(technical.textContent).toContain("publication-9");
     expect(text(container)).not.toContain("owned by another activation source");
@@ -319,8 +319,8 @@ describe("publication channel UX", () => {
     }));
     const alert = container.querySelector("[role='alert']")!;
     expect(alert.textContent).toContain("An HTTP endpoint needs a path.");
-    expect(alert.closest("details")).toBeNull();
-    expect(container.querySelector("details[open]")).toBeNull();
+    expect(alert.closest(".studio-disclosure-fold")).toBeNull();
+    expect(container.querySelector(".studio-disclosure-fold[data-open=true]")).toBeNull();
     expect(button(container, "Publish").disabled).toBe(true);
   });
 
@@ -400,7 +400,7 @@ describe("publication channel UX", () => {
 
   it("shows exact-version editing only when the backend advertises it", () => {
     const unsupported = render(review());
-    expect(unsupported.querySelector("fieldset")).toBeNull();
+    expect(unsupported.querySelector("fieldset:not([role=presentation])")).toBeNull();
     unmount();
 
     const supported = render(review({
@@ -414,7 +414,7 @@ describe("publication channel UX", () => {
         issues: []
       }
     }));
-    expect(supported.querySelector("fieldset")).not.toBeNull();
+    expect(supported.querySelector("fieldset:not([role=presentation])")).not.toBeNull();
     expect(text(supported)).toContain("Next version: 2.0.0");
   });
 
@@ -446,7 +446,7 @@ describe("publication channel UX", () => {
     expect(text(container)).toContain("2.1.0-rc.1");
     const selectedVersion = container.querySelector(".wf-publication-body > .wf-publication-selection")!;
     expect(selectedVersion.textContent).toContain("2.1.0-rc.1");
-    expect(selectedVersion.closest("details")).toBeNull();
+    expect(selectedVersion.closest(".studio-disclosure-fold")).toBeNull();
     expect(text(container)).not.toContain("Next version: 2.0.0");
     expect(button(container, "Publish").disabled).toBe(true);
     expect(container.querySelector("#publication-review-status")?.textContent).toBe("Checking workflow…");
@@ -628,7 +628,7 @@ function button(container: HTMLElement, label: string) {
 }
 
 function summary(container: HTMLElement, label: string) {
-  return [...container.querySelectorAll<HTMLElement>("summary")]
+  return [...container.querySelectorAll<HTMLElement>("button[aria-expanded]")]
     .find(candidate => candidate.textContent === label);
 }
 

@@ -396,6 +396,8 @@ pins exactly those ports, and a connection on a port the node does not declare i
     `PossibleOutcomes`.
   - A behaviour-changing conversion exception needs a separate, explicit, approved and documented decision; S-3 adds
     none.
+> Historical S-3 scope below: [S-12 / spec 1233](../1233-switch-match-any-bodies/spec.md) owns the subsequent case-body extension and its control-outcome fidelity guards.
+
 - **FR-028**: The converter MUST convert an Elsa 3 Switch in "match any" mode to an Elsa 4 Switch in "match any" mode.
   A "match any" Switch whose cases hold activities is out of scope: it is refused with `ELS3-ACTIVITY-UNSUPPORTED-MODE`
   and guidance until spec row S-12 is implemented (amendment of 2026-11-17).

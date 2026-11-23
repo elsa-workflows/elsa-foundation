@@ -70,6 +70,25 @@ export function useWorkflowEditorData({ context, definitionId, documentAdapter, 
     }
   }, [context, definitionId]);
 
+  const applyCatalog = useCallback((nextActivities: ActivityCatalogItem[], nextRecommendedDefinitions: RecommendedActivityDefinition[] | null) => {
+    const recommendedDefinitions = nextRecommendedDefinitions ?? [];
+    const activities = decorateReusableCatalog(nextActivities, recommendedDefinitions);
+    setCatalog(activities);
+    setRecommendedDefinitions(recommendedDefinitions);
+    const nextPaletteCatalog = nextRecommendedDefinitions == null
+      ? activities
+      : projectRecommendedPalette(activities, recommendedDefinitions);
+    setPaletteCatalog(nextPaletteCatalog);
+    observeReusableActivity({
+      event: "picker-load",
+      surface: "workflow-designer",
+      outcome: nextPaletteCatalog.length > 0 ? "ready" : "empty"
+    });
+    setActivityDescriptors(activities.map(toActivityDescriptor));
+    setAvailabilityDiagnostics(null);
+    setDescriptorStatus("ready");
+  }, []);
+
   const reload = useCallback(async (options?: { shouldLoadDraft(): boolean }) => {
     setError("");
     const [nextDetails, nextCatalog, nextRecommendedDefinitions] = await Promise.all([
@@ -98,23 +117,21 @@ export function useWorkflowEditorData({ context, definitionId, documentAdapter, 
       resetHistory(nextDraft);
       loadDraft(nextDraft);
     }
-    const recommendedDefinitions = nextRecommendedDefinitions ?? [];
-    const activities = decorateReusableCatalog(nextCatalog.activities ?? [], recommendedDefinitions);
-    setCatalog(activities);
-    setRecommendedDefinitions(recommendedDefinitions);
-    const nextPaletteCatalog = nextRecommendedDefinitions == null
-      ? activities
-      : projectRecommendedPalette(activities, recommendedDefinitions);
-    setPaletteCatalog(nextPaletteCatalog);
-    observeReusableActivity({
-      event: "picker-load",
-      surface: "workflow-designer",
-      outcome: nextPaletteCatalog.length > 0 ? "ready" : "empty"
-    });
-    setActivityDescriptors(activities.map(toActivityDescriptor));
-    setAvailabilityDiagnostics(null);
-    setDescriptorStatus("ready");
-  }, [context, definitionId, documentAdapter, resetHistory, loadDraft, markSaved, reloadExpressionDescriptors, setError]);
+    applyCatalog(nextCatalog.activities ?? [], nextRecommendedDefinitions);
+  }, [context, definitionId, documentAdapter, resetHistory, loadDraft, markSaved, reloadExpressionDescriptors, setError, applyCatalog]);
+
+  // Reloads only the activity catalog, e.g. after a reusable activity was published from this editor. The live
+  // draft, its undo history and its save baseline are left as they are.
+  const refreshCatalog = useCallback(async () => {
+    const [nextCatalog, nextRecommendedDefinitions] = await Promise.all([
+      listActivities(context),
+      listRecommendedActivityDefinitions(context).catch(error => {
+        if (error instanceof ApiCapabilityUnavailableError) return null;
+        throw error;
+      })
+    ]);
+    applyCatalog(nextCatalog.activities ?? [], nextRecommendedDefinitions);
+  }, [context, applyCatalog]);
 
   // A background workspace tab tears its effects down and mounts them again when it returns. Load once
   // per reload identity (definition, backend, adapter): a re-mount for the same one keeps the live
@@ -132,6 +149,7 @@ export function useWorkflowEditorData({ context, definitionId, documentAdapter, 
   return {
     details,
     setDetails,
+    refreshCatalog,
     catalog,
     paletteCatalog,
     recommendedDefinitions,
@@ -210,7 +228,9 @@ export function toActivityDescriptor(activity: ActivityCatalogItem): StudioActiv
     ports: (activity.ports ?? []) as StudioActivityDescriptor["ports"],
     isContainer: Boolean(activity.containerStructure),
     isBrowsable: activity.available !== false,
-    ...(readAccessesUndeclaredVariables(activity) ? { accessesUndeclaredVariables: true } : {})
+    ...readWorkflowStateCapability(activity),
+    ...(readAccessesUndeclaredVariables(activity) ? { accessesUndeclaredVariables: true } : {}),
+    ...(readDeclaresAccessesUndeclaredVariables(activity) ? { declaresAccessesUndeclaredVariables: true } : {})
   };
 }
 
@@ -223,4 +243,26 @@ function readAccessesUndeclaredVariables(activity: ActivityCatalogItem) {
     return kind === "elsa.variable-access" && !!payload && typeof payload === "object" &&
       (payload as { accessesUndeclaredVariables?: unknown }).accessesUndeclaredVariables === true;
   });
+}
+
+function readDeclaresAccessesUndeclaredVariables(activity: ActivityCatalogItem) {
+  return (activity.designFacets ?? []).some(facet => {
+    if (!facet || typeof facet !== "object") return false;
+    const { kind, payload } = facet as { kind?: unknown; payload?: unknown };
+    if (kind !== "elsa.variable-access" || !payload || typeof payload !== "object") return false;
+    const access = payload as { accessesUndeclaredVariables?: unknown; declared?: unknown };
+    return access.accessesUndeclaredVariables === true && access.declared === true;
+  });
+}
+
+function readWorkflowStateCapability(activity: ActivityCatalogItem) {
+  for (const value of activity.designFacets ?? []) {
+    if (!value || typeof value !== "object") continue;
+    const facet = value as { kind?: unknown; payload?: { declared?: unknown } };
+    if (facet.kind === "elsa.workflow-state") return {
+      accessesWorkflowState: true,
+      declaresAccessesWorkflowState: facet.payload?.declared === true
+    };
+  }
+  return {};
 }

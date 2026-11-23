@@ -13,10 +13,13 @@ Profile/semantics IDs are immutable compatibility identities. Verify supported I
 | Capability | Grants | Behavior |
 | --- | --- | --- |
 | decisions.list/read/versions | Read | Trusted-tenant bounded inventory/detail; omit protected source without source access. |
+| decisions.recycle-bin | Read | List only recycled decisions in the trusted tenant. |
 | decisions.create/update/import | Manage | Create or expected-revision mutation; import does not grant execution/publication. |
 | decisions.clone-to-draft | Manage + Read | Explicitly copy a permitted immutable version into the draft with revision CAS and source/sensitivity access; never mutate the version. |
 | decisions.validate | Manage | Validate an exact candidate without implicit mutation. |
 | decisions.publish | Publish + Read | Atomic expected-revision publication under an operation key; confirmation/version identity. |
+| decisions.unpublish | Publish | Clear the active published-version pointer by expected revision; keep immutable version history. |
+| decisions.recycle/restore/purge | Manage | Revision-checked soft recycle/restore and confirmed, tenant-scoped purge from the recycle bin. |
 | decisions.evaluate | Evaluate | Exact published version; output/structural explanation subject to value policy. |
 | decisions.cases | Test + Read | Case reads with additional sensitive-value checks. |
 | decisions.save-case/delete-case | Test + Manage | Revision-checked case mutation. |
@@ -28,6 +31,14 @@ Profile/semantics IDs are immutable compatibility identities. Verify supported I
 Decisions contributes grants/capabilities through existing contracts. Trusted host tenant/principal context governs every operation. Body/query IDs and cached browser capability state cannot grant authority. A missing tenant is allowed only in explicitly single-tenant composition, never as all-tenants access.
 
 Manage does not imply Publish; Evaluate does not imply Test/History/Source. Apply existing 401/403/404 conventions without exposing another tenant's existence. Stale revisions/divergent operation-key reuse conflict. Diagnostics use safe codes/locations, not raw cell/input snippets.
+
+## Decision lifecycle
+
+Unpublish is available only for an active published decision. It clears the published-version pointer and advances the revision; immutable versions remain in history. New evaluations and workflow-publication bindings are unavailable until a version is published again. Workflow executions already published with frozen decision content are unaffected.
+
+Recycle is a revision-checked soft transition. It clears publication, records `DeletedAt`, hides the asset from active inventory/detail and new use, and retains the source, versions, saved cases and completed test history in tenant-scoped storage. `GET /decisions/recycle-bin` exposes recycled assets to Read callers. Restore is available only from that inventory, clears `DeletedAt`, and always returns an unpublished active decision.
+
+Purge is available only from the recycle bin and requires the current revision plus an operation ID. One transaction permanently removes the decision, its versions, saved cases and test receipts; its operation receipt remains for exact idempotent replay. Purge cannot retract decision content already frozen into a workflow. It never removes or modifies workflow artifacts.
 
 ## Sensitivity and history
 

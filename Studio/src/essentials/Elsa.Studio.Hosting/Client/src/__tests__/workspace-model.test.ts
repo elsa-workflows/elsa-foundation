@@ -5,6 +5,7 @@ import {
   defaultLocationKey,
   insertTab,
   maxRetainedBackgroundTabs,
+  maxWorkspaceTabs,
   mergeDuplicateResources,
   moveTab,
   removeTabs,
@@ -61,6 +62,36 @@ describe("workspace tab model", () => {
     const retainedBackground = state.tabs.filter(tab => tab.id !== state.activeId && tab.retained);
     expect(retainedBackground).toHaveLength(maxRetainedBackgroundTabs);
     expect(state.tabs.find(tab => tab.id === "t2")?.retained).toBe(true);
+  });
+
+  it("evicts the oldest clean background tab and protects the new, pinned and unsaved tabs", () => {
+    let state = workspace(...Array.from({ length: 12 }, (_, i) => `/screen/${i}`));
+    state = setPinned(state, "t2", true);
+    state = updateTab(state, "t3", { guarded: true });
+    state = insertTab(state, createTab("/new", 20, "new"));
+    expect(state.tabs).toHaveLength(12);
+    expect(ids(state)).not.toContain("t4");
+    expect(ids(state)).toEqual(expect.arrayContaining(["t1", "t2", "t3", "new"]));
+    const guarded = { ...state, tabs: state.tabs.map(tab => ({ ...tab, guarded: true })) };
+    const overflow = activateTab(insertTab(guarded, createTab("/another", 21, "another")), "another");
+    expect(overflow.tabs).toHaveLength(maxWorkspaceTabs + 1);
+    expect(overflow.activeId).toBe("another");
+    expect(overflow.tabs.filter(tab => tab.guarded)).toHaveLength(12);
+  });
+
+  it("restores old oversized workspaces with the active tab and uses visit order across reloads", () => {
+    const initial = workspace(...Array.from({ length: 15 }, (_, i) => `/screen/${i}`));
+    const stored = serializeWorkspace(activateTab(initial, "t15", 150));
+    expect(stored.tabs.some(tab => tab.id === "t15")).toBe(true);
+    const legacy = { ...serializeWorkspace(initial), activeId: "t15" };
+    const restored = parseWorkspace(legacy)!;
+    expect(restored.activeId).toBe("t15");
+    expect(restored.tabs).toHaveLength(12);
+    expect(ids(restored)).not.toContain("t1");
+    const fresh = restoreWorkspace(restored, "/elsewhere", 200);
+    expect(fresh.tabs).toHaveLength(12);
+    expect(ids(fresh)).not.toContain("t4");
+    expect(fresh.tabs.find(tab => tab.id === fresh.activeId)?.location).toBe("/elsewhere");
   });
 
   it("folds tabs that show one resource into the active tab, keeping the earliest place and pin", () => {

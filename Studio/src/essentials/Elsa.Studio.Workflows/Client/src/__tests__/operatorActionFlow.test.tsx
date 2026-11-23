@@ -34,7 +34,8 @@ const RETRY_CLOCK = "2026-10-22T10:00:00Z";
 const FUTURE_RETRY_NOT_BEFORE = "2026-10-23T10:42:30Z";
 const DUE_RETRY_NOT_BEFORE = "2026-10-21T10:42:30Z";
 
-let container: HTMLDivElement;
+let mountPoint: HTMLDivElement;
+let container: HTMLElement;
 let root: Root;
 
 beforeEach(() => {
@@ -43,14 +44,15 @@ beforeEach(() => {
   vi.setSystemTime(new Date(RETRY_CLOCK));
   if (typeof globalThis.CSS === "undefined") vi.stubGlobal("CSS", { escape: (value: string) => value });
   sessionStorage.clear();
-  container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
+  container = document.body;
+  mountPoint = document.createElement("div");
+  document.body.appendChild(mountPoint);
+  root = createRoot(mountPoint);
 });
 
 afterEach(() => {
   flushSync(() => root.unmount());
-  container.remove();
+  mountPoint.remove();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   clearApiCapabilityCache();
@@ -504,7 +506,7 @@ describe("useOperatorActions", () => {
     expect(container.querySelector(".wf-operator-dialog")).toBeNull();
     expect(backend.submits).toHaveLength(0);
 
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await flush();
     expect(container.querySelector(".wf-incident-details-dialog")).toBeNull();
     expect(document.activeElement).toBe(returnTrigger);
@@ -718,6 +720,54 @@ describe("useOperatorActions", () => {
     expect(backend.submits).toHaveLength(1);
   });
 
+  // #4096: focus must not wait for animation frames, which can run before the commit that removes the row's buttons.
+  const RowHarness = ({ context, sink }: { context: StudioEndpointContext; sink: { api?: OperatorActionsApi } }) => (
+    <Harness context={context} sink={sink} extra={api => (
+      <div>
+        {api.pending
+          ? <span tabIndex={-1}>{api.pending.label}</span>
+          : <button type="button" data-row-retry onClick={() => api.open(retryModel(), () => container.querySelector<HTMLElement>("[data-chip]")?.focus())}>Retry</button>}
+        <button type="button" data-chip>Recovery: Needs action</button>
+      </div>
+    )} />
+  );
+
+  it("moves focus to the row's state chip in the commit where a submitted action removes the row's buttons", async () => {
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    const backend = fakeBackend({ plans: ["Queued"] });
+    const sink: { api?: OperatorActionsApi } = {};
+    flushSync(() => root.render(<RowHarness context={backend.context} sink={sink} />));
+    await flush();
+
+    const retry = container.querySelector<HTMLButtonElement>("[data-row-retry]")!;
+    retry.focus();
+    flushSync(() => retry.click());
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[type=submit]")!.click());
+    await flush();
+
+    expect(container.querySelector("[role=dialog]")).toBeNull();
+    expect(container.querySelector("[data-row-retry]")).toBeNull();
+    expect(document.activeElement).toBe(container.querySelector("[data-chip]"));
+  });
+
+  it("returns focus to the opener in the commit where a cancelled dialog closes", async () => {
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    const backend = fakeBackend({});
+    const sink: { api?: OperatorActionsApi } = {};
+    flushSync(() => root.render(<RowHarness context={backend.context} sink={sink} />));
+    await flush();
+
+    const retry = container.querySelector<HTMLButtonElement>("[data-row-retry]")!;
+    retry.focus();
+    flushSync(() => retry.click());
+    expect(container.querySelector("[role=dialog]")!.contains(document.activeElement)).toBe(true);
+    flushSync(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+
+    expect(container.querySelector("[role=dialog]")).toBeNull();
+    expect(document.activeElement).toBe(retry);
+    expect(backend.submits).toHaveLength(0);
+  });
+
   it("only stores the plan when the page left the run while the submission was in flight", async () => {
     let release!: () => void;
     const backend = fakeBackend({ plans: ["Completed"], submitGate: new Promise<void>(resolve => { release = resolve; }) });
@@ -820,7 +870,7 @@ describe("useOperatorActions", () => {
     flushSync(() => container.querySelector<HTMLButtonElement>(".wf-incident-operator-actions button")!.click());
     await flush();
     expect(close).toHaveBeenCalled();
-    expect(container.querySelector("[role=dialog] h3")!.textContent).toBe('Retry "Cancel delivery"?');
+    expect(container.querySelector("[role=dialog] .studio-dialog-title")!.textContent).toBe('Retry "Cancel delivery"?');
 
     flushSync(() => root.render(<Harness context={backend.context} sink={harness.sink} canManage={false} activities={retryActivities()} extra={api => api.renderIncidentActions(waitingIncident(), "Cancel delivery", close, vi.fn())} />));
     await flush();

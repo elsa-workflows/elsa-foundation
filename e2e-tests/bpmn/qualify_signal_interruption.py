@@ -41,7 +41,7 @@ def main():
     if any(p['sourceCommit'] != source for p in products.values()): raise ValueError('Both actual host products must match the full committed source.')
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False)
     root = Path(tempfile.mkdtemp(prefix='elsa-signal-interruption-')); control = root / 'probe'; control.mkdir(); (root / 'packages').mkdir()
-    for name in ('appsettings.json', 'appsettings.Development.json', 'shells.json'): shutil.copyfile(REPO / 'Essentials/apps/Elsa.Workbench' / name, root / name)
+    for name in ('appsettings.json', 'appsettings.Development.json', 'shells.json'): shutil.copyfile(REPO / 'apps/Elsa.Workbench' / name, root / name)
     shells = json.loads((root / 'shells.json').read_text()); features = shells['CShells']['Shells']['default']['Features']
     features.update({'ActivitiesBpmnHosting': {'AdmitNewExecutions': True}, 'ActivitiesBpmnHostingApi': {}, 'WorkflowsRuntimeResumption': {'SweepIntervalSeconds': .2}})
     for name in ('WorkflowsRuntimeDistributed', 'WorkflowsRuntimeDistributedEntityFrameworkCorePersistence', 'WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence'): features.pop(name, None)

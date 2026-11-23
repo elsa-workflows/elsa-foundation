@@ -102,8 +102,8 @@ export const ifActivity: ActivityCatalogItem = {
     payload: {
       mode: "generic", supportsScopedVariables: false,
       slots: [
-        { name: "If.Then", property: "then", displayName: "Then", cardinality: "single" },
-        { name: "If.Else", property: "else", displayName: "Else", cardinality: "single" }
+        { name: "If.Then", property: "then", displayName: "Then", cardinality: "single", collectionProperty: null, childProperty: null, labelProperty: null, slotNameTemplate: null },
+        { name: "If.Else", property: "else", displayName: "Else", cardinality: "single", collectionProperty: null, childProperty: null, labelProperty: null, slotNameTemplate: null }
       ],
       initialPayload: { then: null, else: null }
     }

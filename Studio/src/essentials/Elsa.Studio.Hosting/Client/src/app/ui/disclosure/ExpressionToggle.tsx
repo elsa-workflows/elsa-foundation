@@ -1,3 +1,4 @@
+import { StudioField } from "../forms/Field";
 import React, { useId } from "react";
 import { useTablistKeyboard } from "../layout/Tabs";
 import { type DisclosureControlProps } from "./types";
@@ -35,9 +36,8 @@ export function ExpressionToggle({
 
   return (
     <div className="studio-expression-field" data-mode={value} data-visible={visible ? "true" : "false"}>
-      <div className="studio-expression-field-header">
-        {label ? <span id={`${baseId}-label`} className="studio-expression-field-label">{label}</span> : null}
-        <div
+      <StudioField label={label ?? "Value"} labelId={`${baseId}-label`} meta={<span className="studio-expression-field-header">
+        <span
           className="studio-expression-toggle"
           role="tablist"
           aria-label="Value mode"
@@ -62,13 +62,10 @@ export function ExpressionToggle({
               </button>
             );
           })}
-        </div>
-      </div>
-      {React.Children.map(children, child => {
-        if (!React.isValidElement<{ "aria-label"?: string; "aria-labelledby"?: string }>(child)) return child;
-        if (!label || child.props["aria-label"] || child.props["aria-labelledby"]) return child;
-        return React.cloneElement(child, { "aria-labelledby": `${baseId}-label` });
-      })}
+        </span>
+      </span>}>
+      {children}
+      </StudioField>
     </div>
   );
 }

@@ -224,3 +224,7 @@ No core→model or model→other-model-internals violation was found that this s
 - Dual-path tests named above are **existence** on this SHA, not a re-run on this machine.
 - G2.5 final-main re-qualification, other providers, and generic-kernel delivery are out of scope.
 - ETL (#3804/#3789), #3650, R3/#3951, #4038, Studio, CI workflows, `elsa-studio` / `elsa-extensions` / `elsa-apps` are untouched.
+
+## Runnable example / supported profile / G-e
+
+The hosted Facts in `Essentials/tests/Activities/Bpmn/Hosting/Tests/` are the runnable example for this inventory's dual-path tests (SQLite Owned Workbench, one host). The supported profile is [unified-execution.md](../program-goals/unified-execution.md) plus [G2 Limit](exec-core-g2-child-outcome-mapping.md#limit-every-hosted-cell) and [S8 unsupported / open](exec-core-migration-rollback.md#6-unsupported--open). The recorded #3993 post-restart timeout is a `ResumeNativeParent.v1` claim-fence wait on the #3992 crash Fact, not a G1 extraction candidate and not native-worker `HoldForRetry`; see [G3 G-e](exec-core-g3-overhead-counts.md#g-e--recorded-3993-post-restart-timeout-causal).

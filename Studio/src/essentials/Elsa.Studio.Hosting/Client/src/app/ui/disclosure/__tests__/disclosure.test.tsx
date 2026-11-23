@@ -503,6 +503,32 @@ describe("OverflowMenu", () => {
     ]);
   });
 
+  it("supports checkable items without changing ordinary menu item navigation", () => {
+    const onToggle = vi.fn();
+    const host = mount(<OverflowMenu items={[
+      { id: "autosave", label: "Autosave", checked: true, value: "On", onSelect: onToggle },
+      { id: "retry", label: "Retry", onSelect: () => undefined }
+    ]} />);
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-overflow-menu-trigger")!;
+    giveElementLayout(trigger);
+    flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    const checkable = document.body.querySelector<HTMLButtonElement>("[role='menuitemcheckbox']")!;
+    const ordinary = document.body.querySelector<HTMLButtonElement>("[role='menuitem']")!;
+    const menu = document.body.querySelector<HTMLElement>("[role='menu']")!;
+    expect(checkable.getAttribute("aria-checked")).toBe("true");
+    expect(checkable.textContent).toContain("Autosave");
+    expect(checkable.textContent).toContain("On");
+    expect(document.activeElement).toBe(checkable);
+
+    flushSync(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    expect(document.activeElement).toBe(ordinary);
+    flushSync(() => checkable.click());
+    expect(onToggle).toHaveBeenCalledOnce();
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it("opens from the trigger, supports keyboard movement, and restores focus", () => {
     const selected: string[] = [];
     const host = mount(
@@ -603,9 +629,10 @@ describe("ExpressionToggle", () => {
     expect(tabs[1].getAttribute("aria-selected")).toBe("true");
     expect(host.querySelector(".studio-expression-toggle")?.getAttribute("data-visible")).toBe("true");
     const input = host.querySelector("input")!;
-    const labelId = host.querySelector(".studio-expression-field-label")?.id;
+    const labelId = input.labels?.[0]?.id;
     expect(labelId).toBeTruthy();
-    expect(input.getAttribute("aria-labelledby")).toBe(labelId);
+    expect(input.labels?.[0]?.textContent).toBe("URL");
+    expect(input.labels?.[0]?.htmlFor).toBe(input.id);
   });
 });
 

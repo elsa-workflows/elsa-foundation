@@ -1,8 +1,21 @@
+import { ExpressionEditorWithDataInsertion } from "./ExpressionEditorWithDataInsertion";
+import { getActivityGraphOutputSetters } from "./activityGraphOutputSources";
+import { nextNativeBlockPosition } from "./graph-authoring/nativeBlockPlacement";
+import type { GraphAuthoringView } from "./graph-authoring/GraphAuthoringView";
+import { presentationScopeFrames } from "./graph-authoring/presentationScopeFrames";
+import { NativeBlockCommands } from "./graph-authoring/NativeBlockCommands";
+import { useNativeBlockAuthority } from "./graph-authoring/nativeBlockAuthority";
+import { composeExpressionScopePreservation } from "./graph-authoring/expressionScopePreservation";
+import { composePromotionExpressionSupport } from "./graph-authoring/promotionExpressionSupport";
+import { activityGraphPromotionPayload } from "./graph-authoring/blockPromotionHostDocuments";
+import type { BlockPromotionHost } from "./graph-authoring/BlockPromotionDialog";
+import type { NativeBlockDocument } from "./graph-authoring/nativeBlocks";
 import { indexActivityPresentation, normalizeActivityPresentation, resolveActivityLabel, updateActivityPresentation } from "./activityPresentation";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "./graph-authoring/activityPaletteContext";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Boxes, ListTree, Network, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Boxes, ListTree, Plus, Trash2 } from "lucide-react";
 import type {
   StudioActivityDefinitionContract,
   StudioActivityDefinitionImplementationEditorProps,
@@ -12,8 +25,8 @@ import type {
   StudioExpressionEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { useStudioThemeLayout } from "@elsa-workflows/studio-sdk";
-import { StudioButton } from "@elsa-workflows/studio-ui";
-import type { ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft, WorkflowInput } from "./workflowTypes";
+import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import type { ActivityCatalogItem, ActivityNode, ArgumentType, VariableDefinition, WorkflowDefinitionState, WorkflowDraft, WorkflowInput } from "./workflowTypes";
 import {
   buildCanvas,
   collectActivityNodeIds,
@@ -34,7 +47,7 @@ import {
   type WorkflowNodeData
 } from "./workflowAdapter";
 import { createNodeId } from "./workflow-editor/editorHelpers";
-import { useWorkflowActivities } from "./api/activityDesign";
+import { useActivityAuthoringCapabilities, useWorkflowActivities } from "./api/activityDesign";
 import { activityGraphDiagnosticFocusEvent, type ActivityGraphDiagnosticFocusEventDetail } from "./activityGraphDiagnosticFocus";
 import { ActivityPalettePanel } from "./workflow-editor/ActivityPalettePanel";
 import { groupActivityPalette } from "./workflow-editor/editorHelpers";
@@ -69,7 +82,7 @@ import {
   updateBpmnFlow,
   type BpmnNodeData
 } from "./bpmn/bpmnAdapter";
-import { BpmnElementInspector, BpmnElementConfiguration } from "./bpmn/BpmnElementInspector";
+import { BpmnElementInspector, BpmnElementConfiguration, BpmnElementNameField } from "./bpmn/BpmnElementInspector";
 import { bpmnPaletteElements } from "./bpmn/bpmnPaletteElements";
 import { emptyGraphElements } from "./graph-authoring/graphPaletteElements";
 import { bpmnElementTypeLabel, isBpmnDecisionType, type BpmnElement, type BpmnSequenceFlow } from "./bpmn/bpmnTypes";
@@ -82,6 +95,7 @@ import { SlotEmptyState } from "./workflow-editor/SlotEmptyState";
 import { ConnectMenu } from "./workflow-editor/graph";
 import { listExpressionDescriptors } from "./api/expressions";
 import { WorkflowReferenceAuthoringProvider } from "./workflowReferenceAuthoring";
+import { ActivityDefinitionAuthoringTabsHostContext } from "./activityDefinitionAuthoringTabsHost";
 import {
   activityGraphInspectorCollapsedStorageKey,
   activityGraphInspectorWidthStorageKey,
@@ -89,6 +103,7 @@ import {
   activityGraphPaletteWidthStorageKey,
   activityGraphSidePanelMaximizedStorageKey
 } from "./workflow-editor/constants";
+import { getDialogs } from "./workflow-editor/dialogs";
 import { useSidePanelLayout, type SidePanelLayoutStorageKeys } from "./workflow-editor/useSidePanelLayout";
 import {
   InspectorPanel,
@@ -99,6 +114,7 @@ import { supportsScopedVariables, WORKFLOW_SCOPE_ID } from "./scopedVariables";
 import { getActivityGraphOutcomeMappingOptions, type ActivityGraphOutcomeChoice } from "./activityGraphOutcomeMappingOptions";
 import { SequenceDesigner } from "./graph-authoring/SequenceDesigner";
 import { addCollectionItem, getCollectionSlots, type CollectionSlot } from "./collectionSlots";
+import { WorkflowCanvasCommandBar, WorkflowCanvasToolsHostContext } from "./workflow-editor/WorkflowEditorToolbar";
 export { getActivityGraphOutcomeMappingOptions } from "./activityGraphOutcomeMappingOptions";
 export type { ActivityGraphOutcomeChoice } from "./activityGraphOutcomeMappingOptions";
 
@@ -135,6 +151,7 @@ const activityGraphSidePanelStorageKeys: SidePanelLayoutStorageKeys = {
 };
 
 export function ActivityGraphPublicInterfaceEditor({
+  draftId,
   contractSection,
   context,
   contract,
@@ -149,6 +166,7 @@ export function ActivityGraphPublicInterfaceEditor({
   const catalogByVersion = useMemo(() => new Map(catalog.map(item => [item.activityVersionId, item])), [catalog]);
   const payload = normalizePayload(value.payload);
   const root = payload.rootActivity;
+  const assignedOutputNames = activityGraphAssignedOutputNames(activityGraphDocumentAdapter.readRoot(value), catalogByVersion);
   const outcomeMappingOptions = useMemo(
     () => getActivityGraphOutcomeMappingOptions(
       root,
@@ -170,8 +188,8 @@ export function ActivityGraphPublicInterfaceEditor({
   );
   // The root lets pickers offer the variables of containers inside the body, as the workflow editor does.
   const workflowState = useMemo<WorkflowDefinitionState>(
-    () => ({ inputs: publicInputs, variables: toWorkflowVariables(payload.variables), rootActivity: root }),
-    [payload.variables, publicInputs, root]
+    () => ({ inputs: publicInputs, outputs: contract?.outputs ?? [], variables: toWorkflowVariables(payload.variables), rootActivity: root }),
+    [contract?.outputs, payload.variables, publicInputs, root]
   );
 
   useEffect(() => {
@@ -213,10 +231,11 @@ export function ActivityGraphPublicInterfaceEditor({
       <header className="ad-interface-connections-header"><h2>Designer connections</h2><p>Connect designer results to the public interface.</p></header>
       {(!contractSection || contractSection === "outputs") && <section className="ad-graph-output-mappings" aria-labelledby="activity-graph-output-mappings-title">
         <h3 id="activity-graph-output-mappings-title">Output values</h3>
-        {(contract?.outputs ?? []).length > 0 ? <p>Choose where each output gets its value.</p> : null}
+        {(contract?.outputs ?? []).length > 0 ? <p>Assign outputs in the designer with Set Output, or choose a value here.</p> : null}
         {(contract?.outputs ?? []).length === 0
           ? <p className="wf-muted">Add an output above to connect a value.</p>
           : <WorkflowReferenceAuthoringProvider
+              inputBindingTarget="referenceKey"
               workflowState={workflowState}
               workflowInputs={publicInputs}
               visibleVariables={visibleVariables}
@@ -227,8 +246,10 @@ export function ActivityGraphPublicInterfaceEditor({
                 return (
                   <ActivityGraphOutputMappingEditor
                     key={output.referenceKey}
+                    draftId={draftId}
                     output={output}
                     mapping={mapping}
+                    assignedBySetOutput={assignedOutputNames.has(output.name)}
                     expressionDescriptors={expressionState.descriptors}
                     expressionDescriptorStatus={expressionState.status}
                     expressionEditors={expressionEditors}
@@ -250,8 +271,8 @@ export function ActivityGraphPublicInterfaceEditor({
         </li>)}</ul> : <p>No completion paths connected yet.</p>}
         {unresolvedOutcomes.length > 0 ? <p role="alert">Outcomes still needing a connection: {unresolvedOutcomes.map(item => item.name).join(", ")}.</p> : null}
         {outcomeMappingOptions.sourceOutcomes.length === 0 ? <p role="status">This designer does not expose any connectable completion paths.</p> : outcomeMappingOptions.boundaryOutcomes.length === 0 ? <p role="status">Add an enabled outcome above before connecting a completion path.</p> : <div className="ad-graph-outcome-mapping-add">
-          <label><span>When the designer finishes with</span><select aria-label="Designer outcome" value={sourceOutcomeReferenceKey} onChange={event => setSourceOutcomeReferenceKey(event.target.value)} disabled={readOnly}><option value="">Select an outcome</option>{outcomeMappingOptions.sourceOutcomes.map(outcome => <option key={outcome.referenceKey} value={outcome.referenceKey} disabled={payload.outcomeMappings.some(mapping => mapping.sourceOutcomeReferenceKey === outcome.referenceKey)}>{outcome.name}</option>)}</select></label>
-          <label><span>Return this activity outcome</span><select aria-label="Activity outcome" value={boundaryOutcomeReferenceKey} onChange={event => setBoundaryOutcomeReferenceKey(event.target.value)} disabled={readOnly}><option value="">Select an emitted outcome</option>{outcomeMappingOptions.boundaryOutcomes.map(outcome => <option key={outcome.referenceKey} value={outcome.referenceKey}>{outcome.name}</option>)}</select></label>
+          <StudioField label={<><span>When the designer finishes with</span></>}><select aria-label="Designer outcome" value={sourceOutcomeReferenceKey} onChange={event => setSourceOutcomeReferenceKey(event.target.value)} disabled={readOnly}><option value="">Select an outcome</option>{outcomeMappingOptions.sourceOutcomes.map(outcome => <option key={outcome.referenceKey} value={outcome.referenceKey} disabled={payload.outcomeMappings.some(mapping => mapping.sourceOutcomeReferenceKey === outcome.referenceKey)}>{outcome.name}</option>)}</select></StudioField>
+          <StudioField label={<><span>Return this activity outcome</span></>}><select aria-label="Activity outcome" value={boundaryOutcomeReferenceKey} onChange={event => setBoundaryOutcomeReferenceKey(event.target.value)} disabled={readOnly}><option value="">Select an emitted outcome</option>{outcomeMappingOptions.boundaryOutcomes.map(outcome => <option key={outcome.referenceKey} value={outcome.referenceKey}>{outcome.name}</option>)}</select></StudioField>
           <StudioButton size="sm" onClick={addOutcomeMapping} disabled={readOnly || !sourceOutcomeReferenceKey || !boundaryOutcomeReferenceKey}>Connect</StudioButton>
         </div>}
       </section> : <section className="ad-inline-status" role="status">
@@ -263,7 +284,7 @@ export function ActivityGraphPublicInterfaceEditor({
 
 export function ActivityGraphVariablesEditor({ context, value, readOnly, onChange }: Pick<StudioActivityDefinitionImplementationEditorProps, "context" | "value" | "readOnly" | "onChange">) {
   const payload = normalizePayload(value.payload);
-  return <fieldset disabled={readOnly} className="wf-container-variables wf-tokens">
+  return <fieldset disabled={readOnly} className="wf-container-variables wf-tokens ad-definition-variables-editor">
     <ScopedVariablesEditor
       context={context}
       variables={toVariableEditorRecords(payload.variables)}
@@ -291,25 +312,37 @@ export function ActivityGraphImplementationEditor({
   readOnly,
   onChange
 }: StudioActivityDefinitionImplementationEditorProps) {
+  const blockAuthority = useNativeBlockAuthority();
+  const promotionCapabilities = useActivityAuthoringCapabilities(context);
+  const promotionExpressionSupport = useMemo(() => composePromotionExpressionSupport(expressionEditors), [expressionEditors]);
   const catalogQuery = useWorkflowActivities(context);
   const catalog = useMemo(() => catalogQuery.data?.activities ?? [], [catalogQuery.data?.activities]);
   const catalogByVersion = useMemo(() => new Map(catalog.map(item => [item.activityVersionId, item])), [catalog]);
   const [scopePath, setScopePath] = useState<ScopeFrame[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [paletteSearch, setPaletteSearch] = useState("");
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(() => new Set());
   const [activeLeftPanelId, setActiveLeftPanelId] = useState("activities");
   const themeLayout = useStudioThemeLayout();
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [diagnosticFocusVersion, setDiagnosticFocusVersion] = useState(0);
+  const [nativeBlockToolsHost, setNativeBlockToolsHost] = useState<HTMLElement | null>(null);
+  const canvasToolbarHost = useContext(WorkflowCanvasToolsHostContext);
+  const authoringTabsHostRef = useContext(ActivityDefinitionAuthoringTabsHostContext);
+  const designerViewIsActive = !authoringTabsHostRef || authoringTabsHostRef.activeView === "designer";
   const editorRef = useRef<HTMLDivElement | null>(null);
   const pendingDiagnosticFocusRef = useRef<{
     target: "root" | string;
     complete(result: StudioActivityDiagnosticFocusResult): void;
   } | null>(null);
+  const confirmationContextRef = useRef({ value, scopePath, selectedNodeId, readOnly });
+  confirmationContextRef.current = { value, scopePath, selectedNodeId, readOnly };
   const expressionState = useActivityGraphExpressionDescriptors(context);
   const sidePanelLayout = useSidePanelLayout(activityGraphSidePanelStorageKeys, { palettePresent: true });
+  const { setInspectorCollapsed } = sidePanelLayout;
+
+  const historyView = useRef<GraphAuthoringView>({ frames: [], selectedNodeIds: [], primaryNodeId: null });
+  const pendingHistoryView = useRef<GraphAuthoringView | null>(null);
 
   const buildModel = useCallback((documentRoot: ActivityNode, layout: ReturnType<typeof activityGraphLayoutToDesign>, document: typeof value) => {
     const documentScope = resolveScope(documentRoot, resolveScopeFrames(documentRoot, scopePath, catalogByVersion), catalogByVersion);
@@ -390,10 +423,56 @@ export function ActivityGraphImplementationEditor({
     applyModel,
     reconcileDocument,
     documentSignature: activityGraphDocumentSignature,
+    captureView: () => structuredClone(historyView.current),
+    restoreView(view, document) {
+      const documentRoot = activityGraphDocumentAdapter.readRoot(document);
+      const path = resolveScopeFrames(documentRoot, view.frames, catalogByVersion);
+      const restoredScope = resolveScope(documentRoot, path, catalogByVersion);
+      const visible = restoredScope?.slot.mode === "bpmn"
+        ? readBpmnElements(restoredScope.owner).map(element => element.elementId)
+        : restoredScope?.slot.activities.map(node => node.nodeId) ?? [];
+      const ids = view.selectedNodeIds.filter(id => visible.includes(id));
+      const primary = view.primaryNodeId && ids.includes(view.primaryNodeId) ? view.primaryNodeId : ids.at(-1) ?? null;
+      pendingHistoryView.current = { frames: path, selectedNodeIds: ids, primaryNodeId: primary };
+      setScopePath(path);
+      setSelectedNodeId(primary);
+    },
     onChange
   });
   const { nodes, edges, setNodes, setEdges, commitCanvas, commitDocument, undo, redo, canUndo, canRedo } = canvas;
   const payload = normalizePayload(value.payload);
+  // Promotion may rewrite graph-owned mappings outside the root (output mappings reading block results). The
+  // public contract belongs to the definition editor, so a proposal that would change it is refused here.
+  const promotionDocument = (document: NativeBlockDocument, referenceContext: unknown[]) => {
+    const replaced = activityGraphDocumentAdapter.replaceGraph(value, document.rootActivity, document.layout);
+    const promoted = activityGraphPromotionPayload(contract, (value.payload ?? {}) as Record<string, unknown>, normalizePayload(replaced.payload).rootActivity, referenceContext);
+    return promoted ? { ...replaced, payload: promoted, activityPresentation: document.activityPresentation } : null;
+  };
+  const blockPromotion: BlockPromotionHost = {
+    resourceKind: "activity-definition-graph",
+    publicInputs: (contract?.inputs ?? []).filter(input => input.type).map(input => ({ referenceKey: input.referenceKey, name: input.name,
+      type: input.type as unknown as ArgumentType, isRequired: input.isRequired === true, isNullable: input.isNullable === true, default: input.default })),
+    capabilities: promotionCapabilities.data ?? null,
+    capabilitiesState: promotionCapabilities.isPending ? "loading" : promotionCapabilities.isError ? "failed" : "ready",
+    expressionBoundary: promotionExpressionSupport,
+    refreshCatalog: async () => {
+      const result = await catalogQuery.refetch();
+      if (result.isError) throw new Error("Studio could not reload the activity catalog. Try again when the service is available.");
+    },
+    validate: async (document, referenceContext) => {
+      const candidate = promotionDocument(document, referenceContext);
+      if (!candidate) return { state: "invalid", messages: ["This promotion would change this activity's own public contract. Change the contract first, then promote again."] };
+      return blockAuthority ? blockAuthority.validate(candidate) : { state: "unavailable", messages: [] };
+    },
+    apply: (document, referenceContext, selection, isCurrent) => {
+      const candidate = promotionDocument(document, referenceContext);
+      if (!candidate) throw new Error("This promotion would change this activity's own public contract.");
+      if (!isCurrent() || readOnly || !blockAuthority?.canApply()) throw new Error("The resource changed before commit.");
+      commitDocument(candidate);
+      interactions.selectNodes(selection);
+      if (selection[0]) interactions.queueCanvasNodeFocus(selection[0]);
+    }
+  };
   const root = activityGraphDocumentAdapter.readRoot(value);
   const scopeFrames = resolveScopeFrames(root, scopePath, catalogByVersion);
   const scope = resolveScope(root, scopeFrames, catalogByVersion);
@@ -423,13 +502,33 @@ export function ActivityGraphImplementationEditor({
   const availableActivities = supportedActivities.filter(isOfferedActivity);
   const choicesForSlot = (owner: ActivityNode, slot: ChildSlot) => supportedActivities.filter(activity => isActivityOfferedInContext(activity,
     getActivityPaletteContext("activity-definition-graph", root, owner.nodeId, slot, catalogByVersion)));
+  const paletteGroups = useMemo(() => groupActivityPalette(availableActivities), [availableActivities]);
+  const paletteCategoryNames = useMemo(() => [...new Set([
+    ...paletteGroups.map(group => group.category),
+    ...elements.map(element => element.category)
+  ])], [elements, paletteGroups]);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(() => new Set(paletteCategoryNames));
   const filteredPaletteGroups = useMemo(() => {
     const search = paletteSearch.trim().toLocaleLowerCase();
-    return groupActivityPalette(availableActivities.filter(activity => !search ||
+    if (!search) return paletteGroups;
+    return groupActivityPalette(availableActivities.filter(activity =>
       getActivityDisplay(activity).toLocaleLowerCase().includes(search) ||
       activity.activityTypeKey.toLocaleLowerCase().includes(search) ||
       activity.category.toLocaleLowerCase().includes(search)));
-  }, [availableActivities, paletteSearch]);
+  }, [availableActivities, paletteGroups, paletteSearch]);
+  useEffect(() => {
+    setExpandedCategories(current => {
+      let changed = false;
+      const next = new Set(current);
+      for (const category of paletteCategoryNames) {
+        if (!next.has(category)) {
+          next.add(category);
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [paletteCategoryNames]);
   const supportedPanels = filterGraphAuthoringContributions(graphAuthoringPanels, "activity-definition-graph");
   const panelContext = {
     resourceKind: "activity-definition-graph" as const,
@@ -446,8 +545,8 @@ export function ActivityGraphImplementationEditor({
   );
   // The root lets pickers offer the variables of containers inside the body, as the workflow editor does.
   const workflowState = useMemo<WorkflowDefinitionState>(
-    () => ({ inputs: publicInputs, variables: toWorkflowVariables(payload.variables), rootActivity: root }),
-    [payload.variables, publicInputs, root]
+    () => ({ inputs: publicInputs, outputs: contract?.outputs ?? [], variables: toWorkflowVariables(payload.variables), rootActivity: root }),
+    [contract?.outputs, payload.variables, publicInputs, root]
   );
   const visibleVariables = useMemo(
     () => payload.variables.flatMap(toVisibleGraphVariable),
@@ -562,6 +661,16 @@ export function ActivityGraphImplementationEditor({
       : undefined,
     resolveRemovedActivityNodeIds
   });
+  historyView.current = { frames: scopeFrames, selectedNodeIds: nodes.filter(node => node.selected).map(node => node.id), primaryNodeId: selectedNodeId };
+  useEffect(() => {
+    const pending = pendingHistoryView.current;
+    if (!pending || JSON.stringify(pending.frames.map(frame => [frame.ownerNodeId, frame.slotId])) !== JSON.stringify(scopeFrames.map(frame => [frame.ownerNodeId, frame.slotId]))) return;
+    if (pending.selectedNodeIds.some(id => !nodes.some(node => node.id === id))) return;
+    pendingHistoryView.current = null;
+    interactions.selectNodes(pending.selectedNodeIds, pending.primaryNodeId);
+    if (pending.primaryNodeId) interactions.queueCanvasNodeFocus(pending.primaryNodeId);
+  }, [interactions, nodes, scopeFrames]);
+
   const { stampCanvasNode } = interactions;
   stampCanvasNodeRef.current = stampCanvasNode;
 
@@ -626,7 +735,7 @@ export function ActivityGraphImplementationEditor({
     const present = isBpmnSlot
       ? nodes.some(node => node.id === selectedNodeId)
       : activities.some(activity => activity.nodeId === selectedNodeId);
-    if (present) return;
+    if (present || pendingDiagnosticFocusRef.current?.target === selectedNodeId) return;
     setSelectedNodeId(null);
   }, [activities, isBpmnSlot, nodes, selectedNodeId]);
 
@@ -651,15 +760,25 @@ export function ActivityGraphImplementationEditor({
       const targetPath = findNodeScopePath(root, nodeId, activity => nodeLabel(activity, catalogByVersion), catalogByVersion);
       if (!targetPath) return;
       event.preventDefault();
+      const targetScope = resolveScope(root, targetPath, catalogByVersion);
+      const selectionId = targetScope?.slot.mode === "bpmn"
+        ? readBpmnElements(targetScope.owner).find(element => element.childNodeId === nodeId)?.elementId
+        : nodeId;
+      if (!selectionId) return;
       setScopePath(targetPath);
-      setSelectedNodeId(nodeId);
+      setSelectedNodeId(selectionId);
+      if (location.jsonPointer?.endsWith("/inputs")) {
+        setActiveRightPanelId("inspector");
+        setActiveInspectorTabId("inputs");
+        setInspectorCollapsed(false);
+      }
       pendingDiagnosticFocusRef.current?.complete(unsupportedGraphFocus());
-      pendingDiagnosticFocusRef.current = { target: nodeId, complete: event.detail.complete };
+      pendingDiagnosticFocusRef.current = { target: selectionId, complete: event.detail.complete };
       setDiagnosticFocusVersion(version => version + 1);
     };
     editor.addEventListener(activityGraphDiagnosticFocusEvent, focusDiagnostic);
     return () => editor.removeEventListener(activityGraphDiagnosticFocusEvent, focusDiagnostic);
-  }, [catalogByVersion, payload, root]);
+  }, [catalogByVersion, payload, root, setInspectorCollapsed]);
 
   useEffect(() => {
     const pending = pendingDiagnosticFocusRef.current;
@@ -697,37 +816,48 @@ export function ActivityGraphImplementationEditor({
     pendingDiagnosticFocusRef.current = null;
   }, []);
 
-  const chooseRoot = (activityVersionId: string) => {
+  const confirmGraphChange = async (message: string, confirmLabel: string) => {
+    const originalContext = confirmationContextRef.current;
+    const confirmed = await getDialogs().confirm({ message, confirmLabel, tone: "danger" });
+    const currentContext = confirmationContextRef.current;
+    return confirmed
+      && !currentContext.readOnly
+      && currentContext.value === originalContext.value
+      && currentContext.scopePath === originalContext.scopePath
+      && currentContext.selectedNodeId === originalContext.selectedNodeId;
+  };
+  const chooseRoot = async (activityVersionId: string) => {
     const activity = catalogByVersion.get(activityVersionId);
     if (!activity || !supportsActivityGraphAuthoring(activity) || activityVersionId === root.activityVersionId) return;
-    if (root.activityVersionId && !window.confirm("Replace the root activity and all nested graph content? This change will autosave.")) return;
+    if (root.activityVersionId && !await confirmGraphChange("Replace the root activity and all nested graph content? This change will autosave.", "Replace")) return;
     setScopePath([]);
     setSelectedNodeId(null);
     const nextRoot = createActivityNode(activity, root.nodeId || "root");
     commitDocument(replaceGraphRootAndClearOutcomes(value, nextRoot));
   };
-  const deleteSelected = () => {
+  const deleteSelected = async () => {
     if (isBpmnSlot) {
       // Delete the ELEMENT through the canvas so its sequence flows go with it; dropping a bound
       // activity alone would leave an element pointing at a childNodeId that no longer exists, and a
       // pure structure element has no activity to drop in the first place.
       const elementNode = nodes.find(node => node.id === selectedNodeId);
       if (!elementNode) return;
-      if (!window.confirm(selected
-        ? "Remove this element, the activity it binds, and any nested graph content? This change will autosave."
-        : "Remove this BPMN element and its sequence flows? This change will autosave.")) return;
+      const message = selected
+        ? "Delete this element, the activity it binds, and any nested graph content? This change will autosave."
+        : "Delete this BPMN element and its sequence flows? This change will autosave.";
+      if (!await confirmGraphChange(message, "Delete")) return;
       interactions.onNodesDelete([elementNode]);
       return;
     }
     if (!selected) return;
-    if (!window.confirm("Remove this activity and any nested graph content? This change will autosave.")) return;
+    if (!await confirmGraphChange("Delete this activity and any nested graph content? This change will autosave.", "Delete")) return;
     updateOwnerActivities(activities.filter(activity => activity.nodeId !== selected.nodeId));
     setSelectedNodeId(null);
   };
-  const deleteSequenceActivity = (nodeId: string) => {
+  const deleteSequenceActivity = async (nodeId: string) => {
     if (readOnly || slot?.mode !== "sequence" || slot.cardinality !== "many") return;
     const node = nodes.find(candidate => candidate.id === nodeId);
-    if (!node || !window.confirm("Remove this activity and any nested graph content? This change will autosave.")) return;
+    if (!node || !await confirmGraphChange("Delete this activity and any nested graph content? This change will autosave.", "Delete")) return;
     interactions.onNodesDelete([node]);
     if (nodes.length === 1) {
       window.requestAnimationFrame(() => interactions.canvasRef.current?.focus({ preventScroll: true }));
@@ -752,7 +882,7 @@ export function ActivityGraphImplementationEditor({
       activityPresentation: value.activityPresentation ?? [],
       validationErrors: []
     };
-    const plan = planActivityDuplicate({ snapshot, draft, frames: scopeFrames, catalog: catalogByVersion });
+    const plan = planActivityDuplicate({ resourceKind: "activity-definition", snapshot, draft, frames: scopeFrames, catalog: catalogByVersion });
     if (!plan?.activities.length) return;
     const duplicate = applyActivityDuplicatePlan(draft, scopeFrames, plan, catalogByVersion, nodeId);
     const nextRoot = duplicate?.state.rootActivity;
@@ -783,7 +913,7 @@ export function ActivityGraphImplementationEditor({
     setSelectedNodeId(nodes.find(node => node.id === ownerNodeId || (node.data as unknown as BpmnNodeData).boundActivity?.nodeId === ownerNodeId)?.id ?? ownerNodeId);
     setActiveRightPanelId("inspector");
     setActiveInspectorTabId("slots");
-    sidePanelLayout.setInspectorCollapsed(false);
+    setInspectorCollapsed(false);
   };
   const inspectedNode = selected ?? owner;
   // Keep raw editor text: normalizing here removes a space before the next word is typed.
@@ -830,10 +960,10 @@ export function ActivityGraphImplementationEditor({
       icon: <Boxes size={15} />,
       render: () => (
         <div className="ad-graph-palette">
-          <section data-graph-root-location tabIndex={-1} className="ad-graph-scope-owner"><span>Activity graph</span><strong>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Choose a composition"}</strong><small>The root owns this graph scope and is not a canvas node.</small></section>
+          <section tabIndex={-1} className="ad-graph-scope-owner"><span>Activity graph</span><strong>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Choose a composition"}</strong><small>The root owns this graph scope and is not a canvas node.</small></section>
           {catalogQuery.isPending ? <span role="status">Loading the authorized activity catalog…</span> : null}
           {catalogQuery.isError ? <span role="alert">The activity catalog is unavailable. Existing graph state remains unchanged.</span> : null}
-          {!root.activityVersionId ? <div className="ad-graph-root-options" role="group" aria-label="Graph composition">{availableActivities.filter(activity => getChildSlots(createActivityNode(activity, "root"), activity).length > 0).map(activity => <button key={activity.activityVersionId} type="button" onClick={() => chooseRoot(activity.activityVersionId)} disabled={readOnly}>{getActivityDisplay(activity)}</button>)}</div> : null}
+          {!root.activityVersionId ? <div className="ad-graph-root-options" role="group" aria-label="Graph composition">{availableActivities.filter(activity => getChildSlots(createActivityNode(activity, "root"), activity).length > 0).map(activity => <button key={activity.activityVersionId} type="button" onClick={() => chooseRoot(activity.activityVersionId)} disabled={readOnly || !designerViewIsActive}>{getActivityDisplay(activity)}</button>)}</div> : null}
           {inlineSteps ? null : <ActivityPalettePanel
             paletteSearch={paletteSearch}
             onSearchChange={setPaletteSearch}
@@ -844,7 +974,7 @@ export function ActivityGraphImplementationEditor({
             onElementDragEnd={interactions.onElementDragEnd}
             onElementPointerDown={interactions.onElementPointerDown}
             expandedCategories={expandedCategories}
-            disabled={readOnly}
+            disabled={readOnly || !designerViewIsActive}
             onToggleCategory={category => setExpandedCategories(current => {
               const next = new Set(current);
               if (next.has(category)) next.delete(category);
@@ -870,16 +1000,17 @@ export function ActivityGraphImplementationEditor({
       render: () => (
         <>
           {/* A pure BPMN structure element has no bound activity, but is still removable. */}
-          {selected || selectedBpmnElement ? <div className="ad-graph-node-actions">
+          {selected || selectedBpmnElement ? <div className="ad-graph-node-actions" role="group" aria-label="Selected activity actions">
             {/* Ordering is a slot-list concept; a BPMN process is ordered by its sequence flows. */}
-            <button type="button" aria-label={slot?.mode === "sequence" ? "Move activity up" : "Move activity left"} onClick={() => moveSelected(-1)} disabled={readOnly || isBpmnSlot || selectedIndex <= 0}>{slot?.mode === "sequence" ? <ArrowUp size={15} /> : <ArrowLeft size={15} />}</button>
-            <button type="button" aria-label={slot?.mode === "sequence" ? "Move activity down" : "Move activity right"} onClick={() => moveSelected(1)} disabled={readOnly || isBpmnSlot || selectedIndex < 0 || selectedIndex === activities.length - 1}>{slot?.mode === "sequence" ? <ArrowDown size={15} /> : <ArrowRight size={15} />}</button>
-            <button type="button" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} /> Remove</button>
+            <StudioButton variant="ghost" size="sm" aria-label={slot?.mode === "sequence" ? "Move activity up" : "Move activity left"} onClick={() => moveSelected(-1)} disabled={readOnly || isBpmnSlot || selectedIndex <= 0}>{slot?.mode === "sequence" ? <ArrowUp size={15} aria-hidden="true" /> : <ArrowLeft size={15} aria-hidden="true" />}</StudioButton>
+            <StudioButton variant="ghost" size="sm" aria-label={slot?.mode === "sequence" ? "Move activity down" : "Move activity right"} onClick={() => moveSelected(1)} disabled={readOnly || isBpmnSlot || selectedIndex < 0 || selectedIndex === activities.length - 1}>{slot?.mode === "sequence" ? <ArrowDown size={15} aria-hidden="true" /> : <ArrowRight size={15} aria-hidden="true" />}</StudioButton>
+            <StudioButton size="sm" className="danger" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} aria-hidden="true" /> Delete</StudioButton>
           </div> : null}
           {!selectedSupported ? <span role="alert">This existing nested structure is preserved but cannot be structurally edited here.</span> : null}
           {!ownerSupported ? <span role="alert">This existing multi-slot structure is preserved but cannot be structurally edited by this graph host.</span> : null}
           {bpmnInspectorProps && !selected ? <BpmnElementInspector {...bpmnInspectorProps} /> : <InspectorPanel
-            bpmnRoutingPanel={bpmnInspectorProps && selected ? <BpmnElementConfiguration {...bpmnInspectorProps} /> : undefined}
+            bpmnRoutingPanel={bpmnInspectorProps && selected ? <BpmnElementConfiguration {...bpmnInspectorProps} showElementName={false} /> : undefined}
+            bpmnDetailsPanel={bpmnInspectorProps && selected ? <BpmnElementNameField element={bpmnInspectorProps.element} onChangeElement={bpmnInspectorProps.onChangeElement} readOnly={bpmnInspectorProps.readOnly} label="BPMN element name" /> : undefined}
             key={`${inspectedNode?.nodeId ?? "no-activity"}:${selected ? "selected" : "owner"}`}
             context={context}
             workflowState={workflowState}
@@ -930,6 +1061,7 @@ export function ActivityGraphImplementationEditor({
       clientX={interactions.connectMenu.clientX}
       clientY={interactions.connectMenu.clientY}
       activities={availableActivities}
+      elements={interactions.connectMenu.kind === "fromEmpty" ? elements : emptyGraphElements}
       onPick={activity => {
         // Empty single slots assign an activity; use the same descent as the cards and inspector.
         if (slot?.cardinality === "single" && activities.length === 0 && interactions.connectMenu?.kind === "fromEmpty") {
@@ -939,11 +1071,29 @@ export function ActivityGraphImplementationEditor({
           interactions.onConnectMenuPick(activity);
         }
       }}
+      onPickElement={interactions.onConnectMenuPickElement}
       onClose={() => interactions.setConnectMenu(null)}
     />
   ) : null;
+  const canvasCommandBar = <WorkflowCanvasCommandBar
+    ariaLabel="Activity Graph canvas tools"
+    undoLabel="Undo Activity Graph edit"
+    redoLabel="Redo Activity Graph edit"
+    autoLayoutLabel="Auto-layout Activity Graph"
+    undoTitle="Undo Activity Graph edit"
+    redoTitle="Redo Activity Graph edit"
+    autoLayoutTitle="Auto-layout Activity Graph"
+    canUndo={!readOnly && canUndo}
+    canRedo={!readOnly && canRedo}
+    canAutoLayout={!readOnly && !isSequenceSlot && interactions.canAutoLayout}
+    onUndo={undo}
+    onRedo={redo}
+    onAutoLayout={interactions.autoLayout}
+    canvasToolsSlot={setNativeBlockToolsHost}
+  />;
 
-  return <div ref={editorRef} className="ad-graph-editor" data-provider-diagnostic-focus-root>
+  return <WorkflowReferenceAuthoringProvider inputBindingTarget="referenceKey" workflowState={workflowState} workflowInputs={publicInputs} visibleVariables={visibleVariables} status="ready">
+  <div ref={editorRef} className="ad-graph-editor" data-provider-diagnostic-focus-root>
     <GraphAuthoringWorkbench
       resourceKind="activity-definition-graph"
       className="ad-graph-workspace"
@@ -955,21 +1105,59 @@ export function ActivityGraphImplementationEditor({
         activeTabId: activeLeftPanel.id,
         onSelect: setActiveLeftPanelId
       }}
-      canvas={<main className="wf-canvas-shell ad-graph-canvas" aria-label="Activity Graph designer">
+      canvas={<main className="wf-canvas-shell ad-graph-canvas" aria-label="Activity Graph designer" tabIndex={-1} data-graph-root-location="">
+        <div ref={authoringTabsHostRef?.setTablistHost} className="wf-canvas-tabs ad-authoring-canvas-tabs" />
+        <div className="ad-graph-center-content">
+        <section
+          id={authoringTabsHostRef?.designerPanelId}
+          className="ad-graph-designer-panel"
+          role={authoringTabsHostRef ? "tabpanel" : undefined}
+          aria-label={authoringTabsHostRef ? "Designer" : undefined}
+          aria-labelledby={authoringTabsHostRef?.designerTabId}
+          hidden={Boolean(authoringTabsHostRef && authoringTabsHostRef.activeView !== "designer")}
+        >
         <ScopeBreadcrumb
-          frames={scopeFrames}
+          frames={presentationScopeFrames(root, scopeFrames, catalogByVersion, value.activityPresentation)}
           onNavigate={nextFrames => {
             setScopePath(nextFrames);
             setSelectedNodeId(null);
           }}
         />
-        <div className="ad-graph-scope-label"><span>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Root"}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={interactions.autoLayout} disabled={readOnly || isSequenceSlot || !interactions.canAutoLayout}><Network size={16} /></button></div></div>
+        {scopePath.length > 0 ? <div className="ad-graph-scope-label"><span>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Activity graph"}</span><strong>{slot?.label ?? "Leaf implementation"}</strong></div> : null}
+        {canvasToolbarHost ? createPortal(canvasCommandBar, canvasToolbarHost) : canvasCommandBar}
+        <NativeBlockCommands
+          toolbarHost={nativeBlockToolsHost}
+          endpoint={context}
+          promotion={blockPromotion}
+          context={{
+            document: { rootActivity: root, layout: activityGraphLayoutToDesign(value.layout), activityPresentation: value.activityPresentation ?? [] },
+            catalog, scope: scopeFrames, canEdit: !readOnly && blockAuthority?.canEdit === true && !catalogQuery.isPending && !catalogQuery.isError,
+            referenceContext: [contract, Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "rootActivity"))],
+            sourceKey: JSON.stringify([blockAuthority?.sourceKey, value, nodes.filter(node => node.selected).map(node => node.id), selectedNodeId]),
+            expressionScopePreservation: composeExpressionScopePreservation(expressionEditors)
+          }}
+          selectedNodeIds={nodes.filter(node => node.selected).map(node => node.id)}
+          createPosition={nextNativeBlockPosition(nodes, selectedNodeId)}
+          validate={async document => blockAuthority ? blockAuthority.validate({ ...activityGraphDocumentAdapter.replaceGraph(value, document.rootActivity, document.layout), activityPresentation: document.activityPresentation }) : { state: "unavailable", messages: [] }}
+          apply={(document, selection, isCurrent) => {
+            if (!isCurrent() || readOnly || !blockAuthority?.canApply()) throw new Error("The resource changed before commit.");
+            commitDocument({ ...activityGraphDocumentAdapter.replaceGraph(value, document.rootActivity, document.layout), activityPresentation: document.activityPresentation });
+            interactions.selectNodes(selection);
+            if (selection[0]) interactions.queueCanvasNodeFocus(selection[0]);
+          }}
+          open={nodeId => {
+            const node = activities.find(item => item.nodeId === nodeId);
+            const child = node && getChildSlots(node, catalogByVersion).find(item => item.property === "activities");
+            if (node && child) enterChildSlot(nodeId, child, slotCrumbLabel(resolveActivityLabel(indexActivityPresentation(value.activityPresentation).get(nodeId), catalogByVersion.get(node.activityVersionId), nodeId), child));
+          }}
+        />
         {isSequenceSlot ? <SequenceDesigner
           nodes={nodes.filter(node => node.type !== "bpmnElement")}
           selectedNodeId={selectedNodeId}
           readOnly={readOnly}
           canvasRef={interactions.canvasRef}
           onSelect={setSelectedNodeId}
+          onSelectMany={interactions.selectNodes}
           onInsert={interactions.openSequenceInsertMenu}
           onDropActivity={(activityVersionId, index) => {
             const activity = catalogByVersion.get(activityVersionId);
@@ -1013,7 +1201,7 @@ export function ActivityGraphImplementationEditor({
             onDragLeave: interactions.onCanvasDragLeave,
             onDrop: interactions.onCanvasDrop,
             onPaneClick: () => setSelectedNodeId(null),
-            onNodeClick: (_, node) => setSelectedNodeId(node.id),
+            onNodeClick: (_, node) => interactions.inspectSelectedNode(node.id),
             onNodeDragStop: interactions.commitLayout,
             nodesConnectable: interactions.canCreateActivityFromPort,
             nodesDraggable: !readOnly,
@@ -1029,7 +1217,7 @@ export function ActivityGraphImplementationEditor({
               />
             ) : inlineSteps ? (
               <AddStepButton disabled={readOnly} onOpen={interactions.openAddStepMenu} />
-            ) : nodes.length > 0 ? null : slot.mode === "flowchart" ? (
+            ) : nodes.length > 0 ? null : slot.mode === "flowchart" || slot.mode === "bpmn" ? (
               <button type="button" className="wf-empty-canvas-add" onClick={() => interactions.openEmptyConnectMenu()} disabled={readOnly}>
                 <Plus size={15} /> Add activity
               </button>
@@ -1049,6 +1237,9 @@ export function ActivityGraphImplementationEditor({
         >
           <div className="ad-graph-empty"><strong>{root.activityVersionId ? "Leaf implementation" : "Choose a composition"}</strong><span>{root.activityVersionId ? "This activity does not own a child graph scope." : "Drop a Flowchart, Sequence, or BPMN activity here — or pick one from the palette — to begin."}</span></div>
         </div>}
+        </section>
+        <div ref={authoringTabsHostRef?.setCenterViewHost} className="ad-graph-authoring-view-host" hidden={authoringTabsHostRef?.activeView === "designer"} />
+        </div>
       </main>}
       inspector={{
         ariaLabel: "Inspector panel",
@@ -1058,12 +1249,25 @@ export function ActivityGraphImplementationEditor({
         onSelect: setActiveRightPanelId
       }}
     />
-  </div>;
+  </div>
+  </WorkflowReferenceAuthoringProvider>;
 }
 
-function ActivityGraphOutputMappingEditor({
+function activityGraphAssignedOutputNames(root: ActivityNode, catalog: Map<string, ActivityCatalogItem>): Set<string> {
+  return new Set(getActivityGraphOutputSetters(root, catalog).flatMap(setter => setter.outputName === null ? [] : [setter.outputName]));
+}
+
+// These are the expression syntaxes evaluated by GraphActivity at its completion checkpoint.
+const graphOutputSyntaxes = new Set(["literal", "object", "input", "variable", "javascript"]);
+
+export function ActivityGraphOutputMappingEditor({
+  draftId,
   output,
   mapping,
+  assignedBySetOutput,
+  embedded = false,
+  changingSource = true,
+  preserveValue = false,
   expressionDescriptors,
   expressionDescriptorStatus,
   expressionEditors,
@@ -1071,8 +1275,13 @@ function ActivityGraphOutputMappingEditor({
   readOnly,
   onChange
 }: {
+  draftId: string;
   output: NonNullable<StudioActivityDefinitionContract["outputs"]>[number];
   mapping: ActivityGraphOutputMapping | undefined;
+  assignedBySetOutput: boolean;
+  embedded?: boolean;
+  changingSource?: boolean;
+  preserveValue?: boolean;
   expressionDescriptors: StudioExpressionDescriptor[];
   expressionDescriptorStatus: "loading" | "ready" | "failed";
   expressionEditors: StudioExpressionEditorContribution[];
@@ -1080,6 +1289,7 @@ function ActivityGraphOutputMappingEditor({
   readOnly: boolean;
   onChange(source: ActivityGraphOutputMapping["source"] | null): void;
 }) {
+  const valueReadOnly = readOnly || preserveValue;
   const descriptor = useMemo<StudioActivityInputDescriptor>(() => ({
     name: output.name,
     referenceKey: output.referenceKey,
@@ -1100,8 +1310,25 @@ function ActivityGraphOutputMappingEditor({
       item.surfaces.inline && item.supports(candidateContext));
     return contribution ? [{ descriptor: expression, contribution }] : [];
   }), [descriptor, expressionDescriptors, expressionEditors, readOnly, root]);
-  const currentSyntax = mapping?.source.syntax ?? "";
+  const supportedSources = available.filter(item => graphOutputSyntaxes.has(item.descriptor.type.toLowerCase()));
+  const [replacementSource, setReplacementSource] = useState<string | null>(null);
+  const outputSource = useRef<HTMLDivElement>(null);
+  const replacementInput = useRef<HTMLTextAreaElement>(null);
+  const replacementButton = useRef<HTMLButtonElement>(null);
+  const replacementOpen = !valueReadOnly && replacementSource !== null;
+  useEffect(() => {
+    if (replacementOpen) replacementInput.current?.focus();
+  }, [replacementOpen]);
+  const authoredSyntax = mapping?.source.syntax ?? "";
+  const javaScript = authoredSyntax.toLowerCase() === "javascript";
+  const currentSyntax = javaScript ? "JavaScript" : authoredSyntax;
+  const storedValue = mapping?.source.value;
+  const stableInputKeys = javaScript && isRecord(storedValue) && storedValue.inputBinding === "referenceKey" && typeof storedValue.source === "string";
+  const expressionValue = stableInputKeys ? storedValue.source : storedValue;
+  const storeValue = (syntax: string, source: unknown, stable: boolean) =>
+    syntax === "JavaScript" && stable ? { source: typeof source === "string" ? source : "", inputBinding: "referenceKey" } : source;
   const active = available.find(item => item.descriptor.type === currentSyntax);
+  const supportedMapping = graphOutputSyntaxes.has(currentSyntax.toLowerCase());
   const Editor = active?.contribution.surfaces.inline;
   const context = {
     syntax: currentSyntax,
@@ -1109,56 +1336,90 @@ function ActivityGraphOutputMappingEditor({
     descriptor,
     activity: root,
     expressionDescriptors,
-    readOnly
+    readOnly,
+    editorSessionScope: `activity-output:${draftId}:${output.referenceKey}`
   };
-  const diagnostics = active?.contribution.diagnostics?.(context, mapping?.source.value) ?? [];
+  const diagnostics = active?.contribution.diagnostics?.(context, expressionValue) ?? [];
 
+  const defaultSource = embedded
+    ? ["Literal", "Input", "Variable"].map(type => supportedSources.find(item => item.descriptor.type === type)).find(Boolean) ?? supportedSources[0]
+    : supportedSources[0];
   const add = () => {
-    const first = available[0];
+    const first = defaultSource;
     if (!first) return;
     const nextContext = { ...context, syntax: first.descriptor.type };
     onChange({
       syntax: first.descriptor.type,
-      value: first.contribution.createDefaultValue?.(nextContext) ?? null
+      value: storeValue(first.descriptor.type, first.contribution.createDefaultValue?.(nextContext) ?? null, true)
     });
   };
   const changeSyntax = (syntax: string) => {
-    const next = available.find(item => item.descriptor.type === syntax);
+    const next = supportedSources.find(item => item.descriptor.type === syntax);
     if (!next) return;
     const nextContext = { ...context, syntax };
     onChange({
       ...(mapping?.source ?? {}),
       syntax,
-      value: next.contribution.createDefaultValue?.(nextContext) ?? null
+      value: storeValue(syntax, next.contribution.createDefaultValue?.(nextContext) ?? null, true)
     });
   };
 
   return (
-    <article className="ad-graph-output-mapping">
-      <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}</header>
-      {!mapping ? <>
-        {output.isRequired ? <span role="alert">Choose a value for this required output.</span> : <span className="wf-muted">No value is configured.</span>}
-        <StudioButton size="sm" onClick={add} disabled={readOnly || available.length === 0}>Set value</StudioButton>
+    <article className={`ad-graph-output-mapping${embedded ? " is-embedded" : ""}`} data-output-reference-key={output.referenceKey}>
+      {!embedded ? <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly || replacementOpen}>Remove connection</StudioButton> : null}</header> : mapping && changingSource ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly || replacementOpen}>Remove connection</StudioButton> : null}
+      {mapping && assignedBySetOutput ? <span role="alert">This output also has a Set Output assignment. Remove this connection or the assignment before publishing.</span> : null}
+      <div data-output-source ref={outputSource} tabIndex={-1}>{!mapping ? <>
+        {assignedBySetOutput ? <span className="wf-muted">Assigned in the designer with Set Output.</span> : output.isRequired ? <span role="alert">Assign this required output with Set Output, or choose a value here.</span> : <span className="wf-muted">No value is configured.</span>}
+        <StudioButton size="sm" onClick={add} disabled={readOnly || !defaultSource}>{embedded ? "Choose value" : "Set value"}</StudioButton>
       </> : <>
-        <label><span>Value source</span><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={readOnly}><option value="">Select an expression type</option>{available.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></label>
-        {Editor ? <Editor
+        {changingSource ? <StudioField label={<><span>{embedded ? "Expression type" : "Value source"}</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={valueReadOnly || replacementOpen}><option value="">Select an expression type</option>{currentSyntax && !supportedMapping ? <option value={currentSyntax} disabled>{currentSyntax}</option> : null}{supportedSources.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField> : <p className="ad-output-source-kind">{active?.descriptor.displayName || currentSyntax}</p>}
+        {!supportedMapping ? <span role="alert">Graph outputs cannot evaluate <code>{currentSyntax}</code>. Choose another expression type to replace this value.</span> : null}
+        {javaScript && Editor && !stableInputKeys && typeof expressionValue === "string" && !valueReadOnly ? <div>
+          {replacementSource === null ? <>
+            <p className="wf-muted">This expression uses input names.</p>
+            <StudioButton ref={replacementButton} size="sm" onClick={() => setReplacementSource("")}>Replace with stable-key expression</StudioButton>
+          </> : <>
+            <StudioField label="Current expression using input names">
+              <textarea value={expressionValue} readOnly />
+            </StudioField>
+            <StudioField label="Expression using stable input keys">
+              <textarea ref={replacementInput} value={replacementSource} onChange={event => setReplacementSource(event.target.value)} />
+            </StudioField>
+            <StudioButton size="sm" disabled={!replacementSource.trim()} onClick={() => {
+              onChange({ ...mapping.source, value: storeValue(currentSyntax, replacementSource, true) });
+              setReplacementSource(null);
+              requestAnimationFrame(() => outputSource.current?.focus());
+            }}>Apply replacement</StudioButton>
+            <StudioButton size="sm" onClick={() => {
+              setReplacementSource(null);
+              requestAnimationFrame(() => replacementButton.current?.focus());
+            }}>Cancel</StudioButton>
+          </>}
+        </div> : null}
+        {replacementOpen ? null : Editor ? <ExpressionEditorWithDataInsertion
+          key={output.referenceKey}
+          editor={Editor}
+          contribution={active.contribution}
+          ownerValue={expressionValue}
+          reusableOutput={stableInputKeys ? "referenceKey" : "name"}
           descriptor={descriptor}
           syntax={currentSyntax}
-          value={mapping.source.value}
-          disabled={readOnly}
+          value={expressionValue}
+          disabled={valueReadOnly || !supportedMapping}
           context={context}
-          onChange={nextValue => onChange({ ...mapping.source, value: nextValue })}
+          onChange={nextValue => onChange({ ...mapping.source, value: storeValue(currentSyntax, nextValue, stableInputKeys) })}
         /> : <span role="alert">No shared expression editor supports <code>{currentSyntax || "this expression"}</code>. The existing value is preserved.</span>}
         {diagnostics.map((diagnostic, index) => <span key={`${diagnostic.code ?? "diagnostic"}:${index}`} role={diagnostic.severity === "error" ? "alert" : "status"}>{diagnostic.message}</span>)}
       </>}
-      <details className="ad-mapping-technical"><summary>Binding details</summary><small>Output key <code>{output.referenceKey}</code></small></details>
+      </div>
+      {!embedded ? <details className="ad-mapping-technical"><summary>Binding details</summary><small>Output key <code>{output.referenceKey}</code></small></details> : null}
       {expressionDescriptorStatus === "loading" ? <span role="status">Loading value sources…</span> : null}
       {expressionDescriptorStatus === "failed" ? <span role="alert">Expression types could not be loaded. Existing mappings remain unchanged.</span> : null}
     </article>
   );
 }
 
-function useActivityGraphExpressionDescriptors(context: StudioActivityDefinitionImplementationEditorProps["context"]) {
+export function useActivityGraphExpressionDescriptors(context: StudioActivityDefinitionImplementationEditorProps["context"]) {
   const [retryVersion, setRetryVersion] = useState(0);
   const [state, setState] = useState<{
     descriptors: StudioExpressionDescriptor[];
@@ -1187,7 +1448,7 @@ function useActivityGraphExpressionDescriptors(context: StudioActivityDefinition
   };
 }
 
-function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["inputs"]>[number]): WorkflowInput {
+export function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["inputs"]>[number]): WorkflowInput {
   const type = isRecord(input.type) ? input.type : {};
   return {
     ...input,
@@ -1206,7 +1467,7 @@ function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["in
   };
 }
 
-function toVisibleGraphVariable(value: unknown) {
+export function toVisibleGraphVariable(value: unknown) {
   if (!isRecord(value)) return [];
   const referenceKey = typeof value.referenceKey === "string" ? value.referenceKey.trim() : "";
   const name = typeof value.name === "string" ? value.name.trim() : "";
@@ -1230,7 +1491,7 @@ function toVariableEditorRecords(values: unknown[]) {
   });
 }
 
-function toWorkflowVariables(values: unknown[]): VariableDefinition[] {
+export function toWorkflowVariables(values: unknown[]): VariableDefinition[] {
   return toVariableEditorRecords(values).flatMap(value => {
     if (!isRecord(value) ||
         typeof value.referenceKey !== "string" ||

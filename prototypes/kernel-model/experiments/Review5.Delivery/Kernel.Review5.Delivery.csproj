@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Gate 2, fifth review: executable schedules for R5-M2 (EV-1), R5-M3 (FR-2), R5-M4 (JR-1) and R5-M6 (PO-1).
+       Project references only, so the harness rebuilds from the prototype source at any revision. Machinery copied
+       from experiments/Review4.Blockers, which stays unchanged. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Kernel.Review5</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Kernel.Native brings Kernel.Workflows, Kernel.Durable, Kernel.Runtime and Kernel.Graph. -->
+    <ProjectReference Include="../../models/Native.Legacy/Kernel.Native.Legacy.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+    <Using Include="Kernel.Native" />
+    <Using Include="Kernel.ReviewFixtures" />
+    <Compile Include="../ModeledTicket.cs" Link="ModeledTicket.cs" />
+  </ItemGroup>
+</Project>

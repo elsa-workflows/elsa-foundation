@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { sequenceStructureKind } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 
 /** Backend routes the Activity Definition graph-authoring fixture needs (capabilities, catalog, create). */
 export async function mockGraphAuthoring(page: Page) {
@@ -53,37 +54,50 @@ export async function mockGraphAuthoring(page: Page) {
       snapshotFingerprint: "sha256:browser"
     })
   }));
-  await page.route("**/design/activities/catalog", route => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({
-      activities: [
-        catalogActivity("flowchart-v1", "Elsa.Flowchart", "Flowchart", "Composition", {
-          kind: "Flowchart",
-          schemaVersion: "1",
-          payload: { activities: [], connections: [] }
-        }, [
-          { type: "outcome", referenceKey: "completed", displayName: "Completed" },
-          { type: "outcome", referenceKey: "faulted", displayName: "Faulted" }
-        ]),
-        catalogActivity("sequence-v1", "Elsa.Sequence", "Sequence", "Composition", {
-          kind: "Sequence",
-          schemaVersion: "1",
-          payload: { activities: [] }
-        }),
-        catalogActivity("bpmn-v1", "Elsa.Bpmn", "BPMN", "Composition", {
-          kind: "Bpmn",
-          schemaVersion: "1",
-          payload: { activities: [], connections: [] }
-        }),
-        catalogActivity("write-line-v1", "Elsa.WriteLine", "Write line", "Primitives")
-      ]
-    })
-  }));
+  await page.route("**/design/activities/catalog", route => {
+    const defaultSyntax = new URL(page.url()).searchParams.get("bindings") === "empty" ? "Literal" : "JavaScript";
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        activities: [
+          catalogActivity("flowchart-v1", "Elsa.Flowchart", "Flowchart", "Composition", {
+            kind: "Flowchart",
+            schemaVersion: "1",
+            payload: { activities: [], connections: [] }
+          }, [
+            { type: "outcome", referenceKey: "completed", displayName: "Completed" },
+            { type: "outcome", referenceKey: "faulted", displayName: "Faulted" }
+          ]),
+          catalogActivity("sequence-v1", "Elsa.Sequence", "Sequence", "Composition", {
+            kind: sequenceStructureKind,
+            schemaVersion: "1",
+            payload: { activities: [] }
+          }),
+          catalogActivity("bpmn-v1", "Elsa.Bpmn", "BPMN", "Composition", {
+            kind: "Bpmn",
+            schemaVersion: "1",
+            payload: { activities: [], connections: [] }
+          }),
+          catalogActivity("write-line-v1", "Elsa.WriteLine", "Write line", "Primitives", null, [], [{
+            name: "Message",
+            typeName: "System.String",
+            displayName: "Message",
+            description: "Message to write.",
+            isBrowsable: true,
+            isWrapped: true,
+            defaultSyntax
+          }])
+        ]
+      })
+    });
+  });
   await page.route("**/expressions/descriptors", route => route.fulfill({
     status: 200,
     contentType: "application/json",
-    body: JSON.stringify({ items: [] })
+    body: JSON.stringify({ items: new URL(page.url()).searchParams.get("no-javascript") === "true"
+      ? []
+      : [{ type: "JavaScript", displayName: "JavaScript", editingMode: "text" }] })
   }));
   await page.route("**/design/activities/definitions", async route => {
     requests.push(route.request().postDataJSON());
@@ -119,7 +133,8 @@ function catalogActivity(
   displayName: string,
   category: string,
   structure: Record<string, unknown> | null = null,
-  ports: unknown[] = []
+  ports: unknown[] = [],
+  inputs: unknown[] = []
 ) {
   return {
     activityVersionId,
@@ -129,7 +144,7 @@ function catalogActivity(
     displayName,
     description: null,
     executionType: "sync",
-    inputs: [],
+    inputs,
     outputs: [],
     ports,
     designFacets: [],

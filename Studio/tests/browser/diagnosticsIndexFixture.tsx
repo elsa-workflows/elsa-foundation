@@ -16,7 +16,7 @@ const contributedNavigation: StudioNavigationContribution[] = [
   { id: "structured-logs", label: "Structured logs", path: "/diagnostics/structured-logs", parentId: "diagnostics", order: 860 },
   { id: "console", label: "Console", path: "/diagnostics/console", parentId: "diagnostics", order: 840 },
   { id: "custom-audit", label: "Database audit", path: "/diagnostics/audit", parentId: "diagnostics", order: 900 },
-  { id: "workflows-runtime-diagnostics", label: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", order: 940 }
+  { id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", order: 940 }
 ];
 
 const hostNavigation = getStudioNavigation(contributedNavigation);

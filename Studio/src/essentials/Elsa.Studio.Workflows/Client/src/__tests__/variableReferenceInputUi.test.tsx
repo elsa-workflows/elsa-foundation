@@ -9,7 +9,7 @@ import type {
 } from "@elsa-workflows/studio-sdk";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { toActivityDescriptor } from "../workflow-editor/useWorkflowEditorData";
-import type { ActivityCatalogItem, ActivityNode, ArgumentType, VisibleVariableView, WorkflowDefinitionState } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, ArgumentType, ScriptBodyWriteSet, VisibleVariableView, WorkflowDefinitionState } from "../workflowTypes";
 import { referenceTypeFits } from "../variableReferenceInput";
 
 // Spec 1231 FR-036: variable-reference inputs bind a declared variable in scope; the panel shows the node's
@@ -68,6 +68,7 @@ function renderPanel(
     scopeStatus?: "ready" | "loading" | "error" | "unavailable";
     editors?: StudioActivityPropertyEditorContribution[];
     workflowState?: WorkflowDefinitionState;
+    scriptWrites?: ScriptBodyWriteSet | null;
   } = {}
 ) {
   const container = document.createElement("div");
@@ -86,6 +87,7 @@ function renderPanel(
       descriptorStatus="ready"
       visibleVariables={options.variables ?? visibleVariables}
       scopeStatus={options.scopeStatus ?? "ready"}
+      scriptWrites={options.scriptWrites}
       onChange={options.onChange ?? (() => undefined)}
     />
   ));
@@ -488,6 +490,45 @@ describe("may-write set", () => {
 
     expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write any visible variable");
   });
+
+  // Spec 1231 FR-036: a script activity carries the type-level marker, and its analyzed body decides what it may write.
+  it("lists what a script body may write instead of the type-level marker", () => {
+    const container = renderPanel({ accessesUndeclaredVariables: true }, {
+      scriptWrites: { variables: [{ name: "total", scopeId: "workflow", referenceKey: "total-key" }], mayWriteEveryVisibleVariable: false }
+    });
+
+    expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write: total");
+  });
+
+  it("says a script that writes by a computed name may write any visible variable", () => {
+    const container = renderPanel({ accessesUndeclaredVariables: true }, {
+      scriptWrites: { variables: [], mayWriteEveryVisibleVariable: true }
+    });
+
+    expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write any visible variable (its script writes by a computed name)");
+  });
+
+  it("shows nothing for a script that writes no variable", () => {
+    const container = renderPanel({ accessesUndeclaredVariables: true }, {
+      scriptWrites: { variables: [], mayWriteEveryVisibleVariable: false }
+    });
+
+    expect(container.querySelector(".wf-variable-writes")).toBeNull();
+  });
+
+  it("tells two script-written variables of one name apart by scope", () => {
+    const container = renderPanel({ accessesUndeclaredVariables: true }, {
+      scriptWrites: {
+        variables: [
+          { name: "total", scopeId: "container", referenceKey: "inner" },
+          { name: "total", scopeId: "workflow", referenceKey: "outer" }
+        ],
+        mayWriteEveryVisibleVariable: false
+      }
+    });
+
+    expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write: total · container, total · workflow");
+  });
 });
 
 describe("catalog descriptor", () => {
@@ -518,5 +559,41 @@ describe("catalog descriptor", () => {
     const container = renderPanel(descriptor);
 
     expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write any visible variable");
+  });
+
+  it.each([false, true])("keeps an explicit C# marker broader than analyzed script writes (computed: %s)", computed => {
+    const descriptor = toActivityDescriptor(catalogItem({
+      designFacets: [{ kind: "elsa.variable-access", schemaVersion: "1", payload: { accessesUndeclaredVariables: true, declared: true } }]
+    }));
+    expect(descriptor.declaresAccessesUndeclaredVariables).toBe(true);
+    const container = renderPanel(descriptor, {
+      scriptWrites: { variables: [], mayWriteEveryVisibleVariable: computed }
+    });
+
+    expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write any visible variable");
+  });
+});
+
+describe("workflow-state effect authoring", () => {
+  it("shows literal state targets independently of variable writes", () => {
+    const container = renderPanel({ accessesWorkflowState: true }, { scriptWrites: {
+      variables: [], mayWriteEveryVisibleVariable: false,
+      workflowState: { accessesState: true, outputNames: ["Total"], writesCorrelationId: true, writesInstanceName: true, conservative: false }
+    } });
+    expect(container.textContent).toContain("May change: output Total, correlation, instance name");
+  });
+  it("keeps explicit native declarations conservative despite a read-only script analysis", () => {
+    const container = renderPanel({ accessesWorkflowState: true, declaresAccessesWorkflowState: true }, { scriptWrites: {
+      variables: [], mayWriteEveryVisibleVariable: false,
+      workflowState: { accessesState: false, outputNames: [], writesCorrelationId: false, writesInstanceName: false, conservative: false }
+    } });
+    expect(container.textContent).toContain("May change workflow outputs, correlation and instance name");
+  });
+  it("shows conservative computed access and a read-only body without invented changes", () => {
+    const container = renderPanel({ accessesWorkflowState: true }, { scriptWrites: {
+      variables: [], mayWriteEveryVisibleVariable: false,
+      workflowState: { accessesState: true, outputNames: [], writesCorrelationId: false, writesInstanceName: false, conservative: true }
+    } });
+    expect(container.textContent).toContain("computed or indirect access");
   });
 });

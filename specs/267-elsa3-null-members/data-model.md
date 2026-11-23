@@ -30,3 +30,18 @@ Gains `OnNull` (`Elsa3NullConversion?`, default null).
 | `Emit(v)` | `ArgumentState(key, new ArgumentValue(v, "Literal"))` |
 | `Refuse(r)` | node fails with `ELS3-ACTIVITY-NULL-UNCONVERTIBLE` |
 | none, R2 / R5 default | the default `ApplyDefaults` already emits |
+
+## #3281 source-shape corrections
+
+The original OnNull model remains delivered. The follow-up adds nullable init properties `OnAbsent`, `OnBlank`
+and `OnLiteralNull` to the existing member-rule body; its positional constructor stays intact. Each reuses existing
+conversion actions and defaults to no correction for existing/custom maps.
+
+Importer-local source classification distinguishes supported defaulted wrappers from a resolved Literal whose value
+is null/omitted, literal blank text and explicit empty collections. It is not persisted state or a workflow policy.
+Classify before default/unbound handling; preserve the original inventory and caller JSON.
+
+Focused built-in narrowed contracts cover nonempty Flow status lists, positive literal Timer intervals and response
+statuses whose raw value will not become a target default. Check explicit empty lists before an unbound shortcut.
+Existing generic enum/time-span contracts retain their custom-map semantics. Add no general empty-list policy,
+service or strategy. Generic portable/pinned null/missing/undefined policy data remains owned by spec1232.

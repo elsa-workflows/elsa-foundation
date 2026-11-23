@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { FallbackCodeEditor } from "./engines/FallbackCodeEditor";
 import {
   getStudioCodeEditorSession,
@@ -31,6 +31,8 @@ function subscribeToCompactSessions(notify: (activeSession: string | undefined) 
 
 export function StudioCodeEditor({
   document,
+  documentEditing,
+  actions,
   profile = "expanded",
   sessionKey,
   session: suppliedSession,
@@ -53,6 +55,8 @@ export function StudioCodeEditor({
   onExpand,
   onNewline
 }: StudioCodeEditorProps) {
+  const editingInteraction = useRef(false);
+  editingInteraction.current = documentEditing?.interactionActive === true;
   const [compactActive, setCompactActive] = useState(profile === "expanded");
   const compactSession = sessionKey ?? document.uri;
   const [authorizationRevoked, setAuthorizationRevoked] = useState(
@@ -88,13 +92,18 @@ export function StudioCodeEditor({
   const languageLabel = languageAdapter?.displayName ?? document.language;
   const loadEditor = languageAdapter?.loadEditor;
   const RichCodeEditor = useMemo(() => loadEditor ? lazy(loadEditor) : null, [loadEditor]);
-  void authorizationGeneration;
   const session = suppliedSession ?? getStudioCodeEditorSession(sessionKey ?? document.uri);
-  const isCompactPreview = profile === "compact" && !compactActive;
+  const isCompactPreview = profile === "compact" && !compactActive && !editingInteraction.current;
+  const fallbackSelection = useMemo<NonNullable<StudioCodeEditorEngineProps["fallbackSelection"]>>(
+    () => ({ current: null }),
+    [session, document.uri, document.language, profile, RichCodeEditor, isCompactPreview, authorizationRevoked, authorizationGeneration]
+  );
   const engineProps: StudioCodeEditorEngineProps = {
     document,
+    documentEditing,
     profile,
     session,
+    fallbackSelection: RichCodeEditor ? fallbackSelection : undefined,
     readOnly,
     theme,
     minHeight,
@@ -112,7 +121,7 @@ export function StudioCodeEditor({
     },
     onBlur: () => {
       onBlur?.();
-      if (profile === "compact") releaseCompactSession(compactSession);
+      if (profile === "compact" && !documentEditing) releaseCompactSession(compactSession);
     },
     onExpand,
     onNewline
@@ -141,7 +150,7 @@ export function StudioCodeEditor({
         // compact editor always returns to its lightweight preview.
         const editorElement = event.currentTarget;
         queueMicrotask(() => {
-          if (!editorElement.contains(globalThis.document.activeElement)) releaseCompactSession(compactSession);
+          if (!editingInteraction.current && !editorElement.contains(globalThis.document.activeElement)) releaseCompactSession(compactSession);
         });
       }}
     >
@@ -151,6 +160,7 @@ export function StudioCodeEditor({
           <code>{document.uri}</code>
         </div>
       ) : null}
+      {profile === "expanded" && !authorizationRevoked && actions ? <div className="studio-code-editor-actions">{actions}</div> : null}
       {authorizationRevoked ? (
         <div className="studio-code-editor-status" role="status">
           Expression source is hidden because the authorization session changed.
@@ -175,6 +185,7 @@ export function StudioCodeEditor({
       ) : (
         <FallbackCodeEditor {...engineProps} />
       )}
+      {profile === "compact" && !authorizationRevoked && actions ? <div className="studio-code-editor-actions">{actions}</div> : null}
       {!authorizationRevoked && status ? <div className="studio-code-editor-status" role="status" aria-live="polite">{status}</div> : null}
       {!authorizationRevoked ? <div className="studio-code-editor-escape" aria-live="polite">
         {escapeDescription ?? defaultEscapeDescription(profile)}

@@ -1,6 +1,8 @@
 import React from "react";
-import { ChevronRight } from "lucide-react";
+import { Home } from "lucide-react";
+import { StudioBreadcrumbs } from "@elsa-workflows/studio-ui";
 import type { ScopeFrame } from "../workflowAdapter";
+import "./ScopeBreadcrumb.css";
 
 // Breadcrumb trail over the scope frame path, shared by the editor and the run viewer. Unlabelled
 // frames are descent hops planSlotNavigation tucks under the next crumb (entering a slot through its
@@ -11,15 +13,17 @@ export function ScopeBreadcrumb({ frames, onNavigate, className }: {
   onNavigate(frames: ScopeFrame[]): void;
   className?: string;
 }) {
-  return (
-    <div className={className ? `wf-breadcrumb ${className}` : "wf-breadcrumb"}>
-      <button type="button" onClick={() => onNavigate([])}>Root</button>
-      {frames.map((frame, index) => frame.label ? (
-        <React.Fragment key={`${frame.ownerNodeId}-${frame.slotId}-${index}`}>
-          <ChevronRight size={13} />
-          <button type="button" onClick={() => onNavigate(frames.slice(0, index + 1))}>{frame.label}</button>
-        </React.Fragment>
-      ) : null)}
-    </div>
-  );
+  const crumbs = [
+    { label: <><Home className="wf-scope-root-icon" size={16} aria-hidden="true" /><span className="wf-scope-root-label">Root</span></>, onClick: () => onNavigate([]) },
+    ...frames.flatMap((frame, index) => frame.label
+      ? [{ label: frame.label, onClick: () => onNavigate(frames.slice(0, index + 1)) }]
+      : [])
+  ];
+  const current = crumbs[crumbs.length - 1];
+  return <StudioBreadcrumbs
+    aria-label="Graph scope"
+    className={className ? `wf-breadcrumb ${className}` : "wf-breadcrumb"}
+    items={crumbs.slice(0, -1)}
+    current={<button className="studio-breadcrumb-action" type="button" onClick={current.onClick}>{current.label}</button>}
+  />;
 }

@@ -1,0 +1,175 @@
+using System.Collections.Concurrent;
+using System.Data.Common;
+using System.Diagnostics;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+
+namespace Elsa3Cost;
+
+/// <summary>One DbCommand that an Elsa DbContext executed.</summary>
+public sealed record CommandRecord(
+    long Seq,
+    double AtMs,
+    string Phase,
+    bool InFlow,
+    string Context,
+    string Kind,
+    string Sql);
+
+/// <summary>A transaction or SaveChanges event an Elsa DbContext raised.</summary>
+public sealed record EventRecord(long Seq, double AtMs, string Phase, bool InFlow, string Context, string Kind);
+
+/// <summary>
+/// Collects every reader, non-query and scalar command, every transaction start/commit/rollback and every SaveChanges
+/// call made by any DbContext the interceptors are added to. A command is recorded as it starts (like Elsa 4's
+/// CommandCaptureInterceptor), so a command that then fails still counts.
+/// The counting window is the span between <see cref="Open"/> and <see cref="Close"/>; outside it, records are tagged
+/// "setup" or "after". <see cref="InFlow"/> marks a record whose async flow started inside the window from the caller
+/// (AsyncLocal); a record in the window that is not in-flow ran on a background loop.
+/// </summary>
+public sealed class Recorder
+{
+    private static readonly AsyncLocal<string?> Flow = new();
+    private readonly Stopwatch clock = Stopwatch.StartNew();
+    private readonly ConcurrentQueue<CommandRecord> commands = new();
+    private readonly ConcurrentQueue<EventRecord> events = new();
+    private long seq;
+    private volatile string phase = "setup";
+    private long lastActivityTicks;
+
+    public IReadOnlyList<CommandRecord> Commands => commands.ToArray();
+    public IReadOnlyList<EventRecord> Events => events.ToArray();
+    public string CurrentPhase => phase;
+
+    /// <summary>Milliseconds since the last command or event.</summary>
+    public double MsSinceLastActivity => (clock.ElapsedTicks - Interlocked.Read(ref lastActivityTicks)) * 1000.0 / Stopwatch.Frequency;
+
+    public void Open(string windowPhase)
+    {
+        phase = windowPhase;
+        Flow.Value = windowPhase;
+    }
+
+    /// <summary>
+    /// Marks the current async flow as the window's own flow. TestServer does not flow the caller's ExecutionContext
+    /// into the request pipeline, so a middleware calls this for requests that carry the measurement header.
+    /// </summary>
+    public void JoinFlow(string windowPhase) => Flow.Value = windowPhase;
+
+    public void Close(string afterPhase = "after")
+    {
+        phase = afterPhase;
+        Flow.Value = null;
+    }
+
+    // Elsa 3 registers the ManagementElsaDbContext options three times (the management feature and its definitions and
+    // instances sub-features each call AddDbContextFactory), so the interceptors end up in that context's chain three
+    // times. EF hands every interceptor in the chain the same DbCommand / event-data object, so each is recorded once.
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, object> seen = new();
+    private static readonly object Marker = new();
+    public int DuplicateCallbacksSkipped;
+
+    private bool FirstTime(object key)
+    {
+        if (seen.TryAdd(key, Marker)) return true;
+        Interlocked.Increment(ref DuplicateCallbacksSkipped);
+        return false;
+    }
+
+    public void RecordCommand(DbCommand command, DbContext? context, string kind)
+    {
+        if (!FirstTime(command)) return;
+        Touch();
+        commands.Enqueue(new CommandRecord(
+            Interlocked.Increment(ref seq),
+            clock.Elapsed.TotalMilliseconds,
+            phase,
+            Flow.Value is not null && Flow.Value == phase,
+            context?.GetType().Name ?? "(none)",
+            kind,
+            command.CommandText));
+    }
+
+    public void RecordEvent(object eventData, DbContext? context, string kind)
+    {
+        if (!FirstTime(eventData)) return;
+        Touch();
+        events.Enqueue(new EventRecord(
+            Interlocked.Increment(ref seq),
+            clock.Elapsed.TotalMilliseconds,
+            phase,
+            Flow.Value is not null && Flow.Value == phase,
+            context?.GetType().Name ?? "(none)",
+            kind));
+    }
+
+    private void Touch() => Interlocked.Exchange(ref lastActivityTicks, clock.ElapsedTicks);
+
+    /// <summary>Waits until no command or event has been recorded for <paramref name="quietMs"/>.</summary>
+    public async Task WaitForQuietAsync(int quietMs, int maxMs = 30000)
+    {
+        var started = Stopwatch.StartNew();
+        await Task.Delay(50);
+        while (MsSinceLastActivity < quietMs)
+        {
+            if (started.ElapsedMilliseconds > maxMs)
+                throw new TimeoutException($"Database activity did not go quiet for {quietMs} ms within {maxMs} ms.");
+            await Task.Delay(25);
+        }
+    }
+
+    private IInterceptor[]? interceptors;
+
+    public IInterceptor[] Interceptors() => interceptors ??= [new CommandInterceptor(this), new TransactionInterceptor(this), new SaveInterceptor(this)];
+
+    private sealed class CommandInterceptor(Recorder r) : DbCommandInterceptor
+    {
+        public override InterceptionResult<DbDataReader> ReaderExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
+        { r.RecordCommand(command, eventData.Context, "Reader"); return result; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        { r.RecordCommand(command, eventData.Context, "Reader"); return ValueTask.FromResult(result); }
+
+        public override InterceptionResult<int> NonQueryExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
+        { r.RecordCommand(command, eventData.Context, "NonQuery"); return result; }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        { r.RecordCommand(command, eventData.Context, "NonQuery"); return ValueTask.FromResult(result); }
+
+        public override InterceptionResult<object> ScalarExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<object> result)
+        { r.RecordCommand(command, eventData.Context, "Scalar"); return result; }
+
+        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<object> result, CancellationToken cancellationToken = default)
+        { r.RecordCommand(command, eventData.Context, "Scalar"); return ValueTask.FromResult(result); }
+    }
+
+    private sealed class TransactionInterceptor(Recorder r) : DbTransactionInterceptor
+    {
+        public override DbTransaction TransactionStarted(DbConnection connection, TransactionEndEventData eventData, DbTransaction result)
+        { r.RecordEvent(eventData, eventData.Context, "TransactionStarted"); return result; }
+
+        public override ValueTask<DbTransaction> TransactionStartedAsync(DbConnection connection, TransactionEndEventData eventData, DbTransaction result, CancellationToken cancellationToken = default)
+        { r.RecordEvent(eventData, eventData.Context, "TransactionStarted"); return ValueTask.FromResult(result); }
+
+        public override void TransactionCommitted(DbTransaction transaction, TransactionEndEventData eventData)
+            => r.RecordEvent(eventData, eventData.Context, "TransactionCommitted");
+
+        public override Task TransactionCommittedAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+        { r.RecordEvent(eventData, eventData.Context, "TransactionCommitted"); return Task.CompletedTask; }
+
+        public override void TransactionRolledBack(DbTransaction transaction, TransactionEndEventData eventData)
+            => r.RecordEvent(eventData, eventData.Context, "TransactionRolledBack");
+
+        public override Task TransactionRolledBackAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+        { r.RecordEvent(eventData, eventData.Context, "TransactionRolledBack"); return Task.CompletedTask; }
+    }
+
+    private sealed class SaveInterceptor(Recorder r) : SaveChangesInterceptor
+    {
+        public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
+        { r.RecordEvent(eventData, eventData.Context, "SaveChanges"); return result; }
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        { r.RecordEvent(eventData, eventData.Context, "SaveChanges"); return ValueTask.FromResult(result); }
+    }
+}

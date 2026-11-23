@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import axe from "axe-core";
 
 test.use({
@@ -251,14 +251,14 @@ test("Sequence drag gestures reorder and insert exactly once at an explicit boun
   await page.goto("/?mode=activity-duplicate-editor&composition=sequence&theme=dark");
   const steps = page.locator(".wf-sequence-step");
   await expect(steps).toHaveCount(3);
-  await page.locator('.wf-sequence-step[data-id="write-one"]').dragTo(
+  await dragToSequenceBoundary(page, page.locator('.wf-sequence-step[data-id="write-one"]'),
     page.getByRole("button", { name: "Insert step after Write Line", exact: true })
   );
   // Order is authored by the drop boundary, not saved XY.
   await expect.poll(() => steps.evaluateAll(items => items.map(item => item.getAttribute("data-id"))))
     .toEqual(["loop", "write-two", "write-one"]);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await page.getByRole("treeitem", { name: "Write Line, Exact version 1.0.0", exact: true }).dragTo(
+  await dragToSequenceBoundary(page, page.getByRole("treeitem", { name: "Write Line, Exact version 1.0.0", exact: true }),
     page.getByRole("button", { name: "Insert step between Notify buyer and For Each", exact: true })
   );
   await expect(steps).toHaveCount(4);
@@ -268,3 +268,14 @@ test("Sequence drag gestures reorder and insert exactly once at an explicit boun
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(steps).toHaveCount(3);
 });
+
+async function dragToSequenceBoundary(page: Page, source: Locator, boundary: Locator) {
+  // Bring the drop target into view before the pointer goes down.
+  await boundary.scrollIntoViewIfNeeded();
+  await source.hover();
+  await page.mouse.down();
+  // The boundary must receive dragover to accept the native drop.
+  await boundary.hover();
+  await boundary.hover();
+  await page.mouse.up();
+}

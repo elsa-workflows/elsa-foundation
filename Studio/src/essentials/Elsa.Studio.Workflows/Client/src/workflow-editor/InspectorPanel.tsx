@@ -1,6 +1,7 @@
+import type { StudioExpressionEditorEdit } from "@elsa-workflows/studio-sdk";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { AlertTriangle, Flag, Repeat2, Send } from "lucide-react";
-import { CopyableIdentifier, StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioButton, StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
 import type {
   StudioActivityDescriptor,
   StudioActivityPropertyEditorContribution,
@@ -82,6 +83,7 @@ interface InspectorPanelProps {
   choicesForSlot?(owner: ActivityNode, slot: ChildSlot): ActivityCatalogItem[];
   placementNotice?: string;
   bpmnRoutingPanel?: ReactNode;
+  bpmnDetailsPanel?: ReactNode;
   catalogByVersion?: Map<string, ActivityCatalogItem>;
   selectedSupportsScopedVariables: boolean;
   variablesPanel?: ReactNode;
@@ -95,9 +97,11 @@ interface InspectorPanelProps {
   scopedVariableAnalysis: ScopedVariableAnalysis;
   /** Source analysis for Choose data on the ordinary activity inputs; absent where the owner offers none. */
   activityDataSelection?: ActivityDataSelectionHost | null;
+  focusInputKey?: string | null;
+  focusInputRequest?: number;
   activeTabId?: ActivityInspectorTabId;
   onActiveTabChange?(tabId: ActivityInspectorTabId): void;
-  onSelectedActivityChange(activity: ActivityNode): void;
+  onSelectedActivityChange(activity: ActivityNode, edit?: StudioExpressionEditorEdit): void;
   /** Discrete collection operations end the previous property-edit history group. */
   onSelectedStructureChange?(activity: ActivityNode): void;
   onSelectedPresentationChange?(presentation: Pick<ActivityPresentationRecord, "displayName" | "description">): void;
@@ -141,6 +145,7 @@ export function InspectorPanel({
   choicesForSlot,
   placementNotice,
   bpmnRoutingPanel,
+  bpmnDetailsPanel,
   catalogByVersion,
   selectedSupportsScopedVariables,
   variablesPanel,
@@ -153,6 +158,8 @@ export function InspectorPanel({
   onRetryExpressionDescriptors,
   scopedVariableAnalysis,
   activityDataSelection = null,
+  focusInputKey,
+  focusInputRequest,
   activeTabId,
   onActiveTabChange,
   onSelectedActivityChange,
@@ -245,8 +252,11 @@ export function InspectorPanel({
       visibleVariables={scopedVariableAnalysis.visibleVariables}
       scopeStatus={scopedVariableAnalysis.status}
       scopeRetry={scopedVariableAnalysis.retry}
+      scriptWrites={scopedVariableAnalysis.scriptWrites}
       showHeading={false}
       emptyLabel="This activity has no configurable inputs."
+      focusInputKey={focusInputKey}
+      focusInputRequest={focusInputRequest}
       onChange={onSelectedActivityChange}
     />
   ) : (
@@ -268,8 +278,11 @@ export function InspectorPanel({
       visibleVariables={scopedVariableAnalysis.visibleVariables}
       scopeStatus={scopedVariableAnalysis.status}
       scopeRetry={scopedVariableAnalysis.retry}
+      scriptWrites={scopedVariableAnalysis.scriptWrites}
       showHeading={false}
       emptyLabel="This activity has no configurable inputs."
+      focusInputKey={focusInputKey}
+      focusInputRequest={focusInputRequest}
       activityDataSelection={activityDataSelection}
       onChange={onSelectedActivityChange}
     />
@@ -277,15 +290,15 @@ export function InspectorPanel({
   const renderSlot = (slot: ChildSlot) => {
     const label = slotCrumbLabel(selectedNodeLabel, slot);
     return <div className="wf-slot-row" key={slot.id}>
-      <button type="button" onClick={() => onEnterSlot(selectedNode.nodeId, slot, label)}>
+      <StudioButton type="button" onClick={() => onEnterSlot(selectedNode.nodeId, slot, label)}>
         {slot.label}<small>{describeSlotContents(slot, catalogByVersion)}</small>
-      </button>
-      {!readOnly && slot.cardinality === "single" ? <button
+      </StudioButton>
+      {!readOnly && slot.cardinality === "single" ? <StudioButton
         type="button" className="wf-slot-change"
         aria-label={`${slot.activities.length > 0 ? "Change" : "Choose"} ${slot.label} activity`}
         title={slot.activities.length > 0 ? "Change activity" : "Choose activity"}
         onClick={event => setSlotPicker({ nodeId: selectedNode.nodeId, slotId: slot.id, collectionItemLabel: slot.collectionItemLabel, clientX: event.clientX, clientY: event.clientY })}
-      ><Repeat2 size={14} /></button> : null}
+      ><Repeat2 size={14} /></StudioButton> : null}
     </div>;
   };
 
@@ -308,20 +321,20 @@ export function InspectorPanel({
             {isStartNode ? (
               <span className="wf-chip"><Flag size={12} /> Start node</span>
             ) : (
-              <button
+              <StudioButton
                 type="button"
                 className="wf-link-button"
                 disabled={readOnly || !onSetAsStartNode}
                 onClick={() => onSetAsStartNode?.(selectedNode.nodeId)}
               >
                 <Flag size={12} /> Set as start node
-              </button>
+              </StudioButton>
             )}
           </div>
         ) : null}
         {httpTestRequest && !inspectingScopeOwner ? (
           <div className="wf-start-node-control">
-            <button
+            <StudioButton
               type="button"
               className="wf-link-button"
               disabled={readOnly || !httpTestRequest.available}
@@ -331,7 +344,7 @@ export function InspectorPanel({
               onClick={httpTestRequest.onOpen}
             >
               <Send size={13} /> Send HTTP test request
-            </button>
+            </StudioButton>
             {!httpTestRequest.available ? <small className="wf-muted">Publish this workflow to enable a live request.</small> : null}
           </div>
         ) : null}
@@ -358,7 +371,7 @@ export function InspectorPanel({
           {switchUpgradeTarget ? <div className="wf-slot-collection-item">
             <p className="wf-muted">Use a separate Boolean expression for each case. Existing matches and branches are preserved.</p>
             {!canUpgradeSwitch(selectedNode) ? <p className="wf-muted" role="note">This Switch cannot be upgraded while Value uses an activation-only Secret reference or its cases have an unsupported shape. Replace the Secret Value binding or correct the case data first.</p> : null}
-            <button type="button" disabled={readOnly || !canUpgradeSwitch(selectedNode)} onClick={() => (onSelectedStructureChange ?? onSelectedActivityChange)(upgradeSwitch(selectedNode, switchUpgradeTarget))}>Upgrade to case conditions</button>
+            <StudioButton type="button" disabled={readOnly || !canUpgradeSwitch(selectedNode)} onClick={() => (onSelectedStructureChange ?? onSelectedActivityChange)(upgradeSwitch(selectedNode, switchUpgradeTarget))}>Upgrade to case conditions</StudioButton>
           </div> : null}
           {predicateOnly ? <p className="wf-muted">Set each case condition in the Slots tab.</p> : null}
           {propertiesPanel}
@@ -436,6 +449,7 @@ export function InspectorPanel({
           </StudioTabPanel>
         ) : null}
         <StudioTabPanel {...tabPanelProps("details")}>
+          {bpmnDetailsPanel}
           <ActivityPresentationFields key={selectedNode.nodeId} presentation={selectedPresentation}
             label={selectedNodeLabel} onChange={onSelectedPresentationChange} />
           <CopyableIdentifier label="Activity type" value={selectedActivityType} />
@@ -512,11 +526,11 @@ function ReusableActivityIdentity({
       {status === "loading" ? <p className="wf-muted" role="status">Loading exact version details…</p> : null}
       {status === "failed" ? <p className="wf-muted" role="status">Exact authorized version details are unavailable.</p> : null}
       <div className="wf-reusable-actions">
-        <button type="button" disabled={!version || !onChangeVersion} onClick={() => {
+        <StudioButton className="wf-reusable-version-button" type="button" disabled={!version || !onChangeVersion} onClick={() => {
           if (version) onChangeVersion?.(node, version);
         }}>
           <Repeat2 size={14} /> Change exact version
-        </button>
+        </StudioButton>
         <StudioLink href={sourceUrl}>Open exact source definition</StudioLink>
         <StudioLink href={draftUrl}>Create a separate draft</StudioLink>
       </div>

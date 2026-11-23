@@ -4,6 +4,7 @@ Expose capability `elsa.api.user-tasks` with relations for inbox/detail/claim/re
 
 - GET tasks: view `mine`, `queue`, `history`, or manager-authorized `all`; bounded cursor and search, authorized rows before paging.
 - GET task by ID: permitted content, pinned form/prefill, allowed operations, current revision and safe history.
+- Task responses (inbox rows, task by ID and every mutation result) name the people they store: `assigneeName`, `groupName`, `claimantName` and each history entry's `actorName`, read from the task tenant's directory for any reader, or `null` when the directory has no match (#4198).
 - POST claim/release: task ID + expected revision + stable request ID. Claim requires current eligible group; release requires claimant.
 - POST complete: task ID + expected revision + stable request ID + action + exact case-preserved response object. Result includes accepted/pending/completed receipt; 202 is pending, never a false completed result.
 - POST reassign: task ID + expected revision + request ID + exactly one assignee/group ID. Explicit manage authority; current target validation.

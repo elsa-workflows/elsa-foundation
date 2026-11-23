@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import re
 import subprocess
+from typing import Callable
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 PATHS = ROOT / 'tools/ci/workflow-paths.json'
@@ -18,30 +20,61 @@ def matches(path: str, pattern: str) -> bool:
     return re.fullmatch(expression, path) is not None
 
 
-def select(event_name: str, event: dict, changed: list[str] | None, patterns: dict) -> dict[str, bool]:
+# A change to any of these re-runs the heavy proofs on the PR that makes it, whatever the push (it changes the tiers).
+TIER_FILES = frozenset({
+    'tools/ci/test-tiers.json', 'tools/ci/test_tiers.py', 'tools/ci/test_results.py', 'tools/ci/run_shard.py',
+    '.github/workflows/ci.yml', 'tools/ci/workflow_scope.py', 'tools/ci/workflow-paths.json'})
+FULL_TIER_LABEL = 'full-tier'
+
+
+def heavy_now(event_name: str, event: dict, changed: list[str] | None, every_push: bool = False) -> bool:
+    """Whether this run carries the heavy proofs of a ready pull request: the full tier, the Studio browser shards
+    and the Weaver witness. They run when a PR opens ready, reopens or is marked ready, in the merge queue and on
+    main, and on a later push to a ready PR only when it has the `full-tier` label, changes the tiers, or
+    CI_FULL_TIER_EVERY_PUSH is true. Every other push to a PR runs the PR tier alone."""
+    if event_name != 'pull_request':
+        return True
+    pull_request = event.get('pull_request', {})
+    labels = {label.get('name') for label in pull_request.get('labels', [])}
+    return (event.get('action') in {'opened', 'reopened', 'ready_for_review'} or every_push
+            or FULL_TIER_LABEL in labels or changed is None or any(path in TIER_FILES for path in changed))
+
+
+def select(event_name: str, event: dict, changed: list[str] | None, patterns: dict,
+           every_push: bool = False) -> dict[str, bool]:
     """None means the diff is unavailable: run every potentially affected proof."""
-    result = dict.fromkeys([*patterns, 'studio-order'], False)
+    # Studio browser shards follow the heavy scope. Full composed UX runs nightly,
+    # on a manual Studio request, or through the existing explicit full-tier opt-in.
+    result = dict.fromkeys([*patterns, 'studio-order', 'studio-heavy', 'studio-ux'], False)
     if event_name == 'workflow_dispatch':
         suite = event.get('inputs', {}).get('suite', 'ci')
         if suite in result:
             result[suite] = True
+        result['studio-heavy'] = result['studio']
+        result['studio-ux'] = result['studio']
         return result
     if event_name == 'schedule':
         result['studio-order'] = True
+        result['studio-ux'] = True
         return result
     if event_name not in {'push', 'pull_request', 'merge_group'}:
         return result
     # A merge-queue entry is validated as a pull request that just received a push: same scope, same proofs.
     pr_like = event_name in {'pull_request', 'merge_group'}
     draft = event.get('pull_request', {}).get('draft', False)
+    heavy = heavy_now(event_name, event, changed, every_push)
     for suite, filters in patterns.items():
         affected = changed is None or any(matches(path, pattern) for path in changed for pattern in filters)
         if suite == 'studio':
-            result[suite] = event_name == 'push' or affected
+            result[suite] = affected
         elif suite == 'weaver':
-            result[suite] = affected and not draft
+            result[suite] = affected and not draft and heavy
         else:
             result[suite] = pr_like and affected
+    result['studio-heavy'] = result['studio'] and not draft and heavy
+    labels = {label.get('name') for label in event.get('pull_request', {}).get('labels', [])}
+    result['studio-ux'] = (event_name == 'pull_request' and result['studio-heavy']
+                           and (FULL_TIER_LABEL in labels or every_push))
     result['studio-order'] = pr_like and (
         changed is None or any(path in {'.github/workflows/ci.yml', 'tools/ci/workflow_scope.py',
                                       'tools/ci/workflow-paths.json', 'tools/ci/test_workflow_scope.py',
@@ -49,18 +82,73 @@ def select(event_name: str, event: dict, changed: list[str] | None, patterns: di
     return result
 
 
-def changed_paths(event_name: str, event: dict, head: str) -> list[str] | None:
+# A run of this workflow whose focused proofs ran to a verdict. A cancelled run (on main usually a pending run replaced
+# by a newer push, see the concurrency block in ci.yml) or a skipped one (a [skip ci] head) validated nothing.
+VALIDATED_CONCLUSIONS = frozenset({'success', 'failure'})
+PLAN_SCOPE_JOB = 'Select focused validation'
+RUN_PAGES = 3
+
+
+def github_json(path: str) -> dict:
+    api = os.environ.get('GITHUB_API_URL', 'https://api.github.com')
+    request = urllib.request.Request(f'{api}{path}', headers={
+        'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28',
+        'Authorization': f"Bearer {os.environ['GH_TOKEN']}"})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.load(response)
+
+
+def is_ancestor(commit: str, head: str) -> bool:
+    return subprocess.run(['git', 'merge-base', '--is-ancestor', commit, head], cwd=ROOT,
+                          capture_output=True).returncode == 0
+
+
+def last_validated_push(head: str, fetch: Callable[[str], dict] = github_json,
+                        ancestor: Callable[[str, str], bool] = is_ancestor) -> str | None:
+    """The head of the newest earlier push run of this workflow on this branch that validated its change (#4713).
+
+    A push run diffed only from the event's `before` loses the change of every run in between that validated
+    nothing: a pending run that a newer push replaced, or a push whose head carried [skip ci]. Diffing from the last
+    validated head instead means every change on main reaches at least one run's path filters. A failed run counts:
+    it ran its selected proofs and filed "main is red". None means no such run can be read: select every proof."""
+    repository, branch = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_REF_NAME']
+    run_id = int(os.environ.get('GITHUB_RUN_ID', '0'))
+    workflow = os.environ.get('GITHUB_WORKFLOW_REF', '/ci.yml@').split('@', 1)[0].rsplit('/', 1)[-1]
+    try:
+        for page in range(1, RUN_PAGES + 1):
+            runs = fetch(f'/repos/{repository}/actions/workflows/{workflow}/runs'
+                         f'?event=push&branch={branch}&status=completed&per_page=100&page={page}')['workflow_runs']
+            for run in runs:
+                if (run['id'] == run_id or run.get('conclusion') not in VALIDATED_CONCLUSIONS
+                        or not ancestor(run['head_sha'], head)):
+                    continue
+                jobs = fetch(f"/repos/{repository}/actions/runs/{run['id']}/jobs?filter=latest&per_page=100")['jobs']
+                if any(job['name'] == PLAN_SCOPE_JOB and job.get('conclusion') == 'success' for job in jobs):
+                    print(f"Change scope: from {run['head_sha']}, the head of run {run['id']} ({run['conclusion']}), "
+                          'the last push run on this branch whose focused proofs ran.')
+                    return run['head_sha']
+            if len(runs) < 100:
+                break
+    except Exception as error:  # noqa: BLE001 - any failure to read the history widens the scope, never narrows it
+        print(f'::warning::Cannot read the earlier runs ({error}); selecting every focused proof.')
+        return None
+    print('::warning::No earlier push run validated an ancestor of this commit; selecting every focused proof.')
+    return None
+
+
+def changed_paths(event_name: str, event: dict, head: str, push_base: str | None = None) -> list[str] | None:
     if event_name not in {'push', 'pull_request', 'merge_group'}:
         return []
     # PR merge commit first parent is the base branch today (main or initiative/*), rather than the stale base.sha. A
     # merge-queue entry names its own parent: base_sha is the commit the entry was built on, and head (GITHUB_SHA) is the
-    # entry's merge result.
+    # entry's merge result. A push diffs from the last validated head (last_validated_push), never the event's
+    # `before`, which can belong to a run that was cancelled before it ran anything.
     if event_name == 'pull_request':
         base = f'{head}^1'
     elif event_name == 'merge_group':
         base = event.get('merge_group', {}).get('base_sha', '')
     else:
-        base = event.get('before', '')
+        base = push_base or ''
     if not base or set(base) == {'0'}:
         return None
     diff_range = f'{base}..{head}' if event_name == 'push' else f'{base}...{head}'
@@ -75,11 +163,16 @@ def changed_paths(event_name: str, event: dict, head: str) -> list[str] | None:
 def main() -> None:
     event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
     event_name = os.environ['GITHUB_EVENT_NAME']
-    selected = select(event_name, event, changed_paths(event_name, event, os.environ['GITHUB_SHA']),
-                      json.loads(PATHS.read_text()))
+    head = os.environ['GITHUB_SHA']
+    push_base = last_validated_push(head) if event_name == 'push' else None
+    changed = changed_paths(event_name, event, head, push_base)
+    every_push = os.environ.get('CI_FULL_TIER_EVERY_PUSH') == 'true'
+    selected = select(event_name, event, changed, json.loads(PATHS.read_text()), every_push)
     with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
         for name, enabled in selected.items():
             output.write(f'{name}={str(enabled).lower()}\n')
+        # Not a proof to select: whether this run carries the ready-PR heavy proofs (read by plan-full).
+        output.write(f'heavy={str(heavy_now(event_name, event, changed, every_push)).lower()}\n')
     print(json.dumps(selected, sort_keys=True))
 
 

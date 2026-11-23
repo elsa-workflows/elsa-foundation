@@ -51,7 +51,7 @@ for (const item of presets) test(`${item.name} is a complete, persistent preset 
   await page.addScriptTag({ content: axe.source });
   const violations = await page.evaluate(async () => (window as unknown as Window & { axe: typeof axe }).axe.run(document.querySelector(".studio-shell")!, { runOnly: ["color-contrast", "button-name", "label"] }).then(result => result.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.failureSummary) }))));
   expect(violations).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath(`${item.id}-definitions.png`), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath(`${item.id.replaceAll(":", "-")}-definitions.png`), fullPage: true });
 });
 
 for (const item of presets) test(`${item.name} keeps workflow headings inside their tracks at desktop and narrow widths`, async ({ page }) => {
@@ -116,12 +116,13 @@ test("minimal logs preserve live controls, selected details and empty state", as
   await page.getByRole("row", { name: /Select Information structured log/ }).first().click();
   await expect(page.getByRole("complementary", { name: "Structured log details", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Pause", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause", exact: true, pressed: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Pause", exact: true, pressed: true }).click();
   await page.getByRole("button", { name: "Close structured log details", exact: true }).click();
   await page.getByRole("textbox", { name: "Filter by category", exact: true }).fill("empty");
   await expect(page.getByRole("row", { name: /Select Information structured log/ })).toHaveCount(0);
-  await expect(page.getByText("No structured logs received yet.", { exact: true })).toBeVisible();
+  await expect(page.getByText("No logs match these filters.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset filters", exact: true })).toBeVisible();
 });
 
 test("a public UI consumer opts into Minimal without host CSS", async ({ page }) => {
@@ -265,18 +266,31 @@ test("Classic dark keeps library fields and buttons aligned beside folders", asy
   await page.screenshot({ path: testInfo.outputPath("classic-dark-folders-1329.png"), fullPage: true });
 });
 
-test("a host without folders keeps its full-width browse content", async ({ page }) => {
+test("a host without folders keeps workflow and Recycle bin navigation", async ({ page }) => {
   await preset(page);
   await view(page, "library", "&folders=unavailable");
   const table = page.getByRole("region", { name: "Workflow definitions table", exact: true });
   await expect(table).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Workflow folders", exact: true })).toHaveCount(0);
+  const navigation = page.getByRole("complementary", { name: "Workflows", exact: true });
+  await expect(navigation).toBeVisible();
+  await expect(navigation.getByRole("treeitem", { name: "All workflows", exact: true })).toBeVisible();
+  await expect(navigation.getByRole("treeitem")).toHaveCount(1);
+  await expect(navigation.getByRole("button", { name: "Recycle bin", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Folders", exact: true })).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Search all workflows", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Workflow library organization", exact: true })).toBeVisible();
-  const list = await page.locator(".wf-definitions-list").boundingBox();
+  const navigationBounds = await navigation.boundingBox();
   const bounds = await table.boundingBox();
-  expect(Math.abs(bounds!.x - list!.x)).toBeLessThanOrEqual(1);
-  expect(Math.abs(bounds!.width - list!.width)).toBeLessThanOrEqual(1);
+  expect(bounds!.x).toBeGreaterThanOrEqual(navigationBounds!.x + navigationBounds!.width);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+
+  await page.setViewportSize({ width: 430, height: 760 });
+  await page.getByRole("button", { name: "Workflows", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Workflows", exact: true });
+  await expect(drawer.getByRole("button", { name: "Recycle bin", exact: true })).toBeVisible();
+  await drawer.getByRole("button", { name: "Recycle bin", exact: true }).click();
+  await expect(drawer).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get("state")).toBe("deleted");
 });
 
 for (const item of presets) for (const width of [320, 1440]) test(`${item.name} integrates folders, tags, favorites and saved views at ${width}px`, async ({ page }, testInfo) => {

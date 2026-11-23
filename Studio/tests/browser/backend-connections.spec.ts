@@ -10,23 +10,51 @@ test.beforeEach(async ({page})=>{
 test("keeps list, details and edit separate; persists personal metadata on reload",async({page})=>{
   await page.getByRole("button",{name:"Add backend",exact:true}).click();
   await expect(page.getByRole("heading",{name:"Add backend"})).toBeVisible();
+  let breadcrumbs=page.getByRole("navigation",{name:"Breadcrumb",exact:true});
+  await expect(breadcrumbs.getByRole("link",{name:"Backends",exact:true})).toHaveAttribute("href",/^\/settings\/backends(?:\?|$)/);
+  await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("Add backend");
   await expect(page.getByRole("table")).toHaveCount(0);
   await page.getByLabel("Name",{exact:true}).fill("My personal backend");
   await page.getByLabel("Backend API URL",{exact:true}).fill("https://personal.example/shell/");
   await page.getByRole("button",{name:"Create backend"}).click();
   await expect(page.getByRole("heading",{name:"My personal backend"})).toBeVisible();
+  breadcrumbs=page.getByRole("navigation",{name:"Breadcrumb",exact:true});
+  await expect(breadcrumbs.getByRole("link",{name:"Backends",exact:true})).toBeVisible();
+  await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("My personal backend");
   await expect(page.getByRole("tab",{name:"Connection",exact:true})).toHaveAttribute("aria-selected","true");
   await page.getByRole("button",{name:"Edit",exact:true}).click();
+  breadcrumbs=page.getByRole("navigation",{name:"Breadcrumb",exact:true});
+  await expect(breadcrumbs.getByRole("link",{name:"Backends",exact:true})).toBeVisible();
+  await expect(breadcrumbs.getByRole("link",{name:"My personal backend",exact:true})).toBeVisible();
+  await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("Edit");
+  await page.getByLabel("Name",{exact:true}).fill("Unsaved backend name");
+  const backendsLink=breadcrumbs.getByRole("link",{name:"Backends",exact:true});
+  await backendsLink.click();
+  await page.getByRole("dialog",{name:"Discard backend profile changes?"}).getByRole("button",{name:"Cancel"}).click();
+  await expect(page.getByRole("heading",{name:"Edit backend",exact:true})).toBeVisible();
+  await backendsLink.click();
+  await page.getByRole("dialog",{name:"Discard backend profile changes?"}).getByRole("button",{name:"Discard"}).click();
+  await expect(page.getByRole("heading",{name:"Backends",exact:true})).toBeVisible();
+  await page.getByRole("button",{name:/^My personal backend/}).click();
+  await page.getByRole("button",{name:"Edit",exact:true}).click();
   await page.getByLabel("Name",{exact:true}).fill("Renamed backend");
-  await page.getByRole("button",{name:"Save changes"}).click();
+  await page.getByRole("button",{name:"Save"}).click();
   await expect(page.getByRole("heading",{name:"Renamed backend"})).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button",{name:"Renamed backend"})).toBeVisible();
   await page.getByRole("button",{name:"Renamed backend"}).click();
-  page.once("dialog",dialog=>dialog.accept());
-  await page.getByRole("button",{name:"Remove backend"}).click();
+  await page.getByRole("button",{name:"Delete profile"}).click();
+  await page.getByRole("dialog",{name:"Delete backend profile?"}).getByRole("button",{name:"Delete",exact:true}).click();
   await expect(page.getByRole("heading",{name:"Backends",exact:true})).toBeVisible();
   await expect(page.getByRole("button",{name:"Renamed backend"})).toHaveCount(0);
+});
+
+test("missing backend profiles keep a breadcrumb back to the collection",async({page})=>{
+  await page.goto("/backendConnections.html?path=%2Fsettings%2Fbackends%2Fmissing-profile");
+  const breadcrumbs=page.getByRole("navigation",{name:"Breadcrumb",exact:true});
+  await expect(breadcrumbs.getByRole("link",{name:"Backends",exact:true})).toHaveAttribute("href",/^\/settings\/backends(?:\?|$)/);
+  await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("Unavailable profile");
+  await expect(page.getByText("This backend profile is no longer available.", {exact:true})).toBeVisible();
 });
 
 test("configuration ownership, capability tabs and keyboard switching",async({page})=>{

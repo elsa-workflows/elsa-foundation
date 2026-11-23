@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioActivityInputDescriptor, StudioActivityPropertyEditorContribution } from "@elsa-workflows/studio-sdk";
+import { setNotifications } from "../workflow-editor/notifications";
 import { DictionaryValueEditor } from "../DictionaryValueEditor";
 import { clearDictionaryEditorSession, clearDictionaryEditorSessionScope } from "../dictionaryEditorSession";
 
@@ -10,8 +11,11 @@ let root: Root;
 let container: HTMLDivElement;
 let testId = 0;
 let sessionKey = "";
+const notifications = { notify: vi.fn(() => ({ id: "copy", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
+const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
 
 beforeEach(() => {
+  notifications.notify.mockClear(); setNotifications(notifications);
   testId++;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -23,6 +27,9 @@ afterEach(() => {
   container.remove();
   clearDictionaryEditorSession(sessionKey);
   vi.restoreAllMocks();
+  setNotifications(undefined);
+  if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+  else Reflect.deleteProperty(navigator, "clipboard");
 });
 
 describe("DictionaryValueEditor", () => {
@@ -188,6 +195,31 @@ describe("DictionaryValueEditor", () => {
     fill(complexEditor, '{"count":2}');
     expect(onChange).toHaveBeenLastCalledWith({ payload: { count: 2 } });
     expect(container.querySelectorAll("[role='dialog']")).toHaveLength(0);
+  });
+
+  it("keeps a JSON-copy failure inline and clears it after a successful retry", async () => {
+    const writeText = vi.fn().mockRejectedValueOnce(new Error("Clipboard unavailable")).mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    renderEditor({ value: { first: "one" }, variant: "expanded" });
+    click(tab("JSON")); click(button("Copy JSON"));
+    await vi.waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toBe("Could not copy JSON."));
+    expect(notifications.notify).not.toHaveBeenCalled();
+    click(button("Copy JSON"));
+    await vi.waitFor(() => expect(notifications.notify).toHaveBeenCalledTimes(1));
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it.each(["disposal", "session replacement", "value replacement"])("suppresses delayed JSON-copy feedback after %s", async change => {
+    let finish!: () => void;
+    const work = new Promise<void>(resolve => { finish = resolve; });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn(() => work) } });
+    renderEditor({ value: { first: "one" }, variant: "expanded", sessionScope: "copy-first" });
+    click(tab("JSON")); click(button("Copy JSON"));
+    if (change === "disposal") flushSync(() => root.render(<p>Another page</p>));
+    else renderEditor({ value: change === "value replacement" ? { second: "two" } : { first: "one" }, variant: "expanded", sessionScope: change === "session replacement" ? "copy-second" : "copy-first" });
+    finish(); await work; await Promise.resolve();
+    expect(notifications.notify).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
   it("isolates private drafts by workflow session scope and clears a completed scope", () => {

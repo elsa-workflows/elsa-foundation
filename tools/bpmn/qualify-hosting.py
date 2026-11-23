@@ -529,7 +529,7 @@ def resume_upgrade(args) -> dict:
     env = os.environ.copy()
     env.update(ELSA_BPMN_LEGACY_CAPTURE_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output),
         ELSA_BPMN_HOST_SOURCE_REVISION=source)
-    project = REPO / "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"
+    project = REPO / "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"
     command = ["dotnet", "test", str(project), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "--filter",
         "FullyQualifiedName~LegacyPartialForkUpgradeTests", "--logger", "trx;LogFileName=legacy-partial-fork-upgrade.trx"]
     if args.artifacts_path is not None:
@@ -719,7 +719,7 @@ def resume_native_parent_upgrade(args) -> dict:
         raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
     env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
-    command = ["dotnet", "test", str(REPO / "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"),
+    command = ["dotnet", "test", str(REPO / "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"),
         "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyNativeParentUpgradeTests",
         "--logger", "trx;LogFileName=legacy-native-parent-upgrade.trx"]
     if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
@@ -861,7 +861,7 @@ def resume_called_ack_upgrade(args) -> dict:
         raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
     env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
-    command = ["dotnet", "test", str(REPO / "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"),
+    command = ["dotnet", "test", str(REPO / "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"),
         "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyCalledAcknowledgmentUpgradeTests",
         "--logger", "trx;LogFileName=legacy-called-ack-upgrade.trx"]
     if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
@@ -1008,7 +1008,7 @@ def resume_broadcast_upgrade(args) -> dict:
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True, timeout=5).strip(): raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
     env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
-    command = ["dotnet", "test", str(REPO / "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyBroadcastUpgradeTests", "--logger", "trx;LogFileName=legacy-broadcast-upgrade.trx"]
+    command = ["dotnet", "test", str(REPO / "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyBroadcastUpgradeTests", "--logger", "trx;LogFileName=legacy-broadcast-upgrade.trx"]
     if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
     with (output / "run.log").open("w") as log: subprocess.run(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
     if inputs != verify_broadcast_inputs(baseline): raise ValueError("Broadcast upgrade changed an original input.")
@@ -1173,7 +1173,7 @@ def resume_controls_upgrade(args) -> dict:
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True, timeout=5).strip(): raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
     env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
-    command = ["dotnet", "test", str(REPO / "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyControlsUpgradeTests", "--logger", "trx;LogFileName=legacy-controls-upgrade.trx"]
+    command = ["dotnet", "test", str(REPO / "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyControlsUpgradeTests", "--logger", "trx;LogFileName=legacy-controls-upgrade.trx"]
     if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
     with (output / "run.log").open("w") as log: subprocess.run(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
     if inputs != verify_controls_inputs(baseline): raise ValueError("Control upgrade changed an original input.")
@@ -1307,7 +1307,7 @@ def resume_multi_instance_upgrade(args) -> dict:
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True, timeout=5).strip(): raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
     env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
-    command = ["dotnet", "test", str(REPO / "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyMultiInstanceUpgradeTests", "--logger", "trx;LogFileName=legacy-multi-instance-upgrade.trx"]
+    command = ["dotnet", "test", str(REPO / "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyMultiInstanceUpgradeTests", "--logger", "trx;LogFileName=legacy-multi-instance-upgrade.trx"]
     if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
     with (output / "run.log").open("w") as log: subprocess.run(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
     if inputs != verify_multi_instance_inputs(baseline): raise ValueError("MI recovery changed an original input.")

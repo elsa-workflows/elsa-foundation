@@ -6,14 +6,14 @@ import {
 import type { InspectionGranularity, PersistenceMode, WorkflowInstanceDetails } from "../workflowTypes";
 
 const checkpointCadenceHelp: Record<PersistenceMode, string> = {
-  Durable: "This run checkpoints after every activity. Inspection shows exact per-activity evidence.",
+  Durable: "This run checkpoints after every activity. Inspection shows exact per-activity data.",
   Balanced: "This run checkpoints at boundaries, so inspection shows boundary-level detail.",
   Ephemeral: "This run checkpoints only at key events, so inspection shows boundary-level detail."
 };
 
 const inspectionGranularityHelp: Record<InspectionGranularity, string> = {
-  "activity-level": "Per-activity evidence is exact.",
-  "boundary-level": "Per-activity evidence inside a segment is folded to the commit boundary, so timeline values reflect the durable boundary."
+  "activity-level": "Per-activity data is exact.",
+  "boundary-level": "Per-activity data inside a segment is folded to the commit boundary, so timeline values reflect the durable boundary."
 };
 
 const inspectionGranularityLabel: Record<InspectionGranularity, string> = {
@@ -72,4 +72,16 @@ export function WorkflowInstanceInspectionNote({
       {inspectionGranularityHelp[granularity]}
     </p>
   );
+}
+
+/** Identity is the current committed projection; denied values remain visibly unavailable. */
+export function WorkflowInstanceIdentityFacts({ instance, canInspectValues }: {
+  instance: WorkflowInstanceDetails["instance"];
+  canInspectValues?: boolean;
+}) {
+  const label = (value: string | null | undefined) => canInspectValues === false ? "Hidden by access policy" : value || "None";
+  return <>
+    <dt>Instance name</dt><dd>{label(instance.instanceName)}</dd>
+    <dt>Correlation</dt><dd>{label(instance.correlationId)}</dd>
+  </>;
 }

@@ -11,9 +11,9 @@ const readStudio = path => readFileSync(join(studioRoot, path), "utf8");
 const rel = path => relative(repoRoot, path).split("\\").join("/");
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", "bin", "obj", "wwwroot"]);
-const extensionStudioRoots = readdirSync(join(repoRoot, "Extensions"), { withFileTypes: true })
+const extensionStudioRoots = readdirSync(join(repoRoot, "extensions"), { withFileTypes: true })
   .filter(entry => entry.isDirectory())
-  .map(entry => join(repoRoot, "Extensions", entry.name, "studio"))
+  .map(entry => join(repoRoot, "extensions", entry.name, "studio"))
   .filter(existsSync);
 const moduleSourceRoots = [join(studioRoot, "src"), ...extensionStudioRoots];
 
@@ -36,7 +36,12 @@ function* walk(roots, predicate) {
 
 const projects = [
   ...walk(moduleSourceRoots, name => name.endsWith(".csproj")),
-  ...walk([join(studioRoot, "tests")], name => name.endsWith(".csproj"))
+  ...walk([join(studioRoot, "tests")], name => name.endsWith(".csproj")),
+  // The independent Studio consumer and its editor module are solution-owned acceptance projects.
+  ...walk([
+    join(repoRoot, "tools/ux-acceptance/StudioConsumer"),
+    join(repoRoot, "tools/ux-acceptance/extensions/TriggerEditor")
+  ], name => name.endsWith(".csproj"))
 ].map(rel).sort();
 const packages = [
   ...walk(moduleSourceRoots, name => name === "package.json"),
@@ -50,7 +55,7 @@ const packageManifests = new Map(packages.map(path => [
 // A module's root is the directory containing its project, or — for a Client-only module —
 // the parent of the package directory. Generated Vite output lives here.
 const moduleRoots = [...new Set([
-  ...projects.filter(path => path.startsWith("Studio/src/") || path.startsWith("Extensions/"))
+  ...projects.filter(path => path.startsWith("Studio/src/") || path.startsWith("extensions/"))
     .map(path => join(repoRoot, dirname(path))),
   ...packages.filter(path => path.includes("/Client/package.json"))
     .map(path => join(repoRoot, dirname(dirname(path))))
@@ -133,7 +138,7 @@ const fail = (assertion, detail) => failures.push({ assertion, detail });
 // ── 4. every module stylesheet is covered by the actual lint globs ─────────────────────────
 {
   const script = JSON.parse(readStudio("package.json")).scripts["lint:css"];
-  const globs = [...script.matchAll(/"([^"]+)"/g)].map(match => resolve(studioRoot, match[1]));
+  const globs = [...script.matchAll(/"([^"]+)"/g)].map(match => resolve(studioRoot, match[1]).split("\\").join("/"));
   const result = await stylelint.lint({ files: globs, configFile: join(studioRoot, ".stylelintrc.json") });
   const linted = new Set(result.results.map(result => rel(result.source)));
   const onDisk = [...walk(moduleSourceRoots, name => name.endsWith(".css"))]
@@ -154,16 +159,16 @@ const fail = (assertion, detail) => failures.push({ assertion, detail });
     if (!/^Studio\/src\/(essentials|apps)\//.test(project))
       fail("layout", `${project} is not under Studio/src/essentials or Studio/src/apps`);
   }
-  for (const project of projects.filter(path => path.startsWith("Extensions/"))) {
-    if (!/^Extensions\/[^/]+\/studio\/[^/]+\//.test(project))
-      fail("layout", `${project} is not under Extensions/<capability>/studio/<module>`);
+  for (const project of projects.filter(path => path.startsWith("extensions/"))) {
+    if (!/^extensions\/[^/]+\/studio\/[^/]+\//.test(project))
+      fail("layout", `${project} is not under extensions/<capability>/studio/<module>`);
   }
   for (const project of projects.filter(path => path.startsWith("Studio/src/essentials/"))) {
     const includes = [...readFileSync(join(repoRoot, project), "utf8").matchAll(/<ProjectReference\s+Include="([^"]+)"/g)];
     for (const [, include] of includes) {
       if (include.includes("$")) continue;
       const target = rel(resolve(join(repoRoot, dirname(project)), include.split("\\").join("/")));
-      if (target.startsWith("Extensions/"))
+      if (target.startsWith("extensions/"))
         fail("boundary", `${project} is a Studio essential but references optional module ${target}`);
     }
   }
@@ -173,7 +178,7 @@ const fail = (assertion, detail) => failures.push({ assertion, detail });
     for (const group of ["dependencies", "devDependencies", "peerDependencies"]) {
       for (const [name, range] of Object.entries(manifest[group] ?? {})) {
         const dependencyPath = packageManifests.get(name);
-        if (typeof range === "string" && range.startsWith("workspace:") && dependencyPath?.startsWith("Extensions/"))
+        if (typeof range === "string" && range.startsWith("workspace:") && dependencyPath?.startsWith("extensions/"))
           fail("boundary", `${manifestPath} is an essential but depends on extension package ${name}`);
       }
     }

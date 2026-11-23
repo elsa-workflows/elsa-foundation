@@ -5,7 +5,7 @@ export * from "./moduleHost";
 export * from "./notifications";
 import type {StudioConnectionController, StudioModuleHostContext, StudioModuleInstance, StudioShellContribution} from "./moduleHost";
 import type { StudioBackendAwareContribution, StudioBackendSession } from "./backends";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { StudioActivityIconComponent } from "./activityIcons";
 import type { StudioNotificationApi } from "./notifications";
 
@@ -212,16 +212,11 @@ export type StudioNavigationSection = "workspace" | "settings";
 
 /**
  * Where a nav contribution appears in the Studio sidebar.
- * Unset defaults to `more` at the top level (extensions land under More tools). A child with no
- * placement inherits its parent's resolved placement so it stays visible; a child that declares a
- * different placement is listed there instead of vanishing. `section: "settings"` still maps to
- * `admin` so older modules keep their Settings grouping until they declare `placement`.
- * `admin` and `settings` stay visible to anonymous/demo users because the server allows admin
- * calls when sign-in is off; authenticated users need host-control read.
+ * Top-level workspace destinations declare a named placement; there is no catch-all default.
+ * Children inherit their parent's placement. `admin` requires host-control read when signed in;
+ * authoring/runtime settings retain their own contributed role/permission requirements.
  */
-export type StudioNavigationPlacement = "main" | "more" | "settings" | "admin";
-
-export const defaultStudioNavigationPlacement: StudioNavigationPlacement = "more";
+export type StudioNavigationPlacement = "main" | "build" | "operate" | "integrations" | "settings" | "authoring" | "runtime" | "admin";
 export const defaultStudioNavigationOrder = 1000;
 
 export type StudioNavigationRequirement = string | readonly string[];
@@ -234,6 +229,10 @@ export interface StudioNavigationContribution extends StudioBackendAwareContribu
   order?: number;
   iconColor?: string;
   parentId?: string;
+  /** Render children as nested sidebar links or local route views. */
+  childDisplay?: "links" | "views";
+  /** Include the parent's own route as a local view, such as Definitions or Overview. */
+  viewLabel?: string;
   /**
    * The sidebar section the item is listed under. When omitted the host infers it: its own settings-style paths
    * (modules, feeds, features, themes) land under Settings and everything else under Workspace.
@@ -241,11 +240,9 @@ export interface StudioNavigationContribution extends StudioBackendAwareContribu
    */
   section?: StudioNavigationSection;
   /**
-   * Sidebar placement. `main` is the curated Home / Workflows / Runs / Tasks list; `more` is More tools;
-   * `settings` is a Settings shell section (Appearance; available to every session); `admin` is
-   * Settings › Administration and uses the host-control read gate. Unset defaults to `more` at the
-   * top level, or to the parent placement when this item is a child. The sidebar keeps one Settings
-   * entry.
+   * `main` contains direct workspace links such as Home. Named groups are `build`, `operate` and
+   * `integrations`. Settings groups are `settings` (Studio), `authoring`, `runtime` and `admin`.
+   * Omit only for children inheriting a parent's placement or route-only contributions.
    */
   placement?: StudioNavigationPlacement;
   /** Hide the item when any listed feature is disabled. The contributing module's own gate still applies. */
@@ -442,6 +439,23 @@ export interface StudioWorkflowDesignerPanelContribution<TContext = unknown> {
   component: ComponentType<StudioWorkflowDesignerPanelProps<TContext>>;
 }
 
+/** Optional module canvas; the contributing module owns its document protocol and context. */
+export interface StudioWorkflowDesignerCanvasContribution extends StudioBackendAwareContribution {
+  id: string;
+  title: string;
+  order?: number;
+  protocol: { id: string; version: number };
+  supportedResourceKinds: StudioGraphAuthoringResourceKind[];
+  supportedStructures: { kind: string; schemaVersions: string[] }[];
+  load(): Promise<{ default: ComponentType<{ context: unknown }> }>;
+}
+
+/** Per-user preference; never part of a workflow or activity document. */
+export interface StudioCanvasEditorPreferenceStore {
+  load(): Promise<string | null>;
+  save(editorId: string): Promise<void>;
+}
+
 export interface StudioWorkflowContextConnection {
   source: string;
   target: string;
@@ -458,6 +472,9 @@ export interface StudioFeatureAreaNavLeaf extends StudioBackendAwareContribution
   icon?: StudioNavigationContribution["icon"];
   placeholder?: boolean;
   placement?: StudioNavigationPlacement;
+  parentId?: string;
+  childDisplay?: StudioNavigationContribution["childDisplay"];
+  viewLabel?: string;
   order?: number;
   requiresFeature?: StudioNavigationRequirement;
   requiresRole?: StudioNavigationRequirement;
@@ -473,6 +490,9 @@ export interface StudioFeatureAreaNavParent extends StudioBackendAwareContributi
   icon?: StudioNavigationContribution["icon"];
   items: StudioFeatureAreaNavLeaf[];
   placement?: StudioNavigationPlacement;
+  parentId?: string;
+  childDisplay?: StudioNavigationContribution["childDisplay"];
+  viewLabel?: string;
   order?: number;
   requiresFeature?: StudioNavigationRequirement;
   requiresRole?: StudioNavigationRequirement;
@@ -537,6 +557,8 @@ export interface StudioSettingEditorProps {
 
 export interface StudioSettingEditorContribution {
   id: string;
+  /** The editor owns its label, help and field presentation. Omit for legacy editors. */
+  presentsField?: boolean;
   order?: number;
   supports(setting: StudioSettingDescriptor): boolean;
   component: ComponentType<StudioSettingEditorProps>;
@@ -682,6 +704,11 @@ export interface StudioActivityDescriptor {
   isTerminal?: boolean;
   /** The activity type is marked `[AccessesUndeclaredVariables]` (spec 1231 FR-026): it may write any visible variable. */
   accessesUndeclaredVariables?: boolean;
+  /** Explicit C# free-name access cannot be narrowed by analysis of an activity's script input. */
+  declaresAccessesUndeclaredVariables?: boolean;
+  /** Independent native workflow-state capability, refined by a script body when present. */
+  accessesWorkflowState?: boolean;
+  declaresAccessesWorkflowState?: boolean;
 }
 
 export type StudioExpressionEditingMode = "literal" | "text" | "structured" | "reference";
@@ -728,6 +755,64 @@ export interface StudioUserTaskFormContribution extends StudioBackendAwareContri
   component: ComponentType<StudioUserTaskFormProps>;
 }
 
+export type StudioUserTaskFieldValueKind = "string" | "number" | "boolean" | "object" | "array" | "any";
+
+/** Stable field data shared by module renderers and property editors. */
+export interface StudioUserTaskFieldDefinition {
+  key: string;
+  label: string;
+  kind: string;
+  required: boolean;
+  readOnly: boolean;
+  help?: string;
+  controlId?: string;
+  configuration?: Record<string, unknown>;
+  minimum?: number;
+  maximum?: number;
+  maxLength?: number;
+  choices?: string[];
+  presentation?: { display: string; trueLabel?: string; falseLabel?: string; unansweredLabel?: string };
+  mustBeTrue?: boolean;
+}
+
+/** Module-owned field renderer props; Forms continues to own validation, required and read-only semantics. */
+export interface StudioUserTaskFieldControlRenderProps {
+  field: StudioUserTaskFieldDefinition;
+  id: string;
+  disabled: boolean;
+  required: boolean;
+  value: unknown;
+  error?: string;
+  onChange(value: unknown): void;
+}
+
+/** A field control may edit only its field's custom configuration and type-specific settings. */
+export interface StudioUserTaskFieldControlEditorProps {
+  field: StudioUserTaskFieldDefinition;
+  disabled?: boolean;
+  onChange(field: unknown): void;
+}
+
+/** Module-owned user-task field control, shared by the designer, preview and recipient form. */
+export interface StudioUserTaskFieldControlContribution extends StudioBackendAwareContribution {
+  /** Stable namespaced identity with a major contract version, e.g. `acme.rating/1`. */
+  id: string;
+  label: string;
+  /** Response JSON value kind (for example `string`, `number`, or `boolean`). */
+  valueKind: StudioUserTaskFieldValueKind;
+  /** Legacy field kind this contribution can render without persisted control metadata. */
+  legacyKind?: string;
+  order?: number;
+  icon?: ReactNode;
+  propertiesLabel?: string;
+  /** Set when the renderer provides its own accessible label, e.g. a radio fieldset legend. */
+  ownsFieldLabel?: boolean;
+  createField(fields: readonly StudioUserTaskFieldDefinition[]): StudioUserTaskFieldDefinition;
+  component: ComponentType<StudioUserTaskFieldControlRenderProps>;
+  propertiesEditor?: ComponentType<StudioUserTaskFieldControlEditorProps>;
+  validateConfiguration?(configuration: unknown): string[];
+}
+
 export interface StudioActivityPropertyEditorProps {
   descriptor: StudioActivityInputDescriptor;
   value: unknown;
@@ -735,6 +820,27 @@ export interface StudioActivityPropertyEditorProps {
   context: StudioActivityPropertyEditorContext;
   onChange(value: unknown): void;
   /** Reports only whether this mounted editor currently has a local blocking error. */
+  onValidationChange?: (hasError: boolean) => void;
+}
+
+export interface StudioActivityPropertyEditorGroupInput {
+  descriptor: StudioActivityInputDescriptor;
+  /** Literal value, or the expression value for a non-literal syntax. */
+  value: unknown;
+  syntax: string;
+  /** Kept separately so an empty expression remains distinguishable from a missing assignment. */
+  expressionValue?: unknown;
+  readOnly: boolean;
+}
+
+export interface StudioActivityPropertyEditorGroupProps {
+  inputs: StudioActivityPropertyEditorGroupInput[];
+  context: StudioActivityPropertyEditorContext;
+  disabled: boolean;
+  /** Renders the host's regular syntax and expression editor for one input in this group. */
+  renderExpressionEditor(inputKey: string): ReactNode;
+  /** Updates one literal input; use context.setLiteralInputs for related atomic changes. */
+  onChange(inputKey: string, value: unknown): void;
   onValidationChange?: (hasError: boolean) => void;
 }
 
@@ -754,6 +860,19 @@ export interface StudioDraftValidationContext {
 
 export interface StudioActivityPropertyEditorContribution extends StudioBackendAwareContribution {
   id: string;
+  /** The editor presents its descriptor label in its own shared field. */
+  presentsField?: boolean;
+  /** Groups this input's row with adjacent rows from contributions declaring the same group id. */
+  propertyGroup?: {
+    id: string;
+    label: string;
+    description?: string;
+    /** Input keys required before the group component replaces its individual rows. */
+    inputKeys?: string[];
+    /** Keeps sibling inputs unchanged when an expression editor changes this group. */
+    preserveSiblingOnExpression?: boolean;
+    component?: ComponentType<StudioActivityPropertyEditorGroupProps>;
+  };
   order?: number;
   /** Declares that all local blocking errors are reported through onValidationChange, or that none exist. */
   supportsValidationReporting?: true;
@@ -826,6 +945,26 @@ export interface StudioWorkflowRunInputEditorContribution {
   component: ComponentType<StudioWorkflowRunInputEditorProps>;
   validate(context: StudioWorkflowRunInputEditorContext): string | undefined;
   serialize(context: StudioWorkflowRunInputEditorContext): unknown;
+}
+
+/** JSON-only configuration exchanged with a standalone trigger's optional editor. */
+export type StudioTriggerConfigurationValue = null | boolean | number | string | StudioTriggerConfigurationValue[] | { [key: string]: StudioTriggerConfigurationValue };
+export interface StudioTriggerConfigurationFinding { code: string; message: string; field?: string; inputName?: string }
+export interface StudioTriggerConfigurationEditorProps {
+  readonly typeKey: string;
+  readonly schemaVersion: string;
+  readonly configuration: Readonly<Record<string, StudioTriggerConfigurationValue>>;
+  readonly disabled: boolean;
+  readonly findings: readonly StudioTriggerConfigurationFinding[];
+  /** Reports the full configuration; preserved fields must remain in the returned value. */
+  onChange(configuration: Record<string, StudioTriggerConfigurationValue>): void;
+}
+/** Pure configuration authoring only. This contribution supplies no trigger, graph or execution authority. */
+export interface StudioTriggerConfigurationEditorContribution extends StudioBackendAwareContribution {
+  id: string;
+  typeKey: string;
+  schemaVersion: string;
+  component: ComponentType<StudioTriggerConfigurationEditorProps>;
 }
 
 /** A backend-discovered trigger mode available while driving a workflow Test Run. */
@@ -1137,14 +1276,54 @@ export interface StudioExpressionEditorContext {
   onBlur?(): void;
 }
 
+/** Optional installed syntax adapter. The workflow host does not parse member-access syntax. */
+export interface StudioExpressionReferenceFix {
+  from: number;
+  to: number;
+  current: string;
+  replacement: string;
+}
+
+export interface StudioExpressionSourceInsertion {
+  render(request: { namespace?: "args" | "variables"; alias: string; memberPath: readonly string[]; source: string; selection: { anchor: number; head: number } }):
+    { supported: true; insert: string; /** UTF-16 positions relative to the inserted text. */ selection?: { anchor: number; head: number } } | { supported: false; reason: string };
+  /** Finds direct argument references for which the host can supply an unambiguous replacement. */
+  findArgumentFixes?(source: string, resolve: (name: string) => { namespace: "args" | "variables"; name: string } | undefined):
+    StudioExpressionReferenceFix[];
+}
+/** Ephemeral editor state never enters the authored workflow document. */
+export interface StudioExpressionEditorBookmark { restore(): void }
+export interface StudioExpressionEditorSnapshot {
+  readonly source: string;
+  readonly selection: Readonly<{ anchor: number; head: number }>;
+}
+export interface StudioExpressionEditorController {
+  capture(): StudioExpressionEditorSnapshot | null;
+  apply(edit: { expected: StudioExpressionEditorSnapshot; range?: { from: number; to: number }; insert: string; historyValue: unknown; selection?: { anchor: number; head: number } }): boolean;
+}
+export interface StudioExpressionEditorEdit {
+  historyValue: unknown;
+  origin: "input" | "insertion" | "undo" | "redo";
+  before: StudioExpressionEditorBookmark;
+  after: StudioExpressionEditorBookmark;
+}
+export interface StudioExpressionDocumentEditing {
+  interactionActive?: boolean;
+  /** Immutable JSON owner data apart from source text. */
+  historyValue: unknown;
+  onController(controller: StudioExpressionEditorController | null): void;
+}
+
 export interface StudioExpressionEditorProps {
+  actions?: ReactNode;
   descriptor: StudioActivityInputDescriptor;
   syntax: string;
   value: unknown;
   disabled?: boolean;
   initialFocus?: boolean;
   context: StudioExpressionEditorContext;
-  onChange(value: unknown): void;
+  documentEditing?: StudioExpressionDocumentEditing;
+  onChange(value: unknown, edit?: StudioExpressionEditorEdit): void;
   /** Requests the host to reveal the same document in its expanded editor surface. */
   onExpand?(): void;
   /** Reports only whether this mounted editor currently has a local blocking error. */
@@ -1193,8 +1372,45 @@ export interface StudioExpressionSourceRenderer {
   expanded: ComponentType<StudioExpressionSourceRendererProps>;
 }
 
+export interface StudioExpressionResultType {
+  alias: string;
+  collectionKind?: string | null;
+}
+
+export interface StudioExpressionResultDiagnostic {
+  message: string;
+  /** A source-only edit with UTF-16 offsets into the analyzed source. */
+  fix?: { from: number; to: number; replacement: string; label: string };
+}
+
+/** The editor host offers type facts for bound parameters. The language owns result inference and edits. */
+export interface StudioExpressionResultCheck {
+  check(request: {
+    source: string;
+    expectedType: StudioExpressionResultType;
+    resolveParameterType(name: string, memberPath: readonly string[]): Promise<StudioExpressionResultType | undefined>;
+  }): Promise<StudioExpressionResultDiagnostic | undefined>;
+}
+
 export interface StudioExpressionEditorContribution extends StudioBackendAwareContribution {
+  sourceInsertion?: StudioExpressionSourceInsertion;
+  resultCheck?: StudioExpressionResultCheck;
   id: string;
+  /** Language-owned proof that adding an unrelated lexical variable preserves this authored expression. */
+  variableAdditionPreservation?: {
+    language: string;
+    revision: string;
+    allows(expression: Readonly<Record<string, unknown>>): boolean;
+  };
+
+  /** Language-owned proof that all reads use explicit parameters and survive a closed reusable boundary. */
+  reusableBoundaryPreservation?: {
+    language: string;
+    revision: string;
+    allows(expression: Readonly<Record<string, unknown>>): boolean;
+  };
+  /** The inline editor presents its descriptor caption in its own shared field. */
+  presentsField?: boolean;
   order?: number;
   supports(context: StudioExpressionEditorContext): boolean;
   surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
@@ -1615,10 +1831,13 @@ export const studioSlotIds = {
   activityEditors: "workflow.activity.editors",
   propertyEditors: "workflow.activity.property-editors",
   userTaskForms: "user-task.form-renderers",
+  userTaskFieldControls: "user-task.field-controls",
   expressionEditors: "workflow.expression-editors",
   workflowRunInputEditors: "workflow.run-input.editors",
+  triggerConfigurationEditors: "workflow.trigger.configuration-editors",
   workflowTestStimulusEditors: "workflow.test-stimulus.editors",
   workflowRunRelatedLinks: "workflow.run.related-links",
+  incidentRootCauseProviders: "workflow.incident.root-cause-providers",
   settingEditors: "studio.setting-editors",
   weaverContextProviders: "studio.weaver.context-providers",
   weaverPromptStarters: "studio.weaver.prompt-starters",
@@ -1632,6 +1851,7 @@ export const studioSlotIds = {
   workflowDesignerNodeRenderers: "workflow.designer.node-renderers",
   workflowDesignerToolboxItems: "workflow.designer.toolbox-items",
   workflowDesignerPanels: "workflow.designer.panels",
+  workflowDesignerCanvasEditors: "workflow.designer.canvas-editors",
   diagnostics: "studio.diagnostics",
   diagnosticsWidgets: "studio.diagnostics.widgets"
 } as const;
@@ -1707,11 +1927,14 @@ export const studioSlots = {
   toolbarActions: defineStudioSlot({ id: studioSlotIds.toolbarActions, kind: "toolbar-action", title: "Toolbar actions", owner: hostSlotOwner() }),
   activityEditors: defineStudioSlot({ id: studioSlotIds.activityEditors, kind: "activity-editor", title: "Activity editors", owner: hostSlotOwner() }),
   userTaskForms: defineStudioSlot({ id: studioSlotIds.userTaskForms, kind: "user-task-form-renderer", title: "User task form renderers", owner: hostSlotOwner() }),
+  userTaskFieldControls: defineStudioSlot({ id: studioSlotIds.userTaskFieldControls, kind: "user-task-field-control", title: "User task field controls", owner: hostSlotOwner() }),
   propertyEditors: defineStudioSlot({ id: studioSlotIds.propertyEditors, kind: "property-editor", title: "Activity property editors", owner: hostSlotOwner() }),
   expressionEditors: defineStudioSlot({ id: studioSlotIds.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: hostSlotOwner() }),
   workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
+  triggerConfigurationEditors: defineStudioSlot({ id: studioSlotIds.triggerConfigurationEditors, kind: "trigger-configuration-editor", title: "Trigger configuration editors", owner: hostSlotOwner() }),
   workflowTestStimulusEditors: defineStudioSlot({ id: studioSlotIds.workflowTestStimulusEditors, kind: "workflow-test-stimulus-editor", title: "Workflow Test Run stimulus editors", owner: hostSlotOwner() }),
   workflowRunRelatedLinks: defineStudioSlot({ id: studioSlotIds.workflowRunRelatedLinks, kind: "workflow-run-related-link", title: "Workflow run related links", owner: hostSlotOwner() }),
+  incidentRootCauseProviders: defineStudioSlot({ id: studioSlotIds.incidentRootCauseProviders, kind: "incident-root-cause-provider", title: "Incident root cause providers", owner: hostSlotOwner() }),
   settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
   weaverContextProviders: defineStudioSlot({ id: studioSlotIds.weaverContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
   weaverPromptStarters: defineStudioSlot({ id: studioSlotIds.weaverPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
@@ -1725,6 +1948,7 @@ export const studioSlots = {
   workflowDesignerNodeRenderers: defineStudioSlot({ id: studioSlotIds.workflowDesignerNodeRenderers, kind: "workflow-designer-node-renderer", title: "Workflow designer node renderers", owner: hostSlotOwner() }),
   workflowDesignerToolboxItems: defineStudioSlot({ id: studioSlotIds.workflowDesignerToolboxItems, kind: "workflow-designer-toolbox-item", title: "Workflow designer toolbox items", owner: hostSlotOwner() }),
   workflowDesignerPanels: defineStudioSlot({ id: studioSlotIds.workflowDesignerPanels, kind: "workflow-designer-panel", title: "Workflow designer panels", owner: hostSlotOwner() }),
+  workflowDesignerCanvasEditors: defineStudioSlot({ id: studioSlotIds.workflowDesignerCanvasEditors, kind: "workflow-designer-canvas-editor", title: "Workflow canvas editors", owner: moduleSlotOwner("Elsa.Studio.Workflows") }),
   diagnostics: defineStudioSlot({ id: studioSlotIds.diagnostics, kind: "diagnostic", title: "Diagnostics", owner: hostSlotOwner() }),
   diagnosticsWidgets: defineStudioSlot({ id: studioSlotIds.diagnosticsWidgets, kind: "diagnostics-widget", title: "Diagnostics widgets", owner: hostSlotOwner() })
 };
@@ -1832,14 +2056,43 @@ export interface StudioNavigationRequest {
   toPath: string;
   /** Absent on requests from hosts that predate workspace tabs; treat it as `navigate`. */
   intent?: StudioNavigationIntent;
+  /** Register a shared-dialog decision. A synchronous probe or legacy host cannot defer its action. */
+  confirmWith?(review: () => Promise<boolean>): void;
+}
+
+function dispatchNavigationRequest(detail: StudioNavigationRequest) {
+  return typeof window === "undefined" || window.dispatchEvent(new CustomEvent<StudioNavigationRequest>(studioNavigationRequestedEvent, {
+    cancelable: true, detail
+  }));
 }
 
 export function requestStudioNavigation(fromPath: string, toPath: string, intent: StudioNavigationIntent = "navigate") {
-  if (typeof window === "undefined") return true;
-  return window.dispatchEvent(new CustomEvent<StudioNavigationRequest>(studioNavigationRequestedEvent, {
-    cancelable: true,
-    detail: { fromPath, toPath, intent }
-  }));
+  return dispatchNavigationRequest({ fromPath, toPath, intent });
+}
+
+let latestNavigationReview = 0;
+
+/** Synchronous guards keep ordinary navigation immediate. A newer action supersedes a pending review. */
+export function reviewStudioNavigation(fromPath: string, toPath: string, intent: StudioNavigationIntent = "navigate"): boolean | Promise<boolean> {
+  if (intent === "probe") return requestStudioNavigation(fromPath, toPath, intent);
+  const generation = ++latestNavigationReview;
+  const reviews: Array<() => Promise<boolean>> = [];
+  if (!dispatchNavigationRequest({ fromPath, toPath, intent, confirmWith: review => reviews.push(review) })) return false;
+  if (!reviews.length) return true;
+  return (async () => {
+    try {
+      for (const review of reviews) {
+        if (generation !== latestNavigationReview || !await review()) return false;
+      }
+      return generation === latestNavigationReview;
+    } catch { return false; }
+  })();
+}
+
+/** Carry out an immediate decision in the current event or observe a deferred one once it settles. */
+export function settleStudioNavigationReview(review: boolean | Promise<boolean>, decide: (allowed: boolean) => void) {
+  if (typeof review === "boolean") decide(review);
+  else void review.then(decide);
 }
 
 export interface StudioActivityDefinitionLayoutRecord {
@@ -1954,6 +2207,12 @@ export interface StudioActivityDefinitionImplementationEditorProps {
   value: StudioActivityDefinitionImplementationState;
   readOnly: boolean;
   onChange(value: StudioActivityDefinitionImplementationState): void;
+  /**
+   * Optional synchronous parent admission. Return true only after admitting this value against its
+   * exact baseline, or false without changing canonical state. Controlled editors require literal
+   * true before updating history; the legacy onChange notification is not an acknowledgement.
+   */
+  tryChange?(value: StudioActivityDefinitionImplementationState, expectedValue: StudioActivityDefinitionImplementationState): boolean;
 }
 
 export interface StudioActivityDefinitionImplementationEditorContribution extends StudioBackendAwareContribution {
@@ -1984,6 +2243,29 @@ export interface StudioWorkflowRunRelatedLink {
   label: string;
   /** A Studio-relative route. The host rejects foreign origins/backends and preserves the selected backend. */
   path: string;
+}
+
+/** Minimal incident shape passed to root cause providers so they don't depend on the full Workflows module types. */
+export interface StudioIncidentStateSummary {
+  incidentId: string;
+  failureType: string;
+  message: string;
+  metadata?: Record<string, string>;
+  severity: string;
+  status: string;
+  isBlocking: boolean;
+  createdAt: string;
+}
+
+export interface StudioIncidentRootCauseProviderContribution extends StudioBackendAwareContribution {
+  id: string;
+  order?: number;
+  /** Failure types this provider handles; empty or absent means all. */
+  failureTypes?: readonly string[];
+  /** Metadata key prefixes this provider cares about. */
+  metadataKeyPrefixes?: readonly string[];
+  /** Returns a tailored root cause message, or null to decline. */
+  getRootCause(incident: StudioIncidentStateSummary): string | null;
 }
 
 export interface StudioWorkflowRunRelatedLinkContribution extends StudioBackendAwareContribution {
@@ -2021,19 +2303,27 @@ export interface ElsaStudioModuleApi {
   readonly activityEditors: StudioContributionRegistry<StudioActivityDefinitionImplementationEditorContribution>;
   readonly propertyEditors: StudioContributionRegistry<StudioActivityPropertyEditorContribution>;
   readonly userTaskForms?: StudioContributionRegistry<StudioUserTaskFormContribution>;
+  /** Optional on older hosts; modules should guard before registering or composing field controls. */
+  readonly userTaskFieldControls?: StudioContributionRegistry<StudioUserTaskFieldControlContribution>;
   readonly expressionEditors: StudioContributionRegistry<StudioExpressionEditorContribution>;
   /** Available on hosts that support the workflow run-input editor Slot. */
   readonly workflowRunInputEditors?: StudioContributionRegistry<StudioWorkflowRunInputEditorContribution>;
+  /** Optional on older hosts; generic backend metadata remains the configuration fallback. */
+  readonly triggerConfigurationEditors?: StudioContributionRegistry<StudioTriggerConfigurationEditorContribution>;
   /** Available on hosts that support module-owned workflow Test Run stimulus editors. */
   readonly workflowTestStimulusEditors?: StudioContributionRegistry<StudioTestStimulusEditorContribution>;
   /** Optional on older hosts. Only authorized matching public state views are supplied to contributors. */
   readonly workflowRunRelatedLinks?: StudioContributionRegistry<StudioWorkflowRunRelatedLinkContribution>;
+  /** Optional on older hosts. Modules register tailored root cause messages for specific incident types. */
+  readonly incidentRootCauseProviders?: StudioContributionRegistry<StudioIncidentRootCauseProviderContribution>;
   readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
   readonly weaver: StudioWeaverRegistry;
   readonly workflowDesigner: {
     readonly nodeRenderers: StudioContributionRegistry<unknown>;
     readonly toolboxItems: StudioContributionRegistry<unknown>;
     readonly panels: StudioContributionRegistry<StudioWorkflowDesignerPanelContribution>;
+    /** Absent on older hosts; contributions must guard before registering. */
+    readonly canvasEditors?: StudioContributionRegistry<StudioWorkflowDesignerCanvasContribution>;
     /** Optional host alias of the standalone `registerActivityIcons` export. Callers must guard when it is missing. */
     registerActivityIcons?: (icons: Record<string, StudioActivityIconComponent | null | undefined>) => void;
   };

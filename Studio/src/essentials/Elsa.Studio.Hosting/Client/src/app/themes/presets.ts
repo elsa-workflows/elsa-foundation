@@ -4,6 +4,13 @@ import type { WorkspaceStyle } from "./workspaceStyles";
 
 export type StudioThemeSource = "built-in" | "custom";
 
+export const sidebarBackdropOptions = ["solid", "gradient", "starfield"] as const;
+export type SidebarBackdrop = (typeof sidebarBackdropOptions)[number];
+
+export function isSidebarBackdrop(value: unknown): value is SidebarBackdrop {
+  return typeof value === "string" && (sidebarBackdropOptions as readonly string[]).includes(value);
+}
+
 /**
  * The appearance a user picks. `light` and `dark` are the two base modes every theme defines;
  * `dim` (a softer mid-dark for long sessions) and `high-contrast` (black, white and one bright
@@ -119,6 +126,8 @@ export interface StudioThemeDefinition {
   layout?: StudioThemeLayout;
   /** Default shared visual treatment. An explicit user workspace choice overrides it. */
   workspaceStyle?: WorkspaceStyle;
+  /** Decorative treatment for the left navigation, coupled to this theme's color scheme. */
+  sidebarBackdrop?: SidebarBackdrop;
   material?: {
     textureAssets?: Record<string, string>;
     cssVariables?: Record<string, string>;
@@ -228,6 +237,7 @@ export function cloneThemeDefinition(theme: StudioThemeDefinition): StudioThemeD
     shape: theme.shape,
     layout: theme.layout,
     workspaceStyle: theme.workspaceStyle,
+    sidebarBackdrop: theme.sidebarBackdrop,
     material: theme.material
   })) as StudioThemeDefinition;
 }

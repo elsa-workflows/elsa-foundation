@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import "./workflowTestDrive.css";
 import type { StudioTestStimulusEditorProps, StudioTestStimulusResultProps } from "@elsa-workflows/studio-sdk";
 import { defaultHttpTestRequestDraft } from "./workflowTestRequestDefaults";
@@ -11,11 +12,7 @@ export function HttpRequestEditorView({ option, mode, draft, disabled, controlPr
   return (
     <div className="wf-test-drive-http">
       <dl><div><dt>Endpoint</dt><dd>{method} {template}</dd></div></dl>
-      <label className="wf-form-field" htmlFor={controlProps.id}>
-        <span>HTTP request data</span>
-        <textarea {...controlProps} rows={10} value={draft} placeholder={placeholder} disabled={disabled} onChange={event => onChange(event.currentTarget.value)} />
-        <small>Use routeValues as strings, query and headers as arrays of strings, and body as text.</small>
-      </label>
+      <StudioField className="wf-form-field" controlId={controlProps.id} label={<><span>HTTP request data</span></>}><textarea {...controlProps} rows={10} value={draft} placeholder={placeholder} disabled={disabled} onChange={event => onChange(event.currentTarget.value)} /><small>Use routeValues as strings, query and headers as arrays of strings, and body as text.</small></StudioField>
       <small>Requests use your current Studio identity. Authorization and Cookie headers are managed by Studio.</small>
     </div>
   );
@@ -28,11 +25,7 @@ export function EventEditorView({ option, mode, draft, disabled, controlProps, o
   return (
     <div className="wf-test-drive-event">
       <dl><div><dt>Event</dt><dd>{eventName}</dd></div>{correlationId ? <div><dt>Correlation</dt><dd>{correlationId}</dd></div> : null}</dl>
-      <label className="wf-form-field" htmlFor={controlProps.id}>
-        <span>Event data</span>
-        <textarea {...controlProps} rows={5} value={draft} disabled={disabled} onChange={event => onChange(event.currentTarget.value)} />
-        <small>Enter an object with an optional payload value.</small>
-      </label>
+      <StudioField className="wf-form-field" controlId={controlProps.id} label={<><span>Event data</span></>}><textarea {...controlProps} rows={5} value={draft} disabled={disabled} onChange={event => onChange(event.currentTarget.value)} /><small>Enter an object with an optional payload value.</small></StudioField>
     </div>
   );
 }

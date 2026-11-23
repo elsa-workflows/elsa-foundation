@@ -1,15 +1,17 @@
 import { sha256Hex } from "../sha256";
 import type { Node } from "@xyflow/react";
-import { createHttpStarterState } from "./httpWorkflowStarter";
 import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
-import type { CreateDefinitionRequest, ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityPresentationRecord, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityPresentationRecord, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import type { ChildSlot } from "../workflowAdapter";
-import { createActivityNode, flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
+import { flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
 import { shortTypeName } from "../workflowFormatting";
 import { groupByCategory } from "../categoryGrouping";
 import { workflowSidePanelMaximizedStorageKey } from "./constants";
-import type { ActivityPaletteGroup, CreateWorkflowDraft, CreateWorkflowKind, WorkflowEditorError, WorkflowErrorInput, WorkflowGraphConnection, WorkflowMetadataSuggestion, WorkflowSidePanel } from "./editorTypes";
+import type { ActivityPaletteGroup, CreateWorkflowKind, WorkflowEditorError, WorkflowErrorInput, WorkflowGraphConnection, WorkflowMetadataSuggestion, WorkflowSidePanel } from "./editorTypes";
 import { resolveActivityLabel } from "../activityPresentation";
+
+export { formatExecutableRunError, getExecutableReferenceStatus, readExecutableRunWorkflowExecutionId } from "./executableRunHelpers";
+export type { ExecutableReferenceStatus } from "./executableRunHelpers";
 
 export { dispatchAiAction, findAiAction, getTotalPages, pageItems } from "./editorListHelpers";
 
@@ -146,32 +148,6 @@ export function getCreateRootActivity(selectedVersionId: string | null, activiti
     ?? findCompositionActivity(available, "bpmn");
 }
 
-export function getCreateInitialState(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
-  if (draft.starter === "http") return createHttpStarterState(activities);
-  const activity = getCreateRootActivity(draft.rootActivityVersionId, activities);
-  if (!activity?.authoringTemplate) return null;
-
-  const rootActivity = createActivityNode(activity, createNodeId(activity));
-  return {
-    rootActivity: {
-      ...rootActivity,
-      inputs: toAuthoredArguments(activity.authoringTemplate.inputs) as unknown as ActivityNode["inputs"],
-      outputs: toAuthoredArguments(activity.authoringTemplate.outputs) as unknown as ActivityNode["outputs"]
-    }
-  };
-}
-
-function toAuthoredArguments(value: unknown) {
-  if (!Array.isArray(value)) return structuredClone(value ?? {});
-  return Object.fromEntries(value.flatMap(item => {
-    if (!item || typeof item !== "object") return [];
-    const argument = item as { referenceKey?: unknown; value?: unknown };
-    return typeof argument.referenceKey === "string"
-      ? [[argument.referenceKey, structuredClone(argument.value)]]
-      : [];
-  }));
-}
-
 export function findCompositionActivity(activities: ActivityCatalogItem[], kind: CreateWorkflowKind) {
   return activities.find(activity => getCompositionKind(activity) === kind);
 }
@@ -277,54 +253,12 @@ export function formatExecutableSourceKind(sourceKind?: string | null) {
     .replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
-export function readExecutableRunWorkflowExecutionId(response: WorkflowExecutableRunResponse | null | undefined) {
-  const workflowExecutionId = response?.workflowExecutionId ?? response?.runId ?? response?.executionId;
-  return typeof workflowExecutionId === "string" && workflowExecutionId.trim() ? workflowExecutionId : null;
-}
-
-// Surfaces the reference-gate refusal behind a failed executable run (ADR 0040): the backend answers
-// 409 with { error } distinguishing an expired test-run reference from a retired one. The backend
-// sentence is shown verbatim, followed by the recovery hint matching the structured reason.
-export function formatExecutableRunError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  const payload = (typeof error === "object" && error && "payload" in error ? (error as { payload?: unknown }).payload : null)
-    ?? tryParseJson(message);
-  const backendError = payload && typeof payload === "object" && typeof (payload as { error?: unknown }).error === "string"
-    ? (payload as { error: string }).error
-    : null;
-  if (!backendError) return message;
-
-  if (/no live .* reference/i.test(backendError)) {
-    return /expired/i.test(backendError)
-      ? `${backendError} Start a new test run from the definition editor to mint a fresh reference.`
-      : `${backendError} Restore the executable or republish its definition to run it.`;
-  }
-
-  return backendError;
-}
-
-function tryParseJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
-
 // Display label for a Source Reference scope ("Published" | "TestRun" on the wire).
 export function formatReferenceScope(scope: string | null | undefined) {
   const normalized = scope?.trim().toLowerCase() ?? "";
   if (normalized === "published") return "Published";
   if (normalized === "testrun" || normalized === "test-run") return "Test run";
   return scope?.trim() || "Unknown";
-}
-
-export type ExecutableReferenceStatus = "live" | "retired" | "expired";
-
-export function getExecutableReferenceStatus(reference: WorkflowExecutableReference, now: Date = new Date()): ExecutableReferenceStatus {
-  if (reference.deletedAt) return "retired";
-  if (reference.expiresAt && new Date(reference.expiresAt).getTime() <= now.getTime()) return "expired";
-  return "live";
 }
 
 // How the inspected artifact relates to its source definition in this environment: absent when the
@@ -368,12 +302,11 @@ export async function copyTextToClipboard(value: string) {
   textArea.style.position = "fixed";
   textArea.style.opacity = "0";
   document.body.appendChild(textArea);
-  textArea.select();
-  const copied = document.execCommand("copy");
-  textArea.remove();
-
-  if (!copied) {
-    throw new Error("Clipboard copy failed.");
+  try {
+    textArea.select();
+    if (!document.execCommand("copy")) throw new Error("Clipboard copy failed.");
+  } finally {
+    textArea.remove();
   }
 }
 
@@ -745,7 +678,3 @@ function isNotFoundError(error: unknown, message: string) {
 }
 
 
-export function getCreateInitialDocument(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]): Pick<CreateDefinitionRequest, "initialState" | "layout" | "activityPresentation"> {
-  if (draft.templateContent) return { initialState: structuredClone(draft.templateContent.state), layout: structuredClone(draft.templateContent.layout), activityPresentation: structuredClone(draft.templateContent.activityPresentation ?? []) };
-  return { initialState: getCreateInitialState(draft, activities) };
-}

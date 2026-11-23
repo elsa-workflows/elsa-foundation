@@ -1,3 +1,4 @@
+import { StudioButton, StudioIconButton } from "../ui/forms/Button";
 import React, { useState } from "react";
 import { MessageSquarePlus, Send, Square, X } from "lucide-react";
 import type { WeaverFollowup } from "./useWeaverSession";
@@ -43,9 +44,9 @@ export function WeaverComposer({
             <span key={followup.id} className="weaver-followup-chip">
               <MessageSquarePlus size={12} />
               <span>{followup.message}</span>
-              <button type="button" aria-label="Remove queued follow-up" onClick={() => onRemoveFollowup(followup.id)}>
+              <StudioIconButton type="button" aria-label="Remove queued follow-up" onClick={() => onRemoveFollowup(followup.id)}>
                 <X size={11} />
-              </button>
+              </StudioIconButton>
             </span>
           ))}
         </div>
@@ -61,13 +62,13 @@ export function WeaverComposer({
           onKeyDown={onKeyDown}
         />
         {busy ? (
-          <button type="button" className="weaver-stop" aria-label="Stop Weaver" onClick={onStop}>
+          <StudioButton type="button" className="weaver-stop" aria-label="Stop Weaver" onClick={onStop}>
             <Square size={14} /> Stop
-          </button>
+          </StudioButton>
         ) : (
-          <button type="button" className="weaver-send" aria-label="Send message" disabled={disabled || message.trim().length === 0} onClick={submit}>
+          <StudioIconButton type="button" className="weaver-send" aria-label="Send message" disabled={disabled || message.trim().length === 0} onClick={submit}>
             <Send size={14} />
-          </button>
+          </StudioIconButton>
         )}
       </div>
     </div>

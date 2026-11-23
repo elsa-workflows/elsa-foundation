@@ -1,0 +1,54 @@
+{
+  "walkthroughSha256": "ef3efb15db3b20b8977790ce63eceedc954e77c348345f8ae9611936436ecaf4",
+  "sourceConcatenationEqual": true,
+  "checks": [
+    {
+      "width": 390,
+      "theme": "light",
+      "cards": 8,
+      "ownershipSteps": 8,
+      "jumpBackEqual": true,
+      "currentActionVisible": true,
+      "verticalPositionPreserved": true,
+      "documentOverflow": false,
+      "minNewTextContrast": 5.400604469635271,
+      "consoleErrors": []
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "cards": 8,
+      "ownershipSteps": 8,
+      "jumpBackEqual": true,
+      "currentActionVisible": true,
+      "verticalPositionPreserved": true,
+      "documentOverflow": false,
+      "minNewTextContrast": 4.993240715785386,
+      "consoleErrors": []
+    },
+    {
+      "width": 1440,
+      "theme": "light",
+      "cards": 8,
+      "ownershipSteps": 8,
+      "jumpBackEqual": true,
+      "currentActionVisible": true,
+      "verticalPositionPreserved": true,
+      "documentOverflow": false,
+      "minNewTextContrast": 5.400604469635271,
+      "consoleErrors": []
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "cards": 8,
+      "ownershipSteps": 8,
+      "jumpBackEqual": true,
+      "currentActionVisible": true,
+      "verticalPositionPreserved": true,
+      "documentOverflow": false,
+      "minNewTextContrast": 4.993240715785386,
+      "consoleErrors": []
+    }
+  ]
+}

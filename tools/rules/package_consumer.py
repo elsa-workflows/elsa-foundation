@@ -151,14 +151,14 @@ def verify_consumer(receipt, evidence, source, feed, run, environment, process_p
 
 def verify_identity_control(receipt, evidence, source, feed, deployment, executable, run, env):
     """A valid alternate assembly is rejected, then omission of its digest check breaks that proof."""
-    implementation = source / 'Extensions/Rules/src/Runtime/RuleDeploymentIdentitySource.cs'
+    implementation = source / 'extensions/Rules/src/Runtime/RuleDeploymentIdentitySource.cs'
     original_source = implementation.read_bytes()
     deployed_asset = deployment / 'Elsa.Rules.Runtime.dll'
     original_asset = deployed_asset.read_bytes()
     guard = b'                    if (!StringComparer.Ordinal.Equals(assetHash, asset.AssetSha256))\n                        return null;'
     if original_source.count(guard) != 1:
         raise ValueError('Identity control no longer matches the reviewed implementation; update the control.')
-    project = source / 'Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj'
+    project = source / 'extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj'
     built_asset = project.parent / 'bin/Release/net10.0/Elsa.Rules.Runtime.dll'
     build = ['dotnet', 'build', project, '-c', 'Release', '--no-restore', '--no-dependencies',
              '-p:CustomBeforeDirectoryBuildProps=' + str(feed.parent / 'package-versions.props')]

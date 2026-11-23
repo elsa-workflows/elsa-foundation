@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Declares the activity-provider and design ports consumers compile against pre-GA (#4008). -->
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,3 +1,4 @@
+import { StudioButton } from "../ui/forms/Button";
 import React from "react";
 import type { StudioWeaverPromptStarterContribution } from "../../sdk";
 
@@ -17,9 +18,9 @@ export function WeaverPromptStarters({
   return (
     <div className="weaver-prompt-starters" aria-label="Suggested prompts">
       {prompts.map(prompt => (
-        <button key={prompt.id} type="button" disabled={disabled} onClick={() => onSelect(prompt.prompt, prompt.requiredCapabilities?.[0])}>
+        <StudioButton key={prompt.id} type="button" disabled={disabled} onClick={() => onSelect(prompt.prompt, prompt.requiredCapabilities?.[0])}>
           {prompt.label}
-        </button>
+        </StudioButton>
       ))}
     </div>
   );

@@ -8,6 +8,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <None Update="README.md" Pack="true" PackagePath="" />
+    <InternalsVisibleTo Include="Elsa.Studio.Tests" />
     <PackageReference Include="CShells.Nuplane" />
     <PackageReference Include="Nuplane" />
     <PackageReference Include="Nuplane.Admin" />
@@ -17,7 +18,7 @@
     <AdditionalFiles Include="PublicAPI.Shipped.txt" />
     <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
     <ProjectReference Include="../Elsa.Studio.Hosting/Elsa.Studio.Hosting.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
   </ItemGroup>
 </Project>

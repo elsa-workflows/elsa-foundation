@@ -66,8 +66,9 @@ Its variables are its own, but Correlate, Set Name and Finish act on that callin
 
    No JavaScript or Liquid assigns a value either (`setVariable`, `setOutput`, `setInput`, `setResult`, a generated
    `set{Name}(...)`, `setCorrelationId`, `setWorkflowInstanceName`, `variables.x = ...`, Liquid `assign`): that is
-   refused in every workflow (`VF-IMP-005`), and the Set, Correlate or Set Name activity its guidance points to is not
-   available in a reusable body yet.
+   refused in a reusable workflow (`VF-IMP-005`), and the Set, Correlate or Set Name activity its guidance points to is
+   not available in a reusable body yet. In a regular workflow, a RunJavaScript script's `setVariable`, generated
+   setters and member changes convert (spec 1231); see the Elsa 3 mapping README.
 3. **Reading values.** A body reads its own values as in Elsa 3 (spec 265): `getInput(...)`, a generated `get{Name}()`
    accessor, `getVariable(...)`, `variables.x`, a property bound to a variable or to another activity's output, and an
    output captured into one of its variables. These convert to the same bindings as in a regular workflow; Liquid
@@ -157,3 +158,12 @@ runs the same import, so every check on this page applies, and it also publishes
   a changed workflow under an Elsa 3 version that is already imported. Give a changed workflow a new version in Elsa 3.
 - Publishing needs no permissions: the startup task publishes in its persistence scope's tenant.
 - The folder holds every reusable version the other workflows use (the collection checklist above).
+
+## Step workflow-state body conversion
+
+Spec 1234 adds the three direct workflow-state body setters and pending correlation/name getters documented in the
+[converter's supported body contract](../../Extensions/Elsa3/src/Mapping/README.md#workflow-state-in-supported-script-bodies-spec-1234).
+This narrows the historical setter-refusal inventory for supported inline bodies only. Input-expression writes,
+`setInput`/`setResult`, structural/background sessions, and the broader graph/reusable acceptance tracked by
+[#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023) and
+[#4805](https://github.com/elsa-workflows/elsa-foundation/issues/4805) remain excluded.

@@ -1,3 +1,4 @@
+import { useNotificationGuard } from "./notifications";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
@@ -166,7 +167,7 @@ export async function downloadExecutableArtifact(
  */
 export function useExecutableArtifactDownload({ context, onExported, onFailed }: {
   context: StudioEndpointContext;
-  onExported(fileName: string, executable: WorkflowExecutableSummary): void;
+  onExported(fileName: string, executable: WorkflowExecutableSummary, canNotify: () => boolean): void;
   onFailed(message: string, executable: WorkflowExecutableSummary): void;
 }) {
   const [supported, setSupported] = useState(false);
@@ -184,8 +185,10 @@ export function useExecutableArtifactDownload({ context, onExported, onFailed }:
     return () => { active = false; };
   }, [baseUrl]);
 
+  const captureNotificationGuard = useNotificationGuard(context);
   const exportArtifact = useCallback(async (executable: WorkflowExecutableSummary) => {
     if (exportingArtifactId) return;
+    const canNotify = captureNotificationGuard();
     setExportingArtifactId(executable.artifactId);
     try {
       const fileName = await downloadExecutableArtifact(contextRef.current, {
@@ -193,13 +196,13 @@ export function useExecutableArtifactDownload({ context, onExported, onFailed }:
         definitionId: executable.definitionId,
         artifactVersion: executable.artifactVersion
       });
-      onExported(fileName, executable);
+      if (canNotify.isOwned()) onExported(fileName, executable, canNotify);
     } catch (error) {
-      onFailed(formatExecutableArtifactExportError(error), executable);
+      if (canNotify.isOwned()) onFailed(formatExecutableArtifactExportError(error), executable);
     } finally {
       setExportingArtifactId(null);
     }
-  }, [exportingArtifactId, onExported, onFailed]);
+  }, [captureNotificationGuard, exportingArtifactId, onExported, onFailed]);
 
   return { supported, exportingArtifactId, exportArtifact };
 }

@@ -10,9 +10,12 @@
  * A resource with no left panel (the editorial layout's inline authoring) gives the palette's
  * columns to the canvas. Structural, not theme-keyed: any host may omit the palette.
  */
-.wf-editor-body.palette-absent {
+.wf-editor-body.palette-absent:where(:not(.inspector-maximized)) {
   grid-template-columns: 0 0 minmax(0, 1fr) 10px var(--wf-inspector-width, 320px);
 }
+
+/* Paint inspector content above opacity-created canvas stacking contexts without trapping canvas dialogs. */
+.wf-editor-body > .wf-inspector { isolation: isolate; }
 
 /* A stale "palette maximized" preference must not hide the canvas when there is no palette. */
 .wf-editor-body.palette-absent.palette-maximized .wf-canvas-shell {

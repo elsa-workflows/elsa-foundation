@@ -1,4 +1,3 @@
-import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -100,12 +99,13 @@ function Fixture() {
     let runs = createRuns();
     let failInitialRunsRequest = new URLSearchParams(window.location.search).get("fixtureError") === "1";
     const healthSupported = new URLSearchParams(window.location.search).get("health") !== "unsupported";
+    const deletionSupported = new URLSearchParams(window.location.search).get("deletion") !== "unsupported";
     const delayRuns = new URLSearchParams(window.location.search).get("fixtureDelay") === "1";
     const runtimeLinks = [
       { rel: "workflow-instances-page", href: "runtime/workflows/instances/page" },
       { rel: "workflow-instance", href: "runtime/workflows/instances/{workflowExecutionId}", templated: true },
       { rel: "workflow-executable", href: "runtime/workflows/executables/{artifactId}", templated: true },
-      { rel: "workflow-instance-delete", href: "runtime/workflows/instances/{workflowExecutionId}", templated: true },
+      ...(deletionSupported ? [{ rel: "workflow-instance-delete", href: "runtime/workflows/instances/{workflowExecutionId}", templated: true }] : []),
       ...(healthSupported ? [{ rel: "workflow-instances-health-filter", href: "runtime/workflows/instances/health" }] : [])
     ];
     const definitionsPage = (path: string) => {
@@ -173,6 +173,7 @@ function Fixture() {
 
           if (path.startsWith("/runtime/workflows/instances/")) {
             const workflowExecutionId = decodeURIComponent(path.split("/").at(-1)!);
+            if (delayRuns) await new Promise(resolve => window.setTimeout(resolve, 1_200));
             const instance = runs.find(run => run.workflowExecutionId === workflowExecutionId);
             if (!instance) throw new Error(`Unknown fixture run ${workflowExecutionId}`);
             return { instance, activities: [], incidents: createIncidents(instance), ...runInspectionFacts(workflowExecutionId) };
@@ -236,7 +237,6 @@ function Fixture() {
 
   const ai = { promptActions: { list: () => [] } } as unknown as StudioAiContributionApi;
   const page = <ThemeProvider><main className={`studio-page wf-page${route.workflowExecutionId ? " wf-page--run-workbench" : ""} golden-runs-page`}>
-    {route.workflowExecutionId ? <StudioPageHeader title="Run" headingLevel={2} actions={<div className="wf-page-context"><span>Workflow Instance ID</span><code>{route.workflowExecutionId}</code></div>} /> : null}
     {route.workflowExecutionId ? <WorkflowInstanceDetailsWorkbench
       context={context}
       ai={ai}

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { StudioField } from "@elsa-workflows/studio-ui";
+import { useEffect, useMemo, useState } from "react";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityDefinitionDraftView } from "./activityDefinitionTypes";
 import { createActivityDefinitionDraft, useActivityAuthoringCapabilities } from "./api/activityDesign";
-import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 import { ActivityDefinitionManagementDialogActions, ActivityDefinitionManagementDialogShell } from "./ActivityDefinitionManagementDialogShell";
 import { ActivityDefinitionVersionPicker } from "./ActivityDefinitionVersionPicker";
 import {
@@ -38,8 +38,6 @@ export function ActivityDefinitionDraftDialog({
   const [presentationLabel, setPresentationLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLElement>(null);
-  useDialogFocus(dialogRef, submitting ? null : onClose);
 
   useEffect(() => {
     if (!provider && choices.length === 1) setProvider(choiceValue(choices[0]));
@@ -72,18 +70,18 @@ export function ActivityDefinitionDraftDialog({
     }
   };
 
-  return <ActivityDefinitionManagementDialogShell dialogRef={dialogRef} title="Create parallel draft" kicker="Design-owned mutable work" submitting={submitting} onClose={onClose}>
+  return <ActivityDefinitionManagementDialogShell title="Create parallel draft" submitting={submitting} onClose={onClose}>
     <fieldset className="ad-choice-grid">
       <legend>Starting point</legend>
       <label><input type="radio" name="draft-mode" checked={mode === "blank"} onChange={() => setMode("blank")} /> <span><strong>Blank</strong><small>Start from an advertised authoring provider and its required contract outcomes.</small></span></label>
       <label><input type="radio" name="draft-mode" checked={mode === "clone"} onChange={() => setMode("clone")} /> <span><strong>Clone exact version</strong><small>Deep-copy one visible immutable version; the source remains unchanged.</small></span></label>
     </fieldset>
-    <label className="ad-dialog-field"><span>Draft label <small>Optional · need not be unique</small></span><input value={presentationLabel} maxLength={200} onChange={event => setPresentationLabel(event.target.value)} placeholder="Generated fallback used when blank" /></label>
+    <StudioField className="ad-dialog-field" label={<><span>Draft label </span></>}><input value={presentationLabel} maxLength={200} onChange={event => setPresentationLabel(event.target.value)} placeholder="Generated fallback used when blank" /><small>Optional · need not be unique</small></StudioField>
     {mode === "blank" ? <>
       {capabilitiesQuery.isPending ? <div className="ad-inline-status" role="status">Loading authorized providers…</div> : null}
       {capabilitiesQuery.isError ? <div className="ad-inline-error" role="alert">Authoring capabilities are unavailable. Studio will not invent a blank provider state.</div> : null}
       {capabilitiesQuery.isSuccess && choices.length === 0 ? <div className="ad-inline-status" role="status">No authorable provider schemas are available for blank draft creation.</div> : null}
-      <label className="ad-dialog-field"><span>Implementation provider</span><select value={provider} onChange={event => setProvider(event.target.value)}><option value="" disabled>Select a provider</option>{choices.map(item => <option key={choiceValue(item)} value={choiceValue(item)}>{item.capability.displayName} · schema {item.schemaVersion}</option>)}</select></label>
+      <StudioField className="ad-dialog-field" label={<><span>Implementation provider</span></>}><select value={provider} onChange={event => setProvider(event.target.value)}><option value="" disabled>Select a provider</option>{choices.map(item => <option key={choiceValue(item)} value={choiceValue(item)}>{item.capability.displayName} · schema {item.schemaVersion}</option>)}</select></StudioField>
       {choice && !choice.contribution ? <div className="ad-inline-error" role="alert">The exact Studio editor for this advertised provider schema is unavailable. Blank creation is disabled.</div> : null}
     </> : <ActivityDefinitionVersionPicker context={context} definitionId={definitionId} selectedVersionId={sourceVersionId} onChange={setSourceVersionId} />}
     <p className="ad-dialog-note">Each draft receives a stable server-generated identity. Labels are presentation metadata and may be blank or repeated.</p>

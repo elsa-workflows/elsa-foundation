@@ -1,6 +1,6 @@
+import { StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { useId, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
-import { useDialogFocus } from "./useDialogFocus";
 import { maxOperatorReasonLength, validateOperatorReason, type OperatorActionModel } from "../operatorActions";
 import "./operatorActionDialog.css";
 
@@ -32,9 +32,9 @@ export function OperatorActionDialog({
   /** Where focus goes when the dialog closes and the control that opened it is gone. */
   restoreFocus?(): void;
 }) {
-  const dialogRef = useRef<HTMLElement | null>(null);
+  const firstControl = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const id = useId();
-  const titleId = `${id}-title`;
   const reasonId = `${id}-reason`;
   const hintId = `${id}-hint`;
   const reasonErrorId = `${id}-reason-error`;
@@ -42,7 +42,6 @@ export function OperatorActionDialog({
   const [reason, setReason] = useState("");
   const [touched, setTouched] = useState(false);
   const [decision, setDecision] = useState<string | null>(model.initialDecision ?? null);
-  useDialogFocus(dialogRef, busy ? null : onCancel, true, restoreFocus);
 
   const reasonError = validateOperatorReason(reason, model.reasonRequired);
   const needsOutcome = !!model.outcomes && model.outcomes.length > 0;
@@ -51,118 +50,97 @@ export function OperatorActionDialog({
   const describedBy = [hintId, showReasonError ? reasonErrorId : null].filter(Boolean).join(" ");
 
   return (
-    <div className="wf-dialog-backdrop" role="presentation" onMouseDown={event => {
-      if (event.target === event.currentTarget && !busy) onCancel();
-    }}>
-      <section
-        ref={dialogRef}
-        className="wf-dialog wf-operator-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        data-tone={model.tone}
-      >
-        <form
-          noValidate
-          onSubmit={event => {
-            event.preventDefault();
-            setTouched(true);
-            if (!valid || busy) return;
-            onConfirm({ reason: reason.trim(), decision });
+    <StudioDialog open title={model.title} className="wf-operator-dialog" onClose={onCancel} dismissDisabled={busy}
+      initialFocusRef={firstControl} noValidate onCloseAutoFocus={event => {
+        event.preventDefault();
+        if (document.activeElement !== document.body) return;
+        if (opener?.isConnected && !opener.matches(":disabled")) opener.focus();
+        else restoreFocus?.();
+      }} onSubmit={event => {
+        event.preventDefault();
+        setTouched(true);
+        if (valid && !busy) onConfirm({ reason: reason.trim(), decision });
+      }}
+      footer={<StudioDialogFooter onCancel={onCancel} cancelDisabled={busy} confirmDisabled={!valid || busy}
+        confirmVariant={model.tone === "danger" ? "danger" : "primary"} confirmLabel={busy ? "Submitting…" : model.confirmLabel} />}>
+      <dl className="wf-operator-facts">
+        <div>
+          <dt>Target</dt>
+          <dd>{model.target.map(line => <span key={line}>{line}</span>)}</dd>
+        </div>
+      </dl>
+
+      {needsOutcome ? (
+        <fieldset className="wf-operator-outcomes" aria-describedby={!decision && touched ? outcomeErrorId : undefined}>
+          <legend>Outcome</legend>
+          {model.outcomes!.map((outcome, index) => {
+            const optionId = `${id}-outcome-${index}`;
+            const initial = decision ? decision === outcome.decision : index === 0;
+            return (
+              <div key={outcome.decision} className="wf-operator-outcome">
+                <input
+                  id={optionId}
+                  type="radio"
+                  name={`${id}-outcome`}
+                  value={outcome.decision}
+                  checked={decision === outcome.decision}
+                  disabled={busy}
+                  aria-describedby={`${optionId}-description`}
+                  ref={element => { if (initial) firstControl.current = element; }}
+                  onChange={() => setDecision(outcome.decision)}
+                />
+                <label htmlFor={optionId}>{outcome.label}</label>
+                <small id={`${optionId}-description`}>{outcome.description}</small>
+              </div>
+            );
+          })}
+          {!decision && touched ? <small id={outcomeErrorId} className="wf-operator-error">Choose an outcome.</small> : null}
+        </fieldset>
+      ) : null}
+
+      <dl className="wf-operator-facts">
+        <div>
+          <dt>Effect</dt>
+          <dd>
+            {model.effect.map(line => <span key={line}>{line}</span>)}
+            {model.notUndone && model.notUndone.length > 0 ? (
+              <ul aria-label="Steps that stay not undone">
+                {model.notUndone.map(item => <li key={item}>{item}</li>)}
+              </ul>
+            ) : null}
+            {model.effectAfter?.map(line => <span key={line}>{line}</span>)}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="wf-operator-reason"><StudioField controlId={reasonId} label={<>Reason {model.reasonRequired ? "(required)" : "(optional)"}</>}>
+
+        <textarea
+          id={reasonId}
+          rows={2}
+          value={reason}
+          disabled={busy}
+          aria-required={model.reasonRequired || undefined}
+          aria-invalid={showReasonError || undefined}
+          aria-describedby={describedBy}
+          ref={element => { if (!needsOutcome) firstControl.current = element; }}
+          onChange={event => {
+            setReason(event.target.value);
+            if (event.target.value.trim()) setTouched(true);
           }}
-        >
-          <div className="wf-dialog-heading">
-            <h3 id={titleId}>{model.title}</h3>
-          </div>
+          onBlur={() => setTouched(true)}
+        />
+        <small id={hintId}>
+          Visible to everyone who can view this run. Do not include secrets. Up to {maxOperatorReasonLength} characters.
+        </small>
+        {showReasonError ? <small id={reasonErrorId} className="wf-operator-error">{reasonError}</small> : null}
+      </StudioField></div>
 
-          <dl className="wf-operator-facts">
-            <div>
-              <dt>Target</dt>
-              <dd>{model.target.map(line => <span key={line}>{line}</span>)}</dd>
-            </div>
-          </dl>
-
-          {needsOutcome ? (
-            <fieldset className="wf-operator-outcomes" aria-describedby={!decision && touched ? outcomeErrorId : undefined}>
-              <legend>Outcome</legend>
-              {model.outcomes!.map((outcome, index) => {
-                const optionId = `${id}-outcome-${index}`;
-                const initial = decision ? decision === outcome.decision : index === 0;
-                return (
-                  <div key={outcome.decision} className="wf-operator-outcome">
-                    <input
-                      id={optionId}
-                      type="radio"
-                      name={`${id}-outcome`}
-                      value={outcome.decision}
-                      checked={decision === outcome.decision}
-                      disabled={busy}
-                      aria-describedby={`${optionId}-description`}
-                      data-dialog-initial-focus={initial ? "" : undefined}
-                      onChange={() => setDecision(outcome.decision)}
-                    />
-                    <label htmlFor={optionId}>{outcome.label}</label>
-                    <small id={`${optionId}-description`}>{outcome.description}</small>
-                  </div>
-                );
-              })}
-              {!decision && touched ? <small id={outcomeErrorId} className="wf-operator-error">Choose an outcome.</small> : null}
-            </fieldset>
-          ) : null}
-
-          <dl className="wf-operator-facts">
-            <div>
-              <dt>Effect</dt>
-              <dd>
-                {model.effect.map(line => <span key={line}>{line}</span>)}
-                {model.notUndone && model.notUndone.length > 0 ? (
-                  <ul aria-label="Steps that stay not undone">
-                    {model.notUndone.map(item => <li key={item}>{item}</li>)}
-                  </ul>
-                ) : null}
-                {model.effectAfter?.map(line => <span key={line}>{line}</span>)}
-              </dd>
-            </div>
-          </dl>
-
-          <div className="wf-operator-reason">
-            <label htmlFor={reasonId}>Reason {model.reasonRequired ? "(required)" : "(optional)"}</label>
-            <textarea
-              id={reasonId}
-              rows={2}
-              value={reason}
-              disabled={busy}
-              aria-required={model.reasonRequired || undefined}
-              aria-invalid={showReasonError || undefined}
-              aria-describedby={describedBy}
-              data-dialog-initial-focus={needsOutcome ? undefined : ""}
-              onChange={event => {
-                setReason(event.target.value);
-                if (event.target.value.trim()) setTouched(true);
-              }}
-              onBlur={() => setTouched(true)}
-            />
-            <small id={hintId}>
-              Visible to everyone who can view this run. Do not include secrets. Up to {maxOperatorReasonLength} characters.
-            </small>
-            {showReasonError ? <small id={reasonErrorId} className="wf-operator-error">{reasonError}</small> : null}
-          </div>
-
-          {error ? (
-            <p className="wf-operator-submit-error" role="alert">
-              <AlertTriangle size={14} aria-hidden="true" /> {error}
-            </p>
-          ) : null}
-
-          <div className="wf-dialog-actions">
-            <button type="button" onClick={onCancel} disabled={busy}>Cancel</button>
-            <button type="submit" disabled={!valid || busy} data-tone={model.tone}>
-              {busy ? "Submitting…" : model.confirmLabel}
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>
+      {error ? (
+        <p className="wf-operator-submit-error" role="alert">
+          <AlertTriangle size={14} aria-hidden="true" /> {error}
+        </p>
+      ) : null}
+    </StudioDialog>
   );
 }

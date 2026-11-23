@@ -1,5 +1,8 @@
 /* Shown only when a rename leaves references to repair by hand, so it always asks for attention. */
 .wf-variable-rename-notice {
+  flex: 0 0 auto;
+  max-height: 40vh;
+  overflow: auto;
   margin: 8px 12px 0;
   padding: 8px 10px;
   border: 1px solid color-mix(in srgb, var(--studio-warning) 46%, var(--studio-border));

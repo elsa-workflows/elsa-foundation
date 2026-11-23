@@ -1,8 +1,13 @@
-import React, { useCallback, useId } from "react";
+import React, { useCallback, useId, useLayoutEffect, useRef } from "react";
 
 export interface StudioTabItem {
   id: string;
   label: string;
+  disabled?: boolean;
+  icon?: React.ReactNode;
+  trailing?: React.ReactNode;
+  /** Link to a tabpanel index, or use `null` when the view has no tabpanel. */
+  panelIndex?: number | null;
 }
 
 /**
@@ -85,7 +90,8 @@ export function StudioTabs({
   onSelect,
   ariaLabel,
   baseId: providedBaseId,
-  className
+  className,
+  compact = false
 }: {
   tabs: StudioTabItem[];
   activeTab: string;
@@ -94,33 +100,60 @@ export function StudioTabs({
   /** Share with StudioTabPanel when callers compose the tab list and mounted panels separately. */
   baseId?: string;
   className?: string;
+  /** Render a single-line, horizontally scrollable tab row and reveal its selected tab. */
+  compact?: boolean;
 }) {
   const generatedBaseId = useId();
   const baseId = providedBaseId ?? generatedBaseId;
-  const tabIds = tabs.map(tab => tab.id);
+  const tabIds = tabs.filter(tab => !tab.disabled).map(tab => tab.id);
   const onKeyDown = useTablistKeyboard(tabIds, activeTab, onSelect);
+  const tablistRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const tablist = tablistRef.current;
+    if (!compact || !tablist) return;
+
+    const revealActiveTab = () => {
+      const selectedTab = tablist.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (!selectedTab) return;
+      const viewport = tablist.getBoundingClientRect();
+      const tab = selectedTab.getBoundingClientRect();
+      if (tab.left < viewport.left) tablist.scrollLeft += tab.left - viewport.left;
+      else if (tab.right > viewport.right) tablist.scrollLeft += tab.right - viewport.right;
+    };
+
+    revealActiveTab();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(revealActiveTab);
+    observer.observe(tablist);
+    return () => observer.disconnect();
+  }, [activeTab, compact, tabs.length]);
 
   return (
-    <div className={["studio-tabs", className].filter(Boolean).join(" ")} role="tablist" aria-label={ariaLabel} onKeyDown={onKeyDown}>
+    <div ref={tablistRef} className={["studio-tabs", compact ? "studio-tabs--compact" : "", className].filter(Boolean).join(" ")} role="tablist" aria-label={ariaLabel} onKeyDown={onKeyDown}>
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeTab;
-        const ids = tabElementIds(baseId, index);
+        const tabId = tabElementIds(baseId, index).tabId;
+        const panelId = tab.panelIndex === null ? undefined : tabElementIds(baseId, tab.panelIndex ?? index).panelId;
         return (
           <button
             key={tab.id}
-            id={ids.tabId}
+            id={tabId}
             data-tab-id={tab.id}
             type="button"
             role="tab"
             aria-selected={isActive}
-            aria-controls={ids.panelId}
+            aria-controls={panelId}
             // Roving tabindex: only the active tab is in the sequential tab order; arrows reach the rest.
             tabIndex={isActive ? 0 : -1}
             className={isActive ? "active" : ""}
             title={tab.label}
+            disabled={tab.disabled}
             onClick={() => onSelect(tab.id)}
           >
-            {tab.label}
+            {tab.icon ? <span className="studio-tab-icon" aria-hidden="true">{tab.icon}</span> : null}
+            <span>{tab.label}</span>
+            {tab.trailing}
           </button>
         );
       })}

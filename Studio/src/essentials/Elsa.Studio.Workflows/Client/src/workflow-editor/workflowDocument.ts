@@ -1,7 +1,7 @@
 import { useReducer, useMemo } from "react";
 import type { WorkflowDraft } from "../workflowTypes";
 import type { ScopeFrame } from "../workflowAdapter";
-import { getDraftContentRevision } from "./editorHelpers";
+import { cloneWorkflowDraftForUndo, getDraftContentRevision } from "./editorHelpers";
 import { removeActivityPresentation } from "../activityPresentation";
 import type { WorkflowTestRunState, WorkflowTestRunWaitDraftState } from "./editorTypes";
 
@@ -30,10 +30,26 @@ export function forgetRemovedNodes(draft: WorkflowDraft, removedNodeIds: Iterabl
 // separate setDraft/setFrames/setSelectedNodeId/setTestRun/setPublishedArtifactId calls scattered across
 // WorkflowEditor. Modelling it as one reducer makes the transitions (and, crucially, *what resets when*)
 // explicit and unit-testable, instead of implied by the ordering of setState calls in each handler.
+export interface OrdinaryWorkflowEditHistory {
+  before: { restore(): void };
+  after: { restore(): void };
+}
+/** Transient reducer receipts retain each boundary even when React batches several edits. */
+export interface OrdinaryWorkflowEditTransition {
+  id: number;
+  before: WorkflowDraft;
+  after: WorkflowDraft;
+  history: OrdinaryWorkflowEditHistory;
+}
+let nextOrdinaryEditId = 0;
+
 export interface WorkflowDocumentState {
+  historyTransitions?: readonly OrdinaryWorkflowEditTransition[];
   // The open draft. null until the definition has loaded.
   draft: WorkflowDraft | null;
   batchTransaction?: { id: string; applied: boolean };
+  /** Request-only acknowledgement for an ordinary reviewed edit; never persisted in the draft. */
+  editTransaction?: { id: string; applied: boolean };
   // Scope navigation breadcrumb: which nested activity slot the canvas is currently showing.
   frames: ScopeFrame[];
   // Selected activity within the current scope (drives the inspector).
@@ -58,6 +74,7 @@ export const initialWorkflowDocumentState: WorkflowDocumentState = {
 export type WorkflowDraftRecipe = (state: WorkflowDocumentState) => WorkflowDraft | null;
 
 export type WorkflowDocumentAction =
+  | { type: "draftComparedAndEdited"; transactionId: string; definitionId: string; expectedRevision: string; expectedSelection: string | null; draft: WorkflowDraft; selectedNodeId: string | null; expectedFrames: ScopeFrame[]; frames: ScopeFrame[]; isCurrent(): boolean }
   // A reviewed Weaver change (spec 1193 FR-008): applied only when the definition, the SHA-256 content revision, the
   // selection and the scope frame are still exactly what the change was bound to; otherwise refused with zero change.
   // The frames the caller computed keep the user's scope when it survives and fall back to its nearest ancestor.
@@ -71,7 +88,8 @@ export type WorkflowDocumentAction =
   | { type: "draftReplacedByBatch"; draft: WorkflowDraft; selectedNodeId: string | null }
   // In-place edit that keeps the current scope + selection (property edits, canvas commit, activity update,
   // debounced save merge).
-  | { type: "draftEdited"; recipe: WorkflowDraftRecipe }
+  | { type: "draftEdited"; recipe: WorkflowDraftRecipe; history?: OrdinaryWorkflowEditHistory; id?: number }
+  | { type: "historyTransitionsCaptured"; ids: readonly number[] }
   // Edit that also moves the selection to a known node (adding/wrapping a root or a scoped activity).
   | { type: "draftEditedAndSelected"; recipe: WorkflowDraftRecipe; selectedNodeId: string | null }
   | { type: "selectionChanged"; selectedNodeId: string | null }
@@ -88,21 +106,30 @@ export type WorkflowDocumentAction =
 
 export function workflowDocumentReducer(state: WorkflowDocumentState, action: WorkflowDocumentAction): WorkflowDocumentState {
   switch (action.type) {
+    case "draftComparedAndEdited": {
+      const applied = action.isCurrent() && !!state.draft && state.draft.definitionId === action.definitionId
+        && getDraftContentRevision(state.draft) === action.expectedRevision && state.selectedNodeId === action.expectedSelection
+        && JSON.stringify(state.frames) === JSON.stringify(action.expectedFrames);
+      return applied ? { ...state, draft: action.draft, selectedNodeId: action.selectedNodeId, frames: action.frames,
+        editTransaction: { id: action.transactionId, applied: true } }
+        : { ...state, editTransaction: { id: action.transactionId, applied: false } };
+    }
     case "draftComparedAndReplacedByBatch": {
       const applied = !!state.draft && state.draft.definitionId === action.definitionId
         && getDraftContentRevision(state.draft) === action.expectedRevision && state.selectedNodeId === action.expectedSelection
         && JSON.stringify(state.frames) === JSON.stringify(action.expectedFrames);
       // The last test run and the published-artifact association describe the replaced document, so they are cleared;
       // designer-history Undo restores the draft, not them.
-      return applied ? { ...state, draft: action.draft, selectedNodeId: action.selectedNodeId, frames: action.frames, testRun: null, publishedArtifactId: null,
+      return applied ? { ...state, ...(state.historyTransitions ? { historyTransitions: [] } : {}), draft: action.draft, selectedNodeId: action.selectedNodeId, frames: action.frames, testRun: null, publishedArtifactId: null,
         batchTransaction: { id: action.transactionId, applied: true } }
         : { ...state, batchTransaction: { id: action.transactionId, applied: false } };
     }
     case "draftLoaded":
-      return { ...state, draft: action.draft, frames: [], selectedNodeId: null };
+      return { ...state, ...(state.historyTransitions ? { historyTransitions: [] } : {}), draft: action.draft, frames: [], selectedNodeId: null };
     case "draftReplacedByBatch":
       return {
         ...state,
+        ...(state.historyTransitions ? { historyTransitions: [] } : {}),
         draft: action.draft,
         frames: [],
         selectedNodeId: action.selectedNodeId,
@@ -110,9 +137,16 @@ export function workflowDocumentReducer(state: WorkflowDocumentState, action: Wo
         publishedArtifactId: null
       };
     case "draftEdited": {
+      const before = action.history && state.draft ? cloneWorkflowDraftForUndo(state.draft) : null;
       const draft = action.recipe(state);
-      return draft ? { ...state, draft } : state;
+      if (!draft) return state;
+      const historyTransitions = action.history && before && action.id !== undefined
+        ? [...(state.historyTransitions ?? []), { id: action.id, before, after: cloneWorkflowDraftForUndo(draft), history: action.history }]
+        : state.historyTransitions;
+      return historyTransitions ? { ...state, draft, historyTransitions } : { ...state, draft };
     }
+    case "historyTransitionsCaptured":
+      return { ...state, historyTransitions: state.historyTransitions?.filter(event => !action.ids.includes(event.id)) };
     case "draftEditedAndSelected": {
       const draft = action.recipe(state);
       return { ...state, draft: draft ?? state.draft, selectedNodeId: action.selectedNodeId };
@@ -150,6 +184,10 @@ export function useWorkflowDocument() {
   const [state, dispatch] = useReducer(workflowDocumentReducer, initialWorkflowDocumentState);
 
   const actions = useMemo(() => ({
+    compareAndEditDraft(transactionId: string, definitionId: string, expectedRevision: string, expectedSelection: string | null, draft: WorkflowDraft,
+      selectedNodeId: string | null, expectedFrames: ScopeFrame[], frames: ScopeFrame[], isCurrent: () => boolean) {
+      dispatch({ type: "draftComparedAndEdited", transactionId, definitionId, expectedRevision, expectedSelection, draft, selectedNodeId, expectedFrames, frames, isCurrent });
+    },
     compareAndReplaceDraftByBatch(transactionId: string, definitionId: string, expectedRevision: string, expectedSelection: string | null, draft: WorkflowDraft, selectedNodeId: string | null,
       expectedFrames: ScopeFrame[], frames: ScopeFrame[]) {
       dispatch({ type: "draftComparedAndReplacedByBatch", transactionId, definitionId, expectedRevision, expectedSelection, draft, selectedNodeId, expectedFrames, frames });
@@ -163,8 +201,11 @@ export function useWorkflowDocument() {
       dispatch({ type: "draftReplacedByBatch", draft, selectedNodeId });
     },
     // In-place draft edit that keeps scope + selection.
-    editDraft(recipe: WorkflowDraftRecipe) {
-      dispatch({ type: "draftEdited", recipe });
+    editDraft(recipe: WorkflowDraftRecipe, history?: OrdinaryWorkflowEditHistory) {
+      dispatch({ type: "draftEdited", recipe, history, id: history ? ++nextOrdinaryEditId : undefined });
+    },
+    acknowledgeHistoryTransitions(ids: readonly number[]) {
+      dispatch({ type: "historyTransitionsCaptured", ids });
     },
     // Draft edit that also selects a node (add/wrap root, add scoped activity).
     editDraftAndSelect(recipe: WorkflowDraftRecipe, selectedNodeId: string | null) {

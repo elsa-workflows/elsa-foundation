@@ -10,6 +10,7 @@ export interface AdvancedSectionProps extends DisclosureControlProps {
   setCount?: number;
   hasError?: boolean;
   defaultOpen?: boolean;
+  onOpenChange?(open: boolean): void;
   allowCollapseWhenSet?: boolean;
   children: React.ReactNode;
 }
@@ -24,6 +25,7 @@ export function AdvancedSection({
   setCount = 0,
   hasError,
   defaultOpen = false,
+  onOpenChange,
   allowCollapseWhenSet = false,
   persistKey,
   forceOpen,
@@ -50,6 +52,7 @@ export function AdvancedSection({
       onOpenChange={nextOpen => {
         setRevealedAfterForce(false);
         setOpen(nextOpen);
+        onOpenChange?.(nextOpen);
       }}
     >
       {children}

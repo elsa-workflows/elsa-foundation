@@ -1,0 +1,487 @@
+# Engines
+
+Commit hashes cited below are in the prototype's history, kept at the tag `prototype/kernel-model-history`.
+
+The EF store of the kernel model on PostgreSQL, SQL Server, MySQL and SQLite: the stress test of
+[FINDINGS.md](FINDINGS.md) section 4, the cost count of section 5, probes for what a review of the protocol predicted,
+the store conformance suite, and the fence broken on purpose on every engine.
+
+**After the merge (FINDINGS.md section 23).** Round 3's store operations (heartbeat, start subscriptions, the
+projector's row and the view rows, delete, unsubscribe-all, held messages, reply addresses) are implemented in every
+dialect; E1, E4, E7 and E8 hold for them, and the conformance suite has cases for each. The figures below are the
+branch's; section 23 has the merged ones.
+
+**Round 4 (FINDINGS.md section 24).** The names are round 4's: an instance's step is a *turn* (`ITurn`), off-step
+work is a *background job* (`StartJob`, `IJob`, `job-finished`, the row's `jobs`), and the runtime's call into a
+partition is a *pass*. `src/Kernel` is now three projects: `src/Kernel.Runtime`, `src/Kernel.Durable` and
+`src/Kernel.Workflows`; a file named below without a path is in one of them. Seeds, counts and costs are unchanged.
+
+Evidence is marked as in FINDINGS: **run** means a command below produced it; **reasoned** means nobody ran it.
+Raw output of every run is under `.out/` (not committed).
+
+## Setup
+
+| Engine | Image | Provider | Driver |
+|---|---|---|---|
+| PostgreSQL 17 | `postgres:17` | Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 | Npgsql 10.0.3 |
+| SQL Server 2022 | `mcr.microsoft.com/mssql/server:2022-latest` (amd64, emulated on arm64) | Microsoft.EntityFrameworkCore.SqlServer 10.0.15 | Microsoft.Data.SqlClient 6.1.7 |
+| MySQL 8.4.13 (InnoDB) | `mysql:8.4` | **MySql.EntityFrameworkCore 10.0.12** (Oracle) | MySql.Data 26.10.0 |
+| SQLite | in process | Microsoft.EntityFrameworkCore.Sqlite 10.0.15 | Microsoft.Data.Sqlite 10.0.15 |
+
+MySQL provider: Oracle's is the only one for EF Core 10. Pomelo's latest release is 9.0.0 (EF Core 9), checked on
+nuget.org on 12 November 2026.
+
+```
+dotnet build ef/Kernel.Ef.Run -c Release
+dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x stress|cost|probe|block|definite|deadlock <engine> "<connection>" [key=value ...]
+dotnet build ef/Kernel.Ef.Conformance -c Release
+dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite|postgres|sqlserver|mysql ["<server>"] [--fence-in-batch|--checked-fence] [--m5] [--rcsi-off] [--rc] <suite command>   # "<server>" for the server engines only; no fence flag: the engine's default (FINDINGS 25.1); suite command: semantic, semantic-broken, stress, stress-broken, cost
+```
+
+`EngineRun.cs` lists the options. The stress test is the one of FINDINGS section 4: three nodes, two partitions (four
+in the runs marked "no kills"), six workers on 150 ms leases, stalls of 150 to 500 ms, a busy worker session killed
+every 20 to 60 ms (`pg_terminate_backend`, `KILL`, `KILL CONNECTION`; SQLite has no sessions), an outside producer
+that retries. Its end-state properties are the ones FINDINGS section 4 lists. Do not run the conformance suite on an
+engine while a stress test runs there: the stress test kills the suite's `kernel-worker` sessions too (two suite runs
+were discarded for that).
+
+## Results on the merged kernel (`a4f7c49b65` merged, fixes applied). Run
+
+40 s and 5,000 outside messages unless the row says otherwise. Resets are fenced commits plus commits with an unknown
+outcome. Deadlocks are as the engine counted them, with where the store saw the victim.
+
+| Engine | Isolation | Fence | Result | Deadlocks | Retries | Resets | Takeovers | Changed for it |
+|---|---|---|---|---|---|---|---|---|
+| PostgreSQL | READ COMMITTED | checked | holds | 0 | 0 | 667 | 320, 347 | E4 |
+| PostgreSQL | READ COMMITTED | batch | holds | 0 | 0 | 452 | 223, 229 | E1, E4 |
+| PostgreSQL | READ COMMITTED | batch, E1 off (`m5=1`) | holds; 708 commits answered *definite* | 0 | 0 | 194 | 215, 209 | M5 reproduced |
+| SQL Server | RCSI | checked | holds | 0 | 0 | 758 | 401, 362 | E5, E7, E8 |
+| SQL Server | RCSI | batch | holds | **127, all takes** (E9) | 0 | 1,081 | 578, 518 | E1, E5, E7, E8 |
+| SQL Server | locking READ COMMITTED | checked | holds | 0 | 0 | 731 | 356, 385 | E7, E8 |
+| SQL Server | locking, poll `READPAST` | batch | holds | 15, all takes | 0 | 959 | 470, 501 | (E6) |
+| MySQL | REPEATABLE READ | checked | holds | 0 | 0 | 664 | 348, 343 | E7, E8 |
+| MySQL | READ COMMITTED | checked | holds | 0 | 0 | 735 | 387, 404 | E7, E8 |
+| MySQL | REPEATABLE READ | batch | holds | 1, a take | 0 | 611 | 306, 320 | E1, E7, E8 |
+| SQLite | WAL, one process | checked | holds | 0 | 0 | 984 | 485, 499 | E4 |
+| SQLite | rollback journal, two processes, 1 s timeout | checked | holds; 26 takes and 7 commits answered BUSY, the commits retried | 0 | 7 | 1,464 + B's | 1,391, 1,349 | E4 |
+
+The same tests on the kernel of `301c3727c9`, before the merge (all hold unless said):
+
+| Engine | Isolation | Fence | Result | Deadlocks | Retries | Resets |
+|---|---|---|---|---|---|---|
+| PostgreSQL | READ COMMITTED | batch, 40 s, 5,000 | holds | 0 | 0 | 527 |
+| PostgreSQL | READ COMMITTED | batch, 60 s, 8,000 | holds | 0 | 0 | 788 |
+| SQL Server | locking | checked | holds | 0 | 0 | 658 |
+| SQL Server | locking | batch | holds | 12, all polls (E5) | 0 | 737 |
+| SQL Server | locking, no kills, 4 partitions, 8,000 | checked | holds; a commit waited **11.4 s** | 4 polls + 1 harness count (E5) | 0 | 439 |
+| SQL Server | RCSI | checked | holds | 0 | 0 | 816 |
+| SQL Server | RCSI | batch | holds | 0 | 0 | 912 |
+| SQL Server | RCSI, no kills, 4 partitions, 8,000 | checked | holds; longest commit 232 ms | 0 | 0 | 603 |
+| SQL Server | locking, poll `READPAST` | checked | holds | 0 | 0 | 808 |
+| SQL Server | locking, poll `READPAST` | batch | **2 of 2 runs failed**: 370 and 1,708 violations (E6) | 0 | 0 | 963 |
+| MySQL | REPEATABLE READ | checked | holds | 0 | 0 | 627 |
+| MySQL | REPEATABLE READ, no kills, 4 partitions, 8,000 | checked | holds | 0 | 0 | 748 |
+| MySQL | READ COMMITTED | checked | holds | 0 | 0 | 671 |
+| MySQL | REPEATABLE READ | batch | holds | 0 | 0 | 687 |
+| SQLite | WAL, one process | checked | holds | 0 | 0 | 449 |
+| SQLite | rollback journal, one process | checked | holds; 95 takes answered BUSY | 0 | 0 | 849 |
+| SQLite | WAL, two processes | checked | holds | 0 | 0 | 305 + 299 |
+| SQLite | rollback journal, two processes, 1 s timeout | checked | holds; 80 takes and 1 commit answered BUSY, the commit retried | 0 | 1 | 643 |
+
+On the merged kernel MySQL REPEATABLE READ with the checked fence, before E8 was fixed, held with **1 deadlock**: the
+graph is E8's.
+
+### The fence broken on purpose. Run
+
+15 s, 1,500 messages, `unfenced=1` (the fence's conditions are dropped; for the fence in the batch the tokens are read
+from the row, so the check always passes).
+
+| Engine | Kernel | Fence | Result |
+|---|---|---|---|
+| PostgreSQL | before merge | checked | 179 violations: I6 (659 journal rows at position 637), I3/I4, I11, instances missing |
+| PostgreSQL | before merge | batch | 251 violations: I6, I3/I4, instances missing |
+| PostgreSQL | merged | batch | 554 violations |
+| SQL Server | before merge | checked | 575 violations: I6 on both partitions, messages left |
+| SQL Server | merged | checked | 158 violations |
+| MySQL | before merge | checked | 1 violation, I11 |
+| MySQL | merged | checked | 328 violations |
+| SQLite | before merge | checked | 7 violations, all I11 |
+| SQLite | merged | checked | 106 violations: I6, I3/I4, I11, messages and a subscription left |
+
+The test can fail on every engine. On MySQL and SQLite before the merge it failed narrowly (1 and 7 violations).
+
+### PostgreSQL public root admission in the Core Preview
+
+On a dedicated preview database, `PostgresRootAdmission` installs a persistent reference issuer for the
+existing virtual partitions. A generated start writes a tenant-scoped operation receipt, its exact
+creation binding and one inbox row in one transaction. An independent client can resolve the reference
+and read the pending creator after the writer exits. Receipt expiry permits a new life, and each
+earlier reference continues to name its original creation.
+
+Run `ef/Kernel.Ef.Conformance` with `postgres "<server connection>" root-admission` for the concurrent
+admission, rollback, expiry, tenant and physical inbox cases. The preview uses ordinary PostgreSQL
+text for a representable input and a reversible envelope for text containing NUL or unpaired UTF-16
+units. It refuses an encoded row above the storage budget before its transaction commits.
+
+The first generated-root Running checkpoint now consumes the exact creator, stores revision 1
+in `Instances` and appends its journal in the existing fenced PostgreSQL commit. That transaction
+checks the tenant, reference and partition, then locks the pending creator and compares its
+stored input, start specification and deadline exactly. The database clock must have reached the
+creator's due time. The birth fingerprint remains compatible with earlier admissions. Its qualified
+point read returns the creation, nullable state, model version, type data and labels. Ordinary
+readers refuse the qualified state format. The preview protects this first checkpoint from legacy
+updates and deletes. Run `postgres "<server connection>" root-checkpoint` with either commit and
+fence mode to exercise the stored transition and its refusal cases.
+
+Public actor execution with emitted effects and later revisions remains ahead. The legacy Worker
+refuses any poll containing a public creator, so use this ingress only in its dedicated database.
+The existing Native workflow restart demonstration uses the prototype adapter.
+
+The `root-direct-send` case covers ordinary sends before and after the first checkpoint. The receipt is scoped to
+one exact actor life and the public operation id. It can expire while an earlier delivery stays pending. Every allowed
+reuse gets a new physical occurrence, with the original operation, due presence, kind and payload available to a
+fresh scoped reader. The public runner and its later fenced checkpoints are separate increments.
+
+The `root-turn` case runs both commit writers and fence modes on PostgreSQL. A Running generated root can commit
+one or more ready direct inputs in sequence, its next qualified checkpoint and a journal row. Finishing records the
+terminal revision and database time. A refused checkpoint rolls back every consumed input and the journal row.
+This increment covers ordinary direct inputs and checkpoint-only actor turns.
+
+### The store conformance suite. Run
+
+`conformance/Kernel.Store.Conformance` (merged from `6097f0174b`), 46 semantic cases, against the merged store with
+the fixes. The runner `ef/Kernel.Ef.Conformance` now takes SQL Server and MySQL.
+
+| Store | Required | Reference |
+|---|---|---|
+| PostgreSQL, checked | 43 pass | 3 differ (as MONGO.md: subscribe twice, unsubscribe what is not there, seqs of non-fixed-width ids) |
+| PostgreSQL, batch | 43 pass | the same 3 |
+| PostgreSQL, batch, E1 off (`--m5`) | **1 fails**: concurrent fence, `PK_Journal` | the same 3 |
+| SQL Server RCSI, checked | 42 pass, 1 skipped | the same 3 |
+| SQL Server locking, checked | 42 pass, 1 skipped | the same 3 |
+| SQL Server RCSI, batch | 42 pass, 1 skipped | the same 3 |
+| SQL Server, batch, E1 off | **1 fails**: concurrent fence, `PK_Journal` (0, 1) | the same 3 |
+| SQL Server, fence broken | 5 fail (old epoch, wrong position, stale beat, concurrent fence, take beside a commit) | |
+| MySQL REPEATABLE READ, checked | 42 pass, 1 skipped | the same 3 |
+| MySQL READ COMMITTED, checked | 42 pass, 1 skipped | the same 3 |
+| MySQL, batch | 42 pass, 1 skipped | the same 3 |
+| MySQL, batch, E1 off | **1 fails**: concurrent fence, `Duplicate entry '0-1' for key 'Journal.PRIMARY'` | the same 3 |
+| MySQL, fence broken | 5 fail, the same 5 | |
+| SQLite, checked and batch | 43 pass | 2 differ |
+| SQLite, batch, E1 off | **1 fails**: concurrent fence | 2 differ |
+
+Skipped on SQL Server and MySQL: "a row the store refuses". Both store any string an instance row holds, so the
+runner has no refused row to offer (PostgreSQL refuses a NUL).
+
+## What it costs. Run
+
+Round trips counted on the TCP stream by a proxy in front of the database (`proxy=1`, class `Wire`): a round trip
+starts each time the client sends after the server last spoke. The cost harness also counts the way FINDINGS
+section 5 does; where the two disagree, the proxy is right (E4, E10). After the fixes:
+
+| Run | PG checked | PG batch | SQL Server checked | SQL Server batch | MySQL checked | MySQL batch | SQLite |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Ten no-ops, ephemeral, on the owner | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Ten no-ops, balanced, on the owner | 3 | 2 | 4 | 3 | 7 | 6 | 5 |
+| Ten no-ops, durable, on the owner | 30 | 20 | 40 | 30 | 70 | 60 | 77 |
+| Ten no-ops, ephemeral, from another node | 9 | 7 | 11 | 9 | 23 | 21 | 11 |
+| Ten no-ops, balanced, from another node | 9 | 7 | 11 | 9 | 23 | 21 | 13 |
+| Ten no-ops, durable, from another node | 36 | 25 | 47 | 36 | 86 | 75 | 85 |
+| Parent with three children | 12 | 8 | 16 | 12 | 28 | 24 | 49 |
+| 100 balanced started at once | 3 | 2 | 4 | 3 | 7 | 6 | 203 |
+| 1,000 balanced started at once | 4 | 4 to 5 | 11 | 10 | 8 | 8 | 2,003 |
+| 100 balanced, starts by poll | 8 | 6 | 10 | 8 | 20 | 18 | 408 |
+| 1,000 balanced, starts by poll | 10 | 10 | 19 | 17 | 24 | 22 | 4,008 |
+
+What a round trip is, per provider:
+
+- **PostgreSQL (Npgsql):** one per command and one per COMMIT; BEGIN rides with the first command. Measured equal to
+  FINDINGS section 5 once EF's savepoints are off (E4); with them on, every commit costs two more.
+- **SQL Server (SqlClient):** BEGIN TRANSACTION is a request of its own, so a commit is BEGIN, the fence, the
+  SaveChanges, COMMIT: four with the checked fence, three in the batch. A request larger than a TDS packet is several
+  network reads on the server (`sys.dm_exec_connections.num_reads`: 24 for the 100-instance flush) but one round trip.
+- **MySQL (Connector/NET):** every connection taken from the pool sends COM_PING and COM_INIT_DB, and every transaction
+  sends SET TRANSACTION ISOLATION LEVEL and BEGIN apart: six round trips for a commit with the fence in the batch,
+  seven with it checked (E10). `performance_schema` counts statements, not requests (a two-statement fence is two).
+- **SQLite:** no wire. Calls into the engine: BEGIN, each command, COMMIT. EF sends one command per row.
+
+Before the fixes, on the same runs: PostgreSQL balanced 5 and 4, durable 50 and 40 (E4); SQL Server 100 started at
+once 8 and 7, 1,000 at once 51 and 50 (E7); MySQL 100 at once 11 and 10 (E7).
+
+## Findings
+
+### E1 (= MONGO.md M5). With the fence in the batch, a stale owner is told "duplicate key", not "fenced". Run, all four engines
+
+- **Where:** every engine, the fence in the batch. Found by the agent before me (`301c3727c9`) and fixed in
+  `EfStore`; the MongoDB agent found it independently on the EF store of `a4f7c49b65`, which predates that fix.
+- **Trace:** EF sends a SaveChanges' statements in its own order; `Partitions` sorts after `Journal` and `Messages`. A
+  stale owner's journal row at position n+1, or a message id its successor already wrote, fails with
+  `23505 duplicate key value violates unique constraint "PK_Journal"` (PostgreSQL), `2627 ... 'PK_Journal' ... (0, 1)`
+  (SQL Server), `1062 Duplicate entry '0-1' for key 'Journal.PRIMARY'` (MySQL) before the fence's row count is read.
+- **Sentence:** "A definite error (a value too long, a key violation, a deadlock victim): no reset ... the owner
+  commits the batch's instances one by one and parks the one that fails."
+- **Reproduced:** the conformance case "of many concurrent commits at one position, exactly one lands" fails with E1
+  off (`--m5`) on PostgreSQL, SQL Server, MySQL and SQLite, and passes with it. In the stress test with E1 off
+  (`m5=1`, PostgreSQL, fence in the batch) 708 commits answered *definite*; the end state still held, because every
+  one-by-one commit and every park was itself fenced off and the owner reset, as MONGO.md reasoned. With E1 on, 233
+  key violations in one run (31 on SQL Server, 201 on MySQL) were reported as the fence.
+- **Fix, in `EfStore.CommitAsync` (comment names E1 and M5):** after a failure that says the batch did not happen
+  (definite or transient), read the partition row; if epoch and position are no longer this owner's, answer "not
+  landed". An unknown outcome stays unknown: that batch may have landed and moved the position itself. Epoch and
+  position never go back, so a fence that holds after the failure held during it. **SQL Server and MySQL have the same
+  problem, and the same fix covers them.** The checked fence is not affected.
+
+### E2. SqlClient does not open a connection in invariant-globalization mode. Reasoned, not re-run
+
+`InvariantGlobalization` is false in `Kernel.Ef.Run.csproj` and now `Kernel.Ef.Conformance.csproj`.
+
+### E3. Connector/NET sends `SET TRANSACTION ISOLATION LEVEL` before every BEGIN. Run
+
+Seen in `performance_schema` (one `set_option` per transaction) and on the wire (a round trip of its own). The level
+must be passed at BEGIN (`Engine.BeginAsync`); a session setting is overwritten.
+
+### E4. EF's savepoints cost two round trips per commit on PostgreSQL. Run
+
+- **Where:** PostgreSQL (and one per commit on SQL Server, two on MySQL; on SQLite two engine calls).
+- **Evidence:** proxy count, balanced on the owner, fence in the batch: 4 with EF's default, 2 with savepoints off;
+  durable 40 against 20. The earlier comment said Npgsql sends the savepoint with the next command; it does not.
+- **Sentence:** the cost table of the sketch ("2 (3 with the fence as its own statement)") and FINDINGS section 5
+  hold only with savepoints off. The interceptor of section 5 does not see savepoints.
+- **Fix:** `AutoSavepointsEnabled = false` for every commit (`EfStore`, `Engine.BeginAsync`). A failed commit is
+  rolled back whole, so the savepoint never served.
+
+### E5. SQL Server, locking READ COMMITTED: the poll waits behind writers and deadlocks with commits. Run
+
+- **Probe (`x block`):** with a transaction holding an uncommitted insert, an uncommitted mark of the oldest row or an
+  uncommitted delete, the poll does not answer in 3 s; under RCSI it answers in 1 to 10 ms with the committed rows. A
+  poll stopped by `TOP` before it reaches the locked rows (5,000 rows ahead) does not wait.
+- **Deadlock graph (`.out/mssql-deadlock-graphs-all.xml`):** the poll (`SELECT TOP (@p3) ...`, victim) holds S on a
+  `PK_Messages` key and waits for S on another; a commit's SaveChanges holds X on that one and wants X on the first.
+  The poll keeps shared locks on rows with `nvarchar(max)` values until the statement ends. Three-way variants with
+  two polls. The waiters waited up to 11,336 ms: the deadlock monitor runs in rounds of up to 5 s.
+- **Sentence:** "Polling: ... A plain read." On SQL Server under locking it is not plain: it blocks and is blocked.
+- **Fix:** `READ_COMMITTED_SNAPSHOT ON`, set by `SqlServerEngine.CreatedAsync`, on unless `rcsi=0`. Rerun without
+  kills: 0 deadlocks, longest commit 232 ms (11,389 ms before), poll 99th percentile 7.6 ms (49.5 ms before).
+
+### E6. SQL Server, `READPAST` on the poll. Run, not explained to the line
+
+- The probe shows `READPAST` skips a row whose mark is uncommitted and returns the next rows of the same target.
+- With the checked fence a stale owner's commit holds the partition row before it touches a message, and the take
+  waits on that row, so a poll can only skip uncommitted inserts or the owner's own in-flight commit. Reasoned: safe;
+  run: holds.
+- With the fence in the batch a stale owner locks message rows before its fence: two of two runs on the old kernel
+  ended with a partition that stopped (a due timer on trial at the current epoch never ran; 313 messages left). On the
+  merged kernel one run held. Not diagnosed to a line; the trial logic changed in the merge.
+- **Fix:** none needed; do not use `READPAST`. RCSI (E5) is the fix for the poll.
+
+### E7. SQL Server and MySQL put at most 42 statements in one command. Run
+
+- 100 instances started at once were five commands on SQL Server (seven round trips with the fence in the batch),
+  1,000 were 48. **Sentence:** "100 instance-commits cost the same round trips as one."
+- **Fix:** `MaxBatchSize(1000)` in the provider options (`EngineRun.cs`, the conformance runner). SQL Server's provider
+  still splits by its 2,100-parameter limit: 1,000 instances are eight commands.
+- **Parameter limits and lock escalation, run:** a flush of 3,000 instances, and 3,000 starts arriving by poll (a
+  `LoadAsync` of 3,000 ids), work on SQL Server. The largest commit held 9,001 key locks and no object lock: escalation
+  is decided per statement and table at about 5,000, and no statement came near. The sketch's cap on rows per flush is
+  still needed for this reason, not proven by it.
+
+### E8. The merged kernel's take scans the whole message table. Run
+
+- **Where:** the take of `a4f7c49b65`: `UPDATE "Messages" SET "Attempts" = "Attempts" + 1 WHERE "Partition" = p AND
+  "Trial" = e AND "Done" = 0` has no index to use.
+- **MySQL, REPEATABLE READ, deadlock (`.out/m-mysql-rr-deadlock.txt`):** the take holds `lock_mode X` (next-key) on
+  4,622 rows of `Messages.PRIMARY`, every partition's; a commit of partition 0 inserting `0/par4666#1.0000` waits for
+  an insert-intention gap lock inside that range, while the take waits for the commit's new row. InnoDB rolls back the
+  commit, which retries. The review's gap-lock prediction was for draft 1's claim; it comes back with this statement.
+- **SQL Server:** the same statement takes an update lock on every row it passes and waits behind every partition's
+  uncommitted inserts; take median 6.3 ms against 0.9 ms before the merge.
+- **Sentence:** "One node owns a partition at a time and is its only writer" (partitions do not touch each other).
+- **Fix (`Engine.Model`, `MySqlEngine.TakeIsolation`):** an index on `(Partition, Trial)` on SQL Server and MySQL, and
+  the take at READ COMMITTED on MySQL, where even the indexed update takes a gap lock before the first row it changes.
+  Rerun: MySQL REPEATABLE READ checked 0 deadlocks; SQL Server and MySQL all hold. PostgreSQL locks only the rows it
+  changes and needs neither (reasoned); the index would still save the scan.
+
+### E9. SQL Server, fence in the batch, merged kernel: the take deadlocks with a stale commit. Run; fixed in round 4 (the checked fence), closed by round 5 B (the owned in-batch fence is the default again)
+
+- **Graph (`.out/f-mssql-deadlock-graphs.xml`):** a stale owner's SaveChanges holds X on a `PK_Messages` key (a seen
+  or trial mark) and waits for U on `PK_Partitions` (its fence follows the message write); the take holds X on
+  `PK_Partitions` and waits for U on that message key, in the attempts update of E8. 127 in one run, victims all
+  takes; one on MySQL. Waits up to 3 s.
+- **Harm:** a take that loses is "not taken" and is tried again; nothing wrong lands (end state holds). It costs
+  availability during takeovers.
+- **Sentence:** "The row lock on the partition row orders it against a takeover." With the fence in the batch it does
+  not come first.
+- **Smallest fix:** use the checked fence on SQL Server (0 take deadlocks), or make the fence the first statement of
+  the batch (EF orders by table, so that needs the fence as its own command, which is the checked fence). Changing the
+  take's order would change the protocol shared by all engines; not done.
+- **Applied (round 4, FINDINGS section 25.1):** the owner chose the checked fence as SQL Server's default on 13 November.
+  `SqlServerEngine.FenceInBatchByDefault` was false, so a store that was not told took it; `fence=batch` still gave the
+  fence in the batch. The stress test with the default had no take deadlocks (FINDINGS section 25.1).
+- **Decided 16 November (round 5 B, COMMIT-SQL.md):** with the owned commit the batch opens with the fence, so the
+  partition row is the commit's first lock as it is the take's and the cycle above cannot form: 0 deadlocks in the 40 s
+  runs against EF's 74. SQL Server's default is the fence in the batch again, as on every other engine
+  (`SqlServerEngine.FenceInBatchByDefault(ownedCommit)` true for the owned commit); `fence=checked` (`--checked-fence`)
+  stays selectable as the 13 November fallback and stays the default for the EF reference path (`commit=ef`), whose batch
+  still writes message rows before the fence (a reviewer measured 8 take deadlocks in 40 s with it in the batch). One round trip less per commit (the "SQL Server batch" column of the cost tables is now the default's).
+  Gates of the flip, on its head (SQL Server 2022, RCSI unless said, amd64 emulation, owned commit): conformance with
+  the default (now in the batch) 87 pass and 1 skipped, `--checked-fence` the same; `semantic fence --fence-ignores-count`
+  exits 1 (default 1 of 3 fail, checked 3 of 3); `semantic-broken fence` default 1 of 3 fail, checked 3 of 3; two 40 s and
+  5,000-message stress runs with the default, **0 deadlocks**, holds (resets 1,143 and 1,119); one with `rcsi=0` (locking
+  READ COMMITTED), **0 deadlocks**, holds (919 resets); the cost run with the default equals the "SQL Server batch"
+  column cell for cell (balanced on the owner 3, durable 30, 1,000 instances at once 10, 1,000 by poll 13).
+
+### E10. MySQL's driver costs four round trips per commit more than PostgreSQL's. Run; not fixed
+
+- COM_PING and COM_INIT_DB at every pool checkout, SET TRANSACTION and BEGIN apart (E3). `connectionreset=true` adds a
+  COM_CHANGE_USER; `false` (the default) removes nothing.
+- **Sentence:** the sketch's cost table (2 round trips per commit) is a PostgreSQL figure. On MySQL it is 6.
+- **Smallest fix, reasoned:** keep one open connection per worker instead of one per store call, or a driver that
+  pipelines (MySqlConnector, once a provider for EF Core 10 uses it).
+
+### E11. Oracle's MySQL EF provider can acknowledge a partial batch (#4358)
+
+One commit of 125 fresh `Make.New` turns on MySQL 8.4.13 with the default batch fence returned `Landed`.
+Direct SQL counted 125 instances, partition position 125 and zero journal rows. The general log showed an
+instance insert, the fence update and COMMIT. A fresh database and one writer reproduced it without a
+projector, deletion or recreation. With this row shape, 110 worked, 111 lost all the journal rows, 170 worked
+and 420 failed with an empty command. Batch size alone does not determine the outcome.
+
+Oracle 10.0.12 queues bulk inserts until the next incompatible command. EF Core 10.0.15 saves its SQL rollback
+position before adding that command. When the queued journals and the fence exceed Oracle's parameter check
+(`count + 1 < 2100`), rollback truncates the generated journal SQL and the fence together. Only the fence
+is retried. At 420 turns even the journal insert group alone exceeds the check. Removing it at the next
+boundary leaves an empty command. See [Oracle's batch implementation](https://github.com/mysql/mysql-connector-net/blob/df22e52651cea9942fe903d751116170e2e3af95/EFCore/src/Update/MySQLModificationCommandBatch.cs#L74-L143)
+and [EF's rollback checkpoint](https://github.com/dotnet/efcore/blob/v10.0.15/src/EFCore.Relational/Update/ReaderModificationCommandBatch.cs#L96-L159).
+
+`MySqlCommandBatchPreparer` finishes an ordered EF command set before an incompatible command would cross
+that threshold. Oracle still generates each compatible multi-row insert and applies the configured maximum
+command count. All commands use the store's transaction. In the 125-turn case the first command now includes
+both instance and journal inserts, and the second checks the fence. A refused consume in a subsequent
+command rolls back the earlier writes.
+
+The required `commit: journaled creations` case reads the committed instances, journal and position through a
+separate client. It checks that a missing consume rolls a mixed batch back, then supplies the input and
+repeats the same commit successfully. Against main `beaad818f8` before this correction, the case read zero
+journal rows for 125 acknowledged creations. With the correction, the MySQL batch and checked fences each
+passed 60 of 61 cases with one skip (the provider cannot create a permanently refused row for that case).
+Both passed the semantic send-order checks using the comparer from #4459.
+
+Earlier measurements on the viewer integration tree at `082b1f9195` used the same batch preparer.
+Plain fresh batches of 125, 420, 500 and 850 took two, three, three and three EF commands. On that tree,
+default-fence before/after TCP counts matched on every cost-harness row, including 100 and 1,000 balanced
+starts on the owner (6 and 8) and arriving by poll (19 and 22).
+
+## Round 5 B: the commit as the store's own SQL. Run
+
+Since round 5 B (16 November, [COMMIT-SQL.md](COMMIT-SQL.md)) the store writes its commit itself on every engine and EF
+keeps the schema and the cold paths; `commit=ef` (`--ef-commit`) is the reference path the tables above were run with.
+What the owned commit changes in the findings above:
+
+| Finding | On the owned commit |
+|---|---|
+| E1 (a stale owner is told "duplicate key") | Does not arise: the fence is the first statement and the first result the client reads (SQL Server: the server stops the batch at the fence's THROW). `m5=1` changes nothing. |
+| E3, E10 (Connector/NET's round trips per transaction) | Unchanged: the driver's, not the commit's. MySQL stays 6 round trips per in-batch commit. |
+| E4 (EF's savepoints) | Not on this path: no SaveChanges. |
+| E7 (42 statements per command; 2,100 parameters) | No command count; the owned commit chunks at 2,000 parameters on SQL Server (SQL Server, 1,000 instances started at once: 6 commands where EF sent 12 with the fence in the batch, 8 where EF sent 14 checked; round trips 16 → 10 and 18 → 12) and at 1,000 rows per multi-row statement. |
+| E8 (the take's index) | Unchanged: the take is the same statement. |
+| E9 (SQL Server, fence in the batch: take deadlocks) | **Gone.** The owned in-batch fence is the first lock of the commit, as the take's partition row is the take's: EF in the batch 74 take deadlocks and the run did not drain, owned in the batch 0 deadlocks and holds (40 s, 5,000 messages, RCSI). On this evidence the owner moved SQL Server's default fence to the batch on 16 November (the flip is its own pull request); the EF reference path (`commit=ef`) keeps the checked fence by default on SQL Server, where its in-batch fence still deadlocks takes. |
+| E11 (Oracle's provider acknowledges a partial batch) | Not on this path: the store's own statements and counts; `MySqlCommandBatchPreparer` serves the `commit=ef` reference only. |
+
+The cost table of "What it costs" on the owned commit, round trips on the TCP stream (EF → owned; SQLite: calls into
+the engine). The PostgreSQL cells of the 100- and 1,000-instance rows vary by one or two between runs on both paths (COMMIT-SQL.md,
+FINDINGS 29 F-B6); every other cell, and the statement and command counts, reproduce exactly:
+
+| Run | postgres checked | postgres batch | sqlserver checked | sqlserver batch | sqlite checked | sqlite batch | mysql checked | mysql batch |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| ten no-ops, ephemeral, started on the owner | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 |
+| ten no-ops, balanced, started on the owner | 3 → 3 | 2 → 2 | 4 → 4 | 3 → 3 | 5 → 4 | 5 → 3 | 7 → 7 | 6 → 6 |
+| ten no-ops, durable, started on the owner | 30 → 30 | 20 → 20 | 40 → 40 | 30 → 30 | 77 → 40 | 77 → 30 | 70 → 70 | 60 → 60 |
+| ten no-ops, ephemeral, started from another node | 9 → 9 | 7 → 7 | 11 → 11 | 9 → 9 | 11 → 11 | 11 → 9 | 23 → 23 | 21 → 21 |
+| ten no-ops, balanced, started from another node | 9 → 9 | 7 → 7 | 11 → 11 | 9 → 9 | 13 → 11 | 13 → 9 | 23 → 23 | 21 → 21 |
+| ten no-ops, durable, started from another node | 36 → 36 | 25 → 25 | 47 → 47 | 36 → 36 | 85 → 47 | 85 → 36 | 86 → 86 | 75 → 75 |
+| parent with three children, same partition | 12 → 12 | 8 → 8 | 21 → 21 | 16 → 16 | 57 → 16 | 57 → 12 | 38 → 38 | 33 → 33 |
+| terminate a parent with three waiting children, from another node | 17 → 13 | 13 → 9 | 21 → 17 | 17 → 13 | 41 → 17 | 41 → 13 | 35 → 31 | 31 → 27 |
+| delete that parent, from another node | 9 → 7 | 7 → 5 | 11 → 9 | 9 → 7 | 13 → 9 | 13 → 7 | 19 → 17 | 17 → 15 |
+| a start subscription, then an event that starts an instance | 13 → 13 | 11 → 11 | 15 → 15 | 13 → 13 | 17 → 15 | 17 → 13 | 35 → 35 | 33 → 33 |
+| a projector round over the journal so far | 3 → 3 | 3 → 3 | 6 → 6 | 6 → 6 | 7 → 7 | 7 → 7 | 13 → 13 | 13 → 13 |
+| a heartbeat | 3 → 3 | 3 → 3 | 3 → 3 | 3 → 3 | 3 → 3 | 3 → 3 | 9 → 9 | 9 → 9 |
+| 100 balanced instances started at once | 3 → 3 | 3 → 3 | 9 → 9 | 7 → 7 | 203 → 4 | 203 → 3 | 17 → 17 | 15 → 15 |
+| 1000 balanced instances started at once | 4 → 3 | 5 → 3 | 18 → 12 | 16 → 10 | 2003 → 4 | 2003 → 3 | 18 → 17 | 17 → 15 |
+| 100 balanced instances, their starts arriving by poll | 8 → 8 | 7 → 6 | 11 → 10 | 9 → 8 | 408 → 10 | 408 → 8 | 21 → 20 | 19 → 18 |
+| 1000 balanced instances, their starts arriving by poll | 10 → 9 | 13 → 8 | 24 → 15 | 22 → 13 | 4008 → 10 | 4008 → 8 | 26 → 20 | 24 → 18 |
+
+The stress test of "Results on the merged kernel" on the owned commit (40 s, 5,000 messages; the harness fix of
+FINDINGS 29 F-B1 applied to both paths):
+
+| Engine | Fence | Commit | Mutation | Deadlocks | Resets | Definite | Result |
+|---|---|---|---|---|---|---|---|
+| postgres | batch | EF SaveChanges | fence broken (unfenced) | 0 | 335 (fenced 0, unknown 335) | 0 | holds |
+| postgres | batch | EF SaveChanges |  | 0 | 321 (fenced 3, unknown 318) | 0 | holds |
+| postgres | checked | EF SaveChanges | fence broken (unfenced) | 0 | 533 (fenced 0, unknown 533) | 0 | holds |
+| postgres | checked | EF SaveChanges |  | 0 | 272 (fenced 0, unknown 272) | 0 | holds |
+| postgres | batch | owned SQL | fence count ignored | 0 | 343 (fenced 17, unknown 326) | 58206 | 1708 violations |
+| postgres | batch | owned SQL | E1 off (m5) | 0 | 250 (fenced 0, unknown 250) | 0 | holds |
+| postgres | batch | owned SQL | fence broken (unfenced) | 0 | 189 (fenced 0, unknown 189) | 0 | holds |
+| postgres | batch | owned SQL |  | 0 | 374 (fenced 0, unknown 374) | 0 | holds |
+| postgres | checked | owned SQL | fence count ignored | 0 | 297 (fenced 0, unknown 297) | 0 | holds |
+| postgres | checked | owned SQL | fence broken (unfenced) | 0 | 298 (fenced 0, unknown 298) | 0 | holds |
+| postgres | checked | owned SQL |  | 0 | 469 (fenced 0, unknown 469) | 0 | holds |
+| sqlserver | batch | EF SaveChanges |  | 74 | 1224 (fenced 91, unknown 1133) | 0 | 727 violations |
+| sqlserver | checked | EF SaveChanges |  | 0 | 721 (fenced 4, unknown 717) | 0 | holds |
+| sqlserver | batch | owned SQL | fence count ignored | 0 | 1028 (fenced 15, unknown 1013) | 8177 | 2191 violations |
+| sqlserver | batch | owned SQL | E1 off (m5) | 0 | 1048 (fenced 16, unknown 1032) | 0 | holds |
+| sqlserver | batch | owned SQL | fence broken (unfenced) | 0 | 1356 (fenced 13, unknown 1343) | 12458 | 2017 violations |
+| sqlserver | batch | owned SQL |  | 0 | 1021 (fenced 45, unknown 976) | 0 | holds |
+| sqlserver | checked | owned SQL | fence count ignored | 0 | 903 (fenced 1, unknown 902) | 13174 | 2157 violations |
+| sqlserver | checked | owned SQL | fence broken (unfenced) | 0 | 811 (fenced 0, unknown 811) | 0 | holds |
+| sqlserver | checked | owned SQL |  | 0 | 1009 (fenced 1, unknown 1008) | 0 | holds |
+| sqlite | batch | EF SaveChanges |  | 0 | 280 (fenced 280, unknown 0) | 0 | holds |
+| sqlite | checked | EF SaveChanges |  | 0 | 128 (fenced 128, unknown 0) | 0 | holds |
+| sqlite | batch | owned SQL | fence count ignored | 0 | 420 (fenced 420, unknown 0) | 63441 | 2215 violations |
+| sqlite | batch | owned SQL | E1 off (m5) | 0 | 158 (fenced 158, unknown 0) | 0 | holds |
+| sqlite | batch | owned SQL | fence broken (unfenced) | 0 | 405 (fenced 405, unknown 0) | 51111 | 2135 violations |
+| sqlite | batch | owned SQL |  | 0 | 283 (fenced 283, unknown 0) | 0 | holds |
+| sqlite | checked | owned SQL | fence count ignored | 0 | 3 (fenced 3, unknown 0) | 54760 | 2196 violations |
+| sqlite | checked | owned SQL | fence broken (unfenced) | 0 | 5 (fenced 5, unknown 0) | 59496 | 2110 violations |
+| sqlite | checked | owned SQL |  | 0 | 212 (fenced 212, unknown 0) | 0 | holds |
+| mysql | batch | EF SaveChanges |  | 0 | 457 (fenced 0, unknown 457) | 0 | holds |
+| mysql | checked | EF SaveChanges |  | 0 | 437 (fenced 2, unknown 435) | 0 | holds |
+| mysql | batch | owned SQL | fence count ignored | 0 | 589 (fenced 1, unknown 588) | 12471 | 686 violations |
+| mysql | batch | owned SQL | E1 off (m5) | 0 | 437 (fenced 0, unknown 437) | 0 | holds |
+| mysql | batch | owned SQL | fence broken (unfenced) | 0 | 487 (fenced 0, unknown 487) | 0 | holds |
+| mysql | batch | owned SQL |  | 0 | 477 (fenced 0, unknown 477) | 0 | holds |
+| mysql | checked | owned SQL | fence count ignored | 0 | 487 (fenced 0, unknown 487) | 0 | holds |
+| mysql | checked | owned SQL | fence broken (unfenced) | 0 | 531 (fenced 0, unknown 531) | 0 | holds |
+| mysql | checked | owned SQL |  | 0 | 736 (fenced 3, unknown 733) | 0 | holds |
+
+### Not a finding of the engines: a batch that names one message twice. Run
+
+Before the merge, 1 or 2 times per run on PostgreSQL, SQL Server and MySQL, a commit carried the same message id in
+`Seen` and in `Sent` (`0/par469#1.0000 in seen+sent`). EF refuses to track the id twice, the store answers *unknown*,
+and the owner resets: safe, wasted. After the merge it appeared once, in a broken-fence run. Kernel side, reasoned: a
+turn whose revision was already committed ran again from a stale load.
+
+## The review's predictions
+
+| Prediction | Result |
+|---|---|
+| The poll blocks on SQL Server without `READPAST` or RCSI | **Confirmed**, run (E5); and it deadlocks with commits |
+| `READPAST` is a fix | Run: holds with the checked fence; failed twice with the fence in the batch on the old kernel (E6). RCSI instead |
+| Gap-lock deadlocks on MySQL under REPEATABLE READ | **Not with draft 2's protocol**: 0 in four runs, one without kills; the claim UPDATE they were predicted for is gone. **Back with the merged kernel's take** (E8), run, fixed |
+| No `RETURNING` on MySQL | Handled: take as UPDATE then SELECT in one transaction (the row lock is held); the fence as UPDATE plus `SELECT ROW_COUNT()` in one command, counting matched rows (`UseAffectedRows=false`). An UPDATE that changes no value reports 1 row on every engine (probe) |
+| `seq` order inside one commit (MySQL) | Run, probe: in send order for 12, 1,000 and 3,000 messages with fixed-width ids, on SQL Server and MySQL as on PostgreSQL; not with non-fixed-width ids (F8). SQL Server assigns them through `MERGE ... OUTPUT`, whose identity order is not documented; it held in every probe (reasoned risk) |
+| `SQLITE_BUSY` | Run. Microsoft.Data.Sqlite retries BUSY itself until the command timeout (30 s by default), so BUSY reaches the store only with a short timeout or as an immediate BUSY (two writers both holding SHARED). Before the merge 95 and 80 takes answered BUSY (not taken, tried again) and 1 commit (retried as the same batch); after it, 26 takes and 7 commits. The end state held each time. WAL with one or two processes: no BUSY reached the store; waits show as commits of 150 to 600 ms |
+| BUSY means retry, not reset | **Holds**: a BUSY commit did not happen (the transaction is rolled back before the retry), so retrying the batch is right. Reasoned: `SQLITE_BUSY_SNAPSHOT` in WAL needs a new transaction, which the retry is |
+| Parameter limits (2,100 on SQL Server) | Not hit: EF splits commands by parameter count; `Contains` over 3,000 ids worked (E7) |
+| Lock escalation | Not seen at 9,001 key locks per commit (E7) |
+| A key violation inside a transaction without `XACT_ABORT` | Run (`x definite`): with and without `XACT_ABORT`, a batch with an existing instance or a 602-character id leaves nothing behind, and the one-by-one commits land the rest. The store never sends COMMIT after an error, so the setting does not matter |
+| Deadlocks between a commit and other partitions' message inserts | Not seen on SQL Server; on MySQL only through E8 |
+
+## What was not run
+
+- Wire capture with a packet tool: the proxy counts request bursts, not packets; Npgsql's and SqlClient's
+  behaviour inside a burst is inferred.
+- SQL Server on native hardware: it ran under amd64 emulation. Timings are slower than real; counts are not affected.
+- SNAPSHOT isolation on SQL Server, MySQL's SERIALIZABLE, PostgreSQL REPEATABLE READ.
+- The fence broken on purpose with the fence in the batch on SQL Server, MySQL and SQLite (only on PostgreSQL).
+- The kernel side of the double-named message and of E6 is not diagnosed.

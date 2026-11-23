@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { pathToFileURL } from 'node:url';
 const repo=process.cwd();
 const { chromium, expect }=await import(pathToFileURL(path.join(repo,'Studio/node_modules/@playwright/test/index.mjs')).href);
+const { signInThroughStudio }=await import(pathToFileURL(path.join(repo,'tools/bpmn/studio_ready.mjs')).href);
 if (!process.argv[2]) throw new Error('Usage: node tools/bpmn/drive_direct_studio.mjs OUTPUT [INPUT_BPMN]');
 const output=path.resolve(process.argv[2]);
 const input=path.resolve(process.argv[3] ?? 'tools/bpmn/fixtures/direct-human.bpmn');
@@ -37,11 +38,7 @@ async function shot(page,name){
 }
 async function login(page,url){
  await page.goto(url);
- const username=page.getByLabel('Username',{exact:true});
- const visible=await username.waitFor({state:'visible',timeout:5000}).then(()=>true,()=>false);
- if(visible){await username.fill('admin');await page.getByLabel('Password',{exact:true}).fill('Password123!');await page.getByRole('button',{name:'Sign in',exact:true}).click();}
- await page.waitForURL(value=>value.origin===ready.studioUrl,{timeout:30000});
- await expect(page.getByRole('main').first()).toBeVisible({timeout:30000});
+ await signInThroughStudio(page,expect,{studioOrigin:ready.studioUrl});
 }
 async function command(action,label){
  const receipt=path.join(output,(action==='finish'?'process':label)+'.json');

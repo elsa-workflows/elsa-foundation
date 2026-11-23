@@ -70,7 +70,7 @@ internal sealed class ShellFeatureStore(
     {
         var provided = await registry.GetBlueprintAsync(ShellName, cancellationToken)
             ?? throw new StudioHostingException($"Studio shell '{ShellName}' has no configuration blueprint.");
-        return await provided.Blueprint.ComposeAsync(cancellationToken);
+        return await ShellComposition.ComposeAsync(provided.Blueprint, cancellationToken);
     }
 
     private async Task<ShellFeatureConfigurationSnapshot> SnapshotAsync(JsonObject? node, ShellSettings settings, JsonElement shellConfiguration, CancellationToken cancellationToken)

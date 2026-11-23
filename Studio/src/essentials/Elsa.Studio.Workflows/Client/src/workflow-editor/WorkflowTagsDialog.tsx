@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
+import { useEffect, useRef, useState } from "react";
+import { StudioAlert, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { RefreshCw } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
@@ -8,15 +8,12 @@ import {
   type WorkflowOrganization, type WorkflowTagAssignment, type WorkflowTagBulkOutcome
 } from "../api/workflowOrganization";
 import { WorkflowTagAssignmentsEditor } from "./WorkflowTagAssignmentsEditor";
-import { useDialogFocus } from "./useDialogFocus";
 import "./workflowOrganization.css";
 import "./workflowOrganizationDialog.css";
 
 export function WorkflowTagsDialog({ context, definitionId, name, onClose, onSaved }: {
   context: StudioEndpointContext; definitionId: string; name: string; onClose(): void; onSaved(): void;
 }) {
-  const ref = useRef<HTMLElement>(null);
-  const titleId = useId();
   const [organization, setOrganization] = useState<WorkflowOrganization | null>(null);
   const [tags, setTags] = useState<WorkflowTagAssignment[]>([]);
   const [busy, setBusy] = useState(false);
@@ -25,7 +22,6 @@ export function WorkflowTagsDialog({ context, definitionId, name, onClose, onSav
   const [refresh, setRefresh] = useState(0);
   const [creatingTag, setCreatingTag] = useState(false);
   const operationKey = useRef(workflowOperationKey());
-  useDialogFocus(ref, busy || creatingTag ? null : onClose);
   useEffect(() => {
     let active = true;
     setLoading(true); setError(""); setOrganization(null);
@@ -44,35 +40,39 @@ export function WorkflowTagsDialog({ context, definitionId, name, onClose, onSav
     catch (caught) { setError(`Couldn't save tags. ${errorMessage(caught)} Your changes are retained. Reload tags to review a concurrent change.`); }
     finally { setBusy(false); }
   };
-  return <div className="wf-dialog-backdrop" role="presentation"><section ref={ref} className="wf-dialog wf-organization-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-    <form onSubmit={event => { event.preventDefault(); void save(); }}>
-      <header className="wf-organization-heading"><h3 id={titleId}>Tags for {name}</h3><p>Add labels to make this workflow easier to find.</p></header>
-      <div className="wf-organization-scroll">
-        {loading ? <p role="status">Loading tags…</p> : null}
-        {organization ? <>
-          <WorkflowTagAssignmentsEditor context={context} assignments={tags} disabled={busy || organization.permissions?.canAssignTags !== true} onBusyChange={setCreatingTag} onChange={next => { setTags(next); operationKey.current = workflowOperationKey(); }} />
-          {organization.permissions?.canAssignTags !== true ? <p className="wf-library-help">You can view these tags. Editing requires additional permission.</p> : null}
-        </> : null}
-        {error ? <p role="alert">{error}</p> : null}
-      </div>
-      <StudioDialogFooter
-        className="wf-organization-footer"
-        leading={error ? <StudioButton disabled={busy || creatingTag} onClick={() => setRefresh(value => value + 1)}><RefreshCw size={14} aria-hidden="true" />Reload tags</StudioButton> : undefined}
-        cancelLabel="Close"
-        onCancel={onClose}
-        cancelDisabled={busy || creatingTag}
-        confirmLabel={busy ? "Saving…" : "Save tags"}
-        confirmDisabled={busy || creatingTag || !changed || organization?.permissions?.canAssignTags !== true}
-      />
-    </form>
-  </section></div>;
+  return <StudioDialog
+    open
+    title={<>Tags for {name}</>}
+    description="Add labels to make this workflow easier to find."
+    className="wf-tokens wf-organization-dialog"
+    onClose={onClose}
+    dismissDisabled={busy || creatingTag}
+    onEscapeKeyDown={keepExpandedTagSearchOpen}
+    dismissOnOutsideClick={false}
+    onSubmit={event => { event.preventDefault(); void save(); }}
+    footer={<StudioDialogFooter
+      leading={error ? <StudioButton disabled={busy || creatingTag} onClick={() => setRefresh(value => value + 1)}><RefreshCw size={14} aria-hidden="true" />Reload tags</StudioButton> : undefined}
+      cancelLabel={organization?.permissions?.canAssignTags === false ? "Close" : "Cancel"}
+      onCancel={onClose}
+      cancelDisabled={busy || creatingTag}
+      confirmLabel={busy ? "Saving…" : "Save tags"}
+      confirmDisabled={busy || creatingTag || !changed || organization?.permissions?.canAssignTags !== true}
+    />}
+  >
+    <div className="wf-organization-scroll">
+      {loading ? <p role="status">Loading tags…</p> : null}
+      {organization ? <>
+        <WorkflowTagAssignmentsEditor context={context} assignments={tags} disabled={busy || organization.permissions?.canAssignTags !== true} onBusyChange={setCreatingTag} onChange={next => { setTags(next); operationKey.current = workflowOperationKey(); }} />
+        {organization.permissions?.canAssignTags !== true ? <p className="wf-library-help">You can view these tags. Editing requires additional permission.</p> : null}
+      </> : null}
+      {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
+    </div>
+  </StudioDialog>;
 }
 
 export function WorkflowBulkTagsDialog({ context, definitionIds, onClose, onSaved }: {
   context: StudioEndpointContext; definitionIds: string[]; onClose(): void; onSaved(): void;
 }) {
-  const ref = useRef<HTMLElement>(null);
-  const titleId = useId();
   const [targets, setTargets] = useState<WorkflowOrganization[]>([]);
   const [assignments, setAssignments] = useState<WorkflowTagAssignment[]>([]);
   const [creatingTag, setCreatingTag] = useState(false);
@@ -85,7 +85,6 @@ export function WorkflowBulkTagsDialog({ context, definitionIds, onClose, onSave
   const [refresh, setRefresh] = useState(0);
   const keyRef = useRef(workflowOperationKey());
   const targetKey = JSON.stringify(definitionIds);
-  useDialogFocus(ref, busy || creatingTag ? null : onClose);
   useEffect(() => {
     let active = true;
     const ids = JSON.parse(targetKey) as string[];
@@ -108,31 +107,40 @@ export function WorkflowBulkTagsDialog({ context, definitionIds, onClose, onSave
     } catch (caught) { setError(`Couldn't complete this bulk edit. ${errorMessage(caught)} Retry uses the same operation identity.`); }
     finally { setBusy(false); }
   };
-  return <div className="wf-dialog-backdrop" role="presentation"><section ref={ref} className="wf-dialog wf-organization-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-    <form onSubmit={event => { event.preventDefault(); if (preview) void apply(); else setPreview(true); }}>
-      <h3 id={titleId}>Edit tags on {definitionIds.length} workflows</h3>
-      <div className="wf-organization-scroll">
-        {loading ? <p role="status">Checking selected workflows and current revisions…</p> : null}
-        {!loading && !canEdit ? <p role="alert">Every selected workflow must be available and permit tag changes. Close this dialog and adjust your selection, or reload after an access change.</p> : null}
-        <label>Change<select aria-label="Bulk tag change" disabled={busy || creatingTag || Boolean(outcomes)} value={action} onChange={event => { setAction(event.target.value as "add" | "remove"); changed(); }}><option value="add">Add tags</option><option value="remove">Remove tags</option></select></label>
-        <WorkflowTagAssignmentsEditor context={context} assignments={assignments} disabled={busy || !canEdit || Boolean(outcomes)} allowRetired={action === "remove"} onBusyChange={setCreatingTag} onChange={next => { setAssignments(next); changed(); }} />
-        {preview ? <div className="wf-library-preview" role="region" aria-label="Bulk tag preview"><p>{action === "add" ? "Add" : "Remove"} {assignments.length} tag assignment{assignments.length === 1 ? "" : "s"} {action === "add" ? "to" : "from"} these {targets.length} explicitly selected workflows.</p><ul>{targets.map(target => <li key={target.definitionId}><code>{target.definitionId}</code></li>)}</ul><p>Each workflow is checked against its inspected revision. Other tags are retained.</p></div> : null}
-        {outcomes ? <div role="status" aria-label="Bulk tag results"><p>Bulk tag results</p><ul>{outcomes.map(outcome => <li key={outcome.definitionId}><code>{outcome.definitionId}</code>: {outcome.status}{outcome.message ? ` — ${outcome.message}` : ""}</li>)}</ul><button type="button" disabled={busy} onClick={() => { setRefresh(value => value + 1); setOutcomes(null); setPreview(false); keyRef.current = workflowOperationKey(); }}>Reload targets for another edit</button></div> : null}
-        {error ? <p role="alert">{error}</p> : null}
-      </div>
-      <StudioDialogFooter
-        className="wf-dialog-actions"
-        extra={preview && !outcomes ? <StudioButton disabled={busy} onClick={() => setPreview(false)}>Back to changes</StudioButton> : null}
-        cancelLabel="Close"
-        onCancel={onClose}
-        cancelDisabled={busy || creatingTag}
-        confirmLabel={busy ? "Applying…" : preview ? "Apply tag changes" : "Preview changes"}
-        confirmDisabled={busy || creatingTag || loading || !canEdit || !assignments.length || Boolean(outcomes)}
-      />
-    </form>
-  </section></div>;
+  return <StudioDialog
+    open
+    title={<>Edit tags on {definitionIds.length} workflows</>}
+    className="wf-tokens wf-organization-dialog"
+    onClose={onClose}
+    dismissDisabled={busy || creatingTag}
+    onEscapeKeyDown={keepExpandedTagSearchOpen}
+    dismissOnOutsideClick={false}
+    onSubmit={event => { event.preventDefault(); if (preview) void apply(); else setPreview(true); }}
+    footer={<StudioDialogFooter
+      extra={preview && !outcomes ? <StudioButton disabled={busy} onClick={() => setPreview(false)}>Back to changes</StudioButton> : null}
+      cancelLabel={outcomes ? "Close" : "Cancel"}
+      onCancel={onClose}
+      cancelDisabled={busy || creatingTag}
+      confirmLabel={busy ? "Applying…" : preview ? "Apply tag changes" : "Preview changes"}
+      confirmDisabled={busy || creatingTag || loading || !canEdit || !assignments.length || Boolean(outcomes)}
+    />}
+  >
+    <div className="wf-organization-scroll">
+      {loading ? <p role="status">Checking selected workflows and current revisions…</p> : null}
+      {!loading && !canEdit ? <p role="alert">Every selected workflow must be available and permit tag changes. Close this dialog and adjust your selection, or reload after an access change.</p> : null}
+      <StudioField label="Change"><select aria-label="Bulk tag change" disabled={busy || creatingTag || Boolean(outcomes)} value={action} onChange={event => { setAction(event.target.value as "add" | "remove"); changed(); }}><option value="add">Add tags</option><option value="remove">Remove tags</option></select></StudioField>
+      <WorkflowTagAssignmentsEditor context={context} assignments={assignments} disabled={busy || !canEdit || Boolean(outcomes)} allowRetired={action === "remove"} onBusyChange={setCreatingTag} onChange={next => { setAssignments(next); changed(); }} />
+      {preview ? <div className="wf-library-preview" role="region" aria-label="Bulk tag preview"><p>{action === "add" ? "Add" : "Remove"} {assignments.length} tag assignment{assignments.length === 1 ? "" : "s"} {action === "add" ? "to" : "from"} these {targets.length} explicitly selected workflows.</p><ul>{targets.map(target => <li key={target.definitionId}><code>{target.definitionId}</code></li>)}</ul><p>Each workflow is checked against its inspected revision. Other tags are retained.</p></div> : null}
+      {outcomes ? <div role="status" aria-label="Bulk tag results"><p>Bulk tag results</p><ul>{outcomes.map(outcome => <li key={outcome.definitionId}><code>{outcome.definitionId}</code>: {outcome.status}{outcome.message ? ` — ${outcome.message}` : ""}</li>)}</ul><button type="button" disabled={busy} onClick={() => { setRefresh(value => value + 1); setOutcomes(null); setPreview(false); keyRef.current = workflowOperationKey(); }}>Reload targets for another edit</button></div> : null}
+      {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
+    </div>
+  </StudioDialog>;
 }
 
+
+function keepExpandedTagSearchOpen(event: KeyboardEvent) {
+  if (event.target instanceof HTMLElement && event.target.matches('[role="combobox"][aria-expanded="true"]')) event.preventDefault();
+}
 
 function assignmentSignature(assignments: WorkflowTagAssignment[]) { return JSON.stringify(assignments.map(workflowTagAssignmentKey).sort()); }
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : "The server could not complete this request."; }

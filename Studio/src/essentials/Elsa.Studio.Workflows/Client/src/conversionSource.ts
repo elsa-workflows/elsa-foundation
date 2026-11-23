@@ -1,4 +1,4 @@
-export type ConversionMode = "auto" | "none" | "json" | "xml" | "profile";
+export type ConversionMode = "auto" | "none" | "json" | "jsonString" | "xml" | "profile";
 
 export interface ConversionProfileReference {
   id: string;
@@ -8,6 +8,7 @@ export interface ConversionProfileReference {
 /** The profiles every foundation host ships; the fallback when no listing endpoint is available. */
 export const builtInConversionProfiles: ConversionProfileReference[] = [
   { id: "elsa.json", version: "1" },
+  { id: "elsa.json-string", version: "1" },
   { id: "elsa.xml", version: "1" }
 ];
 
@@ -20,6 +21,7 @@ export const builtInConversionProfiles: ConversionProfileReference[] = [
  */
 export function describeInferredSource(expressionType: string, value: unknown, mode: ConversionMode): string {
   if (mode === "json") return "JSON content";
+  if (mode === "jsonString") return "JSON value";
   if (mode === "xml") return "XML content";
   if (mode === "profile") return "Formatted content";
   const type = expressionType.trim().toLowerCase();

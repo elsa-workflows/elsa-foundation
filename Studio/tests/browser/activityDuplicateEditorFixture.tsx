@@ -1,7 +1,11 @@
+import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
+import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
+import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
+import "../../src/essentials/Elsa.Studio.Workflows/Client/src/workspaceAppearance.css";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences, type ThemeModePreference } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
-import React, { useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type {
   StudioActivityDefinitionImplementationEditorProps,
@@ -14,7 +18,6 @@ import { setNotifications } from "../../src/essentials/Elsa.Studio.Workflows/Cli
 import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/ToastHost";
 import { activityGraphDiagnosticFocusEvent } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDiagnosticFocus";
 import { ActivityGraphImplementationEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
-import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
 import { WorkflowInstanceDetailsWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import { WorkflowExecutableInspectorWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowExecutableInspector";
 import {
@@ -33,13 +36,14 @@ import {
   leafNode,
   writeLine
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/fixtures";
-import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
+import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { collectActivityNodeIds, createActivityNode, getChildSlots } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { activityGraphLayoutFromDesign } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDocumentAdapter";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+const WorkflowEditor = lazy(() => import("../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const bpmnDecisionFixture = new URLSearchParams(window.location.search).get("bpmn-decision");
 const adaptivePorts = new URLSearchParams(window.location.search).get("adaptive-ports");
 const collectionSlotsFixture = new URLSearchParams(window.location.search).get("collection-slots");
@@ -78,7 +82,8 @@ const writeLineCatalog: ActivityCatalogItem = {
   ports: adaptivePorts === "branches" ? [
     { type: "outcome", name: "True", displayName: "True", isBrowsable: true },
     { type: "outcome", name: "False", displayName: "False", isBrowsable: true }
-  ] : [{ name: "Done", displayName: "Done", isBrowsable: true }],
+  ] : adaptivePorts === "outcomes" ? ["Approve", "Reject", "Unmatched"].map(name => ({ type: "outcome", name, displayName: name, isBrowsable: true }))
+    : [{ name: "Done", displayName: "Done", isBrowsable: true }],
   available: true
 };
 const runEtlCatalog: ActivityCatalogItem = {
@@ -94,6 +99,7 @@ const denseOutcomeCatalog: ActivityCatalogItem = {
 };
 
 const runLayoutFixture = new URLSearchParams(window.location.search).has("run-layout");
+const executableIdentityFieldsFixture = new URLSearchParams(window.location.search).has("identity-fields");
 
 const workflowStartFixture = new URLSearchParams(window.location.search).has("workflow-start");
 const httpEndpointCatalog: ActivityCatalogItem = {
@@ -157,8 +163,9 @@ function editorDraft(): WorkflowDraft {
     } else {
       root.structure!.payload.activities = [adaptivePorts === "dense" ? { ...notifyBuyer, activityVersionId: denseOutcomeCatalog.activityVersionId } : notifyBuyer, leafNode("write-two"), leafNode("write-three")];
       root.structure!.payload.connections = [{ id: "flow-write-one-write-two",
-        source: { nodeId: "write-one", port: adaptivePorts === "branches" ? "True" : "Done" }, target: { nodeId: "write-two" } },
-      ...(adaptivePorts === "branches" ? [{ id: "flow-false", source: { nodeId: "write-one", port: "False" }, target: { nodeId: "write-three" } }] : [])];
+        source: { nodeId: "write-one", port: adaptivePorts === "branches" ? "True" : adaptivePorts === "outcomes" ? "Approve" : "Done" }, target: { nodeId: "write-two" } },
+      ...(adaptivePorts === "branches" ? [{ id: "flow-false", source: { nodeId: "write-one", port: "False" }, target: { nodeId: "write-three" } }] : []),
+      ...(adaptivePorts === "outcomes" ? [{ id: "flow-reject", source: { nodeId: "write-one", port: "Reject" }, target: { nodeId: "write-three" } }] : [])];
       if (adaptivePorts === "dense") root.structure!.payload.connections = Array.from({ length: 30 }, (_, index) => ({
         id: `flow-case-${index + 1}`, source: { nodeId: "write-one", port: `Case ${index + 1}` }, target: { nodeId: "write-two" }
       }));
@@ -211,6 +218,9 @@ function editorDraft(): WorkflowDraft {
     ] : collectionSlotsFixture === "switch-ports" ? [
       { nodeId: "collection-owner", x: 120, y: 160 },
       { nodeId: "write-one", x: 540, y: 40 }, { nodeId: "write-two", x: 540, y: 360 }
+    ] : adaptivePorts === "outcomes" ? [
+      // A User Task-style decision laid out left to right, as the composed User Task journey lays it out (#4064).
+      { nodeId: "write-one", x: 100, y: 200 }, { nodeId: "write-two", x: 560, y: 80 }, { nodeId: "write-three", x: 560, y: 320 }
     ] : adaptivePorts ? [
       { nodeId: "write-one", x: 200, y: 80 },
       { nodeId: "write-two", x: adaptivePorts === "offset" ? 305 : 200, y: adaptivePorts === "offset" ? 430 : adaptivePorts === "dense" ? 1100 : 320 },
@@ -282,19 +292,29 @@ function ActivityDuplicateEditorFixtureContent() {
   const context = useMemo(() => createEditorContext(instanceHost || motionFixture ? live.current : undefined), [instanceHost, motionFixture]);
   const activityHost = new URLSearchParams(window.location.search).get("host") === "activity";
   const ai = useMemo(() => ({
-    promptActions: { list: () => new URLSearchParams(window.location.search).has("toolbar-explain") ? [{ id: "weaver.workflows.explain-instance", label: "Explain run", createPrompt: () => ({ message: "Explain this run", mode: "enqueue", attachments: [] }) }] : [] },
+    promptActions: { list: () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("host") === "executable" && params.has("toolbar-explain")) return [{
+        id: "weaver.workflows.explain-executable",
+        label: "Explain executable",
+        createPrompt: context => ({ message: "Explain this executable", mode: "enqueue", attachments: [], context })
+      }];
+      return params.has("toolbar-explain") ? [{ id: "weaver.workflows.explain-instance", label: "Explain run", createPrompt: () => ({ message: "Explain this run", mode: "enqueue", attachments: [] }) }] : [];
+    } },
     providerAvailability: { get: () => false, subscribe: () => () => undefined },
     dispatchPrompt: () => undefined
   } as unknown as StudioAiContributionApi), []);
 
+  setDialogs(dialogs);
   return (
-    <div className={`activity-duplicate-editor${instanceHost || executableHost ? " wf-page wf-page--run-workbench" : ""}`} data-testid="activity-duplicate-editor">
+    <div className={`activity-duplicate-editor${instanceHost || executableHost ? " wf-page wf-page--run-workbench" : ""}${executableHost ? " wf-page--executable-inspector" : ""}`} data-testid="activity-duplicate-editor">
+      <DialogHost />
       {instanceHost || motionFixture ? <div aria-label="Fixture runtime controls"><button onClick={() => { live.current.status = "Completed"; }}>Complete fixture execution</button>
         <button onClick={() => { live.current.disconnected = true; }}>Disconnect fixture reads</button><button onClick={() => { live.current.disconnected = false; }}>Reconnect fixture reads</button></div> : null}
       <QueryClientProvider client={queryClient}>
-        {executableHost ? <WorkflowExecutableInspectorWorkbench context={context} ai={ai} artifactId="editor-artifact" sourceReferenceId={null} onSelectReference={() => undefined} runInputEditors={[]} /> : instanceHost ? <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId="editor-execution" expressionEditors={expressionEditors} navigate={() => undefined} /> : activityHost
+        {executableHost ? <WorkflowExecutableInspectorWorkbench context={context} ai={ai} artifactId="editor-artifact" sourceReferenceId={null} onSelectReference={() => undefined} runInputEditors={[]} /> : instanceHost ? <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId="editor-execution" initialHistorySearch="?view=diagram" expressionEditors={expressionEditors} navigate={() => undefined} /> : activityHost
           ? <ControlledActivityGraphFixture context={context} />
-          : <WorkflowEditor
+          : <Suspense fallback={<p role="status">Loading workflow designer…</p>}><WorkflowEditor
               context={context}
               definitionId="definition-1"
               ai={ai}
@@ -304,7 +324,7 @@ function ActivityDuplicateEditorFixtureContent() {
               workflowDesignerPanels={[]}
               autosaveEnabledByDefault={Boolean(staleValidationsFixture)}
               onBack={() => undefined}
-            />}
+            /></Suspense>}
       </QueryClientProvider>
       <ToastHost controller={notifications} navigate={path => window.history.pushState({}, "", path)} />
     </div>
@@ -393,13 +413,24 @@ export function createEditorContext(live?: { status: string; disconnected: boole
   const incident = { incidentId: "incident-write-two", workflowExecutionId: "editor-execution", activityExecutionId: "activity-exec-write-two",
     executableNodeId: "exec-write-two", severity: "Error", status: "Active", failureType: "ActivityFailed", message: "Second activity failed in its exact execution.",
     createdAt: "2026-10-27T10:00:00Z", isBlocking: true, metadata: {} };
+  // Opt-in deterministic history protocol for Timeline interaction controls only.
+  const historyFixture = new URLSearchParams(window.location.search).has("timeline-entries");
+  const historyEvents = records.map((record, index) => ({
+    historyEventId: `fixture-history-${index + 1}`, workflowExecutionId: "editor-execution", sequence: index + 1, schemaVersion: 1,
+    name: "ActivityCompleted", category: "ActivityLifecycle", authority: "CommittedTransition",
+    activityExecutionId: record.activityExecutionId, executableNodeId: record.executableNodeId,
+    occurredAt: record.scheduledAt, recordedAt: record.scheduledAt, metadata: {}
+  }));
+  const historyCoverage = { state: "captured", policyId: "browser-fixture", policyVersion: 1,
+    supportedKinds: ["ActivityCompleted"], capturedFromStart: true, hasGaps: false,
+    firstSequence: 1, lastSequence: historyEvents.length, settledSequence: historyEvents.length, purgedThroughSequence: 0 };
   const runView = { testRunId: "editor-test", definitionId: draft.definitionId, definitionVersionId: "draft-1", artifactId: "editor-artifact", workflowExecutionId: "editor-execution", status: "Dispatched" };
   return {
     baseUrl: "browser-activity-duplicate-editor",
     http: {
       getJson: async (url: string) => {
         if (hostPersistenceMode && url === "/runtime/workflows/persistence-mode") return { persistenceMode: hostPersistenceMode };
-        if (live?.disconnected && url.startsWith("/runtime/")) throw new Error("Fixture connection dropped");
+        if (live?.disconnected && url.startsWith("/runtime/")) { (window as Window & { droppedFixtureReads?: number }).droppedFixtureReads = ((window as Window & { droppedFixtureReads?: number }).droppedFixtureReads ?? 0) + 1; throw new Error("Fixture connection dropped"); }
         if (url === "/capabilities") {
           return {
             capabilities: [
@@ -413,6 +444,10 @@ export function createEditorContext(live?: { status: string; disconnected: boole
                 { id: "elsa.api.runtime", contractVersion: "1", links: [
                   ...(hostPersistenceMode ? [{ rel: "runtime-persistence-mode", href: "runtime/workflows/persistence-mode" }] : []),
                   { rel: "workflow-instance", href: "runtime/workflows/instances/{workflowExecutionId}", templated: true },
+                  ...(historyFixture ? [
+                    { rel: "workflow-history-page", href: "runtime/workflows/instances/{workflowExecutionId}/fixture-history", templated: true },
+                    { rel: "workflow-history-event", href: "runtime/workflows/instances/{workflowExecutionId}/fixture-history/{historyEventId}", templated: true }
+                  ] : []),
                   { rel: "workflow-executable", href: "runtime/workflows/executables/{artifactId}", templated: true },
                   { rel: "activity-execution", href: "runtime/workflows/instances/{workflowExecutionId}/activities/{activityExecutionId}", templated: true },
                   { rel: "activity-executions", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions", templated: true }
@@ -482,16 +517,41 @@ export function createEditorContext(live?: { status: string; disconnected: boole
             ]
           };
         }
+        if (historyFixture && url.startsWith("/runtime/workflows/instances/editor-execution/fixture-history/")) {
+          const id = decodeURIComponent(url.split("/fixture-history/")[1]);
+          const event = historyEvents.find(item => item.historyEventId === id);
+          if (!event) throw new Error("Unknown fixture history event");
+          return { coverage: historyCoverage, event, readAt: "2026-10-27T10:00:01Z" };
+        }
+        if (historyFixture && url.startsWith("/runtime/workflows/instances/editor-execution/fixture-history?")) {
+          const query = new URL(url, "http://fixture").searchParams;
+          const items = historyEvents.filter(event => !query.get("activityExecutionId") || event.activityExecutionId === query.get("activityExecutionId"));
+          return { coverage: historyCoverage, items, upperSequence: historyEvents.length, scannedThroughSequence: historyEvents.length,
+            scannedCount: historyEvents.length, nextContinuationToken: null, catchUpToken: null, scopeComplete: true, readAt: "2026-10-27T10:00:01Z" };
+        }
         if (runCanvas && url === "/runtime/workflows/instances/editor-execution") return {
           instance: { workflowExecutionId: "editor-execution", artifactId: "editor-artifact", definitionId: "definition-1", definitionVersionId: "draft-1",
             createdAt: "2026-10-27T10:00:00Z", status: live?.status ?? "Completed", activityCount: 3 },
-          activities: [], incidents: runCanvas === "incident" ? [incident] : [], persistenceMode: "Balanced", inspectionGranularity: "boundary-level"
+          activities: new URLSearchParams(window.location.search).has("timeline-entries") ? observedRecords() : [],
+          incidents: runCanvas === "incident" ? [incident] : [], persistenceMode: "Balanced", inspectionGranularity: "boundary-level"
         };
         if (runCanvas && url === "/runtime/workflows/executables/editor-artifact") return {
-          artifactId: "editor-artifact", artifactHash: "fixture-artifact-hash", createdAt: "2026-10-27T10:00:00Z",
+          artifactId: "editor-artifact", artifactHash: executableIdentityFieldsFixture ? `sha256:${"abcdef0123456789".repeat(4)}` : "fixture-artifact-hash", createdAt: "2026-10-27T10:00:00Z",
           rootActivityType: draft.state.rootActivity!.activityVersionId, rootActivityVersion: "1.0.0",
           nodeCount: runtimeNodes.length, resumeTargetCount: 0, references: [], rootActivity: compiled(draft.state.rootActivity!),
-          ...(live ? { chosenReference: { sourceReferenceId: "fixture-reference", selection: "requested", ...((adaptivePorts || runLayoutFixture) ? { layout: draft.layout } : {}), activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
+          ...(executableIdentityFieldsFixture ? {
+            chosenReference: { sourceReferenceId: "fixture-reference", selection: "requested", layout: draft.layout },
+            references: [{
+              sourceReferenceId: "fixture-reference",
+              artifactId: "editor-artifact",
+              sourceKind: "definition",
+              definitionId: "definition-reference-0123456789abcdef0123456789abcdef",
+              definitionVersionId: "definition-version-reference-0123456789abcdef0123456789abcdef",
+              artifactVersion: "1.0.0",
+              createdAt: "2026-10-27T10:00:00Z",
+              scope: "Published"
+            }]
+          } : live ? { chosenReference: { sourceReferenceId: "fixture-reference", selection: "requested", ...((adaptivePorts || runLayoutFixture) ? { layout: draft.layout } : {}), activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
         };
         if (runCanvas && url.startsWith("/runtime/workflows/instances/editor-execution/activity-executions?")) {
           if (new URLSearchParams(window.location.search).has("evidence-latency")) await new Promise(resolve => setTimeout(resolve, 400));

@@ -36,6 +36,17 @@ describe("ActivityDefinitionDiagnosticsPanel", () => {
     ]);
   });
 
+  it.each(["error", "Error"])("counts blocking wire severity correctly (%s)", severity => {
+    const item = diagnostic("activity.graph.variable.initial-value-invalid", "Error", "/variables/1/initialValue", "elsa.activity-graph");
+    item.severity = severity as StudioActivityDiagnostic["severity"];
+    item.metadata = { actionLabel: "Edit variable initial value" };
+    const rendered = renderPanel([item]);
+    expect(rendered.querySelector('[aria-label="Diagnostic severity counts"]')?.textContent).toBe("1 error");
+    expect(rendered.querySelector(".ad-diagnostic-item.is-error")).not.toBeNull();
+    expect(rendered.querySelector(".ad-diagnostic-item button")?.textContent).toContain("Edit variable initial value");
+    expect(rendered.querySelector(".ad-diagnostic-item button")?.getAttribute("aria-label")).toBe("Edit variable initial value");
+  });
+
   it("does not repeat headings or invent errors for a rejected informational result", () => {
     const rendered = renderPanel([diagnostic("agent.manifest.invalid", "Info", "/instructions")]);
     expect(rendered.querySelectorAll("h2")).toHaveLength(1);

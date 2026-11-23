@@ -1,6 +1,6 @@
-import { forwardRef, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, Check, Plus, Trash2, X } from "lucide-react";
-import { tabElementIds, useTablistKeyboard } from "@elsa-workflows/studio-ui";
+import { Fragment, forwardRef, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, X } from "lucide-react";
+import { AdvancedSection, TechnicalDetails, StudioFactList, StudioTabs, StudioTabPanel, StudioField } from "@elsa-workflows/studio-ui";
 import type { StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityAuthoringCapabilities,
@@ -25,6 +25,7 @@ import {
   serializeDefaultValue
 } from "./activityContractAuthoring";
 import { useDialogFocus } from "./workflow-editor/useDialogFocus";
+import { WorkflowPropertyRemoveCell, WorkflowPropertySection } from "./WorkflowPropertiesView";
 import "./activityContractEditor.css";
 
 type ContractMember = ActivityInputContract | ActivityOutputContract | ActivityOutcomeContract;
@@ -55,6 +56,7 @@ type ActivityDefinitionContractEditorProps = {
   baselineUnavailable: boolean;
   readOnly: boolean;
   capabilitiesUnavailable: boolean;
+  renderOutputValue?(output: ActivityOutputContract): ReactNode;
   onChange(contract: ActivityContract): void;
   onLocalValidityChange(valid: boolean): void;
 };
@@ -70,6 +72,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
   baselineUnavailable,
   readOnly,
   capabilitiesUnavailable,
+  renderOutputValue,
   onChange,
   onLocalValidityChange
 }: ActivityDefinitionContractEditorProps, ref) {
@@ -82,8 +85,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
   const [selectionGuardMessage, setSelectionGuardMessage] = useState<string | null>(null);
   const addNameInputRef = useRef<HTMLInputElement>(null);
   const collectionElementRef = useRef<HTMLElement>(null);
-  const originatingAddButtonRef = useRef<HTMLButtonElement | null>(null);
-  const focusOriginAddOnClose = useRef(true);
+  const focusOriginAddOnClose = useRef(false);
   const focusNewMemberId = useRef<string | null>(null);
   const newMemberNameInputRef = useRef<HTMLInputElement>(null);
   const editorKeys = useRef(new Map<string, string>());
@@ -94,10 +96,10 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
   const requiredOutcomeKeys = useMemo(() => new Set(providerRequiredOutcomes.map(outcome => outcome.referenceKey)), [providerRequiredOutcomes]);
   const expressionChoices = useMemo(() => expressions.filter(descriptor => descriptor.editingMode !== "literal"), [expressions]);
   const visibleEntries = entries.filter(entry => entry.kind === memberKind);
-  const activeEntry = visibleEntries.find(entry => entry.id === selectedMemberIds[memberKind]) ?? visibleEntries[0] ?? null;
+  const activeEntry = visibleEntries.find(entry => entry.id === selectedMemberIds[memberKind]) ?? null;
   const activeId = activeEntry?.id ?? null;
-  const setSelectedMemberId = (id: string, kind: ContractMemberKind = memberKind) => {
-    setSelectedMemberIds(current => ({ ...current, [kind]: id }));
+  const setSelectedMemberId = (id: string | null, kind: ContractMemberKind = memberKind) => {
+    setSelectedMemberIds(current => ({ ...current, [kind]: id ?? undefined }));
   };
   const hasDefaultDrafts = invalidDefaults.size > 0 || pendingDefaults.size > 0;
   const canAddValues = !readOnly && !capabilitiesUnavailable && Boolean(capabilities) && authorableTypes.length > 0;
@@ -109,9 +111,10 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
 
   useEffect(() => {
     if (newMemberKind) addNameInputRef.current?.focus();
-    else if (focusOriginAddOnClose.current && originatingAddButtonRef.current) {
-      const origin = originatingAddButtonRef.current;
-      const target = origin.isConnected ? origin : collectionElementRef.current?.querySelector<HTMLButtonElement>(".ad-contract-workbench-list button[aria-label^='Add ']");
+    else if (focusOriginAddOnClose.current) {
+      focusOriginAddOnClose.current = false;
+      const origin = collectionElementRef.current?.querySelector<HTMLButtonElement>(".wf-properties-add");
+      const target = origin?.isConnected ? origin : collectionElementRef.current?.querySelector<HTMLButtonElement>(".wf-properties-add");
       target?.focus();
     }
   }, [newMemberKind]);
@@ -143,23 +146,23 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
   };
 
   const selectMember = (entry: ContractEntry) => {
-    if (entry.id !== activeId && hasDefaultDrafts) {
-      const activeHasDraft = invalidDefaults.has(activeId ?? "") || pendingDefaults.has(activeId ?? "");
+    const draftEntry = entries.find(candidate => selectedMemberIds[candidate.kind] === candidate.id && (invalidDefaults.has(candidate.id) || pendingDefaults.has(candidate.id)));
+    if (entry.id !== draftEntry?.id && hasDefaultDrafts) {
       const targetHasDraft = invalidDefaults.has(entry.id) || pendingDefaults.has(entry.id);
-      if (!activeHasDraft && targetHasDraft) {
+      if (!draftEntry && targetHasDraft) {
         setSelectionGuardMessage(null);
-        setSelectedMemberId(entry.id);
+        setSelectedMemberId(entry.id, entry.kind);
         return;
       }
-      setSelectionGuardMessage(invalidDefaults.has(activeId ?? "")
+      setSelectionGuardMessage(invalidDefaults.has(draftEntry?.id ?? "")
         ? "Correct the invalid literal text in this member before selecting another member. The unsaved text is still visible here."
-        : pendingDefaults.has(activeId ?? "")
+        : pendingDefaults.has(draftEntry?.id ?? "")
           ? "Apply or correct this default before selecting another member. Its current candidate is still visible here."
           : "Another member has an unapplied default candidate. Resolve it there before selecting a different member.");
       return;
     }
     setSelectionGuardMessage(null);
-    setSelectedMemberId(entry.id);
+    setSelectedMemberId(entry.id, entry.kind);
   };
 
   useImperativeHandle(ref, () => ({
@@ -171,9 +174,8 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
     }
   }), [entries]);
 
-  const openCreateForm = (kind: ContractMemberKind, addButton: HTMLButtonElement) => {
+  const openCreateForm = (kind: ContractMemberKind) => {
     if (readOnly || hasDefaultDrafts || (kind === "outcome" ? !canAddOutcomes : !canAddValues)) return;
-    originatingAddButtonRef.current = addButton;
     focusOriginAddOnClose.current = true;
     setNewName("");
     setNewMemberKind(kind);
@@ -223,6 +225,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
       if (kind === "outcome") onChange({ ...contract, outcomes: contract.outcomes.filter(item => item !== member) });
       setDefaultStatus(contractMemberId(kind, member.referenceKey), true, false);
       editorKeys.current.delete(contractMemberId(kind, member.referenceKey));
+      if (selectedMemberIds[kind] === contractMemberId(kind, member.referenceKey)) setSelectedMemberId(null, kind);
     };
     if (!sourceVersionId || !baselineHasMember(baselineContract, kind, member.referenceKey)) return apply();
     setPendingImpact({
@@ -285,7 +288,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
 
   const entriesFor = (kind: ContractMemberKind) => entries.filter(entry => entry.kind === kind);
   const renderCreateForm = (kind: ContractMemberKind) => newMemberKind === kind ? <form className="ad-contract-create-form" onSubmit={event => { event.preventDefault(); addMember(kind); }} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); cancelCreateForm(); } }}>
-    <label><span>{kindLabel(kind)} name</span><input ref={addNameInputRef} value={newName} onChange={event => setNewName(event.target.value)} required disabled={readOnly} /></label>
+    <StudioField label={<><span>{kindLabel(kind)} name</span></>}><input ref={addNameInputRef} value={newName} onChange={event => setNewName(event.target.value)} required disabled={readOnly} /></StudioField>
     <div><button type="submit" disabled={!newName.trim() || readOnly || hasDefaultDrafts || (kind === "outcome" ? !canAddOutcomes : !canAddValues)}>Add {kind}</button><button type="button" onClick={cancelCreateForm}>Cancel</button></div>
   </form> : null;
 
@@ -293,124 +296,119 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
   const description = memberKind === "input" ? "Define the values this activity receives."
     : memberKind === "output" ? "Define the values this activity returns."
       : "Define the completion paths callers can follow.";
-  return <section ref={collectionElementRef} className="ad-contract-editor" aria-label={`${title} editor`}>
-    <header className="ad-contract-header">
-      <div><h2 id="activity-contract-title">{title}</h2><p>{description}</p></div>
-    </header>
+  const headers = memberKind === "input" ? ["Name", "Type", "Collection", "Default", "Storage", "Required"]
+    : memberKind === "output" ? ["Name", "Type", "Collection", "Required"]
+      : ["Name", "Emitted"];
+  const currentEntries = entriesFor(memberKind);
+  const createForm = renderCreateForm(memberKind);
+  const toggleMember = (entry: ContractEntry) => {
+    if (selectedMemberIds[entry.kind] === entry.id) {
+      if (invalidDefaults.has(entry.id) || pendingDefaults.has(entry.id)) {
+        setSelectionGuardMessage("Apply or correct this default before hiding its editor. The current candidate is still visible here.");
+        return;
+      }
+      setSelectionGuardMessage(null);
+      setSelectedMemberId(null, entry.kind);
+    } else selectMember(entry);
+  };
+  return <section ref={collectionElementRef} className={`ad-contract-editor is-${memberKind}${memberKind === "output" ? " ad-output-editor" : ""}`} aria-label={`${title} editor`} data-active-contract-kind={memberKind}>
     {capabilitiesUnavailable ? <div className="ad-inline-error" role="alert"><strong>Contract options unavailable</strong><span>Studio could not load the available types and storage options. Existing members remain visible, but their type settings cannot be changed safely.</span></div> : null}
     {!capabilitiesUnavailable && capabilities && authorableTypes.length === 0 ? <div className="ad-inline-error" role="alert">No supported type with an active storage option is available, so inputs and outputs cannot be added.</div> : null}
-    {sourceVersionId && baselineUnavailable ? <div className="ad-contract-baseline-warning" role="alert"><AlertTriangle size={16} aria-hidden /><span><strong>Published baseline unavailable.</strong> Existing-member changes are conservatively guarded as potentially breaking until the exact immutable baseline can be loaded.</span></div> : null}
-    <div className={`ad-contract-workbench${activeEntry ? "" : " is-empty"}`}>
-      <nav className="ad-contract-workbench-list" aria-label={`${title} members`}>
-        <ContractMemberGroup
-          kind={memberKind}
-          entries={entriesFor(memberKind)}
+    {sourceVersionId && baselineUnavailable ? <div className="ad-contract-baseline-warning" role="alert"><AlertTriangle size={16} aria-hidden /><span><strong>Could not load the published version.</strong> Until Studio can compare versions, changes to existing members may affect callers.</span></div> : null}
+    {selectionGuardMessage ? <div className="ad-contract-selection-guard" role="alert">{selectionGuardMessage}</div> : null}
+    <WorkflowPropertySection
+      title={title}
+      headingLevel={2}
+      description={description}
+      addLabel={`Add ${memberKind}`}
+      addDisabled={(memberKind === "outcome" ? !canAddOutcomes : !canAddValues) || hasDefaultDrafts}
+      emptyLabel={`No ${title.toLowerCase()} defined.`}
+      headers={headers}
+      isEmpty={currentEntries.length === 0 && !createForm}
+      keepMountedChildren
+      onAdd={() => openCreateForm(memberKind)}
+    >
+      {entries.map(entry => {
+        const selected = entry.id === selectedMemberIds[entry.kind];
+        const focusedNameRef = focusNewMemberId.current === entry.id ? newMemberNameInputRef : undefined;
+        const removable = !(entry.kind === "outcome" && requiredOutcomeKeys.has(entry.member.referenceKey));
+        const name = entry.member.name || `Unnamed ${entry.kind}`;
+        const defaultStatus = invalidDefaults.has(entry.id) ? "Correction needed" : pendingDefaults.has(entry.id) ? "Apply default" : null;
+        const detailToggle = <button type="button" className="ad-contract-details-toggle" aria-label={`${selected ? "Hide" : "Show"} ${entry.kind} details for ${name}`} aria-expanded={selected} data-member-kind={entry.kind} data-member-reference-key={entry.member.referenceKey} onClick={() => toggleMember(entry)}>{selected ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}</button>;
+        const onRemove = () => requestRemoval(entry.kind, entry.member);
+        const row = entry.kind === "input" ? <tr key={`${entry.id}-row`} data-contract-row-kind="input" data-contract-kind="input" data-contract-index={entry.index} data-contract-reference-key={entry.member.referenceKey}>
+          <td data-label="Name"><div className="ad-contract-name-cell"><StagedNameField compact field="name" value={entry.member.name} readOnly={readOnly || capabilitiesUnavailable} inputRef={focusedNameRef} onApply={value => requestMemberChange("input", entry.member, { ...entry.member, name: value }, accepted => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? accepted : item) }))} />{detailToggle}</div></td>
+          <td data-label="Type"><ContractTypeCell member={entry.member} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly || capabilitiesUnavailable} onChange={next => requestMemberChange("input", entry.member, next, accepted => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? accepted : item) }))} /></td>
+          <td data-label="Collection"><ContractCollectionCell member={entry.member} type={findContractType(capabilities, entry.member.type.alias)} readOnly={readOnly || capabilitiesUnavailable} onChange={next => requestMemberChange("input", entry.member, next, accepted => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? accepted : item) }))} /></td>
+          <td data-label="Default"><button type="button" className="ad-contract-default-summary" aria-label={`${defaultStatus ? `${defaultStatus}: ` : ""}Edit ${name} default`} onClick={() => selected ? undefined : selectMember(entry)}><span>{defaultSummary(entry.member.default)}</span>{defaultStatus ? <span className="ad-contract-default-status">{defaultStatus}</span> : null}</button></td>
+          <td data-label="Storage"><StorageCell member={entry.member} type={findContractType(capabilities, entry.member.type.alias)} capabilities={capabilities} readOnly={readOnly || capabilitiesUnavailable} onChange={next => requestMemberChange("input", entry.member, next, accepted => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? accepted : item) }))} /></td>
+          <td data-label="Required" className="wf-properties-cell-center"><input data-contract-field="isRequired" type="checkbox" aria-label={`${name} required`} checked={entry.member.isRequired} onChange={event => requestMemberChange("input", entry.member, { ...entry.member, isRequired: event.target.checked }, accepted => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? accepted : item) }))} disabled={readOnly || capabilitiesUnavailable} /></td>
+          <WorkflowPropertyRemoveCell label={`Remove input ${name}`} disabled={readOnly} onRemove={onRemove} />
+        </tr> : entry.kind === "output" ? <tr key={`${entry.id}-row`} data-contract-row-kind="output" data-contract-kind="output" data-contract-index={entry.index} data-contract-reference-key={entry.member.referenceKey}>
+          <td data-label="Name"><div className="ad-contract-name-cell"><StagedNameField compact field="name" value={entry.member.name} readOnly={readOnly || capabilitiesUnavailable} inputRef={focusedNameRef} onApply={value => requestMemberChange("output", entry.member, { ...entry.member, name: value }, accepted => onChange({ ...contract, outputs: contract.outputs.map(item => item === entry.member ? accepted : item) }))} />{detailToggle}</div></td>
+          <td data-label="Type"><ContractTypeCell member={entry.member} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly || capabilitiesUnavailable} onChange={next => requestMemberChange("output", entry.member, next, accepted => onChange({ ...contract, outputs: contract.outputs.map(item => item === entry.member ? accepted : item) }))} /></td>
+          <td data-label="Collection"><ContractCollectionCell member={entry.member} type={findContractType(capabilities, entry.member.type.alias)} readOnly={readOnly || capabilitiesUnavailable} onChange={next => requestMemberChange("output", entry.member, next, accepted => onChange({ ...contract, outputs: contract.outputs.map(item => item === entry.member ? accepted : item) }))} /></td>
+          <td data-label="Required" className="wf-properties-cell-center"><input data-contract-field="isRequired" type="checkbox" aria-label={`${name} required`} checked={entry.member.isRequired} onChange={event => requestMemberChange("output", entry.member, { ...entry.member, isRequired: event.target.checked }, accepted => onChange({ ...contract, outputs: contract.outputs.map(item => item === entry.member ? accepted : item) }))} disabled={readOnly || capabilitiesUnavailable} /></td>
+          <WorkflowPropertyRemoveCell label={`Remove output ${name}`} disabled={readOnly} onRemove={onRemove} />
+        </tr> : <tr key={`${entry.id}-row`} data-contract-row-kind="outcome" data-contract-kind="outcome" data-contract-index={entry.index} data-contract-reference-key={entry.member.referenceKey}>
+          <td data-label="Name"><div className="ad-contract-name-cell">{requiredOutcomeKeys.has(entry.member.referenceKey) ? <span data-contract-field="name" tabIndex={-1}>{name}</span> : <StagedNameField compact field="name" value={entry.member.name} readOnly={readOnly || capabilitiesUnavailable} inputRef={focusedNameRef} onApply={value => requestMemberChange("outcome", entry.member, { ...entry.member, name: value }, accepted => onChange({ ...contract, outcomes: contract.outcomes.map(item => item === entry.member ? accepted : item) }))} />}{detailToggle}</div></td>
+          <td data-label="Emitted" className="wf-properties-cell-center">{requiredOutcomeKeys.has(entry.member.referenceKey)
+            ? <label className="ad-contract-required-outcome" data-contract-field="isEmitted" aria-label={`${name} emitted`} tabIndex={-1}><input type="checkbox" checked={entry.member.isEmitted} disabled /></label>
+            : <input data-contract-field="isEmitted" type="checkbox" aria-label={`${name} emitted`} checked={entry.member.isEmitted} onChange={event => requestMemberChange("outcome", entry.member, { ...entry.member, isEmitted: event.target.checked }, accepted => onChange({ ...contract, outcomes: contract.outcomes.map(item => item === entry.member ? accepted : item) }))} disabled={readOnly || capabilitiesUnavailable} />}</td>
+          {removable ? <WorkflowPropertyRemoveCell label={`Remove outcome ${name}`} disabled={readOnly} onRemove={onRemove} /> : <td />}
+        </tr>;
+        const detailPanel = entry.kind === "input" ? <InputEditor
+          key={getEditorKey(entry.kind, entry.member.referenceKey)}
+          selected={selected && entry.kind === memberKind}
+          member={entry.member}
+          index={entry.index}
           capabilities={capabilities}
-          selectedId={activeId}
-          invalidDefaults={invalidDefaults}
-          pendingDefaults={pendingDefaults}
-          onSelect={selectMember}
-          onAdd={button => openCreateForm(memberKind, button)}
-          addDisabled={(memberKind === "outcome" ? !canAddOutcomes : !canAddValues) || hasDefaultDrafts}
-          createForm={renderCreateForm(memberKind)}
-        />
-      </nav>
-      <div className="ad-contract-workbench-detail" role="group" aria-label="Selected contract member">
-        {selectionGuardMessage ? <div className="ad-contract-selection-guard" role="alert">{selectionGuardMessage}</div> : null}
-        <div className="ad-contract-workbench-panes">
-          {entries.map(entry => {
-            const selected = entry.id === activeId;
-            const editorKey = getEditorKey(entry.kind, entry.member.referenceKey);
-            if (entry.kind === "input") return <InputEditor
-              key={editorKey}
-              selected={selected}
-              nameInputRef={focusNewMemberId.current === entry.id ? newMemberNameInputRef : undefined}
-              member={entry.member}
-              index={entry.index}
-              capabilities={capabilities}
-              authorableTypes={authorableTypes}
-              categories={categories}
-              expressionChoices={expressionChoices}
-              readOnly={readOnly || capabilitiesUnavailable}
-              onStatusChange={(valid, dirty) => setDefaultStatus(entry.id, valid, dirty)}
-              onChange={next => requestMemberChange("input", entry.member, next, accepted => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? accepted : item) }))}
-              onReferenceKeyChange={key => requestReferenceKeyChange("input", entry.member, key, referenceKey => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? { ...item, referenceKey } : item) }))}
-              onRemove={() => requestRemoval("input", entry.member)}
-            />;
-            if (entry.kind === "output") return <OutputEditor
-              key={editorKey}
-              selected={selected}
-              nameInputRef={focusNewMemberId.current === entry.id ? newMemberNameInputRef : undefined}
-              member={entry.member}
-              index={entry.index}
-              capabilities={capabilities}
-              authorableTypes={authorableTypes}
-              categories={categories}
-              readOnly={readOnly || capabilitiesUnavailable}
-              onChange={next => requestMemberChange("output", entry.member, next, accepted => onChange({ ...contract, outputs: contract.outputs.map(item => item === entry.member ? accepted : item) }))}
-              onReferenceKeyChange={key => requestReferenceKeyChange("output", entry.member, key, referenceKey => onChange({ ...contract, outputs: contract.outputs.map(item => item === entry.member ? { ...item, referenceKey } : item) }))}
-              onRemove={() => requestRemoval("output", entry.member)}
-            />;
-            return <OutcomeEditor
-              key={editorKey}
-              selected={selected}
-              nameInputRef={focusNewMemberId.current === entry.id ? newMemberNameInputRef : undefined}
-              member={entry.member}
-              index={entry.index}
-              providerRequired={requiredOutcomeKeys.has(entry.member.referenceKey)}
-              readOnly={readOnly || capabilitiesUnavailable}
-              onChange={next => requestMemberChange("outcome", entry.member, next, accepted => onChange({ ...contract, outcomes: contract.outcomes.map(item => item === entry.member ? accepted : item) }))}
-              onReferenceKeyChange={key => requestReferenceKeyChange("outcome", entry.member, key, referenceKey => onChange({ ...contract, outcomes: contract.outcomes.map(item => item === entry.member ? { ...item, referenceKey } : item) }))}
-              onRemove={() => requestRemoval("outcome", entry.member)}
-            />;
-          })}
-        </div>
-      </div>
-    </div>
-    <details className="ad-contract-workbench-advanced" data-contract-schema tabIndex={-1}>
-      <summary>Advanced interface details</summary>
-      <div className="ad-contract-workbench-facts">
-        <ReadOnlyFact label="Schema version" value={contract.contractSchemaVersion} />
-        {sourceVersionId ? <ReadOnlyFact label="Published baseline version ID" value={sourceVersionId} /> : null}
+          categories={categories}
+          expressionChoices={expressionChoices}
+          readOnly={readOnly || capabilitiesUnavailable}
+          onStatusChange={(valid, dirty) => setDefaultStatus(entry.id, valid, dirty)}
+          onChange={next => requestMemberChange("input", entry.member, next, accepted => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? accepted : item) }))}
+          onReferenceKeyChange={key => requestReferenceKeyChange("input", entry.member, key, referenceKey => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? { ...item, referenceKey } : item) }))}
+        /> : entry.kind === "output" ? <OutputEditor
+          key={getEditorKey(entry.kind, entry.member.referenceKey)}
+          selected={selected && entry.kind === memberKind}
+          member={entry.member}
+          valueEditor={renderOutputValue?.(entry.member)}
+          index={entry.index}
+          capabilities={capabilities}
+          categories={categories}
+          readOnly={readOnly || capabilitiesUnavailable}
+          onChange={next => requestMemberChange("output", entry.member, next, accepted => onChange({ ...contract, outputs: contract.outputs.map(item => item === entry.member ? accepted : item) }))}
+          onReferenceKeyChange={key => requestReferenceKeyChange("output", entry.member, key, referenceKey => onChange({ ...contract, outputs: contract.outputs.map(item => item === entry.member ? { ...item, referenceKey } : item) }))}
+        /> : <OutcomeEditor
+          key={getEditorKey(entry.kind, entry.member.referenceKey)}
+          selected={selected && entry.kind === memberKind}
+          member={entry.member}
+          index={entry.index}
+          providerRequired={requiredOutcomeKeys.has(entry.member.referenceKey)}
+          readOnly={readOnly || capabilitiesUnavailable}
+          onChange={next => requestMemberChange("outcome", entry.member, next, accepted => onChange({ ...contract, outcomes: contract.outcomes.map(item => item === entry.member ? accepted : item) }))}
+          onReferenceKeyChange={key => requestReferenceKeyChange("outcome", entry.member, key, referenceKey => onChange({ ...contract, outcomes: contract.outcomes.map(item => item === entry.member ? { ...item, referenceKey } : item) }))}
+        />;
+        return <Fragment key={getEditorKey(entry.kind, entry.member.referenceKey)}>
+          {entry.kind === memberKind ? row : null}
+          <tr hidden={entry.kind !== memberKind || !selected} className="ad-contract-detail-row" data-contract-detail-kind={entry.kind}><td className="ad-contract-row-details-cell" colSpan={headers.length + 1}>{detailPanel}</td></tr>
+        </Fragment>;
+      })}
+      {createForm ? <tr><td className="ad-contract-row-details-cell" colSpan={headers.length + 1}>{createForm}</td></tr> : null}
+    </WorkflowPropertySection>
+    <div data-contract-schema tabIndex={-1}><TechnicalDetails label="Advanced interface details">
+      <StudioFactList>
+        <div><dt>Schema version</dt><dd>{contract.contractSchemaVersion}</dd></div>
+        {sourceVersionId ? <div><dt>Published baseline version ID</dt><dd>{sourceVersionId}</dd></div> : null}
+      </StudioFactList>
         {sourceVersionId && baselineContract ? <BaselineClassification contract={contract} baseline={baselineContract} /> : null}
         {sourceVersionId && !baselineContract && !baselineUnavailable ? <p className="ad-contract-workbench-note">Loading the exact immutable contract used for local impact classification…</p> : null}
         {sourceVersionId && baselineUnavailable ? <p className="ad-contract-workbench-note">Impact counts are unavailable until the immutable baseline can be loaded.</p> : null}
-      </div>
-    </details>
+    </TechnicalDetails></div>
     {pendingImpact ? <ImpactReviewDialog impact={pendingImpact} onClose={() => setPendingImpact(null)} /> : null}
   </section>;
 });
-
-function ContractMemberGroup({ kind, entries, capabilities, selectedId, invalidDefaults, pendingDefaults, onSelect, onAdd, addDisabled, createForm }: {
-  kind: ContractMemberKind;
-  entries: ContractEntry[];
-  capabilities?: ActivityAuthoringCapabilities;
-  selectedId: string | null;
-  invalidDefaults: Set<string>;
-  pendingDefaults: Set<string>;
-  onSelect(entry: ContractEntry): void;
-  onAdd(button: HTMLButtonElement): void;
-  addDisabled: boolean;
-  createForm: ReactNode;
-}) {
-  const title = `${kindLabel(kind)}s`;
-  const id = `contract-list-${kind}`;
-  return <section className="ad-contract-workbench-group" aria-labelledby={id}>
-    <header><div><h3 id={id}>{title}</h3><span>{entries.length}</span></div>{entries.length > 0 || createForm ? <button type="button" onClick={event => onAdd(event.currentTarget)} disabled={addDisabled} aria-label={`Add ${kind}`}><Plus size={14} aria-hidden /> Add</button> : null}</header>
-    {createForm}
-    {entries.length ? <ul>{entries.map(entry => {
-      const selected = entry.id === selectedId;
-      const invalid = invalidDefaults.has(entry.id);
-      const pending = pendingDefaults.has(entry.id);
-      const detail = entry.kind === "outcome"
-        ? (entry.member.isEmitted ? "Emitted" : "Not emitted")
-        : findContractType(capabilities, entry.member.type.alias)?.displayName || entry.member.type.alias;
-      return <li key={entry.id}><button type="button" className={selected ? "is-selected" : undefined} data-member-kind={entry.kind} data-member-reference-key={entry.member.referenceKey} aria-pressed={selected} onClick={() => onSelect(entry)}>
-        <span className="ad-contract-workbench-member-name">{entry.member.name || "Unnamed member"}</span><span className="ad-contract-workbench-member-detail">{detail}</span>{invalid ? <span className="ad-contract-workbench-member-invalid">Correction needed</span> : pending ? <span className="ad-contract-workbench-member-invalid">Apply default</span> : null}
-      </button></li>;
-    })}</ul> : !createForm ? <div className="ad-contract-workbench-empty"><strong>No {title.toLowerCase()} yet</strong><span>{kind === "input" ? "Add an input to accept a value from callers." : kind === "output" ? "Add an output to return a value to callers." : "Add an outcome to expose a completion path."}</span><button type="button" onClick={event => onAdd(event.currentTarget)} disabled={addDisabled} aria-label={`Add ${kind}`}><Plus size={14} aria-hidden /> Add {kind}</button></div> : null}
-  </section>;
-}
 
 function contractMemberId(kind: ContractMemberKind, referenceKey: string) {
   return JSON.stringify([kind, referenceKey]);
@@ -444,6 +442,61 @@ function kindLabel(kind: ContractMemberKind) {
   return kind.charAt(0).toLocaleUpperCase("en-US") + kind.slice(1);
 }
 
+type ValueContractMember = ActivityInputContract | ActivityOutputContract;
+
+function ContractTypeCell<T extends ValueContractMember>({ member, capabilities, authorableTypes, readOnly, onChange }: {
+  member: T;
+  capabilities?: ActivityAuthoringCapabilities;
+  authorableTypes: ActivityContractTypeCapability[];
+  readOnly: boolean;
+  onChange(member: T): void;
+}) {
+  const known = authorableTypes.some(type => type.alias === member.type.alias);
+  return <select aria-label="Type" data-contract-field="type.alias" value={member.type.alias} onChange={event => {
+    const type = authorableTypes.find(candidate => candidate.alias === event.target.value);
+    if (type && capabilities) onChange(selectTypeForMember(member, type, capabilities));
+  }} disabled={readOnly || authorableTypes.length === 0}>
+    {!known ? <option value={member.type.alias} disabled>{member.type.alias} · unavailable</option> : null}
+    {authorableTypes.map(type => <option key={type.alias} value={type.alias} disabled={!type.supportsNull && member.isNullable}>{type.displayName}{!type.supportsNull && member.isNullable ? " · first disable Allow null" : ""}</option>)}
+  </select>;
+}
+
+function ContractCollectionCell<T extends ValueContractMember>({ member, type, readOnly, onChange }: {
+  member: T;
+  type?: ActivityContractTypeCapability;
+  readOnly: boolean;
+  onChange(member: T): void;
+}) {
+  const kinds = type?.supportedCollectionKinds ?? [member.type.collectionKind];
+  if (kinds.length <= 1) return <span data-contract-field="type.collectionKind" tabIndex={-1}>{member.type.collectionKind}</span>;
+  return <select aria-label="Collection" data-contract-field="type.collectionKind" value={member.type.collectionKind} onChange={event => onChange({ ...member, type: { ...member.type, collectionKind: event.target.value } })} disabled={readOnly}>
+    {!kinds.includes(member.type.collectionKind) ? <option value={member.type.collectionKind} disabled>{member.type.collectionKind} · unavailable</option> : null}
+    {kinds.map(kind => <option key={kind} value={kind}>{kind}</option>)}
+  </select>;
+}
+
+function StorageCell<T extends ValueContractMember>({ member, type, capabilities, readOnly, onChange }: {
+  member: T;
+  type?: ActivityContractTypeCapability;
+  capabilities?: ActivityAuthoringCapabilities;
+  readOnly: boolean;
+  onChange(member: T): void;
+}) {
+  const drivers = activatedStorageDrivers(type, capabilities);
+  const available = drivers.includes(member.storageDriverKey);
+  return <select aria-label="Storage provider" data-contract-field="storageDriverKey" title={drivers.length === 0 ? "No compatible storage driver is active." : drivers.length === 1 ? "Only one compatible storage driver is active." : "Choose where this value is stored durably."} value={member.storageDriverKey} onChange={event => onChange({ ...member, storageDriverKey: event.target.value })} disabled={readOnly || drivers.length === 0}>
+    {!available ? <option value={member.storageDriverKey} disabled>{member.storageDriverKey || "No driver"} · unavailable</option> : null}
+    {drivers.map(driver => <option key={driver} value={driver}>{driver}</option>)}
+  </select>;
+}
+
+function defaultSummary(value: ActivityInputContract["default"]) {
+  const mode = defaultMode(value);
+  if (mode === "none") return "No default";
+  if (mode === "expression") return `Expression · ${value?.syntax}`;
+  return `Value · ${serializeDefaultValue(value?.value)}`;
+}
+
 function BaselineClassification({ contract, baseline }: { contract: ActivityContract; baseline: ActivityContract }) {
   const summary = compareContractPresentation(contract, baseline);
   return <div className="ad-contract-workbench-classification" role="status">
@@ -453,31 +506,25 @@ function BaselineClassification({ contract, baseline }: { contract: ActivityCont
   </div>;
 }
 
-function InputEditor({ member, index, selected, nameInputRef, capabilities, authorableTypes, categories, expressionChoices, readOnly, onStatusChange, onChange, onReferenceKeyChange, onRemove }: {
+function InputEditor({ member, index, selected, capabilities, categories, expressionChoices, readOnly, onStatusChange, onChange, onReferenceKeyChange }: {
   member: ActivityInputContract;
   index: number;
   selected: boolean;
-  nameInputRef?: { current: HTMLInputElement | null };
   capabilities?: ActivityAuthoringCapabilities;
-  authorableTypes: ActivityContractTypeCapability[];
   categories: string[];
   expressionChoices: StudioExpressionDescriptor[];
   readOnly: boolean;
   onStatusChange(valid: boolean, dirty: boolean): void;
   onChange(member: ActivityInputContract): void;
   onReferenceKeyChange(key: string): void;
-  onRemove(): void;
 }) {
   const type = findContractType(capabilities, member.type.alias);
   const available = isContractTypeSelectionAuthorable(type, member.type.collectionKind, member.storageDriverKey, capabilities);
   return <section className="ad-contract-workbench-member" hidden={!selected} data-contract-selected={selected ? "true" : undefined} aria-labelledby={`contract-input-${index}-title`} data-contract-kind="input" data-contract-index={index} data-contract-reference-key={member.referenceKey} tabIndex={-1}>
-    <header className="ad-contract-workbench-member-header"><div><span>Input</span><h3 id={`contract-input-${index}-title`}>{member.name || "Unnamed input"}</h3></div><button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove input</button></header>
+    <header className="ad-contract-workbench-member-header"><div><span>Input details</span><h3 id={`contract-input-${index}-title`}>{member.name || "Unnamed input"}</h3></div></header>
     {capabilities && !available ? <UnavailableType alias={member.type.alias} /> : null}
     <MemberFieldTabs general={<div className="ad-contract-fields">
-      <StagedNameField field="name" value={member.name} readOnly={readOnly} inputRef={nameInputRef} onApply={name => onChange({ ...member, name })} />
-      <TypeFields member={member} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly} onChange={onChange} />
-      <label className="ad-contract-description"><span>Description</span><textarea data-contract-field="description" value={member.description ?? ""} onChange={event => onChange({ ...member, description: event.target.value || null })} disabled={readOnly} rows={2} /></label>
-      <label className="ad-contract-check"><input data-contract-field="isRequired" type="checkbox" checked={member.isRequired} onChange={event => onChange({ ...member, isRequired: event.target.checked })} disabled={readOnly} /><span>Required</span><small>A value must be available after the default is applied.</small></label>
+      <StudioField className="ad-contract-description" label={<><span>Description</span></>}><textarea data-contract-field="description" value={member.description ?? ""} onChange={event => onChange({ ...member, description: event.target.value || null })} disabled={readOnly} rows={2} /></StudioField>
       <DefaultEditor member={member} type={type} expressions={expressionChoices} readOnly={readOnly} onStatusChange={onStatusChange} onChange={onChange} />
     </div>
     } presentation={<PresentationFields member={member} categories={categories} readOnly={readOnly} onChange={onChange} />} advanced={<div className="ad-contract-fields">
@@ -488,123 +535,59 @@ function InputEditor({ member, index, selected, nameInputRef, capabilities, auth
         preventsTightening={member.default?.syntax === "Literal" && member.default.value === null}
         onChange={onChange}
       />
-      <AdvancedTypeFields member={member} type={type} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly} onChange={onChange} />
-      <DurabilityFields member={member} type={type} capabilities={capabilities} readOnly={readOnly} onChange={onChange} />
       <ReferenceKeyField value={member.referenceKey} readOnly={readOnly} onApply={onReferenceKeyChange} />
     </div>} />
   </section>;
 }
 
-function OutputEditor({ member, index, selected, nameInputRef, capabilities, authorableTypes, categories, readOnly, onChange, onReferenceKeyChange, onRemove }: {
+function OutputEditor({ member, valueEditor, index, selected, capabilities, categories, readOnly, onChange, onReferenceKeyChange }: {
+  valueEditor?: ReactNode;
   member: ActivityOutputContract;
   index: number;
   selected: boolean;
-  nameInputRef?: { current: HTMLInputElement | null };
   capabilities?: ActivityAuthoringCapabilities;
-  authorableTypes: ActivityContractTypeCapability[];
   categories: string[];
   readOnly: boolean;
   onChange(member: ActivityOutputContract): void;
   onReferenceKeyChange(key: string): void;
-  onRemove(): void;
 }) {
   const type = findContractType(capabilities, member.type.alias);
   const available = isContractTypeSelectionAuthorable(type, member.type.collectionKind, member.storageDriverKey, capabilities);
   return <section className="ad-contract-workbench-member" hidden={!selected} data-contract-selected={selected ? "true" : undefined} aria-labelledby={`contract-output-${index}-title`} data-contract-kind="output" data-contract-index={index} data-contract-reference-key={member.referenceKey} tabIndex={-1}>
-    <header className="ad-contract-workbench-member-header"><div><span>Output</span><h3 id={`contract-output-${index}-title`}>{member.name || "Unnamed output"}</h3></div><button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove output</button></header>
+    <header className="ad-contract-workbench-member-header ad-output-member-header"><div><h3 id={`contract-output-${index}-title`}>{member.name || "Unnamed output"} details</h3></div></header>
     {capabilities && !available ? <UnavailableType alias={member.type.alias} /> : null}
-    <MemberFieldTabs general={<div className="ad-contract-fields">
-      <StagedNameField field="name" value={member.name} readOnly={readOnly} inputRef={nameInputRef} onApply={name => onChange({ ...member, name })} />
-      <TypeFields member={member} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly} onChange={onChange} />
-      <label className="ad-contract-description"><span>Description</span><textarea data-contract-field="description" value={member.description ?? ""} onChange={event => onChange({ ...member, description: event.target.value || null })} disabled={readOnly} rows={2} /></label>
-      <label className="ad-contract-check"><input data-contract-field="isRequired" type="checkbox" checked={member.isRequired} onChange={event => onChange({ ...member, isRequired: event.target.checked })} disabled={readOnly} /><span>Required</span><small>The activity must produce this output.</small></label>
+    <div className={`ad-output-primary${valueEditor ? " has-value-editor" : ""}`}>
+      <div className="ad-contract-fields ad-output-declaration">
+        <StudioField className="ad-contract-description" label={<><span>Description</span></>}><textarea data-contract-field="description" value={member.description ?? ""} onChange={event => onChange({ ...member, description: event.target.value || null })} disabled={readOnly} rows={2} /></StudioField>
+      </div>
+      {valueEditor}
     </div>
-    } presentation={<PresentationFields member={member} categories={categories} readOnly={readOnly} onChange={onChange} />} advanced={<div className="ad-contract-fields">
+    <AdvancedSection label="Presentation"><PresentationFields member={member} categories={categories} readOnly={readOnly} onChange={onChange} /></AdvancedSection>
+    <AdvancedSection label="Advanced"><div className="ad-contract-fields">
       <NullabilityField member={member} type={type} readOnly={readOnly} onChange={onChange} />
-      <AdvancedTypeFields member={member} type={type} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly} onChange={onChange} />
-      <DurabilityFields member={member} type={type} capabilities={capabilities} readOnly={readOnly} onChange={onChange} />
       <ReferenceKeyField value={member.referenceKey} readOnly={readOnly} onApply={onReferenceKeyChange} />
-    </div>} />
+    </div></AdvancedSection>
   </section>;
 }
 
-function OutcomeEditor({ member, index, selected, nameInputRef, providerRequired, readOnly, onChange, onReferenceKeyChange, onRemove }: {
+function OutcomeEditor({ member, index, selected, providerRequired, readOnly, onChange, onReferenceKeyChange }: {
   member: ActivityOutcomeContract;
   index: number;
   selected: boolean;
-  nameInputRef?: { current: HTMLInputElement | null };
   providerRequired: boolean;
   readOnly: boolean;
   onChange(member: ActivityOutcomeContract): void;
   onReferenceKeyChange(key: string): void;
-  onRemove(): void;
 }) {
   return <section className="ad-contract-workbench-member" hidden={!selected} data-contract-selected={selected ? "true" : undefined} aria-labelledby={`contract-outcome-${index}-title`} data-contract-kind="outcome" data-contract-index={index} data-contract-reference-key={member.referenceKey} tabIndex={-1}>
-    <header className="ad-contract-workbench-member-header"><div><span>Outcome</span><h3 id={`contract-outcome-${index}-title`} data-contract-field={providerRequired ? "name" : undefined} tabIndex={providerRequired ? -1 : undefined}>{member.name || "Unnamed outcome"}</h3></div>{!providerRequired ? <button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove outcome</button> : null}</header>
-    {providerRequired ? <p className="ad-contract-required-note"><span data-contract-field="isEmitted" tabIndex={-1}>{member.isEmitted ? "Emitted" : "Not emitted"}</span> This outcome is required. Its name and emitted status are fixed.</p> : null}
+    <header className="ad-contract-workbench-member-header"><div><span>Outcome details</span><h3 id={`contract-outcome-${index}-title`}>{member.name || "Unnamed outcome"}</h3></div></header>
     <div className="ad-contract-fields">
-      {!providerRequired ? <StagedNameField field="name" value={member.name} readOnly={readOnly} inputRef={nameInputRef} onApply={name => onChange({ ...member, name })} /> : null}
-      <label className="ad-contract-description"><span>Description</span><textarea data-contract-field="description" value={member.description ?? ""} onChange={event => onChange({ ...member, description: event.target.value || null })} disabled={readOnly} rows={2} /></label>
-      {!providerRequired ? <label className="ad-contract-check"><input data-contract-field="isEmitted" type="checkbox" checked={member.isEmitted} onChange={event => onChange({ ...member, isEmitted: event.target.checked })} disabled={readOnly} /><span>Emitted by this activity</span></label> : null}
+      <StudioField className="ad-contract-description" label={<><span>Description</span></>}><textarea data-contract-field="description" value={member.description ?? ""} onChange={event => onChange({ ...member, description: event.target.value || null })} disabled={readOnly} rows={2} /></StudioField>
     </div>
-    <details className="ad-contract-advanced"><summary>Advanced</summary><div className="ad-contract-fields">
+    <AdvancedSection label="Advanced"><div className="ad-contract-fields">
       <ReferenceKeyField value={member.referenceKey} readOnly={readOnly || providerRequired} onApply={onReferenceKeyChange} />
-    </div></details>
+    </div></AdvancedSection>
   </section>;
-}
-
-function TypeFields<T extends ActivityInputContract | ActivityOutputContract>({ member, capabilities, authorableTypes, readOnly, onChange }: {
-  member: T;
-  capabilities?: ActivityAuthoringCapabilities;
-  authorableTypes: ActivityContractTypeCapability[];
-  readOnly: boolean;
-  onChange(member: T): void;
-}) {
-  return <>
-    <label><span>Type</span><select data-contract-field="type.alias" value={member.type.alias} onChange={event => {
-      const selected = authorableTypes.find(item => item.alias === event.target.value);
-      if (selected && capabilities) onChange(selectTypeForMember(member, selected, capabilities));
-    }} disabled={readOnly || authorableTypes.length === 0}>
-      {!authorableTypes.some(item => item.alias === member.type.alias) ? <option value={member.type.alias} disabled>{member.type.alias} · unavailable</option> : null}
-      {authorableTypes.map(item => <option key={item.alias} value={item.alias} disabled={!item.supportsNull && member.isNullable}>{item.displayName} · {item.category}{!item.supportsNull && member.isNullable ? " · first disable Allow null" : ""}</option>)}
-    </select></label>
-  </>;
-}
-
-function AdvancedTypeFields<T extends ActivityInputContract | ActivityOutputContract>({ member, type, capabilities, authorableTypes, readOnly, onChange }: {
-  member: T;
-  type?: ActivityContractTypeCapability;
-  capabilities?: ActivityAuthoringCapabilities;
-  authorableTypes: ActivityContractTypeCapability[];
-  readOnly: boolean;
-  onChange(member: T): void;
-}) {
-  const currentTypeCanBeReapplied = Boolean(
-    type &&
-    capabilities &&
-    authorableTypes.some(candidate => candidate.alias === type.alias) &&
-    !isContractTypeSelectionAuthorable(type, member.type.collectionKind, member.storageDriverKey, capabilities)
-  );
-  return <>
-    {type && type.supportedCollectionKinds.length > 1 ? <label><span>Collection</span><select data-contract-field="type.collectionKind" value={member.type.collectionKind} onChange={event => onChange({ ...member, type: { ...member.type, collectionKind: event.target.value } })} disabled={readOnly}>{type.supportedCollectionKinds.map(kind => <option key={kind}>{kind}</option>)}</select></label> : <ReadOnlyFact label="Collection" value={member.type.collectionKind} field="type.collectionKind" />}
-    {currentTypeCanBeReapplied && type && capabilities ? <button type="button" onClick={() => onChange(selectTypeForMember(member, type, capabilities))} disabled={readOnly}>Apply type defaults</button> : null}
-  </>;
-}
-
-function DurabilityFields<T extends ActivityInputContract | ActivityOutputContract>({ member, type, capabilities, readOnly, onChange }: {
-  member: T;
-  type?: ActivityContractTypeCapability;
-  capabilities?: ActivityAuthoringCapabilities;
-  readOnly: boolean;
-  onChange(member: T): void;
-}) {
-  const drivers = activatedStorageDrivers(type, capabilities);
-  const available = drivers.includes(member.storageDriverKey);
-  const helpId = useId();
-  return <label><span>Durable storage driver</span><select data-contract-field="storageDriverKey" aria-label="Durable storage driver" aria-describedby={helpId} value={member.storageDriverKey} onChange={event => onChange({ ...member, storageDriverKey: event.target.value })} disabled={readOnly || drivers.length === 0}>
-    {!available ? <option value={member.storageDriverKey} disabled>{member.storageDriverKey || "No driver"} · unavailable</option> : null}
-    {drivers.map(driver => <option key={driver} value={driver}>{driver}</option>)}
-  </select><small id={helpId} data-contract-field="durability" tabIndex={-1}>{drivers.length === 0 ? "No compatible storage driver is active." : drivers.length === 1 ? "Only one compatible storage driver is active. Activate another compatible driver on the server to choose it here." : "Choose where this value is stored durably."}</small></label>;
 }
 
 function NullabilityField<T extends ActivityInputContract | ActivityOutputContract>({ member, type, readOnly, preventsTightening = false, onChange }: {
@@ -671,7 +654,7 @@ function DefaultEditor({ member, type, expressions, readOnly, onStatusChange, on
     : supportsNull ? null : "";
 
   return <div className="ad-default-editor" data-contract-field-container="default">
-    <label><span>Default</span><select data-contract-field="default" aria-label="Default" value={selectedMode} onChange={event => {
+    <StudioField label={<><span>Default</span></>}><select data-contract-field="default" aria-label="Default" value={selectedMode} onChange={event => {
       const next = event.target.value;
       if (next === "none") updateCandidate(null);
       if (next === "literal") updateCandidate(literalCandidate(initialLiteral()));
@@ -682,7 +665,7 @@ function DefaultEditor({ member, type, expressions, readOnly, onStatusChange, on
       <option value="literal">{literalOptionLabel}</option>
       {supportsNull || nullMode ? <option value="null" disabled={!supportsNull}>{supportsNull ? "Null" : "Null · unavailable"}</option> : null}
       <option value="expression" disabled={!expressionAvailable}>Expression</option>
-    </select><small>No default differs from an explicit null value.</small></label>
+    </select><small>No default differs from an explicit null value.</small></StudioField>
     {mode === "literal" && candidate ? nullMode
       ? <p className="ad-default-null-value" data-contract-field="default.value">The default is explicitly null.</p>
       : simpleLiteral && primitiveEditor
@@ -724,8 +707,8 @@ function PrimitiveDefaultField({ editor, value, readOnly, onValidityChange, onCh
   onChange(value: unknown): void;
 }) {
   if (value === null) return <p className="ad-default-null-value" data-contract-field="default.value">The default is explicitly null.</p>;
-  if (editor === "text") return <label><span>Value</span><input data-contract-field="default.value" aria-label="Value" type="text" value={String(value)} onChange={event => { onValidityChange(true); onChange(event.target.value); }} disabled={readOnly} /></label>;
-  if (editor === "boolean") return <label><span>Value</span><select data-contract-field="default.value" aria-label="Value" value={String(value)} onChange={event => { onValidityChange(true); onChange(event.target.value === "true"); }} disabled={readOnly}><option value="true">True</option><option value="false">False</option></select></label>;
+  if (editor === "text") return <StudioField label={<><span>Value</span></>}><input data-contract-field="default.value" aria-label="Value" type="text" value={String(value)} onChange={event => { onValidityChange(true); onChange(event.target.value); }} disabled={readOnly} /></StudioField>;
+  if (editor === "boolean") return <StudioField label={<><span>Value</span></>}><select data-contract-field="default.value" aria-label="Value" value={String(value)} onChange={event => { onValidityChange(true); onChange(event.target.value === "true"); }} disabled={readOnly}><option value="true">True</option><option value="false">False</option></select></StudioField>;
   return <NumberDefaultField value={value as number} readOnly={readOnly} onValidityChange={onValidityChange} onChange={onChange} />;
 }
 
@@ -739,7 +722,7 @@ function NumberDefaultField({ value, readOnly, onValidityChange, onChange }: {
   const [source, setSource] = useState(() => String(value));
   const [error, setError] = useState<string | null>(null);
   useEffect(() => setSource(String(value)), [value]);
-  return <label><span>Value</span><input data-contract-field="default.value" type="text" aria-label="Value" inputMode="decimal" value={source} onChange={event => {
+  return <StudioField label={<><span>Value</span></>}><input data-contract-field="default.value" type="text" aria-label="Value" inputMode="decimal" value={source} onChange={event => {
     const next = event.target.value;
     setSource(next);
     const isNumber = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(next) && Number.isFinite(Number(next));
@@ -747,7 +730,7 @@ function NumberDefaultField({ value, readOnly, onValidityChange, onChange }: {
     setError(nextError);
     onValidityChange(!nextError);
     if (isNumber) onChange(Number(next));
-  }} disabled={readOnly} aria-invalid={Boolean(error)} aria-describedby={error ? `${errorId}-error` : undefined} />{error ? <small id={`${errorId}-error`} role="alert">{error} This text is not saved.</small> : null}</label>;
+  }} disabled={readOnly} aria-invalid={Boolean(error)} aria-describedby={error ? `${errorId}-error` : undefined} />{error ? <small id={`${errorId}-error`} role="alert">{error} This text is not saved.</small> : null}</StudioField>;
 }
 
 function LiteralDefaultField({ value, supportsNull, readOnly, onValidityChange, onChange }: {
@@ -761,7 +744,7 @@ function LiteralDefaultField({ value, supportsNull, readOnly, onValidityChange, 
   const [source, setSource] = useState(() => serializeDefaultValue(value));
   const [error, setError] = useState<string | null>(null);
   useEffect(() => setSource(serializeDefaultValue(value)), [value]);
-  return <label><span>Value (JSON)</span><textarea data-contract-field="default.value" aria-label="Value (JSON)" value={source} onChange={event => {
+  return <StudioField label={<><span>Value (JSON)</span></>}><textarea data-contract-field="default.value" aria-label="Value (JSON)" value={source} onChange={event => {
     const next = event.target.value;
     setSource(next);
     const parsed = parseLiteralDefault(next);
@@ -769,7 +752,7 @@ function LiteralDefaultField({ value, supportsNull, readOnly, onValidityChange, 
     setError(nextError);
     onValidityChange(!nextError);
     if (parsed.ok && !nextError) onChange(parsed.value);
-  }} rows={3} disabled={readOnly} aria-invalid={Boolean(error)} aria-describedby={error ? `${errorId}-error` : undefined} />{error ? <small id={`${errorId}-error`} role="alert">{error} The visible text is not saved.</small> : null}</label>;
+  }} rows={3} disabled={readOnly} aria-invalid={Boolean(error)} aria-describedby={error ? `${errorId}-error` : undefined} />{error ? <small id={`${errorId}-error`} role="alert">{error} The visible text is not saved.</small> : null}</StudioField>;
 }
 
 function ExpressionDefaultFields({ value, expressions, readOnly, onChange }: {
@@ -781,11 +764,11 @@ function ExpressionDefaultFields({ value, expressions, readOnly, onChange }: {
   const current = value.syntax;
   const known = expressions.some(expression => expression.type === current);
   return <>
-    <label><span>Expression syntax</span><select data-contract-field="default.syntax" value={current} onChange={event => onChange({ ...value, syntax: event.target.value })} disabled={readOnly || expressions.length === 0}>
+    <StudioField label={<><span>Expression syntax</span></>}><select data-contract-field="default.syntax" value={current} onChange={event => onChange({ ...value, syntax: event.target.value })} disabled={readOnly || expressions.length === 0}>
       {!known ? <option value={current} disabled>{current} · unavailable</option> : null}
       {expressions.map(expression => <option key={expression.type} value={expression.type}>{expression.displayName || expression.type}</option>)}
-    </select></label>
-    <label><span>Expression source</span><textarea data-contract-field="default.value" value={typeof value.value === "string" ? value.value : serializeDefaultValue(value.value)} onChange={event => onChange({ ...value, value: event.target.value })} rows={3} disabled={readOnly || !known} /></label>
+    </select></StudioField>
+    <StudioField label={<><span>Expression source</span></>}><textarea data-contract-field="default.value" value={typeof value.value === "string" ? value.value : serializeDefaultValue(value.value)} onChange={event => onChange({ ...value, value: event.target.value })} rows={3} disabled={readOnly || !known} /></StudioField>
     {!known ? <div className="ad-inline-error" role="alert">The stored expression syntax remains visible but is unavailable for mutable authoring. Select an advertised syntax to continue.</div> : null}
   </>;
 }
@@ -795,13 +778,11 @@ const memberTabs = ["General", "Presentation", "Advanced"];
 function MemberFieldTabs({ general, presentation, advanced }: { general: ReactNode; presentation: ReactNode; advanced: ReactNode }) {
   const [active, setActive] = useState("General");
   const id = useId();
-  const onKeyDown = useTablistKeyboard(memberTabs, active, setActive);
   const panels = [general, presentation, advanced];
   return <div className="ad-member-settings">
-    <div className="ad-tabs ad-member-tabs" role="tablist" aria-label="Member settings" onKeyDown={onKeyDown}>
-      {memberTabs.map((tab, index) => <button key={tab} type="button" role="tab" id={tabElementIds(id, index).tabId} data-tab-id={tab} aria-controls={tabElementIds(id, index).panelId} aria-selected={active === tab} tabIndex={active === tab ? 0 : -1} onClick={() => setActive(tab)}>{tab}</button>)}
-    </div>
-    {panels.map((panel, index) => <div key={memberTabs[index]} role="tabpanel" id={tabElementIds(id, index).panelId} aria-labelledby={tabElementIds(id, index).tabId} hidden={active !== memberTabs[index]}>{panel}</div>)}
+    <StudioTabs compact className="ad-member-tabs" baseId={id} ariaLabel="Member settings"
+      tabs={memberTabs.map(tab => ({ id: tab, label: tab }))} activeTab={active} onSelect={setActive} />
+    {panels.map((panel, index) => <StudioTabPanel key={memberTabs[index]} baseId={id} index={index} hidden={active !== memberTabs[index]}>{panel}</StudioTabPanel>)}
   </div>;
 }
 
@@ -813,20 +794,25 @@ function PresentationFields<T extends ActivityInputContract | ActivityOutputCont
 }) {
   const categoryListId = useId();
   return <div className="ad-contract-fields">
-    <label><span>Display name</span><input data-contract-field="displayName" value={member.displayName ?? ""} onChange={event => onChange({ ...member, displayName: event.target.value || null })} disabled={readOnly} /><small>Optional label shown to workflow authors.</small></label>
-    <label><span>Category</span><input data-contract-field="category" list={categoryListId} value={member.category ?? ""} onChange={event => onChange({ ...member, category: event.target.value || null })} disabled={readOnly} /><datalist id={categoryListId}>{categories.map(category => <option key={category} value={category} />)}</datalist><small>Choose an existing category or enter a new one.</small></label>
-    <label><span>Order</span><input data-contract-field="order" type="number" value={member.order ?? 0} onChange={event => onChange({ ...member, order: Number(event.target.value) })} disabled={readOnly} /></label>
-    <label><span>UI hint</span><input data-contract-field="uiHint" value={member.uiHint ?? ""} onChange={event => onChange({ ...member, uiHint: event.target.value || null })} disabled={readOnly} /></label>
+    <StudioField label={<><span>Display name</span></>}><input data-contract-field="displayName" value={member.displayName ?? ""} onChange={event => onChange({ ...member, displayName: event.target.value || null })} disabled={readOnly} /><small>Optional label shown to workflow authors.</small></StudioField>
+    <StudioField label={<><span>Category</span><datalist id={categoryListId}>{categories.map(category => <option key={category} value={category} />)}</datalist></>}><input data-contract-field="category" list={categoryListId} value={member.category ?? ""} onChange={event => onChange({ ...member, category: event.target.value || null })} disabled={readOnly} /><small>Choose an existing category or enter a new one.</small></StudioField>
+    <StudioField label={<><span>Order</span></>}><input data-contract-field="order" type="number" value={member.order ?? 0} onChange={event => onChange({ ...member, order: Number(event.target.value) })} disabled={readOnly} /></StudioField>
+    <StudioField label={<><span>UI hint</span></>}><input data-contract-field="uiHint" value={member.uiHint ?? ""} onChange={event => onChange({ ...member, uiHint: event.target.value || null })} disabled={readOnly} /></StudioField>
   </div>;
 }
 
 function ReferenceKeyField({ value, readOnly, onApply }: { value: string; readOnly: boolean; onApply(key: string): void }) {
   const [candidate, setCandidate] = useState(value);
+  const helpId = useId();
   useEffect(() => setCandidate(value), [value]);
-  return <div className="ad-contract-staged-field ad-contract-reference-field"><label><span>Stable reference key</span><input data-contract-reference-key-control data-contract-field="referenceKey" value={candidate} onChange={event => setCandidate(event.target.value)} disabled={readOnly} /></label><button type="button" aria-label="Apply key" title="Apply key" onClick={() => onApply(candidate)} disabled={readOnly || !candidate.trim() || candidate.trim() === value}><Check size={16} aria-hidden /></button><small>Changing a published key is a breaking change.</small></div>;
+  return <div className="ad-contract-staged-field ad-contract-reference-field">
+    <StudioField label={<><span>Stable reference key</span></>}><input data-contract-reference-key-control data-contract-field="referenceKey" value={candidate} aria-describedby={helpId} onChange={event => setCandidate(event.target.value)} disabled={readOnly} /></StudioField>
+    <button type="button" aria-label="Apply key" title="Apply key" onClick={() => onApply(candidate)} disabled={readOnly || !candidate.trim() || candidate.trim() === value}><Check size={16} aria-hidden /></button>
+    <small id={helpId}>Used in saved bindings. Changing a published key is a breaking change.</small>
+  </div>;
 }
 
-function StagedNameField({ value, field = "name", readOnly, inputRef, onApply }: { value: string; field?: string; readOnly: boolean; inputRef?: { current: HTMLInputElement | null }; onApply(name: string): void }) {
+function StagedNameField({ value, field = "name", compact, readOnly, inputRef, onApply }: { value: string; field?: string; compact?: boolean; readOnly: boolean; inputRef?: { current: HTMLInputElement | null }; onApply(name: string): void }) {
   const [candidate, setCandidate] = useState(value);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => setCandidate(value), [value]);
@@ -840,13 +826,18 @@ function StagedNameField({ value, field = "name", readOnly, inputRef, onApply }:
     if (name !== value) onApply(name);
     else setCandidate(value);
   };
-  return <div className="ad-contract-staged-field">
-    <label><span>Name</span><input ref={inputRef} data-contract-field={field} value={candidate} onChange={event => { setCandidate(event.target.value); setError(null); }} onBlur={applyCandidate} onKeyDown={event => {
+  return <div className={`ad-contract-staged-field${compact ? " is-compact" : ""}`}>
+    {compact ? <input ref={inputRef} aria-label="Name" data-contract-field={field} value={candidate} onChange={event => { setCandidate(event.target.value); setError(null); }} onBlur={applyCandidate} onKeyDown={event => {
       if (event.key === "Enter") {
         event.preventDefault();
         applyCandidate();
       }
-    }} disabled={readOnly} aria-invalid={Boolean(error)} /></label>
+    }} disabled={readOnly} aria-invalid={Boolean(error)} /> : <StudioField label={<><span>Name</span></>}><input ref={inputRef} data-contract-field={field} value={candidate} onChange={event => { setCandidate(event.target.value); setError(null); }} onBlur={applyCandidate} onKeyDown={event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyCandidate();
+      }
+    }} disabled={readOnly} aria-invalid={Boolean(error)} /></StudioField>}
     {candidate.trim() !== value ? <small>Press Enter or leave the field to review this name change. If confirmation is canceled, the candidate stays here so you can retry or revise it.</small> : null}
     {error ? <small role="alert">{error}</small> : null}
   </div>;

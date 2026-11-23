@@ -22,7 +22,7 @@ function render(tag?: WorkflowTag) {
   let visible = true;
   const setVisibility = (mode: "visible" | "hidden") => {
     visible = mode === "visible";
-    flushSync(() => root.render(<StudioWorkspaceTabProvider value={{ id: "tags", active: visible, location: "/workflows/tags/new", isActive: () => visible, markPendingWork: () => undefined, setTitle: () => undefined }}><Activity mode={mode}><WorkflowTagEditor context={context} tag={tag} onBack={() => undefined} onCreated={onCreated} /></Activity></StudioWorkspaceTabProvider>));
+    flushSync(() => root.render(<StudioWorkspaceTabProvider value={{ id: "tags", active: visible, location: "/workflows/tags/new", isActive: () => visible, markPendingWork: () => undefined, setTitle: () => undefined }}><Activity mode={mode}><WorkflowTagEditor context={context} tag={tag} onBack={() => undefined} navigate={() => undefined} onCreated={onCreated} /></Activity></StudioWorkspaceTabProvider>));
   };
   setVisibility("visible");
   return { container, postJson, putJson, onCreated, setVisibility };
@@ -32,7 +32,7 @@ describe("workflow controlled value wire identities", () => {
   it("uses page actions with Create tag as the filled primary and Cancel as default", () => {
     const { container } = render();
     const close = button(container, "Cancel")!;
-    const create = button(container, "Create tag")!;
+    const create = button(container, "Create")!;
     expect(close.classList.contains("studio-button")).toBe(true);
     expect(close.getAttribute("data-variant")).toBe("default");
     expect(create.classList.contains("studio-button")).toBe(true);
@@ -46,7 +46,7 @@ describe("workflow controlled value wire identities", () => {
     await select(container.querySelector('select[aria-label="Tag kind"]'), "controlled");
     await click(button(container, "Add controlled value"));
     await fill(container.querySelector('input[aria-label="Value name 1"]'), "Europe");
-    await click(button(container, "Create tag"));
+    await click(button(container, "Create"));
     await vi.waitFor(() => expect(postJson).toHaveBeenCalledOnce());
     expect(postJson.mock.calls[0]).toEqual(["/tags", expect.objectContaining({ values: [{ id: "", name: "Europe", deprecated: false }] })]);
   });
@@ -64,7 +64,7 @@ describe("workflow controlled value wire identities", () => {
     let resolve!: (value: WorkflowTag) => void;
     postJson.mockImplementationOnce(() => new Promise<WorkflowTag>(done => { resolve = done; }));
     await fill(container.querySelector('[aria-label="Tag name"]'), "Region");
-    await click(button(container, "Create tag"));
+    await click(button(container, "Create"));
     await vi.waitFor(() => expect(postJson).toHaveBeenCalledOnce());
     setVisibility("hidden");
     await new Promise(done => setTimeout(done, 20));
@@ -74,7 +74,7 @@ describe("workflow controlled value wire identities", () => {
     setVisibility("visible");
     await vi.waitFor(() => expect(onCreated).toHaveBeenCalledOnce());
     expect(onCreated).toHaveBeenCalledWith(existing);
-    expect(button(container, "Create tag")?.hasAttribute("disabled")).toBe(false);
+    expect(button(container, "Create")?.hasAttribute("disabled")).toBe(false);
   });
 
 });

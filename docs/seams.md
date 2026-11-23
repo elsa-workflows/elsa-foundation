@@ -1,5 +1,7 @@
 # Seams and bridges in the activities and workflows domain
 
+> **Current core.** This page describes the current Elsa core, which stays the default until the switch to the clean-slate kernel (milestone K13). The kernel is in development, tracked in [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229); its design is in the [kernel architecture pages](architecture/README.md). This page will be rewritten for the new core as part of that switch.
+
 **Who this is for:** contributors who need to know where the activities/workflows code is allowed to connect, so they can build against those boundaries without coupling the pieces together.
 
 ## A concrete example first
@@ -211,7 +213,7 @@ These are sections of the Elsa constitution (`.specify/memory/constitution.md`):
 ## Where this lives in the code
 
 - The worked bridge: `Essentials/src/Workflows/Publishing/Api/`
-- CLR activation: `ClrActivityActivator` in `Essentials/src/Activities/Primitives/Activation/ClrActivityActivator.cs`
+- CLR activation: `ClrActivityActivator` in `Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Activation/ClrActivityActivator.cs`
 - Graph activation: `GraphActivityActivationStrategy`, registered in `Essentials/src/Activities/Graph/Runtime/GraphActivitiesRuntimeFeature.cs`
 - Consumer keys `elsa.clr-activity` / `elsa.graph-activity`: `Essentials/src/Activities/Runtime/Core/Models/RuntimeActivityDescriptor.cs`
 - Current value-flow design: [`specs/095-value-flow-redesign/`](../specs/095-value-flow-redesign) and [ADR 0045](adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md)
