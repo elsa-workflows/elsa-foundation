@@ -861,3 +861,10 @@ Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession.ObservePendingRead(E
 Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.ExpiresAt.get -> System.DateTimeOffset?
 Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.ExpiresAt.init -> void
 Elsa.Activities.Runtime.Core.Models.IActivityTriggerRegistration.ExpiresAt.get -> System.DateTimeOffset?
+Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext.DefaultOnNull.get -> bool
+Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext.UndefinedAsNull.get -> bool
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession.WriteUndefined(Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget! target) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.DefaultOnNull.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.DefaultOnNull.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.UndefinedAsNull.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.UndefinedAsNull.init -> void

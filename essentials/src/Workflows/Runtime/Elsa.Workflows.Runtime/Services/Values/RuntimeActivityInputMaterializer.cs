@@ -11,6 +11,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Resolvers;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
@@ -190,7 +191,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 resolutionContext,
                 cancellationToken);
 
-            ValidatePresence(input, value, node.ExecutableNodeId);
+            value = ValidatePresence(input, value, node.ExecutableNodeId, resolutionContext);
             values.Add(input.Key, value);
         }
 
@@ -252,7 +253,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 ValidatePortableType(input, binding, node.ExecutableNodeId);
                 ValidateEffectivePolicy(input, binding, node.ExecutableNodeId);
                 value = await MaterializeEnvelopeAsync(node, invocationId, input, binding, resolutionContext, cancellationToken);
-                ValidatePresence(input, value, node.ExecutableNodeId);
+                value = ValidatePresence(input, value, node.ExecutableNodeId, resolutionContext);
                 values.Add(key, value);
             }
 
@@ -671,13 +672,22 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' would downgrade its contract protection policy.");
     }
 
-    private static void ValidatePresence(ActivityInputContract input, ValueEnvelope value, string nodeId)
+    private ValueEnvelope ValidatePresence(ActivityInputContract input, ValueEnvelope value, string nodeId,
+        RuntimeInputBindingResolutionContext context)
     {
         if (value.Presence == ValuePresence.Absent && input.IsRequired)
             throw new InvalidOperationException($"VF-ACT-003: Required input '{input.Key}' on executable node '{nodeId}' cannot materialize as absent.");
 
+        if (value.Presence == ValuePresence.ExplicitNull && !input.IsNullable && context.Executable?.ValuePolicies.DefaultOnNull == true &&
+            _wellKnownTypeRegistry is not null && _wellKnownTypeRegistry.TryGetTypeOrDefault(input.Type.Alias, out var elementType) &&
+            NullPolicyDefaults.TryGetTypeDefault(TypeReferenceFactory.Close(elementType, input.Type.CollectionKind), out var defaultValue))
+        {
+            context.Warnings?.Report(new ExecutionWarning("VF-NULL-001", $"Input '{input.Key}' on '{nodeId}' used its type default because DefaultOnNull is enabled.", ExecutionWarningSeverity.Information));
+            return ValueEnvelope.Inline(value.Type, JsonSerializer.SerializeToElement(defaultValue, defaultValue!.GetType()), value.Policy);
+        }
         if (value.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull && !input.IsNullable)
             throw new InvalidOperationException($"VF-ACT-004: Input '{input.Key}' on executable node '{nodeId}' does not accept null or absence.");
+        return value;
     }
 
     private static bool SameType(ValueTypeDescriptor left, ValueTypeDescriptor right) =>

@@ -38,6 +38,9 @@ public sealed class ExecutableNodeCompiler(
     ValueConversionPlanResolver? conversionPlanResolver = null,
     ScriptVariableReadResolver? scriptVariableReadResolver = null)
 {
+    internal ExecutableNodeCompiler WithInputBindingCompiler(RuntimeInputBindingCompiler compiler) =>
+        new(activityStructureService, wellKnownTypeRegistry, compiler, outputCaptureCompiler,
+            operatorSchedulingCapabilityProviders, conversionPlanResolver, scriptVariableReadResolver);
 
     /// <summary>
     /// The scoped-variable visibility of one compilation, iteration scopes included, kept per tree projection so the
@@ -576,7 +579,7 @@ public sealed class ExecutableNodeCompiler(
                     StorageDriverType: null,
                     DisplayName: input.Key,
                     Category: null,
-                    IsNullable: false,
+                    IsNullable: input.Key == WorkflowIntrinsicInputKeys.Value && inputBindingCompiler.AuthoredAllowsNull(input.Value),
                     IsRequired: true),
                 authoredInputs[input.Key]),
             StringComparer.Ordinal);

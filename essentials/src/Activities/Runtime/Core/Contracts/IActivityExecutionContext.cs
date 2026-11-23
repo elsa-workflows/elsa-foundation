@@ -6,4 +6,6 @@ public interface IActivityExecutionContext
 {
     IActivity Activity { get; }
     CancellationToken CancellationToken { get; }
+    bool DefaultOnNull => false;
+    bool UndefinedAsNull => false;
 }

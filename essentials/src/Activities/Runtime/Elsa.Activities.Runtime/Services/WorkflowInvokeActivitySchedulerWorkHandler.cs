@@ -287,11 +287,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     triggerPayload: projections.StimulusInput is JsonElement stimulusInput ? stimulusInput : null,
                     triggerNodeId: projections.TriggerNodeId,
                     triggerMetadata: projections.TriggerMetadata,
-                    scopedVariableEnvelopes: scopedVariableEnvelopes);
+                    scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies);
                 stepSession = await StepVariableSessions.CreateAsync(
                     serviceProvider, scopeService, activity, executable, executableNode, executionContextState, persistedDurableValues, cancellationToken);
                 stateSession = await StepWorkflowState.CreateAsync(serviceProvider, scopeService, activity, executableNode,
                     executionContextState, persistedDurableValues, stepSession, cancellationToken);
+                stepSession?.SetWarnings(stepWarnings);
                 faultMasking.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedOutput ||
                     activity is not IStepWorkflowStateConsumer && stateSession.HasReadProtectedValue);
                 stepWarnings.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedValue);

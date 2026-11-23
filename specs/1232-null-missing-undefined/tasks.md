@@ -24,8 +24,10 @@ red without the change. xUnit only.
   refresh the R-6 write-path audit and source paths; reuse main's input-contract nullability and explicit-null-default
   marker; retain S-1's evaluation/date helpers, S-4's computed misses and S-8's bridge. Record the compared commits on
   the implementation PR. This recheck does not replace the spec proposal's pre-merge gate
-- [ ] T003 Run the #3052 JTest measurement on the implementation branch before any change and record the baseline in
-  the PR
+- [x] T003 Capture and run the #3052 JTest pre-change measurement from frozen implementation baseline
+  `79ada540ac7fcc80db354ef3bef7fe6c0c7e17a2`: 36 definitions, 16 converted, 11 published, 4 observed completions.
+  The one measurement test passes; refusals/non-completions remain private and are not execution-parity acceptance.
+  Baseline source checkout is clean after removing the temporary measurement probe. Record this scope on the PR.
 
 ## Phase 2: Foundational (blocks every story)
 

@@ -411,10 +411,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 executableNode,
                 executionState,
                 variableScope: null,
-                scopedVariableEnvelopes: scopedVariableEnvelopes);
+                scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies);
             stepSession = await StepVariableSessions.CreateAsync(
                 serviceProvider, scopeService, activity, executable, executableNode, executionState, durableValues: null, cancellationToken,
                 attemptId: resumeAttempt.AttemptId);
+            stepSession?.SetWarnings(stepWarnings);
             stateSession = await StepWorkflowState.CreateAsync(serviceProvider, scopeService, activity, executableNode,
                 executionState, await durableValueStateStore.ListAllDurableValueStatesAsync(workItem.WorkflowExecutionId, cancellationToken),
                 stepSession, cancellationToken);
@@ -464,7 +465,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 triggerDelivery,
                 cancellationToken,
                 (IStepVariables?)stepSession ?? UnavailableStepVariables.Instance,
-                stepWarnings, stateSession!);
+                  stepWarnings, stateSession!, executable.ValuePolicies);
             RecordContinuation(RuntimeHistorySourceFactKind.ActivityContinuationStarted);
             var transition = await statefulActivity.ResumeAsync(actualResume);
             RecordContinuation(RuntimeHistorySourceFactKind.ActivityContinuationReturned, reasonCode: transition?.Kind.ToString() ?? "Unknown");
@@ -1010,7 +1011,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityTriggerDelivery trigger,
         CancellationToken cancellationToken,
         IStepVariables variables,
-        IExecutionWarningSink warnings, IStepWorkflowState workflowState)
+        IExecutionWarningSink warnings, IStepWorkflowState workflowState, WorkflowValuePolicies valuePolicies)
     {
         var privateState = state.PrivateState
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' has no committed private state.");
@@ -1023,7 +1024,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 state.InvocationId,
                 attempt.AttemptId,
                 resumePayload.ExecutableNodeId,
-                cancellationToken).WithResolvedOperationKeys(state).WithVariables(variables).WithWorkflowState(workflowState).WithWarnings(warnings)
+                cancellationToken)
+            {
+                DefaultOnNull = valuePolicies.DefaultOnNull,
+                UndefinedAsNull = valuePolicies.UndefinedAsNull
+            }.WithResolvedOperationKeys(state).WithVariables(variables).WithWorkflowState(workflowState).WithWarnings(warnings)
                 .WithProtectedInputs(ProtectsAnyInput(state.InputSnapshot)),
             privateState.Value.Type,
             RequireInlinePayload(privateState.Value, "private state"),

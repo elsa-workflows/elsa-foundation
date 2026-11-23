@@ -6,6 +6,9 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// </summary>
 public sealed class WorkflowStrategyOptions
 {
+    /// <summary>Explicit, portable null and undefined policies, compiled into the executable.</summary>
+    public WorkflowNullHandling? NullHandling { get; set; }
+
     /// <summary>
     /// The alias of the <see cref="IWorkflowActivationStrategy"/> to apply when new instances are requested to be created.
     /// </summary>

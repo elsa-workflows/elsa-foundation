@@ -189,7 +189,7 @@ internal static class StructuralCallbackEvaluation
                     parentState,
                     variableScope: null,
                     liveChildActivities: liveChildActivities,
-                    scopedVariableEnvelopes: scopedVariableEnvelopes);
+                    scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies);
                 history?.SetAttempt(context.AttemptId);
 
                 continuation = await ActivityHistory.ObserveAsync(history, () => definition.InvokeAsync(parentActivity, context), result => result?.Kind.ToString() ?? "Unknown");

@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class WorkflowExecutableHashContractTests
+public sealed partial class WorkflowExecutableHashContractTests
 {
     private readonly WorkflowExecutableHasher _hasher = new();
 

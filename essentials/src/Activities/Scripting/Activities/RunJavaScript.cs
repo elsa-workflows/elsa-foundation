@@ -113,6 +113,7 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
                 context.CancellationToken)
             {
                 Warnings = context.Warnings,
+                UndefinedAsNull = context.UndefinedAsNull,
                 Variables = variables,
                 WorkflowState = workflowState
             });

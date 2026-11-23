@@ -34,7 +34,8 @@ internal static class PlainJson
         JsValue value,
         Func<double, string>? infinity,
         Func<ObjectInstance, string?>? marker,
-        out string? text)
+        out string? text,
+        Func<string>? undefined = null)
     {
         text = null;
         var intrinsics = engine.Intrinsics;
@@ -43,7 +44,7 @@ internal static class PlainJson
         if (!PrototypesArePlain(objectPrototype, arrayPrototype))
             return false;
 
-        var writer = new Writer(objectPrototype, arrayPrototype, infinity, marker);
+        var writer = new Writer(objectPrototype, arrayPrototype, infinity, marker, undefined);
         var builder = new StringBuilder();
         switch (writer.Write(value, builder, depth: 0))
         {
@@ -75,7 +76,8 @@ internal static class PlainJson
         ObjectInstance objectPrototype,
         ObjectInstance arrayPrototype,
         Func<double, string>? infinity,
-        Func<ObjectInstance, string?>? marker)
+        Func<ObjectInstance, string?>? marker,
+        Func<string>? undefined)
     {
         private readonly HashSet<ObjectInstance> _open = new(ReferenceEqualityComparer.Instance);
 
@@ -87,6 +89,11 @@ internal static class PlainJson
                 return Outcome.Written;
             }
 
+            if (value.IsUndefined() && undefined is not null)
+            {
+                Quote(undefined(), json);
+                return Outcome.Written;
+            }
             if (value.IsUndefined() || value.IsSymbol())
                 return Outcome.Undefined;
             if (value.IsBoolean())
@@ -104,7 +111,7 @@ internal static class PlainJson
             if (value.IsNumber())
             {
                 var number = value.AsNumber();
-                if (double.IsInfinity(number) && infinity is not null)
+                if (!double.IsFinite(number) && infinity is not null)
                     Quote(infinity(number), json);
                 else
                     AppendNumber(number, json);
@@ -159,6 +166,11 @@ internal static class PlainJson
                     json.Append(',');
                 // A hole reads through the prototype chain: not provably plain.
                 var element = array.GetOwnProperty(JsNumber.Create(index));
+                if (element == PropertyDescriptor.Undefined && undefined is not null)
+                {
+                    Quote(undefined(), json);
+                    continue;
+                }
                 if (element == PropertyDescriptor.Undefined || !element.IsDataDescriptor())
                     return Outcome.NotPlain;
                 switch (Write(element.Value, json, depth + 1))

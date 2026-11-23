@@ -520,7 +520,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         if (executable.InputContract is not { } contract || _inputValidator is null)
             return supplied;
 
-        var validation = _inputValidator.Validate(contract, supplied);
+        var validation = _inputValidator.Validate(contract, supplied, executable.ValuePolicies);
         if (!validation.IsValid)
         {
             throw new WorkflowExecutableStartRejectedException(

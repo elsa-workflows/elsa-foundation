@@ -6,6 +6,7 @@ using Elsa.Expressions.JavaScript.Core.Models;
 using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
+using Jint.Native;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -46,7 +47,7 @@ internal sealed class JintPortableJavaScriptEvaluator(
     {
         var definition = request.Definition;
         var engine = IsolatedJintEngine.Create(featureOptions.Value, request.CancellationToken, timeProvider);
-        using var values = valueBridge.Begin(engine);
+        using var values = valueBridge.Begin(engine, request.UndefinedAsNull);
         var functions = new JavaScriptHostFunctionContext(values, request.VariableReader, logger);
         hostFunctions.Install(engine, featureOptions.Value, functions, request.CancellationToken);
         IsolatedJintEngine.SetArgs(engine, values, request.ArgumentValues(), featureOptions.Value);
@@ -69,11 +70,17 @@ internal sealed class JintPortableJavaScriptEvaluator(
         }
 
         if (result.IsUndefined())
-            throw new InvalidOperationException("A JavaScript binding must produce a value. Use an expression or return a value from the statement block; undefined is not supported.");
+        {
+            if (!request.UndefinedAsNull)
+                throw new InvalidOperationException("VF-UNDEF-001: A JavaScript binding must produce a value. Use an expression or return a value from the statement block; undefined is not supported.");
+            result = JsValue.Null;
+        }
 
         foreach (var warning in functions.Warnings)
             request.Warnings?.Report(warning);
         var written = JavaScriptValueWrites.Apply(values.Write(result, "result"), "result", precisionPolicy);
+        foreach (var warning in values.Warnings)
+            request.Warnings?.Report(warning);
         JavaScriptValueWrites.WarnLossyReads(values, written.Losses, request.Warnings, logger);
         return written.Value!.Value;
     }

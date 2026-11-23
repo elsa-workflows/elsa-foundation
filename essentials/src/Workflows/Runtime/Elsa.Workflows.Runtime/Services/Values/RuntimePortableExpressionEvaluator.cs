@@ -73,7 +73,11 @@ internal sealed class RuntimePortableExpressionEvaluator(
             fallback = expression.VariableReadFallback is null
                 ? null
                 : await RuntimeVariableReadFallback.LoadAsync(resolutionContext.VisibleVariables, externalPayloadStore, cancellationToken);
-            request = new ExpressionEvaluationRequest(definition, parameters.Values, fallback, cancellationToken) { Warnings = warnings };
+            request = new ExpressionEvaluationRequest(definition, parameters.Values, fallback, cancellationToken)
+            {
+                Warnings = warnings,
+                UndefinedAsNull = resolutionContext.Executable?.ValuePolicies.UndefinedAsNull ?? false
+            };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

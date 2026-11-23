@@ -46,6 +46,16 @@ public interface IWorkflowExecutableHasher
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null,
         IncidentStrategyReference? incidentStrategy = null);
 
+    /// <summary>Hashes the full behavioral payload including explicit pinned value policies.</summary>
+    string ComputeHash(
+        ExecutableNode rootActivity,
+        WorkflowExecutableInputContract inputContract,
+        IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
+        PersistenceMode? persistenceMode,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
+        IncidentStrategyReference? incidentStrategy,
+        WorkflowValuePolicies valuePolicies);
+
     /// <summary>
     /// Verifies the declared hash using a canonical schema this implementation supports. The default
     /// verifies the current schema; a hasher that evolves its rendering may also recognize historical schemas.
@@ -56,7 +66,7 @@ public interface IWorkflowExecutableHasher
         ArgumentNullException.ThrowIfNull(executable);
         return executable.InputContract is { } contract && StringComparer.Ordinal.Equals(
             ComputeHash(executable.RootActivity, contract, executable.Dependencies, executable.PersistenceMode,
-                executable.WorkflowVariables, executable.IncidentStrategy), executable.Identity.ArtifactHash);
+                executable.WorkflowVariables, executable.IncidentStrategy, executable.ValuePolicies), executable.Identity.ArtifactHash);
     }
 
     /// <summary>Derives the content-addressed artifact id from a computed hash.</summary>

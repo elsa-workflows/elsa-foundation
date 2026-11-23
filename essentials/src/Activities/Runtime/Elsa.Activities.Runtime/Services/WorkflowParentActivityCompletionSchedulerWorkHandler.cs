@@ -310,7 +310,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                     parentState,
                     variableScope: null,
                     liveChildActivities: liveChildActivities,
-                    scopedVariableEnvelopes: scopedVariableEnvelopes);
+                    scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies);
                 history?.SetAttempt(context.AttemptId);
 
                 if (childFaulted && isDescendantFaultEvaluation)

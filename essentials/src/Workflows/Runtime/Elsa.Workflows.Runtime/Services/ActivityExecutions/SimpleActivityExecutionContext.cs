@@ -31,6 +31,18 @@ public sealed class SimpleActivityExecutionContext(
     IReadOnlyDictionary<string, ValueEnvelope>? scopedVariableEnvelopes = null)
     : IRuntimeActivityExecutionContext
 {
+    public bool DefaultOnNull { get; private set; }
+    public bool UndefinedAsNull { get; private set; }
+
+    /// <summary>Sets the pinned workflow choices before this context is handed to an activity.</summary>
+    public SimpleActivityExecutionContext WithValuePolicies(WorkflowValuePolicies policies)
+    {
+        ArgumentNullException.ThrowIfNull(policies);
+        DefaultOnNull = policies.DefaultOnNull;
+        UndefinedAsNull = policies.UndefinedAsNull;
+        return this;
+    }
+
     // The single construction path for a runtime activity context.
     public static SimpleActivityExecutionContext ForExecution(
         IActivity activity,
@@ -217,7 +229,11 @@ public sealed class SimpleActivityExecutionContext(
             ExecutableNodeId,
             CancellationToken,
             TriggerPayload,
-            TriggerNodeId).WithResolvedOperationKeys(activityExecutionState);
+            TriggerNodeId)
+        {
+            DefaultOnNull = DefaultOnNull,
+            UndefinedAsNull = UndefinedAsNull
+        }.WithResolvedOperationKeys(activityExecutionState);
 
     /// <summary>
     /// The visible container-scope chain threaded by the runtime for this concrete activity execution.

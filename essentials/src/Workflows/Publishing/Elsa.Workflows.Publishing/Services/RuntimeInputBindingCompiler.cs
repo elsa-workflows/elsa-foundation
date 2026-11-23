@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
@@ -14,6 +15,7 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using ActivityValuePolicy = Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using RuntimeActivityDescriptor = Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor;
@@ -33,6 +35,44 @@ public sealed class RuntimeInputBindingCompiler(
     IWellKnownTypeRegistry wellKnownTypeRegistry,
     ValueConversionPlanResolver? conversionPlanResolver = null) : IActivityTemplateInputBindingCompiler
 {
+    private readonly IVariableTypeDescriptorCatalog? _typeDescriptors;
+    private readonly WorkflowValuePolicies _valuePolicies = WorkflowValuePolicies.Off;
+
+    private RuntimeInputBindingCompiler(IWellKnownTypeRegistry registry, ValueConversionPlanResolver resolver,
+        IVariableTypeDescriptorCatalog? descriptors, WorkflowValuePolicies policies) : this(registry, resolver)
+    {
+        _typeDescriptors = descriptors;
+        _valuePolicies = policies;
+    }
+
+    internal RuntimeInputBindingCompiler WithValuePolicies(WorkflowValuePolicies policies) =>
+        new(wellKnownTypeRegistry, resolvedConversionPlanResolver, _typeDescriptors, policies);
+
+    /// <summary>Uses the activated type descriptors for authored member nullability.</summary>
+    public RuntimeInputBindingCompiler(
+        IWellKnownTypeRegistry wellKnownTypeRegistry,
+        IVariableTypeDescriptorCatalog typeDescriptors,
+        ValueConversionPlanResolver? conversionPlanResolver)
+        : this(wellKnownTypeRegistry, conversionPlanResolver)
+    {
+        _typeDescriptors = typeDescriptors;
+    }
+
+    internal bool AuthoredAllowsNull(TypeReference type)
+    {
+        if (type.CollectionKind != CollectionKind.Single)
+            return true;
+        var descriptor = _typeDescriptors?.GetDescriptors()
+            .FirstOrDefault(item => StringComparer.Ordinal.Equals(item.Alias, type.Alias));
+        if (descriptor is not null)
+            return descriptor.SupportsNull;
+        if (TypeAliasConvention.IsAny(type.Alias) || type.Alias is "JsonElement" or "System.Text.Json.JsonElement" or "JsonNode" or "System.Text.Json.Nodes.JsonNode")
+            return true;
+        if (!wellKnownTypeRegistry.TryGetTypeOrDefault(type.Alias, out var clrType))
+            throw new ArgumentException($"Unknown authored type alias '{type.Alias}'.");
+        return !clrType.IsValueType || Nullable.GetUnderlyingType(clrType) is not null;
+    }
+
     private const string LiteralExpressionType = "Literal";
     private const string ObjectExpressionType = "Object";
     private const string VariableExpressionType = "Variable";
@@ -144,7 +184,7 @@ public sealed class RuntimeInputBindingCompiler(
             throw SecretBindingDiagnostics.VariableDefaultRefused(nodeId, variable.ReferenceKey);
         if (variable.Default is not null)
         {
-            initialBinding = Compile(
+            initialBinding = WithValuePolicies(WorkflowValuePolicies.Off).Compile(
                 nodeId,
                 new InputDefinition(
                     variable.ReferenceKey,
@@ -153,13 +193,29 @@ public sealed class RuntimeInputBindingCompiler(
                     storageProfile,
                     variable.Name,
                     Category: null,
-                    IsNullable: true),
+                    IsNullable: AuthoredAllowsNull(variable.Type)),
                 variable.Default);
             if (initialBinding.Source != RuntimeInputBindingSource.Literal)
                 throw new ArgumentException($"Variable '{variable.ReferenceKey}' on activity node '{nodeId}' requires a persistable literal initial binding.");
         }
 
+        if (initialBinding is null && !AuthoredAllowsNull(variable.Type))
+        {
+            if (!TryAuthoredDefault(variable.Type, out var defaultValue))
+                throw new ArgumentException($"VF-ACT-003: Variable '{variable.Name}' on '{nodeId}' requires a declared default.");
+            initialBinding = new RuntimeInputBinding(variable.ReferenceKey, type, policy, RuntimeInputBindingSource.Literal,
+                literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(defaultValue, defaultValue!.GetType()), policy));
+        }
+
         return new RuntimeVariableDeclaration(variable.ReferenceKey, variable.Name, type, policy, initialBinding);
+    }
+
+    internal bool TryAuthoredDefault(TypeReference type, out object? value)
+    {
+        value = null;
+        return type.CollectionKind == CollectionKind.Single &&
+               wellKnownTypeRegistry.TryGetTypeOrDefault(type.Alias, out var clrType) &&
+               NullPolicyDefaults.TryGetTypeDefault(clrType, out value);
     }
 
     RuntimeInputBinding IActivityTemplateInputBindingCompiler.PinAssignmentSourceConversion(
@@ -491,7 +547,7 @@ public sealed class RuntimeInputBindingCompiler(
             // TimeSpan → 00:00:00). This resolves the VF-ACT-003 contradiction where the design contract marks an input
             // optional but the non-nullable CLR type refuses omission, so a UI that pins no default can still publish (#925).
             // A non-nullable reference type has no fabricable non-null default, so it remains a hard contract error.
-            if (!TryCreateClrDefault(inputType, out var defaultValue))
+            if (!NullPolicyDefaults.TryGetTypeDefault(inputType, out var defaultValue))
             {
                 throw new ArgumentException(
                     $"VF-ACT-003: Optional input '{inputDefinition.ReferenceKey}' with non-nullable type alias '{inputDefinition.Type.Alias}' " +
@@ -1432,10 +1488,12 @@ public sealed class RuntimeInputBindingCompiler(
     private static bool AcceptsNull(InputDefinition inputDefinition) =>
         inputDefinition.IsNullable;
 
-    private static void ValidateNull(InputDefinition inputDefinition, Type inputType, object? value, string nodeId)
+    private void ValidateNull(InputDefinition inputDefinition, Type inputType, object? value, string nodeId)
     {
         if (value is null && !AcceptsNull(inputDefinition))
         {
+            if (_valuePolicies.DefaultOnNull && NullPolicyDefaults.TryGetTypeDefault(inputType, out _))
+                return;
             throw new ArgumentException(
                 $"VF-ACT-004: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not accept null.");
         }

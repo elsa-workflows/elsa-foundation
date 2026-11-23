@@ -23,4 +23,16 @@ public interface IWorkflowExecutableInputValidator
     WorkflowExecutableInputValidation ValidateKnownInputs(
         WorkflowExecutableInputContract contract,
         IEnumerable<KeyValuePair<string, JsonElement>> inputs);
+
+    /// <summary>Normalizes a complete input bag using the selected executable's pinned policies.</summary>
+    WorkflowExecutableInputValidation Validate(
+        WorkflowExecutableInputContract contract,
+        IEnumerable<KeyValuePair<string, JsonElement>> inputs,
+        WorkflowValuePolicies policies);
+
+    /// <summary>Normalizes known inputs and declared defaults without completing omitted optional members.</summary>
+    WorkflowExecutableInputValidation ValidateKnownInputs(
+        WorkflowExecutableInputContract contract,
+        IEnumerable<KeyValuePair<string, JsonElement>> inputs,
+        WorkflowValuePolicies policies);
 }

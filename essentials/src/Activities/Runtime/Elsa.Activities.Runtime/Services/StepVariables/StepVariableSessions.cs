@@ -47,7 +47,8 @@ internal static class StepVariableSessions
             : null;
         var suspends = activity is IStatefulActivity || activity is IRuntimeActivityCheckpointParticipant;
         return new StepVariableSession(frames, executable, invocation, node, services.GetService<IWorkflowExecutableInputValidator>(), attemptId, suspends,
-            BoundReferences(node, contract), activity is IStepVariableSessionConsumer);
+            BoundReferences(node, contract), activity is IStepVariableSessionConsumer,
+            services.GetService<Elsa.Serialization.Core.IWellKnownTypeRegistry>());
     }
 
     // The variables this node's reference inputs are bound to, from their pinned bindings, and whether each is writable.
