@@ -899,6 +899,21 @@ $MOR "$MO" [--fence-in-batch] cost
 $MOR "$MO" probe crash|limits
 ```
 
+### Relational store format checks
+
+Place the format command before the fence option. From `prototypes/kernel-model`, for example:
+
+```sh
+dotnet run -c Release --project ef/Kernel.Ef.Conformance -- sqlite version-services --checked-fence
+dotnet run -c Release --project ef/Kernel.Ef.Conformance -- postgres "$PG" version-services --checked-fence
+```
+
+Repeat with `--fence-in-batch`. Use a disposable server for network providers. SQLite uses a temporary file.
+The other format commands are `node-formats`, `version-take`, `format-migration` and `job-generation-format`.
+`version-take` and `version-services` exercise a higher and lower value for each of schema, message protocol and
+journal codec. An unsupported marker leaves ownership, the journal, projection and retained rows untouched.
+Restoring the supported marker lets ownership take and the store's service operations proceed.
+
 ### MySQL node-lease cancellation
 
 From `prototypes/kernel-model`, use an isolated TLS-enabled MySQL test server with an administrative fixture

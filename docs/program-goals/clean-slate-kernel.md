@@ -537,8 +537,13 @@ store's successful end-state runs. [Completed run receipt](https://github.com/el
 · [Initial failure](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7114915253)
 · [Connector/NET report](https://bugs.mysql.com/bug.php?id=115572)
 
-K4 remains open for the remaining physical K3 cases, upgrade-family compatibility and provider-path coverage.
-MongoDB remains on the owner hold.
+The [relational store format checks](../../prototypes/kernel-model/README.md#relational-store-format-checks)
+cover higher and lower mismatches for all three families at ownership take, journal and projection access and
+sweep. Rejected operations leave the committed state untouched. These checks retain the separate K12 rehearsal
+with running software versions and a recorded rollback floor.
+
+K4 remains open for the remaining physical K3 cases and production provider integration, including the upgrade
+path. MongoDB remains on the owner hold.
 
 ### FC-8 on providers
 
