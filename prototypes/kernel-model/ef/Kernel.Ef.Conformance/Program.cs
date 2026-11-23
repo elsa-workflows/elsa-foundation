@@ -22,6 +22,12 @@ using Npgsql;
 string[] flags = ["--fence-in-batch", "--checked-fence", "--m5", "--rcsi-off", "--rc", "--ef-commit", "--owned-commit", "--fence-ignores-count"];
 switch (args)
 {
+    case ["sqlite", "node-formats", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckNodeFormatsAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "node-formats", .. var options]:
+        await new EfProvider(engine, connection, options).CheckNodeFormatsAsync();
+        return 0;
     case ["sqlite", "version-take", .. var options]:
         await new EfProvider("sqlite", null, options).CheckTakeVersionsAsync();
         return 0;
@@ -88,6 +94,12 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         "mysql" => new MySqlEngine { Isolation = flags.Contains("--rc") ? System.Data.IsolationLevel.ReadCommitted : null },
         _ => null,
     };
+
+    internal async Task CheckNodeFormatsAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
+        await NodeAdvertisementChecks.Run(fixture.CreateAdmin(), fixture.Store);
+    }
 
     internal async Task CheckTakeVersionsAsync()
     {
