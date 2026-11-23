@@ -54,7 +54,8 @@ internal sealed class JsonHashReferenceGraph
                     pending.Push(writer);
                     // An injected delegate is assigned by the constructor/setter's caller. Retain all
                     // observed callers so a new producer cannot borrow an existing helper's receipt.
-                    if (Definitions.TryGetValue(identity, out var field) && field.Kind == "delegate-field" && callers.TryGetValue(writer, out var producers))
+                    if (Definitions.TryGetValue(identity, out var field) && field.Kind == "delegate-field" &&
+                        Definitions.TryGetValue(writer, out var writerDefinition) && writerDefinition.HasDelegateParameter && callers.TryGetValue(writer, out var producers))
                     {
                         var producerQueue = new Stack<string>(producers);
                         var seenProducers = new HashSet<string>(StringComparer.Ordinal);

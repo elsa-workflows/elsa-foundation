@@ -97,7 +97,7 @@ public sealed class JsonHashReferenceGraphTests
     {
         var graph = Fixture.Value;
         Assert.Empty(graph.Errors);
-        var reference = Assert.Single(graph.References.Where(item => Owner(item, method) && item.Role == "digest-primitive"));
+        var reference = Assert.Single(graph.References, item => Owner(item, method) && item.Role == "digest-primitive");
         Assert.Contains("System.Security.Cryptography.SHA256::HashData(System.Byte[])", reference.Target, StringComparison.Ordinal);
     }
 
@@ -124,7 +124,7 @@ public sealed class JsonHashReferenceGraphTests
     public void Closure_reaches_real_hashes_through_fields_accessors_interfaces_virtual_calls_and_wrappers(string method)
     {
         var graph = Fixture.Value;
-        var entry = Assert.Single(graph.Definitions.Values.Where(item => item.Type == "HashFixture.Recipes" && item.Name == method));
+        var entry = Assert.Single(graph.Definitions.Values, item => item.Type == "HashFixture.Recipes" && item.Name == method);
         var closure = graph.ReachableDefinitions(entry.Identity);
         Assert.Contains(graph.References, item => closure.Contains(item.Owner) && item.Role == "digest-primitive");
     }
@@ -133,7 +133,7 @@ public sealed class JsonHashReferenceGraphTests
     public void A_new_caller_of_an_existing_physical_helper_changes_the_observed_caller_set()
     {
         var original = Fixture.Value;
-        var helper = Assert.Single(original.Definitions.Values.Where(item => item.Name == "PhysicalHelper"));
+        var helper = Assert.Single(original.Definitions.Values, item => item.Name == "PhysicalHelper");
         var modified = Source.Replace("public static byte[] JsonViaHelper", "public static byte[] NewlyAdmitted(string json) => PhysicalHelper(json); public static byte[] JsonViaHelper", StringComparison.Ordinal);
         var after = JsonHashReferenceGraph.Scan([Assembly.Load(FixtureCompiler.Compile("JsonHashReferenceFixture", modified, [typeof(JsonHashInput).Assembly]))]);
         Assert.Empty(after.Errors);
@@ -145,7 +145,7 @@ public sealed class JsonHashReferenceGraphTests
     public void An_injected_delegate_retains_its_constructor_producers()
     {
         var graph = Fixture.Value;
-        var entry = Assert.Single(graph.Definitions.Values.Where(item => item.Type == "HashFixture.InjectedRecipe" && item.Name == "Run"));
+        var entry = Assert.Single(graph.Definitions.Values, item => item.Type == "HashFixture.InjectedRecipe" && item.Name == "Run");
         var closure = graph.ReachableDefinitions(entry.Identity);
         Assert.Contains(graph.References, item => closure.Contains(item.Owner) && item.Role == "digest-primitive" && item.Operation == "ldftn");
         Assert.Contains(closure, item => item.Contains("::TwoStageFactory()", StringComparison.Ordinal));
@@ -163,8 +163,8 @@ public sealed class JsonHashReferenceGraphTests
     [Fact]
     public void Gateway_overloads_and_generic_input_types_remain_explicit()
     {
-        var direct = Assert.Single(Fixture.Value.References.Where(item => Owner(item, "Gateway") && item.Role == "json-hash-input"));
-        var generic = Assert.Single(Fixture.Value.References.Where(item => Owner(item, "GenericGateway") && item.Role == "json-hash-input"));
+        var direct = Assert.Single(Fixture.Value.References, item => Owner(item, "Gateway") && item.Role == "json-hash-input");
+        var generic = Assert.Single(Fixture.Value.References, item => Owner(item, "GenericGateway") && item.Role == "json-hash-input");
         Assert.Contains("System.Text.Json.JsonElement", direct.Target, StringComparison.Ordinal);
         Assert.Equal(["System.String"], generic.GenericArguments);
         Assert.NotEqual(direct.Target, generic.Target);
