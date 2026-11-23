@@ -49,9 +49,13 @@ and a separate [abrupt owner loss demo](https://github.com/elsa-workflows/elsa-f
 partition. The program issue records the verified heads and the remaining landing work.
 [Owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7091776914)
 
-Subsequent increments can demonstrate two-node failover, Flowchart execution, or inspecting and recovering a parked
-workflow. Publish demo readiness and milestone acceptance separately. Provider and operator qualification follow the
-milestones below. The owner decides the default switch and approves the retirement inventory at their respective gates.
+A separate two-process PostgreSQL Cluster demo runs a public Native workflow over 1,024 virtual partitions. It
+checkpoints roots on different partitions in one transaction. A surviving owner deduplicates replay and completes the
+workflow after the peer stops. [Run instructions and evidence](https://github.com/elsa-workflows/elsa-foundation/pull/5517#issuecomment-7104130045)
+
+Other increments can demonstrate Flowchart execution and inspecting or recovering a parked workflow. Publish demo
+readiness and milestone acceptance separately. Provider and operator qualification follow the milestones below. The
+owner decides the default switch and approves the retirement inventory at their respective gates.
 
 ## Milestones
 
