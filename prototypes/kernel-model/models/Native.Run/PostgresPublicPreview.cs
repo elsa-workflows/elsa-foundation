@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Kernel.EntityFramework;
 using Kernel.Native.Preview;
+using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -42,7 +43,7 @@ internal static class PostgresPublicPreview
         var store = new EfStore(() => new(measured), postgres: true);
         var probe = new EfStore(() => new(data), postgres: true);
         var admission = new PostgresRootAdmission(() => new(measured), TimeSpan.FromHours(1));
-        var scope = new Contract.BoundScope("preview");
+        var scope = FixedTenantScope.Bind("preview");
 
         if (birth)
         {
@@ -148,7 +149,7 @@ internal static class PostgresPublicPreview
                 }
                 var overflow = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "oversized", "notice",
                     new string('\0', 3 * 1024 * 1024), cancellationToken: stop);
-                var missing = await foundation.SendAsync(new Contract.BoundScope("preview-other"), new Contract.Target.Ref(actor),
+                var missing = await foundation.SendAsync(FixedTenantScope.Bind("preview-other"), new Contract.Target.Ref(actor),
                     "missing", "notice", cancellationToken: stop);
                 Check(overflow is { Outcome: Contract.AdmissionOutcome.Refused, Reason: null, Actor: null } &&
                     missing is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch, Actor: null },
@@ -190,7 +191,7 @@ internal static class PostgresPublicPreview
             Report("inspect final checkpoint and journal");
 
             Reset();
-            var other = new Contract.BoundScope("preview-other");
+            var other = FixedTenantScope.Bind("preview-other");
             Check(await foundation.GetAsync(other, actor, stop) is null &&
                 (await foundation.TailAsync(other, actor, cancellationToken: stop)).Items.Count == 0,
                 "public reads stay within the bound tenant");
