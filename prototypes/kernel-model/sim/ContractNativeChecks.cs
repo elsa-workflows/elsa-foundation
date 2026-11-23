@@ -865,13 +865,13 @@ internal static class ContractNativeChecks
 
     public sealed class ReceiptReceiver : CompositeActivity
     {
-        protected override void Execute(CompositeContext context)
+        protected internal override void Execute(CompositeContext context)
         {
             context.RegisterInputInbox(2, 2, TimeSpan.FromMilliseconds(5));
             context.Schedule(context.Children.Single());
         }
 
-        protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
+        protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
     }
 
     private sealed class LocalReplies(Requests requests) : IReplyTransport
