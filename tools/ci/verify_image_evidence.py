@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from urllib.parse import unquote
 
 SPDX = "https://spdx.dev/Document"
 SLSA = "https://slsa.dev/provenance/v1"
@@ -15,6 +16,34 @@ SLSA = "https://slsa.dev/provenance/v1"
 def require(condition, message):
     if not condition:
         raise ValueError(message)
+
+
+def package_identities(packages):
+    """Read versioned OS and NuGet identities that agree with their SPDX package."""
+    for package in packages:
+        for ref in package.get("externalRefs", []):
+            if ref.get("referenceType") != "purl":
+                continue
+            locator = ref.get("referenceLocator", "")
+            if re.search(r"\s|%(?![0-9a-fA-F]{2})", locator):
+                continue
+            match = re.fullmatch(r"pkg:(deb|rpm|apk|nuget)/([^?#@]+)@([^?#@/]+)(?:\?[^#]+)?", locator)
+            if not match:
+                continue
+            kind, path, version = match.groups()
+            parts = [unquote(part) for part in path.split("/")]
+            if not all(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]*", part) for part in parts):
+                continue
+            version = unquote(version)
+            name = parts[-1].casefold()
+            if name != package.get("name", "").casefold() or version != package.get("versionInfo"):
+                continue
+            if kind == "nuget":
+                if len(parts) != 1 or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,3}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", version):
+                    continue
+            elif not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.+~:_^-]*", version):
+                continue
+            yield kind, name
 
 
 def verify(reference, fetch, output, builder_run, application, validate_spdx):
@@ -83,11 +112,10 @@ def verify(reference, fetch, output, builder_run, application, validate_spdx):
         validate_spdx(sbom)
         require(sbom.get("spdxVersion") == "SPDX-2.3" and sbom.get("packages"),
                 f"Missing SPDX package inventory for {platform}")
-        purls = [ref.get("referenceLocator", "") for package in sbom["packages"]
-                 for ref in package.get("externalRefs", []) if ref.get("referenceType") == "purl"]
-        require(any(purl.startswith(("pkg:deb/", "pkg:apk/", "pkg:rpm/")) for purl in purls),
+        identities = set(package_identities(sbom["packages"]))
+        require(any(kind in {"deb", "apk", "rpm"} for kind, _ in identities),
                 f"Missing operating-system inventory for {platform}")
-        require(any(purl.casefold().startswith(f"pkg:nuget/{application}@".casefold()) for purl in purls),
+        require(("nuget", application.casefold()) in identities,
                 f"Missing {application} inventory for {platform}")
         definition = predicates[SLSA].get("buildDefinition", {})
         require(definition.get("buildType") and isinstance(definition.get("externalParameters"), dict),

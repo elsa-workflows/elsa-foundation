@@ -96,6 +96,12 @@ and in-toto statements by digest. It checks the subject bindings, SLSA builder m
 and presence of operating-system and Elsa components, then saves
 `linux-amd64.spdx.json` and `linux-arm64.spdx.json`. Use the file for your deployment platform.
 
+Publishers stage versioned tags first. The run summary identifies the staged digest.
+For a main-source publication, the publisher advances `latest` after inventory and signature
+verification and checks its registry digest. If main has advanced, use the verified versioned
+digest. A failed or interrupted run may have published versioned tags without completing verification.
+Use its recorded digest and verify the signature and both inventories before using them.
+
 For **Workbench and Foundation Host**, independently verify **each printed attestation
 manifest digest** with Cosign. Substitute the expected Foundation workflow commit from
 the producer run. This example is for the current v1.16.0 reusable builder:

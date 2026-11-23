@@ -3,7 +3,7 @@ import hashlib
 import json
 import unittest
 
-from verify_image_evidence import SLSA, SPDX, verify
+from verify_image_evidence import SLSA, SPDX, package_identities, verify
 
 
 class ImageEvidenceTests(unittest.TestCase):
@@ -32,9 +32,11 @@ class ImageEvidenceTests(unittest.TestCase):
                     continue
                 predicate = {"buildDefinition": {"buildType": "fixture", "externalParameters": {}}, "runDetails": {"builder": {"id": "fixture/attempts/1"}}}
                 if kind == SPDX:
-                    refs = [{"referenceType": "purl", "referenceLocator": purl}
-                            for purl in ["pkg:deb/os@1", "pkg:nuget/Elsa.Test@1"]]
-                    predicate = {"spdxVersion": "SPDX-2.3", "packages": [{"externalRefs": refs}]}
+                    packages = [
+                        {"name": name, "versionInfo": "1", "externalRefs": [
+                            {"referenceType": "purl", "referenceLocator": purl}]}
+                        for name, purl in [("os", "pkg:deb/os@1"), ("Elsa.Test", "pkg:nuget/Elsa.Test@1")]]
+                    predicate = {"spdxVersion": "SPDX-2.3", "packages": packages}
                 subject = self.children["amd64"] if swap and kind == SPDX else child
                 layer = self.store({"_type": "https://in-toto.io/Statement/v1", "subject": [{"digest": {"sha256": subject[7:]}}],
                                     "predicateType": kind, "predicate": predicate})
@@ -76,6 +78,15 @@ class ImageEvidenceTests(unittest.TestCase):
     def test_unrelated_elsa_package(self):
         with self.assertRaisesRegex(ValueError, "Missing Elsa.Workbench inventory"):
             verify(self.index(), self.fetch, None, "fixture", "Elsa.Workbench", self.validate_spdx)
+
+    def test_versioned_purls_must_match_their_package(self):
+        for locator in ("pkg:deb/", "pkg:deb//os@1", "pkg:nuget/Elsa.Test@",
+                        "pkg:nuget/Elsa.Test@bad%20version", "pkg:nuget/Elsa.Test@1%XX",
+                        "pkg:nuget/Other@1", "pkg:nuget/Elsa.Test@2"):
+            with self.subTest(locator=locator):
+                package = {"name": "Elsa.Test", "versionInfo": "1", "externalRefs": [
+                    {"referenceType": "purl", "referenceLocator": locator}]}
+                self.assertFalse(list(package_identities([package])))
 
     def test_corrupt_download(self):
         ref = self.index()

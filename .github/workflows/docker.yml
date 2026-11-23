@@ -209,7 +209,6 @@ jobs:
       meta-images: elsaworkflows/elsa-workbench
       meta-tags: |
         type=sha
-        type=raw,value=latest
         type=raw,value=4.0.0-preview.${{ github.run_number }}
       labels: |
         org.opencontainers.image.title=Elsa Workbench
@@ -246,7 +245,6 @@ jobs:
       meta-images: elsaworkflows/elsa-foundation-host
       meta-tags: |
         type=sha
-        type=raw,value=latest
         type=raw,value=4.0.0-preview.${{ github.run_number }}
       labels: |
         org.opencontainers.image.title=Elsa Foundation Host
@@ -262,7 +260,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      IMAGE: docker.io/elsaworkflows/elsa-workbench
+      DIGEST: ${{ needs.build-and-push.outputs.digest }}
     steps:
+      - name: Record staged versioned image before verification
+        run: |
+          echo "Staged $IMAGE at $DIGEST (sha-${GITHUB_SHA:0:7}, 4.0.0-preview.$GITHUB_RUN_NUMBER)." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -271,20 +275,37 @@ jobs:
       - name: Verify signed builder output and per-platform inventories
         env:
           SIGNED: ${{ needs.build-and-push.outputs.signed }}
-          DIGEST: ${{ needs.build-and-push.outputs.digest }}
         run: |
           set -euo pipefail
           test "$SIGNED" = true
-          echo "docker.io/elsaworkflows/elsa-workbench@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
           python3 tools/ci/verify_image_evidence.py "docker.io/elsaworkflows/elsa-workbench@$DIGEST" --application Elsa.Workbench \
             --builder-run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+      - name: Log in for verified tag promotion
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Promote verified index to latest
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/ci/promote_verified_image.sh
+      - name: Report incomplete image publication
+        if: failure()
+        run: echo "Incomplete publication for $IMAGE@$DIGEST. Inspect the failed verification or promotion step and check latest by digest." >> "$GITHUB_STEP_SUMMARY"
 
   verify-elsa-foundation-host:
     needs: build-and-push-foundation-host
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      IMAGE: docker.io/elsaworkflows/elsa-foundation-host
+      DIGEST: ${{ needs.build-and-push-foundation-host.outputs.digest }}
     steps:
+      - name: Record staged versioned image before verification
+        run: |
+          echo "Staged $IMAGE at $DIGEST (sha-${GITHUB_SHA:0:7}, 4.0.0-preview.$GITHUB_RUN_NUMBER)." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -293,10 +314,21 @@ jobs:
       - name: Verify signed builder output and per-platform inventories
         env:
           SIGNED: ${{ needs.build-and-push-foundation-host.outputs.signed }}
-          DIGEST: ${{ needs.build-and-push-foundation-host.outputs.digest }}
         run: |
           set -euo pipefail
           test "$SIGNED" = true
-          echo "docker.io/elsaworkflows/elsa-foundation-host@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
           python3 tools/ci/verify_image_evidence.py "docker.io/elsaworkflows/elsa-foundation-host@$DIGEST" --application Elsa.Foundation.Host \
             --builder-run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+      - name: Log in for verified tag promotion
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Promote verified index to latest
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/ci/promote_verified_image.sh
+      - name: Report incomplete image publication
+        if: failure()
+        run: echo "Incomplete publication for $IMAGE@$DIGEST. Inspect the failed verification or promotion step and check latest by digest." >> "$GITHUB_STEP_SUMMARY"
