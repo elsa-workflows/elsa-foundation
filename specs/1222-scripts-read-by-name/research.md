@@ -109,7 +109,7 @@ projecting all visible variables when it detects computed access.
    the pinned values; a body's reads go into its session reads instead (R-10). Candidates that
    were made readable but not read are not recorded.
 5. **A missing name** reads `undefined` in JavaScript (never `null`) and nil in Liquid, records a warning, and marks
-   the read absent (spec 1216 FR-025/FR-026). A missing **literal** name stays a publish diagnostic (FR-027).
+   the read absent (spec 1232 FR-025/FR-026). A missing **literal** name stays a publish diagnostic (FR-027).
 
 **Rationale.** Matches D-7 word for word: static pinning plus dynamic fallback, conservative reporting, recorded and
 checked actual reads. Reuses the projection the runtime already has, so no new pattern.
