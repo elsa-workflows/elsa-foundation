@@ -57,6 +57,12 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.events.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Pipelines.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.persistence.core": {
         "type": "Project"
       },
@@ -68,6 +74,7 @@
           "Elsa.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
@@ -75,8 +82,18 @@
       "elsa.persistence.schema": {
         "type": "Project"
       },
+      "elsa.pipelines.core": {
+        "type": "Project"
+      },
       "elsa.primitives": {
         "type": "Project"
+      },
+      "elsa.serialization.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
       },
       "CShells": {
         "type": "CentralTransitive",
