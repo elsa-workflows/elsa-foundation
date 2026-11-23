@@ -30,7 +30,7 @@ public sealed partial class EfStore
         internal abstract Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken);
     }
 
-    private sealed record FirstRootCheckpoint(string Tenant, string Reference, Message Creator, string Header) : QualifiedRootCheckpoint(1)
+    private sealed record FirstRootCheckpoint(string Tenant, string Reference, Message Creator, string Header, InstanceStatus Status) : QualifiedRootCheckpoint(1)
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -56,13 +56,17 @@ public sealed partial class EfStore
             if (consumed != 1) return false;
 
             var fingerprint = CreationProtocol.Fingerprint(Creator.Start, Creator.Kind, Creator.Payload);
+            var finished = Status == InstanceStatus.Finished;
             var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" i SET "FoundationReference" = b."Reference", "FoundationTenant" = b."Tenant",
-                    "FoundationHeader" = {Header}, "State" = {PublicRootState} || i."State"
+                    "FoundationHeader" = {Header}, "State" = {PublicRootState} || i."State",
+                    "FoundationTerminalRevision" = CASE WHEN {finished} THEN {JournalRevision} ELSE NULL END,
+                    "FoundationTerminalAt" = CASE WHEN {finished} THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint ELSE NULL END
                 FROM "FoundationRootBirths" b WHERE b."Reference" = {Reference} AND b."Tenant" = {Tenant}
                     AND b."Actor" = {Creator.Target.Id} AND b."Creation" = 1 AND b."Creator" = {Creator.InboxKey.Id}
                     AND b."Fingerprint" = {fingerprint} AND i."Id" = b."Actor" AND i."Partition" = b."Partition"
-                    AND i."Revision" = 1 AND i."FoundationReference" IS NULL
+                    AND i."Revision" = {JournalRevision} AND i."Status" = {(int)Status} AND i."FoundationReference" IS NULL
+                    AND (NOT {finished} OR NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = i."Id"))
                 """, cancellationToken);
             return affected == 1;
         }
@@ -100,8 +104,8 @@ public sealed partial class EfStore
             FOR EACH ROW EXECUTE FUNCTION kernel_require_root_journal_revision();
             """, cancellationToken);
 
-    /// <summary>The first Running checkpoint of a generated root, with its creator as the sole input.
-    /// Later actor revisions and turns with effects require their own qualified paths.</summary>
+    /// <summary>The manual first Running checkpoint of a generated root, with its creator as the sole input.
+    /// The Worker qualifies immediate completion through its regular turn path.</summary>
     internal ValueTask<Committed> CommitFirstRootAsync(string tenant, string reference, Message creator,
         PartitionFence fence, TimeSpan lease, string? state, int stateVersion, string typeData,
         IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken = default) =>
@@ -109,7 +113,7 @@ public sealed partial class EfStore
 
     private PreparedRoot PrepareFirstRoot(string tenant, string reference, Message creator,
         PartitionFence fence, string? state, int stateVersion, string typeData,
-        IReadOnlyDictionary<string, string> labels, string journal, RootJobState? jobState = null)
+        IReadOnlyDictionary<string, string> labels, string journal, RootJobState? jobState = null, InstanceStatus status = InstanceStatus.Running)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("First root checkpoints require PostgreSQL.");
         if (creator.Start is not { Parent: null, Creation: { Generation: 1, Previous: 0 } } start ||
@@ -119,12 +123,12 @@ public sealed partial class EfStore
             throw new ArgumentException("First root checkpoint requires the admitted exact creator.", nameof(creator));
         var (storedState, header) = EncodeRootContent(start.Model, start.Definition, state, stateVersion, typeData, labels, journal);
         // Model and definition are in the qualified header, including values that PostgreSQL text cannot carry.
-        var row = new InstanceRow(creator.Target.Id, "", "", InstanceStatus.Running, "null", 1, null,
+        var row = new InstanceRow(creator.Target.Id, "", "", status, "null", 1, null,
             History: start.History, StateVersion: stateVersion, Jobs: jobState?.Jobs).WithFoundationState(storedState)
             with { NextJobGeneration = jobState?.NextGeneration };
         // BindCheckpointAsync consumes the exact, due creator before this same transaction lands.
         var turn = new TurnCommit(row.Id, row, null, [], [], [], [], [], journal);
-        return new(turn, new FirstRootCheckpoint(tenant, reference, creator, header));
+        return new(turn, new FirstRootCheckpoint(tenant, reference, creator, header, status));
     }
 
     private static (string? State, string Header) EncodeRootContent(string model, string definition, string? state,
