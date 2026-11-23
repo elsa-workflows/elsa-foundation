@@ -23,6 +23,11 @@ if (rest.Remove("--no-abort")) MongoStore.AbortOnFailure = false;
 if (rest.Remove("--no-backoff")) MongoStore.BackOffOnTransient = false;
 if (rest.Remove("--labels-only")) MongoStore.LabelsOnly = true;
 if (rest.Remove("--cuts-only")) MongoProvider.CutsOnly = true;
+if (rest is ["version-take"])
+{
+    await VersionTakeChecks.RunAsync(connection, options);
+    return 0;
+}
 if (rest is ["probe", .. var probe]) return await Probes.RunAsync(connection, options, probe.ToArray());
 using var provider = new MongoProvider(connection, options);
 return await Cli.RunAsync(provider, rest.ToArray());
