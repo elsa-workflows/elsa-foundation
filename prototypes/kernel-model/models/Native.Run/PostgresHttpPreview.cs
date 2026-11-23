@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Net.Http.Json;
@@ -28,6 +27,8 @@ internal static class PostgresHttpPreview
         var stop = deadline.Token;
         var late = schedule == "late";
         var disconnect = schedule == "disconnect";
+        var clockDelay = schedule == "clock-delay";
+        var delayedClock = 0;
         var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var clientStop = CancellationTokenSource.CreateLinkedTokenSource(stop);
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
@@ -42,7 +43,7 @@ internal static class PostgresHttpPreview
         await store.CreateAsync(1);
         await admission.InstallAsync(stop);
         var tenant = FixedTenantScope.Bind("approval");
-        var receiver = new PostgresDirectRequests(admission, Receiver);
+        var receiver = new PostgresDirectRequests(admission, store, Receiver);
         var preview = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType, directRequests: receiver);
         Contract.IIngress ingress = preview;
@@ -89,9 +90,14 @@ internal static class PostgresHttpPreview
                 (await admission.ReadPendingDirectAsync("other", foreignActor.Id, stop)).Count == 0,
                 "A request for another tenant's live reference must leave both workflow inboxes empty.");
 
+            var expired = await ingress.RequestAsync(tenant, new Contract.Target.Ref(actor), Operation, CompositeSignal.Kind,
+                null, null, new(null, await admission.ReadReplyTimeAsync(stop) - 1), stop);
+            Require(expired is { Error: "timeout", Status: Contract.ActorStatus.Running } && (await PendingAsync()).Count == 0,
+                "An already-expired public request must report the running actor without admitting input.");
+
             if (schedule == "slow-body") await CheckSlowBodyAsync();
             if (schedule == "blocked") await CheckBlockedAdmissionAsync(waiting.Actor.Id);
-            request = PostAsync("/approval", "Ada", late ? 4_000 : 15_000, clientStop.Token);
+            request = PostAsync("/approval", "Ada", late || clockDelay ? 4_000 : 15_000, clientStop.Token);
             while (true)
             {
                 var inputs = await PendingAsync();
@@ -156,6 +162,10 @@ internal static class PostgresHttpPreview
             transport.Count == originalCarriers && (await preview.TailAsync(tenant, actor, before, stop)).Items.SequenceEqual(suffix.Items),
             "A duplicate operation must leave the journal unchanged and cannot attach to an earlier reply.");
 
+        var replayStatus = await ingress.RequestAsync(tenant, new Contract.Target.Ref(actor), Operation, CompositeSignal.Kind,
+            "changed", null, new(null, await admission.ReadReplyTimeAsync(stop) + 250), stop);
+        Require(replayStatus is { Error: "timeout", Status: Contract.ActorStatus.Finished },
+            "The public contract must include the finished status when a duplicate times out.");
         var outcome = disconnect ? "disconnected" : late ? "504" : "202 approved";
         Console.WriteLine($"ok PostgreSQL HTTP {(inBatch ? "in-batch" : "checked")} {schedule}: epoch {firstEpoch}->{epoch}, one revision, HTTP {outcome}, replay 504, other tenant 404.");
         return 0;
@@ -235,7 +245,6 @@ internal static class PostgresHttpPreview
             if (!int.TryParse(context.Request.Query["wait"], out var wait) || wait is < 1 or > 15_000)
                 return Results.BadRequest();
 
-            var began = Stopwatch.GetTimestamp();
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stop);
             budget.CancelAfter(wait);
             var token = budget.Token;
@@ -272,8 +281,11 @@ internal static class PostgresHttpPreview
             {
                 var now = await admission.ReadReplyTimeAsync(token);
                 token.ThrowIfCancellationRequested();
-                var remaining = Math.Max(0, wait - (long)Stopwatch.GetElapsedTime(began).TotalMilliseconds);
-                var routeDeadline = now + remaining;
+                // Use the whole interval with the database's entry sample. The independent HTTP timer
+                // measures the actual connected lifetime from handler entry, including query latency.
+                if (clockDelay && reference == actor && Interlocked.CompareExchange(ref delayedClock, 1, 0) == 0)
+                    await Task.Delay(2_400, token);
+                var routeDeadline = now + wait;
                 JsonNode? body;
                 try { body = await JsonNode.ParseAsync(context.Request.Body, cancellationToken: token); }
                 catch (JsonException) { return new(null, null, Error: "body"); }
