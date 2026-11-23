@@ -685,10 +685,21 @@
 .wf-trigger-selected-target-header,
 .wf-trigger-target-summary-main {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--studio-space-3, 12px);
   min-width: 0;
   flex: 1;
+}
+.wf-trigger-selected-target .studio-copyable-identifier,
+.wf-trigger-target-summary .studio-copyable-identifier {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  width: 100%;
+  max-width: 100%;
+}
+.wf-trigger-selected-target .studio-copyable-identifier__label,
+.wf-trigger-target-summary .studio-copyable-identifier__label {
+  grid-column: 1 / -1;
 }
 .wf-trigger-selected-target-body,
 .wf-trigger-target-summary-info {
