@@ -39,7 +39,13 @@ internal static class PostgresMultiRootClient
         Contract.ActorRef foreign, CancellationToken token)
     {
         var journal = await foundation.TailAsync(scope, own, cancellationToken: token);
-        if (!journal.Items.Select(e => e.Revision).Distinct().SequenceEqual([1L, 2L, 3L]) || await foundation.GetAsync(scope, foreign, token) is not null)
+        var ownMarker = Json.Write("approved:" + scope.Tenant + "-two");
+        var foreignMarker = Json.Write("approved:" + (scope.Tenant == Primary ? Secondary : Primary) + "-two");
+        var inaccessible = await foundation.TailAsync(scope, foreign, cancellationToken: token);
+        if (!journal.Items.Select(e => e.Revision).Distinct().SequenceEqual([1L, 2L, 3L]) ||
+            journal.Items.Count(e => e.Revision == 3 && e.Entry == ownMarker) != 1 || journal.Items.Any(e => e.Entry == foreignMarker) ||
+            journal.Items.Count(e => e.Entry == Json.Write("end")) != 1 || journal.Items[^1].Entry != Json.Write("end") ||
+            await foundation.GetAsync(scope, foreign, token) is not null || inaccessible.Items.Count != 0 || inaccessible.Next is not null)
             throw new InvalidOperationException("The public journal or tenant read did not match the two-root fixture.");
     }
 

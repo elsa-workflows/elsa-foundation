@@ -54,10 +54,10 @@ internal static class PostgresMultiRootChecks
             Check((await Read(0)).Revision == 1 && (await Read(1)).Revision == 2, "cold load separate revisions");
             await Send(1, "one", "changed", duplicate: true);
             await Send(0, "one", "A1");
-            await Send(1, "two", "B2");
+            await Send(1, Secondary + "-two", "B2");
             await CheckRollback();
             await Pair(2, 3);
-            await Send(0, "two", "A2");
+            await Send(0, Primary + "-two", "A2");
             await Drive(3, 3);
             for (var i = 0; i < 2; i++)
             {
