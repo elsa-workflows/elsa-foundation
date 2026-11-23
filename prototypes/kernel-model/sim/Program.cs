@@ -93,6 +93,12 @@ if (args.Contains("--park-large-drain-check"))
     await ParkLargeDrainChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--park-cached-release-check"))
+{
+    var failed = false;
+    await ParkCachedReleaseChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--park-kept-check"))
 {
     var failed = false;
