@@ -255,7 +255,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var checkpoint = store.FoundationTurnHeader(row);
         if (checkpoint.Park is null && checkpoint.Terminal is { } mark &&
             retentionWindow?.Invoke(Header(checkpoint)) is { Ticks: >= 0 } window &&
-            (decimal)input.Services.Now - mark.At >= (long)window.TotalMilliseconds)
+            ((decimal)input.Services.Now - mark.At) * TimeSpan.TicksPerMillisecond >= window.Ticks)
             return null;
         return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "NotEligible");
     }

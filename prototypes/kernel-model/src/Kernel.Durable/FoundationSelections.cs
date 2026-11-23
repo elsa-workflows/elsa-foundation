@@ -19,14 +19,21 @@ public sealed partial class InMemoryStore
     {
         lock (_gate)
         {
-            if (BoundActor(tenant, reference) is not { } actor) return false;
             Span<byte> presented = stackalloc byte[SelectionBytes];
-            if (!TryOpenReadCursor(SelectionContext(tenant, actor.Binding.Reference), token, presented)) return false;
-            Span<byte> committed = stackalloc byte[SelectionBytes];
-            var checkpoint = Checkpoint(actor.Row, actor.Binding);
-            return (!requireTerminal || checkpoint.Terminal is not null) &&
-                TryEncodeSelectionMark(checkpoint, committed) && presented.SequenceEqual(committed);
+            return TryMatchFoundationSelection(tenant, reference, token, presented, requireTerminal);
         }
+    }
+
+    private bool TryMatchFoundationSelection(string tenant, string? reference, string? token, Span<byte> presented, bool requireTerminal)
+    {
+        if (BoundActor(tenant, reference) is not { } actor ||
+            !TryOpenReadCursor(SelectionContext(tenant, actor.Binding.Reference), token, presented))
+            return false;
+
+        Span<byte> committed = stackalloc byte[SelectionBytes];
+        var checkpoint = Checkpoint(actor.Row, actor.Binding);
+        return (!requireTerminal || checkpoint.Terminal is not null) &&
+            TryEncodeSelectionMark(checkpoint, committed) && presented.SequenceEqual(committed);
     }
 
     internal bool AuthorizesEndedRecoverThenDelete(InstanceRow row, Message input)

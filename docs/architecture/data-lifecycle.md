@@ -42,7 +42,7 @@ Logs, traces and metrics are outside this table; question 6 (observability, PR #
 - **Refusals.** A delete of a running instance is consumed and dropped. A model can refuse a delete while it protects retained receipts (`ProtectsDeletion` in [WorkflowInstance.cs](../../prototypes/kernel-model/src/Kernel.Workflows/WorkflowInstance.cs)). That check loads and deserializes the full state, so deleting an instance that is not in memory costs a load.
 - **Measured.** On PostgreSQL 17.11 an isolated sample measured 4 observed TCP edges each for a raw delete and a retirement, with 512 and 656 WAL bytes respectively, and a retained marker tuple of 101 bytes ([WRITES.md](../../prototypes/kernel-model/WRITES.md#15-november-required-metadata-protocol-and-raw-delete-repair)). That is a bounded sample with no general constant.
 
-There is no retention policy, no automatic removal and no archive.
+The in-memory Foundation also enforces qualified operator deletes and applies configured retention windows.
 
 ### Proposed: a retention policy, enforced by delete
 
@@ -61,11 +61,18 @@ public sealed record RetentionPolicy(
 - **Refused deletes.** A delete the owner refuses (protected, not yet eligible, or a different run or transition) is consumed with no change to the row. A later sweep selects the instance again if it is still eligible, with its current identity.
 - **The same path serves operators.** Delete one instance and delete by filter (definition, tenant, status, age) send the same qualified delete, with reason Operator. Terminate-then-delete for a running instance is one command, below.
 
-The in-memory Foundation uses a host-issued Retention Delete with a reserved id derived from the
-tenant, actor reference and terminal selection. The owner reads the configured window at execution.
-`--retention-delete-check` covers a policy extension, a queued delete across caller-key reuse, an
-unresolved re-park and the new Faulted window after expiry. The policy configuration surface,
-retention worker and its rate control retain their K11 cases.
+The in-memory Foundation derives the reserved operation ID for a host-issued Retention Delete
+from the tenant, exact actor reference and authenticated terminal mark. Reopening a list page
+can return a fresh token for the same mark, which reuses the reserved operation. The owner
+reads the configured window at execution.
+
+`--retention-pass-check` runs one configured public list page per pass, using the tenant, definition
+label, status, `EndedAt`, `AsOf` and opaque selection. The pass follows the supplied continuation
+and excludes unresolved Parks. Its application work and admission attempts are bounded by the
+configured page size. The in-memory list scans instance checkpoints to build that page.
+`--retention-delete-check` covers policy extension, caller-key reuse, an unresolved re-park and the
+new Faulted window after expiry. Both checks cover a fractional window at the foundation clock's
+millisecond resolution.
 
 ### Proposed: the qualified delete
 
@@ -316,7 +323,12 @@ For [B1](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomm
 
 ## Unverified
 
-- **Not built:** the qualified delete and its checks, the terminal mark, persisted creation on EF and MongoDB, the retention worker, the option a value rows, the later option b sweeper and its instance-scoped names, the archive command and archiver, compaction, keyed hashes, codec headers, the key ring and encryption.
+- **Physical providers and policy administration:** The PostgreSQL preview persists terminal marks and projects
+  `EndedAt` for generated roots that finish. Full creation and terminal-mark coverage and qualified deletion
+  across physical providers remain open. Policy configuration, shortening confirmation and scheduling rate control
+  retain their K11 cases.
+- **Other lifecycle work:** The option a value rows, the later option b sweeper and its instance-scoped names,
+  the archive command and archiver, compaction, keyed hashes, codec headers, the key ring and encryption.
 - **Done markers:** clearing their payloads assumes no reader uses them. The event-start acceptance receipt and the outside-command duplicate answer must be checked before it is built.
 - **Value store:** its crash durability, pruning and erasure are unqualified (VALUES.md). Decision 10's acceptance run, the `pad=` case against a reference on PostgreSQL with option a, is unrun (POSTGRES.md; write volume decision 2).
 - **Estimates:** all encryption costs.

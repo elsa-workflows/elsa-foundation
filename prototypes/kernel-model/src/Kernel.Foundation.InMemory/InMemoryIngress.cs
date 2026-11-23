@@ -56,6 +56,15 @@ internal sealed class InMemoryIngress(Durable.InMemoryStore store, Durable.Reque
     public ValueTask SetStartAsync(BoundScope scope, string key, string wait, StartSpec? spec, CancellationToken cancellationToken = default) =>
         _event.SetStartAsync(scope, key, wait, spec, cancellationToken);
 
+    internal ValueTask<Admission> AdmitRetentionDeleteAsync(BoundScope scope, ActorRef actor, string selection,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        cancellationToken.ThrowIfCancellationRequested();
+        var receipt = store.AdmitRetentionDelete(scope.Tenant, actor.Id, selection);
+        return new(OperatorIngress.AdmissionFor(receipt, missingIsTargetMismatch: true));
+    }
+
     private ValueTask<Admission> SendToActor(BoundScope scope, Target target, string id, string kind, string? payload,
         AddOptions? options, CancellationToken cancellationToken, string? replyTo = null) =>
         Kinds.IsCommand(kind) && target is Target.Ref or Target.Key { Spec: null }

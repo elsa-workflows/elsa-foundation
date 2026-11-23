@@ -61,17 +61,20 @@ internal sealed class OperatorIngress(Durable.InMemoryStore store, Func<BoundSco
 
         var receipt = store.AdmitFoundationOperator(scope.Tenant, (target as Target.Ref)?.Actor.Id,
             (target as Target.Key)?.CallerKey, id, kind, payload, options?.DueAt, options?.KeepFor, selection, replyTo, recoverMode, recoverHandles, deleteTarget);
-        return new(receipt.Outcome switch
-        {
-            Durable.InMemoryStore.OperatorAdmission.Accepted => new Admission(AdmissionOutcome.Accepted, new ActorRef(receipt.Reference!)),
-            Durable.InMemoryStore.OperatorAdmission.Duplicate => new Admission(AdmissionOutcome.Duplicate, new ActorRef(receipt.Reference!)),
-            Durable.InMemoryStore.OperatorAdmission.StaleSelection => new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.StaleSelection),
-            Durable.InMemoryStore.OperatorAdmission.Unavailable when kind == Kinds.Migrate && target is Target.Ref =>
-                new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.TargetMismatch),
-            Durable.InMemoryStore.OperatorAdmission.TargetMismatch => new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.TargetMismatch),
-            _ => refused
-        });
+        return new(AdmissionFor(receipt, missingIsTargetMismatch: kind == Kinds.Migrate && target is Target.Ref));
     }
+
+    internal static Admission AdmissionFor((Durable.InMemoryStore.OperatorAdmission Outcome, string? Reference) receipt,
+        bool missingIsTargetMismatch) => receipt.Outcome switch
+    {
+        Durable.InMemoryStore.OperatorAdmission.Accepted => new Admission(AdmissionOutcome.Accepted, new ActorRef(receipt.Reference!)),
+        Durable.InMemoryStore.OperatorAdmission.Duplicate => new Admission(AdmissionOutcome.Duplicate, new ActorRef(receipt.Reference!)),
+        Durable.InMemoryStore.OperatorAdmission.StaleSelection => new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.StaleSelection),
+        Durable.InMemoryStore.OperatorAdmission.Unavailable when missingIsTargetMismatch =>
+            new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.TargetMismatch),
+        Durable.InMemoryStore.OperatorAdmission.TargetMismatch => new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.TargetMismatch),
+        _ => new Admission(AdmissionOutcome.Refused)
+    };
 
     // Bound the list while reading the operator payload, before it reaches the store.
     private sealed class RetryHandlesConverter : JsonConverter<IReadOnlyList<string>>
