@@ -191,16 +191,20 @@ internal static class PostgresHeldDirectChecks
     internal static async Task<Worker> TakeAsync(EfStore source, string node, WorkflowRegistry registry, IReplyTransport transport,
         CancellationToken stop, Action<TurnCommit, object?, Message?>? prepare = null)
     {
+        var (host, worker) = await PrepareAsync(source, node, registry,
+            new WorkerOptions { Transport = transport, OnPreparedCheckpoint = prepare }, stop);
+        await host.HeartbeatAsync(worker.Lease, stop);
+        return (Worker?)await host.ActivateAsync(0, stop) ?? throw new InvalidOperationException("The fixture owner did not take.");
+    }
+
+    internal static async Task<(DurableHost Host, Worker Worker)> PrepareAsync(EfStore source, string node,
+        WorkflowRegistry registry, WorkerOptions options, CancellationToken stop)
+    {
         var (roots, count) = await source.BindWorkerPartitionAsync(0, stop);
         var type = new ActorAdapter(new PostgresNativeRootOwner.Headers(roots), new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]),
             rootHeldReplies: true);
-        var worker = new Worker(node, 0, source, type, new WorkerOptions
-        {
-            Partitions = count, Transport = transport, OnPreparedCheckpoint = prepare
-        });
-        var host = new DurableHost([worker]);
-        await host.HeartbeatAsync(Defaults.Lease, stop);
-        return (Worker?)await host.ActivateAsync(0, stop) ?? throw new InvalidOperationException("The fixture owner did not take.");
+        var worker = new Worker(node, 0, source, type, options with { Partitions = count });
+        return (new DurableHost([worker]), worker);
     }
 
     internal static Workflow Build() => Wf.Workflow(Definition, Wf.Sequence("flow",
