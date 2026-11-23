@@ -5,6 +5,31 @@ import { buildDraftFromJson, serializeDraftToJson } from "../workflowSerializati
 import type { ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft } from "../workflowTypes";
 
 describe("activity input wire adapter", () => {
+  it.each([{ value: null, wire: null }, { value: false, wire: "false" }, { value: 0, wire: "0" }, { value: "", wire: "" }])("preserves explicit $value through load, an unrelated edit, save and reopen", ({ value, wire }) => {
+    const loaded = stateOf({
+      ...writeLine("review", {}),
+      inputs: [
+        { referenceKey: "GroupId", value: { expressionType: "Literal", value } },
+        { referenceKey: "FormVersion", value: { expressionType: "Literal", value: "1" } }
+      ]
+    });
+    const expanded = expandStateFromWire(loaded);
+    expect((expanded.rootActivity!.GroupId as { expression: { value: unknown } }).expression.value).toEqual(value);
+    const edited = { ...expanded, rootActivity: { ...expanded.rootActivity!, FormVersion: wrapped("2", "Literal") } };
+    const saved = canonicalizeStateForWire(edited);
+    expect(saved.rootActivity!.inputs).toEqual([
+      { referenceKey: "GroupId", value: { expressionType: "Literal", value: wire } },
+      { referenceKey: "FormVersion", value: { expressionType: "Literal", value: "2" } }
+    ]);
+    expect(canonicalizeStateForWire(expandStateFromWire(JSON.parse(JSON.stringify(saved))))).toEqual(saved);
+  });
+
+  it("keeps the existing empty editor fallback when a wire argument has no value", () => {
+    const loaded = stateOf({ ...writeLine("review", {}), inputs: [{ referenceKey: "GroupId", value: { expressionType: "Literal" } }] });
+    expect(canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!.inputs)
+      .toEqual([{ referenceKey: "GroupId", value: { expressionType: "Literal", value: "" } }]);
+  });
+
   it("folds a top-level wrapped input into the canonical inputs array", () => {
     const state = stateOf(writeLine("write-one", { text: wrapped("Hello World!", "Literal") }));
 

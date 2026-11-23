@@ -65,8 +65,11 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     const syntax = row.getByRole("button", { name: /Condition expression syntax:/ });
     if (!(await syntax.getAttribute("aria-label"))?.includes("JavaScript")) {
       await syntax.click(); await page.getByRole("option", { name: /JavaScript/ }).click();
+      await expect(row.locator(".cm-content").first()).toBeFocused();
+    } else {
+      const preview = row.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true });
+      if (await preview.isVisible()) await preview.click();
     }
-    await row.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
     const editor = row.locator(".cm-content").first();
     await editor.fill(String(value)); await editor.press("Escape");
   }
@@ -84,7 +87,7 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
   }
   async function configureBody(text: string) {
     await page.getByRole("complementary", { name: "Inspector panel", exact: true }).getByRole("tab", { name: "Inputs", exact: true }).click();
-    const row = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Text$/ }) });
+    const row = page.getByRole("group", { name: "Text property", exact: true });
     const editor = row.getByRole("textbox").first();
     await editor.fill(text); await editor.press("Tab");
   }

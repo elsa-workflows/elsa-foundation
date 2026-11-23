@@ -166,7 +166,8 @@ export async function userTaskGroupedInputsJourney(page: Page, info: TestInfo, c
   const beforeReopen = await read();
   await open();
   await expect(assignment.getByRole("combobox", { name: "Expression returns", exact: true })).toHaveValue("AssigneeId");
-  await expect(expressionRow.locator(".wf-syntax-picker-trigger")).toContainText("JavaScript");
+  await expect(expressionRow.locator(".wf-syntax-picker-trigger")).toHaveAttribute("title", "JavaScript");
+  await expect(expressionRow.locator(".wf-syntax-picker-trigger")).toHaveAttribute("aria-label", "Assignee ID expression syntax: JavaScript");
   await expect(expressionRow).toContainText(source);
   await expect(formSummary).toHaveAttribute("aria-label", `Task form: ${formName} · Version 2`);
   const reopened = await read();

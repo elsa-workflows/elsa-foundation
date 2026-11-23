@@ -29,6 +29,7 @@ let replaceActivity: (next: ActivityNode) => void = noRenderedPanel;
 let replaceDraftId: (next: string) => void = noRenderedPanel;
 let replaceEditors: (next: StudioActivityPropertyEditorContribution[]) => void = noRenderedPanel;
 let replaceReadOnly: (next: boolean) => void = noRenderedPanel;
+let requestInputFocus: (key: string | undefined, request: number | undefined) => void = noRenderedPanel;
 
 const backendExpressionDescriptors: StudioExpressionDescriptor[] = [
   { type: "Literal", displayName: "Literal", editingMode: "literal" },
@@ -52,6 +53,7 @@ afterEach(() => {
   replaceDraftId = noRenderedPanel;
   replaceEditors = noRenderedPanel;
   replaceReadOnly = noRenderedPanel;
+  requestInputFocus = noRenderedPanel;
   unmountActivePanel();
 });
 
@@ -89,18 +91,21 @@ function renderPanel(
     customProperties: options.customProperties
   };
   const initialActivity = options.activity ?? activity();
+  const visibleVariables: React.ComponentProps<typeof ActivityPropertiesPanel>["visibleVariables"] = [];
 
   function Harness() {
     const [currentActivity, setCurrentActivity] = React.useState(initialActivity);
     const [currentDraftId, setCurrentDraftId] = React.useState(options.draftId);
     const [currentEditors, setCurrentEditors] = React.useState(options.editors ?? []);
     const [readOnly, setReadOnly] = React.useState(options.readOnly ?? false);
+    const [focus, setFocus] = React.useState({ key: options.focusInputKey, request: options.focusInputRequest });
     const optionsRef = React.useRef(options);
     optionsRef.current = options;
     replaceActivity = setCurrentActivity;
     replaceDraftId = setCurrentDraftId;
     replaceEditors = setCurrentEditors;
     replaceReadOnly = setReadOnly;
+    requestInputFocus = (key, request) => setFocus({ key, request });
     const handleChange = React.useCallback((nextActivity: ActivityNode) => {
       optionsRef.current.onChange?.(nextActivity);
       if (optionsRef.current.updateActivity !== false) setCurrentActivity(nextActivity);
@@ -118,10 +123,10 @@ function renderPanel(
         expressionDescriptors={options.expressionDescriptors ?? backendExpressionDescriptors}
         expressionDescriptorStatus={options.expressionDescriptorStatus ?? "ready"}
         onRetryDescriptors={options.onRetryDescriptors}
-        focusInputKey={options.focusInputKey}
-        focusInputRequest={options.focusInputRequest}
+        focusInputKey={focus.key}
+        focusInputRequest={focus.request}
         descriptorStatus="ready"
-        visibleVariables={[]}
+        visibleVariables={visibleVariables}
         scopeStatus="ready"
         onChange={handleChange}
       />
@@ -191,12 +196,13 @@ describe("validation navigation to compact code editors", () => {
     }
   };
 
-  function navigateTo(source: string) {
+  function navigateTo(source: string, focus: { key?: string; request?: number } = { key: "text", request: 1 }) {
     return renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
       activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: source } } }),
       expressionEditors: [editor],
-      focusInputKey: "text",
-      focusInputRequest: 1
+      editors: [],
+      focusInputKey: focus.key,
+      focusInputRequest: focus.request
     });
   }
 
@@ -225,6 +231,34 @@ describe("validation navigation to compact code editors", () => {
       expect(expanded).not.toBeNull();
       expect(document.activeElement).toBe(expanded);
     });
+  });
+
+  it("honors a changed focus target on an otherwise unchanged mounted row", async () => {
+    const container = navigateTo("return 1;", { request: 1 });
+    await nextFrame();
+    expect(container.querySelector(".studio-code-editor-preview")).not.toBeNull();
+    flushSync(() => requestInputFocus("text", 1));
+    await vi.waitFor(() => {
+      const rich = container.querySelector<HTMLElement>(".cm-content");
+      expect(rich).not.toBeNull();
+      expect(document.activeElement).toBe(rich);
+    });
+  });
+
+  it("honors another request for the same unchanged mounted input after focus leaves it", async () => {
+    const container = navigateTo("return 1;", { key: "text" });
+    await nextFrame();
+    expect(container.querySelector(".studio-code-editor-preview")).not.toBeNull();
+    for (const request of [1, 2]) {
+      flushSync(() => requestInputFocus("text", request));
+      await vi.waitFor(() => {
+        const rich = container.querySelector<HTMLElement>(".cm-content");
+        expect(rich).not.toBeNull();
+        expect(document.activeElement).toBe(rich);
+      });
+      flushSync(() => container.querySelector<HTMLButtonElement>("button")!.focus());
+      await vi.waitFor(() => expect(container.querySelector(".studio-code-editor-preview")).not.toBeNull());
+    }
   });
 });
 

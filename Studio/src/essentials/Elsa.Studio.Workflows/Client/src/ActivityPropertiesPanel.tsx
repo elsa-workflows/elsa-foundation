@@ -1614,6 +1614,8 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
     previous.activityDescriptor !== next.activityDescriptor ||
     previous.endpointContext !== next.endpointContext ||
     previous.draftId !== next.draftId ||
+    previous.focusInputKey !== next.focusInputKey ||
+    previous.focusInputRequest !== next.focusInputRequest ||
     previous.expressionTooling !== next.expressionTooling ||
     previous.dictionarySessionScope !== next.dictionarySessionScope ||
     previous.expressionEditorSessionScope !== next.expressionEditorSessionScope ||

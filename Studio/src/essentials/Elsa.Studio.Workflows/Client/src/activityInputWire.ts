@@ -302,7 +302,7 @@ function expandActivityNode(node: ActivityNode): ActivityNode {
       typeName: "",
       expression: {
         type: typeof argumentValue.expressionType === "string" ? argumentValue.expressionType : "Literal",
-        value: argumentValue.value ?? ""
+        value: argumentValue.value === undefined ? "" : argumentValue.value
       },
       ...(argument.conversion != null ? { conversion: argument.conversion } : {}),
       ...(Object.keys(argumentExtras).length > 0 ? { argumentExtras } : {})

@@ -95,7 +95,7 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   const effect = () => page.getByRole("note").filter({ hasText: /May change: output Count/ });
   await expect(effect()).toBeVisible();
   await capture(page, info, "known-effects");
-  const row = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Script$/ }) });
+  const row = page.getByRole("group", { name: "Script property", exact: true });
   const editor = row.getByRole("textbox").first();
   async function edit(source: string) {
     const analysis = page.waitForResponse(response => response.request().method() === "POST" &&

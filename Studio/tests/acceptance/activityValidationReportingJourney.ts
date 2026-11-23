@@ -2,6 +2,7 @@ import { expect, type Page, type TestInfo } from "@playwright/test";
 
 /** Real HTTP and rendered Studio against the acceptance runner's disposable stores. */
 export async function activityValidationReportingJourney(page: Page, info: TestInfo, capture: (page: Page, info: TestInfo, name: string) => Promise<void>) {
+  const authoringTabs = page.getByRole("tablist", { name: "Activity Definition authoring", exact: true });
   await page.goto("/workflows/activity-definitions");
   await page.locator(".studio-page-header").getByRole("button", { name: "New activity definition", exact: true }).click();
   await page.getByRole("textbox", { name: "Display name", exact: true }).fill(`Validation guidance ${info.project.name} ${Date.now()}`);
@@ -70,7 +71,7 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
   await page.getByRole("button", { name: "Edit variable initial value", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "variable-blocker");
   await page.getByRole("button", { name: "Edit variable initial value", exact: true }).press("Enter");
-  await expect(page.getByRole("tab", { name: "Variables", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(authoringTabs.getByRole("tab", { name: "Variables", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("textbox", { name: "Variable default value", exact: true })).toBeFocused();
   await capture(page, info, "variable-focused");
   await page.getByRole("button", { name: "Return to diagnostic", exact: true }).click();
@@ -81,7 +82,7 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
   await page.getByRole("button", { name: "Edit output value source", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "output-blocker");
   await page.getByRole("button", { name: "Edit output value source", exact: true }).press("Enter");
-  await expect(page.getByRole("tab", { name: "Outputs (2)", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(authoringTabs.getByRole("tab", { name: "Outputs (2)", exact: true })).toHaveAttribute("aria-selected", "true");
   const source = page.locator('.ad-output-value-source[data-output-reference-key="second"]');
   await expect(source).toBeFocused();
   await expect(source.getByRole("button", { name: "Choose value", exact: true })).toBeVisible();
