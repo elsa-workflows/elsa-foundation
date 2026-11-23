@@ -109,6 +109,10 @@ internal static class PostgresClusterChecks
             await Until(async () => await Image(target) is { Status: InstanceStatus.Finished });
             var image = (await Image(target))!;
             var results = Json.Read<NativeState>(image.State!).Results["approve"]!.AsArray().Select(x => x!.GetValue<string>());
+            var suffix = await api.TailAsync(scope, target.Ref, prefix.Next, stop);
+            Check(suffix.Items.All(e => e.Revision == 3 && PostgresPublicPreview.Decode(e) != "approved:approve-1") &&
+                suffix.Items.Count(e => PostgresPublicPreview.Decode(e) == "approved:approve-2") == 1,
+                "the pre-exit bookmark returns only the third revision and its single second approval");
             var journal = await api.TailAsync(scope, target.Ref, cancellationToken: stop);
             Check(journal.Items.Count(e => PostgresPublicPreview.Decode(e) == "approved:approve-1") == 1 &&
                 journal.Items.Count(e => e.Revision == 3 && PostgresPublicPreview.Decode(e) == "approved:approve-2") == 1,
