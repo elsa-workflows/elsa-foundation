@@ -56,15 +56,23 @@ internal static class NativeTenantEffectChecks
         await Drive(first);
         var waitingA = Checkpoint(blue, a);
         var waitingB = Checkpoint(green, b);
-        check(waitingA is { Status: InstanceStatus.Running } && waitingB is { Status: InstanceStatus.Running } &&
-            receiver.Arrivals.Count == 0, "both Native actors committed their initial wait before issuing any effects");
+        var bluePrefix = await reads.TailAsync(blue, a);
+        var greenPrefix = await reads.TailAsync(green, b);
+        if (!Waiting(waitingA, bluePrefix) || !Waiting(waitingB, greenPrefix) ||
+            bluePrefix.Next is not { } blueBookmark || greenPrefix.Next is not { } greenBookmark || receiver.Arrivals.Count != 0)
+        {
+            check(false, "both Native actors must commit their initial wait before effects and expose an exact journal bookmark");
+            return;
+        }
+        check(true, "both Native actors committed their initial wait and exposed an exact journal bookmark before effects");
 
         now += 10;
         await Drive(first, () => dropped);
         check(dropped && receiver.Arrivals is [{ Owner: "first", Actor: var firstHttp, Channel: Channel.Http },
             { Owner: "first", Actor: var firstMail, Channel: Channel.Mail }] && firstHttp == a && firstMail == a &&
-            Checkpoint(blue, a) == waitingA && Checkpoint(green, b) == waitingB,
-            "the first owner sent both blue effects while the store kept both earlier checkpoints");
+            Checkpoint(blue, a) == waitingA && Checkpoint(green, b) == waitingB &&
+            await EmptyTail(blue, a, blueBookmark) && await EmptyTail(green, b, greenBookmark),
+            "the first owner sent both blue effects while the store kept both original checkpoints and journal tails");
 
         var earlierEpoch = store.Partitions[0].Epoch;
         now = store.Nodes["first"].LeaseUntil + 1;
@@ -84,11 +92,14 @@ internal static class NativeTenantEffectChecks
 
         var finalA = Checkpoint(blue, a);
         var finalB = Checkpoint(green, b);
-        var blueJournal = await reads.TailAsync(blue, a);
-        var greenJournal = await reads.TailAsync(green, b);
-        check(Completed(finalA, waitingA, "blue-invoice", blueJournal) && Completed(finalB, waitingB, "green-invoice", greenJournal) &&
+        var blueSuffix = await reads.TailAsync(blue, a, blueBookmark);
+        var greenSuffix = await reads.TailAsync(green, b, greenBookmark);
+        check(Completed(finalA, waitingA, "blue-invoice") && Completed(finalB, waitingB, "green-invoice") &&
             await reads.GetAsync(blue, b) is null && await reads.GetAsync(green, a) is null,
-            "the successor committed each exact life once with its own Native output and activity history");
+            "the successor committed each exact life once with its own Native output");
+        check(FinalJournal(finalA, blueSuffix) && FinalJournal(finalB, greenSuffix) &&
+            await JournalMatches(blue, a, bluePrefix, blueSuffix) && await JournalMatches(green, b, greenPrefix, greenSuffix),
+            "both journal suffixes contain ordered HTTP completion, email completion and ending at the final revision");
 
         runtime = OpenIngress("successor");
         var blueReplay = await Start(blue, "blue-invoice", 10);
@@ -101,9 +112,8 @@ internal static class NativeTenantEffectChecks
             blueConflict is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.Conflict } &&
             greenConflict is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.Conflict } &&
             Checkpoint(blue, a) == finalA && Checkpoint(green, b) == finalB && sends.Count == 6 &&
-            (await reads.TailAsync(blue, a)).Items.SequenceEqual(blueJournal.Items) &&
-            (await reads.TailAsync(green, b)).Items.SequenceEqual(greenJournal.Items),
-            "each tenant's exact retry returned its original receipt and changed inputs conflicted without further effects");
+            await JournalMatches(blue, a, bluePrefix, blueSuffix) && await JournalMatches(green, b, greenPrefix, greenSuffix),
+            "exact retries returned each original receipt and changed inputs conflicted without new effects or journal entries");
 
         PublicRuntime OpenIngress(string node) => new(new InMemoryIngress(store, new Requests(node), node), reads);
         ValueTask<Contract.Admission> Start(Contract.BoundScope scope, string payload, int delay) =>
@@ -111,6 +121,12 @@ internal static class NativeTenantEffectChecks
                 NativeExecutionModel.Start(Definition, Modes.Balanced, new JsonObject { ["payload"] = payload, ["delay"] = delay }),
                 callerKey: CallerKey);
         InstanceRow? Checkpoint(Contract.BoundScope scope, Contract.ActorRef actor) => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor?.Row;
+        async ValueTask<bool> EmptyTail(Contract.BoundScope scope, Contract.ActorRef actor, Contract.PageToken? bookmark) =>
+            bookmark is { } token && await reads.TailAsync(scope, actor, token) is { Items.Count: 0, Next: null };
+        async ValueTask<bool> JournalMatches(Contract.BoundScope scope, Contract.ActorRef actor,
+            Contract.Page<Contract.JournalEntry> prefix, Contract.Page<Contract.JournalEntry> suffix) =>
+            (await reads.TailAsync(scope, actor)).Items.SequenceEqual(prefix.Items.Concat(suffix.Items)) &&
+            await EmptyTail(scope, actor, suffix.Next);
 
         async ValueTask<IScopeActivation> Own(string node, IKernelStore wire)
         {
@@ -133,15 +149,25 @@ internal static class NativeTenantEffectChecks
         }
     }
 
-    private static bool Completed(InstanceRow? row, InstanceRow? original, string output, Contract.Page<Contract.JournalEntry> journal)
+    private static bool Waiting(InstanceRow? row, Contract.Page<Contract.JournalEntry> prefix) =>
+        row is { Status: InstanceStatus.Running } && prefix.Items.Count > 0 &&
+        prefix.Items.All(entry => entry.Revision == row.Revision) &&
+        prefix.Items.Any(entry => Json.Read<string>(entry.Entry) == "start");
+
+    private static bool Completed(InstanceRow? row, InstanceRow? original, string output) =>
+        row is { Status: InstanceStatus.Finished } && original is not null &&
+        (row.Id, row.Creation, row.Revision) == (original.Id, original.Creation, original.Revision + 1) &&
+        Json.Read<NativeState>(row.State).Variables["output"]?.GetValue<string>() == output;
+
+    private static bool FinalJournal(InstanceRow? row, Contract.Page<Contract.JournalEntry> suffix)
     {
-        if (row is not { Status: InstanceStatus.Finished } || original is null ||
-            (row.Id, row.Creation, row.Revision) != (original.Id, original.Creation, original.Revision + 1) ||
-            Json.Read<NativeState>(row.State).Variables["output"]?.GetValue<string>() != output) return false;
-        var entries = journal.Items.Select(entry => Json.Read<string>(entry.Entry)).ToArray();
-        return entries.Count(entry => entry.StartsWith("c:", StringComparison.Ordinal) && entry.EndsWith(":http", StringComparison.Ordinal)) == 1 &&
-            entries.Count(entry => entry.StartsWith("c:", StringComparison.Ordinal) && entry.EndsWith(":mail", StringComparison.Ordinal)) == 1 &&
-            entries.Count(entry => entry == "end") == 1;
+        if (row is null || suffix.Items.Any(entry => entry.Revision != row.Revision)) return false;
+        var entries = suffix.Items.Select(entry => Json.Read<string>(entry.Entry))
+            .Where(entry => entry == "end" || Completion(entry, "http") || Completion(entry, "mail")).ToArray();
+        return entries is [var http, var mail, "end"] && Completion(http, "http") && Completion(mail, "mail");
+
+        static bool Completion(string entry, string node) =>
+            entry.StartsWith("c:", StringComparison.Ordinal) && entry.EndsWith(":" + node, StringComparison.Ordinal);
     }
 
     private static async Task Drive(IScopeActivation owner, Func<bool>? stop = null)
@@ -166,8 +192,10 @@ internal static class NativeTenantEffectChecks
         {
             var (channel, key, destination, payload) = outgoing.Effect switch
             {
-                HttpSendEffect { Request: var request } when request.Method == "POST" =>
-                    (Channel.Http, request.Headers[SendHttpRequest.IdempotencyKeyHeader], request.Url, request.Body!.GetValue<string>()),
+                HttpSendEffect { Request: var request } when request.Method == "POST" &&
+                    request.Headers.TryGetValue("Idempotency-Key", out var idempotencyKey) && !string.IsNullOrWhiteSpace(idempotencyKey) =>
+                    (Channel.Http, idempotencyKey, request.Url, request.Body!.GetValue<string>()),
+                HttpSendEffect => throw new InvalidOperationException("The invoice receiver requires a POST with a nonempty Idempotency-Key header."),
                 EmailSendEffect { Mail: var mail } =>
                     (Channel.Mail, mail.MessageId, mail.To, mail.Body),
                 _ => throw new InvalidOperationException("The fake receiver only accepts invoice POSTs and email.")
