@@ -6,8 +6,8 @@
   "interchangePackage": "0.1.1-preview.19",
   "stateAlias": "Elsa.Bpmn.ExecutionState",
   "stateVersion": 1,
-  "databaseSha256": "83b49e97039474774d1058b52f229177d8e07cc0240245270e6ea2b2206de950",
-  "compressedSha256": "8651357d7384317b6d48fe5d254888ce8ca6172951bf03dcb162dee667a45138",
+  "databaseSha256": "9dc54a6ea3cc21e7a4a0e5a3cd9c1c6eaf8c5065baaf6be0a60b4883496e79f7",
+  "compressedSha256": "14dd1f1d377d49de2caae0ef14971c2757da0c7e115b6273c811f34bd0e02990",
   "oldHostControl": "fresh provider over a separate exact database copy passed",
   "facts": {
     "parentId": "legacy-activity-0",
@@ -66,5 +66,66 @@
     "statePinsRegenerated": true,
     "changedStateContractReferences": 8,
     "changedBindingFingerprints": 3
+  },
+  "s9ProtocolRegeneration": {
+    "spec": 1207,
+    "inputCompressedSha256": "8651357d7384317b6d48fe5d254888ce8ca6172951bf03dcb162dee667a45138",
+    "inputDatabaseSha256": "83b49e97039474774d1058b52f229177d8e07cc0240245270e6ea2b2206de950",
+    "changedColumns": [
+      "elsa_runtime_post_commit_outbox.ContentJson",
+      "elsa_runtime_scheduler_work_item.ContentJson"
+    ],
+    "changes": [
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 1,
+        "renamedKeyTokens": 23,
+        "inputSha256": "a5860f161745728589dc1c5383214ccd2ffa9d839cd008145d8438e4e301b993",
+        "outputSha256": "597452e20596f62d8c6da6a80bf7fdba497bb639a43b034e5a115cc405c8224e"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 2,
+        "renamedKeyTokens": 23,
+        "inputSha256": "ddfa99ca3c2752c4de8e2f2250658cda8071600dcaba19ee7ec465bfe643b18a",
+        "outputSha256": "28e3e2df04d6d3c3bf3657a585cfb67aa8025a639536a81c06888d9db113140b"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 3,
+        "renamedKeyTokens": 28,
+        "inputSha256": "aa7e009e7ad95dcfee2347c8b7dfd3569178269488ceb401a5b92f5ff1c3cc06",
+        "outputSha256": "81d78b5f7e290a41ba238465a061482dcd8a73f16f7f2d06d97aaa6ffa40790d"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 4,
+        "renamedKeyTokens": 28,
+        "inputSha256": "e70e25bc7809254559290cd2d9805597b8f3aa23f0c465fb83585104ac5b55d4",
+        "outputSha256": "0ad7b9b88fa3fdbc2e96c53565bb7d5d0afcce1719b43144a4cc0f305d7fd609"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 5,
+        "renamedKeyTokens": 37,
+        "inputSha256": "0c44ba6587b479d3ce512cb075794aa6f5c5b6a4b6db20f764ecad8b297464dd",
+        "outputSha256": "779aa2b07bf4e91aec0f0209a810922f9d00db00a6b157add0e702d4ced019e8"
+      },
+      {
+        "table": "elsa_runtime_scheduler_work_item",
+        "rowId": 3,
+        "renamedKeyTokens": 14,
+        "inputSha256": "da18cc1e065c2ff65092e35482a6abfbd43bb4628c449320ee358899569c9edd",
+        "outputSha256": "4e32c0575f53eb12c72f4acd41049cfc19831d4051dc1abd2a913d30f04dfc54"
+      },
+      {
+        "table": "elsa_runtime_scheduler_work_item",
+        "rowId": 4,
+        "renamedKeyTokens": 14,
+        "inputSha256": "3bdad9df9f1f4053985425fb5977520438f0efa8196ac45ecd77458e48f53b59",
+        "outputSha256": "e88779b5fe5f7d2aa3aae9e2d037cc661029f92ad37677549cf8007f941f8f76"
+      }
+    ],
+    "preserved": "Only declared RuntimeSchedulerWorkItem/typed command/identity/provenance key tokens change; every other JSON token and database column is unchanged. Historical old-host proof applies to the original capture."
   }
 }

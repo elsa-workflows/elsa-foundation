@@ -421,8 +421,8 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
                 Id = "v1", TenantId = "tenant-a", ProviderKey = "provider", ProviderSchemaVersion = "1",
                 ConsumerKey = "consumer", ConsumerSchemaVersion = "1", SourceKind = "json", SourceId = "source",
                 DescriptorPayloadSource = "{\"mode\":\"opaque\"}",
-                InputsSource = JsonSerializer.Serialize(new[] { new InputDefinition("input", "Input", new Elsa.Primitives.Models.TypeReference("string"), null, "Input", null, true) }),
-                OutputsSource = "[]", DesignFacetsSource = JsonSerializer.Serialize(new[] { new ActivityDesignFacet("canvas", "1", JsonDocument.Parse("{\"color\":\"blue\"}").RootElement) })
+                InputsSource = JsonSerializer.Serialize(new[] { new InputDefinition("input", "Input", new Elsa.Primitives.Models.TypeReference("string"), null, "Input", null, true) }, Elsa.Serialization.Core.JsonBaseline.Options),
+                OutputsSource = "[]", DesignFacetsSource = JsonSerializer.Serialize(new[] { new ActivityDesignFacet("canvas", "1", JsonDocument.Parse("{\"color\":\"blue\"}").RootElement) }, Elsa.Serialization.Core.JsonBaseline.Options)
             });
             await db.SaveChangesAsync();
         }
@@ -1846,7 +1846,7 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
         db.ActivityDefinitions.Add(definition);
         ActivityForkReceipt Receipt(string id, string? tenant, string idempotency, string actor = "actor") => new()
         {
-            Id = id, TenantId = tenant, IdempotencyKey = idempotency, CandidateId = "candidate", PublicCandidateId = "public", RequestFingerprint = "request", AccessBindingFingerprint = "access", ActorId = actor, AuthorizationProfile = "auth", DefinitionId = "forked", ActivityTypeKey = definition.ActivityTypeKey, DraftId = "draft", DefinitionMaterialJson = JsonSerializer.Serialize(definition), AuthoringState = authoring, Draft = draft, Layout = layout, MigrationDiagnostics = [new ActivityDiagnostic("migration", ActivityDiagnosticSeverity.Warning, "warning", new("fork", "forked"))], AppliedAt = DateTimeOffset.UtcNow
+            Id = id, TenantId = tenant, IdempotencyKey = idempotency, CandidateId = "candidate", PublicCandidateId = "public", RequestFingerprint = "request", AccessBindingFingerprint = "access", ActorId = actor, AuthorizationProfile = "auth", DefinitionId = "forked", ActivityTypeKey = definition.ActivityTypeKey, DraftId = "draft", DefinitionMaterialJson = JsonSerializer.Serialize(definition, Elsa.Serialization.Core.JsonBaseline.Options), AuthoringState = authoring, Draft = draft, Layout = layout, MigrationDiagnostics = [new ActivityDiagnostic("migration", ActivityDiagnosticSeverity.Warning, "warning", new("fork", "forked"))], AppliedAt = DateTimeOffset.UtcNow
         };
         db.ActivityForkReceipts.AddRange(Receipt("receipt", "tenant-a", "op"), Receipt("receipt-global", null, "same-op"), Receipt("receipt-literal-global", "<global>", "same-op"), Receipt("receipt-trailing", null, "same-op ", "actor "));
         await db.SaveChangesAsync();
@@ -1877,7 +1877,7 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
             Id = request.ReceiptId, TenantId = candidate.TenantId, IdempotencyKey = request.IdempotencyKey, CandidateId = request.CandidateId, PublicCandidateId = candidate.CandidateId,
             RequestFingerprint = request.RequestFingerprint, AccessBindingFingerprint = request.AccessBindingFingerprint, ActorId = request.ActorId, AuthorizationProfile = request.AuthorizationProfile,
             DefinitionId = candidate.ReservedDefinition.Id, ActivityTypeKey = candidate.ReservedDefinition.ActivityTypeKey, DraftId = candidate.ReservedDraft.Id,
-            DefinitionMaterialJson = JsonSerializer.Serialize(candidate.ReservedDefinition), AuthoringState = candidate.ReservedAuthoringState, Draft = candidate.ReservedDraft, Layout = candidate.ReservedLayout,
+            DefinitionMaterialJson = JsonSerializer.Serialize(candidate.ReservedDefinition, Elsa.Serialization.Core.JsonBaseline.Options), AuthoringState = candidate.ReservedAuthoringState, Draft = candidate.ReservedDraft, Layout = candidate.ReservedLayout,
             MigrationDiagnostics = [], AppliedAt = request.AppliedAt
         });
         await db.SaveChangesAsync();

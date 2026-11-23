@@ -37,12 +37,13 @@ including JSON components of framed and keyed protocols. Its independent fixed o
 entry below. Canonical bytes belong to equality and hashing; they do not replace the bytes of stored or forwarded
 data. See [ADR 0091](adr/0091-json-data-passes-through-unchanged-and-every-serializer-derives-from-one-baseline.md).
 
-Physical checksums remain byte checks: file manifests, exact transport copies and the activity authority row witness
+Physical checksums remain byte checks: `EfMigrationPlan.ManifestSha256`, captured closure-file digests, exact transport copies and the activity authority row witness
 detect changes to stored bytes even when JSON values are equal. `ActivityAuthorityIntegrity` binds raw and auxiliary
 JSON spellings, token columns and decoded scalars using the length-framed UTF-16 recipe verified by SQL Server's
 `HASHBYTES` predicate, including scalars above 4,000 characters. It is not a content hash or JSON value identity.
 The paired authority columns are compared with the provider's ordinal collation before paging and ordinally after
 hydration. Replacing this witness with canonical JSON would hide physical drift and invalidate the SQL verifier.
+Semantic package-manifest catalog hashes still use `JsonHashInput`; a file's JSON extension alone grants no exemption.
 
 ## Types are stored by alias
 

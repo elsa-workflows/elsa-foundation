@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Elsa.Serialization.Core;
 using Xunit;
@@ -44,11 +45,17 @@ public sealed class JsonConversionLifetimeTests
         Assert.Equal("Ada", JsonConversionContract.SerializeToElement(new Dictionary<string, object> { ["KeepKey"] = instance }).GetProperty("KeepKey").GetProperty(key).GetString());
         // Include a collectible root read and an explicit stable-root options consumer.
         _ = JsonConversionContract.Deserialize("{}", type);
+        var member = typeof(MemberHolder).GetProperty(nameof(MemberHolder.Value))!;
+        var memberContract = JsonConversionContract.For(type, member);
+        Assert.Same(memberContract, JsonConversionContract.For(type, member));
+        Assert.NotSame(memberContract, JsonConversionContract.For(typeof(object), member));
+        Assert.Equal("Ada", memberContract.Write(instance, type).GetProperty("customerName").GetString());
         Assert.True(JsonConversionContract.For(typeof(object)).Options.IsReadOnly);
         _ = JsonSerializer.SerializeToElement<object>(instance, JsonConversionContract.For(typeof(object)).Options);
         return new WeakReference(type);
     }
 
     private sealed class Holder { public object? Value { get; init; } }
+    private sealed class MemberHolder { [JsonConversion] public object? Value { get; init; } }
     private sealed class Canary { public string Name => "canary"; }
 }

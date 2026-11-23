@@ -214,6 +214,11 @@ internal static class ActivitiesDesignProviderSmoke
             var caseDrift = providerMaterial.ContentAuthorityJson!.Replace("provider", "Provider", StringComparison.Ordinal);
             Assert.NotEqual(providerMaterial.ContentAuthorityJson, caseDrift);
             await context.Database.ExecuteSqlRawAsync(string.Concat("UPDATE ", table, " SET ", canonicalColumn, " = {0} WHERE ", resourceColumn, " = {1}"), caseDrift, projection.ResourceId);
+            var witnessCollation = Elsa.Persistence.EntityFramework.EfOrdinalCollation.ForProvider(expectedProviderName)!;
+            Assert.False(await context.ActivityDefinitionManagementProjections.AsNoTracking()
+                .Where(x => x.ResourceId == projection.ResourceId && x.ContentAuthorityIsValid && x.ContentAuthorityJson != null &&
+                    EF.Functions.Collate(x.ContentAuthorityJson, witnessCollation) == EF.Functions.Collate(x.ContentAuthorityCanonicalJson, witnessCollation))
+                .AnyAsync());
             Assert.Null(await authorityStore.FindDefinitionAsync(projection.ResourceId, "tenant-a", projection.ValidFromSequence));
             await context.Database.ExecuteSqlRawAsync(string.Concat("UPDATE ", table, " SET ", canonicalColumn, " = {0} WHERE ", resourceColumn, " = {1}"), providerMaterial.ContentAuthorityJson, projection.ResourceId);
             Assert.NotNull(await authorityStore.FindDefinitionAsync(projection.ResourceId, "tenant-a", projection.ValidFromSequence));

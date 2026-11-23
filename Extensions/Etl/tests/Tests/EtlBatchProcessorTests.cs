@@ -23,10 +23,10 @@ public sealed partial class EtlBatchProcessorTests
         using var equal = JsonDocument.Parse("\"\\u006beep\"");
         using var different = JsonDocument.Parse("\"different\"");
         var originalFilter = Assert.Single(scenario.Pipeline.Filters);
-        var same = scenario.Pipeline with { Filters = [originalFilter with { Value = equal.RootElement.Clone() }] };
+        var same = scenario.Pipeline with { Filters = [new EtlFilter(originalFilter.Field, originalFilter.Comparison, equal.RootElement)] };
         var result = await Processor.ProcessAsync(scenario.Admission, same, scenario.Prepared, scenario.Batch, scenario.Bindings);
         Assert.True(result.Succeeded, result.Diagnostic?.ToString());
-        var changed = scenario.Pipeline with { Filters = [originalFilter with { Value = different.RootElement.Clone() }] };
+        var changed = scenario.Pipeline with { Filters = [new EtlFilter(originalFilter.Field, originalFilter.Comparison, different.RootElement)] };
         var refused = await Processor.ProcessAsync(scenario.Admission, changed, scenario.Prepared, scenario.Batch, scenario.Bindings);
         Assert.False(refused.Succeeded);
         Assert.Equal("etl.pipeline-artifact-mismatch", refused.Diagnostic!.Code);

@@ -10,7 +10,7 @@ namespace Elsa.Serialization.Core;
 public sealed class JsonConversionContract
 {
     private static readonly ConditionalWeakTable<Type, JsonConversionContract> Types = new();
-    private static readonly ConditionalWeakTable<MemberInfo, JsonConversionContract> Members = new();
+    private static readonly ConditionalWeakTable<MemberInfo, ConditionalWeakTable<Type, JsonConversionContract>> Members = new();
     private readonly JsonKnownNamingPolicy namingPolicy;
     private readonly bool caseInsensitive;
     private readonly (string Json, string Member)[] mappings;
@@ -70,7 +70,7 @@ public sealed class JsonConversionContract
         ArgumentNullException.ThrowIfNull(type);
         type = Nullable.GetUnderlyingType(type) ?? type;
         if (member?.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null)
-            return Members.GetValue(member, key => new(key.GetCustomAttribute<JsonConversionAttribute>(inherit: true), type));
+            return Members.GetValue(member, _ => new()).GetValue(type, key => new(member.GetCustomAttribute<JsonConversionAttribute>(inherit: true), key));
         return Types.GetValue(type, key => new(key.GetCustomAttribute<JsonConversionAttribute>(inherit: true), key));
     }
 
