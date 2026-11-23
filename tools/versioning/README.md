@@ -247,13 +247,13 @@ packages to be exactly the affected set, each at its computed version with its c
   named, or an orphan for the bootstrap, pushed without force with the checkout's `GITHUB_TOKEN` (FR-017). A rejected
   push fails the run.
 
-A run that dies between its pushes and its write-back, or whose write-back is rejected, leaves packages on the feed that
+Once the remote publish-state exists, an interrupted or rejected write-back can leave packages on the feed that
 the record does not name. The next run from `main` computes the same versions for them, the feed rejects them, and
 the equal fingerprints record them, with nobody intervening. The next run must see the same inputs for those
 packages; if a later commit changed one of them before any run recorded it, the feed's copy no longer matches and
 the publish fails as a collision for the repair workflow (FR-019, #2083). A bootstrap that stops part way **after a successful write-back**
 leaves `publish-state` in place, and the next push to `main` publishes the remainder at their first versions.
-If the first PUT was accepted but its read-back failed before any write-back, follow the [first-bootstrap recovery procedure](#verify-a-foundation-preview-package).
+If an initial PUT was accepted but read-back or the first write-back failed while the remote record is absent, follow the [first-bootstrap recovery procedure](#verify-a-foundation-preview-package).
 
 The workflow serializes every run from `main`, from its plan to its write-back, on the concurrency group
 `publish-state`, and never cancels one in progress (FR-020); anything else that writes `publish-state` joins that
@@ -362,9 +362,9 @@ their existing evidence status; an older version without signatures will fail th
 Before rollout, compare the most recent Packages publish summary with the feed and the matching record. If an earlier
 unsigned push landed without write-back, verify its original artifact and feed identity, then use the existing
 [operator repair procedure](#repair) to settle that historical entry. The verifier explicitly identifies this case.
-The one-off bootstrap keeps its empty-feed precondition. If the first PUT was accepted and verification failed before
-any record existed, recover the original Packages run and retry its public byte/attestation verification. A new
+The one-off bootstrap keeps its empty-feed precondition. If initial PUTs were accepted and verification or the first
+write-back failed, inspect the remote record. If it exists, the next normal main publish can resume. If it is absent, recover the original Packages run and retry its public byte/attestation verification. A new
 bootstrap will refuse the existing equal version. Have the owner apply the existing bootstrap feed-cleanup procedure
-for that exact unrecorded version before authorizing a new bootstrap. The current Elsa 4 preview feed is already
+only for the confirmed unrecorded bootstrap versions before authorizing a new bootstrap. The current Elsa 4 preview feed is already
 bootstrapped. Stable release composition
 and promotion are tracked in [#2085](https://github.com/elsa-workflows/elsa-foundation/issues/2085).

@@ -137,10 +137,12 @@ public sealed class PackagePublisher(IPackageFeed feed, IPublishState state, Tex
         }
         catch (InvalidOperationException exception)
         {
+            var recovery = plan.Mode == PublishMode.Bootstrap
+                ? "Check the remote publish-state. If its first write did not land, main is still a dry run; follow first-bootstrap recovery in tools/versioning/README.md."
+                : "The next run from main finds them on the feed with the same input fingerprints and verifies them before recording (spec 150 FR-018).";
             return new PublishReport(plan, outcomes, null,
                 (failure is null ? string.Empty : failure + " ") +
-                $"The write-back failed, so {recorded.Length} package(s) are on the feed but not recorded: {exception.Message} The next run from main " +
-                "finds them on the feed with the same input fingerprints and records them (spec 150 FR-018).");
+                $"The write-back failed, so {recorded.Length} package(s) were pushed but their record is unconfirmed: {exception.Message} {recovery}");
         }
     }
 
@@ -262,6 +264,7 @@ public sealed class PackagePublisher(IPackageFeed feed, IPublishState state, Tex
         }
         catch (FeedException exception)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return Outcome(PackageOutcomeKind.Collision,
                 $"the feed already holds {packed.Version}, and its input fingerprint cannot be read ({exception.Message}), so nothing shows it was built from " +
                 $"these inputs, {computed.Fingerprint}. The feed's copy is kept (spec 150 FR-018); settle the record with the repair workflow (FR-019).");

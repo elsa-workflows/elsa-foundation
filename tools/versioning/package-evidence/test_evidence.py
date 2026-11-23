@@ -105,6 +105,19 @@ class DestinationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'expected package'):
                 verify.signed_inventory(self.file)
 
+    def test_cli_missing_and_unavailable_responses_remain_distinguishable(self):
+        endpoint = f"https://api.github.com/repos/{verify.REPO}/attestations/sha256:{verify.sha256(self.file)}"
+        for stderr, expected, message in [
+                ('no attestations found', verify.NoAttestations, 'No .* records were found'),
+                ('Error: no attestations found', verify.NoAttestations, 'No .* records were found'),
+                (f'Error: HTTP 404: Not Found ({endpoint}?per_page=30)', ValueError, 'Confirm repository attestation read access'),
+                ('Error: HTTP 503', ValueError, 'GitHub could not verify')]:
+            error = verify.subprocess.CalledProcessError(1, 'gh', stderr=stderr.encode())
+            with self.subTest(stderr=stderr), patch.object(verify.subprocess, 'check_output',
+                                                          side_effect=['gh version 2.104.0', error]):
+                with self.assertRaisesRegex(expected, message):
+                    verify.signed_inventory(self.file)
+
     def test_reader_requires_exact_workflow_matching_support(self):
         with patch.object(verify.subprocess, 'check_output', return_value='gh version 2.101.0 (2026-09-01)') as gh:
             with self.assertRaisesRegex(ValueError, '2.102.0'):

@@ -57,8 +57,14 @@ def signed_inventory(path):
                                           stderr=subprocess.PIPE, timeout=55)
         except subprocess.CalledProcessError as error:
             detail = (error.stderr or b"").decode(errors="replace").strip()
-            if detail == "Error: no attestations found":
+            if detail.removeprefix("Error: ") == "no attestations found":
                 raise NoAttestations(f"No {predicate} records were found for these bytes.") from error
+            endpoint = f"https://api.github.com/repos/{REPO}/attestations/sha256:{sha256(path)}"
+            if "HTTP 404" in detail and endpoint in detail:
+                raise ValueError("GitHub returned 404 for this package digest. Confirm repository attestation read access "
+                                 "and compare the original producer run with the published version. The pre-cutover "
+                                 "procedure in tools/versioning/README.md requires independently confirmed missing "
+                                 "evidence before changing the record.") from error
             raise ValueError(f"GitHub could not verify {predicate}: {detail}") from error
         records = json.loads(raw)
         if not records:
