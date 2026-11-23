@@ -201,7 +201,8 @@ internal static class Elsa3ImportRecordCodec
             throw new InvalidDataException("The Elsa 3 import row content does not match its content hash.");
         string actual;
         try { actual = JsonHashInput.HashJson(contentJson); }
-        catch (JsonException exception) { throw new InvalidDataException("The Elsa 3 import row content is not valid JSON.", exception); }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+        { throw new InvalidDataException("The Elsa 3 import row content is not valid JSON.", exception); }
         if (!StringComparer.Ordinal.Equals(contentHash, actual))
             throw new InvalidDataException("The Elsa 3 import row content does not match its content hash.");
     }

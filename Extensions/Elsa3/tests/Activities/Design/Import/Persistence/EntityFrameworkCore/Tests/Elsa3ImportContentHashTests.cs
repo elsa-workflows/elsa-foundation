@@ -44,7 +44,30 @@ public sealed class Elsa3ImportContentHashTests
         else
             SetContent(record, material, expected);
         var before = Content(record);
-        Assert.NotNull(Read(kind, record, material));
+        object? decoded = null;
+        var failure = Record.Exception(() => decoded = Read(kind, record, material));
+        Assert.True(failure is null, $"{name}: retained-content reader golden failed: {failure}. {Freeze}");
+        Assert.NotNull(decoded);
+        Assert.Equal(before, Content(record));
+    }
+
+    [Theory]
+    [InlineData("collection", "{")]
+    [InlineData("collection", "{\"extra\":\"\\ud800\"}")]
+    [InlineData("collection", "{\"\\ud800\":1}")]
+    [InlineData("receipt", "{")]
+    [InlineData("receipt", "{\"extra\":\"\\ud800\"}")]
+    [InlineData("receipt", "{\"\\ud800\":1}")]
+    public void Invalid_JSON_and_unpaired_surrogates_are_normalized_without_rewriting_received_content(string kind, string invalid)
+    {
+        var vector = Vectors().Single(vector => (string)vector[0] == kind + "-writer");
+        var material = (string)vector[3];
+        var record = Write(kind, material);
+        SetContent(record, invalid, Content(record).Hash);
+        var before = Content(record);
+        var failure = Assert.Throws<TargetInvocationException>(() => Read(kind, record, material));
+        var normalized = Assert.IsType<InvalidDataException>(failure.InnerException);
+        Assert.True(normalized.InnerException is JsonException or InvalidOperationException, normalized.ToString());
         Assert.Equal(before, Content(record));
     }
 
