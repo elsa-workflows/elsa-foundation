@@ -18,6 +18,18 @@ internal static class PostgresSelfSetChecks
         var ingress = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         await ingress.InstallAsync(stop);
         await store.EnableRootSelfSendsAsync(stop);
+        if (!owned)
+        {
+            try { store.BindWorkerNode(); }
+            catch (NotSupportedException) when (!store.OwnedSetsAvailable)
+            {
+                await using var untouched = Open();
+                Require(!await untouched.Partitions.AnyAsync(p => p.Owner != null, stop) &&
+                    !await untouched.Messages.AnyAsync(stop), "the EF writer declines grouped ownership before changing the database");
+                return 0;
+            }
+            throw new InvalidOperationException("Unexpected grouped EF writer.");
+        }
         store.BindWorkerNode();
 
         const string tenant = "flow-set";

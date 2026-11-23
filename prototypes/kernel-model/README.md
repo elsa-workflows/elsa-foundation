@@ -160,10 +160,11 @@ the partition at a higher epoch, applies that exact continuation once, and runs 
 A changed-body approval replay preserves the original result. Two actor revisions are silent. The partition journal
 keeps consecutive positions. The check also runs with eight virtual partitions.
 
-For the grouped storage operations alone, run `pg-root-self-set <owned|ef> <checked|in-batch>` with the same
+For the grouped storage operations alone, run `pg-root-self-set owned <checked|in-batch>` with the same
 runner on a fresh database. This uses two homes with different epochs. Two checkpoints and their private
 continuations commit together. A stale sibling's fence rolls back a mixed consume, and the current set advances
-only the home that writes a journal entry.
+only the home that writes a journal entry. With `ef` the fixture checks that the store declines grouped
+ownership before changing any lease or inbox row.
 
 ### PostgreSQL Flowchart preview
 
