@@ -6,7 +6,7 @@ using Kernel.Model.Contracts;
 namespace Kernel.WorkflowActor;
 
 /// <summary>Runs workflow models through the public actor contract.</summary>
-public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType
+public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType
 {
     public const string ActorType = "workflow";
 
@@ -48,6 +48,12 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
                 WriteHeader(turn, workflow, workflow with { Version = terminatingModel.StateVersion });
             }
             if (header.Status == ActorStatus.Running) turn.End(ActorStatus.Cancelled);
+            return;
+        }
+
+        if (command == Kinds.Migrate)
+        {
+            ApplyMigration(turn, workflow, turn.Inbox[0]);
             return;
         }
 
@@ -127,12 +133,14 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
             JsonSerializer.Deserialize(state, model.StateType) ?? throw new InvalidOperationException("The workflow state is absent.");
     }
 
-    private static void WriteHeader(IActorTurn turn, WorkflowHeader previous, WorkflowHeader next)
+    private static void WriteHeader(IActorTurn turn, WorkflowHeader previous, WorkflowHeader next, string? answeredPlan = null)
     {
-        if (previous == next) return;
+        if (previous == next && answeredPlan is null) return;
         var labels = new Dictionary<string, string>(StringComparer.Ordinal) { ["definition"] = next.Definition };
         if (next.Version is { } version) labels.Add("version", version.ToString(CultureInfo.InvariantCulture));
-        turn.SetHeader(JsonSerializer.Serialize(next), labels);
+        answeredPlan ??= turn.Header.Labels.GetValueOrDefault(AnsweredPlanLabel);
+        if (answeredPlan is not null) labels.Add(AnsweredPlanLabel, answeredPlan);
+        turn.SetHeader(previous == next ? turn.Header.TypeData : JsonSerializer.Serialize(next), labels);
     }
 
     private static InstanceInfo Instance(ActorHeader header, WorkflowHeader workflow) =>
