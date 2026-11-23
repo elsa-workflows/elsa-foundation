@@ -78,6 +78,8 @@ public sealed partial class EfStore
                 throw new StoreFormatException("The PostgreSQL owner must initialize its job capability before binding to the job profile.");
             if (RootTimedJobIssuanceEnabled && (scope.Discover || scope.Actors.Length != 1))
                 throw new NotSupportedException("The timed job issuance fixture binds exactly one generated root.");
+            if (db.UsesRootValueProtocol != RootValuesEnabled)
+                throw new StoreFormatException("The PostgreSQL owner must initialize its value capability before binding to the value qualification profile.");
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
         }
@@ -197,18 +199,21 @@ public sealed partial class EfStore
         await RequireStoreVersionsAsync(db, token);
         if (db.UsesRootJobProtocol)
             throw new NotSupportedException("The PostgreSQL job profile requires the qualified Worker checkpoint writer.");
+        if (db.UsesRootValueProtocol)
+            throw new NotSupportedException("The PostgreSQL value qualification requires the qualified Worker checkpoint writer.");
         return await CommitAsync(new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [prepared.JournalTurn!], [], []),
             prepared.Checkpoint, sentAt, token);
     }
 
     private sealed record RootCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> Commands, IReadOnlyDictionary<string, long> Revisions,
-        bool JobProfile, bool TimedJobIssuance)
+        bool JobProfile, bool TimedJobIssuance, bool ValueProfile)
         : QualifiedRootCheckpoint(0)
     {
         internal override long RevisionFor(string actor) => Revisions[actor];
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
-            if (db.UsesRootJobProtocol != JobProfile || db.UsesRootTimedJobIssuance != TimedJobIssuance) return false;
+            if (db.UsesRootJobProtocol != JobProfile || db.UsesRootTimedJobIssuance != TimedJobIssuance ||
+                db.UsesRootValueProtocol != ValueProfile) return false;
             foreach (var command in Commands)
                 if (!await command.BindCheckpointAsync(db, cancellationToken)) return false;
             return true;
@@ -267,7 +272,8 @@ public sealed partial class EfStore
                 revisions.Add(journal.Instance, prepared.Checkpoint.JournalRevision);
             }
         }
-        return (batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled));
+        return (batch with { Turns = turns, Seen = [], Trial = [] },
+            new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled, RootValuesEnabled));
     }
 
     private static bool InputsMatch(WorkerRoot root, TurnCommit turn, bool jobs = false) =>
@@ -294,6 +300,9 @@ public sealed partial class EfStore
         }
         var row = turn.Row;
         var recalls = turn.FoundationSelfRecalls;
+        var values = turn.FoundationValues;
+        if (values is not null && (!RootValuesEnabled || turn.Expected is null || turn.FoundationRootOperator is not null))
+            throw RootShape();
         if (recalls is not null && (RootSelfIssuer is null || turn.Expected is null ||
             recalls.Any(key => key.Scope != -1 || !root.Owns(key)) ||
             turn.Consumed.Any(recalls.Contains) || turn.Sent.Any(m => recalls.Contains(m.InboxKey)))) throw RootShape();
@@ -310,7 +319,8 @@ public sealed partial class EfStore
             turn.Subscribed, turn.Unsubscribed, turn.Journal, turn.Unsubscribe, turn.Held)
         {
             FoundationHeader = turn.FoundationHeader, FoundationRootOperator = turn.FoundationRootOperator, FoundationSelfRecalls = recalls,
-            FoundationRootJobCompletion = RootJobsEnabled ? turn.FoundationRootJobCompletion : null
+            FoundationRootJobCompletion = RootJobsEnabled ? turn.FoundationRootJobCompletion : null,
+            FoundationValues = values
         };
         var supportedRow = new InstanceRow(row.Id, row.Model, row.Definition, row.Status, row.State, row.Revision, null,
             History: row.History, Suspended: row.Suspended, StateVersion: row.StateVersion, Creation: 1, StartIntent: root.Fingerprint,
@@ -370,6 +380,6 @@ public sealed partial class EfStore
         if (RootJobsEnabled) ValidateRootJobChange(current, row, inputs, turn.Sent, turn.FoundationRootJobCompletion);
         return WithSends(PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
             row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, recalls?.Select(key => key.Id).ToArray(),
-            jobState: jobState, jobCompletion: turn.FoundationRootJobCompletion));
+            jobState: jobState, jobCompletion: turn.FoundationRootJobCompletion, values: values));
     }
 }

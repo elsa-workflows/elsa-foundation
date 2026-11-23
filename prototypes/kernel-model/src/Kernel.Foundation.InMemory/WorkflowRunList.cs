@@ -20,17 +20,8 @@ internal sealed class WorkflowRunList(Durable.InMemoryStore store, string workfl
     internal ValueTask<Page<WorkflowRunView>> ListAsync(BoundScope scope, WorkflowRunQuery query, PageToken? from = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(scope);
-        ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
-        if (query.From > query.To)
-            throw new ArgumentException("The workflow run history start must not be after its end.", nameof(query));
-
-        var context = Encoding.UTF8.GetBytes(Durable.DurableKeyJson.Write(new
-        {
-            Read = "workflow-run-history/1", scope.Tenant, Type = workflowActorType, query.Definition, query.Status,
-            From = query.From?.UtcTicks, To = query.To?.UtcTicks
-        }));
+        var context = Context("workflow-run-history/1", scope, workflowActorType, query);
         Span<byte> bookmark = stackalloc byte[sizeof(long) + RefBytes];
         Durable.InMemoryStore.RunHistoryBookmark? after = null;
         if (from is { } token)
@@ -55,7 +46,19 @@ internal sealed class WorkflowRunList(Durable.InMemoryStore store, string workfl
         return new(new Page<WorkflowRunView>(items, next, page.AsOf));
     }
 
+    internal static byte[] Context(string read, BoundScope scope, string type, WorkflowRunQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(query);
+        if (query.From > query.To)
+            throw new ArgumentException("The workflow run history start must not be after its end.", nameof(query));
+        return Encoding.UTF8.GetBytes(Durable.DurableKeyJson.Write(new
+        {
+            Read = read, scope.Tenant, Type = type, query.Definition, query.Status, From = query.From?.UtcTicks, To = query.To?.UtcTicks
+        }));
+    }
+
     // The foundation clock has millisecond precision. Preserve finer query bounds through comparison.
-    private static decimal? UnixMilliseconds(DateTimeOffset? value) =>
+    internal static decimal? UnixMilliseconds(DateTimeOffset? value) =>
         value is { } instant ? (instant.UtcTicks - DateTimeOffset.UnixEpoch.UtcTicks) / (decimal)TimeSpan.TicksPerMillisecond : null;
 }

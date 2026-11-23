@@ -289,6 +289,7 @@ public sealed class TurnOutcome(string instance)
     public List<Delivery> Consumed = [], Held = [];
     public List<InboxKey> Cancelled = [];
     internal IReadOnlySet<InboxKey>? FoundationSelfRecalls;
+    internal IReadOnlyList<FoundationValue>? FoundationValues;
     public List<Message> Sent = [];
     public HashSet<InboxKey> Fresh = [], Volatile = [];
     public List<SubscriptionRow> Subscribed = [], Unsubscribed = [];
