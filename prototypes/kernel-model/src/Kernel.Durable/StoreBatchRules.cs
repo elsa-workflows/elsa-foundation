@@ -237,6 +237,8 @@ public static class StoreBatchRules
 
     public static void ValidateIdentity(InstanceRow row)
     {
+        if (row.FoundationNullState && (row.State != "null" || row.Retired || row.IdentityOnly))
+            throw new StoreException(Failure.Definite, "An absent actor state requires the null placeholder on an actor checkpoint.");
         if (row.IdentityMetadataRequired && !row.IdentityOnly)
             throw new StoreException(Failure.Definite,"A terminal metadata protocol requires an identity-only row.");
         if (row is { IdentityOnly:true } identity && (identity.Retired || identity.Status==InstanceStatus.Running || identity.Creation!=0 || identity.Parent is not null ||

@@ -372,7 +372,10 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Partitions" SET "Owner" = NULL WHERE "Id" = {0} AND "Epoch" = {1}"""), [partition, epoch], cancellationToken);
     }
 
-    public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
+    public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
+        CommitAsync(batch, null, cancellationToken);
+
+    private async ValueTask<Committed> CommitAsync(CommitBatch batch, FirstRootCheckpoint? root, CancellationToken cancellationToken)
     {
         StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable);
         // Marker shape uses the canonical row address. A raw update's alternate spelling is
@@ -394,7 +397,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
         while (true)
         {
-            try { return await CommitOnceAsync(batch, waits, careful, sentAt, cancellationToken); }
+            try { return await CommitOnceAsync(batch, waits, careful, sentAt, root, cancellationToken); }
             catch (PostgresException error) when (error.SqlState == PgCommitWindow.Expired)
             {
                 throw new StoreException(Failure.WindowExpired, "Database commit window expired.", error);
@@ -458,9 +461,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         return waits;
     }
 
-    private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, long sentAt, CancellationToken cancellationToken)
+    private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, long sentAt, FirstRootCheckpoint? root, CancellationToken cancellationToken)
     {
-        if (OwnedCommit) return await CommitOwnedAsync(batch, waits, sentAt, cancellationToken);      // EfStore.Owned.cs
+        if (OwnedCommit) return await CommitOwnedAsync(batch, waits, sentAt, root, cancellationToken);      // EfStore.Owned.cs
         await using var db = create();
         foreach(var turn in batch.Turns.Where(t=>t.Row is {} r && t.Instance!=r.Id))
         {
@@ -575,6 +578,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (turn.Delete)
                 await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0"""), [batch.Partition, turn.Instance], cancellationToken);
         }
+        if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
         return new Committed(true, now, sent.Select(m => m.Seq).ToList());
@@ -618,6 +622,10 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };
+            // The legacy Worker cannot commit a positive creation. Leave preview creators pending until
+            // the public foundation adapter and its qualified checkpoint are available on this store.
+            if (PostgresRootAdmission.IsStoredCreator(r.Start))
+                throw new StoreException(Failure.Definite, "PostgreSQL public root creators require a qualified foundation owner.");
             return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo).WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
         }).ToList();

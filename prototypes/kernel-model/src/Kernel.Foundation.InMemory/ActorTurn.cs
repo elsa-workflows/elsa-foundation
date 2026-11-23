@@ -192,8 +192,7 @@ internal sealed partial class ActorAdapter
             }
 
             var cascade = cascades ? new Durable.CascadeRegistry(_turn.MoveJobsToCascade(), [.. _children]) : null;
-            var row = _row with { State = State ?? "null", FoundationNullState = State is null,
-                Revision = _turn.Revision, Status = (Durable.InstanceStatus)_status, Jobs = _turn.Jobs(),
+            var row = _row.WithFoundationState(State) with { Revision = _turn.Revision, Status = (Durable.InstanceStatus)_status, Jobs = _turn.Jobs(),
                 Children = cascades ? null : Durable.ChildRegistry.Write(_children) };
             if (ended)
             {
