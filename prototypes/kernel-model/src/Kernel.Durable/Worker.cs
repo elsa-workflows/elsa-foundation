@@ -1602,7 +1602,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// epoch, which moves the polls on, but it is neither on trial nor cleared to run. The next owner still suspects it.
     /// </summary>
     private bool Shelf(Delivery suspect) => !Has(Flaw.NoShelf) && _slots.TryGetValue(Canonical(suspect.Message.Target.Id), out var slot) &&
-        (WithheldByRecovery(suspect, slot) || WaitsForCohortHead(suspect, slot) || Withheld(slot) && !CanSettleWhileWithheld(slot, suspect)) &&
+        (WithheldByDrain(suspect, slot) || WaitsForCohortHead(suspect, slot) || Withheld(slot) && !CanSettleWhileWithheld(slot, suspect)) &&
         CreationError(slot, suspect.Message) is null;
 
     private bool WaitsForCohortHead(Delivery item, Slot slot)
@@ -1622,8 +1622,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private static bool CohortInput(Delivery item, Slot slot) => item.ReleasedBy is { } tag &&
         tag == RecoveryRelease(slot.CurrentRow) && !ParkRecoveryCredit.IsTicket(item.Message.Kind);
 
-    private static bool WithheldByRecovery(Delivery item, Slot slot) => slot.CurrentRow is { ParkRecovery: not null } row &&
-        !item.Message.IsControl && (row.Status != InstanceStatus.Running || item.ReleasedBy != RecoveryRelease(row));
+    private static bool WithheldByDrain(Delivery item, Slot slot)
+    {
+        if (item.Message.IsControl || slot.CurrentRow is not { } row) return false;
+        if (row.ParkRecovery is not null)
+            return row.Status != InstanceStatus.Running || item.ReleasedBy != RecoveryRelease(row);
+        // Clearing pages own the kept rows. A pending release from an earlier Park settles after Complete.
+        return row.ParkDiscard is not null && EarlierParkRelease(item, row);
+    }
+
+    private static bool EarlierParkRelease(Delivery item, InstanceRow row) => item.ReleasedBy is { } prior &&
+        prior.Creation == row.Creation && prior.Generation < row.ParkResolutionGeneration;
 
     private ParkPageCursor? FirstUnheldRecoveryInput(Slot slot) =>
         slot.CurrentRow is { } row && RecoveryRelease(row) is { } release && !Withheld(slot)
@@ -1634,7 +1643,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     internal bool RecoveryHandedOff(InboxKey key) => _items.TryGetValue(key, out var item) && item.HeldHere;
 
-    private bool PoisonInput(Delivery item, Slot slot) => !item.Taken && !DiscardedAt(item, slot) && !WithheldByRecovery(item, slot) &&
+    private bool PoisonInput(Delivery item, Slot slot) => !item.Taken && !DiscardedAt(item, slot) && !WithheldByDrain(item, slot) &&
         item.UncheckedReference is null && item.Attempts >= _options.MaxAttempts &&
         item.Message.Kind != Kinds.JobFinished && !item.Message.IsControl && CreationError(slot, item.Message) is null;
 
@@ -1702,7 +1711,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             // their store sequence sorts first. Within the eligible side, take only a prefix per target.
             if (!heads.TryGetValue(target, out var head)) heads[target] = head = FirstUnheldRecoveryInput(slot);
             var cohort = CohortInput(suspect, slot);
-            if (WithheldByRecovery(suspect, slot) || suspect.Message.Due > now ||
+            if (WithheldByDrain(suspect, slot) || suspect.Message.Due > now ||
                 (head is { } first && (cohort ? RecoveryOrder(suspect) != first : slot.CurrentRow?.ParkCohort is not null)) ||
                 !cohort && !BeforeRecoveryControl(suspect, control)) continue;
             // A raw job already converted to terminal/refusal cleanup needs a fence, not physical entry.
@@ -1818,7 +1827,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (open && !onTrial && control is not null) return ReadyControl(control);
         if (head is { } first && !slot.Inbox.Exists(item => RecoveryOrder(item) == first)) return ReadyControl(waitingDrain);
         var cohortFirst = slot.CurrentRow?.ParkCohort is not null && head is not null;
-        bool Eligible(Delivery item) => item != waitingDrain && !item.Ticket && !item.Taken && !(item.Message.Due > now) && !WithheldByRecovery(item, slot) && (!cohortFirst || CohortInput(item, slot))
+        bool Eligible(Delivery item) => item != waitingDrain && !item.Ticket && !item.Taken && !(item.Message.Due > now) && !WithheldByDrain(item, slot) && (!cohortFirst || CohortInput(item, slot))
             && (!suspended || DiscardedAt(item, slot) || item.Message.IsControl || CanSettleWhileWithheld(slot, item) ||
                 CreationError(slot, item.Message) is not null);
         bool InFront(Delivery item) => CohortInput(item, slot) || TrialItems.Contains(item) || BeforeRecoveryControl(item, control);
@@ -1890,7 +1899,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private long HeldCommandStimulus(Slot slot, Delivery held, long now) => slot.Inbox
         .Where(item => !item.Held && !item.Taken && !item.Ticket && !(item.Message.Due > now) &&
             item.ObservedOrder > held.HeldThrough && !Awaits(item) && !DiscardedAt(item, slot) &&
-            !WithheldByRecovery(item, slot) && CreationError(slot, item.Message) is null)
+            !WithheldByDrain(item, slot) && CreationError(slot, item.Message) is null)
         .Select(item => item.ObservedOrder).DefaultIfEmpty().Max();
 
     // A qualified terminate also frees its ordinary predecessors to run. The dispatcher still selects them first.
@@ -2262,7 +2271,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             return; // the normal fenced dispatch consumes/refuses this stale target
         }
         // Callers finish their current collection operation before standing down, so a refused ticket is never stranded.
-        if (_releasing || !CanStartWork || WithheldByRecovery(ticket, loadedSlot) || PoisonPending(loadedSlot) || Volatile.Read(ref loadedSlot.PendingJobRestrictions) != 0 || Withheld(loadedSlot) || ticket.Cancel is not null || ticket.Taken || ticket.AwaitingJobMark || Awaits(ticket) || _schedulerRetries.Contains(ticket)) return;
+        if (_releasing || !CanStartWork || WithheldByDrain(ticket, loadedSlot) || PoisonPending(loadedSlot) || Volatile.Read(ref loadedSlot.PendingJobRestrictions) != 0 || Withheld(loadedSlot) || ticket.Cancel is not null || ticket.Taken || ticket.AwaitingJobMark || Awaits(ticket) || _schedulerRetries.Contains(ticket)) return;
         if (CanWithdrawJobTrials && ticket.Again && TerminatePrecedesJobRetry(Now))
         {
             _jobsWaitingForTerminate = true;
@@ -3364,6 +3373,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             InvalidateAliasMisses(unit);
             if (_loading && _store.HasActorAliases && (unit.Row is not null || unit.Delete || committed.Unwritten))
                 committed.WrittenDuringAliasRead = _aliasRead;
+            // Complete is itself the stimulus to drop a previous Park's locally held release.
+            if (committed.Row is { ParkDiscard: not null } clearing && unit.Row is { ParkDiscard: null })
+                foreach (var item in committed.Inbox)
+                    if (item.Held && EarlierParkRelease(item, clearing))
+                        (item.Held, item.HeldHere) = (false, false);
             if (unit.Row is not null)
                 (committed.Row, committed.AbsentAt) = (unit.InMemory ? unit.Row : unit.Row.WithoutInlineBirth(), 0);
             if (unit.Delete && unit.Row is not { Retired: true } || committed.Unwritten && !unit.InMemory && unit.Row is null)
