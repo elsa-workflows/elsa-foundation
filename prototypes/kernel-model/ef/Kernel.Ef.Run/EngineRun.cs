@@ -418,7 +418,7 @@ static class EngineRun
         if (target.Writes is { } described) Console.WriteLine("writes: " + await described.DescribeAsync() + $"; history {target.Get("history", "as the models say")}, pad {target.Int("pad", 0)} bytes");
         Console.WriteLine("counted: commands, COMMITs and (but for PostgreSQL) BEGINs, as FINDINGS.md section 5 counts; sent: what the driver sends, one per request (see ENGINES.md)");
         Console.WriteLine($"{"run",-58} {"commands",8} {"begin",6} {"commit",6} {"opens",6} {"saves",6} {"counted",8} {"sent",6} {"server",8} {"tcp",6}");
-        async Task<(int Counted, long? RoundTrips)> Row(string name, Func<Task> body, Func<Task>? before = null)
+        async Task<(int Sent, long? RoundTrips)> Row(string name, Func<Task> body, Func<Task>? before = null)
         {
             // With writes=1 the setup's WAL is measured too: for the rows whose setup only adds outside messages, it is their inserts.
             var setupFrom = target.Writes is { } ws && before is not null ? await ws.TakeAsync() : null;
@@ -445,7 +445,7 @@ static class EngineRun
             if (walLine is not null) Console.WriteLine(walLine);
             if (setupLine is not null) Console.WriteLine(setupLine);
             if (target.Has("wire") && target.Engine == "mysql") Console.WriteLine("    server: " + string.Join(", ", delta.OrderBy(k => k.Key).Select(k => $"{k.Key.Replace("statement/", "")} x{k.n}")));
-            return (counted, tcp);
+            return (sent, tcp);
         }
 
         if (sizes is null)
@@ -477,7 +477,7 @@ static class EngineRun
                 "sqlite" => (3, "engine calls"),
                 _ => (0, "wire round trips"),
             };
-            var observed = target.Engine == "sqlite" ? measured.Counted : measured.RoundTrips;
+            var observed = target.Engine == "sqlite" ? measured.Sent : measured.RoundTrips;
             if (observed is null or <= 0 || budget > 0 && observed > budget)
             {
                 Console.Error.WriteLine($"Reference cost failed on {target.Engine}: {observed?.ToString() ?? "unavailable"} {units}, budget {budget}.");
