@@ -118,12 +118,14 @@ internal static class PostgresPublicPreview
                 var extra = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "already-queued", CompositeSignal.Kind,
                     Json.Write(new CompositeSignal(frame, "approve", "third")), cancellationToken: stop);
                 Check(extra.Outcome == Contract.AdmissionOutcome.Accepted, "third input was admitted while the actor was still running");
-                var pending = await admission.ReadPendingDirectAsync(scope.Tenant, actor.Id, stop);
+                var diagnosticAdmission = new PostgresRootAdmission(() => new(data), TimeSpan.Zero);
+                var pending = await diagnosticAdmission.ReadPendingDirectAsync(scope.Tenant, actor.Id, stop);
                 queued = pending.Single(input => input.Id == "already-queued");
                 var currentFence = ((Worker)owner).Fences.Single();
                 var leading = pending.Single(input => input.Id == "approval-2");
                 var invalid = new TurnCommit(leading.Target.Id, null, null, [], [leading.InboxKey], [], [], [], null);
-                Check(!(await store.CommitAsync(new(currentFence.Partition, currentFence.Epoch, currentFence.Position,
+                await probe.BindWorkerRootAsync(scope.Tenant, actor.Id, stop);
+                Check(!(await probe.CommitAsync(new(currentFence.Partition, currentFence.Epoch, currentFence.Position,
                     TimeSpan.FromSeconds(10), false, [invalid], [], []), stop)).Landed,
                     "a rowless terminal disposition cannot consume the running root's approval");
             }
@@ -132,7 +134,7 @@ internal static class PostgresPublicPreview
                 Json.Read<NativeState>(finished.State!).Results["approve"]!.AsArray()
                     .Select(n => n!.GetValue<string>()).SequenceEqual(["Ada", "Grace"]),
                 "persisted Native result is Ada, Grace exactly once");
-            Report(queued is null ? "second approval including admission" : "finish with two queued inputs and running-root disposition check");
+            Report(queued is null ? "second approval including admission" : "finish with two queued inputs including admission");
 
             counter.Reset();
             var (entries, _) = await ReadJournal(bookmark);

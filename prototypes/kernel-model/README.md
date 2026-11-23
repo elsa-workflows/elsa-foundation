@@ -69,8 +69,8 @@ checkpoint stays byte for byte through replay. The journal and final result veri
 
 The receipt counts EF commands and explicit transaction completions by phase. Their sum is the round-trip count at
 the provider command boundary, excluding connection setup. Setup, ownership and journal reads have their own rows.
-The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes use a separate
-unmeasured client. The demonstration scopes execution to one generated root and direct messages.
+The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
+refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 
 ## The simulation
 
