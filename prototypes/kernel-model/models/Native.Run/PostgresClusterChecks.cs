@@ -12,6 +12,7 @@ internal static class PostgresClusterChecks
 {
     private const string Primary = "preview-primary", Peer = "preview-peer";
     private sealed record Root(Contract.ActorRef Ref, InstanceRef Actor);
+    private sealed record Ownership(string? Node, long Epoch);
 
     internal static async Task<int> RunAsync(int partitions, bool peer)
     {
@@ -72,20 +73,22 @@ internal static class PostgresClusterChecks
             while (selected is null)
             {
                 foreach (var r in roots)
-                    if (await Owner(r) == Peer) { selected = r; break; }
+                    if ((await Placement(r)).Node == Peer) { selected = r; break; }
                 if (selected is null) await Start();
             }
             var target = selected;
             await Until(async () => await Image(target) is { Revision: 1 });
+            var beforeApproval = await Placement(target);
+            Check(beforeApproval.Node == Peer, "peer owns the target immediately before approval admission");
             await Send(target, "approve-1", "Ada", Contract.AdmissionOutcome.Accepted);
             await Until(async () => await Image(target) is { Revision: 2 });
-            Check(await Owner(target) == Peer, "peer held the waiting root at its second checkpoint");
-            var epoch = await Epoch(target);
+            Check(await Placement(target) == beforeApproval, "the same peer epoch spans approval admission and the second checkpoint");
             await child.StandardInput.WriteLineAsync("stop");
             await child.WaitForExitAsync(stop);
             Check(child.ExitCode == 0, "peer stopped cleanly");
             await Until(async () => await Count(Primary) == partitions);
-            Check(await Owner(target) == Primary && await Epoch(target) > epoch, "remaining node assumed the exact root's partition at a later epoch");
+            var afterDeparture = await Placement(target);
+            Check(afterDeparture.Node == Primary && afterDeparture.Epoch > beforeApproval.Epoch, "remaining node assumed the exact root's partition at a later epoch");
             await Send(target, "approve-1", "changed", Contract.AdmissionOutcome.Duplicate);
             await Send(target, "approve-2", "Grace", Contract.AdmissionOutcome.Accepted);
             await Until(async () => await Image(target) is { Status: InstanceStatus.Finished });
@@ -97,7 +100,7 @@ internal static class PostgresClusterChecks
             Check(await api.GetAsync(new("other"), target.Ref, stop) is null, "public read stayed tenant bound");
             await node.StopAsync(stop);
             Healthy();
-            Console.WriteLine($"ok PostgreSQL public Cluster: {partitions} partitions, processes {Environment.ProcessId} and {child.Id}, target {target.Actor.Partition}, prior epoch {epoch}, shared journal transaction, 3 revisions.");
+            Console.WriteLine($"ok PostgreSQL public Cluster: {partitions} partitions, processes {Environment.ProcessId} and {child.Id}, target {target.Actor.Partition}, epochs {beforeApproval.Epoch}->{afterDeparture.Epoch}, shared journal transaction, 3 revisions.");
             return 0;
         }
         finally
@@ -126,8 +129,11 @@ internal static class PostgresClusterChecks
         }
         Task<EfStore.RootImage?> Image(Root root) => store.ReadFirstRootAsync(scope.Tenant, root.Ref.Id, stop);
         async Task<int> Count(string owner) { await using var db = Open(); return await db.Partitions.CountAsync(p => p.Owner == owner, stop); }
-        async Task<string?> Owner(Root root) { await using var db = Open(); return await db.Partitions.Where(p => p.Id == root.Actor.Partition).Select(p => p.Owner).SingleAsync(stop); }
-        async Task<long> Epoch(Root root) { await using var db = Open(); return await db.Partitions.Where(p => p.Id == root.Actor.Partition).Select(p => p.Epoch).SingleAsync(stop); }
+        async Task<Ownership> Placement(Root root)
+        {
+            await using var db = Open();
+            return await db.Partitions.Where(p => p.Id == root.Actor.Partition).Select(p => new Ownership(p.Owner, p.Epoch)).SingleAsync(stop);
+        }
         async Task Until(Func<Task<bool>> condition)
         {
             while (!await condition()) { Healthy(); await Task.Delay(40, stop); }
