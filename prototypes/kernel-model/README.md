@@ -193,6 +193,26 @@ checks the same node and epoch still have a live renewed lease. After PostgreSQL
 acquires a later epoch after the stored deadline, resumes the journal bookmark, replays Ada's input and records
 Grace's approval. This exercises one fixed partition. K5 covers Cluster placement and balancing across partitions.
 
+For a Durable Flowchart handover, set `KERNEL_PREVIEW_POSTGRES` to a fresh database. Both runtime nodes and the public reader use the scoped continuation format (schema 3, message protocol 3, journal codec 1). Run:
+
+```sh
+dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-flowchart 1024
+```
+
+The two RuntimeNodes establish an equal split. A public purchase Flowchart starts on the peer. A fixture callback
+pauses that process after its creator's commit, and the parent checks that the checkpoint and pending continuation
+share a PostgreSQL transaction ID. The parent locks that partition row, rechecks the peer epoch and pending input,
+and holds the lock until its child process has exited. The surviving RuntimeNode then takes
+the partition at a higher epoch, applies that exact continuation once, and runs both approval branches to one join.
+A changed-body approval replay preserves the original result. Two actor revisions are silent. The partition journal
+keeps consecutive positions. The check also runs with eight virtual partitions.
+
+For the grouped storage operations alone, run `pg-root-self-set owned <checked|in-batch>` with the same
+runner on a fresh database. This uses two homes with different epochs. Two checkpoints and their private
+continuations commit together. A stale sibling's fence rolls back a mixed consume, and the current set advances
+only the home that writes a journal entry. With `ef` the fixture checks that the store declines grouped
+ownership before changing any lease or inbox row.
+
 ### Flowchart restart on the public PostgreSQL preview
 
 Set `KERNEL_PREVIEW_POSTGRES` to a fresh PostgreSQL database and run from `prototypes/kernel-model`:
@@ -248,6 +268,30 @@ are `ef` for the writer and `in-batch` for the fence.
 
 On a fresh database, `dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-flowchart-preview merge-early`
 replaces the join with a merge. The waiting assertion detects the premature finish.
+
+### PostgreSQL Delay preview
+
+On a fresh dedicated PostgreSQL database set `KERNEL_PREVIEW_POSTGRES` and run:
+
+```sh
+models/Native.Run/run-delay-preview.sh owned checked
+```
+
+The Delay profile seeds schema 3, message protocol 4 and journal codec 1. An existing schema-2 Delay store
+retains its deadlines through the [coordinated job-generation upgrade](#relational-job-generation-format).
+The immediate-continuation Flowchart stays on protocol 3 and the ordinary preview uses protocol 2.
+Pass `durable` as a third script argument to run the same Delay in Durable mode. The default is Balanced.
+
+The first Embedded process starts a public Native sequence with an eight-second Delay. It checks that the saved wait
+and its issued timer share a PostgreSQL transaction and that the deadline equals the issuing turn time plus eight
+seconds. A second process reads the original handle and absolute deadline
+at a higher ownership epoch. A future-horizon poll sees the timer early. A ready poll excludes it, and an ordinary
+application input of the same kind leaves the frame waiting. At the deadline the worker resumes the frame once.
+A process restarted after the deadline observes the timer ready immediately and completes the same frame.
+The receipt prints the deadline, the worker's application time, the database's terminal checkpoint time and
+whether the early-input check ran. The
+fixture checks the public journal after another worker pass. Use `ef` for the EF writer or `in-batch` for the batch
+fence. This preview exercises a single generated root, one partition and a clean process restart.
 
 ## Built-in Cluster redistribution on PostgreSQL
 
@@ -548,9 +592,10 @@ clock is not modelled. The simulation and the stress tests use their own short l
 ### Relational job-generation format
 
 During the coordinated stop, call `EfStore.UpgradeJobGenerationFormatAsync` before reopening a schema-2
-database. The ordinary relational format advances from (2, 1, 1) to (3, 2, 1). The PostgreSQL continuation
-format advances from (2, 3, 1) to (3, 3, 1) and refreshes its private inbox view in the same transaction.
-The three numbers identify schema, message protocol and journal codec. Both upgrades preserve existing data.
+database. The ordinary relational format advances from (2, 1, 1) to (3, 2, 1). The PostgreSQL immediate-continuation
+format advances from (2, 3, 1) to (3, 3, 1). The PostgreSQL Delay format advances from (2, 4, 1) to (3, 4, 1).
+Both keep their existing private inputs and refresh the private inbox view in the schema transaction.
+The three numbers identify schema, message protocol and journal codec.
 Checkpoints that predate the creation's next-job counter read as null. Existing messages read as generation zero.
 MySQL prepares the two additive columns on a separate connection while the migration holds the version marker.
 An interrupted preparation can be retried. Reopening requires a reader for the resulting three-part format.

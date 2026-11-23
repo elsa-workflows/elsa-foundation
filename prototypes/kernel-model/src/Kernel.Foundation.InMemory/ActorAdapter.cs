@@ -13,7 +13,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     private readonly (Durable.Requests Requests, string Node)? local;
     private readonly Func<Contract.ActorHeader, TimeSpan?>? retentionWindow;
     private readonly IRootDispatchHeaders? roots;
-    private readonly Func<string, string>? issueSelf;
+    private readonly Durable.FoundationSelfIssuer? issueSelf;
     private Durable.InMemoryStore store => inMemory ?? throw new NotSupportedException("This provider does not implement this foundation operation.");
 
     internal ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
@@ -25,7 +25,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         this.retentionWindow = retentionWindow;
     }
 
-    internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Func<string, string>? issueSelf = null) =>
+    internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Durable.FoundationSelfIssuer? issueSelf = null) =>
         (this.roots, this.actor, this.issueSelf) = (roots, actor, issueSelf);
 
     private const int TerminalEnvelopeLimit = 16_457_728;

@@ -9,23 +9,24 @@ public sealed partial class EfStore
     // A private physical envelope, scoped to issued rows. The application kind is carried inside.
     internal const long RootSelfScope = -5; // provider storage only; the Worker receives InboxKey.Issued (-1)
     private const string RootSelfWire = "!foundation-self/1";
-    private sealed record RootSelfHeader(long Revision, int Ordinal, string Kind);
+    private sealed record RootSelfHeader(long Revision, int Ordinal, string Kind,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? Due = null);
     private string RootInboxSource => RootSelfIssuer is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
-    internal Func<string, string>? RootSelfIssuer { get; private set; }
+    internal FoundationSelfIssuer? RootSelfIssuer { get; private set; }
 
     private sealed record SelfInstallation(byte[] Key, bool Installed);
 
     internal async Task EnableRootSelfSendsAsync(CancellationToken token)
     {
         await using var db = create();
-        if (!db.Database.IsNpgsql() || db.RequiredFormat != StoreFormat.RootSelf)
+        if (!db.Database.IsNpgsql() || !db.UsesRootSelfProtocol)
             throw new StoreFormatException("Immediate public continuations require the PostgreSQL continuation protocol.");
         await RequireStoreVersionsAsync(db, token);
         var install = await db.Database.SqlQueryRaw<SelfInstallation>("""
             SELECT "Key", to_regprocedure('kernel_root_self_insert_v2()') IS NOT NULL AS "Installed" FROM "FoundationRootIssuer"
             """).SingleAsync(token);
         if (!install.Installed) await new PostgresRootAdmission(create, TimeSpan.Zero).InstallAsync(token);
-        RootSelfIssuer = seed => FoundationSelfSend.Handle(install.Key, seed);
+        RootSelfIssuer = new(seed => FoundationSelfSend.Handle(install.Key, seed), db.RequiredFormat == StoreFormat.RootTimers);
     }
 
     // The ordinary writer transports an exceptional payload as base64. Only the compact bytea is stored.
@@ -65,24 +66,24 @@ public sealed partial class EfStore
 
     private Message EncodeRootSelf(WorkerRoot root, long revision, int ordinal, Message m)
     {
-        if (RootSelfIssuer is null || !FoundationSelfSend.IsImmediate(m, root.Actor, 1) ||
-            m.Id != RootSelfIssuer(FoundationSelfSend.Seed(CreationProtocol.Origin(root.Actor, 1), revision, ordinal))) throw RootShape();
+        if (RootSelfIssuer is null || !RootSelfIssuer.Allows(m.Due) || !FoundationSelfSend.IsSelfInput(m, root.Actor, 1) ||
+            m.Id != FoundationSelfSend.Issue(RootSelfIssuer.Handle, CreationProtocol.Origin(root.Actor, 1), revision, ordinal, m.Due)) throw RootShape();
         // Leave ordinary payloads verbatim, including embedded newlines. A missing separator encodes null.
         var escaped = m.Payload is not null && (m.Payload.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(m.Payload));
-        var header = (escaped ? "B" : "T") + DurableKeyJson.Write(new RootSelfHeader(revision, ordinal, m.Kind));
+        var header = (escaped ? "B" : "T") + DurableKeyJson.Write(new RootSelfHeader(revision, ordinal, m.Kind, m.Due));
         if (!FoundationMetadataLimits.FitsContent(m.Payload) || Encoding.UTF8.GetByteCount(header) > 24 * 1024)
             throw new StoreException(Failure.Definite, "Encoded self input exceeds the PostgreSQL row budget.");
         var content = escaped ? Convert.ToBase64String(RootSelfContent.Encode(m.Payload!)) : m.Payload;
         var body = content is null ? header : string.Concat(header, "\n", content);
         // The existing writer returns the insert's sequence for same-owner handover.
-        return new Message(m.InboxKey.Id, m.Target, RootSelfWire, body, m.Sender).WithInboxScope(RootSelfScope);
+        return new Message(m.InboxKey.Id, m.Target, RootSelfWire, body, m.Sender, Due: m.Due).WithInboxScope(RootSelfScope);
     }
 
-    private static Message DecodeRootSelf(MessageEntity row, Func<string, string>? issue)
+    private static Message DecodeRootSelf(MessageEntity row, FoundationSelfIssuer? issue)
     {
         var actor = row.InboxScope == RootSelfScope ? SelfActor(InboxKey.Issued(row.Id)) : null;
         if (issue is null || row.JobGeneration != 0 || actor != row.Target || row.Sender != actor || row.Kind != RootSelfWire ||
-            row.Payload is null || row.Start is not null || row.KeepUntil is not null || row.ReplyTo is not null || row.Due != 0)
+            row.Payload is null || row.Start is not null || row.KeepUntil is not null || row.ReplyTo is not null)
             throw RootShape();
         var cut = row.Payload.IndexOf('\n');
         var header = cut < 0 ? row.Payload : row.Payload[..cut];
@@ -90,8 +91,9 @@ public sealed partial class EfStore
         var body = DurableKeyJson.Read<RootSelfHeader>(header[1..]);
         var payload = cut < 0 ? null : row.Payload[(cut + 1)..];
         if (header[0] == 'B') payload = RootSelfContent.Decode(Convert.FromBase64String(payload ?? throw RootShape()));
-        var id = issue(FoundationSelfSend.Seed(CreationProtocol.Origin(actor, 1), body.Revision, body.Ordinal));
-        var message = FoundationSelfSend.Create(actor, 1, id, body.Kind, payload);
+        if (!issue.Allows(body.Due) || row.Due != (body.Due ?? 0)) throw RootShape();
+        var id = FoundationSelfSend.Issue(issue.Handle, CreationProtocol.Origin(actor, 1), body.Revision, body.Ordinal, body.Due);
+        var message = FoundationSelfSend.Create(actor, 1, id, body.Kind, payload, body.Due);
         if (body.Revision < 1 || body.Ordinal < 0 || !FoundationMetadataLimits.IsOrdinaryKind(body.Kind) ||
             message.InboxKey.Id != row.Id) throw RootShape();
         return message;

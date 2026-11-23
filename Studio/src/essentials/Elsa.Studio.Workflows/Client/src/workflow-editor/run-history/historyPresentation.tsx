@@ -1,6 +1,8 @@
-import { Activity, BookmarkCheck, CircleAlert, CircleCheck, CirclePlay, Clock3, Inbox, ListPlus, Pause, RotateCcw, Workflow } from "lucide-react";
+import type { ReactNode } from "react";
+import { Activity, BookmarkCheck, ChevronRight, CircleAlert, CircleCheck, CirclePlay, Clock3, Inbox, ListPlus, Pause, RotateCcw, Workflow } from "lucide-react";
 import type { RuntimeHistoryCoverage, RuntimeHistoryEvent } from "../../runtimeHistoryTypes";
 import { formatDuration, humanizeTypeName } from "../../workflowFormatting";
+import type { RunHistoryDetailLevel } from "./historyLocation";
 
 const names: Record<string, string> = {
   WorkflowStarted: "Run started", WorkflowCompleted: "Run completed", WorkflowFaulted: "Run faulted", WorkflowCancelled: "Run cancelled",
@@ -83,7 +85,31 @@ export function historyEventExplanation(event: HistoryPresentationEvent) {
     default: return null;
   }
 }
+const lifecycleEventNames = new Set([
+  "WorkflowStarted",
+  "WorkflowCompleted",
+  "WorkflowFaulted",
+  "WorkflowCancelled",
+  "WorkflowSuspended",
+  "ActivityStarted",
+  "ActivityCompleted",
+  "ActivitySuspended",
+  "ActivityFaulted",
+  "ActivityCancelled",
+  "ActivityRecovered",
+  "BookmarkCreated",
+  "BookmarkConsumed",
+  "IncidentRecorded",
+  "IncidentResolved"
+]);
+
+export function isHistoryLifecycle(event: Pick<RuntimeHistoryEvent, "name">) { return lifecycleEventNames.has(event.name); }
 export function isHistoryHighlight(event: RuntimeHistoryEvent) { return !["ActivityScheduled", "ActivityAttemptClaimed", "ValueCaptured"].includes(event.name); }
+export function matchesHistoryDetail(event: RuntimeHistoryEvent, detail: RunHistoryDetailLevel) {
+  if (detail === "all") return true;
+  if (detail === "highlights") return isHistoryHighlight(event);
+  return isHistoryLifecycle(event);
+}
 export function historyAuthorityLabel(value: string) {
   return value === "CommittedTransition" ? "Committed runtime transition" : value === "DeliveryObservation" ? "Recorded delivery observation"
     : value === "Unspecified" ? "Authority unspecified" : `Unrecognized recorded authority (${value})`;
@@ -103,17 +129,27 @@ export function historyInstant(value?: string | null) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : `${date.toLocaleString()} · ${value}`;
 }
+export function historyCompactInstant(value?: string | null) {
+  if (!value) return "Not recorded";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
 export function historyZone() { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Local time"; }
 
-export function HistoryCoverage({ coverage, scopeComplete = true, scopeLimitation, readAt }: {
-  coverage: RuntimeHistoryCoverage; scopeComplete?: boolean; scopeLimitation?: string | null; readAt?: string;
-}) {
+export function isHistoryCoverageDegraded(coverage: RuntimeHistoryCoverage, scopeComplete = true, scopeLimitation?: string | null) {
   const settled = coverage.settledSequence >= coverage.lastSequence;
-  const emptyRetainedRange = coverage.firstSequence === 0 && coverage.lastSequence === 0 || coverage.firstSequence > coverage.lastSequence;
-  const availablePositions = emptyRetainedRange
-    ? ["captured", "partial", "pending"].includes(coverage.state) ? "No retained events" : "Not available"
-    : `${coverage.firstSequence}–${coverage.lastSequence}`;
-  const label = !["captured", "partial", "pending", "uncaptured", "disabled", "unsupported", "invalid"].includes(coverage.state) ? `Unrecognized recording coverage (${coverage.state}). Completeness cannot be established.`
+  return coverage.state !== "captured"
+    || !coverage.capturedFromStart
+    || coverage.hasGaps
+    || coverage.purgedThroughSequence > 0
+    || !settled
+    || !scopeComplete
+    || Boolean(coverage.limitation || scopeLimitation || coverage.captureLimitation || coverage.sourceHistoryLimitation);
+}
+
+export function historyCoverageSummaryLabel(coverage: RuntimeHistoryCoverage, scopeComplete = true) {
+  const settled = coverage.settledSequence >= coverage.lastSequence;
+  const base = !["captured", "partial", "pending", "uncaptured", "disabled", "unsupported", "invalid"].includes(coverage.state) ? `Unrecognized recording coverage (${coverage.state}). Completeness cannot be established.`
     : coverage.state === "disabled" ? "History capture was disabled when this run was admitted."
     : coverage.state === "uncaptured" ? "History was not captured for this run; its original capture setting is unavailable."
     : coverage.state === "unsupported" ? "This host does not support durable history."
@@ -121,27 +157,83 @@ export function HistoryCoverage({ coverage, scopeComplete = true, scopeLimitatio
         : coverage.state === "pending" || !settled ? "Recorded history is still settling."
           : coverage.hasGaps || coverage.purgedThroughSequence > 0 || coverage.state === "partial" ? "Partial recorded history."
             : coverage.capturedFromStart ? "History available from run start." : "History is available from a later capture boundary.";
+  return `${base}${!scopeComplete ? " This execution scope is incomplete." : ""}`;
+}
+
+function historyCoverageShortBadge(coverage: RuntimeHistoryCoverage, scopeComplete = true) {
+  const settled = coverage.settledSequence >= coverage.lastSequence;
+  if (!scopeComplete) return "Incomplete scope";
+  if (coverage.state === "disabled") return "Disabled";
+  if (coverage.state === "uncaptured") return "Uncaptured";
+  if (coverage.state === "unsupported") return "Unsupported";
+  if (coverage.state === "invalid") return "Invalid";
+  if (coverage.state === "pending" || !settled) return "Settling";
+  if (coverage.hasGaps || coverage.purgedThroughSequence > 0 || coverage.state === "partial") return "Partial";
+  if (!["captured"].includes(coverage.state)) return coverage.state;
+  return coverage.capturedFromStart ? "From run start" : "Partial start";
+}
+
+export function HistoryCoverage({ coverage, scopeComplete = true, scopeLimitation, readAt, variant = "banner" }: {
+  coverage: RuntimeHistoryCoverage; scopeComplete?: boolean; scopeLimitation?: string | null; readAt?: string;
+  variant?: "banner" | "disclosure";
+}) {
+  const emptyRetainedRange = coverage.firstSequence === 0 && coverage.lastSequence === 0 || coverage.firstSequence > coverage.lastSequence;
+  const availablePositions = emptyRetainedRange
+    ? ["captured", "partial", "pending"].includes(coverage.state) ? "No retained events" : "Not available"
+    : `${coverage.firstSequence}–${coverage.lastSequence}`;
+  const label = historyCoverageSummaryLabel(coverage, scopeComplete);
+  const limitations = [
+    coverage.limitation,
+    scopeLimitation && scopeLimitation !== coverage.limitation ? scopeLimitation : null,
+    coverage.captureLimitation && coverage.captureLimitation !== coverage.limitation ? coverage.captureLimitation : null,
+    coverage.sourceHistoryLimitation && coverage.sourceHistoryLimitation !== coverage.limitation ? coverage.sourceHistoryLimitation : null
+  ].filter((item): item is string => Boolean(item));
+  const facts = <dl className="wf-history-facts">
+    {readAt ? <div className="wf-history-fact-row"><dt>Inspection observed</dt><dd>{historyInstant(readAt)}</dd></div> : null}
+    <div className="wf-history-fact-row"><dt>Current capture chain</dt><dd>{coverage.captureAvailable === true ? "Available" : coverage.captureAvailable === false ? "Unavailable now; recorded history remains separate" : coverage.captureAvailable === null ? "Unknown" : "Not reported by this host"}</dd></div>
+    <div className="wf-history-fact-row"><dt>Source history responsibility</dt><dd>{coverage.sourceHistoryPending === true ? "Recorded source history is still owed" : coverage.sourceHistoryPending === false ? "No owed source history observed at this read; later facts may arrive" : coverage.sourceHistoryPending === null ? "Cannot establish source settlement" : "Not reported by this host"}</dd></div>
+    <div className="wf-history-fact-row"><dt>Available positions</dt><dd>{availablePositions}</dd></div>
+    <div className="wf-history-fact-row"><dt>Settled through</dt><dd>{coverage.settledSequence} · a settled prefix can receive later events</dd></div>
+    {coverage.purgedThroughSequence > 0 ? <div className="wf-history-fact-row"><dt>Purged through</dt><dd>{coverage.purgedThroughSequence}</dd></div> : null}
+    <div className="wf-history-fact-row"><dt>Capture profile</dt><dd>{coverage.policyId ? `${coverage.policyId} v${coverage.policyVersion ?? "?"}` : "Not recorded"}</dd></div>
+    <div className="wf-history-fact-row"><dt>Supported event kinds</dt><dd>{coverage.supportedKinds.length ? coverage.supportedKinds.map(name => historyEventLabel({ name })).join(", ") : "No recorded capture catalog"}</dd></div>
+  </dl>;
+
+  if (variant === "disclosure") {
+    const degraded = isHistoryCoverageDegraded(coverage, scopeComplete, scopeLimitation);
+    return <details className="wf-history-disclosure wf-history-coverage-disclosure" data-state={coverage.state} data-degraded={degraded || undefined}>
+      <summary>
+        <ChevronRight size={14} className="wf-history-disclosure-chevron" aria-hidden="true" />
+        <span>Recording coverage</span>
+        <small>{historyCoverageShortBadge(coverage, scopeComplete)}</small>
+      </summary>
+      <div className="wf-history-disclosure-body">
+        <p className="wf-history-coverage-lead" role="status">{label}</p>
+        {limitations.map((item, index) => <p key={index} className="wf-history-coverage-lead">{item}</p>)}
+        {facts}
+      </div>
+    </details>;
+  }
+
   return <div className="wf-history-coverage" data-state={coverage.state} role="status">
-    <p>{label}{!scopeComplete ? " This execution scope is incomplete." : ""}</p>
-    {coverage.limitation ? <p>{coverage.limitation}</p> : null}
-    {scopeLimitation && scopeLimitation !== coverage.limitation ? <p>{scopeLimitation}</p> : null}
-    {coverage.captureLimitation && coverage.captureLimitation !== coverage.limitation ? <p>{coverage.captureLimitation}</p> : null}
-    {coverage.sourceHistoryLimitation && coverage.sourceHistoryLimitation !== coverage.limitation ? <p>{coverage.sourceHistoryLimitation}</p> : null}
-    <details><summary>Recording coverage</summary><dl className="wf-history-facts">
-      {readAt ? <><dt>Inspection observed</dt><dd>{historyInstant(readAt)}</dd></> : null}
-      <dt>Current capture chain</dt><dd>{coverage.captureAvailable === true ? "Available" : coverage.captureAvailable === false ? "Unavailable now; recorded history remains separate" : coverage.captureAvailable === null ? "Unknown" : "Not reported by this host"}</dd>
-      <dt>Source history responsibility</dt><dd>{coverage.sourceHistoryPending === true ? "Recorded source history is still owed" : coverage.sourceHistoryPending === false ? "No owed source history observed at this read; later facts may arrive" : coverage.sourceHistoryPending === null ? "Cannot establish source settlement" : "Not reported by this host"}</dd>
-      <dt>Available positions</dt><dd>{availablePositions}</dd>
-      <dt>Settled through</dt><dd>{coverage.settledSequence} · a settled prefix can receive later events</dd>
-      {coverage.purgedThroughSequence > 0 ? <><dt>Purged through</dt><dd>{coverage.purgedThroughSequence}</dd></> : null}
-      <dt>Capture profile</dt><dd>{coverage.policyId ? `${coverage.policyId} v${coverage.policyVersion ?? "?"}` : "Not recorded"}</dd>
-      <dt>Supported event kinds</dt><dd>{coverage.supportedKinds.length ? coverage.supportedKinds.map(name => historyEventLabel({ name })).join(", ") : "No recorded capture catalog"}</dd>
-    </dl></details>
+    <p>{label}</p>
+    {limitations.map((item, index) => <p key={index}>{item}</p>)}
+    <details className="wf-history-coverage-details"><summary><ChevronRight size={13} className="wf-history-disclosure-chevron" aria-hidden="true" /><span>Recording coverage</span></summary>{facts}</details>
   </div>;
 }
 
-function EventIcon({ event }: { event: RuntimeHistoryEvent }) {
-  const props = { size: 16, "aria-hidden": true as const };
+export type HistoryEventTone = "danger" | "success" | "warning" | "accent" | "neutral";
+
+export function historyEventTone(event: Pick<RuntimeHistoryEvent, "name" | "category" | "authority">): HistoryEventTone {
+  if (/Fault|IncidentRecorded|Rejected/.test(event.name)) return "danger";
+  if (/Completed|Resolved/.test(event.name)) return "success";
+  if (/Suspended|Waiting|Deferred|Unmatched/.test(event.name)) return "warning";
+  if (event.category === "WorkflowLifecycle" || /Started|Bookmark/.test(event.name)) return "accent";
+  return "neutral";
+}
+
+export function HistoryEventIcon({ event, size = 15 }: { event: Pick<RuntimeHistoryEvent, "name" | "category" | "authority">; size?: number }) {
+  const props = { size, "aria-hidden": true as const };
   if (/Fault|IncidentRecorded|Rejected/.test(event.name)) return <CircleAlert {...props} />;
   if (event.category === "BookmarkLifecycle") return <BookmarkCheck {...props} />;
   if (event.authority === "DeliveryObservation" || event.category === "DeliveryObservation") return <Inbox {...props} />;
@@ -154,12 +246,14 @@ function EventIcon({ event }: { event: RuntimeHistoryEvent }) {
   return <Activity {...props} />;
 }
 
-export function HistoryEventList({ items, selectedEventId, onSelect, labelForEvent, compact = false, unloadedAfterSequence, hideActivityExecutionId }: {
-  items: RuntimeHistoryEvent[]; selectedEventId?: string | null; onSelect(event: RuntimeHistoryEvent): void;
+export function HistoryEventList({ items, selectedEventId, expandedEventId, onSelect, labelForEvent, compact = false, unloadedAfterSequence, hideActivityExecutionId, renderExpanded }: {
+  items: RuntimeHistoryEvent[]; selectedEventId?: string | null; expandedEventId?: string | null; onSelect(event: RuntimeHistoryEvent): void;
   labelForEvent?(event: RuntimeHistoryEvent): string | null; compact?: boolean; unloadedAfterSequence?: number; hideActivityExecutionId?: string;
+  renderExpanded?(event: RuntimeHistoryEvent): ReactNode;
 }) {
   const creations = new Map(items.filter(event => event.name === "BookmarkCreated" && event.bookmarkId).map(event => [event.bookmarkId, event]));
-  return <ol className={`wf-history-events${compact ? " wf-history-events-compact" : ""}`} aria-label={compact ? "Activity journal events" : "Run history events"}>
+  const expandable = Boolean(renderExpanded);
+  return <ol className={`wf-history-events${compact ? " wf-history-events-compact" : ""}${expandable ? " is-expandable" : ""}`} aria-label={compact ? "Activity journal events" : "Run history events"}>
     {items.map((event, index) => {
       const reason = skippedResumeReason(event)?.reason ?? event.metadata["history.reasonCode"];
       const creation = event.name === "BookmarkConsumed" ? creations.get(event.bookmarkId) : undefined;
@@ -168,23 +262,31 @@ export function HistoryEventList({ items, selectedEventId, onSelect, labelForEve
       const previous = items[index - 1];
       const gap = unloadedAfterSequence !== undefined && event.sequence > unloadedAfterSequence && (!previous || previous.sequence <= unloadedAfterSequence);
       const age = creation && creation.occurredAtKnown !== false && event.occurredAtKnown !== false ? formatDuration(creation.occurredAt, occurredAt) : "";
-      return <li key={event.historyEventId}>
+      const actor = labelForEvent?.(event) || (event.activityExecutionId && event.activityExecutionId !== hideActivityExecutionId ? `Execution ${event.activityExecutionId}` : null);
+      const status = event.metadata["history.status"];
+      const primaryMeta = [actor, status].filter(Boolean).join(" · ");
+      const expanded = Boolean(expandable && expandedEventId === event.historyEventId);
+      return <li key={event.historyEventId} className={expanded ? "wf-history-event-item is-expanded" : "wf-history-event-item"}>
         {gap ? <p className="wf-history-range-gap" role="note">Earlier snapshot history is not fully loaded. The following events arrived after position #{unloadedAfterSequence}.</p> : null}
         {!previous || historyDate(previous.occurredAtKnown === false ? null : previous.occurredAt) !== date ? <p className="wf-history-date">{date}</p> : null}
-        <button type="button" className="wf-history-event" aria-pressed={selectedEventId === event.historyEventId}
+        <button type="button" className="wf-history-event"
+          aria-pressed={expandable ? undefined : selectedEventId === event.historyEventId}
+          aria-expanded={expandable ? expanded : undefined}
           data-history-event-id={event.historyEventId} data-history-sequence={event.sequence} data-category={event.category}
           onClick={() => onSelect(event)}>
           <time dateTime={occurredAt ?? undefined} title={historyInstant(occurredAt)}>{historyClock(occurredAt)}</time>
-          <span className="wf-history-event-icon"><EventIcon event={event} /></span>
+          <span className="wf-history-event-icon" data-tone={historyEventTone(event)}><HistoryEventIcon event={event} size={14} /></span>
           <span className="wf-history-event-body"><strong>{historyEventLabel(event)}</strong>
-            {labelForEvent?.(event) ? <small>{labelForEvent(event)}</small> : event.activityExecutionId && event.activityExecutionId !== hideActivityExecutionId ? <small>Execution {event.activityExecutionId}</small> : null}
-            {event.metadata["history.status"] ? <small>{event.metadata["history.status"]}</small> : null}
+            {primaryMeta ? <small className="wf-history-event-meta">{primaryMeta}</small> : null}
             {reason ? <small>{reason}</small> : null}
             {age ? <small><Clock3 size={12} aria-hidden="true" /> Handle lifetime {age}</small> : null}
             {event.authority === "DeliveryObservation" ? <small>Recorded delivery observation</small> : event.authority !== "CommittedTransition" && event.authority !== "Unspecified" ? <small>{historyAuthorityLabel(event.authority)}</small> : null}
           </span>
-          <span className="wf-history-position" aria-label={`Recorded position ${event.sequence}`}>#{event.sequence}</span>
+          {expandable
+            ? <ChevronRight size={14} className="wf-history-event-chevron" aria-hidden="true" />
+            : <span className="wf-history-position" aria-label={`Recorded position ${event.sequence}`}>#{event.sequence}</span>}
         </button>
+        {expanded ? <div className="wf-history-event-inline-detail">{renderExpanded!(event)}</div> : null}
       </li>;
     })}
   </ol>;

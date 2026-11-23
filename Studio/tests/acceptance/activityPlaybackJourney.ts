@@ -253,8 +253,9 @@ export async function playbackLiveWaitJourney(page: Page, info: TestInfo, captur
   expect(created).toBeTruthy(); expect(consumed).toBeTruthy();
   const actualWait = Date.parse(consumed.occurredAt!) - Date.parse(created.occurredAt!);
   expect(actualWait).toBeGreaterThanOrEqual(52 * 60_000); expect(actualWait).toBeLessThan(53 * 60_000);
-  await page.getByRole("region", { name: "Run timeline", exact: true }).getByText("Filter events", { exact: true }).click();
-  await page.getByRole("region", { name: "Run timeline", exact: true }).getByRole("combobox", { name: "History category", exact: true }).selectOption("BookmarkLifecycle");
+  await page.getByRole("region", { name: "Run timeline", exact: true }).getByRole("button", { name: "Filter events", exact: true }).click();
+  await page.getByRole("dialog", { name: "Filter events", exact: true }).getByRole("combobox", { name: "History category", exact: true }).selectOption("BookmarkLifecycle");
+  await page.keyboard.press("Escape");
   await expect(page.getByText(/Handle lifetime 52m/)).toBeVisible(); await h.snap("playback-live-recorded-wait", page.getByRole("region", { name: "Run timeline", exact: true }).getByRole("button").filter({ hasText: /Handle lifetime 52m/ }));
   // Verify the source duration before introducing a presentation clock. Playback crosses this
   // actual long wait in two one-second steps; it never advances the runtime's source clock.
@@ -263,8 +264,8 @@ export async function playbackLiveWaitJourney(page: Page, info: TestInfo, captur
   const presentationStart = new Date(Date.now() + 60_000);
   await page.clock.install({ time: new Date(presentationStart.getTime() - 60_000) }); await page.clock.pauseAt(presentationStart);
   await h.seek(waitPosition - 1, 4);
-  await h.controls.getByText("Playback options", { exact: true }).click();
-  await h.controls.getByRole("combobox", { name: "Playback speed" }).selectOption("1");
+  await h.controls.getByRole("button", { name: "Playback options", exact: true }).click();
+  await page.getByRole("dialog", { name: "Playback options", exact: true }).getByRole("group", { name: "Playback speed" }).getByRole("button", { name: "1×", exact: true }).click();
   await h.controls.getByRole("button", { name: "Play", exact: true }).click();
   await page.clock.runFor(999); await h.position(waitPosition - 1, 4);
   await page.clock.runFor(1); await h.position(waitPosition, 4, waiter.activityExecutionId);
@@ -340,7 +341,8 @@ export async function playbackCoverageJourney(page: Page, info: TestInfo, captur
   const partial = await h.occurrences(run.id); expect(partial.state).toBe("partial"); expect(BigInt(partial.totalCount!)).toBeGreaterThan(0n);
   expect(BigInt(partial.totalCount!)).toBeLessThan(4n);
   await h.controls.getByRole("button", { name: "Refresh playback", exact: true }).click(); await h.position(0, Number(partial.totalCount));
-  await expect(h.controls.locator(".wf-playback-options")).toHaveJSProperty("open", false);
+  await expect(h.controls.getByRole("button", { name: "Playback options", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("dialog", { name: "Playback options", exact: true })).toHaveCount(0);
   await expect(h.controls.getByRole("status").filter({ hasText: "Partial playback range" })).toBeVisible(); await h.snap("playback-coverage-retained");
   const nonce = crypto.randomUUID().replaceAll("-", ""), faultPath = `/__qualification/activity-playback/${run.id}/pin-read-fault/${nonce}`;
   await h.api(faultPath, "POST");
@@ -420,11 +422,12 @@ export async function playbackTransportJourney(page: Page, info: TestInfo, captu
   await h.position(0, 9, sequence.items[0].activityExecutionId);
   const next = h.controls.getByRole("button", { name: "Next", exact: true });
   await next.focus(); await next.press("Enter"); await h.position(1, 9, sequence.items[1].activityExecutionId); await expect(next).toBeFocused();
-  await h.controls.getByText("Playback options", { exact: true }).click();
-  await h.controls.locator(".wf-playback-details > summary").click();
+  await h.controls.getByRole("button", { name: "Playback options", exact: true }).click();
+  const optionsDialog = page.getByRole("dialog", { name: "Playback options", exact: true });
+  await optionsDialog.locator(".wf-playback-details > summary").click();
   await h.snap("playback-transport-next");
-  await h.controls.locator(".wf-playback-details > summary").click();
-  await h.controls.getByText("Playback options", { exact: true }).click();
+  await optionsDialog.locator(".wf-playback-details > summary").click();
+  await h.controls.getByRole("button", { name: "Playback options", exact: true }).click();
   const forward = [sequence.items[0].activityExecutionId, sequence.items[1].activityExecutionId];
   for (let index = 2; index < sequence.items.length; index++) {
     await next.click(); await h.position(index, 9, sequence.items[index].activityExecutionId);
@@ -443,9 +446,10 @@ export async function playbackTransportJourney(page: Page, info: TestInfo, captu
     autoplay.push(sequence.items[index].activityExecutionId);
   }
   expect(autoplay).toEqual(forward); await expect(h.controls.getByRole("button", { name: "Replay", exact: true })).toBeEnabled();
-  await h.controls.getByText("Playback options", { exact: true }).click();
   for (const [speed, cadence] of [["0.5", 2000], ["1", 1000], ["2", 500], ["4", 250]] as const) {
-    await h.seek(0, 9); await h.controls.getByRole("combobox", { name: "Playback speed" }).selectOption(speed);
+    await h.seek(0, 9);
+    await h.controls.getByRole("button", { name: "Playback options", exact: true }).click();
+    await page.getByRole("dialog", { name: "Playback options", exact: true }).getByRole("group", { name: "Playback speed" }).getByRole("button", { name: `${speed}×`, exact: true }).click();
     await h.controls.getByRole("button", { name: "Play", exact: true }).click();
     await page.clock.runFor(cadence - 1); await h.position(0, 9);
     await page.clock.runFor(1); await h.position(1, 9, sequence.items[1].activityExecutionId);
@@ -526,8 +530,9 @@ export async function playbackTransportJourney(page: Page, info: TestInfo, captu
   await page.goto(`/workflows/instances/${run.id}?${new URLSearchParams({ historyEvent: sequence.items[1].historyEventId,
     historyActivity: root.activityExecutionId, historyDescendants: "1" })}`);
   await h.position(1, 9, sequence.items[1].activityExecutionId);
-  await page.getByRole("region", { name: "Run timeline", exact: true }).getByText("Filter events", { exact: true }).click();
-  await page.getByRole("region", { name: "Run timeline", exact: true }).getByRole("checkbox", { name: "Include descendants", exact: true }).uncheck();
+  await page.getByRole("region", { name: "Run timeline", exact: true }).getByRole("button", { name: "Filter events", exact: true }).click();
+  await page.getByRole("dialog", { name: "Filter events", exact: true }).getByRole("checkbox", { name: "Include descendants", exact: true }).uncheck();
+  await page.keyboard.press("Escape");
   await h.position(0, 1, root.activityExecutionId);
   await expect(page.getByRole("region", { name: "History event details", exact: true })).toContainText(root.activityExecutionId);
   await h.snap("playback-transport-scoped");

@@ -12,6 +12,8 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flowchart-peer"), var flowSize] && int.TryParse(flowSize, out var flowPartitions))
+    return await PostgresClusterChecks.RunAsync(flowPartitions, flowClusterMode == "pg-cluster-flowchart-peer", flowchart: true);
 if (args is [var clusterMode and ("pg-cluster-roots" or "pg-cluster-peer" or "pg-cluster-crash"), var size] && int.TryParse(size, out var clusterPartitions))
     return await PostgresClusterChecks.RunAsync(clusterPartitions, clusterMode == "pg-cluster-peer", clusterMode == "pg-cluster-crash");
 if (args is ["pg-discover-roots", var discoveryPhase and ("birth" or "restart"), var discoveryScope, .. var modes] &&
@@ -69,8 +71,20 @@ if (args is ["pg-durable-flowchart-preview", "restart", ..])
     Console.Error.WriteLine("Durable restart requires a route, actor, bookmark, positive previous epoch and positive waiting revision.");
     return 2;
 }
-if (args is ["pg-root-self", var selfWriter and ("ef" or "owned"), var selfFence and ("checked" or "in-batch")])
-    return await PostgresRootSelfChecks.RunAsync(selfWriter == "owned", selfFence == "in-batch");
+if (args is [var timerPreview and ("pg-delay-preview" or "pg-durable-delay-preview"), var timerWriter and ("owned" or "ef"), var timerFence and ("checked" or "in-batch"), .. var timerArgs])
+{
+    var persistence = timerPreview == "pg-durable-delay-preview" ? Modes.Durable : Modes.Balanced;
+    if (timerArgs is ["birth"]) return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", persistence, null);
+    if (timerArgs is ["restart", var timerRef, var timerEpoch, var timerDue, var timerHandle, var timerCursor] &&
+        long.TryParse(timerEpoch, out var oldTimerEpoch) && oldTimerEpoch > 0 && long.TryParse(timerDue, out var savedDue))
+        return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", persistence, new(timerRef, oldTimerEpoch, savedDue, timerHandle, timerCursor));
+    Console.Error.WriteLine("Use birth or restart <actor> <positive previous epoch> <due> <handle> <cursor>.");
+    return 2;
+}
+if (args is [var selfMode and ("pg-root-self" or "pg-root-timer"), var selfWriter and ("ef" or "owned"), var selfFence and ("checked" or "in-batch")])
+    return await PostgresRootSelfChecks.RunAsync(selfWriter == "owned", selfFence == "in-batch", selfMode == "pg-root-timer");
+if (args is ["pg-root-self-set", var setWriter and ("ef" or "owned"), var setFence and ("checked" or "in-batch")])
+    return await PostgresSelfSetChecks.RunAsync(setWriter == "owned", setFence == "in-batch");
 if (args is ["pg-flowchart-preview", "merge-early"])
 {
     try { return await PostgresFlowchartPreview.RunAsync("automatic", mergeEarly: true); }

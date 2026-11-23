@@ -5,17 +5,17 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    /// <summary>Run during the coordinated stop. The store retains its ordinary or PostgreSQL
-    /// continuation profile. Existing checkpoints and messages retain null/zero generation.</summary>
+    /// <summary>Run during the coordinated stop. Preserves the ordinary, immediate-continuation, or timer profile.
+    /// Existing checkpoints and messages retain null/zero generation.</summary>
     public async Task<bool> UpgradeJobGenerationFormatAsync(CancellationToken cancellationToken = default)
     {
         // Select the migration from the persisted protocol. AdvanceStoreFormatAsync rechecks its
         // exact source and target under the marker lock before any DDL or marker publication.
         await using var db = create();
         var stored = await ReadStoreFormatAsync(db, FormatLock.None, cancellationToken);
-        var continuation = db.Database.IsNpgsql() && stored.MessageProtocol == 3;
-        var expected = new StoreFormat(2, continuation ? 3 : 1, 1);
-        var next = new StoreFormat(3, continuation ? 3 : 2, 1);
+        var continuation = db.Database.IsNpgsql() && stored.MessageProtocol is 3 or 4;
+        var expected = new StoreFormat(2, continuation ? stored.MessageProtocol : 1, 1);
+        var next = new StoreFormat(3, continuation ? stored.MessageProtocol : 2, 1);
         return await AdvanceStoreFormatAsync(expected, next, async (transaction, token) =>
         {
             await AddGenerationColumns(transaction, token);

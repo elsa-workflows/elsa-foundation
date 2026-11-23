@@ -118,7 +118,15 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     // EF keys its model cache by context type. Fresh opt-in databases seed their marker in the
     // same creation transaction as the schema. An existing database keeps its original marker.
     private sealed class RootSelfDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    internal StoreFormat RequiredFormat => this is RootSelfDb ? StoreFormat.RootSelf : StoreFormat.Current;
+    private sealed class RootTimerDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    internal StoreFormat RequiredFormat => this switch
+    {
+        RootTimerDb => StoreFormat.RootTimers,
+        RootSelfDb => StoreFormat.RootSelf,
+        _ => StoreFormat.Current
+    };
+    internal bool UsesRootSelfProtocol => this is RootSelfDb or RootTimerDb;
+    internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => new RootTimerDb(options);
     internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => new RootSelfDb(options);
 
     internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
@@ -150,7 +158,7 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
 
     protected override void OnModelCreating(ModelBuilder model)
     {
-        if (this is RootSelfDb && !Database.IsNpgsql())
+        if (UsesRootSelfProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The continuation profile requires PostgreSQL.");
         model.Entity<StoreVersionEntity>(entity =>
         {
@@ -692,10 +700,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
               AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" = {InboxKey.FoundationOccurrenceScope} OR m."InboxScope" = {RootSelfScope}))
            """
         : RootInboxSource + " m";
+    private const string RootClockMilliseconds = "floor(extract(epoch from clock_timestamp()) * 1000)::bigint";
     private string PollSql => Engine?.Poll ??
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration"{PollBirthColumns}
-         FROM (SELECT {Now} AS now) t
+         FROM (SELECT {(RootSelfIssuer is { SupportsTimers: true } ? RootClockMilliseconds : Now)} AS now) t
          LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter}
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
