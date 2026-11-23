@@ -124,6 +124,7 @@ internal static class PostgresHeldDirectChecks
                 receivedAt = await DatabaseNow();
             } while (receivedAt < request.Deadline);
         }
+        var committedCarriers = transport.Carriers;
         transport.Deliver(receivedAt);
         var response = await answer.WaitAsync(stop);
         var suffix = await api.TailAsync(scope, actor, bookmark, stop);
@@ -144,7 +145,8 @@ internal static class PostgresHeldDirectChecks
         Check(await admission.AdmitDirectRequestAsync(Tenant, actor.Id, CompositeSignal.Kind, "changed", Receiver, replay, false, stop)
             == PostgresRootAdmission.DirectResult.Duplicate, "A new registration cannot reopen a settled operation.");
         await Pass(successor);
-        Check(transport.Attempts == 1 && transport.Accepted == (afterDeadline ? 0 : 1) && requests.IsOpen(replay) &&
+        Check(transport.Attempts == 1 && transport.Carriers == committedCarriers &&
+            transport.Accepted == (afterDeadline ? 0 : 1) && requests.IsOpen(replay) &&
             (await api.TailAsync(scope, actor, bookmark, stop)).Items.SequenceEqual(suffix.Items),
             "The replay must add no reply or journal revision.");
         requests.Disconnect(replay);
@@ -218,22 +220,24 @@ internal static class PostgresHeldDirectChecks
     {
         internal int Attempts { get; private set; }
         internal int Accepted { get; private set; }
+        internal int Carriers { get; private set; }
         internal bool Landed { get; private set; }
         internal Func<bool>? CheckLanded { get; set; }
-        private Reply? response;
+        private readonly Queue<Reply> pending = new();
 
         public void Send(string node, Reply reply)
         {
-            if (node != Receiver || reply.Channel != "response") return;
-            Attempts++;
-            Landed = CheckLanded?.Invoke() == true;
-            response = reply;
+            if (node != Receiver) return;
+            Landed = (Carriers == 0 || Landed) && CheckLanded?.Invoke() == true;
+            Carriers++;
+            if (reply.Channel == "response") Attempts++;
+            pending.Enqueue(reply);
         }
 
         internal void Deliver(long receivedAt)
         {
-            if (response is { } outgoing && requests.TryReceive(outgoing, receivedAt)) Accepted++;
-            response = null;
+            while (pending.TryDequeue(out var outgoing))
+                if (requests.TryReceive(outgoing, receivedAt)) Accepted++;
         }
     }
 
