@@ -70,6 +70,25 @@ applied once. A second Park is discarded. The example shows the inbox rows that 
 each open resolution. The fixture uses the in-memory Actor Foundation. Provider projections,
 Studio integration and the remaining operator operations have their own milestone acceptance.
 
+## In-memory workflow run history
+
+`WorkflowRunList` reads a tenant-scoped projection of workflow checkpoints. A workflow enters the list
+at its first fenced checkpoint. Later checkpoint commits, including changes with no public journal entry,
+supply its `UpdatedAt`. Retirement removes the projected row. The projection uses the foundation clock
+that records each accepted checkpoint.
+
+The query applies inclusive UTC `From` and `To` bounds to the projected time. Pages sort by that time
+descending and exact workflow reference ascending. The opaque bookmark is bound to the tenant and filters.
+Pages read current committed metadata, so a workflow updated during a traversal can move before its bookmark.
+The product's historical fallback fields remain relevant to older execution records. This slice covers new
+in-memory actor-backed runs and their own read route.
+
+Run the Native workflow witness from `prototypes/kernel-model`.
+
+```sh
+dotnet run --project sim -c Release -- --workflow-run-history-check
+```
+
 ## Migration plan outcomes from the journal
 
 From `prototypes/kernel-model`, run:
