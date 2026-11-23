@@ -24,7 +24,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `models/Graph` | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
 | `models/Graph.Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
 | `models/Native` | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
-| `models/Native.Run` | Native smoke tests, cost and memory measurement |
+| `models/Native.Run` | Native smoke tests, cost and memory measurement, PostgreSQL Core Preview |
 | `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs`; the commit as the store's own SQL in `EfStore.Owned.cs` and the `*CommitDialect.cs` files ([COMMIT-SQL.md](COMMIT-SQL.md)) |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`) |
 | `ef/Kernel.Ef.Conformance` | The conformance suite against the EF store, every engine |
@@ -52,6 +52,24 @@ One project at a time (they share `obj/` folders through project references):
 for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
+
+## PostgreSQL Core Preview
+
+Set `KERNEL_PREVIEW_POSTGRES` to the connection string of an empty PostgreSQL 17 database dedicated to the preview.
+Run this from `prototypes/kernel-model` with the SDK in [global.json](global.json).
+
+```bash
+models/Native.Run/run-core-preview.sh
+```
+
+The first Embedded host starts a Native approval workflow through the public Foundation contract, records Ada's approval,
+and exits at the second wait. The next process opens the same database and reads from the first process's journal bookmark.
+It sends Ada's operation ID again with a different payload, then sends Grace's approval with a new ID. The conserved
+checkpoint, the journal and the final result verify that each approval applied once.
+
+The receipt counts PostgreSQL commands and transaction completions by phase. Setup, ownership and journal reads have
+their own rows. The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes
+use a separate unmeasured connection. The demonstration scopes execution to one generated root and direct messages.
 
 ## The simulation
 
