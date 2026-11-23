@@ -22,6 +22,8 @@ using Npgsql;
 string[] flags = ["--fence-in-batch", "--checked-fence", "--m5", "--rcsi-off", "--rc", "--ef-commit", "--owned-commit", "--fence-ignores-count"];
 switch (args)
 {
+    case ["postgres-rehearsal", .. var role]:
+        return await FormatRehearsalProcess.RunAsync(role, (store, token) => store.UpgradeJobGenerationFormatAsync(token));
     case ["postgres-profile-upgrade"]:
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")

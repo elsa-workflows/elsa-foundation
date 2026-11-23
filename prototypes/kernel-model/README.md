@@ -1063,3 +1063,24 @@ Run `job-generation-format` with the EF conformance executable to exercise the
 migration and cold field reads. The legacy writer still refuses qualified Foundation
 job turns. K4's Worker, Park, current-generation result and job-entry cases require
 the qualified relational writer.
+
+### PostgreSQL different-version rehearsal
+
+From `prototypes/kernel-model`, run this with Docker and the locked .NET SDK.
+
+```sh
+bash ef/Kernel.Ef.Conformance/check-mixed-version-rehearsal.sh
+```
+
+The script builds its process driver against the runtime sources at schema-2 revision `08caf14c0e`, schema-3
+revision `6f38d98648`, and the checkout. It runs them in separate processes against a disposable PostgreSQL 17
+database. The old owner writes and keeps its partition. Migration refuses while that owner is live, with the
+original rows and schema preserved. After a coordinated stop, the new owner writes with the advanced marker.
+The old owner at startup, an independent direct take, the sweeper and the projector each refuse with the
+stored and readable versions. Every refusal leaves the rows unchanged. The new owner commits again at the
+same epoch.
+
+The `6f38d98648` owner, sweeper and projector can operate on the resulting ordinary relational format
+(schema 3, message protocol 2, journal codec 1). That is the tested PostgreSQL prototype rollback floor for
+this schedule. Release notes still need their floor for the actual shipped build and store formats.
+The script prints the receipt directory, source revisions and provider assembly hashes.
