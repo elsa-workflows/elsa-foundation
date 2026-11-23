@@ -73,7 +73,8 @@ internal static class PostgresWorkflowHistoryChecks
         var legacy = await Start("legacy", TimeSpan.Zero);
         var baseline = await Start("baseline");
         var neighbor = new Contract.ActorRef(await PostgresMultiRootClient.CallSecondaryAsync(ct, "start"));
-        var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
+        var immediate = Reference.WriteLines(1);
+        var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build()).Add(immediate);
         var host = await PostgresNativeRootOwner.PreparePartitionAsync(store, "history", 0, registry, 16, ct);
         await using var active = await host.TryActivateAsync(ct) ?? throw new InvalidOperationException("Expected the PostgreSQL owner.");
         await Drive(legacy, 1);
@@ -89,6 +90,26 @@ internal static class PostgresWorkflowHistoryChecks
         Check(with == without, $"one added projection upsert leaves client counts unchanged ({with.Commands} commands, {with.Begun} transaction begins, {with.Ended} completions)");
         var legacyRow = (await api.ListRunsAsync(scope, query, cancellationToken: ct)).Items.Single();
         Check(legacyRow.Ref == legacy, "a prior root enters history at its first observed checkpoint");
+
+        var completedAtBirth = await Start("completed-at-birth", definition: immediate.Id);
+        var birthImage = await Drive(completedAtBirth, 1);
+        var birthQuery = new WorkflowRunQuery(immediate.Id, Contract.ActorStatus.Finished);
+        var birthPage = await api.ListRunsAsync(scope, birthQuery, cancellationToken: ct);
+        Check(birthImage is { Status: InstanceStatus.Finished, TerminalRevision: 1, TerminalAt: > 0 } &&
+            birthPage is { Items: [var birth], Next: null } && birth.Ref == completedAtBirth &&
+            birth.UpdatedAt.ToUnixTimeMilliseconds() == birthImage.TerminalAt &&
+            await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (
+                    SELECT 1 FROM "Instances" i JOIN "Journal" j
+                        ON j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j."Revision" = 1 AND j.xmin = i.xmin
+                    JOIN "FoundationActorList" l ON l."Tenant" = i."FoundationTenant" AND l."Reference" = i."FoundationReference"
+                        AND l."EndedAt" = i."FoundationTerminalAt" AND l.xmin = i.xmin
+                    JOIN "FoundationWorkflowHistory" h USING ("Tenant", "Reference")
+                    WHERE l."Tenant" = {scope.Tenant} AND l."Reference" = {completedAtBirth.Id}
+                        AND h."UpdatedAt" = i."FoundationTerminalAt" AND h."Revision" = 1 AND h.xmin = i.xmin
+                ) AS "Value"
+                """).SingleAsync(ct),
+            "a Native run finishing at birth writes its terminal clock, journal and both projections in one PostgreSQL transaction");
 
         var successor = await Start("legacy", TimeSpan.Zero);
         Check(successor != legacy, "a repeated start after its receipt expires gets a distinct exact reference");
@@ -123,10 +144,11 @@ internal static class PostgresWorkflowHistoryChecks
 
         // Seed two groups from observed times so the first cursor lands inside a tie and must also reach older rows.
         var newest = newer.Take(3).Select(actor => actor.Id).ToArray();
+        var runningReferences = newer.Append(legacy).Select(actor => actor.Id).ToArray();
         var older = legacyRow.UpdatedAt.ToUnixTimeMilliseconds();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "FoundationWorkflowHistory" SET "UpdatedAt" = CASE WHEN "Reference" = ANY({newest}) THEN {physical.UpdatedAt} ELSE {older} END
-            WHERE "Tenant" = {scope.Tenant} AND "Reference" <> {finished.Id}
+            WHERE "Tenant" = {scope.Tenant} AND "Reference" = ANY({runningReferences})
             """, ct);
         var tie = DateTimeOffset.FromUnixTimeMilliseconds(physical.UpdatedAt);
         var exact = query with { From = tie.ToOffset(TimeSpan.FromHours(2)), To = tie };
@@ -149,9 +171,9 @@ internal static class PostgresWorkflowHistoryChecks
         Console.WriteLine($"tenant-reference {other.Id}");
         return 0;
 
-        async Task<Contract.ActorRef> Start(string id, TimeSpan? keepFor = null)
+        async Task<Contract.ActorRef> Start(string id, TimeSpan? keepFor = null, string? definition = null)
         {
-            var start = NativeExecutionModel.Start(DirectApprovalWorkflow.Definition) with { History = Contract.History.Minimal };
+            var start = NativeExecutionModel.Start(definition ?? DirectApprovalWorkflow.Definition) with { History = Contract.History.Minimal };
             return (await api.SendAsync(scope, new Contract.Target.Start(Actor.Start(start)), id, Contract.Kinds.Start,
                 options: new(KeepFor: keepFor), cancellationToken: ct)).Actor
                 ?? throw new InvalidOperationException("Expected an admitted workflow.");

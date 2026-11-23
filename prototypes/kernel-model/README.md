@@ -319,9 +319,10 @@ on their first checkpoint observed after installation. Physical workflow retirem
 product routing remain outside this preview.
 
 On a fresh disposable PostgreSQL database, run `pg-root-workflow-history <owned|ef> <checked|in-batch> birth`
-with the Native runner. Run the same command with `restart <projection-bookmark>` and
-`tenant <projection-bookmark> <tenant-reference>` in separate processes using the values from birth. The birth phase renames the checkpoint and journal tables after the physical checks so
-the new processes exercise both projections directly.
+with the Native runner. Birth checks that a run finishing at revision 1 shares its terminal time and database
+transaction with the journal and both projections. Then it renames the checkpoint and journal tables so
+`restart <projection-bookmark>` and `tenant <projection-bookmark> <tenant-reference>` exercise both projections
+from separate processes. Use the bookmark and reference printed by birth.
 
 On a fresh PostgreSQL database, `pg-root-history <owned|ef> <checked|in-batch>` on the same runner
 exercises two ordinary turns with no journal entries. The Minimal workflow saves its first approval. The Full
