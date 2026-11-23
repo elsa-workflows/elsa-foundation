@@ -143,7 +143,7 @@
     -->
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageVersion Include="System.CommandLine" Version="2.0.8" />
-    <PackageVersion Include="System.IO.Hashing" Version="10.0.8" />
+    <PackageVersion Include="System.IO.Hashing" Version="10.0.8" Condition="'$(MSBuildProjectName)' == 'Elsa.Architecture.Tests'" />
     <PackageVersion Include="System.Reflection.MetadataLoadContext" Version="10.0.8" />
     <!--
       Transitive pin (see Microsoft.OpenApi above): no project references System.Security.Cryptography.Pkcs
