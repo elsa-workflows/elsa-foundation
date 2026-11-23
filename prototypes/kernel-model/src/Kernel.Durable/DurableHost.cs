@@ -27,6 +27,8 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
     private readonly Worker? _node;
     private readonly Dictionary<int, NodeScope> _scopes = [];
     private readonly SemaphoreSlim _turn = new(1, 1);     // a pass, a gain and a loss of the node's worker never overlap
+    private readonly object _attachmentGate = new();
+    private RuntimeRun? _runtimeRun;
     private volatile bool _stopping;
     private long _passes, _lastAt, _calls;
     private TimeSpan? _last;
@@ -131,16 +133,42 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         }
     }
 
-    async ValueTask IScopeHost.PrepareToStopAsync(CancellationToken cancellationToken)
+    IScopeHostRun IScopeHost.AttachRuntime()
     {
-        _stopping = true;
-        await Task.WhenAll(Workers.Select(worker => worker.DrainJobsAsync())).WaitAsync(cancellationToken);
+        lock (_attachmentGate)
+        {
+            if (_stopping)
+                throw new InvalidOperationException("This durable host cannot start while its previous shutdown is incomplete.");
+            if (_runtimeRun is not null)
+                throw new InvalidOperationException("This durable host is already attached to a runtime.");
+            return _runtimeRun = new(this);
+        }
     }
 
-    void IScopeHost.Stopped()
+    private sealed class RuntimeRun(DurableHost host) : IScopeHostRun
     {
-        foreach (var worker in Workers) worker.ReopenJobEntry();
-        _stopping = false;
+        public async ValueTask PrepareToStopAsync(CancellationToken cancellationToken)
+        {
+            lock (host._attachmentGate)
+            {
+                if (host._runtimeRun != this)
+                    throw new InvalidOperationException("Only the attached runtime can prepare this durable host for shutdown.");
+                host._stopping = true;
+            }
+            await Task.WhenAll(host.Workers.Select(worker => worker.DrainJobsAsync())).WaitAsync(cancellationToken);
+        }
+
+        public void Stopped()
+        {
+            lock (host._attachmentGate)
+            {
+                if (host._runtimeRun != this || !host._stopping)
+                    throw new InvalidOperationException("Only the attached runtime can complete this durable host's shutdown.");
+                foreach (var worker in host.Workers) worker.ReopenJobEntry();
+                host._stopping = false;
+                host._runtimeRun = null;
+            }
+        }
     }
 
     private IKernelStore? Store => _counted?.Store ?? Workers.FirstOrDefault()?.Store;

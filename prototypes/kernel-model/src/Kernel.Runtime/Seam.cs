@@ -24,12 +24,20 @@ public interface IScopeHost
 {
     ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default);
 
-    /// <summary>After the last pass, end admitted off-turn work before the runtime gives up its scopes.
-    /// This starts orderly shutdown. Cancellation abandons the wait and a release already issued may still finish.</summary>
-    ValueTask PrepareToStopAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+    /// <summary>Optionally claim this host for one runtime run, after scope validation. This is a synchronous local
+    /// operation. A host which tracks attachment refuses a new claim while another run owns it.</summary>
+    IScopeHostRun? AttachRuntime() => null;
+}
 
-    /// <summary>All shutdown releases completed. The host can accept a fresh activation.</summary>
-    void Stopped() { }
+/// <summary>The attachment returned to one runtime run. Only that run can finish shutdown and free the host to be attached again.</summary>
+public interface IScopeHostRun
+{
+    /// <summary>After the last pass, end admitted off-turn work before the runtime gives up its scopes.
+    /// Cancellation abandons the wait and a release already issued may still finish.</summary>
+    ValueTask PrepareToStopAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The attached run completed its shutdown releases. The host can accept a fresh attachment.</summary>
+    void Stopped();
 }
 
 /// <summary>A host that can take several requested scopes together. It returns an activation only for scopes it holds.</summary>

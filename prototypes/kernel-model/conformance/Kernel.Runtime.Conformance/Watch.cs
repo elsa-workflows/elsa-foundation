@@ -160,6 +160,7 @@ public sealed class Watcher
         // The start's count check is layer 2's: the watcher passes it through, so a mismatch refuses the node here too.
         public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) =>
             inner is IScopeCount counted ? counted.CheckScopesAsync(scopes, cancellationToken) : ValueTask.CompletedTask;
+        public IScopeHostRun? AttachRuntime() => inner.AttachRuntime();
 
         public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
         {

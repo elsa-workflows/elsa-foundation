@@ -34,6 +34,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     private readonly bool[] _releasing = new bool[partitions];
     private readonly object _lifecycle = new();
     private IScopeHost? _host;
+    private IScopeHostRun? _hostRun;
     private Task? _stopping;
     private bool _abandoned;
     private bool _balancing, _listening;
@@ -65,6 +66,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
                         throw new InvalidOperationException("This runtime is already running.");
                     if (counted is null)
                     {
+                        _hostRun = host.AttachRuntime();
                         _host = host;
                         listen = !_listening;
                         _listening = true;
@@ -98,17 +100,17 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     public ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
         if (cancellationToken.IsCancellationRequested) return default;
-        IScopeHost host;
+        IScopeHostRun? hostRun;
         TaskCompletionSource stopped;
         lock (_lifecycle)
         {
             if (_stopping is { } pending) return WaitForStopAsync(pending, cancellationToken);
-            if (_host is not { } started) return default;
-            host = started;
+            if (_host is null) return default;
+            hostRun = _hostRun;
             stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
             _stopping = stopped.Task;
         }
-        _ = StopRunAsync(host, stopped, cancellationToken);
+        _ = StopRunAsync(hostRun, stopped, cancellationToken);
         return new(stopped.Task);
     }
 
@@ -118,7 +120,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
     }
 
-    private async Task StopRunAsync(IScopeHost host, TaskCompletionSource stopped, CancellationToken cancellationToken)
+    private async Task StopRunAsync(IScopeHostRun? hostRun, TaskCompletionSource stopped, CancellationToken cancellationToken)
     {
         // The first caller sets the stop deadline. Other callers can give up their own wait.
         // What is not given up yet runs out by its lease, as after a crash.
@@ -127,15 +129,18 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         Task? operation = null;
         try
         {
-            operation = host.PrepareToStopAsync(cancellationToken).AsTask();
-            await operation.WaitAsync(cancellationToken);
+            if (hostRun is not null)
+            {
+                operation = hostRun.PrepareToStopAsync(cancellationToken).AsTask();
+                await operation.WaitAsync(cancellationToken);
+            }
             for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++)
             {
                 operation = DeactivateAsync(scope, cancellationToken);
                 await operation.WaitAsync(cancellationToken);
             }
             if (cancellationToken.IsCancellationRequested) return;
-            host.Stopped();
+            hostRun?.Stopped();
             released = true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -150,6 +155,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             lock (_lifecycle)
             {
                 _host = null;
+                _hostRun = null;
                 _abandoned = !released;
                 if (released) _stopping = null;
                 if (failure is null) stopped.SetResult();

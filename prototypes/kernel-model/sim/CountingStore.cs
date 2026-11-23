@@ -2,7 +2,8 @@ namespace Kernel.Sim;
 
 /// <summary>Passes everything through and counts the commits.</summary>
 public sealed class CountingStore(IKernelStore inner, Action committed, Action<CommitBatch, bool>? observeCommit = null,
-    Func<CommitBatch, ValueTask>? beforeCommit = null, Action? beforeRelease = null, Func<ValueTask>? afterRelease = null) : IKernelStore, IFoundationSchedulingStore, IDueBacklogStore
+    Func<CommitBatch, ValueTask>? beforeCommit = null, Action? beforeRelease = null, Func<ValueTask>? afterRelease = null,
+    Func<ValueTask>? beforePartitionCount = null) : IKernelStore, IFoundationSchedulingStore, IDueBacklogStore
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
     string? IFoundationSchedulingStore.FoundationScheduleTenant(CreationAddress address) =>
@@ -20,7 +21,11 @@ public sealed class CountingStore(IKernelStore inner, Action committed, Action<C
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
-    public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => inner.PartitionCountAsync(cancellationToken);
+    public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
+    {
+        if (beforePartitionCount is not null) await beforePartitionCount();
+        return await inner.PartitionCountAsync(cancellationToken);
+    }
     public ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default) => inner.TakeAsync(partitions, node, lease, cancellationToken);
     public async ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default)
     {

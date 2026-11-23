@@ -19,6 +19,7 @@ internal static class HostJobDrainChecks
         await ConcurrentStopAsync();
         await CanceledStopAsync();
         await CanceledReleaseAsync();
+        await StaleHostValidationAsync();
         await FaultedStopAsync();
         await DisposedSourceAsync();
         await BeforeEntryAsync();
@@ -45,6 +46,16 @@ internal static class HostJobDrainChecks
         var beforeEpoch = fixture.Fence.Epoch;
         Check(before is { Revision: 1, Status: InstanceStatus.Running } && fixture.Fence.Owner == node.Node &&
             !ticket.Done && ticket.Attempts == 0, "the entered job has a durable checkpoint and an outstanding ticket");
+
+        var contender = new PartitionRuntime(node.Node, store, 1, Timeout);
+        try
+        {
+            await contender.StartAsync(host);
+            throw new InvalidOperationException("Two runtimes cannot attach the same active host.");
+        }
+        catch (InvalidOperationException error) when (error.Message.Contains("already attached", StringComparison.Ordinal)) { }
+        Check(!type.Canceled.Task.IsCompleted && fixture.Fence.Owner == node.Node,
+            "another runtime cannot attach the live durable host");
 
         var command = new HostOwnershipAdministration(node, () => true);
         using var disconnected = new CancellationTokenSource();
@@ -299,6 +310,67 @@ internal static class HostJobDrainChecks
         await successor.StopAsync().AsTask().WaitAsync(Timeout);
     }
 
+    private static async Task StaleHostValidationAsync()
+    {
+        const int partitions = 2;
+        var fixture = new Fixture(partitions);
+        var checking = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishCheck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var answered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var checks = 0;
+        var releases = 0;
+        var store = new CountingStore(fixture.Store, static () => { }, afterRelease: async () =>
+        {
+            if (Interlocked.Increment(ref releases) != 1) return;
+            released.TrySetResult();
+            await finishRelease.Task.WaitAsync(Timeout);
+            answered.TrySetResult();
+        }, beforePartitionCount: async () =>
+        {
+            if (Interlocked.Increment(ref checks) != 2) return;
+            checking.TrySetResult();
+            await finishCheck.Task.WaitAsync(Timeout);
+        });
+        var owner = new PartitionRuntime("checked-host", store, partitions, Timeout);
+        var contender = new PartitionRuntime(owner.Node, store, partitions, Timeout);
+        var later = new PartitionRuntime(owner.Node, store, partitions, Timeout);
+        var host = DurableHost.ForNode(owner.Node, store, new ActorAdapter(fixture.Store, new JobProbe()), partitions, fixture.Options);
+        await owner.StartAsync(host);
+        Check(await owner.ActivateAsync(0) is { Active: true } && await owner.ActivateAsync(1) is { Active: true },
+            "the counted durable host owns two real fences before a competing start");
+        var oldEpoch = fixture.Store.Partitions[1].Epoch;
+
+        try
+        {
+            var staleStart = contender.StartAsync(host).AsTask();
+            await checking.Task.WaitAsync(Timeout);
+            Check(!staleStart.IsCompleted, "the contender passed host preflight while the original runtime was active");
+            using var deadline = new CancellationTokenSource();
+            var shuttingDown = owner.StopAsync(deadline.Token).AsTask();
+            await released.Task.WaitAsync(Timeout);
+            deadline.Cancel();
+            await shuttingDown.WaitAsync(Timeout);
+
+            finishCheck.TrySetResult();
+            await RejectAbandonedRestartAsync(staleStart);
+            await contender.StopAsync();
+            await RejectAbandonedRestartAsync(later.StartAsync(host).AsTask());
+            Check(fixture.Fence.Owner is null && releases == 1, "only the first physical fence was released before the deadline");
+        }
+        finally
+        {
+            finishCheck.TrySetResult();
+            finishRelease.TrySetResult();
+        }
+
+        await answered.Task.WaitAsync(Timeout);
+        Check(await host.ActivateAsync(1) is null && releases == 1 && fixture.Store.Partitions[1].Owner == owner.Node &&
+            fixture.Store.Partitions[1].Epoch == oldEpoch,
+            "an unbound contender cannot reopen the abandoned host or adopt the old fence after the late release answer");
+    }
+
     private static async Task FaultedStopAsync()
     {
         var fixture = new Fixture();
@@ -340,7 +412,7 @@ internal static class HostJobDrainChecks
         throw new InvalidOperationException("An incomplete shutdown must prevent this runtime from starting again.");
     }
 
-    private sealed class FaultedStopHost(IScopeHost inner) : IScopeHost
+    private sealed class FaultedStopHost(IScopeHost inner) : IScopeHost, IScopeHostRun
     {
         internal InvalidOperationException Error { get; } = new("The test host could not finish shutdown.");
         internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -348,6 +420,9 @@ internal static class HostJobDrainChecks
 
         public ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default) =>
             inner.ActivateAsync(scope, cancellationToken);
+
+        public IScopeHostRun AttachRuntime() => this;
+        public void Stopped() => throw new InvalidOperationException("A faulted shutdown cannot complete.");
 
         public async ValueTask PrepareToStopAsync(CancellationToken cancellationToken = default)
         {
