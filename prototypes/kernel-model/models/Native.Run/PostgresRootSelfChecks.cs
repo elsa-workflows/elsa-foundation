@@ -171,7 +171,7 @@ internal static class PostgresRootSelfChecks
         Check(!(await cold.CommitAsync(Batch(withdraw) with { Epoch = lease.Epoch + 1 }, stop)).Landed,
             "a mismatched epoch cannot recall the timer");
         await bare.SubscribeAsync(new("recall-check", actor, "guard"), stop);
-        Check(!(await cold.CommitAsync(Batch(withdraw with { Row = withdraw.Row! with { Status = InstanceStatus.Finished }, Unsubscribe = true }), stop)).Landed,
+        Check(!(await cold.CommitAsync(Batch(withdraw with { Row = withdraw.Row! with { Status = InstanceStatus.Finished }, Journal = """["end"]""", Unsubscribe = true }), stop)).Landed,
             "the terminal precondition rejects the checkpoint after preparing its recall");
         await using (var db = Open())
             Check((await cold.LoadAsync([actor], stop)).Single().Revision == recallRevision &&
