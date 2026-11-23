@@ -96,6 +96,7 @@ across its own versions; it never names a tenant; and its waits come back exactl
 | Member | Meaning and guarantee |
 |---|---|
 | `Header` | The actor's `ActorHeader` as committed, present on the first turn too |
+| `StartSettings` | On the creator turn, the foundation's admitted `Ephemeral` and `History` settings |
 | `Now` | The foundation clock, read once for the turn; the clock `dueAt` and `TimerSpec.Due` use |
 | `Inbox` | The messages this turn is given, in delivery order (FC-3) |
 | `State` get, set | The opaque state; what is set is what the commit writes |

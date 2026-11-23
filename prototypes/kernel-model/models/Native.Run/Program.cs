@@ -12,6 +12,15 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["pg-root-operators", "admit"])
+    return await PostgresRootOperatorChecks.RunAsync(null);
+if (args is ["pg-root-operators", "read", var operatorA, var operatorB, var operatorC])
+    return await PostgresRootOperatorChecks.RunAsync([operatorA, operatorB, operatorC]);
+if (args is ["pg-root-operators", var operatorWriter and ("owned" or "ef"), var operatorFence and ("in-batch" or "checked"), .. var operatorArgs])
+{
+    if (operatorArgs is ["admit"]) return await PostgresRootOperatorChecks.RunAsync(null, operatorWriter == "owned", operatorFence == "in-batch");
+    if (operatorArgs is ["read", var a, var b, var c]) return await PostgresRootOperatorChecks.RunAsync([a, b, c], operatorWriter == "owned", operatorFence == "in-batch");
+}
 if (args is ["sqlite-plan-projection", "inspect-neighbor", var neighborFile, var neighborPlan, var neighborActor])
     return await SqlitePlanProjectionChecks.InspectNeighborAsync(neighborFile, neighborPlan, neighborActor);
 if (args is ["sqlite-plan-projection", "build", var planFile]) return await SqlitePlanProjectionChecks.BuildAsync(planFile);

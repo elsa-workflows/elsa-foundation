@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { ActivityExecutionInspectionPanel, ActivityExecutionNavigator, ChildExecutionBrowser, useScopedCanvasActivities } from "../workflow-editor/ActivityExecutionBrowser";
+import { ActivityExecutionInspectionPanel, ActivityExecutionNavigator, ChildExecutionBrowser, ExecutionScopeNavigator, useScopedCanvasActivities } from "../workflow-editor/ActivityExecutionBrowser";
 import { browseActivityExecutions, supportsActivityExecutionBrowsing, type ActivityExecutionBrowseEntry, type ActivityExecutionBrowsePage } from "../api/runtime";
 import { useExecutionFocusRequest } from "../workflow-editor/executionFocus";
 import { latestActivityExecution } from "../runtimeActivityOrder";
@@ -513,4 +513,34 @@ it.each([false, true])("does not revive a failed neighbor focus claim when the s
   await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(container.contains(document.activeElement)).toBe(false);
+});
+
+it("keeps ExecutionScopeNavigator silent while loading and hidden for singletons, then shows multi-occurrence scopes", async () => {
+  let release!: (value: ActivityExecutionBrowsePage) => void;
+  vi.mocked(browseActivityExecutions).mockImplementation(() => new Promise(resolve => { release = resolve; }));
+  const renderScope = (id: number) => flushSync(() => root.render(
+    <ExecutionScopeNavigator context={context} execution={execution(id, "flowchart")} label="Flowchart" refreshKey={0}
+      onSelect={onSelect} onUnavailable={vi.fn()} onIncident={vi.fn()} />
+  ));
+
+  renderScope(1);
+  await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+  expect(container.querySelector("button")).toBeNull();
+  expect(container.textContent).not.toContain("Loading recorded executions");
+
+  release({ items: [{ ...entry(1), previousActivityExecutionId: null, nextActivityExecutionId: null }], totalCount: 1, previousCursor: null, nextCursor: null });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(container.querySelector("button")).toBeNull();
+
+  // Multi-occurrence scope stays silent while loading, then renders directly with ready data.
+  let releaseMulti!: (value: ActivityExecutionBrowsePage) => void;
+  vi.mocked(browseActivityExecutions).mockImplementation(() => new Promise(resolve => { releaseMulti = resolve; }));
+  renderScope(2);
+  await vi.waitFor(() => expect(releaseMulti).toBeTypeOf("function"));
+  expect(container.querySelector("button")).toBeNull();
+  expect(container.textContent).not.toContain("Loading recorded executions");
+
+  releaseMulti({ items: [entry(1), entry(2)], totalCount: 2, previousCursor: null, nextCursor: null });
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 2 of 2"));
+  expect(button("Previous occurrence of Flowchart")).toBeTruthy();
 });
