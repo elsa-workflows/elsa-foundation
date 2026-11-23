@@ -272,6 +272,16 @@ only readers that already use that lock. The migration race fixture runs such a 
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 
+The preview's public `IActorReads.ListAsync` pages a persisted, tenant-indexed list of generated roots. PostgreSQL
+updates the list within the fenced metadata commit, including suspension changes that leave no public journal entry.
+List queries read the projection with a reference bookmark bound to the tenant and filters. The existing root schema
+installer backfills public metadata for earlier preview databases. This slice represents running and finished roots,
+and leaves the release-wide projector, Park, and operator selections to K9 follow-up.
+
+On a fresh disposable PostgreSQL database, `pg-root-list <owned|ef> <checked|in-batch> birth` prints a
+`projection-bookmark`. Run `pg-root-list <owned|ef> <checked|in-batch> restart <bookmark>` against that database
+from a fresh process. The birth phase renames the checkpoint and journal tables after it captures the bookmark.
+
 On a fresh PostgreSQL database, `pg-root-history <owned|ef> <checked|in-batch>` on the same runner
 exercises two ordinary turns with no journal entries. The Minimal workflow saves its first approval. The Full
 workflow consumes an unmatched input admitted while its scheduled start was pending. The owner offers the

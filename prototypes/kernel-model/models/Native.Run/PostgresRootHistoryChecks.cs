@@ -22,7 +22,7 @@ internal static class PostgresRootHistoryChecks
         await reader.CreateAsync(1);
         var admissions = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         await admissions.InstallAsync(ct);
-        var journal = new PostgresRootJournalReader(reader, await admissions.OpenJournalCursorAsync(ct), 128);
+        var journal = new PostgresRootReads(reader, await admissions.OpenJournalCursorAsync(ct), 128);
         var api = new PostgresPreviewFoundation(admissions, reader, journal, PublicActor.ActorType);
         var scope = FixedTenantScope.Bind("preview-history");
         var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
