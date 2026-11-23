@@ -1,17 +1,20 @@
+using System.Data.Common;
 using System.Text;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Kernel.Native.Run;
 
 internal static class PostgresRootSelfChecks
 {
-    internal static async Task<int> RunAsync(bool owned, bool inBatch)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool timers)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a dedicated PostgreSQL preview database.");
-        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => KernelDb.ForPostgresRootSelf(options);
+        var clock = new DeadlineClock();
+        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).AddInterceptors(clock).Options;
+        KernelDb Open() => timers ? KernelDb.ForPostgresRootTimers(options) : KernelDb.ForPostgresRootSelf(options);
         EfStore Client() => new(Open, postgres: true, fenceInBatch: inBatch)
             { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -34,9 +37,9 @@ internal static class PostgresRootSelfChecks
         var lease = (await bare.TakeAsync(0, "check", window, stop))!;
         await bare.NodeHeartbeatAsync("check", window, window, stop);
         await using (var db = Open())
-            Check((await db.Nodes.SingleAsync(n => n.Id == "check", stop)).ReadableMessageProtocol == "3" &&
+            Check((await db.Nodes.SingleAsync(n => n.Id == "check", stop)).ReadableMessageProtocol == (timers ? "4" : "3") &&
                 !await db.Nodes.AnyAsync(n => n.Id == "old-reader", stop),
-                "only the continuation reader holds ownership and advertises protocol 3");
+                "only the configured reader holds ownership and advertises its protocol");
         Check((await bare.CommitFirstRootAsync(tenant, reference, creator, lease.For(0), window, null, 1,
             "state", new Dictionary<string, string>(), """["start"]""", stop)).Landed, "creator");
         await scoped.EnableRootSelfSendsAsync(stop);
@@ -46,10 +49,28 @@ internal static class PostgresRootSelfChecks
         var direct = (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single();
         const string suffix = "\0\ud800\u007f\udfff\U0001f642\n";
         var payload = new string('"', FoundationMetadataLimits.MessageContentBytes - Encoding.UTF8.GetByteCount(suffix)) + suffix;
-        var logical = scoped.RootSelfIssuer!(FoundationSelfSend.Seed(CreationProtocol.Origin(actor, 1), 2, 0));
+        var logical = FoundationSelfSend.Issue(scoped.RootSelfIssuer!.Handle, CreationProtocol.Origin(actor, 1), 2, 0, null);
         var sent = FoundationSelfSend.Create(actor, 1, logical, "ordinary\0step", payload);
+        Message Timer(int ordinal, long due)
+        {
+            var handle = FoundationSelfSend.Issue(scoped.RootSelfIssuer!.Handle, CreationProtocol.Origin(actor, 1), 2, ordinal, due);
+            return FoundationSelfSend.Create(actor, 1, handle, "wake", null, due);
+        }
+        var zero = Timer(1, 0);
+        var future = Timer(2, long.MaxValue);
+        const long deadline = 4_102_444_800_000; // 2100-01-01 UTC
+        var boundary = Timer(3, deadline);
         CommitBatch Batch(params TurnCommit[] turns) => new(0, lease.Epoch, 1, window, false, turns, [], []);
-        var emit = new TurnCommit(actor, row with { Revision = 2 }, 1, [], [direct.InboxKey], [sent], [], [], null);
+        var emit = new TurnCommit(actor, row with { Revision = 2 }, 1, [], [direct.InboxKey], [sent, zero, future, boundary], [], [], null);
+        if (!timers)
+        {
+            try { await scoped.CommitAsync(Batch(emit), stop); throw new InvalidOperationException("A protocol-3 writer accepted a timer."); }
+            catch (NotSupportedException) { }
+            Check((await scoped.LoadAsync([actor], stop)).Single().Revision == 1 &&
+                (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single().InboxKey == direct.InboxKey,
+                "protocol 3 refuses the mixed immediate and scheduled checkpoint before consuming its input");
+            emit = emit with { Sent = [sent] };
+        }
         Check((await scoped.CommitAsync(Batch(emit), stop)).Landed, "silent checkpoint and full-size emitted input");
         var key = sent.InboxKey;
         var stored = key with { Scope = EfStore.RootSelfScope };
@@ -105,7 +126,47 @@ internal static class PostgresRootSelfChecks
         Check((await cold.CommitAsync(Batch(new TurnCommit(actor, row with { Revision = 3 }, 2, [key], [], [], [], [], null)), stop)).Landed,
             "qualified owner consumes the exact input with the next silent checkpoint");
 
+        if (!timers) return 0;
+        var ready = (await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop)).Messages.Select(m => m.Message).ToArray();
+        Check(ready.SequenceEqual([zero, sibling]) && ready[0].Due == 0 && zero.Id != FoundationSelfSend.Issue(
+            scoped.RootSelfIssuer!.Handle, CreationProtocol.Origin(actor, 1), 2, 1, null),
+            "cold poll distinguishes the explicit zero deadline from an immediate send");
+        row = (await cold.LoadAsync([actor], stop)).Single();
+        TurnCommit Advance(Message input) => new(actor, row with { Revision = row.Revision + 1 }, row.Revision, [input.InboxKey], [], [], [], [], null);
+        Check((await cold.CommitAsync(Batch(Advance(zero)), stop)).Landed, "the zero-deadline timer can settle");
+        row = (await cold.LoadAsync([actor], stop)).Single();
+        var settleSibling = new TurnCommit(actor, row with { Revision = 5 }, 4, [], [sibling.InboxKey], [], [], [], null);
+        Check((await cold.CommitAsync(Batch(settleSibling), stop)).Landed, "the direct sibling settles before the future timer");
+        row = (await cold.LoadAsync([actor], stop)).Single();
+        Check(!(await cold.CommitAsync(Batch(Advance(future)), stop)).Landed, "the fenced settlement refuses the future timer");
+        await using (var db = Open())
+            Check((await cold.LoadAsync([actor], stop)).Single().Revision == 5 &&
+                await db.Messages.CountAsync(m => m.Target == actor && !m.Done && m.InboxScope == EfStore.RootSelfScope &&
+                    m.Id == future.InboxKey.Id && m.Due == long.MaxValue, stop) == 1,
+                "the pending future timer and checkpoint survive the early settlement attempt");
+        // Pin just the database clock used by the real poll and transactional settlement SQL.
+        clock.At = "timestamptz '2099-12-31 23:59:59.999750+00'";
+        var before = await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop);
+        Check(before.Now == deadline - 1 && before.Messages.Count == 0 && !(await cold.CommitAsync(Batch(Advance(boundary)), stop)).Landed,
+            "a quarter millisecond before the deadline, neither poll nor settlement exposes the timer");
+        clock.At = "timestamptz '2100-01-01 00:00:00+00'";
+        var at = await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop);
+        Check(at.Now == deadline && at.Messages.Single().Message == boundary && (await cold.CommitAsync(Batch(Advance(boundary)), stop)).Landed,
+            "at the exact deadline, poll and settlement accept the original timer");
         return 0;
+    }
+
+    private sealed class DeadlineClock : DbCommandInterceptor
+    {
+        internal string? At { get; set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (At is not null && command.CommandText.Contains("\"Due\" <=", StringComparison.Ordinal))
+                command.CommandText = command.CommandText.Replace("clock_timestamp()", At, StringComparison.Ordinal);
+            return new(result);
+        }
     }
 
     private static async Task RequireFormatRefusal(Func<Task> check)

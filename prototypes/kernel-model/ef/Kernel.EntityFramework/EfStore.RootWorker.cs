@@ -138,7 +138,7 @@ public sealed partial class EfStore
         }
     }
 
-    private sealed record FinishedRootInputs(WorkerRoot Root, IReadOnlyList<InboxKey> Keys, Func<string, string>? Issue) : QualifiedRootCheckpoint(0)
+    private sealed record FinishedRootInputs(WorkerRoot Root, IReadOnlyList<InboxKey> Keys, FoundationSelfIssuer? Issue) : QualifiedRootCheckpoint(0)
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {

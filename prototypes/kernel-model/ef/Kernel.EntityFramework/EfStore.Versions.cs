@@ -30,6 +30,8 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     // Protocol 2 is allocated to the independent job-generation migration.
     internal static StoreFormat RootSelf => Current with { MessageProtocol = 3 };
 
+    internal static StoreFormat RootTimers => Current with { MessageProtocol = 4 };
+
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
 }
