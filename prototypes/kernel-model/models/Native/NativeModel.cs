@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Contract = Kernel.Foundation.Contracts;
@@ -455,7 +456,13 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case TimerTrigger t:
                 // The key is the timer message's id, so that a cancel can take it back (friction F-N4, fixed in the merge).
                 var delay = TimeSpan.FromMilliseconds(t.Milliseconds);
-                var dueAt = checked(turn.Now + (long)delay.TotalMilliseconds);
+                var issuedAt = turn.Now;
+                if (System.Diagnostics.Activity.Current is { IsAllDataRequested: true } trace)
+                    trace.AddEvent(new ActivityEvent("native.timer.issued", tags: new ActivityTagsCollection
+                    {
+                        { "actor", turn.Actor.Id }, { "issuedAt", issuedAt }
+                    }));
+                var dueAt = checked(issuedAt + (long)delay.TotalMilliseconds);
                 _s.Waits[id] = new WaitEntry(frame.Id, "timer", turn.SendToSelf(NativeKinds.Timer, new TimerFired(id), dueAt))
                     { Due = turn.SavesWaitRecipes ? dueAt : null };
                 break;

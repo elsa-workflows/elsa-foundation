@@ -944,12 +944,37 @@ export interface StudioTriggerConfigurationEditorProps {
   /** Reports the full configuration; preserved fields must remain in the returned value. */
   onChange(configuration: Record<string, StudioTriggerConfigurationValue>): void;
 }
+/** Props accepted by a module-contributed standalone trigger type icon. Use `currentColor` so theme tokens apply. */
+export type StudioTriggerTypeIconComponent = ComponentType<{ size?: number; className?: string; "aria-hidden"?: boolean }>;
+/** Semantic accent token key for standalone trigger type UI cards and badges. */
+export type StudioTriggerTypeAccent = "blue" | "violet" | "teal" | "amber" | "pink" | "neutral";
+/** Pure UI presentation metadata for a standalone trigger type (card icon, summary, category, ordering). */
+export interface StudioTriggerTypePresentationMetadata {
+  displayName?: string;
+  description?: string;
+  icon?: StudioTriggerTypeIconComponent;
+  accent?: StudioTriggerTypeAccent;
+  category?: string;
+  order?: number;
+}
+/** Pure UI presentation only. Supplies no trigger, schema, graph or execution authority. */
+export interface StudioTriggerTypePresentationContribution extends StudioBackendAwareContribution, StudioTriggerTypePresentationMetadata {
+  id: string;
+  /** Matches the backend TriggerTypeDescriptor.typeKey when targeting a concrete trigger type. */
+  typeKey?: string;
+  /** Optional schemaVersion filter when presentation differs across schema versions. */
+  schemaVersion?: string;
+  /** Optional family fallback matcher (e.g. "Http", "Event", "Timer", "Cron") when typeKey is omitted. */
+  family?: string;
+}
 /** Pure configuration authoring only. This contribution supplies no trigger, graph or execution authority. */
 export interface StudioTriggerConfigurationEditorContribution extends StudioBackendAwareContribution {
   id: string;
   typeKey: string;
   schemaVersion: string;
   component: ComponentType<StudioTriggerConfigurationEditorProps>;
+  /** Optional UI presentation metadata co-located with this trigger configuration editor. */
+  presentation?: StudioTriggerTypePresentationMetadata;
 }
 
 /** A backend-discovered trigger mode available while driving a workflow Test Run. */
@@ -1811,6 +1836,7 @@ export const studioSlotIds = {
   navigation: "studio.navigation",
   routes: "studio.routes",
   dashboardWidgets: "studio.dashboard.widgets",
+  dashboardRecordLinks: "studio.dashboard.record-links",
   panels: "studio.panels",
   toolbarActions: "studio.toolbar.actions",
   activityEditors: "workflow.activity.editors",
@@ -1820,6 +1846,7 @@ export const studioSlotIds = {
   expressionEditors: "workflow.expression-editors",
   workflowRunInputEditors: "workflow.run-input.editors",
   triggerConfigurationEditors: "workflow.trigger.configuration-editors",
+  triggerTypePresentations: "workflow.trigger.type-presentations",
   workflowTestStimulusEditors: "workflow.test-stimulus.editors",
   workflowRunRelatedLinks: "workflow.run.related-links",
   incidentRootCauseProviders: "workflow.incident.root-cause-providers",
@@ -1908,6 +1935,7 @@ export const studioSlots = {
   navigation: defineStudioSlot({ id: studioSlotIds.navigation, kind: "navigation", title: "Navigation", owner: hostSlotOwner() }),
   routes: defineStudioSlot({ id: studioSlotIds.routes, kind: "route", title: "Routes", owner: hostSlotOwner() }),
   dashboardWidgets: defineStudioSlot({ id: studioSlotIds.dashboardWidgets, kind: "dashboard-widget", title: "Dashboard widgets", owner: hostSlotOwner() }),
+  dashboardRecordLinks: defineStudioSlot({ id: studioSlotIds.dashboardRecordLinks, kind: "dashboard-record-link", title: "Dashboard record links", owner: hostSlotOwner() }),
   panels: defineStudioSlot({ id: studioSlotIds.panels, kind: "panel", title: "Panels", owner: hostSlotOwner() }),
   toolbarActions: defineStudioSlot({ id: studioSlotIds.toolbarActions, kind: "toolbar-action", title: "Toolbar actions", owner: hostSlotOwner() }),
   activityEditors: defineStudioSlot({ id: studioSlotIds.activityEditors, kind: "activity-editor", title: "Activity editors", owner: hostSlotOwner() }),
@@ -1917,6 +1945,7 @@ export const studioSlots = {
   expressionEditors: defineStudioSlot({ id: studioSlotIds.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: hostSlotOwner() }),
   workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
   triggerConfigurationEditors: defineStudioSlot({ id: studioSlotIds.triggerConfigurationEditors, kind: "trigger-configuration-editor", title: "Trigger configuration editors", owner: hostSlotOwner() }),
+  triggerTypePresentations: defineStudioSlot({ id: studioSlotIds.triggerTypePresentations, kind: "trigger-type-presentation", title: "Trigger type presentations", owner: hostSlotOwner() }),
   workflowTestStimulusEditors: defineStudioSlot({ id: studioSlotIds.workflowTestStimulusEditors, kind: "workflow-test-stimulus-editor", title: "Workflow Test Run stimulus editors", owner: hostSlotOwner() }),
   workflowRunRelatedLinks: defineStudioSlot({ id: studioSlotIds.workflowRunRelatedLinks, kind: "workflow-run-related-link", title: "Workflow run related links", owner: hostSlotOwner() }),
   incidentRootCauseProviders: defineStudioSlot({ id: studioSlotIds.incidentRootCauseProviders, kind: "incident-root-cause-provider", title: "Incident root cause providers", owner: hostSlotOwner() }),
@@ -2268,6 +2297,48 @@ export interface StudioWorkflowRunRelatedLinkContribution extends StudioBackendA
   getLinks(context: StudioWorkflowRunRelatedLinkContext): readonly StudioWorkflowRunRelatedLink[];
 }
 
+export interface StudioDashboardRecordLinkCell {
+  type: string;
+  value: string | null;
+  nullReason?: string;
+}
+
+export interface StudioDashboardRecordLinkColumn {
+  id: string;
+  label: string;
+  type: string;
+  unit?: string;
+}
+
+export interface StudioDashboardRecordLinkContext {
+  /** Dataset identifier when known (e.g. "elsa.workflows.runs"); undefined when withheld or unspecified. */
+  datasetId?: string;
+  column: StudioDashboardRecordLinkColumn;
+  cell: StudioDashboardRecordLinkCell;
+  /** Authorized row values already rendered for the current viewer. */
+  row: Readonly<Record<string, StudioDashboardRecordLinkCell>>;
+}
+
+export interface StudioDashboardRecordLink {
+  /** App-relative Studio path (must start with "/", never a protocol or external URL). */
+  path: string;
+  /** Optional descriptive tooltip (e.g. "Open workflow run"). */
+  title?: string;
+  /** Optional short label for secondary actions; cell links keep the exact cell text. */
+  label?: string;
+}
+
+export interface StudioDashboardRecordLinkContribution extends StudioBackendAwareContribution {
+  id: string;
+  order?: number;
+  /** Optional dataset IDs this contributor handles. Omitting matches any dataset. */
+  datasetIds?: readonly string[];
+  /** Optional column IDs this contributor handles. Omitting matches any column. */
+  columnIds?: readonly string[];
+  /** Pure synchronous projection from already-authorized cell/row values; the target route reauthorizes all reads. */
+  resolveLink(context: StudioDashboardRecordLinkContext): StudioDashboardRecordLink | null | undefined;
+}
+
 export interface ElsaStudioModuleApi {
   readonly connection?: StudioConnectionController;
   readonly shell?: StudioContributionRegistry<StudioShellContribution>;
@@ -2282,6 +2353,8 @@ export interface ElsaStudioModuleApi {
   readonly dashboardWidgets: StudioDashboardWidgetRegistry;
   /** Alias of {@link dashboardWidgets}. Modules should prefer {@link registerHomeWidget}. */
   readonly homeWidgets: StudioDashboardWidgetRegistry;
+  /** Optional on older hosts. Modules resolve already-authorized dashboard query cells to Studio deep-links. */
+  readonly dashboardRecordLinks?: StudioContributionRegistry<StudioDashboardRecordLinkContribution>;
   readonly diagnosticsWidgets: StudioContributionRegistry<StudioDiagnosticsWidgetContribution>;
   readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   readonly toolbarActions: StudioContributionRegistry<unknown>;
@@ -2295,6 +2368,8 @@ export interface ElsaStudioModuleApi {
   readonly workflowRunInputEditors?: StudioContributionRegistry<StudioWorkflowRunInputEditorContribution>;
   /** Optional on older hosts; generic backend metadata remains the configuration fallback. */
   readonly triggerConfigurationEditors?: StudioContributionRegistry<StudioTriggerConfigurationEditorContribution>;
+  /** Optional on older hosts; modules contribute trigger card icons, descriptions and grouping metadata here. */
+  readonly triggerTypePresentations?: StudioContributionRegistry<StudioTriggerTypePresentationContribution>;
   /** Available on hosts that support module-owned workflow Test Run stimulus editors. */
   readonly workflowTestStimulusEditors?: StudioContributionRegistry<StudioTestStimulusEditorContribution>;
   /** Optional on older hosts. Only authorized matching public state views are supplied to contributors. */

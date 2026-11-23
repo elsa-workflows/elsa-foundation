@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Kernel.Foundation.InMemory;
+using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.Data.Sqlite;
 using Contract = Kernel.Foundation.Contracts;
@@ -7,7 +9,7 @@ namespace Kernel.Native.Run;
 
 internal static class SqlitePlanProjectionChecks
 {
-    private static readonly Contract.BoundScope Scope = new("migration");
+    private static Contract.BoundScope Scope => FixedTenantScope.Bind("migration");
     private const string OtherPlan = "second-plan-read-fixture";
 
     internal static async Task<int> BuildAsync(string file)
@@ -32,6 +34,23 @@ internal static class SqlitePlanProjectionChecks
         var extra = await StartAsync("extra");
         var projection = new SqlitePlanProjection(file, Scope, plan);
         await projection.InitializeAsync(stop);
+        var emptyPlan = await StartAsync("empty-plan");
+        var empty = new SqlitePlanProjection(file, Scope, emptyPlan);
+        Check(!await empty.ProjectNextAsync(source, stop) && await empty.BookmarkAsync(stop) is null &&
+            (await new SqlitePlanProjection(file, Scope, emptyPlan).ReadPageAsync(null, 1, stop)).AsOf == now,
+            "A first empty tail must persist its observed time with the null bookmark.");
+
+        now++;
+        var delayedEmpty = new TailWitness(source, afterFirstRead: async () =>
+        {
+            now++;
+            await SendAsync(emptyPlan, "first-record", "record", Json.Write("progress"));
+            Check(await empty.ProjectNextAsync(source, stop), "A competing projector must advance the null bookmark.");
+        });
+        Check(!await empty.ProjectNextAsync(delayedEmpty, stop) && delayedEmpty.Calls == 2 &&
+            (await empty.ReadPageAsync(null, 1, stop)).AsOf == now,
+            "An empty read that loses its bookmark must retry against the advanced cursor.");
+
         await RecordAsync("selection", new MigrationPlanJournal.Selected([migrated, refusedActor, unanswered]));
 
         // Fail during the row writes, after the cursor UPDATE and the first row INSERT have run.
@@ -58,12 +77,17 @@ internal static class SqlitePlanProjectionChecks
             (await secondWriter.ReadPageAsync(null, 4, stop)).Rows.Count == 3,
             "Two projectors with the same input page must publish it only once.");
 
+        var lastCaughtUp = (await projection.ReadPageAsync(null, 4, stop)).AsOf;
+        now++;
         await AnswerAsync(migrated, "not-at-source", MigrationPlanOutcome.NotAtSource);
         await RecordAsync("close", new MigrationPlanJournal.Closed());
+        Check(await projection.ProjectNextAsync(new ActorList(store, 1), stop) &&
+            (await projection.ReadPageAsync(null, 4, stop)) is { Closed: false } partial && partial.AsOf == lastCaughtUp,
+            "A committed close on a later page leaves the partial view at its last confirmed catch-up time.");
         while (await projection.ProjectNextAsync(source, stop)) { }
         var saved = await projection.BookmarkAsync(stop);
         var closed = await projection.ReadPageAsync(null, 4, stop);
-        Check(saved is not null && closed.Closed && closed.Rows.Count(row => row.Result is null) == 2,
+        Check(saved is not null && closed.Closed && closed.AsOf == now && closed.Rows.Count(row => row.Result is null) == 2,
             "A reopened projection needs a durable close and bookmark.");
 
         now++;
@@ -71,8 +95,13 @@ internal static class SqlitePlanProjectionChecks
         await AnswerAsync(migrated, "late-migrated", MigrationPlanOutcome.Migrated);
         await AnswerAsync(refusedActor, "late-refused", MigrationPlanOutcome.Refused);
         await AnswerAsync(migrated, "repeat-migrated", MigrationPlanOutcome.NotAtSource);
-        var reopened = new TailWitness(source);
+        var reopened = new TailWitness(new ActorList(store, 1));
+        Check(await secondWriter.ProjectNextAsync(reopened, stop) &&
+            (await new SqlitePlanProjection(file, Scope, plan).ReadPageAsync(null, 4, stop)).AsOf == closed.AsOf,
+            "A partial catch-up must retain the previously confirmed time, including after reopening SQLite.");
         while (await secondWriter.ProjectNextAsync(reopened, stop)) { }
+        Check((await secondWriter.ReadPageAsync(null, 4, stop)).AsOf == now,
+            "The empty page after the late outcomes confirms the new catch-up time.");
         Check(reopened.First == saved && await secondWriter.BookmarkAsync(stop) != saved,
             "The new projector must read from the stored bookmark and advance it.");
         var lastBookmark = await secondWriter.BookmarkAsync(stop);
@@ -178,15 +207,36 @@ internal static class SqlitePlanProjectionChecks
             results.Values.Count(outcome => outcome == MigrationPlanOutcome.Refused) == 1 &&
             results.Values.Count(outcome => outcome is null) == 1,
             "The closed plan must report exactly one migrated, refused and unanswered actor.");
-        var foreign = new SqlitePlanProjection(file, new("other"), plan);
         var unrelated = new SqlitePlanProjection(file, Scope, new(OtherPlan));
-        var foreignPage = await foreign.ReadPageAsync(null, 2, stop);
         var otherPlanPage = await unrelated.ReadPageAsync(null, 2, stop);
-        Check(foreignPage is { After: null, Rows: [{ Result: null }], Closed: false } &&
-            otherPlanPage is { After: null, Rows: [{ Result: null }], Closed: false } &&
-            !results.ContainsKey(foreignPage.Rows[0].Actor) && !results.ContainsKey(otherPlanPage.Rows[0].Actor),
+        Check(otherPlanPage is { After: null, Rows: [{ Result: null }], Closed: false } &&
+            !results.ContainsKey(otherPlanPage.Rows[0].Actor),
             "The same physical database must isolate different tenants and plans.");
+        var start = new ProcessStartInfo("dotnet") { UseShellExecute = false };
+        foreach (var value in new[] { typeof(SqlitePlanProjectionChecks).Assembly.Location, "sqlite-plan-projection",
+                     "inspect-neighbor", file, plan.Id, otherPlanPage.Rows[0].Actor.Id })
+            start.ArgumentList.Add(value);
+        using var child = Process.Start(start) ?? throw new InvalidOperationException("Could not start the other tenant reader.");
+        try
+        {
+            await child.WaitForExitAsync(stop);
+            Check(child.ExitCode == 0, "The other tenant must see its own selected actor under the same plan reference.");
+        }
+        finally
+        {
+            if (!child.HasExited) { child.Kill(); await child.WaitForExitAsync(); }
+        }
         return results;
+    }
+
+    internal static async Task<int> InspectNeighborAsync(string file, string plan, string actor)
+    {
+        using var timer = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var foreign = new SqlitePlanProjection(file, FixedTenantScope.Bind("other"), new(plan));
+        var page = await foreign.ReadPageAsync(null, 2, timer.Token);
+        Check(page is { After: null, Rows: [{ Result: null }], Closed: false } && page.Rows[0].Actor.Id == actor,
+            "The other tenant must see its exact fixture row.");
+        return 0;
     }
 
     private static void Check(bool ok, string message)
@@ -194,10 +244,11 @@ internal static class SqlitePlanProjectionChecks
         if (!ok) throw new InvalidOperationException(message);
     }
 
-    private sealed class TailWitness(Contract.IActorReads inner, bool synchronize = false) : Contract.IActorReads
+    private sealed class TailWitness(Contract.IActorReads inner, bool synchronize = false, Func<Task>? afterFirstRead = null) : Contract.IActorReads
     {
         private readonly TaskCompletionSource _both = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _calls;
+        internal int Calls => _calls;
         internal Contract.PageToken? First { get; private set; }
 
         public async ValueTask<Contract.Page<Contract.JournalEntry>> TailAsync(Contract.BoundScope scope, Contract.ActorRef actor,
@@ -205,7 +256,11 @@ internal static class SqlitePlanProjectionChecks
         {
             var page = await inner.TailAsync(scope, actor, from, cancellationToken);
             var call = Interlocked.Increment(ref _calls);
-            if (call == 1) First = from;
+            if (call == 1)
+            {
+                First = from;
+                if (afterFirstRead is not null) await afterFirstRead();
+            }
             if (synchronize)
             {
                 if (call == 2) _both.TrySetResult();
