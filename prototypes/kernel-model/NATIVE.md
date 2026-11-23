@@ -295,7 +295,8 @@ dotnet run -c Release --project models/Native.Run -- pg-http-preview in-batch ti
 The Native runner starts an actual loopback Kestrel host on a dynamic port and holds a real HTTP
 connection through the public `IIngress.RequestAsync` surface. A tenant-bound direct approval
 is stored against the exact actor. A second Worker takes at a higher epoch and commits one
-revision. The connection receives `202 approved`. The other tenant's route returns 404 without
+revision. The fixture checks the committed state on a separate connection as the reply is sent. The
+original HTTP connection receives `202 approved`. The other tenant's live reference returns 404 without
 adding input. An identical operation with a changed body never gets attached to the first
 registration and reaches its own 504 deadline. The approval's state and journal are unchanged.
 

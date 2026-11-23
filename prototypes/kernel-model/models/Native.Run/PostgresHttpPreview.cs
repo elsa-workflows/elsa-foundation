@@ -40,15 +40,19 @@ internal static class PostgresHttpPreview
         await store.CreateAsync(1);
         await admission.InstallAsync(stop);
         var tenant = FixedTenantScope.Bind("approval");
-        var otherTenant = FixedTenantScope.Bind("other");
         var receiver = new PostgresDirectRequests(admission, store, Receiver);
         var preview = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType, directRequests: receiver);
         Contract.IIngress ingress = preview;
         var registry = new WorkflowRegistry().Add(PostgresHeldDirectChecks.Build());
         var transport = new CapturedLink();
-        var start = await new WorkflowRuntime(ingress, preview).StartAsync(tenant, "order",
-            NativeExecutionModel.Start(PostgresHeldDirectChecks.Definition), cancellationToken: stop);
+        var native = NativeExecutionModel.Start(PostgresHeldDirectChecks.Definition);
+        var start = await new WorkflowRuntime(ingress, preview).StartAsync(tenant, "order", native, cancellationToken: stop);
+        var foreignStart = WorkflowActor.WorkflowActor.Start(native);
+        var foreign = await admission.AdmitAsync("other", "foreign-order",
+            new(foreignStart.Type, foreignStart.TypeData, foreignStart.Input, History: (History)foreignStart.History),
+            cancellationToken: stop);
+        var foreignActor = new Contract.ActorRef(foreign.Reference);
         var actor = start is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } admitted }
             ? admitted : throw new InvalidOperationException("The Native order must be admitted.");
         var first = await PostgresHeldDirectChecks.TakeAsync(store, "first-http-owner", registry, transport, stop);
@@ -65,20 +69,23 @@ internal static class PostgresHttpPreview
         using var client = new HttpClient();
         await using (first)
         {
-            var waiting = await DriveAsync(first, store, 1);
+            var waiting = await DriveAsync(first, store, actor, tenant.Tenant, 1);
+            var otherWaiting = await DriveAsync(first, store, foreignActor, "other", 1);
+            var otherFrame = Json.Read<NativeState>(otherWaiting.State!).Frames.Values.Single(f => f.Node == "approve").Id;
             var frame = Json.Read<NativeState>(waiting.State!).Frames.Values.Single(f => f.Node == "approve").Id;
             var born = await preview.TailAsync(tenant, actor, cancellationToken: stop);
             before = born.Next ?? throw new InvalidOperationException("The waiting workflow needs a journal bookmark.");
             Require(waiting.Status == InstanceStatus.Running && born.Items.All(item => item.Revision == 1),
                 "The first HTTP owner must leave a committed approval wait.");
-            app.MapPost("/approval", (Delegate)((HttpContext context) => DispatchAsync(context, tenant, frame)));
-            app.MapPost("/other/approval", (Delegate)((HttpContext context) => DispatchAsync(context, otherTenant, frame)));
+            app.MapPost("/approval", (Delegate)((HttpContext context) => DispatchAsync(context, actor, frame)));
+            app.MapPost("/approval/foreign", (Delegate)((HttpContext context) => DispatchAsync(context, foreignActor, otherFrame)));
             await app.StartAsync(stop);
             client.BaseAddress = new Uri(app.Urls.Single());
 
-            using var wrongTenant = await PostAsync("/other/approval", "Ada", 2_000);
-            Require(wrongTenant.StatusCode == HttpStatusCode.NotFound && (await PendingAsync()).Count == 0,
-                "A request on the other tenant's route must leave the workflow inbox empty.");
+            using var wrongTenant = await PostAsync("/approval/foreign", "Ada", 2_000);
+            Require(wrongTenant.StatusCode == HttpStatusCode.NotFound && (await PendingAsync()).Count == 0 &&
+                (await admission.ReadPendingDirectAsync("other", foreignActor.Id, stop)).Count == 0,
+                "A request for another tenant's live reference must leave both workflow inboxes empty.");
 
             request = PostAsync("/approval", "Ada", late ? 4_000 : 15_000, clientStop.Token);
             while (true)
@@ -112,6 +119,7 @@ internal static class PostgresHttpPreview
         }
 
         var successorStore = Store();
+        transport.CheckLanded = () => ResponseHasCommittedAsync().GetAwaiter().GetResult();
         await using var successor = await PostgresHeldDirectChecks.TakeAsync(successorStore, "successor-http-owner", registry, transport, stop,
             (turn, _, _) =>
             {
@@ -122,10 +130,10 @@ internal static class PostgresHttpPreview
         Require(epoch > firstEpoch && (await PendingAsync()).SequenceEqual([pending]),
             "The surviving owner must find the same admitted occurrence at a higher epoch.");
 
-        var done = await DriveAsync(successor, successorStore, 2);
+        var done = await DriveAsync(successor, successorStore, actor, tenant.Tenant, 2);
         var suffix = await preview.TailAsync(tenant, actor, before, stop);
         Require(done is { Status: InstanceStatus.Finished, Revision: 2 } && suffix.Items.Count > 0 &&
-            suffix.Items.All(item => item.Revision == 2) && transport.Count > 0,
+            suffix.Items.All(item => item.Revision == 2) && transport.Count > 0 && transport.LandedAtSend,
             "The surviving owner must commit one terminal revision before releasing the reply link.");
 
         if (!late && !disconnect) Require(await DeliverAsync() == 1, "One live carrier must complete the original request.");
@@ -153,6 +161,13 @@ internal static class PostgresHttpPreview
 
         Task<IReadOnlyList<Message>> PendingAsync() => admission.ReadPendingDirectAsync(tenant.Tenant, actor.Id, stop);
 
+        async Task<bool> ResponseHasCommittedAsync()
+        {
+            await using var observer = Open();
+            return await observer.Instances.AsNoTracking().AnyAsync(row => row.Id == pending.Target.Id && row.Revision == 2, stop) &&
+                await observer.Messages.AsNoTracking().AnyAsync(row => row.Id == pending.InboxKey.Id && row.Done, stop);
+        }
+
         async Task<int> DeliverAsync()
         {
             var accepted = 0;
@@ -161,21 +176,21 @@ internal static class PostgresHttpPreview
             return accepted;
         }
 
-        async Task<EfStore.RootImage> DriveAsync(Worker worker, EfStore source, long revision)
+        async Task<EfStore.RootImage> DriveAsync(Worker worker, EfStore source, Contract.ActorRef reference, string targetTenant, long revision)
         {
             for (var pass = 0; pass < 20; pass++)
             {
                 await worker.WokenAsync(null, stop);
                 await worker.RunAsync(stop);
                 Require(worker.Owns, "The owner must keep its fence between fixture passes.");
-                if (await source.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop) is { } image && image.Revision >= revision)
+                if (await source.ReadFirstRootAsync(targetTenant, reference.Id, stop) is { } image && image.Revision >= revision)
                     return image;
                 await Task.Delay(15, stop);
             }
             throw new InvalidOperationException($"No committed checkpoint at revision {revision}.");
         }
 
-        async Task<IResult> DispatchAsync(HttpContext context, Contract.BoundScope scope, string frame)
+        async Task<IResult> DispatchAsync(HttpContext context, Contract.ActorRef reference, string frame)
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stop);
             var token = linked.Token;
@@ -192,7 +207,7 @@ internal static class PostgresHttpPreview
             Contract.Reply reply;
             try
             {
-                reply = await ingress.RequestAsync(scope, new Contract.Target.Ref(actor), Operation, CompositeSignal.Kind,
+                reply = await ingress.RequestAsync(tenant, new Contract.Target.Ref(reference), Operation, CompositeSignal.Kind,
                     payload, null, new(null, now + wait), token);
             }
             catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
@@ -217,9 +232,12 @@ internal static class PostgresHttpPreview
     private sealed class CapturedLink : IReplyTransport
     {
         internal int Count { get; private set; }
+        internal bool LandedAtSend { get; private set; }
+        internal Func<bool>? CheckLanded { get; set; }
         internal Queue<(string Node, Reply Reply)> Pending { get; } = new();
         public void Send(string node, Reply reply)
         {
+            LandedAtSend = (Count == 0 || LandedAtSend) && CheckLanded?.Invoke() == true;
             Count++;
             Pending.Enqueue((node, reply));
         }
