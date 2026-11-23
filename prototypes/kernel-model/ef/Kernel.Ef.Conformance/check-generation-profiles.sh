@@ -42,8 +42,16 @@ for protocol in 1 3 4; do
         if [[ $(sql 'SELECT count(*) FROM "Nodes" WHERE "LeaseUntil">=floor(extract(epoch from clock_timestamp())*1000)') == 0 ]]; then break; fi
         sleep 0.5
     done
+    [[ $(sql "SELECT to_regclass('\"FoundationActorList\"') IS NULL") == t ]]
+    projected='SELECT count(*) FROM "FoundationActorList" l JOIN "Instances" i
+        ON l."Tenant" = i."FoundationTenant" AND l."Reference" = i."FoundationReference"
+        WHERE l."Header" = i."FoundationHeader" AND l."Status" = i."Status"'
     [[ $(dotnet "$upgrade" postgres-profile-upgrade) == advanced ]]
-    [[ $(sql "$marker") == "3|$next|1" ]]
+    [[ $(sql "$marker") == "3|$next|1" && $(sql "$projected") == 1 ]]
+    # Recreate the outcome of an earlier coordinator that advanced the marker without installing the projection.
+    sql 'DROP TRIGGER kernel_project_root_actor_list ON "Instances"; DROP TABLE "FoundationActorList"'
+    [[ $(dotnet "$upgrade" postgres-profile-upgrade) == "already current" ]]
+    [[ $(sql "$marker") == "3|$next|1" && $(sql "$projected") == 1 ]]
     [[ $(dotnet "$upgrade" postgres-profile-upgrade) == "already current" ]]
     if [[ "$protocol" != 1 ]]; then
         [[ $(sql "$private") == "$original" ]]
@@ -63,5 +71,5 @@ for protocol in 1 3 4; do
     fi
     read -r phase pid resumed rest <<<"$finished"
     [[ "$phase" == finished && "$resumed" == "$actor" && "$pid" != "${state[1]}" ]]
-    echo "ok PostgreSQL protocol $protocol -> $next resumed $actor"
+    echo "ok PostgreSQL protocol $protocol -> $next backfilled on advance and retry, resumed $actor"
 done

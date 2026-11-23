@@ -85,6 +85,11 @@ internal static class JobGenerationFormatChecks
         }
         Context.That(await store.UpgradeJobGenerationFormatAsync(), "a stopped schema-2, protocol-1 store upgrades");
         Context.That(!await store.UpgradeJobGenerationFormatAsync(), "the completed migration is idempotent");
+        await using (var db = create())
+            if (db.Database.IsNpgsql())
+                Context.That(await db.Database.SqlQueryRaw<bool>("""
+                    SELECT to_regclass('"FoundationActorList"') IS NULL AS "Value"
+                    """).SingleAsync(), "migration leaves an ordinary store without a generated-root projection");
         var cold = restart();
         await cold.CreateAsync(2);
         Context.That((await cold.LoadAsync([legacy])).Single() is { NextJobGeneration: null, State: "{}" }, "pre-counter row");

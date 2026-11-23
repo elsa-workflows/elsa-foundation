@@ -16,11 +16,35 @@ public sealed partial class EfStore
         var continuation = db.Database.IsNpgsql() && stored.MessageProtocol is 3 or 4;
         var expected = new StoreFormat(2, continuation ? stored.MessageProtocol : 1, 1);
         var next = new StoreFormat(3, continuation ? stored.MessageProtocol : 2, 1);
-        return await AdvanceStoreFormatAsync(expected, next, async (transaction, token) =>
+        var advanced = await AdvanceStoreFormatAsync(expected, next, async (transaction, token) =>
         {
             await AddGenerationColumns(transaction, token);
             if (continuation) await InstallRootSelfAsync(transaction, token);
+            await BackfillRootActorListAsync(transaction, token);
         }, cancellationToken);
+        if (!advanced && db.Database.IsNpgsql())
+        {
+            // An earlier coordinator can have advanced the format before this projection was required.
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            var current = await ReadStoreFormatAsync(db, FormatLock.Shared, cancellationToken);
+            if (current != next)
+                throw new StoreFormatException($"Cannot prepare the root actor projection for {next}. The store records {current}.");
+            await BackfillRootActorListAsync(db, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        return advanced;
+    }
+
+    private static async Task BackfillRootActorListAsync(KernelDb db, CancellationToken token)
+    {
+        if (!db.Database.IsNpgsql()) return;
+        // Serialize with PostgresRootAdmission.InstallAsync. The projection is specific to generated roots.
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(48602345, 1)", token);
+        var missing = await db.Database.SqlQueryRaw<bool>("""
+            SELECT to_regclass('"FoundationRootBirths"') IS NOT NULL
+                AND to_regclass('"FoundationActorList"') IS NULL AS "Value"
+            """).SingleAsync(token);
+        if (missing) await InstallRootActorListAsync(db, token);
     }
 
     private async Task AddGenerationColumns(KernelDb db, CancellationToken token)
