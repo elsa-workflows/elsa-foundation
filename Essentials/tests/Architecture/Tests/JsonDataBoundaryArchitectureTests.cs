@@ -295,9 +295,10 @@ public sealed class JsonDataBoundaryArchitectureTests
     {
         var options = JsonBaseline.CreateCopy();
         var resolver = new DefaultJsonTypeInfoResolver();
+        var converter = new UnicodeEnumConverter();
         resolver.Modifiers.Add(info =>
         {
-            if (info.Type == typeof(EnumDocument)) info.Properties.Single(property => property.Name == "state").CustomConverter = new UnicodeEnumConverter();
+            if (info.Type == typeof(EnumDocument)) info.Properties.Single(property => property.Name == "state").CustomConverter = converter;
         });
         options.TypeInfoResolver = resolver;
         options.MakeReadOnly();
@@ -309,6 +310,17 @@ public sealed class JsonDataBoundaryArchitectureTests
         var actual = JsonSerializer.SerializeToElement(new EnumDocument { State = WireState.FirstChoice }, options).GetProperty("state").GetRawText();
         Assert.Equal("\"René <+>\"", actual);
         Assert.All(member.GetProperty("EnumWire").EnumerateArray(), token => Assert.Equal(actual, token.GetString()));
+        var actualWriter = converter.Observed[^1];
+        Assert.All(converter.Observed.SkipLast(1), sampled =>
+        {
+            Assert.Same(actualWriter.Encoder, sampled.Encoder);
+            Assert.Equal(actualWriter.Indented, sampled.Indented);
+            Assert.Equal(actualWriter.SkipValidation, sampled.SkipValidation);
+            Assert.Equal(actualWriter.MaxDepth, sampled.MaxDepth);
+            Assert.Equal(actualWriter.IndentCharacter, sampled.IndentCharacter);
+            Assert.Equal(actualWriter.IndentSize, sampled.IndentSize);
+            Assert.Equal(actualWriter.NewLine, sampled.NewLine);
+        });
     }
 
     private static JsonSerializerOptions WithAddedMember(Type target)
@@ -399,8 +411,10 @@ public sealed class JsonDataBoundaryArchitectureTests
     }
     public sealed class UnicodeEnumConverter : JsonConverter<WireState>
     {
+        public List<JsonWriterOptions> Observed { get; } = [];
         public override WireState Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => WireState.FirstChoice;
-        public override void Write(Utf8JsonWriter writer, WireState value, JsonSerializerOptions options) => writer.WriteStringValue("René <+>");
+        public override void Write(Utf8JsonWriter writer, WireState value, JsonSerializerOptions options)
+        { Observed.Add(writer.Options); writer.WriteStringValue("René <+>"); }
     }
     [JsonPolymorphic, JsonDerivedType(typeof(FirstAlternative), "first")]
     public abstract class OwnedUnion;

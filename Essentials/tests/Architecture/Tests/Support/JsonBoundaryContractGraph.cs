@@ -143,13 +143,29 @@ internal static class JsonBoundaryContractGraph
         return Enum.GetNames(type).Select(name =>
         {
             using var stream = new MemoryStream();
-            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
-            {
-                Encoder = options.Encoder, Indented = options.WriteIndented, MaxDepth = options.MaxDepth,
-                IndentCharacter = options.IndentCharacter, IndentSize = options.IndentSize, NewLine = options.NewLine
-            })) write.Invoke(converter, [writer, Enum.Parse(type, name), options]);
+            using (var writer = new Utf8JsonWriter(stream, EffectiveWriterOptions(options)))
+                write.Invoke(converter, [writer, Enum.Parse(type, name), options]);
             return Encoding.UTF8.GetString(stream.ToArray());
         }).ToArray();
+    }
+
+    private static JsonWriterOptions EffectiveWriterOptions(JsonSerializerOptions owner)
+    {
+        // Ask the serializer itself so framework defaults such as validation/depth/indentation stay exact.
+        // The synthetic probe owns only its temporary resolver and never changes the owner context.
+        var options = new JsonSerializerOptions(owner) { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
+        options.Converters.Insert(0, new WriterOptionsConverter());
+        var probe = new WriterOptionsProbe();
+        _ = JsonSerializer.Serialize(probe, options);
+        return probe.Options;
+    }
+
+    private sealed class WriterOptionsProbe { public JsonWriterOptions Options { get; set; } }
+    private sealed class WriterOptionsConverter : JsonConverter<WriterOptionsProbe>
+    {
+        public override WriterOptionsProbe Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => throw new NotSupportedException();
+        public override void Write(Utf8JsonWriter writer, WriterOptionsProbe value, JsonSerializerOptions options)
+        { value.Options = writer.Options; writer.WriteNullValue(); }
     }
 
     private static bool IsLeaf(Type declared)
