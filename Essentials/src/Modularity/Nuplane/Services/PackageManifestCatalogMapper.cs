@@ -17,7 +17,7 @@ public static class PackageManifestCatalogMapper
     {
         // System.Text.Json's byte/span overloads reject a leading UTF-8 BOM ("'0xEF' is an invalid start of a value"),
         // so strip it before deserializing — manifests re-saved by BOM-emitting editors/tooling must still parse.
-        var manifest = JsonSerializer.Deserialize<ElsaPackageManifest>(StripByteOrderMark(bytes), ManifestJsonSerializerOptions.Default);
+        var manifest = JsonSerializer.Deserialize<ElsaPackageManifest>(StripByteOrderMark(bytes), options: ManifestJsonSerializerOptions.Default);
         if (manifest is null)
             return PackageManifestReadResult.Missing("Package manifest was empty.");
 

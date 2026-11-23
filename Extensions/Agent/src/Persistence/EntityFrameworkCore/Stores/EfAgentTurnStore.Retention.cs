@@ -29,7 +29,7 @@ internal sealed partial class EfAgentTurnStore
                     throw new InvalidDataException("The agent journal retention record schema or bounds are unsupported.");
                 // Streaming one row at a time avoids a page of large ciphertexts. Unknown properties,
                 // including protected request/result, are skipped by this private metadata reader.
-                var header = JsonSerializer.Deserialize<RetentionHeader>(row.Payload, Json) ?? throw new InvalidDataException("The agent retention header is missing.");
+                var header = JsonSerializer.Deserialize<RetentionHeader>(row.Payload, options: Json) ?? throw new InvalidDataException("The agent retention header is missing.");
                 AgentOperationRules.Identity(header.Identity);
                 if (header.Handle != row.Handle || AgentTurnDocument.CalculateOperationKey(header.Identity) != row.OperationKey ||
                     header.Identity.TenantId != query.TenantId || header.Identity.PersistencePartition != query.PersistencePartition ||

@@ -943,9 +943,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             ["expression"] = new JsonObject
             {
                 ["type"] = "JavaScript",
-                ["value"] = JsonNode.Parse(JsonSerializer.Serialize(arguments)),
+                ["value"] = JsonNode.Parse(JsonSerializer.Serialize(arguments, options: JsonBaseline.Options)),
             },
-        });
+        }, options: JsonBaseline.Options);
     }
 
     private const string PossibleOutcomesName = "PossibleOutcomes";

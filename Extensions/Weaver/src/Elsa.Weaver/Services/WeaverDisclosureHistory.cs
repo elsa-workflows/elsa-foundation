@@ -151,7 +151,7 @@ internal sealed class WeaverDisclosureHistory
         try
         {
             if (WeaverInvocationIntegrity.DigestCanonical(record.Canonical) != record.Digest
-                || JsonSerializer.Deserialize<WeaverDisclosureSnapshot>(record.Canonical, WeaverInvocationIntegrity.SnapshotOptions) is not { Context: not null, ToolResults: not null } read)
+                || JsonSerializer.Deserialize<WeaverDisclosureSnapshot>(record.Canonical, options: WeaverInvocationIntegrity.SnapshotOptions) is not { Context: not null, ToolResults: not null } read)
                 return null;
             var snapshot = Freeze(read);
             if (WeaverInvocationIntegrity.Digest(snapshot) != record.Digest) return null;

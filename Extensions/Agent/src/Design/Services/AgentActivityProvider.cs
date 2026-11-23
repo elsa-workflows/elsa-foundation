@@ -80,7 +80,7 @@ internal sealed class AgentActivityProvider(
         if (prepared.Descriptor is null)
             return new(null, new Dictionary<string, WorkflowExecutableResumeTarget>(), [], [], [], new(0, 0, 0, 0, 0, 0, 0), request.ProviderFingerprint, [], prepared.Diagnostics);
 
-        var payload = JsonSerializer.SerializeToElement(prepared.Descriptor, AgentJson.Options);
+        var payload = JsonSerializer.SerializeToElement(prepared.Descriptor, options: AgentJson.Options);
         var descriptorSchema = prepared.Descriptor.InvocationControlsProfile is null ? AgentRuntimeIds.DescriptorSchema : AgentRuntimeIds.ContinuityDescriptorSchema;
         var workerPayload = JsonSerializer.SerializeToElement(new { role = "model-turn" }, Elsa.Serialization.Core.JsonBaseline.Options);
         var workerContract = new RuntimeContract(AgentRuntimeIds.TurnCapability, "1", AgentRuntimeIds.ConsumerKey, workerPayload, [],

@@ -52,7 +52,7 @@ public sealed class CandidateInspectionOutput
         body["participants"] = new JsonArray(source.GetProperty("participants").EnumerateArray()
             .Select(row => (JsonNode?)CopyFields(row, ParticipantFields)).ToArray());
         var rendered = format == "json"
-            ? JsonSerializer.Serialize(new { plan = projection, configurationResolution = body }, CompositionPlanCommand.JsonOptions)
+            ? JsonSerializer.Serialize(new { plan = projection, configurationResolution = body }, options: CompositionPlanCommand.JsonOptions)
             : CompositionPlanCommand.RenderText(projection) + Environment.NewLine +
               RenderConfiguration(JsonSerializer.SerializeToElement(body));
         capture.VerifyUnchanged();

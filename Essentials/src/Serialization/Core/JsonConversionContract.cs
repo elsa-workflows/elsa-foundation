@@ -126,8 +126,8 @@ public sealed class JsonConversionContract
 
     private sealed class BoundaryConverter<T>(JsonConversionContract contract) : JsonConverter<T>
     {
-        public override T? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => JsonSerializer.Deserialize<T>(ref reader, contract.Options);
-        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) => JsonSerializer.Serialize(writer, value, contract.Options);
+        public override T? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => JsonSerializer.Deserialize<T>(ref reader, options: contract.Options);
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) => JsonSerializer.Serialize(writer, value, options: contract.Options);
     }
 
     private static (string Json, string Member) ParseMapping(string mapping)

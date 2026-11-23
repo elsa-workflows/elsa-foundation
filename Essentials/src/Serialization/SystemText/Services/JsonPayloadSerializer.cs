@@ -32,14 +32,14 @@ internal sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry convert
         // inference picks TValue = object and STJ serializes against the declared 'object' type, losing the
         // payload's members. With the runtime type, STJ uses built-in handling and produces plain JSON for
         // ordinary classes/collections.
-        return JsonSerializer.Serialize(payload, payload.GetType(), options);
+        return JsonSerializer.Serialize(payload, payload.GetType(), options: options);
     }
 
     /// <inheritdoc />
     public JsonElement SerializeToElement(object payload)
     {
         var options = GetOptions();
-        return JsonSerializer.SerializeToElement(payload, payload.GetType(), options);
+        return JsonSerializer.SerializeToElement(payload, payload.GetType(), options: options);
     }
 
     /// <inheritdoc />
@@ -51,7 +51,7 @@ internal sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry convert
     public object Deserialize(string serializedData, Type type)
     {
         var options = GetOptions();
-        return JsonSerializer.Deserialize(serializedData, type, options)!;
+        return JsonSerializer.Deserialize(serializedData, type, options: options)!;
     }
 
     /// <inheritdoc />
@@ -64,7 +64,7 @@ internal sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry convert
     public T Deserialize<T>(string payload)
     {
         var options = GetOptions();
-        return JsonSerializer.Deserialize<T>(payload, options)!;
+        return JsonSerializer.Deserialize<T>(payload, options: options)!;
     }
 
     /// <inheritdoc />

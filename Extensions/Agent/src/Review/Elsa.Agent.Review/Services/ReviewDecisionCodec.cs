@@ -55,7 +55,7 @@ internal sealed class ReviewDecisionCodec(ISecretValueProtector protector)
     internal string Protect(ReviewDecisionClaims claims)
     {
         if (claims.Purpose != Purpose || claims.Codec != Codec) throw HumanReviewException.Invalid("The decision envelope purpose is not a human review decision.");
-        return protector.Protect(JsonSerializer.Serialize(claims, HumanReviewJson.Web));
+        return protector.Protect(JsonSerializer.Serialize(claims, options: HumanReviewJson.Web));
     }
 
     internal ReviewDecisionClaims Read(string? envelope)
@@ -69,7 +69,7 @@ internal sealed class ReviewDecisionCodec(ISecretValueProtector protector)
             throw HumanReviewException.Invalid("The decision envelope is not authentic.");
         }
         ReviewDecisionClaims? claims;
-        try { claims = JsonSerializer.Deserialize<ReviewDecisionClaims>(plaintext, HumanReviewJson.Web); }
+        try { claims = JsonSerializer.Deserialize<ReviewDecisionClaims>(plaintext, options: HumanReviewJson.Web); }
         catch (JsonException) { throw HumanReviewException.Invalid("The protected value is not a human review decision."); }
         if (claims is null || claims.Purpose != Purpose || claims.Codec != Codec ||
             new[] { claims.TenantId, claims.Partition, claims.WorkflowExecutionId, claims.ActivityExecutionId, claims.ExecutableNodeId,

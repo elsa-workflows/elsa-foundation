@@ -46,7 +46,7 @@ internal sealed class BpmnNativeWorkCheckpointEnricher(BpmnNativeWorkBoundary bo
         {
             if (!commit.Metadata.TryGetValue(RetirementMetadata, out var json))
                 throw new BpmnModelValidationException("Native start retirement lost its exact cancellation address.");
-            var cancellation = JsonSerializer.Deserialize<BpmnNativeWorkCancellation>(json, BpmnNativeWorkBoundary.Web)
+            var cancellation = JsonSerializer.Deserialize<BpmnNativeWorkCancellation>(json, options: BpmnNativeWorkBoundary.Web)
                 ?? throw new BpmnModelValidationException("Native start retirement is missing.");
             var authorized = await boundary.FindCancellationAsync(cancellation.Origin, cancellationToken)
                 ?? throw new BpmnModelValidationException("Native start retirement has no committed model cancellation.");
@@ -74,7 +74,7 @@ internal sealed class BpmnNativeWorkCheckpointEnricher(BpmnNativeWorkBoundary bo
     {
         var metadata = new Dictionary<string, string>
         {
-            [RetirementMetadata] = JsonSerializer.Serialize(cancellation with { Settled = false, NotAdmitted = false }, BpmnNativeWorkBoundary.Web),
+            [RetirementMetadata] = JsonSerializer.Serialize(cancellation with { Settled = false, NotAdmitted = false }, options: BpmnNativeWorkBoundary.Web),
             [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory
         };
         // Deterministic on replay, including after model settlement and an ownership change. The existing
@@ -87,6 +87,6 @@ internal sealed class BpmnNativeWorkCheckpointEnricher(BpmnNativeWorkBoundary bo
     {
         var intentId = result.SourceOutboxItemId[(commit.CommitId.Length + 1)..];
         return new(intentId, result.Origin.WorkerExecutionId, result.Origin.ResultIntentKind, commit.Checkpoint.OccurredAt,
-            result.Completion?.InvocationId, intentId, JsonSerializer.SerializeToElement(result, BpmnNativeWorkBoundary.Web));
+            result.Completion?.InvocationId, intentId, JsonSerializer.SerializeToElement(result, options: BpmnNativeWorkBoundary.Web));
     }
 }

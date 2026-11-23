@@ -1060,12 +1060,12 @@ public sealed class ExecutableNodeCompiler(
             ?? throw new ArgumentException($"Activity node '{nodeId}' has malformed variable declarations.");
         var compiled = authored.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray();
         var payload = structure.Payload.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
-        payload["variables"] = JsonSerializer.SerializeToElement(compiled, DescriptorPayloadSerializer.Options);
+        payload["variables"] = JsonSerializer.SerializeToElement(compiled, options: DescriptorPayloadSerializer.Options);
 
         return new ExecutableActivityStructure(
             structure.Kind,
             structure.SchemaVersion,
-            JsonSerializer.SerializeToElement(payload, DescriptorPayloadSerializer.Options));
+            JsonSerializer.SerializeToElement(payload, options: DescriptorPayloadSerializer.Options));
     }
 
     /// <summary>

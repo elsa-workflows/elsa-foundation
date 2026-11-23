@@ -46,7 +46,7 @@ internal sealed class DispatchWorkflowResumeGuard(IRuntimeChildControlAuthorizer
             var source = await outbox.FindAsync(control.SourceOutboxItemId, cancellationToken)
                 ?? throw WorkflowDispatchControlPolicy.Failure("terminal resume source is missing");
             if (source.OutboxItemId != control.SourceOutboxItemId || source.Intent.Payload is not { } committed ||
-                !Elsa.Serialization.Core.JsonCanonicalForm.Equals(committed, JsonSerializer.SerializeToElement(message, WorkflowControlTransport.Json)))
+                !Elsa.Serialization.Core.JsonCanonicalForm.Equals(committed, JsonSerializer.SerializeToElement(message, options: WorkflowControlTransport.Json)))
                 throw WorkflowDispatchControlPolicy.Failure("terminal resume result differs from its immutable source");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
@@ -85,7 +85,7 @@ internal sealed class DispatchWorkflowResumeGuard(IRuntimeChildControlAuthorizer
             intent.Kind != DispatchWorkflowConstants.ResumeParentIntentKind ||
             intent.WorkflowExecutionId != state.Execution.WorkflowExecutionId || intent.ActivityExecutionId != state.InvocationId ||
             intent.IdempotencyKey != identity.ParentResumeIdempotencyKey || intent.Payload is not { } committed ||
-            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(committed, JsonSerializer.SerializeToElement(message, WorkflowControlTransport.Json)))
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(committed, JsonSerializer.SerializeToElement(message, options: WorkflowControlTransport.Json)))
             throw WorkflowDispatchControlPolicy.Failure("failed admission result differs from its immutable source");
     }
 

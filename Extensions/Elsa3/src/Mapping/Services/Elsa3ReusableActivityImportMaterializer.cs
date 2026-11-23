@@ -260,7 +260,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             });
         }
 
-        var payload = JsonSerializer.SerializeToElement(new { activities = children, variables = Array.Empty<object>() }, Elsa3NativeStructureBuilder.PayloadJsonOptions);
+        var payload = JsonSerializer.SerializeToElement(new { activities = children, variables = Array.Empty<object>() }, options: Elsa3NativeStructureBuilder.PayloadJsonOptions);
         var sequence = new ActivityNode(
             sequenceId,
             await SequenceVersionIdAsync(cancellationToken),

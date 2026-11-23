@@ -66,7 +66,7 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
                 terminalResult is null || terminalResult.Status != worker.Status || receipt is null || receipt.Result.GetProperty("status").GetString() != "Accepted" ||
                 receipt.ContentFingerprint != RuntimeCheckpointCommitFingerprint.ComputeModelInput(new(model.Executable,
                     model.MaterialIncarnationId, origin.ResultInputId, "native-result",
-                    JsonSerializer.SerializeToElement(terminalResult, BpmnNativeWorkBoundary.Web), model.Authority, model.TenantId)))
+                    JsonSerializer.SerializeToElement(terminalResult, options: BpmnNativeWorkBoundary.Web), model.Authority, model.TenantId)))
                 throw Pending("bpmn.native-cancel.result-pending", "The actual native terminal result has not settled the model cancellation.");
             return;
         }
@@ -95,7 +95,7 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
                 // Its source stays owed until cancellation and positive retirement/result consumption settle it.
                 var cleanup = new RuntimeModelExecutionCommand(retainedModel.Executable, retainedModel.MaterialIncarnationId,
                     "settle-faulted-work:" + BpmnModelIdentity.Create(retainedModel.ExecutionId), "cancel",
-                    JsonSerializer.SerializeToElement(new { reason = "Settle native work retained by the final model fault." }, BpmnNativeWorkBoundary.Web),
+                    JsonSerializer.SerializeToElement(new { reason = "Settle native work retained by the final model fault." }, options: BpmnNativeWorkBoundary.Web),
                     retainedModel.Authority, retainedModel.TenantId);
                 await QueueModelAsync(cleanup, retainedModel.ExecutionId, source, cancellationToken);
                 throw Pending("bpmn.native-start.fault-settlement-pending", "The faulted model's original native work remains owed until its cancellation decision.");
@@ -125,7 +125,7 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
         if (!result.Origin.MatchesModel(current)) throw new BpmnModelValidationException("The native result model pin changed.");
         var inputId = BpmnNativeWorkBoundary.ResultInputId(result.Origin);
         var command = new RuntimeModelExecutionCommand(current.Executable, current.MaterialIncarnationId, inputId, "native-result",
-            JsonSerializer.SerializeToElement(result, BpmnNativeWorkBoundary.Web), current.Authority, current.TenantId);
+            JsonSerializer.SerializeToElement(result, options: BpmnNativeWorkBoundary.Web), current.Authority, current.TenantId);
         var fingerprint = RuntimeCheckpointCommitFingerprint.ComputeModelInput(command);
         if (await reader.FindInputAsync(current.ExecutionId, inputId, cancellationToken) is { } accepted)
         {
@@ -139,7 +139,7 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
         // a synchronous worker. Ordinary runtime resumption consumes this exact protected model input.
         await queue.EnqueueAsync(new(RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(inputId), current.ExecutionId, inputId,
             WorkflowExecutionCommandKind.ExecuteModel, envelope, envelope, source.Intent.RecordedAt, clock.GetUtcNow(),
-            payload: JsonSerializer.SerializeToElement(command, BpmnNativeWorkBoundary.Web)), cancellationToken);
+            payload: JsonSerializer.SerializeToElement(command, options: BpmnNativeWorkBoundary.Web)), cancellationToken);
         throw Pending("bpmn.native-result.pending", "The native result is durably queued and remains owed until model consumption.");
     }
 
@@ -154,6 +154,6 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
         var envelope = "bpmn-retire-native:" + BpmnModelIdentity.Create(executionId, command.InputId);
         await queue.EnqueueAsync(new(RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(command.InputId), executionId, command.InputId,
             WorkflowExecutionCommandKind.ExecuteModel, envelope, envelope, source.Intent.RecordedAt, clock.GetUtcNow(),
-            payload: JsonSerializer.SerializeToElement(command, BpmnNativeWorkBoundary.Web)), cancellationToken);
+            payload: JsonSerializer.SerializeToElement(command, options: BpmnNativeWorkBoundary.Web)), cancellationToken);
     }
 }
