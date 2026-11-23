@@ -1,6 +1,7 @@
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Stores;
 using Xunit;
+using System.Text.Json;
 
 namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests;
 
@@ -12,6 +13,23 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests;
 public sealed class StructuredLogAppendFingerprintTests
 {
     private static readonly StructuredLogStoreBinding Binding = new("tenant-a", "scope-a", "stream-a");
+
+    public static IEnumerable<object[]> HashVectors()
+    {
+        using var source = typeof(StructuredLogAppendFingerprintTests).Assembly.GetManifestResourceStream("structured-log-hash-vectors.json")!;
+        using var document = JsonDocument.Parse(source);
+        return document.RootElement.EnumerateArray().Select(item => new object[] { item.Clone() }).ToArray();
+    }
+
+    [Theory]
+    [MemberData(nameof(HashVectors))]
+    public void Append_fingerprint_pins_independent_frame_and_canonical_payload(JsonElement vector)
+    {
+        var actual = StructuredLogAppendFingerprint.Compute(new("tenant-𐀀", "scope-a", "stream-a"),
+            [new("token-1", vector.GetProperty("payload").GetString()!)]);
+        Assert.True(actual == vector.GetProperty("sha256").GetString(),
+            vector.GetProperty("name").GetString() + ": First-stable hash freeze: changes require an explicit identity/migration decision.");
+    }
 
     [Fact]
     public void The_same_binding_and_payloads_produce_the_same_fingerprint()
