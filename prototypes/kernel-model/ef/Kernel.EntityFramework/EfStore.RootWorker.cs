@@ -218,6 +218,10 @@ public sealed partial class EfStore
             return new(null, new FinishedRootInputs(root, [.. turn.Done, .. turn.Consumed], RootSelfIssuer));
         }
         var row = turn.Row;
+        var recalls = turn.FoundationSelfRecalls;
+        if (recalls is not null && (RootSelfIssuer is null || turn.Expected is null ||
+            recalls.Any(key => key.Scope != -1 || !root.Owns(key)) ||
+            turn.Consumed.Any(recalls.Contains) || turn.Sent.Any(m => recalls.Contains(m.InboxKey)))) throw RootShape();
         if (row.Id != root.Actor ||
             row.Creation != 1 || row.NextJobGeneration is not (null or 0) || row.StartIntent != root.Fingerprint || row.Revision != checked((turn.Expected ?? 0) + 1) ||
             row.Status is not (InstanceStatus.Running or InstanceStatus.Finished) ||
@@ -228,7 +232,7 @@ public sealed partial class EfStore
         // Record equality checks the full shape, including extension fields. Adding a new durable effect
         // fails closed here until the qualified SQL writer can represent it.
         var supported = new TurnCommit(turn.Instance, row, turn.Expected, turn.Consumed, turn.Done, turn.Sent,
-            turn.Subscribed, turn.Unsubscribed, turn.Journal, turn.Unsubscribe, turn.Held) { FoundationHeader = turn.FoundationHeader };
+            turn.Subscribed, turn.Unsubscribed, turn.Journal, turn.Unsubscribe, turn.Held) { FoundationHeader = turn.FoundationHeader, FoundationSelfRecalls = recalls };
         var supportedRow = new InstanceRow(row.Id, row.Model, row.Definition, row.Status, row.State, row.Revision, null,
             History: row.History, StateVersion: row.StateVersion, Creation: 1, StartIntent: root.Fingerprint)
             { NextJobGeneration = row.NextJobGeneration, FoundationNullState = row.FoundationNullState, FoundationDispatchHeader = header };
@@ -267,6 +271,6 @@ public sealed partial class EfStore
         var inputs = records.Select(row => row.InboxScope == RootSelfScope ? DecodeRootSelf(row, RootSelfIssuer) : PostgresRootAdmission.DecodeDirect(row, root.Reference)).ToArray();
         if (!SameInputs(inputs, turn.Done.Concat(turn.Consumed))) return null;
         return WithSends(PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
-            row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal));
+            row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, recalls?.Select(key => key.Id).ToArray()));
     }
 }

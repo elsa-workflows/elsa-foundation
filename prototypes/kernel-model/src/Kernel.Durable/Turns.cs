@@ -278,6 +278,7 @@ public sealed class TurnOutcome(string instance)
     }
     public List<Delivery> Consumed = [], Held = [];
     public List<InboxKey> Cancelled = [];
+    internal IReadOnlySet<InboxKey>? FoundationSelfRecalls;
     public List<Message> Sent = [];
     public HashSet<InboxKey> Fresh = [], Volatile = [];
     public List<SubscriptionRow> Subscribed = [], Unsubscribed = [];
@@ -524,6 +525,14 @@ public sealed class DurableTurn
         if (Inbox.Any(m => m.InboxKey == key) || _cancelled.Contains(key)) return;     // given to this turn: consumed with it
         _cancelled.Add(key);        // its row goes with this commit, as a cancelled job's ticket does
         Services.Cancelling(key);
+    }
+
+    internal void RecallPersistedSelfInput(string id)
+    {
+        var key = InboxKey.Issued(Origin + "#" + id);
+        if (_sent.Any(message => message.InboxKey == key))
+            throw new NotSupportedException("The scoped root writer supports recall of an already persisted self input.");
+        Recall(key.Id);
     }
 
     internal void RecallFromActor(InMemoryStore store, string id)

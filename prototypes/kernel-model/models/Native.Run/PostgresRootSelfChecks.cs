@@ -103,6 +103,37 @@ internal static class PostgresRootSelfChecks
                 await db.Messages.CountAsync(m => m.Target == actor && !m.Done && m.InboxScope == EfStore.RootSelfScope &&
                     m.Id == future.InboxKey.Id && m.Due == long.MaxValue, stop) == 1,
                 "the pending future timer and checkpoint survive the early settlement attempt");
+        // An ordinary issued key with the same spelling stays in its separate physical scope.
+        var other = new Message(future.InboxKey.Id, creator.Target, "ordinary", "retain").AsIssued();
+        Check((await bare.CommitAsync(Batch(empty with { Sent = [other] }), stop)).Landed, "ordinary scoped neighbour stored");
+        await ingress.AdmitDirectAsync(tenant, reference, "recall", "change", cancellationToken: stop);
+        var stimulus = (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single();
+        var withdraw = new TurnCommit(actor, row with { Revision = 5 }, 4, [], [stimulus.InboxKey], [], [], [], null)
+            { FoundationSelfRecalls = new HashSet<InboxKey> { future.InboxKey } };
+        var refused = false;
+        try { await bare.CommitAsync(Batch(empty with { FoundationSelfRecalls = withdraw.FoundationSelfRecalls }), stop); }
+        catch (StoreException error) when (error.Failure == Failure.Definite) { refused = true; }
+        Check(refused, "the ordinary provider path refuses a scoped recall");
+        Check(!(await cold.CommitAsync(Batch(withdraw) with { Epoch = lease.Epoch + 1 }, stop)).Landed,
+            "a mismatched epoch cannot recall the timer");
+        await bare.SubscribeAsync(new("recall-check", actor, "guard"), stop);
+        Check(!(await cold.CommitAsync(Batch(withdraw with { Row = withdraw.Row! with { Status = InstanceStatus.Finished }, Unsubscribe = true }), stop)).Landed,
+            "the terminal precondition rejects the checkpoint after preparing its recall");
+        await using (var db = Open())
+            Check((await cold.LoadAsync([actor], stop)).Single().Revision == 4 &&
+                (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single() == stimulus &&
+                await db.Messages.CountAsync(m => m.Id == future.InboxKey.Id && !m.Done, stop) == 2,
+                "rollback keeps the private timer, ordinary neighbour, original stimulus and checkpoint");
+        Check((await cold.CommitAsync(Batch(withdraw), stop)).Landed, "running checkpoint recalls the exact timer");
+        await using (var db = Open())
+            Check((await db.Messages.SingleAsync(m => m.Id == future.InboxKey.Id, stop)).InboxScope == -1 &&
+                (await cold.LoadAsync([actor], stop)).Single().Revision == 5,
+                "the ordinary neighbour survives the committed recall");
+        await ingress.AdmitDirectAsync(tenant, reference, "recall-again", "change", cancellationToken: stop);
+        var again = (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single();
+        row = (await cold.LoadAsync([actor], stop)).Single();
+        Check((await cold.CommitAsync(Batch(withdraw with { Row = row with { Revision = 6 }, Expected = 5, Done = [again.InboxKey] }), stop)).Landed,
+            "recalling the absent private timer again is idempotent");
         return 0;
     }
 

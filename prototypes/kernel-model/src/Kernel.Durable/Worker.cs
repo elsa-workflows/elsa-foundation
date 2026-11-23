@@ -2940,7 +2940,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             try
             {
                 StoreBatchRules.Validate(batch, ownedSets: _store.OwnedSetsAvailable, supportsJobTrialClear: _store.SupportsJobTrialClear,
-                    supportsFoundationParkResolution: true, supportsDueBacklog: _backlog is not null);
+                    supportsFoundationParkResolution: true, supportsDueBacklog: _backlog is not null, supportsFoundationSelfRecalls: true);
                 StoreBatchRules.RequirePhysicalCapability(batch,_store.PhysicalRetirementAvailable);
                 if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: _store.PhysicalRetirementAvailable);
                 if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
@@ -3079,7 +3079,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var consumed = durable.Where(i => !Retained(i)).Select(i => i.Message.InboxKey);
         var done = durable.Where(Retained).Select(i => i.Message.InboxKey);
         var settled = conversions?.Keys.Where(i => i.Durable).Select(i => i.Message.InboxKey) ?? [];
-        var cancelled = Has(Flaw.VolatileJobTicket) ? [] : unit.Cancelled.Where(id => !InMemoryOnly(id));
+        var cancelled = Has(Flaw.VolatileJobTicket) ? [] : unit.Cancelled.Where(id => !InMemoryOnly(id) && unit.FoundationSelfRecalls?.Contains(id) != true);
         var promotions = conversions?.Values.Select(result => result.InboxKey).ToHashSet();
         if (unit.Row?.FoundationInlineBirth is not null && unit.Held.Count > 0)
         {
@@ -3097,6 +3097,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             unit.Held.Where(i => i.Durable && conversions?.ContainsKey(i) != true).Select(i => i.Message.InboxKey).ToList(), unit.Delete)
         {
             FoundationHeader = unit.FoundationHeader,
+            FoundationSelfRecalls = unit.FoundationSelfRecalls,
             FoundationHeldPromotions = promotions,
             FoundationReleasedHolds = releases,
             OpensPark = unit.OpensPark,

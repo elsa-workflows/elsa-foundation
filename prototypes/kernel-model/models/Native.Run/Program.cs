@@ -41,12 +41,12 @@ if (args is ["pg-durable-flowchart-preview", "wait", var waitRoute and ("manual"
 if (args is [var resumedMode and ("pg-flowchart-preview" or "pg-durable-flowchart-preview"), "restart", var resumedRoute and ("manual" or "automatic"), var flowRef, var flowBookmark, var flowEpoch] &&
     long.TryParse(flowEpoch, out var previousEpoch) && previousEpoch > 0)
     return await PostgresFlowchartPreview.RunAsync(resumedRoute, flowRef, flowBookmark, previousEpoch, durable: resumedMode == "pg-durable-flowchart-preview");
-if (args is ["pg-delay-preview", var timerWriter and ("owned" or "ef"), var timerFence and ("checked" or "in-batch"), .. var timerArgs])
+if (args is [var timerMode and ("pg-delay-preview" or "pg-delay-recall-preview"), var timerWriter and ("owned" or "ef"), var timerFence and ("checked" or "in-batch"), .. var timerArgs])
 {
-    if (timerArgs is ["birth"]) return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", null);
+    if (timerArgs is ["birth"]) return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", null, timerMode == "pg-delay-recall-preview");
     if (timerArgs is ["restart", var timerRef, var timerEpoch, var timerDue, var timerHandle, var timerCursor] &&
         long.TryParse(timerEpoch, out var oldTimerEpoch) && oldTimerEpoch > 0 && long.TryParse(timerDue, out var savedDue))
-        return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", new(timerRef, oldTimerEpoch, savedDue, timerHandle, timerCursor));
+        return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", new(timerRef, oldTimerEpoch, savedDue, timerHandle, timerCursor), timerMode == "pg-delay-recall-preview");
     Console.Error.WriteLine("Use birth or restart <actor> <positive previous epoch> <due> <handle> <cursor>.");
     return 2;
 }

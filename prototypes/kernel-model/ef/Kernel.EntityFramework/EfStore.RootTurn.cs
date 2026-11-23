@@ -5,7 +5,7 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
-        string State, string Header, int StateVersion, Message[] Inputs, Func<string, string>? Issue) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
+        string State, string Header, int StateVersion, Message[] Inputs, Func<string, string>? Issue, string[]? Recalls) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -26,6 +26,15 @@ public sealed partial class EfStore
 
             if (!await SettleRootInputsAsync(db, Reference, Current.Actor, Inputs.Select(input => input.InboxKey).ToArray(), Inputs, Issue, cancellationToken))
                 return false;
+            if (Recalls is { Length: > 0 })
+            {
+                // A recall is idempotent. Only an existing private row addressed by this creation changes.
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    DELETE FROM "Messages" WHERE "InboxScope" = {RootSelfScope} AND "Id" = ANY({Recalls})
+                        AND "Target" = {Current.Actor.Id} AND "Sender" = {Current.Actor.Id} AND "Partition" = {home}
+                        AND "Kind" = {RootSelfWire} AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
+                    """, cancellationToken);
+            }
             var finished = Status == InstanceStatus.Finished;
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
             // UnsubscribeAll here only when the exact root has no physical subscriptions.
@@ -81,7 +90,7 @@ public sealed partial class EfStore
 
     private PreparedRoot PrepareRootTurn(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,
-        string typeData, IReadOnlyDictionary<string, string> labels, string? journal)
+        string typeData, IReadOnlyDictionary<string, string> labels, string? journal, string[]? recalls = null)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
@@ -97,7 +106,7 @@ public sealed partial class EfStore
         var image = new InstanceRow(current.Actor.Id, "", "", status, "null", checked(current.Revision + 1), null)
             .WithFoundationState(stored);
         var root = new RootTurnCheckpoint(tenant, reference, current, status, PublicRootState + StoredState.Encode(image),
-            header, stateVersion, accepted, RootSelfIssuer);
+            header, stateVersion, accepted, RootSelfIssuer, recalls);
         var turn = new TurnCommit(image.Id, null, null, [], [], [], [], [], journal);
         return new(turn, root);
     }

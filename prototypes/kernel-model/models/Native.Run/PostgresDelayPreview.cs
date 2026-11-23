@@ -12,7 +12,7 @@ internal static class PostgresDelayPreview
 
     internal sealed record Restart(string Reference, long Epoch, long Due, string Handle, string Cursor);
 
-    internal static async Task<int> RunAsync(bool owned, bool inBatch, Restart? restart)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, Restart? restart, bool recall = false)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a fresh dedicated PostgreSQL database.");
@@ -31,16 +31,18 @@ internal static class PostgresDelayPreview
         var scope = new Contract.BoundScope("preview-delay");
         var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 32),
             WorkflowActor.WorkflowActor.ActorType);
-        var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition,
-            Wf.Sequence("sequence", Wf.Delay("wait", DelayMs), Wf.Set("finished-delay", "result", "continued"))));
+        var delayed = Wf.Sequence(recall ? "slow" : "sequence", Wf.Delay("wait", DelayMs), Wf.Set("finished-delay", "result", "continued"));
+        var body = recall ? Wf.Sequence("sequence", Wf.Parallel("race", 1, delayed, Wf.Node<PostgresFlowchartPreview.Approval>("win")),
+            Wf.Node<PostgresFlowchartPreview.Approval>("finish")) : delayed;
+        var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition, body));
         using var trace = new System.Diagnostics.Activity("postgres.delay.preview").Start();
         var applications = new List<(Message Input, long Now)>();
-        var ordinary = new List<Message>();
+        var ordinary = new List<(Message Input, long Now)>();
         var host = await PostgresNativeRootOwner.PreparePartitionAsync(store, "timer-" + Environment.ProcessId, 0, registry, 2, stop,
             (_, inputs, now) =>
             {
                 foreach (var input in inputs.Where(m => m.Kind == NativeKinds.Timer))
-                    if (input.InboxKey.Scope == -1) applications.Add((input, now)); else ordinary.Add(input);
+                    if (input.InboxKey.Scope == -1) applications.Add((input, now)); else ordinary.Add((input, now));
             });
         await using var activation = await host.TryActivateAsync(stop) ?? throw new InvalidOperationException("The timer owner could not take its partition.");
         var owner = (Worker)activation;
@@ -67,7 +69,28 @@ internal static class PostgresDelayPreview
                    WHERE m."Id" = {key} AND m."InboxScope" = {EfStore.RootSelfScope} AND m."Due" = {due} AND NOT m."Done"
                      AND i."Id" = {image.Actor.Id} AND i."Revision" = {image.Revision}) AS "Value"
                 """).SingleAsync(stop), "the timer and its waiting checkpoint must share a PostgreSQL transaction");
+            if (recall)
+            {
+                var pending = await SendNoticeAsync(reference, due);
+                await ApproveAsync(reference, image, "win");
+                await DriveUntil(async () => (await store.ReadFirstRootAsync(scope.Tenant, reference.Id, stop))?.Revision > image.Revision);
+                var won = (await store.ReadFirstRootAsync(scope.Tenant, reference.Id, stop))!;
+                var waiting = Json.Read<NativeState>(won.State!);
+                Check(won.AsOf < due && won.Status == InstanceStatus.Running && waiting.Waits.Count == 0 &&
+                    waiting.Frames.Values.Any(f => f.Node == "finish") && !waiting.Variables.ContainsKey("result"),
+                    "approval must win the race while the original Delay is pending");
+                Check((await admission.ReadPendingDirectAsync(scope.Tenant, reference.Id, stop)).Single() == pending &&
+                    !await db.Messages.AnyAsync(m => m.Target == image.Actor.Id && m.InboxScope == EfStore.RootSelfScope, stop),
+                    "the scoped recall removes its private timer and retains the exact ordinary message");
+                Check(await db.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM "Instances" i JOIN "Journal" j ON i."Id" = j."Instance" AND j."Revision" = i."Revision"
+                        JOIN "Messages" m ON m."Target" = i."Id" AND m."Done" AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        WHERE i."Id" = {image.Actor.Id} AND i."Revision" = {won.Revision} AND m.xmin = i.xmin AND j.xmin = i.xmin) AS "Value"
+                    """).SingleAsync(stop), "the ordinary approval, winning checkpoint and journal must share a transaction");
+            }
             var journal = await api.TailAsync(scope, reference, cancellationToken: stop);
+            if (recall) Check(journal.Items.Count(j => j.Entry.StartsWith("\"x:", StringComparison.Ordinal) &&
+                j.Entry.EndsWith(":wait\"", StringComparison.Ordinal)) == 1, "the journal must record the Delay frame cancelled once");
             Check(applications.Count == 0 && journal.Next is not null, "start must leave the timer pending");
             Console.WriteLine($"waiting {Environment.ProcessId} {reference.Id} {epoch} {due} {issuedAt} {wait.Key} {journal.Next!.Value.Value}");
             return 0;
@@ -76,6 +99,25 @@ internal static class PostgresDelayPreview
         var actor = new Contract.ActorRef(restart.Reference);
         Check(epoch > restart.Epoch, "the cold owner must take a newer epoch");
         var cold = (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))!;
+        if (recall)
+        {
+            var pending = (await admission.ReadPendingDirectAsync(scope.Tenant, actor.Id, stop)).Single();
+            Check(pending.Id == "surviving-notice" && pending.Due == restart.Due &&
+                Json.Read<NativeState>(cold.State!).Waits.Count == 0, "cold restart must preserve the ordinary input and cancelled checkpoint");
+            var bookmark = new Contract.PageToken(restart.Cursor);
+            await DriveUntil(() => Task.FromResult(ordinary.Count > 0));
+            Check(ordinary is [var notice] && notice.Input == pending && notice.Now >= restart.Due && applications.Count == 0, "the original ordinary message must run once after the timer deadline");
+            await ApproveAsync(actor, (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))!, "finish");
+            await DriveUntil(async () => (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))?.Status == InstanceStatus.Finished);
+            var final = (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))!;
+            var tail = await api.TailAsync(scope, actor, bookmark, stop);
+            await Pass();
+            Check(applications.Count == 0 && final.AsOf >= restart.Due && !Json.Read<NativeState>(final.State!).Variables.ContainsKey("result") &&
+                tail.Items.Any(j => j.Entry == "\"end\"") && !tail.Items.Any(j => j.Entry.Contains("finished-delay", StringComparison.Ordinal)) &&
+                (await api.TailAsync(scope, actor, bookmark, stop)).Items.SequenceEqual(tail.Items), "the recalled timer must never resume its frame");
+            Console.WriteLine($"finished {Environment.ProcessId} {actor.Id} epoch {epoch} due {restart.Due} ordinary 1 timer 0");
+            return 0;
+        }
         var saved = Json.Read<NativeState>(cold.State!).Waits.Single(p => p.Value.Kind == "timer");
         Check(saved.Value.Key == restart.Handle && saved.Value.Due == restart.Due, "cold checkpoint must retain the original deadline and handle");
         var future = await store.PollAsync(0, epoch, TimeSpan.FromMilliseconds(DelayMs * 2), 2, stop);
@@ -89,7 +131,7 @@ internal static class PostgresDelayPreview
         await DriveUntil(() => Task.FromResult(ordinary.Count == 1));
         var early = (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))!;
         var earlyState = Json.Read<NativeState>(early.State!);
-        Check(early.AsOf < restart.Due && applications.Count == 0 && ordinary.Single().Sender is null && ordinary.Single().Id != restart.Handle &&
+        Check(early.AsOf < restart.Due && applications.Count == 0 && ordinary.Single().Input.Sender is null && ordinary.Single().Input.Id != restart.Handle &&
             early.Status == InstanceStatus.Running && earlyState.Waits[saved.Key] == saved.Value && !earlyState.Variables.ContainsKey("result"),
             "ordinary input leaves the original wait pending before the deadline");
         await DriveUntil(async () => (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))?.Status == InstanceStatus.Finished);
@@ -109,6 +151,22 @@ internal static class PostgresDelayPreview
                 (await api.TailAsync(scope, actor, cursor, stop)).Items.SequenceEqual(suffix.Items), "timer consumption and journal must remain stable");
         Console.WriteLine($"finished {Environment.ProcessId} {actor.Id} epoch {epoch} due {restart.Due} applied {applications.Single().Now} checkpoint {finished.TerminalAt} timer 1");
         return 0;
+
+        async Task<Message> SendNoticeAsync(Contract.ActorRef target, long due)
+        {
+            var accepted = await api.SendAsync(scope, new Contract.Target.Ref(target), "surviving-notice", NativeKinds.Timer,
+                Json.Write(new TimerFired("notice")), new(DueAt: due), stop);
+            Check(accepted.Outcome == Contract.AdmissionOutcome.Accepted, "the ordinary notice must be accepted");
+            return (await admission.ReadPendingDirectAsync(scope.Tenant, target.Id, stop)).Single();
+        }
+
+        async Task ApproveAsync(Contract.ActorRef target, EfStore.RootImage image, string node)
+        {
+            var frame = Json.Read<NativeState>(image.State!).Frames.Values.Single(f => f.Node == node);
+            var signal = new CompositeSignal(frame.Id, "approve", node);
+            var accepted = await api.SendAsync(scope, new Contract.Target.Ref(target), node, CompositeSignal.Kind, Json.Write(signal), cancellationToken: stop);
+            Check(accepted.Outcome == Contract.AdmissionOutcome.Accepted, "the public approval must be accepted");
+        }
 
         async Task Pass()
         {

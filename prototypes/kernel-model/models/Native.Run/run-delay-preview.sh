@@ -7,7 +7,12 @@ fence=${2:-checked}
 [[ "$writer" == owned || "$writer" == ef ]] && [[ "$fence" == checked || "$fence" == in-batch ]] || { echo "Usage: $0 [owned|ef] [checked|in-batch]" >&2; exit 2; }
 dotnet restore --locked-mode
 dotnet build -c Release --no-restore
-run=(dotnet bin/Release/net10.0/Kernel.Native.Run.dll pg-delay-preview "$writer" "$fence")
+case ${3:-fire} in
+  fire) mode=pg-delay-preview ;;
+  recall) mode=pg-delay-recall-preview ;;
+  *) echo "Use fire or recall for the Delay scenario." >&2; exit 2 ;;
+esac
+run=(dotnet bin/Release/net10.0/Kernel.Native.Run.dll "$mode" "$writer" "$fence")
 waiting="$("${run[@]}" birth)"
 printf '%s\n' "$waiting"
 read -r phase pid actor epoch due issued handle cursor <<<"$waiting"

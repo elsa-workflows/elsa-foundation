@@ -182,6 +182,13 @@ The receipt prints the deadline, the worker's application time and the database'
 fixture checks the public journal after another worker pass. Use `ef` for the EF writer or `in-batch` for the batch
 fence. This preview exercises a single generated root, one partition and a clean process restart.
 
+Run `models/Native.Run/run-delay-preview.sh owned checked recall` on another fresh database to let a public approval
+win a Native Parallel join before the sibling Delay fires. Its checkpoint recalls the persisted timer. A cold process
+keeps the same actor, delivers an independently admitted notice at the original deadline and finishes on a second
+approval. The journal records the cancelled frame once. This Embedded preview supports recall of already persisted
+self inputs on a generated root. Same-turn retraction, whole-workflow operator termination, Park and Cluster timer
+recovery fall outside this case.
+
 ## The simulation
 
 ```

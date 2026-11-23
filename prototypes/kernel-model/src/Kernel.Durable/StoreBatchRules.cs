@@ -7,7 +7,7 @@ namespace Kernel.Durable;
 public static class StoreBatchRules
 {
     public static void Validate(CommitBatch batch,bool deferUpdateAliases=false,bool deferInsertAliases=false,bool ownedSets=false,
-        bool supportsJobTrialClear=false,bool supportsFoundationParkResolution=false,bool supportsFoundationValues=false,bool supportsDueBacklog=false)
+        bool supportsJobTrialClear=false,bool supportsFoundationParkResolution=false,bool supportsFoundationValues=false,bool supportsDueBacklog=false,bool supportsFoundationSelfRecalls=false)
     {
         if (batch.ClearJobTrials.Count > 0 && (!supportsJobTrialClear || batch.HandOver || batch.Turns.Count > 0 ||
             batch.Seen.Count > 0 || batch.Trial.Count > 0 || batch.ClearJobTrials.Distinct().Count() != batch.ClearJobTrials.Count))
@@ -51,6 +51,8 @@ public static class StoreBatchRules
         }
         foreach (var turn in batch.Turns)
         {
+            if (!supportsFoundationSelfRecalls && turn.FoundationSelfRecalls is not null)
+                throw new StoreException(Failure.Definite, "Scoped self recalls require the qualified root writer.");
             if (turn.FoundationValues is { Count: > 0 } &&
                 (!supportsFoundationValues || turn.Delete || turn.Row is not { Retired: false, Creation: > 0 } valueOwner ||
                     valueOwner.Id != turn.Instance))
