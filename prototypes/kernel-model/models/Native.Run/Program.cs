@@ -12,6 +12,11 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["pg-multi-root", var writer and ("owned" or "ef"), var fence and ("in-batch" or "checked"), .. var phaseArgs])
+{
+    if (phaseArgs is ["birth"]) return await PostgresMultiRootChecks.RunAsync([], writer == "owned", fence == "in-batch");
+    if (phaseArgs is ["restart", var a, var b, var outside]) return await PostgresMultiRootChecks.RunAsync([a, b, outside], writer == "owned", fence == "in-batch");
+}
 if (args is ["pg-core-preview", var birthPhase and ("birth" or "hold-owner")]) return await PostgresPublicPreview.RunAsync(birthPhase);
 if (args is ["pg-core-preview", "standby", var standbyRoot, var standbyBookmark, var priorEpoch] &&
     long.TryParse(priorEpoch, out var epoch) && epoch > 0)

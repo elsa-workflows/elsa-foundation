@@ -373,7 +373,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     }
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
-        _ordinaryRoot is { } root ? CommitWorkerRootAsync(root, batch, cancellationToken) : CommitAsync(batch, null, cancellationToken);
+        _ordinaryRoots is { } root ? CommitWorkerRootAsync(root, batch, cancellationToken) : CommitAsync(batch, null, cancellationToken);
 
     private async ValueTask<Committed> CommitAsync(CommitBatch batch, QualifiedRootCheckpoint? root, CancellationToken cancellationToken)
     {
@@ -549,7 +549,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 db.Add(entity);
             }
             if (turn.Journal is not null)
-                db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = turn.Instance, Revision = turn.Delete ? -1 : root?.JournalRevision ?? turn.Row?.Revision ?? 0, Entries = turn.Journal });
+                db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = turn.Instance, Revision = turn.Delete ? -1 : root?.RevisionFor(turn.Instance) ?? turn.Row?.Revision ?? 0, Entries = turn.Journal });
         }
         if (!careful)
             foreach (var ((key, instance, wait), there) in waits)
@@ -608,16 +608,16 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         await using var db = create();
         // A plain read. The left join returns database time even when no message does.
-        if (_ordinaryRoot is { } root)
+        if (_ordinaryRoots is { } root)
         {
             if (partition != root.Partition) throw new InvalidOperationException("The root belongs to another partition.");
-            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actor).ToListAsync(cancellationToken));
+            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken));
         }
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
     }
 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
-    private string RootPollFilter => _ordinaryRoot is null ? "" : """ AND m."Target" = {4}""";
+    private string RootPollFilter => _ordinaryRoots is null ? "" : """ AND m."Target" = ANY({4})""";
     private string PollSql => Engine?.Poll ??
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
@@ -634,9 +634,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };
             // Only the scoped public owner can decode and commit these persisted envelopes.
-            if (_ordinaryRoot is { } root)
+            if (_ordinaryRoots is { } root)
             {
-                if (r.Target != root.Actor || !root.Owns(key)) throw RootShape();
+                if (r.Target is null || root.ForActor(r.Target) != root.ForInput(key)) throw RootShape();
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) : PostgresRootAdmission.DecodeDirect(entity);
@@ -682,11 +682,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        if (_ordinaryRoot is { } root)
+        if (_ordinaryRoots is { } root)
         {
-            if (ids.Any(id => id != root.Actor)) throw RootShape();
-            var image = ids.Count == 0 ? null : await ReadFirstRootAsync(root.Tenant, root.Reference, cancellationToken);
-            return image is null ? [] : [WorkerRow(root, image)];
+            var found = new List<InstanceRow>();
+            foreach (var binding in ids.Distinct().Select(root.ForActor))
+                if (await ReadFirstRootAsync(binding.Tenant, binding.Reference, cancellationToken) is { } image)
+                    found.Add(WorkerRow(binding, image));
+            return found;
         }
         var rows = await db.Instances.AsNoTracking().Where(i => ids.Contains(i.Id)).ToListAsync(cancellationToken);
         return rows.Select(Snapshot).ToList();

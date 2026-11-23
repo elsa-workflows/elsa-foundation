@@ -4,7 +4,7 @@ using PublicActor = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Kernel.Native.Run;
 
-/// <summary>A fixed Embedded activation for one public Native root in the PostgreSQL Core Preview.</summary>
+/// <summary>A fixed Embedded activation for public Native roots on one partition in the PostgreSQL Core Preview.</summary>
 internal sealed class PostgresNativeRootOwner
 {
     private readonly DurableHost _host;
@@ -12,12 +12,17 @@ internal sealed class PostgresNativeRootOwner
 
     private PostgresNativeRootOwner(DurableHost host, int partition) => (_host, Partition) = (host, partition);
 
-    internal static async Task<PostgresNativeRootOwner> PrepareAsync(EfStore store, string node, string tenant, string reference,
+    internal static Task<PostgresNativeRootOwner> PrepareAsync(EfStore store, string node, string tenant, string reference,
         WorkflowRegistry registry, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn = null)
+        => PrepareAsync(store, node, [(tenant, reference)], registry, cancellationToken, onTurn);
+
+    internal static async Task<PostgresNativeRootOwner> PrepareAsync(EfStore store, string node,
+        IReadOnlyList<(string Tenant, string Reference)> requested, WorkflowRegistry registry, CancellationToken cancellationToken,
+        Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn = null)
     {
-        var root = await store.BindWorkerRootAsync(tenant, reference, cancellationToken);
+        var root = await store.BindWorkerRootsAsync(requested, cancellationToken);
         var adapter = new ActorAdapter(new Headers(root), new PublicActor([new NativeExecutionModel(registry)]));
-        var worker = new Worker(node, root.Partition, store, adapter, new WorkerOptions { PollLimit = 1, OnTurn = onTurn });
+        var worker = new Worker(node, root.Partition, store, adapter, new WorkerOptions { PollLimit = requested.Count, OnTurn = onTurn });
         var host = new DurableHost([worker]);
         var prepared = new PostgresNativeRootOwner(host, root.Partition);
         await prepared.HeartbeatAsync(cancellationToken);
@@ -34,11 +39,13 @@ internal sealed class PostgresNativeRootOwner
         return await prepared.TryActivateAsync(cancellationToken) ?? throw new InvalidOperationException("The partition is already owned.");
     }
 
-    private sealed class Headers(EfStore.WorkerRoot root) : IRootDispatchHeaders
+    private sealed class Headers(EfStore.WorkerRoots roots) : IRootDispatchHeaders
     {
-        public (string Tenant, string Reference) Creator(Message creator) =>
-            creator.Target.Id == root.Actor && root.Owns(creator.InboxKey)
-                ? (root.Tenant, root.Reference) : throw new InvalidOperationException("Unexpected root creator.");
+        public (string Tenant, string Reference) Creator(Message creator)
+        {
+            var root = roots.ForActor(creator.Target.Id);
+            return root.Owns(creator.InboxKey) ? (root.Tenant, root.Reference) : throw new InvalidOperationException("Unexpected root creator.");
+        }
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
             throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");

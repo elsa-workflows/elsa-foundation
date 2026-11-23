@@ -91,6 +91,21 @@ multiplexing disabled. The output also reports PostgreSQL Sync and Query groups 
 | Duplicate approval after restart including admission | 5 | 5 |
 | Finishing approval including admission | 19 | 21 |
 
+To run two tenants' Native approvals on the same Embedded worker, use a fresh dedicated database. After building
+`models/Native.Run` in Release, run the following commands from `prototypes/kernel-model`. Supply the three
+references printed by the first process to the second. The third identifies a root outside the owner's set.
+
+```bash
+dll=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+birth=$(dotnet "$dll" pg-multi-root owned in-batch birth)
+read -r label first_ref second_ref outside_ref <<< "$(printf '%s\n' "$birth" | awk '$1 == "multi-references"')"
+dotnet "$dll" pg-multi-root owned in-batch restart "$first_ref" "$second_ref" "$outside_ref"
+```
+
+The fixture checks the PostgreSQL transaction IDs for two journal rows at different actor revisions, replays a
+direct input after restart, and checks that a terminal refusal on one root rolls back both turns. The writer choices
+are `owned` and `ef`. The fence choices are `in-batch` and `checked`.
+
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
 ```bash
