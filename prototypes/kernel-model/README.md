@@ -672,6 +672,8 @@ Use `unhandled-timeout` to run a workflow with no timeout handler. The third own
 timeout and persists an authored `Faulted` outcome with workflow substatus `job`, an end marker and no Park.
 The accepted receipt remains a duplicate. A fourth owner waits for the delayed input admitted before the
 fault and settles that input under its fence, without a new workflow turn or journal entry.
+Run unhandled timeouts on a fresh fixture database with every settlement owner and ingress using the
+same updated build.
 The fixture counts durable outcomes. The completion case deliberately executes the callback again after takeover.
 
 ### PostgreSQL Suspend and Resume preview
