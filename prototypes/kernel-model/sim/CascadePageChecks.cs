@@ -10,6 +10,7 @@ internal static class CascadePageChecks
 {
     internal static async Task Run(Action<bool, string> check)
     {
+        CascadePageMeasurements.CheckFirstUse(check);
         await Run(CascadeProtocol.PageLimit, check);
         await Run(2 * CascadeProtocol.PageLimit + 1, check, delete: true);
         await Run(2, check, jobs: true);
@@ -42,7 +43,13 @@ internal static class CascadePageChecks
         var ingress = new InMemoryIngress(store, new Requests("authored-then-end"), "authored-then-end");
         var root = (await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "root")), "start", Contract.Kinds.Start)).Actor!.Value;
         var address = store.FoundationTarget(scope.Tenant, root.Id)!.Id;
-        var worker = new Worker("authored-then-end", 0, store, new ActorAdapter(store, probe), new WorkerOptions { Monotonic = () => 0 });
+        using var measurements = new CascadePageMeasurements(throwAfterMeasurement: true);
+        var landedPages = 0;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (landed) landedPages += batch.Turns.Count(turn => turn.FoundationCascade is not null);
+        });
+        var worker = new Worker("authored-then-end", 0, wire, new ActorAdapter(store, probe), new WorkerOptions { Monotonic = () => 0 });
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
         await Step(worker, address);
         await ingress.SendAsync(scope, new Contract.Target.Ref(root), "register", "register-child");
@@ -55,6 +62,8 @@ internal static class CascadePageChecks
         check(store.Instances[address] is { Status: InstanceStatus.Cancelled, Cascade: null } &&
             terminates.Count(message => message.ActorAuthored) == 1 && terminates.Count(message => message.CascadeOrigin) == 1,
             "an authored Terminate stays valid when End(Cancelled) moves that child's registration into the cascade");
+        check(landedPages == 1 && measurements.AtInstance == 1 && worker.Owns,
+            "PC-1 a throwing measurement listener leaves the single landed cascade page acknowledged");
     }
 
     private static async Task RefuseLegacyRebinding(Action<bool, string> check)
@@ -180,6 +189,7 @@ internal static class CascadePageChecks
         var partition = new InstanceRef(address).Partition;
         var other = 1 - partition;
 
+        using var measurements = new CascadePageMeasurements();
         var landedPages = new List<TurnCommit>();
         var failed = false;
         var canFail = !delete;
@@ -349,6 +359,9 @@ internal static class CascadePageChecks
             landedPages.Count == (count + registry.Count + CascadeProtocol.PageLimit - 1) / CascadeProtocol.PageLimit &&
             landedPages.All(page => page.Sent.Count <= CascadeProtocol.PageLimit + 1),
             "every exact child receives one stored terminate and the final page clears its obligation");
+        var markerCount = landedPages.Count(page => page.Row is { Retired: true } && !page.Delete);
+        check(measurements.AtMarker == markerCount && measurements.AtInstance == landedPages.Count - markerCount && measurements.Other == 0,
+            $"PC-1 the cascade counter reports exactly {landedPages.Count} committed pages");
         if (laterChild is not null)
             check(final.Cascade is null && ChildRegistry.Read(final.Children).SequenceEqual([laterChild]) &&
                 sent.All(message => message.Target.Id != laterChild.Id),
@@ -364,12 +377,16 @@ internal static class CascadePageChecks
             if (!loseAfter.HasValue)
             {
                 probe.CancelOnStart = true;
+                var beforeInstance = measurements.AtInstance;
+                var beforeMarker = measurements.AtMarker;
                 for (var pass = 0; pass < 5; pass++) await Step(worker, address);
                 var replacementCreation = checked(row.Creation + 1);
                 check(store.Instances[address] is { Status: InstanceStatus.Cancelled, Retired: false } successor &&
                     successor.Creation == replacementCreation &&
                     Stops().Count(message => message.Sender == address && message.SenderCreation == replacementCreation) == 1,
                     "a successor can start and terminate an attached child in its birth turn over a retired predecessor");
+                check(measurements.AtInstance == beforeInstance + 1 && measurements.AtMarker == beforeMarker,
+                    "PC-1 the successor birth counts one instance page while its retired predecessor contributes zero");
             }
         }
 

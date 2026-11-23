@@ -94,7 +94,10 @@ internal static class RetirementCascadeChecks
             ? (await new DurableHost([worker]).ActivateAsync(0))! : null;
         if (retakeBeforeDelete && timed is { } beforeDelete)
         {
+            using var pages = new CascadePageMeasurements();
             for (var pass = 0; pass < 4; pass++) await Step(child);
+            check(pages.AtInstance == 0 && pages.AtMarker == 0 && pages.Other == 0,
+                "PC-1 ordinary terminal job deadline cleanup emits zero cascade pages");
             check(Row(child) is { Retired: false, Status: InstanceStatus.Finished } &&
                 !store.Messages.ContainsKey(beforeDelete.Ticket) && !store.Messages.ContainsKey(beforeDelete.Deadline),
                 "a fresh owner settles the linked legacy deadline when it consumes the ticket before Delete");

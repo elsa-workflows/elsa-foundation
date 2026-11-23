@@ -7,10 +7,9 @@ internal readonly record struct ParkDrainSample(long Rows, long Bytes, long Held
 
 internal static class ParkDrainMetrics
 {
-    private static readonly Meter Meter = new("Elsa.Kernel.Durable");
-    private static readonly Gauge<long> Pending = Meter.CreateGauge<long>("elsa.kernel.drain.pending", "{message}");
-    private static readonly Gauge<long> PendingBytes = Meter.CreateGauge<long>("elsa.kernel.drain.pending.bytes", "By");
-    private static readonly Gauge<long> Held = Meter.CreateGauge<long>("elsa.kernel.drain.held", "{message}");
+    private static readonly Gauge<long> Pending = KernelMetrics.Meter.CreateGauge<long>("elsa.kernel.drain.pending", "{message}");
+    private static readonly Gauge<long> PendingBytes = KernelMetrics.Meter.CreateGauge<long>("elsa.kernel.drain.pending.bytes", "By");
+    private static readonly Gauge<long> Held = KernelMetrics.Meter.CreateGauge<long>("elsa.kernel.drain.held", "{message}");
 
     internal static bool Enabled => Pending.Enabled || PendingBytes.Enabled || Held.Enabled;
 

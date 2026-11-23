@@ -238,6 +238,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             supportsFoundationParkResolution: true, supportsFoundationValues: true, supportsDueBacklog: true);
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
+        Committed committed;
+        int instancePages = 0, markerPages = 0;
         lock (_gate)
         {
             // The k-row fence: every fence row the batch touches, locked in ascending partition id, all or nothing.
@@ -326,6 +328,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     {
                         if (cascade.Kept.Count != 0) _ = checked(now + (long)IngressDeduplicationWindow.TotalMilliseconds);
                         (cascades ??= new(ReferenceEqualityComparer.Instance)).Add(turn, cascade);
+                        if (turn.FoundationCascade is not null)
+                        {
+                            if (previous is { Retired: true } && previous.Creation == turn.Row?.Creation) markerPages++;
+                            else instancePages++;
+                        }
                         earlier?.UnionWith(cascade.Pending);
                         earlier?.UnionWith(cascade.Kept);
                     }
@@ -614,12 +621,12 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 foreach (var (address, checkpoint, receiptPosition) in deletes)
                     if (_watchedDeletes!.Remove(address, out var watch))
                         watch.SetResult(checkpoint with { Receipt = receiptPosition is { } slot ? Journal.GetValueOrDefault(slot) : null });
-            return new(new Committed(fenced, now, seqs)
+            committed = new Committed(fenced, now, seqs)
             {
                 ParkExpiries = armedExpiries ?? [],
                 CascadeRemovals = cascades?.GroupBy(page => page.Key.Instance, StringComparer.Ordinal).ToDictionary(
                     pages => pages.Key, pages => (IReadOnlyList<InboxKey>)pages.SelectMany(page => page.Value.All).Distinct().ToArray(), StringComparer.Ordinal)
-            });
+            };
 
             // A count that does not match: memory and rows have parted. At the current epoch and position that is a kernel bug.
             void Diverged(string what)
@@ -628,6 +635,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 throw new StoreException(Failure.Unknown, what);
             }
         }
+        if (instancePages > 0) KernelMetrics.Add(KernelMetrics.CascadePages, instancePages, new KeyValuePair<string, object?>("where", "instance"));
+        if (markerPages > 0) KernelMetrics.Add(KernelMetrics.CascadePages, markerPages, new KeyValuePair<string, object?>("where", "retirement-marker"));
+        return new(committed);
     }
 
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default)
