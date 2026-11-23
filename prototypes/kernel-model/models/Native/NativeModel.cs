@@ -58,6 +58,7 @@ public sealed record BackgroundResult(TransitionKind Kind, JsonNode? Result, str
 
 public class NativeExecutionOptions
 {
+    internal Action<Contract.ActorRef, long>? TimerClockRead { get; init; }
     public NativeFlaw Flaws { get; init; }
     public int MaxActivitiesPerTurn { get; init; } = 1000;
     public AdmissionFlaw AdmissionFlaws { get; init; }
@@ -455,7 +456,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case TimerTrigger t:
                 // The key is the timer message's id, so that a cancel can take it back (friction F-N4, fixed in the merge).
                 var delay = TimeSpan.FromMilliseconds(t.Milliseconds);
-                var dueAt = checked(turn.Now + (long)delay.TotalMilliseconds);
+                var issuedAt = turn.Now;
+                options.TimerClockRead?.Invoke(turn.Actor, issuedAt);
+                var dueAt = checked(issuedAt + (long)delay.TotalMilliseconds);
                 _s.Waits[id] = new WaitEntry(frame.Id, "timer", turn.SendToSelf(NativeKinds.Timer, new TimerFired(id), dueAt))
                     { Due = turn.SavesWaitRecipes ? dueAt : null };
                 break;

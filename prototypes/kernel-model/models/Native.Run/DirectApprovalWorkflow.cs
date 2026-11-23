@@ -11,7 +11,7 @@ internal sealed class DirectApprovalWorkflow : CompositeActivity, ISignalledComp
 
     internal static Workflow Build() => Wf.Workflow(Definition, Wf.Node<DirectApprovalWorkflow>("approve"));
 
-    protected override void Execute(CompositeContext context)
+    protected internal override void Execute(CompositeContext context)
     {
         context.SetState(Array.Empty<string>());
         context.Record(WaitEntry + context.FrameId);
@@ -36,6 +36,6 @@ internal sealed class DirectApprovalWorkflow : CompositeActivity, ISignalledComp
             context.SetState(approvals);
     }
 
-    protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
         throw new InvalidOperationException("The direct approval activity has no children.");
 }

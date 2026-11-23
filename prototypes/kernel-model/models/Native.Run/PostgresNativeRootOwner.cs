@@ -25,17 +25,19 @@ internal sealed class PostgresNativeRootOwner
     }
 
     internal static async Task<PostgresNativeRootOwner> PreparePartitionAsync(EfStore store, string node, int partition,
-        WorkflowRegistry registry, int pollLimit, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn = null)
+        WorkflowRegistry registry, int pollLimit, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn = null,
+        NativeExecutionOptions? modelOptions = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pollLimit);
         var (scope, count) = await store.BindWorkerPartitionAsync(partition, cancellationToken);
-        return await PrepareAsync(store, node, scope, registry, pollLimit, cancellationToken, onTurn, count);
+        return await PrepareAsync(store, node, scope, registry, pollLimit, cancellationToken, onTurn, count, modelOptions);
     }
 
     private static async Task<PostgresNativeRootOwner> PrepareAsync(EfStore store, string node, EfStore.WorkerRoots root,
-        WorkflowRegistry registry, int pollLimit, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn, int partitions)
+        WorkflowRegistry registry, int pollLimit, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn, int partitions,
+        NativeExecutionOptions? modelOptions = null)
     {
-        var adapter = new ActorAdapter(new Headers(root), new PublicActor([new NativeExecutionModel(registry)]), store.RootSelfIssuer);
+        var adapter = new ActorAdapter(new Headers(root), new PublicActor([new NativeExecutionModel(registry, modelOptions)]), store.RootSelfIssuer);
         var worker = new Worker(node, root.Partition, store, adapter, new WorkerOptions { PollLimit = pollLimit, OnTurn = onTurn, Partitions = partitions });
         var host = new DurableHost([worker]);
         var prepared = new PostgresNativeRootOwner(host, root.Partition);
