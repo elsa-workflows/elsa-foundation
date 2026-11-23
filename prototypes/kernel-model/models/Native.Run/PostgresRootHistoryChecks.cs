@@ -122,9 +122,9 @@ internal static class PostgresRootHistoryChecks
         {
             foreach (var (change, versions) in new (Action<StoreVersionEntity>, string)[]
             {
-                (row => row.StoreSchema = 2, "schema=2, message protocol=1, journal codec=1"),
-                (row => row.MessageProtocol = 0, "schema=1, message protocol=0, journal codec=1"),
-                (row => row.JournalCodec = 2, "schema=1, message protocol=1, journal codec=2"),
+                (row => row.StoreSchema--, $"Stored schema={original.StoreSchema - 1},"),
+                (row => row.MessageProtocol--, $"message protocol={original.MessageProtocol - 1},"),
+                (row => row.JournalCodec++, $"journal codec={original.JournalCodec + 1}."),
             })
             {
                 await using var db = create();
