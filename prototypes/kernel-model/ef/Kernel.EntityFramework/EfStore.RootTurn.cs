@@ -69,18 +69,20 @@ public sealed partial class EfStore
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, TimeSpan lease, InstanceStatus status, string? state, int stateVersion,
-        string typeData, IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken = default) =>
+        string typeData, IReadOnlyDictionary<string, string> labels, string? journal, CancellationToken cancellationToken = default) =>
         CommitPreparedRootAsync(fence, lease, PrepareRootTurn(tenant, reference, current, inputs, fence, status, state, stateVersion, typeData, labels, journal), cancellationToken);
 
     private PreparedRoot PrepareRootTurn(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,
-        string typeData, IReadOnlyDictionary<string, string> labels, string journal)
+        string typeData, IReadOnlyDictionary<string, string> labels, string? journal)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
             new InstanceRef(current.Actor.Id).Partition != fence.Partition ||
             status is not (InstanceStatus.Running or InstanceStatus.Finished))
             throw new ArgumentException("Invalid running root or target disposition.", nameof(current));
+        if (status == InstanceStatus.Finished && journal is null)
+            throw new ArgumentException("A finished public root requires its terminal journal entry.", nameof(journal));
         var accepted = inputs.ToArray();
         if (accepted.Length == 0 || accepted.Any(message => message.InboxKey.Scope != InboxKey.FoundationOccurrenceScope ||
             message.InboxKey.Match is not null || message.Target.Id != current.Actor.Id || message.TargetCreation != current.Actor.Creation) ||

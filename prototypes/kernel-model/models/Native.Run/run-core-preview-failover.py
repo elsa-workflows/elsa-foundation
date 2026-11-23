@@ -31,7 +31,7 @@ async def run():
     owner = await launch("hold-owner")
     standby = None
     try:
-        address = bookmark = epoch = None
+        address = bookmark = epoch = original_until = None
         async for line in owner.stdout:
             name, _, value = line.decode().strip().partition(" ")
             if name == "reference":
@@ -41,12 +41,12 @@ async def run():
             else:
                 print(line.decode().rstrip(), flush=True)
             if name == "owner-ready":
-                epoch = int(value)
+                epoch, original_until = map(int, value.split())
                 break
-        if not address or not bookmark or not epoch or owner.returncode is not None:
+        if not address or not bookmark or not epoch or not original_until or owner.returncode is not None:
             raise RuntimeError("First host did not reach the persisted second wait.")
 
-        standby = await launch("standby", address, bookmark, str(epoch))
+        standby = await launch("standby", address, bookmark, str(epoch), str(owner.pid), str(original_until))
         refused = f"standby-refused {standby.pid} {epoch}"
         async for line in standby.stdout:
             message = line.decode().strip()

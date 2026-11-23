@@ -44,7 +44,7 @@ internal static class PostgresClusterChecks
             return 0;
         }
 
-        var scope = new Contract.BoundScope("cluster");
+        var scope = FixedTenantScope.Bind("cluster");
         var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 64), WorkflowActor.WorkflowActor.ActorType);
         var workflow = new WorkflowRuntime(api, api);
         var roots = new List<Root>();
@@ -115,7 +115,7 @@ internal static class PostgresClusterChecks
                 "public journal contains both applied approvals once");
             Check(image.Revision == 3 && results.SequenceEqual(["Ada", "Grace"]) &&
                 journal.Items.Select(x => x.Revision).Distinct().SequenceEqual([1L, 2L, 3L]), "exactly one approval of each kind landed across handover");
-            Check(await api.GetAsync(new("other"), target.Ref, stop) is null, "public read stayed tenant bound");
+            await PostgresMultiRootClient.CallSecondaryAsync(stop, "missing", target.Ref.Id);
             await node.StopAsync(stop);
             Healthy();
             Console.WriteLine($"ok PostgreSQL public Cluster: {partitions} partitions, processes {Environment.ProcessId} and {child.Id}, target {target.Actor.Partition}, epochs {beforeApproval.Epoch}->{afterDeparture.Epoch}, shared journal transaction, 3 revisions.");
@@ -143,7 +143,7 @@ internal static class PostgresClusterChecks
         {
             var frame = Json.Read<NativeState>((await Image(root))!.State!).Frames.Single().Key;
             var input = Json.Write(new CompositeSignal(frame, "approve", value));
-            Check((await api.SendAsync(scope, new Contract.Target.Ref(root.Ref), id, CompositeSignal.Kind, input, cancellationToken: stop)).Outcome == expected, "direct admission result");
+            await PostgresMultiRootClient.Send(api, scope, root.Ref, id, input, expected, stop);
         }
         Task<EfStore.RootImage?> Image(Root root) => store.ReadFirstRootAsync(scope.Tenant, root.Ref.Id, stop);
         async Task<int> Count(string owner) { await using var db = Open(); return await db.Partitions.CountAsync(p => p.Owner == owner, stop); }

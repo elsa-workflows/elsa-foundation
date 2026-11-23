@@ -772,13 +772,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (lease is not null && generation == _generation && !_releasing && !_retaking && !given)
                 {
                     var fresh = !Owns;
-                    if (fresh) Volatile.Write(ref _lastPass, _options.Monotonic());
-                    if (!TakeReplyInTime(started))
+                    var received = _options.Monotonic();
+                    if (!TakeReplyInTime(started, received))
                     {
                         _pending[partition] = lease.Epoch;
                         (_taking, _gaining) = (false, []);
                         continue;       // a later answer must confirm this new epoch before the partition can come back
                     }
+                    if (fresh) Volatile.Write(ref _lastPass, received);
                     if (!fresh) RenewGuard(started);       // before the partition joins: a retake sent past the deadline extends nothing
                     _held[partition] = new(lease.Epoch, lease.Position);
                     _mine.Add((partition, lease.Epoch));
@@ -914,7 +915,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     // A heartbeat may have renewed the node while another owner took these rows. Each take's reply has its own deadline.
-    private bool TakeReplyInTime(long started) => _options.Monotonic() - started < (long)_options.Lease.TotalMilliseconds;
+    private bool TakeReplyInTime(long started, long received) => received - started < (long)_options.Lease.TotalMilliseconds;
 
     private async ValueTask<OwnedLease?> TakeFencesAsync(IReadOnlyList<int> partitions, CancellationToken cancellationToken)
     {
@@ -1010,12 +1011,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
         lock (_turnSync)
         {
             Reset();    // a take starts from empty memory
-            Volatile.Write(ref _lastPass, _options.Monotonic());     // its first pass, including pending reconciliation, is due within the lease
-            if (!TakeReplyInTime(started))
+            var received = _options.Monotonic();
+            if (!TakeReplyInTime(started, received))
             {
                 foreach (var fence in lease.Taken) _pending[fence.Partition] = fence.Epoch;
                 return false;
             }
+            Volatile.Write(ref _lastPass, received);     // the first pass of a newly installed owner is due within a lease
             Observe(lease.Now);
             foreach (var taken in lease.Taken)
             {
@@ -1171,14 +1173,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (lease is not null)
                 {
                     var current = generation == _generation && !_releasing && !_retaking;
-                    var timely = TakeReplyInTime(started);
+                    var timely = TakeReplyInTime(started, _options.Monotonic());
                     foreach (var fence in lease.Taken)
                     {
                         if (!current || _givenUp.Contains(fence.Partition)) returning.Add(fence);
                         else if (timely) installed.Add(fence);
                         else _pending[fence.Partition] = fence.Epoch;     // a later heartbeat can confirm or discard it
                     }
-                    if (!timely && _coldGain && _pending.Count > 0) Volatile.Write(ref _lastPass, _options.Monotonic());
                     if (installed.Count > 0)
                     {
                         if (!Owns)
