@@ -128,6 +128,43 @@ from the row, so the check always passes).
 
 The test can fail on every engine. On MySQL and SQLite before the merge it failed narrowly (1 and 7 violations).
 
+### PostgreSQL public root admission in the Core Preview
+
+On a dedicated preview database, `PostgresRootAdmission` installs a persistent reference issuer for the
+existing virtual partitions. A generated start writes a tenant-scoped operation receipt, its exact
+creation binding and one inbox row in one transaction. An independent client can resolve the reference
+and read the pending creator after the writer exits. Receipt expiry permits a new life, and each
+earlier reference continues to name its original creation.
+
+Run `ef/Kernel.Ef.Conformance` with `postgres "<server connection>" root-admission` for the concurrent
+admission, rollback, expiry, tenant and physical inbox cases. The preview uses ordinary PostgreSQL
+text for a representable input and a reversible envelope for text containing NUL or unpaired UTF-16
+units. It refuses an encoded row above the storage budget before its transaction commits.
+
+The first generated-root Running checkpoint now consumes the exact creator, stores revision 1
+in `Instances` and appends its journal in the existing fenced PostgreSQL commit. That transaction
+checks the tenant, reference and partition, then locks the pending creator and compares its
+stored input, start specification and deadline exactly. The database clock must have reached the
+creator's due time. The birth fingerprint remains compatible with earlier admissions. Its qualified
+point read returns the creation, nullable state, model version, type data and labels. Ordinary
+readers refuse the qualified state format. The preview protects this first checkpoint from legacy
+updates and deletes. Run `postgres "<server connection>" root-checkpoint` with either commit and
+fence mode to exercise the stored transition and its refusal cases.
+
+Public actor execution with emitted effects and later revisions remains ahead. The legacy Worker
+refuses any poll containing a public creator, so use this ingress only in its dedicated database.
+The existing Native workflow restart demonstration uses the prototype adapter.
+
+The `root-direct-send` case covers ordinary sends before and after the first checkpoint. The receipt is scoped to
+one exact actor life and the public operation id. It can expire while an earlier delivery stays pending. Every allowed
+reuse gets a new physical occurrence, with the original operation, due presence, kind and payload available to a
+fresh scoped reader. The public runner and its later fenced checkpoints are separate increments.
+
+The `root-turn` case runs both commit writers and fence modes on PostgreSQL. A Running generated root can commit
+one or more ready direct inputs in sequence, its next qualified checkpoint and a journal row. Finishing records the
+terminal revision and database time. A refused checkpoint rolls back every consumed input and the journal row.
+This increment covers ordinary direct inputs and checkpoint-only actor turns.
+
 ### The store conformance suite. Run
 
 `conformance/Kernel.Store.Conformance` (merged from `6097f0174b`), 46 semantic cases, against the merged store with

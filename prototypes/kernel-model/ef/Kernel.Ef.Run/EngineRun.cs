@@ -1075,6 +1075,8 @@ sealed class Tally(IKernelStore inner) : IKernelStore
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
     public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) =>
+        Call("retake", () => inner.RetakeAsync(partition, node, epoch, lease, countDeaths, cancellationToken));
     public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken ct = default) =>
         Call("heartbeat", () => inner.NodeHeartbeatAsync(node, lease, window, ct));
 

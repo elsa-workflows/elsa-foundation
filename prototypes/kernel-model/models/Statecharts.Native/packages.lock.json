@@ -2,12 +2,6 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
-      "kernel.durable": {
-        "type": "Project",
-        "dependencies": {
-          "Kernel.Runtime": "[1.0.0, )"
-        }
-      },
       "kernel.foundation.contracts": {
         "type": "Project"
       },
@@ -35,26 +29,9 @@
           "Kernel.Foundation.Contracts": "[1.0.0, )"
         }
       },
-      "kernel.native.legacy": {
-        "type": "Project",
-        "dependencies": {
-          "Kernel.Native": "[1.0.0, )",
-          "Kernel.Workflows": "[1.0.0, )"
-        }
-      },
-      "kernel.runtime": {
-        "type": "Project"
-      },
       "kernel.statecharts": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Model.Contracts": "[1.0.0, )"
-        }
-      },
-      "kernel.workflows": {
-        "type": "Project",
-        "dependencies": {
-          "Kernel.Durable": "[1.0.0, )",
           "Kernel.Model.Contracts": "[1.0.0, )"
         }
       }
