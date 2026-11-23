@@ -1,11 +1,13 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text.Json;
 using Kernel.EntityFramework;
 using Kernel.Native.Preview;
 using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
+using Models = Kernel.Model.Contracts;
 
 namespace Kernel.Native.Run;
 
@@ -15,7 +17,7 @@ internal static class PostgresClusterChecks
     private sealed record Root(Contract.ActorRef Ref, InstanceRef Actor);
     private sealed record Ownership(string? Node, long Epoch);
 
-    internal static async Task<int> RunAsync(int partitions, bool peer, bool abrupt = false, bool flowchart = false)
+    internal static async Task<int> RunAsync(int partitions, bool peer, bool abrupt = false, bool flowchart = false, bool statechart = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         var stop = timeout.Token;
@@ -39,23 +41,29 @@ internal static class PostgresClusterChecks
         {
             await store.EnableRootSelfSendsAsync(stop);
             registry.Add(PostgresFlowchartPreview.Build());
+        }
+        if (statechart) registry.Add(OrderStatechart.Build());
+        if (flowchart || statechart)
+        {
             int? emitting = null;
             worker = worker with
             {
                 OnPreparedCheckpoint = (turn, _, _) =>
                 {
-                    if (peer && turn.Row is { Revision: 1 } && turn.Sent.Any(m => m.InboxKey.Scope == -1))
+                    if (!peer) return;
+                    if ((flowchart && turn.Row is { Revision: 1 } && turn.Sent.Any(m => m.InboxKey.Scope == EfStore.RootSelfScope)) ||
+                        (statechart && turn.Row is { Revision: 2 }))
                         emitting = new InstanceRef(turn.Instance).Partition;
                 },
                 OnJournal = written =>
                 {
-                    // Hold only this fixture child's pass after its emitter commit has landed. The test parent ends it.
+                    // Pause the fixture peer after its selected commit lands. The driver stops the peer process.
                     if (peer && emitting is { } home && written.Contains(home)) stop.WaitHandle.WaitOne();
                 },
                 OnTurn = (_, messages, _) =>
                 {
                     if (!peer)
-                        foreach (var m in messages.Where(m => m.InboxKey.Scope == -1))
+                        foreach (var m in messages.Where(m => statechart ? m.Id == PostgresStatechartPreview.Shipment : m.InboxKey.Scope == EfStore.RootSelfScope))
                             applied.AddOrUpdate(m.InboxKey, 1, (_, count) => count + 1);
                 }
             };
@@ -91,7 +99,7 @@ internal static class PostgresClusterChecks
 
         var info = new ProcessStartInfo("dotnet") { RedirectStandardInput = true, UseShellExecute = false };
         info.ArgumentList.Add(typeof(PostgresClusterChecks).Assembly.Location);
-        info.ArgumentList.Add(flowchart ? "pg-cluster-flowchart-peer" : "pg-cluster-peer");
+        info.ArgumentList.Add(statechart ? "pg-cluster-statechart-peer" : flowchart ? "pg-cluster-flowchart-peer" : "pg-cluster-peer");
         info.ArgumentList.Add(partitions.ToString(System.Globalization.CultureInfo.InvariantCulture));
         using var child = Process.Start(info) ?? throw new InvalidOperationException("Could not start second RuntimeNode.");
         try
@@ -103,9 +111,10 @@ internal static class PostgresClusterChecks
                     .Select(g => new { Node = g.Key!, Count = g.Count() }).ToDictionaryAsync(g => g.Node, g => g.Count, stop);
                 return split.GetValueOrDefault(Primary) == partitions / 2 && split.GetValueOrDefault(Peer) == partitions / 2;
             });
-            if (flowchart)
+            if (flowchart || statechart)
             {
-                await FlowchartHandoverAsync(child);
+                if (statechart) await StatechartHandoverAsync(child);
+                else await FlowchartHandoverAsync(child);
                 await node.StopAsync(stop);
                 Healthy();
                 return 0;
@@ -176,7 +185,7 @@ internal static class PostgresClusterChecks
             Ownership before;
             do
             {
-                await Start(purchase: true);
+                await Start(NativeExecutionModel.Start(PostgresFlowchartPreview.Definition, Modes.Durable, Wf.Object(("manualReview", true))));
                 target = roots[^1];
                 before = await Placement(target);
             } while (before.Node != Peer);
@@ -261,11 +270,84 @@ internal static class PostgresClusterChecks
             Console.WriteLine($"ok PostgreSQL Durable Flowchart Cluster: {partitions} partitions, processes {Environment.ProcessId} and {peerProcess.Id}, partition {target.Actor.Partition}, peer epoch {before.Epoch}, successor epoch {after.Epoch}, original continuation applied once, revisions 1/2/3/6/7, one join.");
         }
 
-        async Task Start(bool purchase = false)
+        async Task StatechartHandoverAsync(Process peerProcess)
         {
-            var spec = purchase
-                ? NativeExecutionModel.Start(PostgresFlowchartPreview.Definition, Modes.Durable, Wf.Object(("manualReview", true)))
-                : NativeExecutionModel.Start(DirectApprovalWorkflow.Definition);
+            Root target;
+            Ownership before;
+            do
+            {
+                await Start(NativeExecutionModel.Start(OrderStatechart.Definition));
+                target = roots[^1];
+                before = await Placement(target);
+            } while (before.Node != Peer);
+
+            await Until(async () => await Image(target) is { Revision: 1 });
+            var (frame, _) = PostgresStatechartPreview.Configuration((await Image(target))!, "AwaitingPayment");
+            await Signal(PostgresStatechartPreview.Payment, "declined", Contract.AdmissionOutcome.Accepted);
+            await Until(async () => await Image(target) is { Revision: 2 });
+            var waiting = (await Image(target))!;
+            var (waitingFrame, shipmentVisit) = PostgresStatechartPreview.Configuration(waiting, "ReleasingShipment");
+            var prefix = await api.TailAsync(scope, target.Ref, cancellationToken: stop);
+            Check(waitingFrame == frame && await Placement(target) == before && prefix.Next is not null &&
+                PostgresStatechartPreview.ChartEntries(prefix.Items).Where(e => e[2] == "entry").Select(e => e[3])
+                    .SequenceEqual(["AwaitingPayment", "ReleasingShipment"]),
+                "the peer committed the declined payment and a bookmark before the shipment acknowledgement");
+
+            var shipment = PostgresStatechartPreview.Shipment;
+            var body = Body("shipment-released");
+            await Signal(shipment, "shipment-released", Contract.AdmissionOutcome.Accepted);
+            var pending = (await admission.ReadPendingDirectAsync(scope.Tenant, target.Ref.Id, stop)).Single();
+            Check(pending.Id == shipment && pending.Kind == CompositeSignal.Kind && pending.Payload == body,
+                "the exact frame-addressed shipment acknowledgement is pending on the paused peer");
+
+            await using (var guard = Open())
+            await using (var transaction = await guard.Database.BeginTransactionAsync(stop))
+            {
+                var held = await guard.Database.SqlQuery<Ownership>($"""
+                    SELECT "Owner" AS "Node", "Epoch" FROM "Partitions" WHERE "Id" = {target.Actor.Partition} FOR UPDATE
+                    """).SingleAsync(stop);
+                Check(held == before && !peerProcess.HasExited, "the live peer still owns the locked target fence");
+                peerProcess.Kill();
+                await peerProcess.WaitForExitAsync(stop);
+                Check(SameCheckpoint(await Image(target), waiting) &&
+                    (await admission.ReadPendingDirectAsync(scope.Tenant, target.Ref.Id, stop)).SequenceEqual([pending]),
+                    "the peer exited with the same committed checkpoint and original acknowledgement still present");
+                await transaction.CommitAsync(stop);
+            }
+            await Until(async () => await Count(Primary) == partitions && await Image(target) is { Revision: 3 });
+            var successor = await Placement(target);
+            var advanced = (await Image(target))!;
+            var (currentFrame, stockVisit) = PostgresStatechartPreview.Configuration(advanced, "ReleasingStock");
+            var suffix = await api.TailAsync(scope, target.Ref, prefix.Next, stop);
+            Check(successor.Node == Primary && successor.Epoch > before.Epoch && currentFrame == frame && stockVisit != shipmentVisit &&
+                suffix.Next is not null && suffix.Items.All(e => e.Revision == 3) &&
+                PostgresStatechartPreview.ChartEntries(suffix.Items).Select(e => (e[0], e[1], e[2], e[3])).SequenceEqual(
+                [
+                    (frame, shipment, "evaluated", "shipment-released"),
+                    (frame, shipment, "exit", "ReleasingShipment"),
+                    (frame, shipment, "transition", "ReleasingShipment"),
+                    (frame, shipment, "entry", "ReleasingStock"),
+                    (frame, shipment, "handled", "")
+                ]) && applied.GetValueOrDefault(pending.InboxKey) == 1,
+                "the surviving owner applied the original shipment acknowledgement once and recorded one transition");
+
+            await Signal(shipment, "stock-released", Contract.AdmissionOutcome.Duplicate);
+            Check(SameCheckpoint(await Image(target), advanced) && await Placement(target) == successor &&
+                (await admission.ReadPendingDirectAsync(scope.Tenant, target.Ref.Id, stop)).Count == 0 &&
+                (await api.TailAsync(scope, target.Ref, suffix.Next, stop)).Items.Count == 0 &&
+                (await api.TailAsync(scope, target.Ref, prefix.Next, stop)).Items.SequenceEqual(suffix.Items) &&
+                applied.GetValueOrDefault(pending.InboxKey) == 1,
+                "a changed-payload replay preserved the checkpoint and journal and queued no direct input");
+            Console.WriteLine($"ok PostgreSQL Balanced StateMachine Cluster: {partitions} partitions, processes {Environment.ProcessId} and {peerProcess.Id}, partition {target.Actor.Partition}, peer epoch {before.Epoch}, successor epoch {successor.Epoch}, ReleasingShipment -> ReleasingStock once, replay Duplicate.");
+
+            string Body(string trigger) => JsonSerializer.Serialize(new CompositeSignal(frame, trigger));
+            Task Signal(string operation, string trigger, Contract.AdmissionOutcome expected) =>
+                PostgresMultiRootClient.Send(api, scope, target.Ref, operation, Body(trigger), expected, stop);
+        }
+
+        async Task Start(Models.WorkflowStart? spec = null)
+        {
+            spec ??= NativeExecutionModel.Start(DirectApprovalWorkflow.Definition);
             var reply = await workflow.StartAsync(scope, "cluster-start-" + roots.Count, spec, cancellationToken: stop);
             Check(reply.Outcome == Contract.AdmissionOutcome.Accepted, "fresh public start");
             var reference = reply.Actor!.Value;
@@ -291,6 +373,11 @@ internal static class PostgresClusterChecks
         }
         void Healthy() { if (node.LastError is { } ex) throw new InvalidOperationException(name + " runtime error", ex); }
     }
+
+    private static bool SameCheckpoint(EfStore.RootImage? actual, EfStore.RootImage expected) =>
+        actual is not null && (actual with { Labels = expected.Labels, AsOf = expected.AsOf }) == expected &&
+        actual.Labels.Count == expected.Labels.Count &&
+        actual.Labels.All(label => expected.Labels.TryGetValue(label.Key, out var value) && label.Value == value);
 
     private static void Check(bool pass, string detail)
     {

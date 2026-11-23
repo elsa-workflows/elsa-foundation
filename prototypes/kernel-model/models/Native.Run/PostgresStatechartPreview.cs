@@ -13,8 +13,8 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresStatechartPreview
 {
-    private const string Payment = "payment-decision";
-    private const string Shipment = "shipment-release-confirmed";
+    internal const string Payment = "payment-decision";
+    internal const string Shipment = "shipment-release-confirmed";
 
     internal sealed record Restart(string Reference, string Bookmark, long Epoch, long Revision, string StateHash, string Occurrence);
 
@@ -185,7 +185,7 @@ internal static class PostgresStatechartPreview
         }
     }
 
-    private static (string Frame, string Visit) Configuration(EfStore.RootImage image, string expected)
+    internal static (string Frame, string Visit) Configuration(EfStore.RootImage image, string expected)
     {
         var native = Json.Read<NativeState>(image.State!);
         var frame = native.Frames.Values.Single(f => f.Node == OrderStatechart.Node);
@@ -197,7 +197,7 @@ internal static class PostgresStatechartPreview
         return (frame.Id, chart!.Visits![0].Occurrence);
     }
 
-    private static string?[][] ChartEntries(IEnumerable<Contract.JournalEntry> entries)
+    internal static string?[][] ChartEntries(IEnumerable<Contract.JournalEntry> entries)
     {
         const string prefix = "statechart:";
         var chart = new List<string?[]>();
