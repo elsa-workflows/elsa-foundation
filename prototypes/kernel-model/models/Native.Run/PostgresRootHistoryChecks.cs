@@ -1,5 +1,6 @@
 using Kernel.EntityFramework;
 using Kernel.Native.Preview;
+using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
 using PublicActor = Kernel.WorkflowActor.WorkflowActor;
@@ -23,7 +24,7 @@ internal static class PostgresRootHistoryChecks
         await admissions.InstallAsync(ct);
         var journal = new PostgresRootJournalReader(reader, await admissions.OpenJournalCursorAsync(ct), 128);
         var api = new PostgresPreviewFoundation(admissions, reader, journal, PublicActor.ActorType);
-        var scope = new Contract.BoundScope("preview-history");
+        var scope = FixedTenantScope.Bind("preview-history");
         var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
         await using var db = Open();
         Task<long> Position() => db.Partitions.Select(p => p.Position).SingleAsync(ct);

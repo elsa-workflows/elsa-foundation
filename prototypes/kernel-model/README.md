@@ -66,6 +66,8 @@ The first Embedded host starts a Native approval workflow through the public Fou
 and exits at the second wait. The next process opens the same database and reads from the first process's journal bookmark.
 It sends Ada's operation ID again with a different payload, then sends Grace's approval with a new ID. The stored
 serialized workflow state and checkpoint revision stay unchanged through replay. The journal and final result verify that each approval applied once.
+Between the two owner processes, a separate diagnostic process bound to another tenant checks that it cannot
+send to the workflow or read its checkpoint or journal. This probe uses no measured connection.
 
 The default receipt estimates round trips by adding EF commands and explicit transaction completions. It excludes connection setup. Setup, ownership and journal reads have their own rows.
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Kernel.EntityFramework;
 using Kernel.Native.Preview;
+using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -13,8 +14,13 @@ internal static class PostgresPublicPreview
     internal static async Task<int> RunAsync(string phase, string? suppliedReference = null, string? suppliedBookmark = null, long priorEpoch = 0, int priorPid = 0, long originalUntil = 0)
     {
         var birth = phase is "birth" or "hold-owner";
-        if (!birth && (phase is not ("restart" or "terminal" or "standby") || suppliedReference is null || suppliedBookmark is null))
-            throw new ArgumentException("Supply birth or restart with its reference and bookmark.");
+        var tenantProbe = phase == "tenant-probe";
+        if ((phase, suppliedReference, suppliedBookmark, priorEpoch, priorPid, originalUntil) is not
+            (("birth" or "hold-owner", null, null, 0, 0, 0) or
+             ("tenant-probe", not null, null, 0, 0, 0) or
+             ("restart" or "terminal", not null, not null, 0, 0, 0) or
+             ("standby", not null, not null, > 0, > 0, > 0)))
+            throw new ArgumentException("Invalid PostgreSQL Core Preview phase arguments.");
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var stop = timeout.Token;
@@ -24,7 +30,7 @@ internal static class PostgresPublicPreview
         var data = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         Wire? wire = null;
         var measuredConnection = connection;
-        if (Environment.GetEnvironmentVariable("KERNEL_PREVIEW_MEASURE_WIRE") == "1")
+        if (!tenantProbe && Environment.GetEnvironmentVariable("KERNEL_PREVIEW_MEASURE_WIRE") == "1")
         {
             var settings = new Npgsql.NpgsqlConnectionStringBuilder(connection);
             if (settings.Host != "127.0.0.1" || settings.SslMode != Npgsql.SslMode.Disable)
@@ -36,13 +42,13 @@ internal static class PostgresPublicPreview
             settings.Port = wire.LocalPort;
             measuredConnection = settings.ConnectionString;
         }
-        var measured = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(measuredConnection)
+        var measured = tenantProbe ? data : new DbContextOptionsBuilder<KernelDb>().UseNpgsql(measuredConnection)
             .AddInterceptors(counter, counter.Transactions).Options;
         long startTrips = 0, startGroups = 0, startConnections = 0;
         var store = new EfStore(() => new(measured), postgres: true);
         var probe = new EfStore(() => new(data), postgres: true);
         var admission = new PostgresRootAdmission(() => new(measured), TimeSpan.FromHours(1));
-        var scope = new Contract.BoundScope("preview");
+        var scope = FixedTenantScope.Bind(tenantProbe ? "preview-other" : "preview");
 
         if (birth)
         {
@@ -52,6 +58,19 @@ internal static class PostgresPublicPreview
         var cursor = await admission.OpenJournalCursorAsync(stop);
         var tail = new PostgresRootJournalReader(store, cursor, 1);
         var foundation = new PostgresPreviewFoundation(admission, store, tail, PublicActor.ActorType);
+        if (tenantProbe)
+        {
+            var otherActor = new Contract.ActorRef(suppliedReference!);
+            Check(PostgresRootAdmission.IsIssuedReferenceShape(otherActor.Id), "foreign host received a valid reference shape");
+            var unavailable = await foundation.SendAsync(scope, new Contract.Target.Ref(otherActor), "missing", "notice",
+                cancellationToken: stop);
+            Check(unavailable is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch, Actor: null },
+                "the foreign host cannot send to the existing actor");
+            Check(await foundation.GetAsync(scope, otherActor, stop) is null &&
+                (await foundation.TailAsync(scope, otherActor, cancellationToken: stop)).Items.Count == 0,
+                "the foreign host cannot read the existing actor or journal");
+            return 0;
+        }
         var workflow = new WorkflowRuntime(foundation, foundation);
         var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
         Report("host setup");
@@ -157,11 +176,8 @@ internal static class PostgresPublicPreview
                 }
                 var overflow = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "oversized", "notice",
                     new string('\0', 3 * 1024 * 1024), cancellationToken: stop);
-                var missing = await foundation.SendAsync(new Contract.BoundScope("preview-other"), new Contract.Target.Ref(actor),
-                    "missing", "notice", cancellationToken: stop);
-                Check(overflow is { Outcome: Contract.AdmissionOutcome.Refused, Reason: null, Actor: null } &&
-                    missing is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch, Actor: null },
-                    "a valid root's physical size refusal and an unavailable tenant-bound target have distinct receipts");
+                Check(overflow is { Outcome: Contract.AdmissionOutcome.Refused, Reason: null, Actor: null },
+                    "a valid root's physical size refusal has no target-mismatch reason");
             }
 
             Reset();
@@ -200,12 +216,6 @@ internal static class PostgresPublicPreview
                 "public actor read sees the terminal checkpoint");
             Report("inspect final checkpoint and journal");
 
-            Reset();
-            var other = new Contract.BoundScope("preview-other");
-            Check(await foundation.GetAsync(other, actor, stop) is null &&
-                (await foundation.TailAsync(other, actor, cancellationToken: stop)).Items.Count == 0,
-                "public reads stay within the bound tenant");
-            Report("verify read scoping");
             if (queued is not null)
             {
                 var lastBookmark = (await ReadJournal()).Last!.Value;

@@ -19,6 +19,7 @@ if (args is ["pg-core-preview", "standby", var standbyRoot, var standbyBookmark,
     long.TryParse(priorEpoch, out var epoch) && epoch > 0 && int.TryParse(priorPid, out var peerPid) && peerPid > 0 &&
     long.TryParse(initialLease, out var originalUntil) && originalUntil > 0)
     return await PostgresPublicPreview.RunAsync("standby", standbyRoot, standbyBookmark, epoch, peerPid, originalUntil);
+if (args is ["pg-core-preview", "tenant-probe", var probeReference]) return await PostgresPublicPreview.RunAsync("tenant-probe", probeReference);
 if (args is ["pg-core-preview", var replayPhase and ("restart" or "terminal"), var actorReference, var journalBookmark])
     return await PostgresPublicPreview.RunAsync(replayPhase, actorReference, journalBookmark);
 if (args is ["pg-root-worker", "birth"]) return await PostgresRootWorkerChecks.RunAsync("birth", null);
