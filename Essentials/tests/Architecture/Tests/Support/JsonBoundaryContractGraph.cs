@@ -13,6 +13,8 @@ namespace Elsa.Architecture.Tests;
 /// <summary>Inspects actual wire metadata. A shape pin requests review; it never classifies a member as metadata.</summary>
 internal static class JsonBoundaryContractGraph
 {
+    private static readonly Type DefaultNullableConverter = new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver() }
+        .GetConverter(typeof(int?)).GetType().GetGenericTypeDefinition();
     internal sealed record Snapshot(SortedDictionary<string, string> Pins, SortedDictionary<string, string> Shapes,
         SortedSet<string> LooseMembers, SortedSet<string> OpaqueConverters, IReadOnlyList<string> Errors);
     internal sealed record Contracts(string Owner, IEnumerable<Type> Roots, JsonSerializerOptions Options);
@@ -51,7 +53,6 @@ internal static class JsonBoundaryContractGraph
         {
             var identity = "shape|" + owner + "|" + Name(type);
             if (shapes.ContainsKey(identity)) return;
-            if (Nullable.GetUnderlyingType(type) is { } nullable) { Visit(nullable, options, owner); return; }
             shapes.Add(identity, "pending");
             JsonTypeInfo info;
             try { info = options.GetTypeInfo(type); }
@@ -79,7 +80,10 @@ internal static class JsonBoundaryContractGraph
             });
             shapes[identity] = shape;
             pins.Add(identity, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(shape))));
-            if (info.Kind == JsonTypeInfoKind.None && !IsLeaf(type) && type != typeof(object))
+            var underlying = Nullable.GetUnderlyingType(type);
+            var defaultNullable = underlying is not null && info.Converter.GetType().IsConstructedGenericType &&
+                info.Converter.GetType().GetGenericTypeDefinition() == DefaultNullableConverter;
+            if (info.Kind == JsonTypeInfoKind.None && !IsLeaf(type) && type != typeof(object) && !defaultNullable)
                 opaque.Add(owner + "|" + Name(type) + "|" + Name(info.Converter.GetType()));
             foreach (var property in info.Properties.Where(property => property.Get is not null || property.Set is not null))
             {
@@ -94,6 +98,7 @@ internal static class JsonBoundaryContractGraph
                 Visit(property.PropertyType, options, owner);
             }
             foreach (var element in CollectionContracts(type, info.Kind)) Visit(element, options, owner);
+            if (defaultNullable) Visit(underlying!, options, owner);
             if (info.PolymorphismOptions is { } polymorphism)
                 foreach (var derived in polymorphism.DerivedTypes) Visit(derived.DerivedType, options, owner);
         }

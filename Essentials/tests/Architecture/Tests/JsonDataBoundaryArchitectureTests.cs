@@ -358,6 +358,35 @@ public sealed class JsonDataBoundaryArchitectureTests
         Assert.False(before.Pins.SequenceEqual(after.Pins));
     }
 
+    [Fact]
+    public void A_nullable_root_keeps_its_effective_converter_and_enum_wire_tokens()
+    {
+        var before = InspectFixture(JsonBaseline.Options, [typeof(WireState?)]);
+        var options = JsonBaseline.CreateCopy();
+        options.Converters.Add(new NullableWireStateConverterFactory(JsonNamingPolicy.CamelCase));
+        options.MakeReadOnly();
+        var after = InspectFixture(options, [typeof(WireState?)]);
+        Assert.Empty(before.Errors);
+        Assert.Empty(after.Errors);
+        var key = "shape|fixture|" + JsonBoundaryContractGraph.Name(typeof(WireState?));
+        Assert.NotEqual(before.Pins[key], after.Pins[key]);
+        Assert.Equal("0", JsonSerializer.Serialize<WireState?>(WireState.FirstChoice, JsonBaseline.Options));
+        Assert.Equal("\"firstChoice\"", JsonSerializer.Serialize<WireState?>(WireState.FirstChoice, options));
+    }
+
+    [Fact]
+    public void A_nullable_opaque_converter_does_not_require_the_underlying_struct_contract()
+    {
+        var options = JsonBaseline.CreateCopy();
+        options.TypeInfoResolver = new RefusingTypeResolver(typeof(HiddenStruct), new DefaultJsonTypeInfoResolver());
+        options.Converters.Add(new NullableHiddenStructConverter());
+        options.MakeReadOnly();
+        var snapshot = InspectFixture(options, [typeof(HiddenStruct?)]);
+        Assert.Empty(snapshot.Errors);
+        Assert.Single(snapshot.OpaqueConverters);
+        Assert.DoesNotContain("shape|fixture|" + JsonBoundaryContractGraph.Name(typeof(HiddenStruct)), snapshot.Pins.Keys);
+    }
+
     private static JsonSerializerOptions WithAddedMember(Type target)
     {
         var options = JsonBaseline.CreateCopy();
@@ -420,6 +449,17 @@ public sealed class JsonDataBoundaryArchitectureTests
         public override void Write(Utf8JsonWriter writer, ScalarRows value, JsonSerializerOptions options) => writer.WriteStringValue("owned-scalar");
     }
     public sealed class HiddenDocument { public object? InProcess { get; init; } }
+    public readonly struct HiddenStruct { public HiddenDocument? Hidden { get; init; } }
+    private sealed class NullableHiddenStructConverter : JsonConverter<HiddenStruct?>
+    {
+        public override HiddenStruct? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => new HiddenStruct();
+        public override void Write(Utf8JsonWriter writer, HiddenStruct? value, JsonSerializerOptions options) => writer.WriteStringValue("owned-scalar");
+    }
+    private sealed class RefusingTypeResolver(Type hidden, IJsonTypeInfoResolver inner) : IJsonTypeInfoResolver
+    {
+        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options) => type == hidden
+            ? throw new NotSupportedException("The hidden CLR type has no wire metadata.") : inner.GetTypeInfo(type, options);
+    }
     public enum HiddenEnum { Choice }
     public sealed class IgnoredEnumDocument { [JsonIgnore] public HiddenEnum Hidden { get; init; } }
     private sealed class RefusingEnumResolver(IJsonTypeInfoResolver inner) : IJsonTypeInfoResolver
