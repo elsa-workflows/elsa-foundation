@@ -5,6 +5,11 @@ namespace Kernel.WorkflowActor;
 
 internal enum MigrationPlanOutcome { Migrated, Refused, NotAtSource }
 
+internal sealed record MigrationPlanResult(MigrationPlanOutcome Outcome, string? Finding = null)
+{
+    internal const string Kind = "migration-reply";
+}
+
 internal abstract record MigrationPlanJournal(string Kind)
 {
     private const string SelectedKind = "migration-plan.selected.v1";

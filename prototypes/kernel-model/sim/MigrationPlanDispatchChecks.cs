@@ -242,7 +242,7 @@ internal static class MigrationPlanDispatchChecks
                         var request = Json.Read<MigrationRequest>(input.Payload!);
                         var outcome = header.Definition == request.From ? MigrationPlanOutcome.Migrated : MigrationPlanOutcome.NotAtSource;
                         if (outcome == MigrationPlanOutcome.Migrated) SetHeader(header with { Definition = request.To });
-                        turn.Send(request.Plan, "migration-reply", Json.Write(outcome));
+                        turn.Send(request.Plan, MigrationPlanResult.Kind, Json.Write(new MigrationPlanResult(outcome)));
                         break;
                     case "select" when header.Definition == "plan" && header.Pending is null:
                         var selected = Json.Read<MigrationDispatchBatch>(input.Payload!);
@@ -253,8 +253,8 @@ internal static class MigrationPlanDispatchChecks
                         SetHeader(header with { Pending = null });
                         turn.Record("batch-dispatched");
                         break;
-                    case "migration-reply" when header.Definition == "plan" && input.Sender is { } sender:
-                        turn.Record(new MigrationPlanJournal.Answered(sender, Json.Read<MigrationPlanOutcome>(input.Payload!)));
+                    case MigrationPlanResult.Kind when header.Definition == "plan" && input.Sender is { } sender:
+                        turn.Record(new MigrationPlanJournal.Answered(sender, Json.Read<MigrationPlanResult>(input.Payload!).Outcome));
                         break;
                     case "end":
                         turn.End(Contract.ActorStatus.Finished);

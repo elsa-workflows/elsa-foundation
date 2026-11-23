@@ -6,7 +6,7 @@ using Kernel.Model.Contracts;
 namespace Kernel.WorkflowActor;
 
 /// <summary>Runs workflow models through the public actor contract.</summary>
-public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType
+public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType
 {
     public const string ActorType = "workflow";
 
@@ -48,6 +48,12 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
                 WriteHeader(turn, workflow, workflow with { Version = terminatingModel.StateVersion });
             }
             if (header.Status == ActorStatus.Running) turn.End(ActorStatus.Cancelled);
+            return;
+        }
+
+        if (command == Kinds.Migrate)
+        {
+            ApplyMigration(turn, workflow, turn.Inbox[0]);
             return;
         }
 
@@ -143,7 +149,9 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
     private static string JobArguments(string model, string? arguments) => JsonSerializer.Serialize(new WorkflowJobArguments(model, arguments));
 
     private sealed record WorkflowHeader(string Model, string Definition, int? Version, bool Suspended = false,
-        string? SubStatus = null, bool Ephemeral = false, History History = History.Full);
+        string? SubStatus = null, bool Ephemeral = false, History History = History.Full,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        string? LastMigrationPlan = null);
 
     private sealed record WorkflowJobArguments(string Model, string? Arguments);
 
