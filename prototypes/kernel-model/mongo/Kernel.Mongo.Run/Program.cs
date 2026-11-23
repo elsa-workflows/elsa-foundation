@@ -23,6 +23,16 @@ if (rest.Remove("--no-abort")) MongoStore.AbortOnFailure = false;
 if (rest.Remove("--no-backoff")) MongoStore.BackOffOnTransient = false;
 if (rest.Remove("--labels-only")) MongoStore.LabelsOnly = true;
 if (rest.Remove("--cuts-only")) MongoProvider.CutsOnly = true;
+if (rest is ["first-job-root"])
+{
+    await FirstJobRootChecks.RunAsync(connection, options);
+    return 0;
+}
+if (rest is ["job-root-admission"])
+{
+    await JobRootAdmissionChecks.RunAsync(connection, options);
+    return 0;
+}
 if (rest is ["job-generation-format"])
 {
     await JobGenerationChecks.RunAsync(connection, options);

@@ -18,6 +18,7 @@ public sealed record MongoStoreOptions
 
     // Release default stays at format 1. Only the staged provider qualification selects format 2.
     internal bool JobGenerations { get; init; }
+    internal bool ScopedJobRoots { get; init; }
 
 }
 
@@ -50,7 +51,9 @@ public sealed partial class MongoStore : IKernelStore
     {
         _client = client;
         _options = options ?? new MongoStoreOptions();
-        _format = _options.JobGenerations ? JobGenerationFormat : CurrentFormat;
+        if (_options.ScopedJobRoots && !_options.JobGenerations)
+            throw new ArgumentException("Scoped job roots require the job-generation representation.", nameof(options));
+        _format = _options.ScopedJobRoots ? ScopedJobRootFormat : _options.JobGenerations ? JobGenerationFormat : CurrentFormat;
         _grant = new BsonDocument
         {
             { "storeSchema", _format.StoreSchema }, { "messageProtocol", _format.MessageProtocol }, { "journalCodec", _format.JournalCodec }
@@ -182,10 +185,13 @@ public sealed partial class MongoStore : IKernelStore
     private enum CheckKind { Fence, Count, Bound, Mark }
     private readonly record struct Check(int Index, bool Delete, long Expected, CheckKind Kind, BsonDocument? Rewind = null);
 
-    public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
+    public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
+        CommitAsync(batch, null, cancellationToken);
+
+    private async ValueTask<Committed> CommitAsync(CommitBatch batch, FirstJobWrite? firstJob, CancellationToken cancellationToken)
     {
         StoreBatchRules.Validate(batch, ownedSets: true, supportsJobTrialClear: SupportsJobTrialClear);
-        CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
+        if (firstJob is null) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         CommitClockFacts.RejectUnsupported(batch);
         if (!_options.JobGenerations && batch.Turns.Any(t => t.Row?.NextJobGeneration is not null || t.Sent.Any(m => m.JobGeneration != 0)))
             throw new StoreFormatException("Job generations require schema=2, message protocol=2.");
@@ -267,9 +273,15 @@ public sealed partial class MongoStore : IKernelStore
             BsonDocument Keys(IEnumerable<InboxKey> ids, bool notDone, bool bind = true)
             {
                 var filter = new BsonDocument("_id", new BsonDocument("$in", new BsonArray(ids.Select(InboxId))));
+                filter["rootRef"] = new BsonDocument("$exists", false);
                 if (notDone) filter["done"] = false;
                 if (bind && bound is not null) filter["partition"] = bound;
                 return filter;
+            }
+            if (firstJob is not null && !await HasJobRootCreatorAsync(session, firstJob, cancellationToken))
+            {
+                await session.AbortTransactionAsync(cancellationToken);
+                return new Committed(false, 0, []);
             }
             var counted = owned ? CheckKind.Bound : CheckKind.Count;
             foreach (var turn in batch.Turns)
@@ -280,18 +292,24 @@ public sealed partial class MongoStore : IKernelStore
                     // Round 3: an ended instance goes at its revision (a count that must be 1, as for an update), with its
                     // journal documents. All in the one bulk write: with the fence in the batch it stops at the fence first.
                     checks.Add(new(models.Count, true, 1, CheckKind.Count));
-                    models.Add(new BulkWriteDeleteOneModel<BsonDocument>(_instances.CollectionNamespace, new BsonDocument { { "_id", turn.Instance }, { "revision", turn.Expected!.Value } }));
+                    models.Add(new BulkWriteDeleteOneModel<BsonDocument>(_instances.CollectionNamespace, new BsonDocument { { "_id", turn.Instance }, { "revision", turn.Expected!.Value }, { "rootRef", new BsonDocument("$exists", false) } }));
 
                 }
                 if (turn.Delete)
-                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_journal.CollectionNamespace, new BsonDocument { { "partition", home }, { "instance", turn.Instance }, { "revision", new BsonDocument("$gt", 0L) } }));
+                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_journal.CollectionNamespace, new BsonDocument { { "partition", home }, { "instance", turn.Instance }, { "revision", new BsonDocument("$gt", 0L) }, { "rootRef", new BsonDocument("$exists", false) } }));
                 if (turn.Row is { } row)
                 {
-                    var doc = ToDocument(row, home);
+                    var doc = firstJob is null ? ToDocument(row, home) : new BsonDocument
+                    {
+                        { "_id", row.Id }, { "partition", home }, { "tenant", firstJob.Tenant }, { "rootRef", firstJob.Reference },
+                        { "revision", row.Revision }, { "rootImage", firstJob.Image }
+                    };
+                    if (firstJob is not null && doc.ToBson().Length > 16 * 1024 * 1024)
+                        throw new StoreException(Failure.Definite, "The encoded job-root checkpoint exceeds the MongoDB document budget.");
                     if (turn.Expected is not { } expected) models.Add(new BulkWriteInsertOneModel<BsonDocument>(_instances.CollectionNamespace, doc));
                     else
                     {
-                        var match = new BsonDocument { { "_id", row.Id }, { "revision", expected }, { "retired", false } };
+                        var match = new BsonDocument { { "_id", row.Id }, { "revision", expected }, { "retired", false }, { "rootRef", new BsonDocument("$exists", false) } };
                         if (row.Retired) match["status"] = (int)row.Status; // ended status was checked by the marker shape
                         BsonDocument? rewind = null;
                         if (_options.JobGenerations && !row.Retired)
@@ -307,7 +325,7 @@ public sealed partial class MongoStore : IKernelStore
                 if (turn.Consumed.Count > 0)
                 {
                     checks.Add(new(models.Count, true, turn.Consumed.Count, counted));
-                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_messages.CollectionNamespace, Keys(turn.Consumed, notDone: true)));
+                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_messages.CollectionNamespace, firstJob is null ? Keys(turn.Consumed, notDone: true) : CreatorFilter(firstJob)));
                 }
                 if (turn.Done.Count > 0)
                 {
@@ -319,7 +337,13 @@ public sealed partial class MongoStore : IKernelStore
                     seqs.Add(++key[home]);
                     // Messages the owner hands over in memory to a fenced partition are written as seen at that partition's epoch.
                     var seen = batch.HandOver && epochs.TryGetValue(message.Target.Partition, out var mine) ? mine : 0;
-                    models.Add(new BulkWriteInsertOneModel<BsonDocument>(_messages.CollectionNamespace, ToDocument(message, key[home], seen)));
+                    var envelope = ToDocument(message, key[home], seen);
+                    if (firstJob is not null)
+                    {
+                        envelope.Add("rootRef", firstJob.Reference).Add("tenant", firstJob.Tenant)
+                            .Add("senderCreation", message.SenderCreation).Add("targetCreation", message.TargetCreation!.Value);
+                    }
+                    models.Add(new BulkWriteInsertOneModel<BsonDocument>(_messages.CollectionNamespace, envelope));
                 }
                 foreach (var s in turn.Subscribed)
                     models.Add(new BulkWriteReplaceOneModel<BsonDocument>(_subscriptions.CollectionNamespace, new BsonDocument("_id", SubscriptionId(s)), ToDocument(s, home), isUpsert: true));
@@ -340,6 +364,7 @@ public sealed partial class MongoStore : IKernelStore
                     {
                         { "_id", new BsonDocument { { "p", home }, { "n", at } } }, { "partition", home }, { "position", at },
                         { "instance", turn.Instance }, { "revision", turn.Delete ? -1L : turn.Row?.Revision ?? 0L }, { "entries", turn.Journal },
+                        { "rootRef", firstJob?.Reference, firstJob is not null }, { "tenant", firstJob?.Tenant, firstJob is not null },
                     }));
                 }
             }
@@ -501,6 +526,7 @@ public sealed partial class MongoStore : IKernelStore
     private async ValueTask<Polled> PollAsync(int anchor, BsonDocument rows, TimeSpan horizon, int limit, CancellationToken cancellationToken)
     {
         // One round trip: the store's time from a partition document, then the rows. $$NOW is one value for the whole command.
+        rows["rootRef"] = new BsonDocument("$exists", false);
         rows["$expr"] = new BsonDocument("$lte", new BsonArray { "$due", new BsonDocument("$add", new BsonArray { NowMs, (long)horizon.TotalMilliseconds }) });
         BsonDocument[] pipeline =
         [
@@ -565,20 +591,23 @@ public sealed partial class MongoStore : IKernelStore
             throw new StoreFormatException("Job generations require schema=2, message protocol=2.");
     }
 
-    private async ValueTask<long> NextOutsideSeq(int partition, CancellationToken cancellationToken)
+    private async ValueTask<long> NextOutsideSeq(int partition, CancellationToken cancellationToken, IClientSessionHandle? session = null)
     {
         // Nothing fences an outside add, so its key comes from the target partition's inbox clock: one document per
         // partition, apart from the partition document so that adds never conflict with the owner's commits.
         BsonDocument[] tick = [new("$set", new BsonDocument("clock", new BsonDocument("$add", new BsonArray { new BsonDocument("$max", new BsonArray { new BsonDocument("$ifNull", new BsonArray { "$clock", 0L }), NowUs }), 1L })))];
-        var clock = await _clocks.FindOneAndUpdateAsync(new BsonDocument("_id", partition), Builders<BsonDocument>.Update.Pipeline(tick),
-            new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After }, cancellationToken);
+        var key = new BsonDocument("_id", partition);
+        var update = Builders<BsonDocument>.Update.Pipeline(tick);
+        var options = new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After };
+        var clock = session is null ? await _clocks.FindOneAndUpdateAsync(key, update, options, cancellationToken)
+            : await _clocks.FindOneAndUpdateAsync(session, key, update, options, cancellationToken);
         return clock["clock"].AsInt64;
     }
 
     public async ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
     {
         if (ids.Count == 0) return [];
-        var docs = await _instances.Find(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(ids))), new FindOptions { BatchSize = ids.Count + 1 }).ToListAsync(cancellationToken);
+        var docs = await _instances.Find(new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(ids)) }, { "rootRef", new BsonDocument("$exists", false) } }, new FindOptions { BatchSize = ids.Count + 1 }).ToListAsync(cancellationToken);
         return docs.Select(d => StoredState.Restore(new InstanceRow(d["_id"].AsString, d["model"].AsString, d["definition"].AsString, (InstanceStatus)d["status"].AsInt32, d["state"].AsString,
             d["revision"].AsInt64, Str(d["parent"]), Str(d["fault"]), Str(d["jobs"]), (History)d.GetValue("history", 0).AsInt32, d.GetValue("suspended", false).AsBoolean,
             Str(d.GetValue("children", BsonNull.Value)), d.GetValue("stateVersion", 1).AsInt32, Retired: d["retired"].AsBoolean, CustomHandles: Str(d.GetValue("customHandles", BsonNull.Value)), IdentityOnly: false)
@@ -660,7 +689,7 @@ public sealed partial class MongoStore : IKernelStore
     {
         await RequireReadOnlyVersionsAsync(cancellationToken);
         // A find may span multiple cursor batches. Keep them on the same committed snapshot.
-        var docs = await _journal.WithReadConcern(ReadConcern.Snapshot).Find(new BsonDocument { { "partition", partition }, { "instance", instance }, { "position", new BsonDocument("$gt", after) } })
+        var docs = await _journal.WithReadConcern(ReadConcern.Snapshot).Find(new BsonDocument { { "partition", partition }, { "instance", instance }, { "rootRef", new BsonDocument("$exists", false) }, { "position", new BsonDocument("$gt", after) } })
             .Sort(new BsonDocument("position", 1)).ToListAsync(cancellationToken);
         return docs.Select(d => new JournalRow(d["partition"].AsInt32, d["position"].AsInt64, d["instance"].AsString, d["revision"].AsInt64, d["entries"].AsString)).ToList();
     }
@@ -671,7 +700,11 @@ public sealed partial class MongoStore : IKernelStore
         var expired = new BsonDocument("$expr", new BsonDocument("$lt", new BsonArray { "$keepUntil", NowMs }));
         var messages = await _messages.DeleteManyAsync(new BsonDocument { { "done", true }, { "keepUntil", new BsonDocument("$ne", BsonNull.Value) }, { "$expr", expired["$expr"] } }, cancellationToken);
         var events = await _events.DeleteManyAsync(expired, cancellationToken);
-        return (int)(messages.DeletedCount + events.DeletedCount);
+        var receipts = _options.JobGenerations ? (await _meta.DeleteManyAsync(new BsonDocument
+        {
+            { "_id.rootOperation", new BsonDocument("$exists", true) }, { "$expr", new BsonDocument("$lt", new BsonArray { "$until", NowMs }) }
+        }, cancellationToken)).DeletedCount : 0;
+        return (int)(messages.DeletedCount + events.DeletedCount + receipts);
     }
 
     // ---- round 3's operations ---------------------------------------------------------------------------------------------
@@ -747,10 +780,27 @@ public sealed partial class MongoStore : IKernelStore
 
     public async ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default)
     {
+        var ids = instances.ToArray();
+        var requested = new BsonDocument("_id", new BsonDocument("$in", new BsonArray(ids)));
+        if (_options.ScopedJobRoots && ids.Length > 0)
+        {
+            using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
+            return await session.WithTransactionAsync(async (tx, token) =>
+            {
+                await RequireReadOnlyVersionsAsync(token, tx);
+                var scoped = await _instances.Find(tx, new BsonDocument(requested) { { "rootRef", new BsonDocument("$exists", true) } })
+                    .Project(new BsonDocument("_id", 1)).ToListAsync(token);
+                var ordinary = ids.Except(scoped.Select(doc => doc["_id"].AsString), StringComparer.Ordinal);
+                var docs = await _views.Find(tx, new BsonDocument("_id", new BsonDocument("$in", new BsonArray(ordinary)))).ToListAsync(token);
+                return Decode(docs);
+            }, Transaction, cancellationToken);
+        }
         await RequireReadOnlyVersionsAsync(cancellationToken);
-        if (instances.Count == 0) return [];
-        var docs = await _views.Find(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(instances)))).ToListAsync(cancellationToken);
-        return docs.Select(d => new ViewRow(d["_id"].AsString, d["revision"].AsInt64, d["commits"].AsInt32)).ToList();
+        if (ids.Length == 0) return [];
+        return Decode(await _views.Find(requested).ToListAsync(cancellationToken));
+
+        static IReadOnlyList<ViewRow> Decode(List<BsonDocument> docs) =>
+            docs.Select(d => new ViewRow(d["_id"].AsString, d["revision"].AsInt64, d["commits"].AsInt32)).ToArray();
     }
 
     // ---- documents ------------------------------------------------------------------------------------------------------
@@ -789,7 +839,8 @@ public sealed partial class MongoStore : IKernelStore
         var wire = key["id"];
         var message = new Message(wire.IsBsonBinaryData ? DurableKeyJson.FromCodeUnits(wire.AsBsonBinaryData.Bytes) : wire.AsString, new InstanceRef(d["target"].AsString), d["kind"].AsString, Str(d["payload"]), Str(d["sender"]),
             d["start"].IsBsonNull ? null : Json.Read<StartSpec>(d["start"].AsString), due == 0 ? null : due, d["keepUntil"].IsBsonNull ? null : d["keepUntil"].AsInt64,
-            Str(d.GetValue("replyTo", BsonNull.Value))) { JobGeneration = d.GetValue("jobGeneration", 0L).AsInt64 };
+            Str(d.GetValue("replyTo", BsonNull.Value)), SenderCreation: d.GetValue("senderCreation", 0L).AsInt64,
+            TargetCreation: d.TryGetValue("targetCreation", out var creation) ? creation.AsInt64 : null) { JobGeneration = d.GetValue("jobGeneration", 0L).AsInt64 };
         return new Stored(message.WithInboxScope(key["scope"].ToInt64(), Str(key.GetValue("match", BsonNull.Value))), d["seq"].AsInt64, d["seen"].AsInt64, d["attempts"].AsInt32, d["trial"].AsInt64);
     }
 
