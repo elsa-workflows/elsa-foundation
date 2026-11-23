@@ -394,6 +394,10 @@ public sealed partial class EtlRuntimeJourneyTests
         var firstRequest = await observed.Task.WaitAsync(deadline.Token);
         var before = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
         var firstDelivery = EtlConnectorRecordCodec.Read<EtlConnectorHttpDeliveries>(before.Batch!.HttpDeliveryJson!);
+        if (firstDelivery.Main!.Phase != EtlHttpDeliveryPhase.InFlight)
+            throw new InvalidOperationException($"Lost-response phase control failed at {DateTimeOffset.UtcNow:O}. " +
+                $"Fixture database and journals retained at {files.RetainFailureEvidence()}. " +
+                $"Delivery: {before.Batch.HttpDeliveryJson}. Worker output: {predecessor.CapturedOutput}");
         Assert.Equal(EtlHttpDeliveryPhase.InFlight, firstDelivery.Main!.Phase);
         Assert.Null(firstDelivery.Main.Attempts[0].Response);
         Assert.Equal(2, before.Run.OutstandingRecords);

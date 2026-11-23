@@ -273,12 +273,19 @@ public sealed partial class EtlRuntimeJourneyTests
         private readonly List<IHost> _hosts = [];
         private readonly List<EtlWorkerProcess> _workers = [];
         private readonly HashSet<string> _workerRoles = new(StringComparer.Ordinal);
+        private bool _retainEvidence;
         private readonly string _source;
         private readonly string _lookup;
         public EtlScope Scope { get; }
         public string SnapshotRoot => Path.Combine(_directory, "snapshots");
         public string OutputRoot => Path.Combine(_directory, "output");
         public string ErrorRoot => Path.Combine(_directory, "errors");
+
+        public string RetainFailureEvidence()
+        {
+            _retainEvidence = true;
+            return _directory;
+        }
 
         public RuntimeFiles(string source, EtlScope? scope = null)
         {
@@ -469,7 +476,7 @@ public sealed partial class EtlRuntimeJourneyTests
                 catch (Exception exception) { failures.Add(exception); }
             if (failures.Count > 0)
                 throw new AggregateException($"Fixture cleanup failed; shared ETL state and worker logs remain at {_directory}.", failures);
-            Directory.Delete(_directory, recursive: true);
+            if (!_retainEvidence) Directory.Delete(_directory, recursive: true);
         }
     }
 

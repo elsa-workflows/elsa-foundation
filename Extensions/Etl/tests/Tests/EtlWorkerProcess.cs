@@ -16,6 +16,7 @@ internal sealed class EtlWorkerProcess(string root, string configurationPath, st
     private bool _started;
     public int ProcessId => _process.Id;
     public bool HasExited => !_started || _process.HasExited;
+    public string CapturedOutput => Output;
     public string AcceptancePath => EtlWorkerProtocol.AcceptancePath(root, role);
     public string CommittedAcceptancePath => EtlWorkerProtocol.CommittedAcceptancePath(root, role);
     public string CommittedAcceptanceReceiptPath(int ordinal) => EtlWorkerProtocol.CommittedAcceptanceReceiptPath(root, role, ordinal);
