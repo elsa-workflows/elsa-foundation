@@ -1,4 +1,5 @@
 import { lazy, type ReactNode } from "react";
+import { Zap } from "lucide-react";
 import { authSessionEndedEvent, evaluateBackendRequirements, qualifyStudioBackendPath, type ElsaStudioModuleApi, type StudioRouteWorkspaceOptions } from "@elsa-workflows/studio-sdk";
 import { setDialogs } from "./workflow-editor/dialogs";
 import { setNotifications } from "./workflow-editor/notifications";
@@ -18,6 +19,7 @@ import {
 } from "./workflowTestStimulusEditors";
 import { registerWorkflowWeaver } from "./workflowWeaver";
 import { compensationTargetPropertyEditor } from "./CompensationTargetEditor";
+import { workflowDashboardRecordLinks } from "./dashboardRecordLinks";
 import type { WorkflowDesignerPanelContext } from "./workflow-editor/editorTypes";
 
 const WorkflowTagsRoute = lazy(() => import("./workflow-editor/WorkflowTagsPage").then(module => ({ default: module.WorkflowTagsRoute })));
@@ -98,6 +100,9 @@ export function register(api: ElsaStudioModuleApi) {
   api.workflowTestStimulusEditors?.add(httpWorkflowTestStimulusEditor);
   api.workflowTestStimulusEditors?.add(eventWorkflowTestStimulusEditor);
   api.workflowTestStimulusEditors?.add(schedulingWorkflowTestStimulusEditor);
+  for (const link of workflowDashboardRecordLinks) {
+    api.dashboardRecordLinks?.add(link);
+  }
   api.activityEditors.add({...activityGraphImplementationEditorContribution, requiresBackend:[{id:"elsa.api.activity-design",contractVersion:"1"}]});
   api.activityEditors.add({...activityGraphSchema2ImplementationEditorContribution, requiresBackend:[{id:"elsa.api.activity-design",contractVersion:"1"}]});
   latestModuleApi = api;
@@ -144,7 +149,7 @@ export function register(api: ElsaStudioModuleApi) {
         { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], title: "Templates", path: "/workflows/templates", iconColor: "var(--studio-nav-icon-blue)", placement: "build", parentId: "library", order: 25 },
         { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "var(--studio-nav-icon-blue)", placement: "runtime", order: 40 },
         { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "var(--studio-nav-icon-teal)", placement: "authoring", order: 50 },
-        { id: "workflows-triggers", requiresBackend: [{id:"elsa.api.standalone-triggers",contractVersion:"1"}], title: "Triggers", path: "/workflows/triggers", iconColor: "var(--studio-nav-icon-amber)", placement: "operate", order: 35 }
+        { id: "workflows-triggers", requiresBackend: [{id:"elsa.api.standalone-triggers",contractVersion:"1"}], title: "Triggers", path: "/workflows/triggers", icon: Zap, iconColor: "var(--studio-nav-icon-amber)", placement: "operate", order: 35 }
       ]
     },
     routes: [

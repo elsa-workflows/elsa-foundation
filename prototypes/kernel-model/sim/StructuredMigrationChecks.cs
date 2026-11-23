@@ -1,5 +1,6 @@
 using Kernel.Foundation.InMemory;
 using Kernel.Native;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Contract = Kernel.Foundation.Contracts;
 using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
@@ -18,7 +19,18 @@ internal static class StructuredMigrationChecks
             await CheckContainers(mode, Check);
             await CheckLoopAndGraph(mode, Check);
             await CheckStoredReferences(mode, Check);
+            await CheckLiteralLookup(mode, Check);
+            await CheckLiteralNumber(mode, Check);
+            await CheckClonedLiteral(mode, Check);
             await CheckFinished(mode, Check);
+            var job = Wf.Workflow("pending-job", Wf.Call("service", "migration"));
+            await using var withJob = await WaitingActor.StartAsync(job, mode, singleTurn: true);
+            var checkpoint = Json.Read<NativeState>(withJob.Checkpoint());
+            var wait = checkpoint.Waits.Values.Single();
+            Check(wait.Kind == "job" && checkpoint.Frames[wait.Frame].Node == "service" && withJob.HasPendingJob(wait.Key),
+                "the stored background wait has its exact pending ticket");
+            Check(StructuredMigration.Validate(job, job, checkpoint) == StructuredMigrationFinding.UnsupportedCheckpoint,
+                "an outstanding background job refuses migration even to the same definition");
         }
         await CheckQueuedWork(check);
     }
@@ -159,6 +171,151 @@ internal static class StructuredMigrationChecks
             "Durable persists a scheduled child before its frame starts");
         check(StructuredMigration.Validate(source, Definition("remove-queued", Wf.Set("tail", "output", 1)), state)
             == StructuredMigrationFinding.LiveNode, "a scheduled child remains live even without a frame");
+
+        var nested = Wf.Sequence("nested", Wait());
+        await CheckUnstarted(nested, Wf.Sequence("nested", Wait(), Prefix()),
+            "a scheduled Sequence can append to its unstarted children");
+        var branch = Wf.If("nested", true, Wait(), Prefix());
+        await CheckUnstarted(branch, Wf.If("nested", true, Wf.Event("new-then", "first"), Wf.Event("new-else", "second")),
+            "a scheduled If can change either branch before choosing one");
+
+        async Task CheckUnstarted(Node scheduled, Node changed, string message)
+        {
+            var workflow = Definition("scheduled-container", scheduled);
+            await using var pending = await WaitingActor.StartAsync(workflow, Modes.Durable, singleTurn: true);
+            var checkpoint = Json.Read<NativeState>(pending.Checkpoint());
+            var queued = checkpoint.Agenda.Single();
+            check(!queued.Resume && queued.Node == scheduled.Id && queued.Parent is { } parent &&
+                checkpoint.Frames[parent].Node == "sequence" && !checkpoint.Frames.ContainsKey(queued.Frame),
+                $"{scheduled.Type.Name} has a pending start in its parent and no frame yet");
+            check(StructuredMigration.Validate(workflow, Definition("child-list", changed), checkpoint) is null, message);
+            check(StructuredMigration.Validate(workflow, Definition("parent-prefix", Wf.Set("inserted", "output", 1), changed), checkpoint)
+                == StructuredMigrationFinding.SequencePrefix, "the running parent still protects the scheduled child's position");
+        }
+    }
+
+    private static async Task CheckLiteralLookup(string mode, Action<bool, string> check)
+    {
+        foreach (var ignoreCase in new[] { false, true })
+        {
+            var source = WithLookup(ignoreCase);
+            await using var actor = await WaitingActor.StartAsync(source, mode);
+            var state = Json.Read<NativeState>(actor.Checkpoint());
+            check(state.Waits.Values.Single().Key == "event:ready" &&
+                StructuredMigration.Validate(source, WithLookup(ignoreCase), state) is null,
+                $"a waiting custom leaf keeps its nested JSON lookup setting ({ignoreCase})");
+            check(StructuredMigration.Validate(source, WithLookup(!ignoreCase), state) == StructuredMigrationFinding.AuthoredNode,
+                "identical JSON text cannot change case lookup in a waiting leaf's nested object");
+            await actor.PublishAsync();
+            check(actor.Status() == InstanceStatus.Finished &&
+                Json.Read<NativeState>(actor.Checkpoint()).Results["lookup"]?.GetValue<bool>() == ignoreCase,
+                $"the resumed leaf observes its authored nested JSON lookup setting ({ignoreCase})");
+        }
+
+        static Workflow WithLookup(bool ignoreCase)
+        {
+            var value = new JsonArray(new JsonObject(new JsonNodeOptions { PropertyNameCaseInsensitive = ignoreCase })
+                { ["Name"] = "present" });
+            return Wf.Workflow("literal-lookup",
+                Wf.Node<LookupOnResume>("lookup", (nameof(LookupOnResume.Settings), Binding.Literal(value))));
+        }
+    }
+
+    private static async Task CheckLiteralNumber(string mode, Action<bool, string> check)
+    {
+        foreach (var (name, create, readsInt32) in new (string, Func<JsonNode>, bool)[]
+        {
+            ("Int32", () => JsonValue.Create(1)!, true),
+            ("Int64", () => JsonValue.Create(1L)!, false),
+            ("parsed JSON", () => JsonNode.Parse("1")!, true),
+        })
+        {
+            var source = WithNumber(create());
+            await using var actor = await WaitingActor.StartAsync(source, mode);
+            var checkpoint = Json.Read<NativeState>(actor.Checkpoint());
+            check(checkpoint.Waits.Values.Single().Key == "event:ready" &&
+                StructuredMigration.Validate(source, WithNumber(create()), checkpoint) is null,
+                $"an independently constructed equal {name} scalar stays compatible");
+            var changed = WithNumber(name == "Int32" ? JsonValue.Create(1L)! : JsonValue.Create(1)!);
+            check(StructuredMigration.Validate(source, changed, checkpoint) == StructuredMigrationFinding.AuthoredNode,
+                $"the {name} scalar keeps its typed representation even when JSON text is identical");
+            await actor.PublishAsync();
+            check(actor.Status() == InstanceStatus.Finished &&
+                Json.Read<NativeState>(actor.Checkpoint()).Results["number"]?.GetValue<bool>() == readsInt32,
+                $"the resumed leaf reads the {name} scalar as Int32: {readsInt32}");
+        }
+
+        static Workflow WithNumber(JsonNode number) => Wf.Workflow("literal-number",
+            Wf.Node<ReadNumberOnResume>("number", (nameof(ReadNumberOnResume.Number), Binding.Literal(number))));
+    }
+
+    private static async Task CheckClonedLiteral(string mode, Action<bool, string> check)
+    {
+        const string plain = "\"a\"", escaped = "\"\\u0061\"";
+        var caseSensitive = new JsonNodeOptions { PropertyNameCaseInsensitive = false };
+        var ignoreCase = new JsonNodeOptions { PropertyNameCaseInsensitive = true };
+        foreach (var (name, arrayOptions, objectOptions, scalarOptions, raw, expected) in new[]
+        {
+            ("default", (JsonNodeOptions?)null, (JsonNodeOptions?)null, (JsonNodeOptions?)null, plain, "unset/unset/unset"),
+            ("explicit array", caseSensitive, null, null, plain, "False/False/False"),
+            ("case-insensitive array", ignoreCase, null, null, plain, "True/True/True"),
+            ("explicit child object", null, caseSensitive, null, plain, "unset/False/False"),
+            ("explicit child scalar", null, null, caseSensitive, plain, "unset/unset/False"),
+            ("escaped token", null, null, null, escaped, "unset/unset/unset"),
+        })
+        {
+            var source = WithLiteral(arrayOptions, objectOptions, scalarOptions, raw);
+            await using var actor = await WaitingActor.StartAsync(source, mode);
+            var checkpoint = Json.Read<NativeState>(actor.Checkpoint());
+            var same = WithLiteral(arrayOptions, objectOptions, scalarOptions, raw);
+            var changed = name == "default" ? WithLiteral(caseSensitive, null, null, plain) : WithLiteral(null, null, null, plain);
+            check(StructuredMigration.Validate(source, same, checkpoint) is null &&
+                StructuredMigration.Validate(source, changed, checkpoint) == StructuredMigrationFinding.AuthoredNode,
+                $"the waiting leaf preserves distinct cloned JSON metadata and accepts equivalent clones ({name})");
+            await actor.PublishAsync();
+            check(actor.Status() == InstanceStatus.Finished &&
+                Json.Read<NativeState>(actor.Checkpoint()).Results["inspect"]?.GetValue<string>() == expected + "/" + raw,
+                $"the resumed leaf observes the cloned lookup options and raw scalar spelling ({name})");
+        }
+
+        static Workflow WithLiteral(JsonNodeOptions? arrayOptions, JsonNodeOptions? objectOptions,
+            JsonNodeOptions? scalarOptions, string raw)
+        {
+            var child = new JsonObject(objectOptions) { ["value"] = JsonValue.Create(1, scalarOptions) };
+            var input = new JsonArray(arrayOptions) { child, JsonNode.Parse(raw) };
+            return Wf.Workflow("cloned-literal", Wf.Node<InspectClonedLiteral>("inspect",
+                (nameof(InspectClonedLiteral.Input), Binding.Literal(input))));
+        }
+    }
+
+    public sealed class InspectClonedLiteral : StatefulActivity<string, int, JsonNode?>
+    {
+        [Input] public JsonArray Input { get; set; } = [];
+        protected override ValueTask<Transition> ExecuteAsync(StartContext<JsonNode?> context) =>
+            new(Suspend(0, new EventTrigger("ready")));
+        protected override ValueTask<Transition> ResumeAsync(ResumeContext<int, JsonNode?> context)
+        {
+            static string Lookup(JsonNode node) => node.Options?.PropertyNameCaseInsensitive.ToString() ?? "unset";
+            return new(Complete($"{Lookup(Input)}/{Lookup(Input[0]!)}/{Lookup(Input[0]!["value"]!)}/{Input[1]!.GetValue<JsonElement>().GetRawText()}"));
+        }
+    }
+
+    public sealed class ReadNumberOnResume : StatefulActivity<bool, int, JsonNode?>
+    {
+        [Input] public JsonValue Number { get; set; } = null!;
+        protected override ValueTask<Transition> ExecuteAsync(StartContext<JsonNode?> context) =>
+            new(Suspend(0, new EventTrigger("ready")));
+        protected override ValueTask<Transition> ResumeAsync(ResumeContext<int, JsonNode?> context) =>
+            new(Complete(Number.TryGetValue<int>(out var value) && value == 1));
+    }
+
+    public sealed class LookupOnResume : StatefulActivity<bool, int, JsonNode?>
+    {
+        [Input] public JsonArray Settings { get; set; } = [];
+        protected override ValueTask<Transition> ExecuteAsync(StartContext<JsonNode?> context) =>
+            new(Suspend(0, new EventTrigger("ready")));
+        protected override ValueTask<Transition> ResumeAsync(ResumeContext<int, JsonNode?> context) =>
+            new(Complete(Settings[0]?["name"] is not null));
     }
 
     private static async Task CheckFinished(string mode, Action<bool, string> check)
@@ -206,6 +363,11 @@ internal static class StructuredMigrationChecks
 
         internal string Checkpoint() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor?.Row.State
             ?? throw new InvalidOperationException("The Native checkpoint was not committed.");
+        internal bool HasPendingJob(string key)
+        {
+            var row = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row;
+            return store.Messages.GetValueOrDefault(InboxKey.Ticket(row.Id, key, row.Creation)) is { Done: false };
+        }
         internal InstanceStatus Status() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.Status;
 
         internal async Task PublishAsync(string key = "ready")
