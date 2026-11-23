@@ -527,7 +527,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     if (turn.Row is not { Retired: true } && Instances.Remove(turn.Instance, out var removed) && _referenceBirths.Count > 0)
                     {
                         var address = new CreationAddress(removed.Id, removed.Creation);
-                        RemoveFoundationMetadata(address);
+                        RemoveFoundationMetadata(address, removed.Model);
                         FoundationCheckpointTenants.Remove(address);
                     }
                     foreach (var key in Journal.Where(j => j.Value.Instance == turn.Instance && j.Value.Revision > 0 && !Has(Flaw.DeleteLeavesJournal)).Select(j => j.Key).ToList())
