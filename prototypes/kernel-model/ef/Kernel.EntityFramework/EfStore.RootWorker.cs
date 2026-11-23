@@ -190,12 +190,13 @@ public sealed partial class EfStore
 
     private async ValueTask<Committed> CommitPreparedRootAsync(PartitionFence fence, TimeSpan lease, PreparedRoot prepared, CancellationToken token)
     {
+        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
         await using var db = create();
         await RequireStoreVersionsAsync(db, token);
         if (db.UsesRootJobProtocol)
             throw new NotSupportedException("The PostgreSQL job profile requires the qualified Worker checkpoint writer.");
         return await CommitAsync(new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [prepared.JournalTurn!], [], []),
-            prepared.Checkpoint, System.Diagnostics.Stopwatch.GetTimestamp(), token);
+            prepared.Checkpoint, sentAt, token);
     }
 
     private sealed record RootCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> Commands, IReadOnlyDictionary<string, long> Revisions,
