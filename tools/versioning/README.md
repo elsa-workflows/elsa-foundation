@@ -237,8 +237,8 @@ packages to be exactly the affected set, each at its computed version with its c
 - **Pushes** go in dependency order, each package after every package of the set its nuspec depends on, and the
   publish stops at the first failure, so no package is pushed with a range on a version the feed does not hold as
   computed. No push skips a duplicate (FR-011). A 409 is settled by the input fingerprint of the feed's copy (FR-018):
-  the same fingerprint means an earlier run pushed it and did not record it, so it counts as published; another
-  fingerprint, or one that cannot be read, fails the publish and leaves the feed's copy alone. 200, 201 and 202 are
+  an equal fingerprint establishes the same build inputs. The public bytes must also match the signed candidate or
+  carry their own verified original provenance and SBOM. A different or unreadable fingerprint fails publication. 200, 201 and 202 are
   a push taken; any other answer, or none, is a failure.
 - **The write-back** records what reached the feed, even when the publish stopped part way, and nothing else (FR-006,
   FR-014): each package's entry names the version and the commit built — for a package the feed already held, the
@@ -249,9 +249,11 @@ packages to be exactly the affected set, each at its computed version with its c
 
 Once the remote publish-state exists, an interrupted or rejected write-back can leave packages on the feed that
 the record does not name. The next run from `main` computes the same versions for them, the feed rejects them, and
-the equal fingerprints record them, with nobody intervening. The next run must see the same inputs for those
+matching fingerprints and verified original or identical candidate bytes allow automatic recovery. For a confirmed
+unsigned pre-cutover package with different bytes, use the [historical recovery procedure](#verify-a-foundation-preview-package).
+The next run must see the same inputs for those
 packages; if a later commit changed one of them before any run recorded it, the feed's copy no longer matches and
-the publish fails as a collision for the repair workflow (FR-019, #2083). A bootstrap that stops part way **after a successful write-back**
+the publish fails as a collision for [operator repair](#repair) (FR-019, #2083). A bootstrap that stops part way **after a successful write-back**
 leaves `publish-state` in place, and the next push to `main` publishes the remainder at their first versions.
 If an initial PUT was accepted but read-back or the first write-back failed while the remote record is absent, follow the [first-bootstrap recovery procedure](#verify-a-foundation-preview-package).
 
@@ -269,6 +271,12 @@ feed and `--remote` at a scratch repository, which then holds the record.
 The publisher's `repair` command settles by hand what a publish cannot settle itself (spec 150 FR-019). It takes a
 reason and exactly one of two modes. Its manual workflow, `publish-repair.yml`, was deleted with the lean CI (20 Nov
 2026; its last run was on 30 Sep), so a repair now runs the command below from a checkout of `main`.
+
+Before a local repair against the official feed, the release maintainer pauses new runs of the Packages workflow,
+lets active and queued publishers finish, and confirms that no other operator is writing `publish-state`.
+Re-read the remote record and public version after the drain, coordinate the local repair with the other maintainers,
+and run it only if that exact ID and version still need repair. Confirm the resulting remote record before enabling
+Packages again. Run the normal main publisher if a push arrived while it was paused.
 
 ```bash
 dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- repair \

@@ -86,6 +86,7 @@ jobs:
       heavy: ${{ steps.scope.outputs.heavy }}
       published-images: ${{ steps.scope.outputs.published-images }}
       studio-order: ${{ steps.scope.outputs.studio-order }}
+      package-evidence: ${{ steps.scope.outputs.package-evidence }}
       backend-source: ${{ steps.scope.outputs.backend-source }}
       kernel: ${{ steps.kernel.outputs.kernel }}
     steps:
@@ -620,7 +621,7 @@ jobs:
   # measurement (#1668).
   architecture-guards:
     name: Architecture guards
-    needs: plan-tiers
+    needs: [plan-tiers, plan-scope]
     if: needs.plan-tiers.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -663,21 +664,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Select the release package evidence fixture
-        id: package-evidence
-        run: |
-          if ! git diff --quiet HEAD^1 HEAD -- .github/workflows/{ci,packages}.yml tools/versioning/package-evidence tools/versioning/Elsa.Versioning.Publisher essentials/src/Caching/{Core,Memory}; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install the inventory toolchain
-        if: steps.package-evidence.outputs.run == 'true'
+        if: needs.plan-scope.outputs.package-evidence == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
 
       - name: Rehearse source and binary inventory boundaries
-        if: steps.package-evidence.outputs.run == 'true'
+        if: needs.plan-scope.outputs.package-evidence == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
           npm ci --prefix tools/versioning/package-evidence --ignore-scripts --no-audit --no-fund
           node --test tools/versioning/package-evidence/test-generation.mjs
