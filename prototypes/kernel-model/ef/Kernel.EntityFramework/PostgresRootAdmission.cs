@@ -6,12 +6,23 @@ namespace Kernel.EntityFramework;
 
 /// <summary>Store operations for externally generated root starts in the single-host PostgreSQL preview.
 /// The calling host supplies the tenant from its bound ingress scope. Schema installation is explicit.</summary>
-internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow)
+internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow)
 {
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
     private sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput, bool ExplicitZeroDue = false);
     private const string CreatorPrefix = "!kernel-root/1:";
+
+    internal static bool IsIssuedReferenceShape(string? reference) =>
+        FoundationRootCreator.IsGeneratedReference(reference);
+
+    internal async Task<FoundationReadCursor> OpenJournalCursorAsync(CancellationToken cancellationToken)
+    {
+        await using var db = create();
+        var issuerKey = await db.Database.SqlQueryRaw<byte[]>("""SELECT "Key" AS "Value" FROM "FoundationRootIssuer" """)
+            .SingleAsync(cancellationToken);
+        return new(HMACSHA256.HashData(issuerKey, "elsa-preview/journal-cursor/1"u8));
+    }
 
     internal async Task InstallAsync(CancellationToken cancellationToken = default)
     {
@@ -41,6 +52,7 @@ internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan dedu
             ON CONFLICT DO NOTHING
             """, cancellationToken);
         await EfStore.InstallFirstRootCheckpointsAsync(db, cancellationToken);
+        await InstallDirectReceiptsAsync(db, cancellationToken);
         var placementMatches = await db.Database.SqlQueryRaw<bool>("""
             SELECT i."Partitions" = count(p."Id") AND min(p."Id") = 0 AND max(p."Id") = i."Partitions" - 1 AS "Value"
             FROM "FoundationRootIssuer" i CROSS JOIN "Partitions" p GROUP BY i."Partitions"
@@ -53,9 +65,9 @@ internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan dedu
         TimeSpan? keepFor = null, CancellationToken cancellationToken = default)
     {
         if (!FoundationMetadataLimits.IsOutsideMessageId(operation) || spec is { Parent: not null } or { Creation: not null } ||
-            spec.ParentCreation != 0 || !FoundationMetadataLimits.FitsName(spec.Model) ||
-            !FoundationMetadataLimits.FitsContent(spec.Definition, FoundationMetadataLimits.TypeDataBytes))
+            spec.ParentCreation != 0 || !FoundationMetadataLimits.FitsName(spec.Model))
             throw new ArgumentException("Invalid root creator metadata.");
+        FoundationMetadataLimits.RequireContent(spec.Definition, nameof(spec), FoundationMetadataLimits.TypeDataBytes);
         FoundationMetadataLimits.RequireContent(spec.Input, nameof(spec), FoundationMetadataLimits.StartContentBytes);
         var window = keepFor is { } requested && requested < deduplicationWindow ? requested : deduplicationWindow;
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
@@ -99,7 +111,7 @@ internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan dedu
         var header = CreatorPrefix + DurableKeyJson.Write(new StoredRoot(creator.Id, storedSpec, escaped, due == 0));
         // Reserve the 24 KiB fixed frame even for the exceptional encoded representation.
         if (Encoding.UTF8.GetByteCount(header) + (payload is null ? 0 : Encoding.UTF8.GetByteCount(payload)) > 16 * 1024 * 1024 - 24 * 1024)
-            throw new ArgumentException("The encoded PostgreSQL creator exceeds the physical message envelope.", nameof(spec));
+            throw new MetadataLimitExceeded(nameof(spec), 16 * 1024 * 1024 - 24 * 1024);
         db.Messages.Add(new MessageEntity
         {
             Id = creator.InboxKey.Id, Target = actor.Id, Partition = actor.Partition,

@@ -483,6 +483,11 @@ and leaves a cleared trial's count as it was. In both cases the authorized comma
 The provider also runs the inline promotion and same-actor deadline schedule. Mutations clear against the wrong
 epoch and release isolation while a callback is still active.
 
+SQLite and PostgreSQL support the counted clear on EF and owned SQL with either fence mode. The store conformance cases named
+`job trial clear` cover the selected ticket group, refusals, an ordinary input with the same wire id and takeover
+after a transport failure before or after commit. Owned SQL also checks a group across two partition epochs.
+The remaining providers, Worker inline promotion and the same-actor deadline keep their K4 qualification.
+
 ### K11 foundation contract cases
 
 These cases qualify the clauses deferred by the owner's 21 November decision.

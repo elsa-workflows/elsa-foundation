@@ -24,6 +24,15 @@ switch (args)
 {
     case ["root-admission-writer"]:
         return await GeneratedRootChecks.WriteFromChildAsync();
+    case ["postgres", var connection, "root-journal"]:
+        await new EfProvider("postgres", connection, []).CheckRootJournalAsync();
+        return 0;
+    case ["postgres", var connection, "root-direct-send"]:
+        await new EfProvider("postgres", connection, []).CheckDirectSendAsync();
+        return 0;
+    case ["postgres", var connection, "root-turn", .. var options]:
+        await new EfProvider("postgres", connection, options).CheckRootTurnAsync();
+        return 0;
     case ["postgres", var connection, "root-checkpoint", .. var options]:
         await new EfProvider("postgres", connection, options).CheckFirstRootAsync();
         return 0;
@@ -54,6 +63,24 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     private bool CaseEquivalentTopic => engine is "mysql" or "sqlserver";
     private bool Pg => engine == "postgres";
     private string Engine => engine;
+
+    internal async Task CheckRootJournalAsync()
+    {
+        await using var provided = (Provided)await CreateAsync(2, new());
+        await RootJournalChecks.Run(provided.CreateContext, (EfStore)provided.Store, (EfStore)provided.NewClient());
+    }
+
+    internal async Task CheckDirectSendAsync()
+    {
+        await using var provided = (Provided)await CreateAsync(2, new());
+        await DirectSendChecks.Run(provided.CreateContext, (EfStore)provided.Store);
+    }
+
+    internal async Task CheckRootTurnAsync()
+    {
+        await using var provided = (Provided)await CreateAsync(2, new());
+        await RootTurnChecks.Run(provided.CreateContext, (EfStore)provided.Store, (EfStore)provided.NewClient());
+    }
 
     internal async Task CheckFirstRootAsync()
     {

@@ -24,7 +24,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `models/Graph` | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
 | `models/Graph.Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
 | `models/Native` | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
-| `models/Native.Run` | Native smoke tests, cost and memory measurement |
+| `models/Native.Run` | Native smoke tests, cost and memory measurement, PostgreSQL Core Preview |
 | `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs`; the commit as the store's own SQL in `EfStore.Owned.cs` and the `*CommitDialect.cs` files ([COMMIT-SQL.md](COMMIT-SQL.md)) |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`) |
 | `ef/Kernel.Ef.Conformance` | The conformance suite against the EF store, every engine |
@@ -52,6 +52,96 @@ One project at a time (they share `obj/` folders through project references):
 for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
+
+## PostgreSQL Core Preview
+
+Set `KERNEL_PREVIEW_POSTGRES` to the connection string of an empty PostgreSQL 17 database dedicated to the preview.
+Run this from `prototypes/kernel-model` with the SDK in [global.json](global.json).
+
+```bash
+models/Native.Run/run-core-preview.sh
+```
+
+The first Embedded host starts a Native approval workflow through the public Foundation contract, records Ada's approval,
+and exits at the second wait. The next process opens the same database and reads from the first process's journal bookmark.
+It sends Ada's operation ID again with a different payload, then sends Grace's approval with a new ID. The stored
+serialized workflow state and checkpoint revision stay unchanged through replay. The journal and final result verify that each approval applied once.
+Between the two owner processes, a separate diagnostic process bound to another tenant checks that it cannot
+send to the workflow or read its checkpoint or journal. This probe uses no measured connection.
+
+The default receipt estimates round trips by adding EF commands and explicit transaction completions. It excludes connection setup. Setup, ownership and journal reads have their own rows.
+The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
+refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
+
+On a fresh PostgreSQL database, `pg-root-history <owned|ef> <checked|in-batch>` on the same runner
+exercises two ordinary turns with no journal entries. The Minimal workflow saves its first approval. The Full
+workflow consumes an unmatched input admitted while its scheduled start was pending. The owner offers the
+creator at its deadline and releases the input after the first checkpoint. Each workflow reaches revisions
+1, 2 and 3. Its journal has two contiguous positions for revisions 1 and 3. The public tail resumes from
+the start bookmark and returns the recorded entries in revision 3.
+
+To measure TCP turns as well, use a dedicated loopback database with `Host=127.0.0.1`, its published port and
+`SSL Mode=Disable` in `KERNEL_PREVIEW_POSTGRES`. The meter disables optional GSS encryption for its connection
+and refuses `GSS Encryption Mode=Require`.
+
+```bash
+KERNEL_PREVIEW_MEASURE_WIRE=1 models/Native.Run/run-core-preview.sh
+```
+
+The meter counts the client's first send and each subsequent send after a server response. Pipelined requests can
+share one turn. Each process opened one measured TCP connection during setup and reused it for all rows below.
+Across three fresh databases, PostgreSQL 17.12 and Npgsql 10.0.3 gave these counts with pooling enabled and
+multiplexing disabled. The output also reports PostgreSQL Sync and Query groups and new connections per phase.
+
+| Operation | EF estimate | Observed TCP turns |
+|---|---:|---:|
+| Start admission | 5 | 7 |
+| Start turn | 12 | 12 |
+| First approval including admission | 18 | 20 |
+| Duplicate approval after restart including admission | 5 | 5 |
+| Finishing approval including admission | 19 | 21 |
+
+To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
+
+```bash
+models/Native.Run/run-core-preview-failover.py
+```
+
+The fixture starts two Embedded host processes for the same root. The first keeps renewing its lease at the second
+wait. It drives idle Worker passes and heartbeat renewals beyond the original database lease deadline. The standby
+checks the same node and epoch still have a live renewed lease. After PostgreSQL refuses its take, the fixture sends SIGKILL to its first child. The same standby
+acquires a later epoch after the stored deadline, resumes the journal bookmark, replays Ada's input and records
+Grace's approval. This exercises one fixed partition. K5 covers Cluster placement and balancing across partitions.
+
+## Built-in Cluster redistribution on PostgreSQL
+
+Set `KERNEL_PREVIEW_POSTGRES` to the connection string of a fresh, empty PostgreSQL database, then run from
+`prototypes/kernel-model`:
+
+```bash
+dotnet restore models/Native.Run --locked-mode
+dotnet run -c Release --no-restore --project models/Native.Run -- pg-runtime-cluster
+```
+
+Append `wake` to use the optional PostgreSQL wake transport. The two processes listen on separate
+connections. After each of the first two admissions commits, the first node queues the target
+partition number for PostgreSQL `NOTIFY`. The receiving node checks both transport callbacks and confirms
+that its active partition forwarded both hints to the durable Worker. After the second
+node leaves, the first node applies the final approval through the inbox with no hint. Run it
+against another empty database to compare with the polling-only run.
+
+Wake hints carry a partition number. They never carry an actor name, tenant or command payload.
+The sender uses a bounded queue and a separate connection. A full queue or connection failure
+can drop a hint. The node still polls on its ordinary interval.
+
+Two operating-system processes run the built-in `RuntimeNode` and a durable Worker per node. PostgreSQL shows
+eight partitions on the first node, four each when the second joins, and all eight back on the first after the
+second stops gracefully. A Native workflow waits twice for approval events. The departing node records Ada, and
+its successor records Grace at the next journal position.
+
+This fixture uses the general PostgreSQL durable workflow path and the Native compatibility adapter. Public
+Foundation use across an owned set, grouped partition transfers, and qualification of the 1,024-partition release
+profile remain K5 work.
 
 ## The simulation
 
