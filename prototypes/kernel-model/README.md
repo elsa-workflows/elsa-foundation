@@ -53,6 +53,36 @@ for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conform
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
+## Embedded PostgreSQL preview workload
+
+A single-process host runs a Balanced Native workflow with two successive waits for the same approval. The first
+invocation exits after committing the first approval. The next process opens the same database, replays that
+approval inside the one-day deduplication window, and supplies a second approval with a new id. The replay must
+preserve the second wait, counter, revision and journal. The new approval must finish the workflow with count two.
+
+Set `ELSA_PREVIEW_POSTGRES` in the environment to a dedicated PostgreSQL database connection string. The start
+command initializes the prototype schema and its 1,024 virtual partitions. Each run uses a fresh GUID. From this folder:
+
+```sh
+dotnet restore models/Native.Run/Kernel.Native.Run.csproj --locked-mode
+dotnet build models/Native.Run/Kernel.Native.Run.csproj -c Release --no-restore
+runner=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+run_id=$(uuidgen)
+export ELSA_PREVIEW_METER=1
+dotnet "$runner" preview-postgres start "$run_id"
+dotnet "$runner" preview-postgres resume "$run_id"
+dotnet "$runner" preview-postgres journal "$run_id"
+```
+
+The optional meter requires a loopback database host. It counts exchanges on the workflow's PostgreSQL connection
+from input admission through the worker pass. Schema initialization, connection setup for the owner, partition
+acquisition, release and verification reads fall outside those intervals. On local PostgreSQL 17, start took seven
+round trips, the first approval six, replay two and the final approval seven. The journal showed revisions 1, 2 and 3.
+
+This is executable prototype evidence for PostgreSQL, `DurableHost`, the legacy turn adapter and the shared Native
+interpreter. The public Foundation ingress and actor adapter use the in-memory store at this revision. The process
+restart uses an orderly shutdown with a partition release.
+
 ## The simulation
 
 ```
