@@ -1,8 +1,7 @@
 using System.Globalization;
 using Kernel.EntityFramework;
+using Kernel.Native.Run;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Kernel.Ef.Conformance;
 
@@ -14,10 +13,12 @@ internal static class FormatRehearsalProcess
 
     internal static async Task<int> RunAsync(string[] args, Func<EfStore, CancellationToken, Task<bool>>? advance = null)
     {
-        if (args is not [var role and ("old-owner" or "new-owner" or "cold-owner" or "take" or "sweeper" or "projector" or "migrate")])
+        if (args is not [var role and ("old-owner" or "new-owner" or "floor-owner" or "cold-owner" or "take" or "sweeper" or "projector" or "migrate")])
             throw new ArgumentException("Supply a rehearsal role.");
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use the dedicated rehearsal database.");
+        var gates = Environment.GetEnvironmentVariable("KERNEL_REHEARSAL_GATES");
+        Check(Directory.Exists(gates), "Supply the existing rehearsal gate directory.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         KernelDb Open() => new(options);
         var store = new EfStore(Open, postgres: true, fenceInBatch: true) { CommitSql = CommitSql.Owned };
@@ -30,18 +31,13 @@ internal static class FormatRehearsalProcess
             {
                 case "old-owner":
                 case "new-owner":
+                case "floor-owner":
                     await HostAsync(role);
                     break;
                 case "cold-owner":
                     const string node = "rehearsal-cold";
                     var runtime = new PartitionRuntime(node, store, 2, Defaults.Lease);
                     await runtime.StartAsync(DurableHost.ForNode(node, store, new Probe(), 2), stop);
-                    try
-                    {
-                        Check(await runtime.ActivateAsync(1, stop) is { Active: true },
-                            "The unassigned partition must be available on a compatible store.");
-                    }
-                    finally { await runtime.StopAsync(); }
                     break;
                 case "take":
                     var lease = await store.TakeAsync(1, "rehearsal-take", Defaults.Lease, cancellationToken: stop);
@@ -52,7 +48,6 @@ internal static class FormatRehearsalProcess
                     break;
                 case "projector":
                     await new Projector(store, 0).CatchUpAsync(stop);
-                    Console.WriteLine($"projected {(await store.ProjectedAsync(0, stop)).Position}");
                     break;
                 case "migrate":
                     if (advance is null) throw new InvalidOperationException("Use the upgraded coordinator to migrate.");
@@ -73,21 +68,24 @@ internal static class FormatRehearsalProcess
             if (old)
             {
                 await using var db = Open();
-                var creator = db.GetService<IRelationalDatabaseCreator>();
-                Check(await creator.ExistsAsync(stop) && !await creator.HasTablesAsync(stop),
+                Check(await PostgresFixtureDatabase.IsEmptyAsync(db, stop),
                     "Use an empty database dedicated to the format rehearsal.");
                 await store.CreateAsync(2);
             }
-            var gates = Environment.GetEnvironmentVariable("KERNEL_REHEARSAL_GATES")
-                ?? throw new InvalidOperationException("Supply the rehearsal gate directory.");
             await using var worker = new Worker(name, 0, store, new Probe(),
                 new() { Lease = TimeSpan.FromSeconds(old ? 18 : 60) });
             Check(ReferenceEquals(await new DurableHost([worker]).ActivateAsync(0, stop), worker),
                 "The fixture worker must acquire partition zero.");
             var epoch = worker.Fences.Single().Epoch;
-            await ApplyAsync(old ? "seed" : "first-new", old ? 1 : 2, birth: old, keep: true);
+            var (first, revision) = name switch
+            {
+                "old-owner" => ("seed", 1),
+                "new-owner" => ("first-new", 2),
+                _ => ("floor-turn", 4)
+            };
+            await ApplyAsync(first, revision, birth: old, keep: name != "floor-owner");
             Console.WriteLine($"ready {name} epoch {epoch}");
-            if (!old)
+            if (name == "new-owner")
             {
                 await WaitForGateAsync("continue-new");
                 await ApplyAsync("second-new", 3, birth: false, keep: false);
@@ -113,7 +111,7 @@ internal static class FormatRehearsalProcess
 
             async Task WaitForGateAsync(string gate)
             {
-                while (!File.Exists(Path.Combine(gates, gate))) await Task.Delay(20, stop);
+                while (!File.Exists(Path.Combine(gates!, gate))) await Task.Delay(20, stop);
             }
         }
     }
@@ -133,6 +131,7 @@ internal static class FormatRehearsalProcess
             var turn = new DurableTurn(input);
             var id = turn.Inbox.Single().Id;
             var row = input.Row ?? new(input.Actor, Model, Model, InstanceStatus.Running, "0", 0, null);
+            Check(row.State == row.Revision.ToString(CultureInfo.InvariantCulture), "The decoded checkpoint must match its stored revision.");
             row = row with { State = turn.Revision.ToString(CultureInfo.InvariantCulture), Revision = turn.Revision };
             return ValueTask.FromResult(turn.Seal(turn.Outcome(row.Status), row, row.State, Json.Write(new[] { id })));
         }

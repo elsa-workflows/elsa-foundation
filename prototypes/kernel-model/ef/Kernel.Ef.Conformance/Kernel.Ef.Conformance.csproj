@@ -8,6 +8,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../models/Native.Run/PostgresFixtureDatabase.cs" Link="PostgresFixtureDatabase.cs" />
     <ProjectReference Include="../Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
     <ProjectReference Include="../../conformance/Kernel.Store.Conformance/Kernel.Store.Conformance.csproj" />
   </ItemGroup>

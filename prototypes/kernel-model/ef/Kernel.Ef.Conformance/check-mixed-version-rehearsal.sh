@@ -11,9 +11,10 @@ logs=$(mktemp -d "${1:-${TMPDIR:-/tmp}}/kernel-mixed-version.XXXXXXXX")
 scratch=$(mktemp -d)
 old_pid=
 new_pid=
+floor_pid=
 container=
 cleanup() {
-    for pid in "$old_pid" "$new_pid"; do
+    for pid in "$old_pid" "$new_pid" "$floor_pid"; do
         if [[ -n "$pid" ]]; then
             kill -TERM "$pid" 2>/dev/null || true
             wait "$pid" 2>/dev/null || true
@@ -25,31 +26,34 @@ cleanup() {
 trap cleanup EXIT
 echo "logs $logs"
 
-build_historical_driver() {
+new_revision=$(git -C "$repo" -c core.fsmonitor=false rev-parse HEAD)
+source="$scratch/new/prototypes/kernel-model"
+build_driver() {
     local name=$1 revision=$2
     local destination="$scratch/$name"
     mkdir -p "$destination"
     git -C "$repo" -c core.fsmonitor=false archive "$revision" prototypes/kernel-model | tar -xf - -C "$destination"
     local tree="$destination/prototypes/kernel-model"
-    # Only the disposable test entrypoint changes. The provider and kernel sources are the archived revision.
-    cp "$root/$project/FormatRehearsalProcess.cs" "$tree/$project/"
-    cat > "$tree/$project/Program.cs" <<'CS'
+    if [[ "$name" != new ]]; then
+        # The disposable driver and its database guard are the only additions to the archived test project.
+        cp "$source/$project/FormatRehearsalProcess.cs" "$source/models/Native.Run/PostgresFixtureDatabase.cs" "$tree/$project/"
+        cat > "$tree/$project/Program.cs" <<'CS'
 using Kernel.Ef.Conformance;
 return await FormatRehearsalProcess.RunAsync(args);
 CS
+    fi
     (cd "$tree" && dotnet build "$project" -c Release -p:RestoreLockedMode=true) > "$logs/$name-build.log" 2>&1
-    printf '%s %s %s\n' "$name" "$revision" "$(git hash-object "$tree/$project/bin/Release/net10.0/Kernel.EntityFramework.dll")"
+    printf '%s %s %s\n' "$name" "$revision" "$(git -c core.fsmonitor=false hash-object "$tree/$project/bin/Release/net10.0/Kernel.EntityFramework.dll")"
 }
 
 cd "$root"
-build_historical_driver old "$old_revision"
-build_historical_driver floor "$floor_revision"
-dotnet build "$project" -c Release -p:RestoreLockedMode=true > "$logs/new-build.log" 2>&1
-printf 'new %s %s\n' "$(git -C "$repo" -c core.fsmonitor=false rev-parse HEAD)" "$(git hash-object "$project/bin/Release/net10.0/Kernel.EntityFramework.dll")"
+build_driver new "$new_revision"
+build_driver old "$old_revision"
+build_driver floor "$floor_revision"
 old="$scratch/old/prototypes/kernel-model/$dll"
 floor="$scratch/floor/prototypes/kernel-model/$dll"
-new="$root/$dll"
-[[ $(git hash-object "$(dirname "$old")/Kernel.EntityFramework.dll") != $(git hash-object "$(dirname "$new")/Kernel.EntityFramework.dll") ]]
+new="$source/$dll"
+[[ $(git -c core.fsmonitor=false hash-object "$(dirname "$old")/Kernel.EntityFramework.dll") != $(git -c core.fsmonitor=false hash-object "$(dirname "$new")/Kernel.EntityFramework.dll") ]]
 
 export POSTGRES_PASSWORD
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
@@ -85,7 +89,7 @@ expect_refusal() {
 }
 snapshot() {
     local table
-    for table in KernelStoreVersions Partitions Nodes Instances Messages Events Journal Projections Views; do
+    for table in KernelStoreVersions Partitions Nodes Instances Messages Events Subscriptions Journal Projections Views; do
         sql "SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)), '[]'::jsonb) FROM \"$table\" t"
     done
 }
@@ -147,17 +151,26 @@ touch "$KERNEL_REHEARSAL_GATES/continue-new"
 wait_line "$new_pid" "$logs/new-owner.log" '^continued new-owner epoch 2$'
 [[ $(sql "$revision") == '3|3' ]]
 [[ $(sql 'SELECT "Owner", "Epoch", "Position" FROM "Partitions" WHERE "Id" = 0') == 'new-owner|2|3' ]]
-journal=$(sql 'SELECT string_agg("Entries", $$,$$ ORDER BY "Position") FROM "Journal" WHERE "Partition" = 0')
-[[ "$journal" == '["seed"],["first-new"],["second-new"]' ]]
+journal='SELECT string_agg("Entries", $$,$$ ORDER BY "Position") FROM "Journal" WHERE "Partition" = 0'
+prefix=$(sql "$journal")
+[[ "$prefix" == '["seed"],["first-new"],["second-new"]' ]]
 echo 'ok the upgraded owner committed another turn at the same epoch'
 
-dotnet "$floor" cold-owner > "$logs/floor-owner.log"
-dotnet "$floor" sweeper > "$logs/floor-sweep.log"
-dotnet "$floor" projector > "$logs/floor-project.log"
-[[ $(sql 'SELECT "Epoch" FROM "Partitions" WHERE "Id" = 1') == 1 ]]
-[[ $(sql 'SELECT count(*) FROM "Messages"') == 0 && $(sql "$position") == 3 ]]
-[[ $(sql 'SELECT "Revision" FROM "Views" WHERE "Instance" = $$0/format-rehearsal$$') == 3 ]]
 touch "$KERNEL_REHEARSAL_GATES/stop-new-owner"
 wait "$new_pid"
 new_pid=
+[[ $(sql 'SELECT "Owner" IS NULL FROM "Partitions" WHERE "Id" = 0') == t ]]
+
+dotnet "$floor" floor-owner > "$logs/floor-owner.log" 2>&1 &
+floor_pid=$!
+wait_line "$floor_pid" "$logs/floor-owner.log" '^ready floor-owner epoch 3$'
+[[ $(sql "$revision") == '4|4' && $(sql "$journal") == "$prefix"',["floor-turn"]' ]]
+[[ $(sql 'SELECT "Owner", "Epoch", "Position" FROM "Partitions" WHERE "Id" = 0') == 'floor-owner|3|4' ]]
+dotnet "$floor" sweeper > "$logs/floor-sweep.log"
+dotnet "$floor" projector > "$logs/floor-project.log"
+[[ $(sql 'SELECT count(*) FROM "Messages"') == 0 && $(sql "$position") == 4 ]]
+[[ $(sql 'SELECT "Revision" FROM "Views" WHERE "Instance" = $$0/format-rehearsal$$') == 4 ]]
+touch "$KERNEL_REHEARSAL_GATES/stop-floor-owner"
+wait "$floor_pid"
+floor_pid=
 printf 'ok tested PostgreSQL prototype rollback floor %s for schema 3, message protocol 2, journal codec 1\n' "$floor_revision"
