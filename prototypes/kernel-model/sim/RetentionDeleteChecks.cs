@@ -9,6 +9,8 @@ internal static class RetentionDeleteChecks
     {
         await PolicyAtDelivery(check);
         await DelayedAcrossReuse(check);
+        await DeleteIdentityDuringClear(check, afterAttachment: false);
+        await DeleteIdentityDuringClear(check, afterAttachment: true);
         await DelayedParkControlAcrossReuse(check, expiry: true);
         await DelayedParkControlAcrossReuse(check, expiry: false);
         await UnresolvedPark(check);
@@ -215,6 +217,61 @@ internal static class RetentionDeleteChecks
         }
     }
 
+    private static async Task DeleteIdentityDuringClear(Action<bool, string> check, bool afterAttachment)
+    {
+        var fixture = new Fixture { PollHorizon = TimeSpan.Zero };
+        var store = fixture.Store;
+        var worker = fixture.Owner();
+        await using var owner = await Activate(worker);
+        var original = await fixture.Start(worker, "first", callerKey: "same-key");
+        var first = fixture.Row(original);
+        await fixture.Send(original, "end-first", "finish");
+        await Step(worker, first.Id);
+        var originalSelection = await fixture.Selection(original);
+        var due = fixture.Now + 200;
+        var (admitted, delayed) = fixture.OperatorDeleteAt(original, originalSelection, due);
+        await fixture.Send(original, "retire-first", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(originalSelection)));
+        await Step(worker, first.Id);
+        fixture.Now += 101;
+        await store.SweepAsync();
+
+        var current = await fixture.Start(worker, "second", callerKey: "same-key");
+        var running = fixture.Row(current);
+        var recreated = running.Id == first.Id && running.Creation == first.Creation + 1;
+        check(recreated && admitted.Outcome == InMemoryStore.OperatorAdmission.Accepted,
+            "DT-1 the delayed request was admitted for the previous creation of the same key");
+        if (!recreated) return;
+
+        await fixture.Send(current, "park-second", "park");
+        await Step(worker, running.Id);
+        for (var index = 0; index <= 4 * InMemoryStore.ParkPageLimit; index++)
+            await fixture.Send(current, $"retained-{index:D4}", "ordinary");
+        await Step(worker, running.Id);
+        await Step(worker, running.Id);
+        var selection = await fixture.Selection(current);
+        var payload = Json.Write(new Contract.OperatorCommand(selection));
+        await fixture.Send(current, "terminate-second", Contract.Kinds.Terminate, payload);
+        if (afterAttachment) await fixture.Send(current, "delete-second", Contract.Kinds.Delete, payload);
+        for (var pass = 0; pass < 4 && !ReachedBoundary(); pass++) await Step(worker, running.Id);
+        var staged = ReachedBoundary();
+        check(staged, $"DT-1 the current termination is open {(afterAttachment ? "with" : "before")} a qualified Delete attachment");
+        if (!staged) return;
+
+        var before = fixture.Row(current);
+        var journal = store.Journal.Values.ToArray();
+        var foreign = await fixture.SendFromAnotherTenant(current, "other-tenant-delete", payload);
+        check(foreign is { Outcome: Contract.AdmissionOutcome.Refused } && fixture.Row(current) == before,
+            "DT-1 the foreign tenant receives a refusal without changing the current resolution");
+        fixture.Now = due;
+        await Step(worker, running.Id);
+        check(delayed.Answer is CreationResult { Result: "WrongCreation" } && fixture.Row(current) == before &&
+              store.Journal.Values.SequenceEqual(journal),
+            "DT-1 the prior creation's pending Delete is refused without changing the current resolution");
+
+        bool ReachedBoundary() => fixture.Row(current).ParkDiscard is { Kind: ParkClearKind.Terminate } drain &&
+            (drain.Deletion is not null) == afterAttachment;
+    }
+
     private static async Task UnresolvedPark(Action<bool, string> check)
     {
         var fixture = new Fixture { Window = TimeSpan.Zero };
@@ -414,6 +471,9 @@ internal static class RetentionDeleteChecks
 
         internal ValueTask<Contract.Admission> Send(Contract.ActorRef actor, string id, string kind, string? payload = null) =>
             ingress.SendAsync(scope, new Contract.Target.Ref(actor), id, kind, payload);
+
+        internal ValueTask<Contract.Admission> SendFromAnotherTenant(Contract.ActorRef actor, string id, string payload) =>
+            ingress.SendAsync(new Contract.BoundScope("other-tenant"), new Contract.Target.Ref(actor), id, Contract.Kinds.Delete, payload);
 
         internal ((InMemoryStore.OperatorAdmission Outcome, string? Reference) Admission, Request Request)
             Retention(Contract.ActorRef actor, string selection, long? due = null)
