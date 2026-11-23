@@ -77,6 +77,11 @@ internal static partial class NativeHttpEdgeChecks
                 original.Add(host, (actor, born.Next));
             }
 
+            var legacy = requests.Open("legacy", now + 20_000);
+            Require(requests.TryReceive(new(legacy.Registration, "legacy-reply", Request.Response, "legacy")) &&
+                legacy.Answer is "legacy" && requests.RejectedTenantReplies == 0,
+                "An unstamped reply still completes an unscoped legacy request.");
+
             var blueAnswer = PostAsync("blue.fixture", "approve", "Ada");
             await firstTerminal.Task.WaitAsync(token);
             var redAnswer = PostAsync("red.fixture", "approve", "Grace");
@@ -95,8 +100,8 @@ internal static partial class NativeHttpEdgeChecks
                 redResponse.StatusCode == HttpStatusCode.OK && await redResponse.Content.ReadAsStringAsync(token) == "Grace" &&
                 blue.AcceptedResponse?.Tenant == "blue" && red.AcceptedResponse?.Tenant == "red",
                 "Both responses reach only their own tenant and carry the owner-stamped tenant.");
-            Require(transport.Redirected == 1 && requests.RejectedTenantReplies == 1,
-                "The receiver drops and counts a response addressed to the other live tenant.");
+            Require(transport.Redirected == 1 && requests.RejectedTenantReplies == 2,
+                "The receiver drops and counts both the mismatched and unstamped replies to a live tenant.");
             foreach (var (host, scope) in scopes)
             {
                 var (actor, cursor) = original[host];
@@ -137,6 +142,7 @@ internal static partial class NativeHttpEdgeChecks
             {
                 Interlocked.Increment(ref Redirected);
                 requests.Receive(reply with { Request = route });
+                requests.Receive(new Reply(route, "unstamped-end", null, null, Error: "lost"));
             }
             requests.Receive(reply);
         }
