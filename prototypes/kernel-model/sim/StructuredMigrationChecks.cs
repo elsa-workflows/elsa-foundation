@@ -19,6 +19,7 @@ internal static class StructuredMigrationChecks
             await CheckLoopAndGraph(mode, Check);
             await CheckStoredReferences(mode, Check);
             await CheckLiteralLookup(mode, Check);
+            await CheckLiteralNumber(mode, Check);
             await CheckFinished(mode, Check);
             var job = Wf.Workflow("pending-job", Wf.Call("service", "migration"));
             await using var withJob = await WaitingActor.StartAsync(job, mode, singleTurn: true);
@@ -216,6 +217,43 @@ internal static class StructuredMigrationChecks
             return Wf.Workflow("literal-lookup",
                 Wf.Node<LookupOnResume>("lookup", (nameof(LookupOnResume.Settings), Binding.Literal(value))));
         }
+    }
+
+    private static async Task CheckLiteralNumber(string mode, Action<bool, string> check)
+    {
+        foreach (var (name, create, readsInt32) in new (string, Func<JsonNode>, bool)[]
+        {
+            ("Int32", () => JsonValue.Create(1)!, true),
+            ("Int64", () => JsonValue.Create(1L)!, false),
+            ("parsed JSON", () => JsonNode.Parse("1")!, true),
+        })
+        {
+            var source = WithNumber(create());
+            await using var actor = await WaitingActor.StartAsync(source, mode);
+            var checkpoint = Json.Read<NativeState>(actor.Checkpoint());
+            check(checkpoint.Waits.Values.Single().Key == "event:ready" &&
+                StructuredMigration.Validate(source, WithNumber(create()), checkpoint) is null,
+                $"an independently constructed equal {name} scalar stays compatible");
+            var changed = WithNumber(name == "Int32" ? JsonValue.Create(1L)! : JsonValue.Create(1)!);
+            check(StructuredMigration.Validate(source, changed, checkpoint) == StructuredMigrationFinding.AuthoredNode,
+                $"the {name} scalar keeps its typed representation even when JSON text is identical");
+            await actor.PublishAsync();
+            check(actor.Status() == InstanceStatus.Finished &&
+                Json.Read<NativeState>(actor.Checkpoint()).Results["number"]?.GetValue<bool>() == readsInt32,
+                $"the resumed leaf reads the {name} scalar as Int32: {readsInt32}");
+        }
+
+        static Workflow WithNumber(JsonNode number) => Wf.Workflow("literal-number",
+            Wf.Node<ReadNumberOnResume>("number", (nameof(ReadNumberOnResume.Number), Binding.Literal(number))));
+    }
+
+    public sealed class ReadNumberOnResume : StatefulActivity<bool, int, JsonNode?>
+    {
+        [Input] public JsonValue Number { get; set; } = null!;
+        protected override ValueTask<Transition> ExecuteAsync(StartContext<JsonNode?> context) =>
+            new(Suspend(0, new EventTrigger("ready")));
+        protected override ValueTask<Transition> ResumeAsync(ResumeContext<int, JsonNode?> context) =>
+            new(Complete(Number.TryGetValue<int>(out var value) && value == 1));
     }
 
     public sealed class LookupOnResume : StatefulActivity<bool, int, JsonNode?>

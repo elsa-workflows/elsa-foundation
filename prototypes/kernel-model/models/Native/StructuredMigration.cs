@@ -158,9 +158,20 @@ internal static class StructuredMigration
                 pair.First.Key == pair.Second.Key && SameJson(pair.First.Value, pair.Second.Value)),
         (JsonArray left, JsonArray right) =>
             left.Count == right.Count && left.Zip(right).All(pair => SameJson(pair.First, pair.Second)),
-        (JsonValue left, JsonValue right) => left.ToJsonString() == right.ToJsonString(),
+        (JsonValue left, JsonValue right) => SameScalar(left, right),
         _ => false,
     };
+
+    private static bool SameScalar(JsonValue before, JsonValue after)
+    {
+        if (before.ToJsonString() != after.ToJsonString()) return false;
+        // Literal evaluation deep-clones the node. A hydrated leaf can inspect the clone's typed value.
+        var left = before.DeepClone();
+        var right = after.DeepClone();
+        if (left is JsonValue a && right is JsonValue b)
+            return a.GetType() == b.GetType() && a.GetValue<object>().GetType() == b.GetValue<object>().GetType();
+        return SameJson(left, right);
+    }
 
     private static bool SameEntries<T>(IReadOnlyDictionary<string, T> before, IReadOnlyDictionary<string, T> after, Func<T, T, bool> equals)
     {
