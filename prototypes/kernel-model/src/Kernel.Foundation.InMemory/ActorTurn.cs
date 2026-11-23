@@ -12,6 +12,7 @@ internal sealed partial class ActorAdapter
     {
         private readonly Durable.InMemoryStore? _inMemory;
         private readonly Durable.FoundationSelfIssuer? _issueSelf;
+        private readonly Func<string, string>? _rootJobHandle;
         private Durable.InMemoryStore Store => _inMemory ?? throw new NotSupportedException("The ordinary-root provider does not implement this authored effect.");
         private readonly Durable.TurnInput _input;
         private readonly Durable.DurableTurn _turn;
@@ -27,10 +28,12 @@ internal sealed partial class ActorAdapter
         private bool _emitted;
         private bool _migrated;
 
-        public ActorTurn(Durable.InMemoryStore? store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient, Durable.FoundationSelfIssuer? issueSelf)
+        public ActorTurn(Durable.InMemoryStore? store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient,
+            Durable.FoundationSelfIssuer? issueSelf, Func<string, string>? rootJobHandle)
         {
             _inMemory = store;
             _issueSelf = issueSelf;
+            _rootJobHandle = rootJobHandle;
             _input = input;
             _turn = new(input, foundation: true);
             Header = header;
@@ -112,6 +115,8 @@ internal sealed partial class ActorAdapter
         public void StartJob(string key, string? arguments = null, TimeSpan? timeout = null)
         {
             HeaderLimits.RequireName(key, nameof(key), preservesCodeUnits: true);
+            if (_rootJobHandle is not null && timeout is not null)
+                throw new NotSupportedException("This PostgreSQL job profile supports untimed jobs.");
             ArgumentOutOfRangeException.ThrowIfLessThan(timeout ?? TimeSpan.Zero, TimeSpan.Zero, nameof(timeout));
             long? deadline = timeout is { } period ? checked(Now + (long)period.TotalMilliseconds) : null;
             try { _turn.StartJobWithPayload(key, arguments, deadline, boundMessage: true); }
@@ -262,7 +267,9 @@ internal sealed partial class ActorAdapter
                     ? new Contract.ActorRef(reference) : (Contract.ActorRef?)null;
             var logicalId = message.Kind == Contract.Kinds.JobFinished && !message.FoundationJobResult ? message.Id + "/result" : message.Id;
             var id = (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null
-                ? Store.MessageHandle("inbox:" + logicalId) : message.Id;
+                ? message.Kind == Contract.Kinds.JobFinished && _rootJobHandle is { } handle
+                    ? handle("inbox:" + logicalId) : Store.MessageHandle("inbox:" + logicalId)
+                : message.Id;
             if (message.Start is null && Durable.Events.MatchFor(message) is { } match)
             {
                 if (!match.Key.StartsWith(Qualify(""), StringComparison.Ordinal))

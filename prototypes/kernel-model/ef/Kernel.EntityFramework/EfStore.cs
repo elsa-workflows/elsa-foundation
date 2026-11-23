@@ -120,14 +120,18 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     private sealed class RootSelfDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootTimerDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootOperatorDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootJobDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     internal StoreFormat RequiredFormat => this switch
     {
+        RootJobDb => StoreFormat.RootJobs,
         RootOperatorDb => StoreFormat.RootOperators,
         RootTimerDb => StoreFormat.RootTimers,
         RootSelfDb => StoreFormat.RootSelf,
         _ => StoreFormat.Current
     };
     internal bool UsesRootSelfProtocol => this is RootSelfDb or RootTimerDb;
+    internal bool UsesRootJobProtocol => this is RootJobDb;
+    internal static KernelDb ForPostgresRootJobs(DbContextOptions<KernelDb> options) => new RootJobDb(options);
     internal bool UsesRootOperatorProtocol => this is RootOperatorDb;
     internal static KernelDb ForPostgresRootOperators(DbContextOptions<KernelDb> options) => new RootOperatorDb(options);
     internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => new RootTimerDb(options);
@@ -164,6 +168,8 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     {
         if (UsesRootSelfProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The continuation profile requires PostgreSQL.");
+        if (UsesRootJobProtocol && !Database.IsNpgsql())
+            throw new NotSupportedException("The generated-root job profile requires PostgreSQL.");
         if (UsesRootOperatorProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The operator command profile requires PostgreSQL.");
         model.Entity<StoreVersionEntity>(entity =>
@@ -442,10 +448,12 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         if (postgres && Engine is null && (batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials)
             .Concat(batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])))
-            .Any(key => key.Match is null && (key.Scope is InboxKey.FoundationOccurrenceScope or RootSelfScope)) ||
+            .Any(key => key.Match is null && (key.Scope is InboxKey.FoundationOccurrenceScope or RootSelfScope or RootJobScope)) ||
             batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey is { Match: null } key &&
-                (key.Scope == InboxKey.FoundationOccurrenceScope || root is null && key.Scope == RootSelfScope)))))
+                (key.Scope == InboxKey.FoundationOccurrenceScope || root is null && (key.Scope is RootSelfScope or RootJobScope))))))
             throw new StoreException(Failure.Definite, "Qualified PostgreSQL inputs require their root checkpoint writer.");
+        if (root is null && batch.Turns.Any(turn => turn.FoundationRootJobCompletion is not null))
+            throw new StoreException(Failure.Definite, "Generated-root job completions require the qualified writer.");
         StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable,
             supportsJobTrialClear:SupportsJobTrialClear);
         // Marker shape uses the canonical row address. A raw update's alternate spelling is
@@ -692,11 +700,12 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     }
 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
+    private string RootInputScopes => $"{InboxKey.FoundationOccurrenceScope}, {RootSelfScope}{(RootJobsEnabled ? $", {RootJobScope}" : "")}";
     private string RootPollFilter(bool operators) => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
              {(operators ? RootOperatorPollFilter : "")}
-             AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({InboxKey.FoundationOccurrenceScope}, {RootSelfScope}) AND EXISTS (
+             AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({RootInputScopes}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
@@ -728,7 +737,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         ? $"""
            ({RootInboxSource} m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
               AND b."Creation" = 1 AND m."EventMatch" IS NULL
-              AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" = {InboxKey.FoundationOccurrenceScope} OR m."InboxScope" = {RootSelfScope}))
+              AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" IN ({RootInputScopes})))
            """
         : RootInboxSource + " m";
     private const string RootClockMilliseconds = "floor(extract(epoch from clock_timestamp()) * 1000)::bigint";
@@ -766,17 +775,17 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             {
                 if (r.Target is null) throw RootShape();
                 var root = bindings.ForActor(r.Target);
-                if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition ||
-                    root != bindings.ForInput(key.Scope == RootSelfScope ? InboxKey.Issued(key.Id) : key)) throw RootShape();
+                if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition) throw RootShape();
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     JobGeneration = r.JobGeneration!.Value, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
-                    : DecodeRootInput(entity, root.Reference, RootSelfIssuer);
+                    : DecodeRootInput(entity, root.Reference, RootSelfIssuer, RootJobsEnabled);
+                if (root != bindings.ForInput(message.InboxKey)) throw RootShape();
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
             }
             if (key.Match is null &&
                 (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) ||
-                    PostgresRootAdmission.IsStoredOperator(r.Start) || key.Scope == RootSelfScope))
+                    PostgresRootAdmission.IsStoredOperator(r.Start) || key.Scope is RootSelfScope or RootJobScope))
                 throw new StoreException(Failure.Definite, "PostgreSQL public inputs require a qualified foundation owner.");
             return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo) { JobGeneration = r.JobGeneration!.Value }.WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);

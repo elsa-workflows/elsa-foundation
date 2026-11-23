@@ -168,6 +168,7 @@ public sealed record TurnCommit(
     internal FoundationHeaderChange? FoundationHeader { get; init; }
     // The qualified writer compares the exact envelope the owner dispatched with the locked occurrence.
     internal Message? FoundationRootOperator { get; init; }
+    internal RootJobCompletion? FoundationRootJobCompletion { get; init; }
     internal IReadOnlySet<InboxKey>? FoundationSelfRecalls { get; init; }
     internal HashSet<InboxKey>? FoundationHeldPromotions { get; init; }
     internal IReadOnlyList<InboxKey>? FoundationReleasedHolds { get; init; }
