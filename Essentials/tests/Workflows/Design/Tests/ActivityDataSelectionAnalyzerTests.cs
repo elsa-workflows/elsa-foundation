@@ -473,7 +473,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.Empty(result.Findings);
         var sources = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
         var variable = Assert.Single(sources.Sources, source => source.Id.StartsWith("variable:", StringComparison.Ordinal));
-        Assert.Equal("activity-graph", Assert.IsType<VariableReference>(variable.Binding!.Value).DeclaringScopeId);
+        Assert.Equal("activity-graph", Assert.IsType<JsonElement>(variable.Binding!.Value).GetProperty("declaringScopeId").GetString());
     }
 
     [Fact]

@@ -39,7 +39,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
 
         var binding = Assert.Single(result.Sources, source => source.Id == "input:customer-ref").Binding!;
         Assert.Equal("Input", binding.ExpressionType);
-        Assert.Equal("customer-ref", Assert.IsType<VariableReference>(binding.Value).ReferenceKey);
+        Assert.Equal("customer-ref", Assert.IsType<JsonElement>(binding.Value).GetProperty("referenceKey").GetString());
     }
 
     [Theory]
