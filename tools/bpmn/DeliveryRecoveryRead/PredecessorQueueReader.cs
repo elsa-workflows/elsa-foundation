@@ -106,5 +106,7 @@ internal static class PredecessorQueueReader
     {
         public string Encode(string purpose, ReadOnlySpan<byte> payload) => throw new NotSupportedException();
         public byte[] Decode(string purpose, string token) => throw new NotSupportedException();
+        public string EncodeJson(string purpose, ReadOnlySpan<byte> payload) => throw new NotSupportedException();
+        public byte[] DecodeJson(string purpose, string token) => throw new NotSupportedException();
     }
 }

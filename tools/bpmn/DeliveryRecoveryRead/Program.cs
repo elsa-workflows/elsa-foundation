@@ -581,4 +581,6 @@ internal sealed class NoPaging : IRuntimeRecoveryContinuationCodec
 {
     public string Encode(string purpose, ReadOnlySpan<byte> payload) => throw new NotSupportedException("The closed snapshot inspector does not expose paging tokens.");
     public byte[] Decode(string purpose, string token) => throw new NotSupportedException("The closed snapshot inspector does not accept paging tokens.");
+    public string EncodeJson(string purpose, ReadOnlySpan<byte> payload) => throw new NotSupportedException("The closed snapshot inspector does not expose paging tokens.");
+    public byte[] DecodeJson(string purpose, string token) => throw new NotSupportedException("The closed snapshot inspector does not accept paging tokens.");
 }
