@@ -154,6 +154,9 @@ wait_line "$new_pid" "$logs/new-owner.log" '^continued new-owner epoch 2$'
 journal='SELECT string_agg("Entries", $$,$$ ORDER BY "Position") FROM "Journal" WHERE "Partition" = 0'
 prefix=$(sql "$journal")
 [[ "$prefix" == '["seed"],["first-new"],["second-new"]' ]]
+prefix_rows='SELECT jsonb_agg(to_jsonb(j) ORDER BY "Position") FROM "Journal" j
+    WHERE "Partition" = 0 AND "Position" <= 3'
+sql "$prefix_rows" > "$logs/before-floor-journal-prefix.rows"
 echo 'ok the upgraded owner committed another turn at the same epoch'
 
 touch "$KERNEL_REHEARSAL_GATES/stop-new-owner"
@@ -164,7 +167,10 @@ new_pid=
 dotnet "$floor" floor-owner > "$logs/floor-owner.log" 2>&1 &
 floor_pid=$!
 wait_line "$floor_pid" "$logs/floor-owner.log" '^ready floor-owner epoch 3$'
-[[ $(sql "$revision") == '4|4' && $(sql "$journal") == "$prefix"',["floor-turn"]' ]]
+[[ $(sql "$revision") == '4|4' && $(sql 'SELECT count(*) FROM "Journal"') == 4 ]]
+sql "$prefix_rows" > "$logs/after-floor-journal-prefix.rows"
+cmp "$logs/before-floor-journal-prefix.rows" "$logs/after-floor-journal-prefix.rows"
+[[ $(sql 'SELECT "Instance", "Revision", "Entries" FROM "Journal" WHERE "Partition" = 0 AND "Position" = 4') = '0/format-rehearsal|4|["floor-turn"]' ]]
 [[ $(sql 'SELECT "Owner", "Epoch", "Position" FROM "Partitions" WHERE "Id" = 0') == 'floor-owner|3|4' ]]
 dotnet "$floor" sweeper > "$logs/floor-sweep.log"
 dotnet "$floor" projector > "$logs/floor-project.log"
