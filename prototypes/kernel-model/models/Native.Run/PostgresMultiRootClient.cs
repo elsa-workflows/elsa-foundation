@@ -20,11 +20,12 @@ internal static class PostgresMultiRootClient
         return () => new KernelDb(options);
     }
 
-    internal static async Task<Contract.ActorRef> Start(PostgresPreviewFoundation foundation, Contract.BoundScope scope, string id, CancellationToken token)
+    internal static async Task<Contract.ActorRef> Start(PostgresPreviewFoundation foundation, Contract.BoundScope scope, string id, CancellationToken token,
+        Contract.AdmissionOutcome expected = Contract.AdmissionOutcome.Accepted)
     {
         var workflow = new WorkflowRuntime(foundation, foundation);
         var accepted = await workflow.StartAsync(scope, id, NativeExecutionModel.Start(DirectApprovalWorkflow.Definition), cancellationToken: token);
-        return accepted is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } actor } ? actor
+        return accepted.Outcome == expected && accepted.Actor is { } actor ? actor
             : throw new InvalidOperationException("The generated root was not accepted.");
     }
 
@@ -63,6 +64,15 @@ internal static class PostgresMultiRootClient
         {
             case ["start"]:
                 Console.WriteLine((await Start(foundation, scope, "start", token)).Id);
+                break;
+            case ["start-receipt", var operation, var result] when Enum.TryParse<Contract.AdmissionOutcome>(result, out var required):
+                Console.WriteLine((await Start(foundation, scope, operation, token, required)).Id);
+                break;
+            case ["missing", var hidden]:
+                var unavailable = new Contract.ActorRef(hidden);
+                var journal = await foundation.TailAsync(scope, unavailable, cancellationToken: token);
+                if (await foundation.GetAsync(scope, unavailable, token) is not null || journal.Items.Count != 0 || journal.Next is not null)
+                    throw new InvalidOperationException("The second tenant can see an unexpected actor or journal.");
                 break;
             case ["send", var reference, var id, var payload, var expected] when Enum.TryParse<Contract.AdmissionOutcome>(expected, out var outcome):
                 await Send(foundation, scope, new(reference), id, payload, outcome, token);

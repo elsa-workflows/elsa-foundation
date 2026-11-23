@@ -21,8 +21,22 @@ internal sealed class PostgresNativeRootOwner
         Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn = null)
     {
         var root = await store.BindWorkerRootsAsync(requested, cancellationToken);
+        return await PrepareAsync(store, node, root, registry, requested.Count, cancellationToken, onTurn, 1);
+    }
+
+    internal static async Task<PostgresNativeRootOwner> PreparePartitionAsync(EfStore store, string node, int partition,
+        WorkflowRegistry registry, int pollLimit, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn = null)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pollLimit);
+        var (scope, count) = await store.BindWorkerPartitionAsync(partition, cancellationToken);
+        return await PrepareAsync(store, node, scope, registry, pollLimit, cancellationToken, onTurn, count);
+    }
+
+    private static async Task<PostgresNativeRootOwner> PrepareAsync(EfStore store, string node, EfStore.WorkerRoots root,
+        WorkflowRegistry registry, int pollLimit, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn, int partitions)
+    {
         var adapter = new ActorAdapter(new Headers(root), new PublicActor([new NativeExecutionModel(registry)]));
-        var worker = new Worker(node, root.Partition, store, adapter, new WorkerOptions { PollLimit = requested.Count, OnTurn = onTurn });
+        var worker = new Worker(node, root.Partition, store, adapter, new WorkerOptions { PollLimit = pollLimit, OnTurn = onTurn, Partitions = partitions });
         var host = new DurableHost([worker]);
         var prepared = new PostgresNativeRootOwner(host, root.Partition);
         await prepared.HeartbeatAsync(cancellationToken);
@@ -43,6 +57,13 @@ internal sealed class PostgresNativeRootOwner
     {
         public (string Tenant, string Reference) Creator(Message creator)
         {
+            if (roots.Discover)
+            {
+                if (creator.FoundationRootBinding is not { } binding || binding.Actor != creator.Target.Id || creator.Target.Partition != roots.Partition ||
+                    creator.TargetCreation != 1 || creator.InboxKey != new InboxKey("root:" + binding.Actor))
+                    throw new InvalidOperationException("The polled creator needs its admitted root identity.");
+                return (binding.Tenant, binding.Reference);
+            }
             var root = roots.ForActor(creator.Target.Id);
             return root.Owns(creator.InboxKey) ? (root.Tenant, root.Reference) : throw new InvalidOperationException("Unexpected root creator.");
         }

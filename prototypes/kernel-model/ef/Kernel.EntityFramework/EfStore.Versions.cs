@@ -10,7 +10,7 @@ internal sealed class StoreVersionEntity
 {
     internal const string Table = "KernelStoreVersions";
     internal const int MarkerId = 1;
-    internal const int StoreSchemaVersion = 1;
+    internal const int StoreSchemaVersion = 2;
     internal const int MessageProtocolVersion = 1;
     internal const int JournalCodecVersion = 1;
 
@@ -18,6 +18,23 @@ internal sealed class StoreVersionEntity
     public int StoreSchema { get; set; }
     public int MessageProtocol { get; set; }
     public int JournalCodec { get; set; }
+}
+
+// The same parameters are part of every relational node upsert. A readable family currently has one
+// version, represented in invariant decimal. Additional versions use ascending comma-separated values.
+internal static class NodeAdvertisement
+{
+    internal const string Columns = "\"ReadableStoreSchema\", \"ReadableMessageProtocol\", \"ReadableJournalCodec\"";
+    internal const string Parameters = "{1}, {2}, {3}";
+    internal const string Update = "\"ReadableStoreSchema\" = {1}, \"ReadableMessageProtocol\" = {2}, \"ReadableJournalCodec\" = {3}";
+
+    private static readonly string Schema = StoreVersionEntity.StoreSchemaVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private static readonly string Protocol = StoreVersionEntity.MessageProtocolVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private static readonly string Codec = StoreVersionEntity.JournalCodecVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    internal static object[] Arguments(string node, long? lease = null) => lease is { } ms
+        ? [node, Schema, Protocol, Codec, ms]
+        : [node, Schema, Protocol, Codec];
 }
 
 public sealed partial class EfStore
