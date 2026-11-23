@@ -38,4 +38,7 @@
     <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

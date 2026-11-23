@@ -9,6 +9,7 @@ internal static class JsonBaselineSourceScan
     internal sealed record Finding(string Setting, string Signature, int Line, string Site = "", bool CarriesData = false);
     internal sealed record Registration(string File, IReadOnlySet<string> Settings, string Reason, string Approval);
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<SyntaxNode>, HashSet<string>> ContextNameCache = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<SyntaxNode>, TypeDeclarationSyntax[]> TypeCache = new();
     private static readonly HashSet<string> WorkflowDataFiles = new(StringComparer.Ordinal)
     {
         "ActivityCompletionProjector.cs", "ActivityInputHydrator.cs", "StepVariableSession.cs", "RuntimeActivityInputMaterializer.cs",
@@ -52,7 +53,7 @@ internal static class JsonBaselineSourceScan
         var optionAliases = root.DescendantNodes().OfType<UsingDirectiveSyntax>()
             .Where(x => x.Alias is not null && x.Name?.ToString().EndsWith("JsonSerializerOptions", StringComparison.Ordinal) == true)
             .Select(x => x.Alias!.Name.Identifier.ValueText).ToHashSet(StringComparer.Ordinal);
-        bool OptionsType(string value) => (value == "JsonSerializerOptions" || value.EndsWith(".JsonSerializerOptions", StringComparison.Ordinal)) || optionAliases.Contains(value);
+        bool OptionsType(string value) => value.TrimEnd('?') is { } name && (name == "JsonSerializerOptions" || name.EndsWith(".JsonSerializerOptions", StringComparison.Ordinal) || optionAliases.Contains(name));
         bool BaselineCopy(ArgumentListSyntax? args) => args?.Arguments.Count == 1 && IsBaselineExpression(args.Arguments[0].Expression);
         foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
             if (OptionsType(creation.Type.ToString()) && !BaselineCopy(creation.ArgumentList)) Add("construction", creation);
@@ -68,23 +69,30 @@ internal static class JsonBaselineSourceScan
         var contextNames = storageRoots is null ? FindContextNames([root]) : ContextNameCache.GetValue(storageRoots, FindContextNames);
         foreach (var access in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
             if (access.Name.Identifier.ValueText == "Default" &&
-                (contextNames.Contains(access.Expression.ToString().Split('.').Last()) || access.Expression.ToString().EndsWith("JsonContext", StringComparison.Ordinal))) Add("context-default", access);
+                (contextNames.Contains(ContextTypeName(access.Expression.ToString())) || ContextTypeName(access.Expression.ToString()).EndsWith("JsonContext", StringComparison.Ordinal))) Add("context-default", access);
         foreach (var attribute in root.DescendantNodes().OfType<AttributeSyntax>())
         {
-            if (attribute.Name.ToString().Contains("JsonSourceGenerationOptions", StringComparison.Ordinal))
+            var attributeName = AttributeTypeName(attribute);
+            if (attributeName.Contains("JsonSourceGenerationOptions", StringComparison.Ordinal))
                 foreach (var argument in attribute.ArgumentList?.Arguments.Where(argument => argument.NameEquals is null) ?? [])
                     Add("source-generation-defaults", argument);
-            if (attribute.Name.ToString() is "Column" or "ColumnAttribute" or "System.ComponentModel.DataAnnotations.Schema.ColumnAttribute")
+            if (attributeName is "Column" or "ColumnAttribute" or "System.ComponentModel.DataAnnotations.Schema.Column" or "System.ComponentModel.DataAnnotations.Schema.ColumnAttribute")
                 foreach (var argument in attribute.ArgumentList?.Arguments.Where(argument => argument.NameEquals?.Name.Identifier.ValueText == "TypeName") ?? [])
                     foreach (var storage in StorageTypes(argument.Expression, attribute, storageRoots)) Add("storage:" + storage, argument);
         }
         foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
         {
+            if (assignment.Left is ElementAccessExpressionSyntax index)
+            {
+                var collection = DeclaredType(index.Expression, assignment);
+                if (IsConverterCollection(collection) || index.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Converters" }) Add("converter-mutation:replace", assignment);
+                if (IsModifierCollection(collection) || index.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Modifiers" }) Add("modifier-mutation:replace", assignment);
+            }
             var name = assignment.Left is MemberAccessExpressionSyntax member ? member.Name.Identifier.ValueText : assignment.Left.ToString();
-            if (IsOptionsAssignment(assignment, OptionsType) && IsDeviation(name, assignment.Right.ToString())) Add(name, assignment);
+            if (IsDeviation(name, assignment.Right.ToString()) && IsOptionsAssignment(assignment, OptionsType)) Add(name, assignment);
         }
         foreach (var argument in root.DescendantNodes().OfType<AttributeArgumentSyntax>().Where(x => x.NameEquals is not null))
-            if (argument.Ancestors().OfType<AttributeSyntax>().First().Name.ToString().Contains("JsonSourceGenerationOptions", StringComparison.Ordinal))
+            if (AttributeTypeName(argument.Ancestors().OfType<AttributeSyntax>().First()).Contains("JsonSourceGenerationOptions", StringComparison.Ordinal))
             {
                 var name = argument.NameEquals!.Name.Identifier.ValueText;
                 if (IsDeviation(name, argument.Expression.ToString())) Add(name, argument);
@@ -105,7 +113,7 @@ internal static class JsonBaselineSourceScan
             var receiver = member?.Expression.ToString();
             var serializer = receiver is not null && (receiver == "JsonSerializer" || receiver.EndsWith(".JsonSerializer", StringComparison.Ordinal) || serializerAliases.Contains(receiver)) || member is null && staticSerializer;
             var arguments = call.ArgumentList.Arguments;
-            if (name == "HasColumnType" && arguments.Count == 1)
+            if (name is "HasColumnType" or "SetColumnType" && arguments.Count > 0)
                 foreach (var storage in StorageTypes(arguments[0].Expression, call, storageRoots)) Add("storage:" + storage, call);
             if (name is "Column" or "AlterColumn" && arguments.FirstOrDefault(argument => argument.NameColon?.Name.Identifier.ValueText == "type") is { } columnType)
                 foreach (var storage in StorageTypes(columnType.Expression, call, storageRoots)) Add("storage:" + storage, call);
@@ -120,8 +128,10 @@ internal static class JsonBaselineSourceScan
             var httpResult = receiver is "Results" or "TypedResults" or "Microsoft.AspNetCore.Http.Results" or "Microsoft.AspNetCore.Http.TypedResults";
             if (httpRead || httpWrite || httpResult && name is "Json" or "Ok" or "Created" or "Accepted" or "BadRequest" or "Conflict" or "UnprocessableEntity")
             {
-                var explicitProfile = arguments.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" or "jsonSerializerOptions" && !argument.Expression.IsKind(SyntaxKind.NullLiteralExpression)) ||
-                    effective.Any(argument => IsProfileExpression(argument.Expression, call));
+                var profileStart = httpRead ? name == "GetFromJsonAsync" ? 1 : 0 : httpWrite ? name == "WriteAsJsonAsync" ? 1 : 2 : 1;
+                var acceptsProfile = !httpResult || name == "Json";
+                var explicitProfile = acceptsProfile && (arguments.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" or "jsonSerializerOptions" && !argument.Expression.IsKind(SyntaxKind.NullLiteralExpression)) ||
+                    effective.Skip(profileStart).Any(argument => IsProfileExpression(argument.Expression, call)));
                 var bodyCount = name is "Created" or "Accepted" ? 2 : 1;
                 if (!explicitProfile && (httpRead || httpWrite || effective.Length >= bodyCount)) Add("optionless", call);
             }
@@ -138,15 +148,27 @@ internal static class JsonBaselineSourceScan
                 (effective.Length == 0 || effective.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" && argument.Expression.IsKind(SyntaxKind.NullLiteralExpression)) ||
                  member.Name is not GenericNameSyntax && effective.Length == 1 && IsTypeExpression(effective[0].Expression, call))) Add("optionless", call);
             if (member is null) continue;
+            var collectionType = name is "Add" or "Insert" or "Remove" or "RemoveAt" or "Clear" ? DeclaredType(member.Expression, call) : null;
+            if (IsConverterCollection(collectionType))
+            {
+                if (name is "Add" or "Insert") Add("converter:" + ConverterName(arguments.Last().Expression), call);
+                else if (name is "Remove" or "RemoveAt" or "Clear") Add("converter-mutation:" + name, call);
+            }
+            if (IsModifierCollection(collectionType))
+            {
+                if (name is "Add" or "Insert") Add("modifier:" + ModifierName(arguments.Last().Expression), call);
+                else if (name is "Remove" or "RemoveAt" or "Clear") Add("modifier-mutation:" + name, call);
+            }
             if (member.Expression is MemberAccessExpressionSyntax list)
             {
-                if (list.Name.Identifier.ValueText == "Converters")
+                if (list.Name.Identifier.ValueText == "Converters" && !IsConverterCollection(collectionType))
                 {
                     if (name is "Add" or "Insert") Add("converter:" + ConverterName(arguments.Last().Expression), call);
                     else if (name is "Remove" or "RemoveAt" or "Clear") Add("converter-mutation:" + name, call);
                 }
-                if (list.Name.Identifier.ValueText == "Modifiers" && name is "Add" or "Insert")
+                if (list.Name.Identifier.ValueText == "Modifiers" && !IsModifierCollection(collectionType) && name is "Add" or "Insert")
                     Add("modifier:" + ModifierName(arguments.Last().Expression), call);
+                if (list.Name.Identifier.ValueText == "Modifiers" && !IsModifierCollection(collectionType) && name is "Remove" or "RemoveAt" or "Clear") Add("modifier-mutation:" + name, call);
             }
             if (name == "WithAddedModifier" && arguments.Count > 0) Add("modifier:" + ModifierName(arguments.Last().Expression), call);
         }
@@ -167,7 +189,16 @@ internal static class JsonBaselineSourceScan
             .SelectMany(group => group.Select((finding, index) => finding with { Site = finding.Site + "#" + (index + 1) })).ToArray();
 
         void Add(string setting, SyntaxNode node) => findings.Add(new(setting, node.WithoutTrivia().NormalizeWhitespace().ToFullString().Replace("\r", "", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal), node.GetLocation().GetLineSpan().StartLinePosition.Line + 1, Site(node), setting == "optionless" && node is InvocationExpressionSyntax invocation && CarriesData(invocation)));
+
+        string ContextTypeName(string name)
+        {
+            var alias = root.DescendantNodes().OfType<UsingDirectiveSyntax>().FirstOrDefault(usingDirective => usingDirective.Alias?.Name.Identifier.ValueText == name);
+            return (alias?.Name?.ToString() ?? name).Split('.').Last();
+        }
     }
+
+    private static bool IsConverterCollection(string? type) => type is not null && type.Contains("JsonConverter", StringComparison.Ordinal);
+    private static bool IsModifierCollection(string? type) => type == "JsonModifiers" || type is not null && type.Contains("JsonTypeInfo", StringComparison.Ordinal) && type.Contains("Action", StringComparison.Ordinal);
 
     private static IEnumerable<string> StorageTypes(ExpressionSyntax expression, SyntaxNode site, IReadOnlyList<SyntaxNode>? roots = null, HashSet<string>? visited = null)
     {
@@ -175,7 +206,10 @@ internal static class JsonBaselineSourceScan
         var key = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(expression.SyntaxTree) + ":" + expression.SpanStart + ":" + expression.ToString();
         if (!visited.Add(key)) return ["dynamic"];
         if (expression is LiteralExpressionSyntax literal)
-            return literal.Token.ValueText is "json" or "jsonb" ? [literal.Token.ValueText] : [];
+        {
+            var type = literal.Token.ValueText.Trim().ToLowerInvariant();
+            return type is "json" or "jsonb" ? [type] : [];
+        }
         if (expression is ThrowExpressionSyntax) return [];
         if (expression is ParenthesizedExpressionSyntax parentheses) return StorageTypes(parentheses.Expression, site, roots, visited);
         if (expression is SwitchExpressionSyntax choice)
@@ -189,6 +223,10 @@ internal static class JsonBaselineSourceScan
                 ?? site.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
             var initializer = scope?.DescendantNodes().OfType<VariableDeclaratorSyntax>()
                 .FirstOrDefault(variable => variable.Identifier.ValueText == identifier.Identifier.ValueText)?.Initializer?.Value;
+            var assignments = scope?.DescendantNodes().OfType<AssignmentExpressionSyntax>().Where(assignment =>
+                assignment.Left is IdentifierNameSyntax target && target.Identifier.ValueText == identifier.Identifier.ValueText).ToArray() ?? [];
+            if (assignments.Length > 0) return assignments.Select(assignment => assignment.Right).Concat(initializer is null ? [] : new[] { initializer })
+                .SelectMany(value => StorageTypes(value, value, roots, new(visited, StringComparer.Ordinal))).Distinct(StringComparer.Ordinal);
             if (initializer is not null && initializer.ToString() != expression.ToString()) return StorageTypes(initializer, initializer, roots, visited);
             if (method is MethodDeclarationSyntax declaration)
             {
@@ -199,8 +237,8 @@ internal static class JsonBaselineSourceScan
                     var calls = (roots ?? [site.SyntaxTree.GetRoot()]).SelectMany(root => root.DescendantNodes()).OfType<InvocationExpressionSyntax>().Where(call =>
                         (call.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.ValueText == declaration.Identifier.ValueText ||
                         (call.Expression as SimpleNameSyntax)?.Identifier.ValueText == declaration.Identifier.ValueText).Where(call =>
-                        call.Expression is not MemberAccessExpressionSyntax access
-                            ? call.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText == declaration.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText
+                        call.Expression is not MemberAccessExpressionSyntax access || access.Expression.ToString() is "base" or "this"
+                            ? IsOwnerOrDerived(call.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault(), declaration.Ancestors().OfType<TypeDeclarationSyntax>().First(), roots ?? [site.SyntaxTree.GetRoot()])
                             : access.Expression.ToString().Split('.').Last() == declaration.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText).Where(call =>
                         {
                             var argument = call.ArgumentList.Arguments.FirstOrDefault()?.Expression;
@@ -221,24 +259,56 @@ internal static class JsonBaselineSourceScan
         return ["dynamic"];
     }
 
+    private static bool IsOwnerOrDerived(TypeDeclarationSyntax? candidate, TypeDeclarationSyntax owner, IReadOnlyList<SyntaxNode> roots, HashSet<string>? visited = null)
+    {
+        if (candidate is null) return false;
+        if (candidate.Identifier.ValueText == owner.Identifier.ValueText) return true;
+        visited ??= new(StringComparer.Ordinal);
+        if (!visited.Add(candidate.Identifier.ValueText)) return false;
+        var types = TypeCache.GetValue(roots, static trees => trees.SelectMany(tree => tree.DescendantNodes()).OfType<TypeDeclarationSyntax>().ToArray());
+        return candidate.BaseList?.Types.Any(parent =>
+        {
+            var name = parent.Type.ToString().Split('.').Last().Split('<')[0];
+            return name == owner.Identifier.ValueText || types.Where(type => type.Identifier.ValueText == name)
+                .Any(type => IsOwnerOrDerived(type, owner, roots, new(visited, StringComparer.Ordinal)));
+        }) == true;
+    }
+
     private static bool CarriesData(InvocationExpressionSyntax invocation)
     {
         var member = invocation.Expression as MemberAccessExpressionSyntax;
         if (member?.Name is GenericNameSyntax generic && generic.TypeArgumentList.Arguments.Any(argument =>
             invocation.Ancestors().OfType<MethodDeclarationSyntax>().Any(method => method.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == argument.ToString()) == true))) return true;
         var arguments = invocation.ArgumentList.Arguments;
-        foreach (var argument in arguments)
-            if (DeclaredType(argument.Expression, invocation) is "object" or "dynamic" or "JsonElement" or "System.Text.Json.JsonElement" or "JsonNode" or "ExpandoObject") return true;
+        foreach (var expression in arguments.SelectMany(argument => argument.Expression.DescendantNodesAndSelf()).OfType<ExpressionSyntax>())
+            if (DeclaredType(expression, invocation) is { } type && DataType(SyntaxFactory.ParseTypeName(type), new HashSet<string>(StringComparer.Ordinal))) return true;
         if (member?.Name.Identifier.ValueText.StartsWith("Deserialize", StringComparison.Ordinal) == true &&
             arguments.Any(argument => IsTypeExpression(argument.Expression, invocation))) return true;
         return arguments.Any(argument => argument.Expression is InvocationExpressionSyntax call &&
             call.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText is "GetProperty" or "Clone" or "EnumerateArray");
+
+        bool DataType(TypeSyntax type, HashSet<string> aliases)
+        {
+            if (type is NullableTypeSyntax nullable) return DataType(nullable.ElementType, aliases);
+            if (type is ArrayTypeSyntax array) return DataType(array.ElementType, aliases);
+            if (type is QualifiedNameSyntax qualified) return DataType(qualified.Right, aliases);
+            if (type is AliasQualifiedNameSyntax global) return DataType(global.Name, aliases);
+            if (type is GenericNameSyntax generic) return generic.TypeArgumentList.Arguments.Any(argument => DataType(argument, new(aliases, StringComparer.Ordinal)));
+            var name = type.ToString();
+            if (name is "object" or "Object" or "dynamic" or "JsonElement" or "JsonNode" or "JsonObject" or "JsonArray" or "JsonValue" or "ExpandoObject") return true;
+            if (invocation.Ancestors().OfType<MethodDeclarationSyntax>().Any(method => method.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == name) == true) ||
+                invocation.Ancestors().OfType<TypeDeclarationSyntax>().Any(owner => owner.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == name) == true)) return true;
+            var alias = invocation.SyntaxTree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>()
+                .FirstOrDefault(usingDirective => usingDirective.Alias?.Name.Identifier.ValueText == name)?.Name;
+            return alias is not null && aliases.Add(name) && DataType(SyntaxFactory.ParseTypeName(alias.ToString()), aliases);
+        }
     }
 
     private static bool IsOptionsAssignment(AssignmentExpressionSyntax assignment, Func<string, bool> optionsType)
     {
         if (assignment.Left is MemberAccessExpressionSyntax member)
         {
+            if (DeclaredType(member.Expression, assignment) is { } actualType && optionsType(actualType)) return true;
             var receiver = member.Expression.ToString();
             if (member.Expression is IdentifierNameSyntax identifier)
             {
@@ -274,6 +344,17 @@ internal static class JsonBaselineSourceScan
     private static bool IsTypeExpression(ExpressionSyntax expression, SyntaxNode scope) => expression is TypeOfExpressionSyntax ||
         expression.ToString().EndsWith(".GetType()", StringComparison.Ordinal) || DeclaredType(expression, scope) is "Type" or "System.Type";
 
+    private static string AttributeTypeName(AttributeSyntax attribute)
+    {
+        var name = attribute.Name.ToString().Replace("global::", "", StringComparison.Ordinal);
+        foreach (var alias in attribute.SyntaxTree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>().Where(usingDirective => usingDirective.Alias is not null))
+        {
+            var prefix = alias.Alias!.Name.Identifier.ValueText;
+            if (name == prefix || name.StartsWith(prefix + ".", StringComparison.Ordinal)) return alias.Name + name[prefix.Length..];
+        }
+        return name;
+    }
+
     private static HashSet<string> FindContextNames(IReadOnlyList<SyntaxNode> roots) => roots.SelectMany(tree => tree.DescendantNodes()).OfType<TypeDeclarationSyntax>()
         .Where(type => type.BaseList?.Types.Any(parent => parent.Type.ToString().EndsWith("JsonSerializerContext", StringComparison.Ordinal)) == true)
         .Select(type => type.Identifier.ValueText).ToHashSet(StringComparer.Ordinal);
@@ -286,10 +367,31 @@ internal static class JsonBaselineSourceScan
         return IsBaselineExpression(expression) || expression is MemberAccessExpressionSyntax && text.Contains(".WireContext.", StringComparison.Ordinal);
     }
 
-    private static string? DeclaredType(ExpressionSyntax expression, SyntaxNode site)
+    private static string? DeclaredType(ExpressionSyntax expression, SyntaxNode site, HashSet<string>? visited = null)
     {
         if (expression is CastExpressionSyntax cast) return cast.Type.ToString();
+        if (expression is ParenthesizedExpressionSyntax parentheses) return DeclaredType(parentheses.Expression, site, visited);
+        if (expression is PostfixUnaryExpressionSyntax suppression && suppression.IsKind(SyntaxKind.SuppressNullableWarningExpression)) return DeclaredType(suppression.Operand, site, visited);
+        if (expression is MemberAccessExpressionSyntax member)
+        {
+            if (member.Name.Identifier.ValueText == "SerializerOptions" || IsBaselineExpression(member)) return "JsonSerializerOptions";
+            if (member.Expression is ThisExpressionSyntax or BaseExpressionSyntax)
+                return DeclaredType(SyntaxFactory.IdentifierName(member.Name.Identifier), site, visited);
+            var owner = DeclaredType(member.Expression, site, visited);
+            if (member.Name.Identifier.ValueText == "Value" && owner?.EndsWith("?", StringComparison.Ordinal) == true) return owner[..^1];
+            var ownerDeclaration = site.SyntaxTree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>()
+                .FirstOrDefault(type => type.Identifier.ValueText == (owner ?? member.Expression.ToString()).Split('.').Last());
+            var property = ownerDeclaration?.Members.OfType<PropertyDeclarationSyntax>().FirstOrDefault(property => property.Identifier.ValueText == member.Name.Identifier.ValueText);
+            if (property is not null) return property.Type.ToString();
+            var field = ownerDeclaration?.Members.OfType<FieldDeclarationSyntax>().FirstOrDefault(field => field.Declaration.Variables.Any(variable => variable.Identifier.ValueText == member.Name.Identifier.ValueText));
+            if (field is not null) return field.Declaration.Type.ToString();
+            if (member.Name.Identifier.ValueText == "Converters" && KnownType(owner, "JsonSerializerOptions")) return "JsonConverters";
+            if (member.Name.Identifier.ValueText == "Modifiers" && KnownType(owner, "DefaultJsonTypeInfoResolver")) return "JsonModifiers";
+            if (member.ToString().Contains(".WireContext.", StringComparison.Ordinal)) return "JsonTypeInfo";
+        }
         if (expression is not IdentifierNameSyntax identifier) return null;
+        visited ??= new(StringComparer.Ordinal);
+        if (!visited.Add(identifier.Identifier.ValueText)) return null;
         var method = site.Ancestors().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault();
         var parameter = method?.ParameterList.Parameters.FirstOrDefault(parameter => parameter.Identifier.ValueText == identifier.Identifier.ValueText);
         if (parameter is not null) return parameter.Type?.ToString();
@@ -305,13 +407,23 @@ internal static class JsonBaselineSourceScan
         return declaration.Initializer?.Value switch
         {
             ObjectCreationExpressionSyntax creation => creation.Type.ToString(),
+            IdentifierNameSyntax alias => DeclaredType(alias, site, visited),
+            MemberAccessExpressionSyntax access => DeclaredType(access, site, visited),
             TypeOfExpressionSyntax => "Type",
             InvocationExpressionSyntax invocation when IsBaselineExpression(invocation) => "JsonSerializerOptions",
-            MemberAccessExpressionSyntax access when access.ToString().Contains(".WireContext.", StringComparison.Ordinal) => "JsonTypeInfo",
             _ when declaration.Initializer?.Value is { } initializer && initializer.DescendantNodesAndSelf().OfType<InvocationExpressionSyntax>().Any(invocation =>
                 invocation.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText == "GetTypeInfo" && access.Expression.ToString().Contains(".WireContext", StringComparison.Ordinal)) == true => "JsonTypeInfo",
             _ => null
         };
+
+        bool KnownType(string? typeName, string expected)
+        {
+            if (typeName is null) return false;
+            typeName = typeName.TrimEnd('?');
+            if (typeName.Split('.').Last() == expected) return true;
+            return site.SyntaxTree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>().Any(alias =>
+                alias.Alias?.Name.Identifier.ValueText == typeName && alias.Name?.ToString().Split('.').Last() == expected);
+        }
     }
 
     private static string Site(SyntaxNode node)
@@ -344,11 +456,11 @@ internal static class JsonBaselineSourceScan
         "PropertyNamingPolicy" => value is not ("JsonNamingPolicy.CamelCase" or "JsonKnownNamingPolicy.CamelCase"),
         "NumberHandling" => value != "JsonNumberHandling.Strict",
         "DefaultIgnoreCondition" => value != "JsonIgnoreCondition.Never",
-        "Encoder" => !value.EndsWith("JavaScriptEncoder.UnsafeRelaxedJsonEscaping", StringComparison.Ordinal) && !value.EndsWith("JsonBaseline.Options.Encoder", StringComparison.Ordinal),
+        "Encoder" => value is not ("JavaScriptEncoder.UnsafeRelaxedJsonEscaping" or "System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping" or "global::System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping" or "JsonBaseline.Options.Encoder" or "Elsa.Serialization.Core.JsonBaseline.Options.Encoder" or "global::Elsa.Serialization.Core.JsonBaseline.Options.Encoder"),
         "UnmappedMemberHandling" => value != "JsonUnmappedMemberHandling.Skip",
         "MaxDepth" => value is not ("0" or "64"),
         "WriteIndented" or "AllowTrailingCommas" or "IncludeFields" or "IgnoreReadOnlyFields" or "IgnoreReadOnlyProperties" => value != "false",
-        "ReadCommentHandling" or "CommentHandling" => !value.EndsWith("JsonCommentHandling.Disallow", StringComparison.Ordinal),
+        "ReadCommentHandling" or "CommentHandling" => value is not ("JsonCommentHandling.Disallow" or "System.Text.Json.JsonCommentHandling.Disallow" or "global::System.Text.Json.JsonCommentHandling.Disallow"),
         "ReferenceHandler" => value != "null",
         _ => false
     };

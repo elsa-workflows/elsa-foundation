@@ -18,7 +18,7 @@ public static class ConnectionReferencePayload
 
     public static ConnectionReferencePayloadReading Read(object? value)
     {
-        var payload = value is JsonElement element ? element : JsonSerializer.SerializeToElement(value);
+        var payload = value is JsonElement element ? element : JsonSerializer.SerializeToElement(value, Elsa.Serialization.Core.JsonBaseline.Options);
         if (payload.ValueKind != JsonValueKind.Object)
             return ConnectionReferencePayloadReading.Defective("carries no object reference payload");
 

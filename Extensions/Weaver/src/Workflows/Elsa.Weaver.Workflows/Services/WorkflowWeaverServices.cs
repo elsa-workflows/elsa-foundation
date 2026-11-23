@@ -493,7 +493,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
         {
             requestKind = kind, referenceId = reference, intent = Field(content, "intent", 2000), name = Field(content, "name", 256),
             description = Field(content, "description", 2000), rootActivityVersionId = Field(content, "rootActivityVersionId", 256)
-        });
+        }, Elsa.Serialization.Core.JsonBaseline.Options);
         admitted = new($"workflow:request:{caller.Id}", "workflow.request", reference, "Workflow request context", "workflow.request",
             AdmittedSensitivity(caller.Sensitivity), "request", "Module-admitted workflow request and reference metadata; this does not identify live working state.", data,
             new Dictionary<string, string>())

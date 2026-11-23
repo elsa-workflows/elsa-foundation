@@ -41,7 +41,7 @@ internal static class InputReadLowering
         JsonElement { ValueKind: JsonValueKind.Object } json when json.TryGetProperty("referenceKey", out var key) && key.ValueKind == JsonValueKind.String =>
             key.GetString(),
         null => null,
-        not JsonElement => JsonSerializer.SerializeToElement(payload) is { ValueKind: JsonValueKind.Object } serialized &&
+        not JsonElement => JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options) is { ValueKind: JsonValueKind.Object } serialized &&
                            serialized.TryGetProperty("referenceKey", out var key) && key.ValueKind == JsonValueKind.String
             ? key.GetString()
             : null,

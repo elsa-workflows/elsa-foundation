@@ -34,7 +34,7 @@ public static class SecretReferencePayload
     /// </summary>
     public static SecretReferencePayloadReading Read(object? value)
     {
-        var payload = value is JsonElement element ? element : JsonSerializer.SerializeToElement(value);
+        var payload = value is JsonElement element ? element : JsonSerializer.SerializeToElement(value, Elsa.Serialization.Core.JsonBaseline.Options);
         if (payload.ValueKind != JsonValueKind.Object)
             return SecretReferencePayloadReading.Defective("carries no object reference payload");
 
