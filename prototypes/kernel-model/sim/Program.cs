@@ -243,6 +243,12 @@ if (args.Contains("--event-byte-budget-check"))
     await EventByteBudgetChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--broadcast-cardinality-check"))
+{
+    var failed = false;
+    await EventIdentityChecks.CheckLargeBroadcast((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--event-identity-check"))
 {
     var failed = false;
