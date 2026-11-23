@@ -375,8 +375,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
         CommitAsync(batch, null, cancellationToken);
 
-    private async ValueTask<Committed> CommitAsync(CommitBatch batch, FirstRootCheckpoint? root, CancellationToken cancellationToken)
+    private async ValueTask<Committed> CommitAsync(CommitBatch batch, QualifiedRootCheckpoint? root, CancellationToken cancellationToken)
     {
+        if (postgres && Engine is null && (batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials)
+            .Concat(batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])))
+            .Any(key => key.Scope == InboxKey.FoundationOccurrenceScope) ||
+            batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey.Scope == InboxKey.FoundationOccurrenceScope))))
+            throw new StoreException(Failure.Definite, "Qualified PostgreSQL inputs require their root checkpoint writer.");
         StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable);
         // Marker shape uses the canonical row address. A raw update's alternate spelling is
         // authorized separately by the database-column predicate in AliasUpdateGuard.
@@ -461,7 +466,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         return waits;
     }
 
-    private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, long sentAt, FirstRootCheckpoint? root, CancellationToken cancellationToken)
+    private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, long sentAt, QualifiedRootCheckpoint? root, CancellationToken cancellationToken)
     {
         if (OwnedCommit) return await CommitOwnedAsync(batch, waits, sentAt, root, cancellationToken);      // EfStore.Owned.cs
         await using var db = create();
@@ -544,7 +549,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 db.Add(entity);
             }
             if (turn.Journal is not null)
-                db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = turn.Instance, Revision = turn.Delete ? -1 : turn.Row?.Revision ?? 0, Entries = turn.Journal });
+                db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = turn.Instance, Revision = turn.Delete ? -1 : root?.JournalRevision ?? turn.Row?.Revision ?? 0, Entries = turn.Journal });
         }
         if (!careful)
             foreach (var ((key, instance, wait), there) in waits)

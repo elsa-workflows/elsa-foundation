@@ -142,6 +142,11 @@ one exact actor life and the public operation id. It can expire while an earlier
 reuse gets a new physical occurrence, with the original operation, due presence, kind and payload available to a
 fresh scoped reader. The public runner and its later fenced checkpoints are separate increments.
 
+The `root-turn` case runs both commit writers and fence modes on PostgreSQL. A Running generated root can commit
+one or more ready direct inputs in sequence, its next qualified checkpoint and a journal row. Finishing records the
+terminal revision and database time. A refused checkpoint rolls back every consumed input and the journal row.
+This increment covers ordinary direct inputs and checkpoint-only actor turns.
+
 ### The store conformance suite. Run
 
 `conformance/Kernel.Store.Conformance` (merged from `6097f0174b`), 46 semantic cases, against the merged store with

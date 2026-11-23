@@ -97,16 +97,18 @@ internal sealed partial class PostgresRootAdmission
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
                 AND NOT m."Done" ORDER BY m."Seq"
             """).AsNoTracking().ToListAsync(cancellationToken);
-        return rows.Select(row =>
-        {
-            if (!IsStoredDirect(row.Start))
-                throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
-            var header = DurableKeyJson.Read<StoredDirect>(row.Start![DirectPrefix.Length..]);
-            var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;
-            return new Message(header.Operation, new(row.Target), header.EscapedKind ?? row.Kind, payload,
-                Due: row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, KeepUntil: row.KeepUntil, TargetCreation: header.Creation)
-                { StorageId = row.Id }.WithInboxScope(row.InboxScope);
-        }).ToArray();
+        return rows.Select(DecodeDirect).ToArray();
+    }
+
+    internal static Message DecodeDirect(MessageEntity row)
+    {
+        if (!IsStoredDirect(row.Start))
+            throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
+        var header = DurableKeyJson.Read<StoredDirect>(row.Start![DirectPrefix.Length..]);
+        var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;
+        return new Message(header.Operation, new(row.Target), header.EscapedKind ?? row.Kind, payload,
+            Due: row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, KeepUntil: row.KeepUntil, TargetCreation: header.Creation)
+            { StorageId = row.Id }.WithInboxScope(row.InboxScope);
     }
 
     internal async Task<int> SweepDirectReceiptsAsync(CancellationToken cancellationToken = default)

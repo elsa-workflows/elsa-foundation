@@ -36,7 +36,7 @@ public sealed partial class EfStore
 
     private CommitDialect RequireDialect() => Dialect ?? throw new NotSupportedException("This engine has no owned commit dialect yet; use CommitSql.EntityFramework.");
 
-    private async Task<Committed> CommitOwnedAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, long sentAt, FirstRootCheckpoint? root, CancellationToken cancellationToken)
+    private async Task<Committed> CommitOwnedAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, long sentAt, QualifiedRootCheckpoint? root, CancellationToken cancellationToken)
     {
         var dialect = RequireDialect();
         await using var db = create();
@@ -138,7 +138,7 @@ public sealed partial class EfStore
             if (turn.Journal is not null)
             {
                 Room(2);
-                rows.Row(RowGroups.Kind.JournalInsert, RowGroups.Journal, [Lit(home), Lit(++next[home]), c.P(journal.FindProperty("Instance")!, turn.Instance), Lit(turn.Delete ? -1 : turn.Row?.Revision ?? 0), c.P(journal.FindProperty("Entries")!, turn.Journal)]);
+                rows.Row(RowGroups.Kind.JournalInsert, RowGroups.Journal, [Lit(home), Lit(++next[home]), c.P(journal.FindProperty("Instance")!, turn.Instance), Lit(turn.Delete ? -1 : root?.JournalRevision ?? turn.Row?.Revision ?? 0), c.P(journal.FindProperty("Entries")!, turn.Journal)]);
             }
             // Merge with round 3: the set-based deletes of a terminate and a delete, written last (E1, E9: nothing before the fence held).
             if (turn.Unsubscribe) { Room(1); rows.Free(RowGroups.Kind.UnsubscribeAll, $"""DELETE FROM "Subscriptions" WHERE "Instance" = {c.P(subscriptions.FindProperty("Instance")!, turn.Instance)}"""); }
