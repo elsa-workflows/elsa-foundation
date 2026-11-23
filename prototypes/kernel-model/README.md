@@ -622,6 +622,11 @@ Checkpoints that predate the creation's next-job counter read as null. Existing 
 MySQL prepares the two additive columns on a separate connection while the migration holds the version marker.
 An interrupted preparation can be retried. Reopening requires a reader for the resulting three-part format.
 
+To check a real PostgreSQL predecessor, build its Native runner and this checkout's Native and EF conformance
+runners in Release. Run `bash ef/Kernel.Ef.Conformance/check-generation-profiles.sh /absolute/path/to/old/Kernel.Native.Run.dll`
+from this prototype. The script uses a disposable PostgreSQL 17 container and three fresh databases. It starts each
+workflow with the old executable and completes the same wait or pending private input after the schema upgrade.
+
 Run `job-generation-format` with the EF conformance executable to exercise the
 migration and cold field reads. The legacy writer still refuses qualified Foundation
 job turns. K4's Worker, Park, current-generation result and job-entry cases require

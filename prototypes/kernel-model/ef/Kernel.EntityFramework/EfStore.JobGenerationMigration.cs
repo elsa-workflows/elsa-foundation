@@ -46,11 +46,13 @@ public sealed partial class EfStore
                     var nullable = table == "Instances" ? "YES" : "NO";
                     var expectedDefault = table == "Instances" ? null : "0";
                     var existing = await ddl.Database.SqlQuery<ColumnShape>($"""
-                        SELECT IS_NULLABLE AS IsNullable, COLUMN_DEFAULT AS DefaultValue, COLUMN_TYPE AS ColumnType
+                        SELECT IS_NULLABLE AS IsNullable, COLUMN_DEFAULT AS DefaultValue, COLUMN_TYPE AS ColumnType,
+                               EXTRA AS Extra, GENERATION_EXPRESSION AS GenerationExpression
                         FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
                         AND TABLE_NAME = {table} AND COLUMN_NAME = {column}
                         """).SingleAsync(token);
-                    if (existing.IsNullable != nullable || existing.DefaultValue != expectedDefault || existing.ColumnType != "bigint")
+                    if (existing.IsNullable != nullable || existing.DefaultValue != expectedDefault || existing.ColumnType != "bigint" ||
+                        existing.Extra.Length != 0 || existing.GenerationExpression.Length != 0)
                         throw new StoreFormatException($"The pre-existing {table}.{column} column has an incompatible shape.");
                 }
             }
@@ -61,7 +63,7 @@ public sealed partial class EfStore
         await InstallJobGenerationGuard(db, token);
     }
 
-    private Task InstallJobGenerationGuard(KernelDb db, CancellationToken token)
+    private async Task InstallJobGenerationGuard(KernelDb db, CancellationToken token)
     {
         // The legacy physical address cannot be recycled. Its live checkpoint is one creation.
         // A retired marker may release the counter. Future multi-creation writers need a creation predicate.
@@ -77,15 +79,7 @@ public sealed partial class EfStore
                         THROW 51003, 'Job generation counter cannot rewind.', 1;
                 END
                 """,
-            MySqlEngine => """
-                CREATE TRIGGER IF NOT EXISTS kernel_job_generation BEFORE UPDATE ON Instances FOR EACH ROW
-                BEGIN
-                    IF NEW.Retired = 0 AND OLD.NextJobGeneration IS NOT NULL AND
-                       (NEW.NextJobGeneration IS NULL OR NEW.NextJobGeneration < OLD.NextJobGeneration) THEN
-                        SIGNAL SQLSTATE '45000' SET MYSQL_ERRNO = 51003, MESSAGE_TEXT = 'Job generation counter cannot rewind.';
-                    END IF;
-                END
-                """,
+            MySqlEngine => "CREATE TRIGGER IF NOT EXISTS kernel_job_generation BEFORE UPDATE ON Instances FOR EACH ROW\n" + MySqlGenerationBody,
             _ when postgres => """
                 CREATE OR REPLACE FUNCTION kernel_job_generation_guard() RETURNS trigger LANGUAGE plpgsql AS $$
                 BEGIN
@@ -98,20 +92,61 @@ public sealed partial class EfStore
                 CREATE OR REPLACE TRIGGER kernel_job_generation BEFORE UPDATE ON "Instances"
                     FOR EACH ROW EXECUTE FUNCTION kernel_job_generation_guard();
                 """,
-            _ => """
-                CREATE TRIGGER IF NOT EXISTS kernel_job_generation BEFORE UPDATE ON Instances
-                WHEN NEW.Retired = 0 AND OLD.NextJobGeneration IS NOT NULL AND
-                     (NEW.NextJobGeneration IS NULL OR NEW.NextJobGeneration < OLD.NextJobGeneration)
-                BEGIN SELECT RAISE(ABORT, 'Job generation counter cannot rewind.'); END;
-                """
+            _ => "CREATE TRIGGER IF NOT EXISTS " + SqliteGenerationClause
         };
-        return db.Database.ExecuteSqlRawAsync(sql, token);
+        await db.Database.ExecuteSqlRawAsync(sql, token);
+        // Both dialects keep an existing trigger with the same name. Verify the installed definition
+        // before admitting the store or publishing its format, including after interrupted MySQL DDL.
+        if (Engine is MySqlEngine)
+        {
+            var body = await db.Database.SqlQueryRaw<string>("""
+                SELECT ACTION_STATEMENT AS Value FROM information_schema.TRIGGERS
+                WHERE BINARY TRIGGER_SCHEMA = BINARY DATABASE() AND TRIGGER_NAME = 'kernel_job_generation'
+                  AND BINARY EVENT_OBJECT_SCHEMA = BINARY DATABASE()
+                  AND (BINARY EVENT_OBJECT_TABLE = BINARY 'Instances' OR
+                       (@@lower_case_table_names <> 0 AND LOWER(EVENT_OBJECT_TABLE) = 'instances'))
+                  AND EVENT_MANIPULATION = 'UPDATE' AND ACTION_TIMING = 'BEFORE' AND ACTION_ORIENTATION = 'ROW'
+                """).SingleOrDefaultAsync(token);
+            RequireDefinition(body, MySqlGenerationBody);
+        }
+        else if (db.Database.IsSqlite())
+        {
+            var definition = await db.Database.SqlQueryRaw<string>("""
+                SELECT sql AS Value FROM sqlite_schema WHERE type = 'trigger'
+                  AND name = 'kernel_job_generation' COLLATE NOCASE AND tbl_name = 'Instances' COLLATE NOCASE
+                """).SingleOrDefaultAsync(token);
+            RequireDefinition(definition, "CREATE TRIGGER " + SqliteGenerationClause);
+        }
     }
+
+    private static void RequireDefinition(string? actual, string expected)
+    {
+        if (actual?.ReplaceLineEndings("\n") != expected.ReplaceLineEndings("\n"))
+            throw new StoreFormatException("The pre-existing kernel_job_generation trigger has an incompatible definition.");
+    }
+
+    private const string MySqlGenerationBody = """
+        BEGIN
+            IF NEW.Retired = 0 AND OLD.NextJobGeneration IS NOT NULL AND
+               (NEW.NextJobGeneration IS NULL OR NEW.NextJobGeneration < OLD.NextJobGeneration) THEN
+                SIGNAL SQLSTATE '45000' SET MYSQL_ERRNO = 51003, MESSAGE_TEXT = 'Job generation counter cannot rewind.';
+            END IF;
+        END
+        """;
+
+    private const string SqliteGenerationClause = """
+        kernel_job_generation BEFORE UPDATE ON Instances
+        WHEN NEW.Retired = 0 AND OLD.NextJobGeneration IS NOT NULL AND
+             (NEW.NextJobGeneration IS NULL OR NEW.NextJobGeneration < OLD.NextJobGeneration)
+        BEGIN SELECT RAISE(ABORT, 'Job generation counter cannot rewind.'); END
+        """;
 
     private sealed class ColumnShape
     {
         public string IsNullable { get; set; } = "";
         public string? DefaultValue { get; set; }
         public string ColumnType { get; set; } = "";
+        public string Extra { get; set; } = "";
+        public string GenerationExpression { get; set; } = "";
     }
 }

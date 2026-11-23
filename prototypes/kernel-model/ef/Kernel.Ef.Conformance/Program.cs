@@ -22,6 +22,15 @@ using Npgsql;
 string[] flags = ["--fence-in-batch", "--checked-fence", "--m5", "--rcsi-off", "--rc", "--ef-commit", "--owned-commit", "--fence-ignores-count"];
 switch (args)
 {
+    case ["postgres-profile-upgrade"]:
+    {
+        var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
+            ?? throw new ArgumentException("Supply the dedicated profile fixture database.");
+        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        var store = new EfStore(() => new KernelDb(options), postgres: true);
+        Console.WriteLine(await store.UpgradeJobGenerationFormatAsync() ? "advanced" : "already current");
+        return 0;
+    }
     case ["sqlite", "job-generation-format", .. var options]:
         await new EfProvider("sqlite", null, options).CheckJobGenerationFormatAsync();
         return 0;

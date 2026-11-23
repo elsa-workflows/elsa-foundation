@@ -8,6 +8,14 @@ namespace Kernel.Ef.Conformance;
 
 internal static class JobGenerationFormatChecks
 {
+    private static Task<string> ReadGuard(KernelDb db) => db.Database.SqlQueryRaw<string>(db.Database.IsSqlite()
+        ? "SELECT sql AS Value FROM sqlite_schema WHERE type='trigger' AND name='kernel_job_generation'"
+        : "SELECT ACTION_STATEMENT AS Value FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND TRIGGER_NAME='kernel_job_generation'").SingleAsync();
+
+    private static Task InstallInertGuard(KernelDb db) => db.Database.ExecuteSqlRawAsync(db.Database.IsSqlite()
+        ? "CREATE TRIGGER kernel_job_generation BEFORE UPDATE ON Instances BEGIN SELECT 1; END"
+        : "CREATE TRIGGER kernel_job_generation BEFORE UPDATE ON Instances FOR EACH ROW SET NEW.Revision = NEW.Revision");
+
     internal static async Task Run(Func<KernelDb> create, ProvidedStore fixture, Func<EfStore> restart)
     {
         const string legacy = "0/legacy", actor = "0/job-owner";
@@ -24,6 +32,14 @@ internal static class JobGenerationFormatChecks
             var guardDrop = db.Database.IsNpgsql()
                 ? """DROP TRIGGER kernel_job_generation ON "Instances" """ : "DROP TRIGGER kernel_job_generation";
             await db.Database.ExecuteSqlRawAsync(guardDrop);
+            if (db.Database.IsSqlite() || db.Database.ProviderName == "MySql.EntityFrameworkCore")
+            {
+                await InstallInertGuard(db);
+                var inert = await ReadGuard(db);
+                await VersionTakeChecks.Refuses(() => restart().CreateAsync(2), "trigger has an incompatible definition", "startup on an inert guard");
+                Context.Equal(inert, await ReadGuard(db), "startup preserved the incompatible trigger");
+                await db.Database.ExecuteSqlRawAsync(guardDrop);
+            }
             if (db.Database.IsSqlServer())
                 await db.Database.ExecuteSqlRawAsync("""
                     DECLARE @name sysname = (SELECT name FROM sys.default_constraints
@@ -48,10 +64,23 @@ internal static class JobGenerationFormatChecks
             await db.Nodes.ExecuteUpdateAsync(set => set.SetProperty(node => node.LeaseUntil, 0));
             if (db.Database.ProviderName == "MySql.EntityFrameworkCore")
             {
+                await db.Database.ExecuteSqlRawAsync("ALTER TABLE Instances ADD NextJobGeneration BIGINT GENERATED ALWAYS AS (Revision) STORED");
+                await VersionTakeChecks.Refuses(() => store.UpgradeJobGenerationFormatAsync(), "Instances.NextJobGeneration column has an incompatible shape", "generated counter column");
+                Context.Equal(2, (await db.StoreVersions.SingleAsync()).StoreSchema, "generated column refused before publishing");
+                await db.Database.ExecuteSqlRawAsync("ALTER TABLE Instances DROP COLUMN NextJobGeneration");
                 // Simulate process loss after the first MySQL DDL auto-commit.
                 await db.Database.ExecuteSqlRawAsync("ALTER TABLE Instances ADD NextJobGeneration BIGINT NULL");
                 if (store.FenceInBatch)
                     await db.Database.ExecuteSqlRawAsync("ALTER TABLE Messages ADD JobGeneration BIGINT NOT NULL DEFAULT 0");
+            }
+            if (db.Database.IsSqlite() || db.Database.ProviderName == "MySql.EntityFrameworkCore")
+            {
+                await InstallInertGuard(db);
+                var inert = await ReadGuard(db);
+                await VersionTakeChecks.Refuses(() => store.UpgradeJobGenerationFormatAsync(), "trigger has an incompatible definition", "migration on an inert guard");
+                Context.Equal(inert, await ReadGuard(db), "migration preserved the incompatible trigger");
+                Context.Equal(2, (await db.StoreVersions.AsNoTracking().SingleAsync()).StoreSchema, "guard refused before publishing");
+                await db.Database.ExecuteSqlRawAsync("DROP TRIGGER kernel_job_generation");
             }
         }
         Context.That(await store.UpgradeJobGenerationFormatAsync(), "a stopped schema-2, protocol-1 store upgrades");
