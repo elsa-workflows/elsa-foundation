@@ -130,7 +130,7 @@ internal static class DirectSendChecks
                 "the stale position refuses a commit on the unreadable input");
             var stored = await db.Messages.AsNoTracking().SingleAsync(m => m.Id == row.Id && m.InboxScope == row.InboxScope);
             Check(!stored.Done && stored.Start == row.Start && stored.Payload == row.Payload &&
-                await snapshot.SingleAsync() == before &&
+                (await snapshot.SingleAsync()).Equals(before) &&
                 await db.Partitions.Where(p => p.Id == fence.Partition).Select(p => p.Position).SingleAsync() == fence.Position &&
                 (await store.ReadJournalOfAsync(fence.Partition, current.Actor.Id, 0)).SequenceEqual(journal),
                 "an unsupported direct envelope leaves its input, checkpoint, journal and position unchanged");
