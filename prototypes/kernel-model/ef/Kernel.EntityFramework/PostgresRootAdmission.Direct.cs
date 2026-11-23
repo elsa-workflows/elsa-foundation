@@ -157,13 +157,13 @@ internal sealed partial class PostgresRootAdmission
 
     private static async Task<CreationAddress?> GuardedRootAddressAsync(KernelDb db, string tenant, string reference, CancellationToken token)
     {
-        var row = await db.Database.SqlQueryRaw<GuardedAddress>(AdmissionFormat + """
+        var row = await ReadGuardedAdmissionAsync<GuardedAddress>(db, $$"""
 
             SELECT b."Actor" AS "Id", b."Creation", f."StoreSchema", f."MessageProtocol", f."JournalCodec"
             FROM (SELECT 1) report
             LEFT JOIN admission_format f ON true
-            LEFT JOIN "FoundationRootBirths" b ON b."Tenant" = {1} AND b."Reference" = {2}
-            """, StoreVersionEntity.MarkerId, tenant, reference).SingleAsync(token);
+            LEFT JOIN "FoundationRootBirths" b ON b."Tenant" = {4} AND b."Reference" = {5} AND {{CompatibleAdmissionFormat}}
+            """, token, tenant, reference);
         EfStore.RequireSnapshotFormat(db.RequiredFormat, row.StoreSchema, row.MessageProtocol, row.JournalCodec);
         return row.Id is null || row.Creation is null ? null : new(row.Id, row.Creation.Value);
     }

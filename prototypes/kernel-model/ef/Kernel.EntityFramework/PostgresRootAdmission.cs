@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Kernel.EntityFramework;
 
@@ -22,6 +23,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             WHERE "Id" = {0} FOR SHARE
         )
         """;
+    private const string CompatibleAdmissionFormat =
+        """f."StoreSchema" = {1} AND f."MessageProtocol" = {2} AND f."JournalCodec" = {3}""";
     private const string ClaimReceiptSql = """
         INSERT INTO "FoundationRootReceipts" AS r ("Tenant","Operation","Reference","Until")
         SELECT {0}, {1}, {2}, floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {3}
@@ -176,17 +179,41 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         if (!lockOrdinaryWrites)
             return await db.Database.SqlQueryRaw<Issuer>("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """).SingleAsync(token);
 
-        var row = await db.Database.SqlQueryRaw<GuardedIssuer>(AdmissionFormat + """
+        var row = await ReadGuardedAdmissionAsync<GuardedIssuer>(db, $$"""
 
             SELECT i."Key", i."Partitions", f."StoreSchema", f."MessageProtocol", f."JournalCodec"
             FROM (SELECT 1) report
             LEFT JOIN admission_format f ON true
-            LEFT JOIN "FoundationRootIssuer" i ON true
-            """, StoreVersionEntity.MarkerId).SingleAsync(token);
+            LEFT JOIN "FoundationRootIssuer" i ON {{CompatibleAdmissionFormat}}
+            """, token);
         EfStore.RequireSnapshotFormat(db.RequiredFormat, row.StoreSchema, row.MessageProtocol, row.JournalCodec);
         if (row.Key is null || row.Partitions is null)
             throw new InvalidOperationException("The generated-root issuer is missing.");
         return new(row.Key, row.Partitions.Value);
+    }
+
+    private static async Task<TRow> ReadGuardedAdmissionAsync<TRow>(KernelDb db, string lookup, CancellationToken token,
+        params object[] lookupArguments)
+    {
+        var expected = db.RequiredFormat;
+        object[] arguments = [StoreVersionEntity.MarkerId, expected.StoreSchema, expected.MessageProtocol, expected.JournalCodec,
+            ..lookupArguments];
+        try
+        {
+            return await db.Database.SqlQueryRaw<TRow>(AdmissionFormat + lookup, arguments).SingleAsync(token);
+        }
+        catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
+        {
+            throw new StoreFormatException("The generated-root admission schema is unreadable.", error);
+        }
+        catch (PostgresException error) when (error.SqlState.StartsWith("42", StringComparison.Ordinal) &&
+            error.SqlState != PostgresErrorCodes.InsufficientPrivilege)
+        {
+            // An incompatible column type can prevent SQL analysis before the marker lock runs.
+            await db.Database.CurrentTransaction!.RollbackAsync(token);
+            await EfStore.RequireStoreVersionsAsync(db, token);
+            throw;
+        }
     }
 
     internal async Task<CreationAddress?> ResolveAsync(string tenant, string reference, CancellationToken cancellationToken = default)

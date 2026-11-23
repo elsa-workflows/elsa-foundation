@@ -349,13 +349,24 @@ internal static class PostgresPublicPreview
         try
         {
             Check(await SetSchemaAsync(db, original, changed, token) == 1, "the fixture advances only its expected marker");
-            await RefusesFormat(start, "format-new-start", Contract.Kinds.Start);
-            await RefusesFormat(direct, "format-direct", "notice");
+            await RefusesFormat(start, "format-new-start", Contract.Kinds.Start, $"Stored schema={changed},");
+            await RefusesFormat(direct, "format-direct", "notice", $"Stored schema={changed},");
+            await db.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "FoundationRootIssuer" RENAME TO "FoundationRootIssuer_FormatProbe";
+                ALTER TABLE "FoundationRootBirths" RENAME TO "FoundationRootBirths_FormatProbe"
+                """, token);
+            const string unreadable = "The generated-root admission schema is unreadable.";
+            await RefusesFormat(start, "format-new-start", Contract.Kinds.Start, unreadable);
+            await RefusesFormat(direct, "format-direct", "notice", unreadable);
         }
         finally
         {
             using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await using var restoration = new KernelDb(options);
+            await restoration.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE IF EXISTS "FoundationRootIssuer_FormatProbe" RENAME TO "FoundationRootIssuer";
+                ALTER TABLE IF EXISTS "FoundationRootBirths_FormatProbe" RENAME TO "FoundationRootBirths"
+                """, cleanup.Token);
             var restored = await SetSchemaAsync(restoration, changed, original, cleanup.Token);
             Check(restored == 1 || await restoration.StoreVersions.AnyAsync(
                 row => row.Id == StoreVersionEntity.MarkerId && row.StoreSchema == original, cleanup.Token),
@@ -372,16 +383,16 @@ internal static class PostgresPublicPreview
                 WHERE "Id" = {StoreVersionEntity.MarkerId} AND "StoreSchema" = {from}
                 """, cancellationToken);
 
-        async Task RefusesFormat(Contract.Target target, string id, string kind)
+        async Task RefusesFormat(Contract.Target target, string id, string kind, string reason)
         {
             try
             {
                 await ingress.SendAsync(scope, target, id, kind, cancellationToken: token);
                 throw new InvalidOperationException($"Accepted {kind} after the store format changed.");
             }
-            catch (StoreFormatException error) when (error.Message.Contains($"Stored schema={changed},", StringComparison.Ordinal))
+            catch (StoreFormatException error) when (error.Message.Contains(reason, StringComparison.Ordinal))
             {
-                Console.WriteLine($"ok: open ingress refuses {kind} after the store format changes");
+                Console.WriteLine($"ok: open ingress refuses {kind} with {error.Message}");
             }
         }
     }
