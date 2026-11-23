@@ -11,6 +11,7 @@ internal static class PostgresRuntimeCluster
 {
     internal const int DefaultPartitions = 8;
     private const string Definition = "two-stage-cluster-workflow";
+    private sealed record OwnershipRow(int Id, string? Owner, long Epoch, bool Died, string Transaction);
 
     internal static async Task<int> RunAsync(int partitions, bool wake)
     {
@@ -19,11 +20,7 @@ internal static class PostgresRuntimeCluster
         var factory = Database();
         await using (var db = factory())
         {
-            if (!await db.Database.SqlQueryRaw<bool>("""
-                SELECT COALESCE(current_schema() <> 'information_schema' AND current_schema() !~ '^pg_', false) AND NOT EXISTS (
-                    SELECT 1 FROM pg_catalog.pg_tables WHERE schemaname <> 'information_schema' AND schemaname !~ '^pg_'
-                ) AS "Value"
-                """).SingleAsync(token))
+            if (!await PostgresFixtureDatabase.IsEmptyAsync(db, token))
             {
                 Console.Error.WriteLine("Choose an empty PostgreSQL database dedicated to this fixture.");
                 return 2;
@@ -53,16 +50,11 @@ internal static class PostgresRuntimeCluster
                 Check(!p.Died && (p.Owner == first.Node ? p.Epoch == alone[p.Id].Epoch : p.Epoch == alone[p.Id].Epoch + 1),
                     "the join moves only the surplus partitions through orderly give-up");
             var target = joined.First(p => p.Owner == b);
-            var moved = joined.Where(p => p.Owner == b).Select(p => p.Id);
-            Check(a.Releases.ToArray() is [var released] && released.SequenceEqual(moved),
+            var moved = joined.Where(p => p.Owner == b).ToArray();
+            Check(a.Releases.ToArray() is [var released] && released.SequenceEqual(moved.Select(p => p.Id)),
                 "the first runtime gave up all and only the moved partitions in one set call");
-            await using (var db = factory())
-            {
-                var transactions = await db.Database.SqlQuery<int>($"""
-                    SELECT COUNT(DISTINCT xmin::text)::int AS "Value" FROM "Partitions" WHERE "Owner" = {b}
-                    """).SingleAsync(token);
-                Check(transactions == 1, "one PostgreSQL transaction took the successor's entire set");
-            }
+            Check(moved.Select(p => p.Transaction).Distinct(StringComparer.Ordinal).Count() == 1,
+                "one PostgreSQL transaction took the successor's entire set");
             Console.WriteLine($"second PID {second.Id} joined: {partitions / 2} partitions each, one set give-up and one take transaction; target {target.Id} at epoch {target.Epoch}");
             if (wake)
             {
@@ -142,12 +134,14 @@ internal static class PostgresRuntimeCluster
             }
         }
 
-        async Task<PartitionEntity[]> WaitForOwners(Func<PartitionEntity[], bool> complete)
+        async Task<OwnershipRow[]> WaitForOwners(Func<OwnershipRow[], bool> complete)
         {
             await using var db = factory();
             while (true)
             {
-                var rows = await db.Partitions.AsNoTracking().OrderBy(p => p.Id).ToArrayAsync(token);
+                var rows = await db.Database.SqlQueryRaw<OwnershipRow>("""
+                    SELECT "Id", "Owner", "Epoch", "Died", xmin::text AS "Transaction" FROM "Partitions"
+                    """).OrderBy(p => p.Id).ToArrayAsync(token);
                 if (rows.Length == partitions && complete(rows)) return rows;
                 await Task.Delay(75, token);
             }
