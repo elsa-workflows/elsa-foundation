@@ -21,12 +21,23 @@ internal sealed partial class PostgresRootAdmission
 
     internal static bool IsStoredDirect(string? value) => value?.StartsWith(DirectPrefix, StringComparison.Ordinal) == true;
 
+    internal enum DirectResult { Accepted, Duplicate, Refused, MissingTarget }
+
     /// <returns>True for a new send, false for a duplicate and null for an unavailable exact life or invalid input.</returns>
     internal async Task<bool?> AdmitDirectAsync(string tenant, string reference, string id, string kind, string? payload = null,
         long? due = null, TimeSpan? keepFor = null, CancellationToken cancellationToken = default)
+        => await AdmitDirectResultAsync(tenant, reference, id, kind, payload, due, keepFor, cancellationToken) switch
+        {
+            DirectResult.Accepted => true,
+            DirectResult.Duplicate => false,
+            _ => null
+        };
+
+    internal async Task<DirectResult> AdmitDirectResultAsync(string tenant, string reference, string id, string kind, string? payload = null,
+        long? due = null, TimeSpan? keepFor = null, CancellationToken cancellationToken = default)
     {
         if (!FoundationRootCreator.IsGeneratedReference(reference) || !FoundationMetadataLimits.IsOutsideMessageId(id) || !FoundationMetadataLimits.IsOrdinaryKind(kind) ||
-            !FoundationMetadataLimits.FitsContent(payload)) return null;
+            !FoundationMetadataLimits.FitsContent(payload)) return DirectResult.Refused;
         var window = keepFor is { } requested && requested < deduplicationWindow ? requested : deduplicationWindow;
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         var windowMs = (long)window.TotalMilliseconds;
@@ -37,8 +48,9 @@ internal sealed partial class PostgresRootAdmission
             SELECT "Actor" AS "Id", "Creation" FROM "FoundationRootBirths"
             WHERE "Tenant" = {tenant} AND "Reference" = {reference}
             """).SingleOrDefaultAsync(cancellationToken);
-        if (address is null) return null;
-        if (!await LockLiveAsync())
+        if (address is null) return await RefuseAsync(DirectResult.MissingTarget);
+        var status = await LockStatusAsync();
+        if (status is null)
         {
             var pending = await db.Database.SqlQuery<string>($"""
                 SELECT m."Id" AS "Value" FROM "Messages" m
@@ -48,7 +60,25 @@ internal sealed partial class PostgresRootAdmission
                 FOR SHARE OF m
                 """).ToListAsync(cancellationToken);
             // If the creator disappeared while the SELECT waited on its lock, the first checkpoint may now be live.
-            if (pending.Count == 0 && !await LockLiveAsync()) return null;
+            if (pending.Count == 0)
+            {
+                status = await LockStatusAsync();
+                if (status is null) return await RefuseAsync(DirectResult.MissingTarget);
+            }
+        }
+
+        if (status is not (null or InstanceStatus.Running))
+        {
+            if (status == InstanceStatus.Finished && await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "FoundationDirectReceipts"
+                    WHERE "Reference" = {reference} AND "Operation" = {digest}
+                        AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
+                """).SingleAsync(cancellationToken))
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return DirectResult.Duplicate;
+            }
+            return await RefuseAsync(DirectResult.Refused);
         }
 
         var receipt = await db.Database.SqlQuery<long>($"""
@@ -62,7 +92,7 @@ internal sealed partial class PostgresRootAdmission
         if (receipt.Count == 0)
         {
             await transaction.CommitAsync(cancellationToken);
-            return false;
+            return DirectResult.Duplicate;
         }
 
         var occurrence = $"{reference}/{digest}/{Guid.NewGuid():N}";
@@ -72,10 +102,7 @@ internal sealed partial class PostgresRootAdmission
         var header = DirectPrefix + DurableKeyJson.Write(new StoredDirect(id, address.Creation, escaped, due == 0, escapedKind));
         if (Encoding.UTF8.GetByteCount(header) + (body is null ? 0L : Encoding.UTF8.GetByteCount(body)) >
             16 * 1024 * 1024 - 24 * 1024)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            return null;
-        }
+            return await RefuseAsync(DirectResult.Refused);
 
         var target = new InstanceRef(address.Id);
         db.Messages.Add(new MessageEntity
@@ -85,14 +112,20 @@ internal sealed partial class PostgresRootAdmission
         });
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return true;
+        return DirectResult.Accepted;
 
-        async Task<bool> LockLiveAsync() =>
-            (await db.Database.SqlQuery<string>($"""
-                SELECT "Id" AS "Value" FROM "Instances"
+        async Task<DirectResult> RefuseAsync(DirectResult reason)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return reason;
+        }
+
+        Task<InstanceStatus?> LockStatusAsync() =>
+            db.Database.SqlQuery<InstanceStatus?>($"""
+                SELECT "Status" AS "Value" FROM "Instances"
                 WHERE "Id" = {address.Id} AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
                 FOR SHARE
-                """).ToListAsync(cancellationToken)).Count == 1;
+                """).SingleOrDefaultAsync(cancellationToken);
     }
 
     internal async Task<IReadOnlyList<Message>> ReadPendingDirectAsync(string tenant, string reference,
@@ -105,16 +138,18 @@ internal sealed partial class PostgresRootAdmission
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
                 AND NOT m."Done" ORDER BY m."Seq"
             """).AsNoTracking().ToListAsync(cancellationToken);
-        return rows.Select(row =>
-        {
-            if (!IsStoredDirect(row.Start))
-                throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
-            var header = DurableKeyJson.Read<StoredDirect>(row.Start![DirectPrefix.Length..]);
-            var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;
-            return new Message(header.Operation, new(row.Target), header.EscapedKind ?? row.Kind, payload,
-                Due: row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, KeepUntil: row.KeepUntil, TargetCreation: header.Creation)
-                { StorageId = row.Id }.WithInboxScope(row.InboxScope);
-        }).ToArray();
+        return rows.Select(DecodeDirect).ToArray();
+    }
+
+    internal static Message DecodeDirect(MessageEntity row)
+    {
+        if (!IsStoredDirect(row.Start))
+            throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
+        var header = DurableKeyJson.Read<StoredDirect>(row.Start![DirectPrefix.Length..]);
+        var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;
+        return new Message(header.Operation, new(row.Target), header.EscapedKind ?? row.Kind, payload,
+            Due: row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, KeepUntil: row.KeepUntil, TargetCreation: header.Creation)
+            { StorageId = row.Id }.WithInboxScope(row.InboxScope);
     }
 
     internal async Task<int> SweepDirectReceiptsAsync(CancellationToken cancellationToken = default)

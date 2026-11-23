@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Runtime.Hosting" />
+    <InternalsVisibleTo Include="Kernel.Native.Run" />
     <InternalsVisibleTo Include="Kernel.Store.Conformance" />
     <InternalsVisibleTo Include="Kernel.Sim" />
   </ItemGroup>

@@ -7,6 +7,8 @@
   <ItemGroup>
     <Compile Include="../../sim/Models.cs" Link="Models.cs" />
     <ProjectReference Include="../Native.Legacy/Kernel.Native.Legacy.csproj" />
+    <ProjectReference Include="../../src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
+    <ProjectReference Include="../../src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
     <ProjectReference Include="../../ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
   </ItemGroup>
   <ItemGroup>
