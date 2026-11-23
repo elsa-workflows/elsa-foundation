@@ -18,6 +18,7 @@ internal static class StructuredMigrationChecks
             await CheckContainers(mode, Check);
             await CheckLoopAndGraph(mode, Check);
             await CheckStoredReferences(mode, Check);
+            await CheckFinished(mode, Check);
         }
         await CheckQueuedWork(check);
     }
@@ -91,10 +92,6 @@ internal static class StructuredMigrationChecks
         await actor.PublishAsync();
         check(actor.Status() == InstanceStatus.Finished && Json.Read<NativeState>(actor.Checkpoint()).Variables["output"]?.GetValue<string>() == "source",
             "the unchanged live instance consumes its original wait and executes the source tail");
-        check(StructuredMigration.Validate(source, Definition("unrelated", Wf.Set("unrelated", "output", 2)),
-            Json.Read<NativeState>(actor.Checkpoint())) == StructuredMigrationFinding.UnsupportedCheckpoint,
-            "a finished Sequence cannot authorize migration to a different definition");
-
         void Check(Workflow target, StructuredMigrationFinding? expected, string label) =>
             check(StructuredMigration.Validate(source, target, state) == expected, label);
     }
@@ -162,6 +159,17 @@ internal static class StructuredMigrationChecks
             "Durable persists a scheduled child before its frame starts");
         check(StructuredMigration.Validate(source, Definition("remove-queued", Wf.Set("tail", "output", 1)), state)
             == StructuredMigrationFinding.LiveNode, "a scheduled child remains live even without a frame");
+    }
+
+    private static async Task CheckFinished(string mode, Action<bool, string> check)
+    {
+        var source = Definition("finished-source", Prefix());
+        await using var actor = await WaitingActor.StartAsync(source, mode);
+        var state = Json.Read<NativeState>(actor.Checkpoint());
+        check(actor.Status() == InstanceStatus.Finished && state.Started && state.Results.Count == 0,
+            "the completed Sequence retains its started marker and no live result nodes");
+        check(StructuredMigration.Validate(source, Definition("unrelated", Wf.Set("unrelated", "output", 2)), state)
+            == StructuredMigrationFinding.UnsupportedCheckpoint, "an empty completed checkpoint is refused");
     }
 
     private static Node Prefix() => Wf.Set("prefix", "output", "prefix");
