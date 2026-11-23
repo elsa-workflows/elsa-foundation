@@ -108,7 +108,7 @@ each condition.
 | C3 | Work and provider budgets | K4, K12 | OA-1, BA-1, MW-1 | OA-1 and BA-1 open. MongoDB MW-1 deferred. | Measure Open's 9,728-byte keeping charge, the 4 MiB step budget, singleton progress, bytes read and written (so a byte-limited step never first reads 170 maximum-sized payloads), and tenant fairness. When MongoDB qualification resumes, verify sweep progress across 340 covered keys followed by eligible work (coverage removed, then the cursor wraps). | |
 | C4 | Worker and operator transitions | K3, K4, K6, K11 | CJ-1, CJ-2, TT-1, WJ-1, KP-1 | K3 verified, K4, K6 and K11 open | Exercise CJ-1/2, TT-1, WJ-1 and KP-1 through the actual Worker, stores and operator path. Observe durable discards, generations under Hold, physical job-entry withholding and eventual delivery of a publication suffix. | In-memory Worker evidence for [idempotent job cancel](https://github.com/elsa-workflows/elsa-foundation/pull/5354), [job generations under Hold](https://github.com/elsa-workflows/elsa-foundation/pull/5363), [cohort and ordinary poison ties](https://github.com/elsa-workflows/elsa-foundation/pull/5400), [job entry during Terminate](https://github.com/elsa-workflows/elsa-foundation/pull/5399), and [publication suffix recovery](https://github.com/elsa-workflows/elsa-foundation/pull/5414). |
 | C5 | Fixtures and provider boundaries | K3, K4, K6 | EM-1, EM-2, EM-3, EM-4, TR-5, PC-4, SB-7 | K3 verified, K4 and K6 open | Derive attainable sizes from the actual producer and provider, check real parent-bound child ownership, distinguish byte-cut, empty and insert-only steps, and exercise the corrected cross-key digest oracle. | K3 source evidence for [typed and composed limits](https://github.com/elsa-workflows/elsa-foundation/pull/5317), [cross-key delivery identity](https://github.com/elsa-workflows/elsa-foundation/pull/5330), [wide Park pages](https://github.com/elsa-workflows/elsa-foundation/pull/5424), [parent-bound cascade delivery](https://github.com/elsa-workflows/elsa-foundation/pull/5383), [100,000-wait publication](https://github.com/elsa-workflows/elsa-foundation/pull/5466), [step failure counters](https://github.com/elsa-workflows/elsa-foundation/pull/5474), and the [sequential 10,001-child termination](https://github.com/elsa-workflows/elsa-foundation/pull/5476). Provider-size and statement-byte cases stay at K4. The authored Native workload stays at K6. |
-| HA | Handle-accumulation follow-up | K6 | NT-2 (TG-1 run (c), TG-2's third run), and the K6 follow-up | Open | Document what an operator can do when repeated growth parks a parent. Test pending and already-consumed handles separately and decide whether Native should prune stale ones. Preserve the terminal projection either way ([register](../architecture/decisions.md#the-gate-2-seventh-review-round-18-november)). | |
+| HA | Handle-accumulation follow-up | K6 | NT-2 (TG-1 run (c), TG-2's third run), and the K6 follow-up | Public Native handle lifecycle verified in memory. Near-envelope termination qualification open. | Qualify TG-1(c) and TG-2's third run on the supported path. The terminal projection counts all stored handles. New public detached starts omit unused creator IDs. Existing handles stay because older checkpoints cannot distinguish detached from attached handles. The Native guide records operator options for repeated growth Park. | [#5511](https://github.com/elsa-workflows/elsa-foundation/pull/5511) tested pending and consumed creators separately and attached termination. The [detached creator check](../../prototypes/kernel-model/NATIVE.md#detached-creator-handles) passed all 16 assertions on `ef676e13`, in Balanced and Durable. |
 | RP | The reserved event-id prefix under the real collations | K4 | MX-1 run (e) | Open | The outside publish's `InvalidEventId` refusal compares under the pinned collation on SQL Server and MySQL, and refuses a caller event id led by a fullwidth `～` (U+FF5E) and one led by a character the collation ignores. | |
 | FC-C1 | The foundation clock's promise | K2 | FC-4 | Closed | State the clock's properties on the contract page (done: milliseconds since the Unix epoch, one source per foundation or node clocks within a stated skew bound, a reading may step back, a timer is due when the delivering node's reading reaches `dueAt`) and give FC-4 a bound to check on the built-in foundation ([foundation contract review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)). | [#4935](https://github.com/elsa-workflows/elsa-foundation/pull/4935), [#4937](https://github.com/elsa-workflows/elsa-foundation/pull/4937). The built-in store shares one clock, with zero skew between its nodes. FC-4 checks the fixed turn reading, a backward step after poll and delivery at the due reading after takeover. |
 | FC-C2 | `RequestAsync(Event(key))` with no live waiter | K2, K8 | FC-6 | K2 and in-memory HTTP mapping verified. Physical-provider path open. | K2 defines the at-once "no waiter" answer (done on the contract page). Owner card of 20 November ([register](../architecture/decisions.md#owner-decisions-20-november)): "no waiter" means the request published nothing, no wait consumes it now or later and keeping waits never see it, so a retry is safe; a caller who wants the event kept uses `SendAsync(Event(key))` with `KeepFor`. A start subscription on the key counts as a live waiter, so "no waiter" means no live wait and no start subscription matched (a coordinator design choice, 20 November). K8 runs it under the HTTP error and timeout contract and maps it ([foundation contract review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)). | [#4938](https://github.com/elsa-workflows/elsa-foundation/pull/4938), [#4954](https://github.com/elsa-workflows/elsa-foundation/pull/4954), [#4955](https://github.com/elsa-workflows/elsa-foundation/pull/4955). The bound request returns immediately, leaves no publication and can reuse its id when a bound start subscription appears. The [in-memory HTTP check](../../prototypes/kernel-model/NATIVE.md#http-over-the-public-actor-foundation) returns 404 with no publication, delivery or caller registration even with `KeepFor`, then retries the same id with a new payload after the wait commits. |
@@ -509,6 +509,35 @@ kept-event recovery, publication and cascade suites.
 The foundation's turned state and delivery proof at K3 is in memory. K4 owns the corresponding physical-provider cases.
 The K6 handle follow-up and the remaining Gate 2 conditions keep their milestones in the table above.
 
+
+### K4 relational qualification
+
+At `756b7093`, the full existing owned-SQL semantic suite ran on SQLite, PostgreSQL 17, SQL Server 2022 with RCSI,
+and MySQL 8.4 at REPEATABLE READ, in both fence modes. It recorded 882 passes, 22 capability skips, zero required
+failures and zero reference differences. The corrected held-lock case then passed on all eight combinations in
+[#5585](https://github.com/elsa-workflows/elsa-foundation/pull/5585). That case observes an engine-reported lock wait
+or a SQLite transient under the hold, then checks the single journal row after release.
+
+The [owned-SQL stress workload](../../prototypes/kernel-model/README.md#stress-and-cost-on-the-ef-engines) ran on
+`ef676e13` with `seconds=40` and `messages=5000` per case. The network engines used isolated databases
+and ended worker sessions during the run. SQLite has no server sessions. Its WAL run uses owner stalls and takeovers.
+
+| Engine | Checked fence | In-batch fence |
+|---|---|---|
+| PostgreSQL 17 | Passed, 1,287 sessions ended | Passed, 1,257 sessions ended |
+| SQL Server 2022, RCSI | Passed, 1,697 sessions ended, zero deadlocks | Passed, 1,483 sessions ended, zero deadlocks |
+| MySQL 8.4, REPEATABLE READ, TLS | Initial run exited 134 in Connector/NET. An isolated rerun passed with 984 sessions ended. | Passed, 1,554 sessions ended |
+| SQLite WAL | Passed, 1,309 owner stalls | Passed, 1,289 owner stalls |
+
+MySQL connection-loss qualification stays open despite the successful retry. The first checked run exited in the locked Connector/NET 26.10.0 TLS
+cancellation callback. The stack cannot distinguish the application deadline from the driver's connection-timeout
+timer. Before acceptance, qualify a driver fix with TLS and finite timeouts. The application can contain its own
+cancellation callbacks while keeping the node-lease deadlines. Retain the provider failure separately from the
+store's successful end-state runs. [Run receipt](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7114915253)
+· [Connector/NET report](https://bugs.mysql.com/bug.php?id=115572)
+
+K4 remains open for the remaining physical K3 cases, upgrade-family compatibility and provider-path coverage.
+MongoDB remains on the owner hold.
 
 ### FC-8 on providers
 
