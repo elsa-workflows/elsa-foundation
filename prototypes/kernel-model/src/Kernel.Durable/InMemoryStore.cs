@@ -731,6 +731,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 {
                     ReleasedBy = m.ReleasedBy,
                     PayloadLength = m.PayloadLength,
+                    ReplyTenant = m.Scoped && m.Message.ReplyTo is not null ? m.Tenant : null,
                     PersistedHold = m.Held && m.Trial == 0 && m.Message.TargetCreation is > 0 &&
                         Instances.GetValueOrDefault(m.Message.Target.Id) is { Status: InstanceStatus.Running, Retired: false } row &&
                         row.Creation == m.Message.TargetCreation && _referenceBirths.ContainsKey(new(row.Id, row.Creation))

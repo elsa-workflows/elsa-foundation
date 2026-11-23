@@ -104,6 +104,8 @@ public interface ITurnServices
 public sealed class Delivery(Message message, long seq)
 {
     public Message Message { get; internal set; } = message;
+    internal string? ReplyTenant;
+    internal LiveReplyRoute? ReplyRoute => Message.ReplyTo is { } address ? new(address, ReplyTenant) : null;
     internal object? StarterAmbient;    // belongs to this local creator; never written
     internal string? UncheckedReference;
     internal long Seq = seq;         // allocated store sequence, or local post order until promotion
@@ -277,7 +279,11 @@ public sealed class TurnOutcome(string instance)
     internal void ReplyTo(Delivery delivery, object? value, bool creationRefusal)
     {
         if ((delivery.RequestAddress ?? delivery.Message.ReplyTo) is { } route)
-            Replied.Add(new(delivery.Message.InboxKey, route, Request.Response, value) { Rpc = delivery.RequestAddress is not null, RefusedInput = creationRefusal ? delivery.Message : null });
+            Replied.Add(new(delivery.Message.InboxKey, route, Request.Response, value)
+            {
+                Rpc = delivery.RequestAddress is not null, Tenant = delivery.ReplyTenant,
+                RefusedInput = creationRefusal ? delivery.Message : null
+            });
     }
     public List<Delivery> Consumed = [], Held = [];
     public List<InboxKey> Cancelled = [];
@@ -305,6 +311,8 @@ public sealed record RequestReply(InboxKey Message, string To, string Channel, o
 {
     internal bool Rpc { get; init; }
     internal bool FromFoundation { get; init; }
+    internal string? Tenant { get; init; }
+    internal LiveReplyRoute Route => new(To, Tenant);
     internal Message? RefusedInput { get; init; }
 }
 
@@ -378,7 +386,11 @@ public sealed class DurableTurn
     {
         if (!Inbox.Contains(request) || _held.Contains(request.InboxKey) || _replied.Any(r => r.Message == request.InboxKey))
             throw new InvalidOperationException("Reply must name one consumed request of this turn, once.");
-        if (request.ReplyTo is { } to) _replied.Add(new(request.InboxKey, to, channel, item));
+        if (request.ReplyTo is { } to)
+        {
+            var delivery = _input.Taken.Skip(_input.From).First(input => input.Message == request);
+            _replied.Add(new(request.InboxKey, to, channel, item) { Tenant = delivery.ReplyTenant });
+        }
     }
 
     /// <summary>Answer a volatile RPC through the committed per-request reply pipeline. Other deliveries use their

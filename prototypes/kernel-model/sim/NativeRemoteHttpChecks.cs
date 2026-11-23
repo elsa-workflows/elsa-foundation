@@ -22,6 +22,7 @@ internal static partial class NativeHttpEdgeChecks
             Console.WriteLine(loss);
             await CheckRemoteAsync(loss, flaws);
         }
+        await CheckTenantRoutingAsync(flaws);
         return 0;
     }
 
