@@ -68,14 +68,13 @@ public sealed partial class MongoStore : IKernelStore
 
     /// <summary>
     /// The count the first open recorded, once every partition document of it exists; an open cut short between the record
-    /// and the last document refuses (definite) until <see cref="CreateAsync"/> runs again at that count. A database from
-    /// before the record gives its partition documents.
+    /// and the last document refuses (definite) until <see cref="CreateAsync"/> runs again at that count. Opening
+    /// a counted host requires a readable marker even if store initialization was run by another host.
     /// </summary>
     public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
     {
+        var count = await RequireVersionsAsync(cancellationToken);
         var rows = (int)await _partitions.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
-        if (await _meta.Find(new BsonDocument("_id", "partitions")).FirstOrDefaultAsync(cancellationToken) is not { } meta) return rows;
-        var count = meta["count"].ToInt32();
         return rows == count ? count
             : throw new StoreException(Failure.Definite, $"Initialization incomplete: {rows} of {count} partition documents exist. Re-run CreateAsync at the same count.");
     }
@@ -602,6 +601,7 @@ public sealed partial class MongoStore : IKernelStore
 
     public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default)
     {
+        await RequireVersionsAsync(cancellationToken);
         var docs = await _journal.Find(new BsonDocument { { "partition", partition }, { "position", new BsonDocument("$gt", after) } }, new FindOptions { BatchSize = Math.Min(take, 10_000) + 1 })
             .Sort(new BsonDocument("position", 1)).Limit(take).ToListAsync(cancellationToken);
         return docs.Select(d => new JournalRow(d["partition"].AsInt32, d["position"].AsInt64, d["instance"].AsString, d["revision"].AsInt64, d["entries"].AsString)).ToList();
@@ -609,6 +609,7 @@ public sealed partial class MongoStore : IKernelStore
 
     public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
     {
+        await RequireVersionsAsync(cancellationToken);
         // A find may span multiple cursor batches. Keep them on the same committed snapshot.
         var docs = await _journal.WithReadConcern(ReadConcern.Snapshot).Find(new BsonDocument { { "partition", partition }, { "instance", instance }, { "position", new BsonDocument("$gt", after) } })
             .Sort(new BsonDocument("position", 1)).ToListAsync(cancellationToken);
@@ -617,6 +618,7 @@ public sealed partial class MongoStore : IKernelStore
 
     public async ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)
     {
+        await RequireVersionsAsync(cancellationToken);
         var expired = new BsonDocument("$expr", new BsonDocument("$lt", new BsonArray { "$keepUntil", NowMs }));
         var messages = await _messages.DeleteManyAsync(new BsonDocument { { "done", true }, { "keepUntil", new BsonDocument("$ne", BsonNull.Value) }, { "$expr", expired["$expr"] } }, cancellationToken);
         var events = await _events.DeleteManyAsync(expired, cancellationToken);
@@ -643,6 +645,7 @@ public sealed partial class MongoStore : IKernelStore
 
     public async ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default)
     {
+        await RequireVersionsAsync(cancellationToken);
         // The projector's position first, then the partition's: every position up to the second is committed.
         var projected = await _projections.Find(new BsonDocument("_id", partition)).SingleAsync(cancellationToken);
         var written = await _partitions.Find(new BsonDocument("_id", partition)).Project(new BsonDocument("position", 1)).SingleAsync(cancellationToken);
@@ -657,6 +660,7 @@ public sealed partial class MongoStore : IKernelStore
         try
         {
             session.StartTransaction(Transaction);
+            await RequireVersionsAsync(session, cancellationToken);
             var moved = await _projections.UpdateOneAsync(session, new BsonDocument { { "_id", partition }, { "position", from } }, new BsonDocument("$set", new BsonDocument("position", to)), cancellationToken: cancellationToken);
             if (moved.MatchedCount != 1)
             {
@@ -695,6 +699,7 @@ public sealed partial class MongoStore : IKernelStore
 
     public async ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default)
     {
+        await RequireVersionsAsync(cancellationToken);
         if (instances.Count == 0) return [];
         var docs = await _views.Find(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(instances)))).ToListAsync(cancellationToken);
         return docs.Select(d => new ViewRow(d["_id"].AsString, d["revision"].AsInt64, d["commits"].AsInt32)).ToList();
