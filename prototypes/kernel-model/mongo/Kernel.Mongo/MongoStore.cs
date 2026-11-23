@@ -67,16 +67,25 @@ public sealed partial class MongoStore : IKernelStore
     public IMongoDatabase Database { get; }
 
     /// <summary>
-    /// The count the first open recorded, once every partition document of it exists; an open cut short between the record
-    /// and the last document refuses (definite) until <see cref="CreateAsync"/> runs again at that count. Opening
-    /// a counted host requires a readable marker even if store initialization was run by another host.
+    /// The recorded count after the partition, clock and projection rows are ready. Re-run
+    /// <see cref="CreateAsync"/> at the same count if initialization was interrupted. A counted host
+    /// always checks the marker, including when another process initialized the store.
     /// </summary>
     public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
     {
         var count = await RequireVersionsAsync(cancellationToken);
-        var rows = (int)await _partitions.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
-        return rows == count ? count
-            : throw new StoreException(Failure.Definite, $"Initialization incomplete: {rows} of {count} partition documents exist. Re-run CreateAsync at the same count.");
+        await RequireRows(_partitions);
+        await RequireRows(_clocks);
+        await RequireRows(_projections);
+        return count;
+
+        async Task RequireRows(IMongoCollection<BsonDocument> collection)
+        {
+            var rows = await collection.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+            if (rows != count)
+                throw new StoreException(Failure.Definite,
+                    $"Initialization incomplete: {rows} of {count} {collection.CollectionNamespace.CollectionName} documents exist. Re-run CreateAsync at the same count.");
+        }
     }
 
     /// <summary>Collections, indexes and the partition documents. Collections are created here, not inside a transaction.</summary>

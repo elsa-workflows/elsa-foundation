@@ -75,6 +75,25 @@ internal static class VersionServiceChecks
                 "the refused counted start cannot publish its first heartbeat");
             await meta.InsertOneAsync(stored);
             await SetCodec(1);
+            var lastPartition = new BsonDocument("_id", 1);
+            foreach (var name in new[] { "clocks", "projections" })
+            {
+                await db.GetCollection<BsonDocument>(name).DeleteOneAsync(lastPartition);
+                var incomplete = new PartitionRuntime("cold", cold, 2, TimeSpan.FromSeconds(30));
+                try
+                {
+                    await incomplete.StartAsync(host);
+                    throw new InvalidOperationException($"Counted start accepted the incomplete {name} collection.");
+                }
+                catch (StoreException error) when (error.Failure == Failure.Definite &&
+                    error.Message.Contains($"1 of 2 {name} documents", StringComparison.Ordinal))
+                {
+                    Check(!await incomplete.HeartbeatAsync() && !await nodes.Find(FilterDefinition<BsonDocument>.Empty).AnyAsync(),
+                        $"counted start refuses missing {name} rows before its first heartbeat");
+                }
+                await cold.CreateAsync(2);
+            }
+
             await runtime.StartAsync(host);
             Check(await runtime.HeartbeatAsync() && await nodes.Find(new BsonDocument("_id", "cold")).AnyAsync(),
                 "the compatible counted host publishes its first heartbeat");
