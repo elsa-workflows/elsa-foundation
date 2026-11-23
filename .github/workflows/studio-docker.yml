@@ -29,6 +29,20 @@ permissions:
   contents: read
   actions: read
 
+# Keep the admitted publisher exclusive through staging, signing, and latest promotion.
+# Ineligible workflow completions and validation-only dispatches cannot displace it.
+concurrency:
+  group: >-
+    studio-docker-${{ github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish == true) ||
+       (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        (github.event.workflow_run.path == '.github/workflows/ci.yml' ||
+         startsWith(github.event.workflow_run.path, '.github/workflows/ci.yml@')))) &&
+      'publisher' || format('validation-{0}', github.run_id) }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build & optionally publish elsaworkflows/elsa-studio
@@ -40,11 +54,12 @@ jobs:
         github.event.workflow_run.head_repository.full_name == github.repository &&
         (github.event.workflow_run.path == '.github/workflows/ci.yml' ||
          startsWith(github.event.workflow_run.path, '.github/workflows/ci.yml@'))))
-    concurrency:
-      # A failed/PR/fork completion never enters this shared writer queue. Manual
-      # image pushes share it; build-only qualification cannot displace a publisher.
-      group: studio-docker-${{ (github.event_name == 'workflow_run' || inputs.publish == true) && 'publisher' || format('validation-{0}', github.run_id) }}
-      cancel-in-progress: false
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      source_sha: ${{ steps.ci_source.outputs.source_sha || steps.source.outputs.sha }}
+      stable_version: ${{ steps.manifest.outputs.stable_version }}
+      main_source: ${{ github.event_name == 'workflow_run' || steps.source.outputs.head_branch == 'main' }}
+      tags: ${{ steps.image.outputs.tags }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment:
@@ -178,7 +193,7 @@ jobs:
           from pathlib import Path
 
           sys.path.insert(0, os.environ["STUDIO_IMAGE_VALIDATORS"])
-          from studio_image_tags import derive_tags
+          from studio_image_tags import derive_tags, stage_tags
           from studio_docker_publish import read_preview_floor, require_preview_above_floor
           from verify_studio_nuget_packages import verify_packages
 
@@ -218,8 +233,12 @@ jobs:
               require_preview_above_floor(os.environ["PREVIEW_IMAGE_TAG"], read_preview_floor())
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              if ref.startswith("refs/tags/") and "-" not in version and publish_requested:
+                  if ref.removeprefix("refs/tags/").removeprefix("v") != version:
+                      raise SystemExit("Stable image version disagrees with the admitted source tag.")
+                  output.write(f"stable_version={version}\n")
               output.write(f"studio_version={version}\n")
-              output.write("image_tags<<TAGS\n" + "\n".join(tag for tag in tags if tag != "elsaworkflows/elsa-studio:latest") + "\nTAGS\n")
+              output.write("image_tags<<TAGS\n" + "\n".join(stage_tags(tags)) + "\nTAGS\n")
           print(f"Verified the exact {len(package_ids)} Studio package IDs at version {version} from {sha}.")
           PY
 
@@ -287,6 +306,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          sbom: true
+          provenance: mode=min,version=v1
           file: Studio/src/apps/Elsa.Studio.Web/Dockerfile
           platforms: ${{ (github.event_name == 'workflow_run' || inputs.publish == true) && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.event_name == 'workflow_run' || inputs.publish == true }}
@@ -300,25 +321,129 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             io.elsa.build.source-run=${{ steps.ci_source.outputs.source_url || format('https://github.com/{0}/actions/runs/{1}', github.repository, steps.source.outputs.run_id) }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,ignore-error=true
 
-      - name: Promote the verified main digest to latest
-        if: (github.event_name == 'workflow_run' || inputs.publish == true) && (github.event_name == 'workflow_run' || steps.source.outputs.head_branch == 'main')
+      - name: Record staged versioned tags before verification
+        if: github.event_name == 'workflow_run' || inputs.publish == true
+        env:
+          TAGS: ${{ steps.image.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: printf 'Staged at %s\n%s\n' "$DIGEST" "$TAGS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Inspect possibly staged tags if the exporter fails
+        if: failure() && steps.build.outcome == 'failure' && (github.event_name == 'workflow_run' || inputs.publish == true)
+        env:
+          TAGS: ${{ steps.image.outputs.tags }}
+        run: |
+          echo "Build failed. The following registry observations are unverified and may predate this run." >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r tag; do
+            digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$tag" | jq -er '.digest') || digest=unavailable
+            printf '%s %s\n' "$tag" "$digest" >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$TAGS"
+
+  verify-inventories:
+    name: Read back the staged Studio inventories
+    needs: build
+    if: github.event_name == 'workflow_run' || inputs.publish == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DIGEST: ${{ needs.build.outputs.digest }}
+      TAGS: ${{ needs.build.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install pinned image evidence tools
+        run: bash tools/ci/install_image_evidence_tools.sh
+      - name: Read back the Studio platform SBOMs and provenance
+        run: |
+          python3 tools/ci/verify_image_evidence.py "docker.io/elsaworkflows/elsa-studio@$DIGEST" --application Elsa.Studio.Web \
+            --builder-run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+      - name: Report incomplete image verification
+        if: failure()
+        run: printf 'Inventory verification incomplete for %s\n%s\n' "$DIGEST" "$TAGS" >> "$GITHUB_STEP_SUMMARY"
+
+  attest-index:
+    name: Attest the published Studio index
+    needs: [build, verify-inventories]
+    if: github.event_name == 'workflow_run' || inputs.publish == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Sign the verified index digest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: docker.io/elsaworkflows/elsa-studio
+          subject-digest: ${{ needs.build.outputs.digest }}
+          create-storage-record: false
+      - name: Verify the public index attestation
         env:
           GH_TOKEN: ${{ github.token }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          gh attestation verify "oci://docker.io/elsaworkflows/elsa-studio@$DIGEST" \
+            --repo "$GITHUB_REPOSITORY" --source-ref refs/heads/main --source-digest "$GITHUB_SHA" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/studio-docker.yml"
+      - name: Report incomplete Studio signature
+        if: failure()
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+          TAGS: ${{ needs.build.outputs.tags }}
+        run: printf 'Studio signature verification incomplete for %s\n%s\n' "$DIGEST" "$TAGS" >> "$GITHUB_STEP_SUMMARY"
+
+  promote-aliases:
+    name: Promote the signed Studio image
+    needs: [build, attest-index]
+    if: (github.event_name == 'workflow_run' || inputs.publish == true) && (needs.build.outputs.main_source == 'true' || needs.build.outputs.stable_version != '')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # The build job already passed its deployment approval. Use the existing Docker
+    # organization secrets only after staging, inventory verification and signature verification.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Log in for verified tag promotion
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Promote the verified main digest to latest
+        if: (github.event_name == 'workflow_run' || inputs.publish == true) && needs.build.outputs.main_source == 'true'
+        env:
+          IMAGE: docker.io/elsaworkflows/elsa-studio
+          DIGEST: ${{ needs.build.outputs.digest }}
+          SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/ci/promote_verified_image.sh
+      - name: Promote the eligible stable aliases
+        if: needs.build.outputs.stable_version != ''
+        env:
+          VERSION: ${{ needs.build.outputs.stable_version }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+          IMAGE: docker.io/elsaworkflows/elsa-studio
         run: |
           set -euo pipefail
-          MAIN_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
-          SOURCE_SHA=$(git rev-parse HEAD)
-          export MAIN_SHA SOURCE_SHA
-          current_status=0
-          python3 "$STUDIO_IMAGE_VALIDATORS/studio_docker_publish.py" is-current || current_status=$?
-          if [[ "$current_status" == 1 ]]; then
-            echo "Main advanced while building. Versioned tags were published; latest remains unchanged." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          if [[ "$current_status" != 0 ]]; then exit "$current_status"; fi
-          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
-          docker buildx imagetools create --tag elsaworkflows/elsa-studio:latest "elsaworkflows/elsa-studio@$IMAGE_DIGEST"
-          echo "Published Studio latest from $SOURCE_SHA ($IMAGE_DIGEST)." >> "$GITHUB_STEP_SUMMARY"
+          observed=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$IMAGE:$VERSION" | jq -er '.digest')
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ && "$observed" == "$DIGEST" ]]
+          aliases=$(python3 tools/ci/studio_docker_publish.py stable-aliases "$VERSION")
+          while IFS= read -r alias; do
+            [[ -n "$alias" ]] || continue
+            docker buildx imagetools create --tag "$IMAGE:$alias" "$IMAGE@$DIGEST"
+            actual=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$IMAGE:$alias" | jq -er '.digest')
+            [[ "$actual" == "$DIGEST" ]]
+            echo "Verified $IMAGE:$alias at $DIGEST." >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$aliases"
+      - name: Report incomplete alias promotion
+        if: failure()
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: echo "Promotion incomplete for Docker Hub Studio index $DIGEST. Verify rolling tag digests before retrying." >> "$GITHUB_STEP_SUMMARY"

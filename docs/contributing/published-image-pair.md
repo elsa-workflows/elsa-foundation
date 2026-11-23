@@ -72,6 +72,68 @@ The diagnostic unit tests run with Node's built-in test runner before the browse
 node --test tools/contributor-pair-proof/diagnostics.test.mjs
 ```
 
+## Verify an image SBOM
+
+Use the immutable **index** digest from the Foundation publisher run or release record.
+Workbench, Foundation Host and consolidated Studio builds that enable SBOM generation
+carry SPDX documents for each Linux platform in Docker Hub. The historical pair below
+predates this feature. With Python 3 and [ORAS 1.4](https://github.com/oras-project/oras/releases/tag/v1.4.0),
+install the [Sourcemeta JSON Schema CLI](https://github.com/sourcemeta/jsonschema/releases/tag/v17.3.3)
+and run the following from the repository root with the published digest and the expected
+producer URL (`https://github.com/elsa-workflows/elsa-foundation/actions/runs/<id>`):
+
+```bash
+python3 -m venv .image-evidence
+. .image-evidence/bin/activate
+python3 -m pip install --no-deps --only-binary=:all: --require-hashes -r tools/ci/image_evidence_requirements.txt
+curl -fsSLo spdx-schema.json https://raw.githubusercontent.com/spdx/spdx-spec/6f2cb47d13db19b12c23885573b22ef32ec1ada5/schemas/spdx-schema.json
+export ELSA_IMAGE_SPDX_SCHEMA="$PWD/spdx-schema.json"
+image=docker.io/elsaworkflows/elsa-foundation-host
+python3 tools/ci/verify_image_evidence.py "$image@$INDEX_DIGEST" --application Elsa.Foundation.Host \
+  --builder-run "$PRODUCER_RUN_URL" --output host-sboms
+```
+
+Use `Elsa.Workbench` for Workbench and `Elsa.Studio.Web` for Studio.
+The command reads the index, both runnable child descriptors, their attestation manifests
+and in-toto statements by digest. It checks the subject bindings, SLSA builder metadata
+including the invocation and resolved build inputs, supported CPU variants, and native operating-system and Elsa components, then saves
+`linux-amd64.spdx.json` and `linux-arm64.spdx.json`. Use the file for your deployment platform.
+
+Publishers stage versioned tags first. The run summary identifies the staged digest.
+For a main-source publication, the publisher advances `latest` after inventory and signature
+verification and checks its registry digest. If main has advanced, use the verified versioned
+digest. A failed or interrupted run may have published versioned tags without completing verification.
+Retry the failed verification job to check the original staged digest. For a stable Studio version the publisher promotes its eligible major and minor aliases
+after signing, checking newer version tags again before each promotion job. The publisher also
+checks the source tag before updating `latest`, since a newer run can build the same
+commit. If the exporter fails before returning its digest, treat any observed registry tags
+as unverified. Verify the signature and both inventories before using a versioned digest.
+
+For **Workbench and Foundation Host**, independently verify **each printed attestation
+manifest digest** with Cosign. Substitute the expected Foundation workflow commit from
+the producer run. This example is for the current v1.16.0 reusable builder:
+
+```bash
+cosign verify --experimental-oci11 --new-bundle-format \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity 'https://github.com/docker/github-builder/.github/workflows/build.yml@refs/tags/v1.16.0' \
+  --certificate-github-workflow-repository elsa-workflows/elsa-foundation \
+  --certificate-github-workflow-sha "$PRODUCER_SHA" \
+  "$image@$ATTESTATION_DIGEST"
+```
+
+The signature covers the attestation manifest whose layers contain the checked predicates.
+For **consolidated Studio**, the releasing workflow signs the whole index using GitHub
+artifact attestations. Verify it before using the platform inventories. Use the commit
+running the trusted publisher as `PRODUCER_SHA`. A manual release may select an older
+Studio source revision; the image's revision label records that separately.
+
+```bash
+gh attestation verify "oci://docker.io/elsaworkflows/elsa-studio@$INDEX_DIGEST" \
+  --repo elsa-workflows/elsa-foundation --source-ref refs/heads/main --source-digest "$PRODUCER_SHA" \
+  --signer-workflow elsa-workflows/elsa-foundation/.github/workflows/studio-docker.yml
+```
+
 ## Recorded image provenance and hosted result
 
 The index digest is the immutable Compose pin. The child digest records the selected Linux/amd64 manifest. Preview numbers are CI run counters, not library or package versions.

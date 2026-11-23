@@ -95,12 +95,12 @@ def _validated_next_url(next_value: str, current_url: str) -> str:
     return parse.urlunsplit(("https", "hub.docker.com", DOCKER_HUB_TAGS_PATH, parse.urlencode({"page": page, "page_size": page_size}), ""))
 
 
-def read_preview_floor(opener: Callable[..., Any] | None = None) -> int | None:
-    """Read every public Studio Docker Hub tag page and return the highest preview number."""
+def read_tag_names(opener: Callable[..., Any] | None = None) -> set[str]:
+    """Read all public Studio Docker Hub tag names using validated pagination."""
     open_url = opener or request.urlopen
     next_url: str | None = DOCKER_HUB_TAGS_URL
     seen_urls: set[str] = set()
-    floor: int | None = None
+    names: set[str] = set()
 
     while next_url is not None:
         if next_url in seen_urls:
@@ -121,10 +121,7 @@ def read_preview_floor(opener: Callable[..., Any] | None = None) -> int | None:
         for item in payload["results"]:
             if not isinstance(item, dict) or not isinstance(item.get("name"), str):
                 raise ValueError("Docker Hub returned a malformed tag entry.")
-            match = PREVIEW_TAG.fullmatch(item["name"])
-            if match:
-                number = int(match.group(1))
-                floor = number if floor is None else max(floor, number)
+            names.add(item["name"])
 
         page_next = payload.get("next")
         if page_next is None:
@@ -134,7 +131,27 @@ def read_preview_floor(opener: Callable[..., Any] | None = None) -> int | None:
         else:
             raise ValueError("Docker Hub returned an invalid pagination link.")
 
-    return floor
+    return names
+
+
+def read_preview_floor(opener: Callable[..., Any] | None = None) -> int | None:
+    matches = (PREVIEW_TAG.fullmatch(name) for name in read_tag_names(opener))
+    return max((int(match.group(1)) for match in matches if match), default=None)
+
+
+def eligible_stable_aliases(version: str, names: set[str]) -> list[str]:
+    pattern = r"4\.[0-9]+\.[0-9]+"
+    if not re.fullmatch(pattern, version) or version not in names:
+        raise ValueError("The exact stable Studio tag must be present on Docker Hub.")
+    release = tuple(map(int, version.split(".")))
+    published = [tuple(map(int, name.split("."))) for name in names if re.fullmatch(pattern, name)]
+    major, minor, _ = version.split(".")
+    aliases = []
+    if release == max(other for other in published if other[:2] == release[:2]):
+        aliases.append(f"{major}.{minor}")
+    if release == max(published):
+        aliases.append(major)
+    return aliases
 
 
 def next_preview_version(floor: int | None) -> str:
@@ -181,6 +198,11 @@ def _append_tag_output(tags: list[str], output_path: str) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
+
+    if len(args) == 2 and args[0] == "stable-aliases":
+        for alias in eligible_stable_aliases(args[1], read_tag_names()):
+            print(alias)
+        return 0
 
     if args == ["is-current"]:
         source_sha = os.environ.get("SOURCE_SHA", "")
