@@ -209,6 +209,27 @@ journal records one completion revision.
 This is a runnable K7 case on the public Embedded preview. The full Flowchart corpus and Cluster qualification
 remain part of K7.
 
+### Parallel paths in the PostgreSQL Flowchart preview
+
+Use a fresh dedicated database in `KERNEL_PREVIEW_POSTGRES` for each run. From `prototypes/kernel-model`:
+
+```sh
+models/Native.Run/run-flowchart-preview.sh manual
+```
+
+The public runtime starts a Native purchase Flowchart. A decision selects manual risk review while finance waits in
+parallel. The risk review finishes, and a second Embedded host process takes the scope at a higher epoch. Replaying
+the risk operation with a finance payload leaves the checkpoint and journal unchanged. Finance then completes the
+last live branch. The journal shows one join, and the terminal checkpoint contains both decisions.
+
+Run with `automatic` on a separate fresh database to select the bypass path. Finance still has to finish. The distinct
+inactive risk branch cannot hold the join open. This is the Balanced and direct-input PostgreSQL preview. The scoped
+PostgreSQL owner still needs support for internally scheduled Native continuation messages before it can qualify
+Durable Flowchart execution.
+
+On a fresh database, `dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-flowchart-preview merge-early`
+replaces the join with a merge. The waiting assertion detects the premature finish.
+
 ## Built-in Cluster redistribution on PostgreSQL
 
 Set `KERNEL_PREVIEW_POSTGRES` to the connection string of a fresh, empty PostgreSQL database, then run from
