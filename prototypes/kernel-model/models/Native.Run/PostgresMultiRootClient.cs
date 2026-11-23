@@ -30,7 +30,7 @@ internal static class PostgresMultiRootClient
             : throw new InvalidOperationException("The generated root was not accepted.");
     }
 
-    internal static async Task Send(PostgresPreviewFoundation foundation, Contract.BoundScope scope, Contract.ActorRef actor,
+    internal static async Task Send(Contract.IIngress foundation, Contract.BoundScope scope, Contract.ActorRef actor,
         string id, string payload, Contract.AdmissionOutcome expected, CancellationToken token)
     {
         var receipt = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), id, CompositeSignal.Kind, payload, cancellationToken: token);

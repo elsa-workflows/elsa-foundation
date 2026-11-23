@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Kernel.Foundation.Postgres</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
+    <ProjectReference Include="../../src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
+    <ProjectReference Include="../Kernel.Runtime.Hosting/Kernel.Runtime.Hosting.csproj" />
+    <InternalsVisibleTo Include="Kernel.Native.Run" />
+  </ItemGroup>
+</Project>

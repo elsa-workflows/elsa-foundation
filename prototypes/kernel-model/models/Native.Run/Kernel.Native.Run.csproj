@@ -12,6 +12,7 @@
     <ProjectReference Include="../Statecharts.Native/Kernel.Statecharts.Native.csproj" />
     <ProjectReference Include="../Native.Legacy/Kernel.Native.Legacy.csproj" />
     <ProjectReference Include="../../runtime/Kernel.Runtime.Hosting/Kernel.Runtime.Hosting.csproj" />
+    <ProjectReference Include="../../runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj" />
     <ProjectReference Include="../../src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
     <ProjectReference Include="../../src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
     <ProjectReference Include="../../ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
