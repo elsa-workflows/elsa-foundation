@@ -17,6 +17,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     private readonly Durable.FoundationSelfIssuer? issueSelf;
     private readonly Func<string, string>? rootJobHandle;
     private readonly bool rootTimedJobIssuance;
+    private readonly bool rootHeldReplies;
     private Durable.InMemoryStore store => inMemory ?? throw new NotSupportedException("This provider does not implement this foundation operation.");
 
     internal ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
@@ -29,8 +30,9 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     }
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Durable.FoundationSelfIssuer? issueSelf = null,
-        Func<string, string>? rootJobHandle = null, bool rootTimedJobIssuance = false) =>
-        (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance) = (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance);
+        Func<string, string>? rootJobHandle = null, bool rootTimedJobIssuance = false, bool rootHeldReplies = false) =>
+        (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance, this.rootHeldReplies) =
+        (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootHeldReplies);
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, RootValueReader rootValueReader)
         : this(roots, actor) => this.rootValueReader = rootValueReader;

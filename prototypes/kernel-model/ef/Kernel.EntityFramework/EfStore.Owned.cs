@@ -381,7 +381,7 @@ public sealed partial class EfStore
         if (!poll.Contains(single, StringComparison.Ordinal)) throw new InvalidOperationException("The poll has no partition predicate where the set poll replaces it.");
         var set = Q($"""m."Partition" IN ({List(owned.Select(f => f.Partition).Order())}) AND m."Seen" < {EpochOf(owned, "m.\"Partition\"")}""");
         var sql = string.Format(System.Globalization.CultureInfo.InvariantCulture, poll.Replace(single, set, StringComparison.Ordinal), 0, 0, (long)horizon.TotalMilliseconds, limit);
-        if (_ordinaryRoots is { } root) return ToGeneratedPoll(await db.Database.SqlQueryRaw<GeneratedPollRow>(sql).ToListAsync(cancellationToken), root, db.UsesRootOperatorProtocol);
+        if (_ordinaryRoots is { } root) return ToGeneratedPoll(await db.Database.SqlQueryRaw<GeneratedPollRow>(sql).ToListAsync(cancellationToken), root, db.UsesRootOperatorProtocol, db.UsesRootReplyProtocol);
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql).ToListAsync(cancellationToken));
     }
 }

@@ -258,7 +258,26 @@ through the same connection when the deadline is open and returns one 504 when t
 A loss after the commit lands and before any reply crosses the transport returns one 504 at the deadline.
 Every schedule finishes the same approval at journal revision 2. The fixture disconnects the lost
 owner's reply link and keeps its Worker available to check the late commit. Independent process loss,
-provider-backed replies and cross-tenant routing have separate K8 acceptance cases.
+PostgreSQL-backed HTTP and cross-tenant routing have separate K8 acceptance cases.
+
+### Held direct replies on PostgreSQL
+
+Use a fresh dedicated PostgreSQL database for each fence mode and set `KERNEL_PREVIEW_POSTGRES`. From
+`prototypes/kernel-model`, run:
+
+```sh
+dotnet run -c Release --project models/Native.Run -- pg-root-held-direct checked
+```
+
+Use `in-batch` for the other owned fence. The fixture-private protocol 10 admits a bound live request to
+an already-checkpointed root and stores its reply address with the exact direct input. It rejects another
+tenant and an expired registration. A second Worker takes at a higher epoch and consumes that same
+input through a Native approval, with the receiver still waiting immediately before commit. The first reply
+carries the original registration and tenant. Its input settles without retaining the route, and replay
+with a new registration returns Duplicate. The ordinary owner and point reader refuse the new format.
+
+Both owners run in one process, with an orderly handover and an in-process reply link. A held HTTP
+connection, process loss, event-based request admission and public PostgreSQL `RequestAsync` remain open.
 
 ## 5. What it costs
 
