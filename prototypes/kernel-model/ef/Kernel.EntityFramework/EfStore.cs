@@ -122,8 +122,10 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     private sealed class RootOperatorDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootJobDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootTimedJobIssuanceDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootValueDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     internal StoreFormat RequiredFormat => this switch
     {
+        RootValueDb => StoreFormat.RootValues,
         RootTimedJobIssuanceDb => StoreFormat.RootTimedJobIssuance,
         RootJobDb => StoreFormat.RootJobs,
         RootOperatorDb => StoreFormat.RootOperators,
@@ -134,6 +136,8 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     internal bool UsesRootSelfProtocol => this is RootSelfDb or RootTimerDb;
     internal bool UsesRootJobProtocol => this is RootJobDb or RootTimedJobIssuanceDb;
     internal bool UsesRootTimedJobIssuance => this is RootTimedJobIssuanceDb;
+    internal bool UsesRootValueProtocol => this is RootValueDb;
+    internal static KernelDb ForPostgresRootValues(DbContextOptions<KernelDb> options) => new RootValueDb(options);
     internal static KernelDb ForPostgresRootJobs(DbContextOptions<KernelDb> options) => new RootJobDb(options);
     internal static KernelDb ForPostgresRootTimedJobIssuance(DbContextOptions<KernelDb> options) => new RootTimedJobIssuanceDb(options);
     internal bool UsesRootOperatorProtocol => this is RootOperatorDb;
@@ -174,6 +178,8 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
             throw new NotSupportedException("The continuation profile requires PostgreSQL.");
         if (UsesRootJobProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The generated-root job profile requires PostgreSQL.");
+        if (UsesRootValueProtocol && !Database.IsNpgsql())
+            throw new NotSupportedException("The generated-root value qualification requires PostgreSQL.");
         if (UsesRootOperatorProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The operator command profile requires PostgreSQL.");
         model.Entity<StoreVersionEntity>(entity =>
