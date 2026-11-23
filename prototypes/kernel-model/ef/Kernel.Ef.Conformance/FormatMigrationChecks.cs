@@ -15,6 +15,10 @@ internal static class FormatMigrationChecks
             db.Journal.Add(new JournalEntity { Partition = 0, Position = 1, Instance = "0/migrated", Revision = 1, Entries = "[]" });
             await db.SaveChangesAsync();
         }
+        var compatible = new PartitionRuntime("compatible-runtime", store, 2, lease);
+        await compatible.StartAsync(DurableHost.ForNode("compatible-runtime", store, new WorkflowInstance([]), 2));
+        await compatible.StopAsync();
+        Check(await store.PartitionCountAsync() == 2, "a counted runtime starts on the supported marker");
         Check(await store.TakeAsync(0, "original", lease) is { Epoch: 1 }, "current reader owns a partition");
         await VersionTakeChecks.Refuses(() => store.AdvanceStoreFormatAsync(current, next, UnexpectedMigration), "Live node 'original'",
             "migration with a live incompatible node");
