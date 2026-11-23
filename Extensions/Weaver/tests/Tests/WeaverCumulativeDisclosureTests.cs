@@ -727,6 +727,10 @@ public sealed partial class WeaverCumulativeDisclosureTests
         Assert.Null(history.Add(context, []));
         content["value"] = "after";
         Assert.Null(history.Add(context, []));
+        Assert.Single(history.Snapshots);
+        Assert.Equal("before", context[0].Content!.Value.GetProperty("value").GetString());
+        context[0] = HistoryAttachment("same", content);
+        Assert.Null(history.Add(context, []));
         context.Clear();
         Assert.Equal(2, history.Snapshots.Count);
         Assert.Equal("before", Assert.IsType<JsonElement>(Assert.Single(history.Snapshots[0].Context).Content).GetProperty("value").GetString());
