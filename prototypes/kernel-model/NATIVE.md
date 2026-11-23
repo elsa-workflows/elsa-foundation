@@ -282,8 +282,40 @@ is sent. The first reply carries the original registration and tenant. Its input
 with a new registration returns Duplicate. The ordinary owner, checkpoint reader and pending-input
 reader refuse the new format.
 
-Both owners run in one process, with an orderly handover and an in-process reply link. A held HTTP
-connection, process loss, event-based request admission and public PostgreSQL `RequestAsync` remain open.
+Both owners run in one process, with an orderly handover and an in-process reply link.
+
+### PostgreSQL HTTP approval preview
+
+With `KERNEL_PREVIEW_POSTGRES` pointing to a fresh dedicated database, run from `prototypes/kernel-model`:
+
+```sh
+dotnet run -c Release --project models/Native.Run -- pg-http-preview in-batch timely
+```
+
+The Native runner starts an actual loopback Kestrel host on a dynamic port and holds a real HTTP
+connection through the public `IIngress.RequestAsync` surface. A tenant-bound direct approval
+is stored against the exact actor. A second Worker takes at a higher epoch and commits one
+revision. The fixture checks the committed state on a separate connection as the reply is sent. The
+original HTTP connection receives `202 approved`. The other tenant's live reference returns 404 without
+adding input. An identical operation with a changed body never gets attached to the first
+registration and reaches its own 504 deadline. The approval's state and journal are unchanged.
+
+Use `checked` for the other owned fence mode. Use a fresh database for each run. Replace `timely` with
+`late` to hold the live reply through the deadline and observe HTTP 504 with the approval committed.
+Use `disconnect` to close the actual HTTP connection before the handover and see the admitted
+approval complete. Use `slow-body` to send the valid JSON across the route deadline, or `blocked` to hold
+the target row until the edge has returned 504. Both cases verify no input was added, then run a normal
+successful approval. Before listening, the loopback preview samples PostgreSQL time and retries any
+sample whose round trip exceeds 25 ms. The HTTP budget begins at handler entry and incoming replies are
+checked against current PostgreSQL time. The edge can return 504 while a canceled database call unwinds.
+Use `clock-delay` to discard a delayed startup sample, then delay admission. The fixture brackets the
+stored deadline against a separate PostgreSQL observation and still requires HTTP 202. Each run also verifies that public timeout replies include the
+committed Running or Finished status when the caller waits for that provider result.
+
+This preview uses fixture-private protocol 10 and two Workers with orderly handover in one process.
+It enables the public request contract for exact actor references inside the opt-in PostgreSQL
+preview. External transport, abrupt owner loss, event requests and HTTP-triggered starts
+remain separate K8 cases.
 
 ## 5. What it costs
 

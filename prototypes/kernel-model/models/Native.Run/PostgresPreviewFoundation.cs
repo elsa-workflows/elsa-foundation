@@ -10,7 +10,8 @@ internal sealed class PostgresPreviewFoundation(
     EfStore store,
     PostgresRootReads reads,
     string actorType,
-    Func<Contract.BoundScope, string, bool>? authorizeOperator = null) : Contract.IIngress, Contract.IActorReads
+    Func<Contract.BoundScope, string, bool>? authorizeOperator = null,
+    PostgresDirectRequests? directRequests = null) : Contract.IIngress, Contract.IActorReads
 {
     public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
@@ -80,7 +81,9 @@ internal sealed class PostgresPreviewFoundation(
 
     public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("Held requests are outside this preview.");
+        directRequests is not null && target is Contract.Target.Ref exact
+            ? directRequests.RequestAsync(scope, exact.Actor, id, kind, payload, add, request, cancellationToken)
+            : throw new NotSupportedException("This preview supports held direct requests only when the reply profile is enabled.");
 
     public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
         CancellationToken cancellationToken = default) =>

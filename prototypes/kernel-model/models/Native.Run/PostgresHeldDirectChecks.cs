@@ -12,7 +12,7 @@ namespace Kernel.Native.Run;
 internal static class PostgresHeldDirectChecks
 {
     private const string Tenant = "approval";
-    private const string Definition = "held-approval";
+    internal const string Definition = "held-approval";
     private const string Receiver = "approval-receiver";
     private const string Operation = "approve";
 
@@ -33,8 +33,7 @@ internal static class PostgresHeldDirectChecks
         var scope = FixedTenantScope.Bind(Tenant);
         var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType);
-        var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition, Wf.Sequence("flow",
-            Wf.Node<ApprovalSignal>("approve"), Wf.Respond("response", "approved", 202))));
+        var registry = new WorkflowRegistry().Add(Build());
         var started = await new WorkflowRuntime(api, api).StartAsync(scope, "start", NativeExecutionModel.Start(Definition), cancellationToken: stop);
         Check(started.Outcome == Contract.AdmissionOutcome.Accepted, "The public workflow start must be admitted.");
         var actor = started.Actor!.Value;
@@ -76,7 +75,7 @@ internal static class PostgresHeldDirectChecks
             answer = requests.CompletionOf(request);
             var expired = requests.OpenBound("expired", now - 1, Tenant, null);
             Check(await admission.AdmitDirectRequestAsync(Tenant, actor.Id, CompositeSignal.Kind, signal, Receiver, expired, false, stop)
-                == PostgresRootAdmission.DirectResult.Refused, "The database must refuse an already-expired registration.");
+                == PostgresRootAdmission.DirectResult.Expired, "The database must refuse an already-expired registration.");
             requests.Disconnect(expired);
             var other = requests.OpenBound(Operation, now + 30_000, "other", null);
             Check(await admission.AdmitDirectRequestAsync(Tenant, actor.Id, CompositeSignal.Kind, signal, Receiver, other, false, stop)
@@ -166,19 +165,8 @@ internal static class PostgresHeldDirectChecks
 
         EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
 
-        async Task<Worker> Take(EfStore source, string node, Action<TurnCommit, object?, Message?>? prepare = null)
-        {
-            var (roots, count) = await source.BindWorkerPartitionAsync(0, stop);
-            var type = new ActorAdapter(new PostgresNativeRootOwner.Headers(roots), new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]),
-                rootHeldReplies: true);
-            var worker = new Worker(node, 0, source, type, new WorkerOptions
-            {
-                Partitions = count, Transport = transport, OnPreparedCheckpoint = prepare
-            });
-            var host = new DurableHost([worker]);
-            await host.HeartbeatAsync(Defaults.Lease, stop);
-            return (Worker?)await host.ActivateAsync(0, stop) ?? throw new InvalidOperationException("The fixture owner did not take.");
-        }
+        Task<Worker> Take(EfStore source, string node, Action<TurnCommit, object?, Message?>? prepare = null) =>
+            TakeAsync(source, node, registry, transport, stop, prepare);
 
         async Task<EfStore.RootImage> Drive(Worker worker, EfStore source, long revision)
         {
@@ -199,6 +187,24 @@ internal static class PostgresHeldDirectChecks
             Check(worker.Owns, "The fixture pass must retain its fence.");
         }
     }
+
+    internal static async Task<Worker> TakeAsync(EfStore source, string node, WorkflowRegistry registry, IReplyTransport transport,
+        CancellationToken stop, Action<TurnCommit, object?, Message?>? prepare = null)
+    {
+        var (roots, count) = await source.BindWorkerPartitionAsync(0, stop);
+        var type = new ActorAdapter(new PostgresNativeRootOwner.Headers(roots), new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]),
+            rootHeldReplies: true);
+        var worker = new Worker(node, 0, source, type, new WorkerOptions
+        {
+            Partitions = count, Transport = transport, OnPreparedCheckpoint = prepare
+        });
+        var host = new DurableHost([worker]);
+        await host.HeartbeatAsync(Defaults.Lease, stop);
+        return (Worker?)await host.ActivateAsync(0, stop) ?? throw new InvalidOperationException("The fixture owner did not take.");
+    }
+
+    internal static Workflow Build() => Wf.Workflow(Definition, Wf.Sequence("flow",
+        Wf.Node<ApprovalSignal>("approve"), Wf.Respond("response", "approved", 202)));
 
     public sealed class ApprovalSignal : CompositeActivity, ISignalledComposite
     {

@@ -25,7 +25,7 @@ internal sealed partial class PostgresRootAdmission
 
     private static bool IsHeldDirect(string? value) => value?.StartsWith(HeldDirectPrefix, StringComparison.Ordinal) == true;
 
-    internal enum DirectResult { Accepted, Duplicate, Refused, MissingTarget }
+    internal enum DirectResult { Accepted, Duplicate, Refused, MissingTarget, Expired }
 
     /// <returns>True for a new send, false for a duplicate and null for an unavailable exact life or invalid input.</returns>
     internal async Task<bool?> AdmitDirectAsync(string tenant, string reference, string id, string kind, string? payload = null,
@@ -42,13 +42,22 @@ internal sealed partial class PostgresRootAdmission
         => await AdmitDirectCoreAsync(tenant, reference, id, kind, payload, due, keepFor, null, cancellationToken);
 
     internal Task<DirectResult> AdmitDirectRequestAsync(string tenant, string reference, string kind, string? payload,
-        string node, Request request, bool early, CancellationToken cancellationToken)
+        string node, Request request, bool early, CancellationToken cancellationToken, TimeSpan? keepFor = null)
     {
         if (request.Tenant != tenant || request.Done || string.IsNullOrWhiteSpace(node) || node.Length > 256 ||
             node.Contains('|') || node.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(node))
             return Task.FromResult(DirectResult.Refused);
-        return AdmitDirectCoreAsync(tenant, reference, request.Id, kind, payload, null, null,
+        return AdmitDirectCoreAsync(tenant, reference, request.Id, kind, payload, null, keepFor,
             new(request.ReplyAddress(node, early), request.Deadline), cancellationToken);
+    }
+
+    internal async ValueTask<long> ReadReplyTimeAsync(CancellationToken cancellationToken)
+    {
+        await using var db = create();
+        if (!db.UsesRootReplyProtocol) throw new NotSupportedException("This profile does not hold direct requests.");
+        return await db.Database.SqlQueryRaw<long>("""
+            SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value"
+            """).SingleAsync(cancellationToken);
     }
 
     private sealed record DirectReply(string Address, long Deadline);
@@ -92,7 +101,7 @@ internal sealed partial class PostgresRootAdmission
 
         if (reply is not null && !await db.Database.SqlQuery<bool>($"""
             SELECT ({reply.Deadline} > floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
-            """).SingleAsync(cancellationToken)) return await RefuseAsync(DirectResult.Refused);
+            """).SingleAsync(cancellationToken)) return await RefuseAsync(DirectResult.Expired);
 
         var receipt = await db.Database.SqlQuery<long>($"""
             INSERT INTO "FoundationDirectReceipts" AS r ("Reference", "Operation", "Until")

@@ -23,6 +23,14 @@ internal static class RequestReplies
         }
 
         var reply = await completion.WaitAsync(cancellationToken);
+        var status = (ActorStatus?)reply.Status;
+        if (reply.Error == "timeout" && actor is { } reference)
+            status = (ActorStatus?)store.ReadFoundationActor(scope.Tenant, reference.Id).Actor?.Row.Status;
+        return Present(reply, status);
+    }
+
+    internal static Reply Present(Durable.Reply reply, ActorStatus? status)
+    {
         if (reply.Item is Durable.CreationResult refusal)
             return new(null, refusal.OwningOperation, Error: refusal.Result switch
             {
@@ -38,9 +46,6 @@ internal static class RequestReplies
                 "OperatorUnavailable" => "operator unavailable",
                 _ => "missing"
             });
-        var status = (ActorStatus?)reply.Status;
-        if (reply.Error == "timeout" && actor is { } reference)
-            status = (ActorStatus?)store.ReadFoundationActor(scope.Tenant, reference.Id).Actor?.Row.Status;
         return new(reply.Channel, reply.Item, status, reply.Error);
     }
 }
