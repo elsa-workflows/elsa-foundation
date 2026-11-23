@@ -2492,98 +2492,16 @@
   margin-top: 8px;
 }
 
-.wf-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding: 8px;
-  list-style: none;
-}
 
-.wf-timeline-empty {
-  margin: 12px;
-}
 
-.wf-timeline-entry {
-  display: grid;
-  width: 100%;
-  align-items: start;
-  gap: 10px;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  border: 1px solid transparent;
-  border-radius: var(--wf-radius);
-  background: transparent;
-  color: var(--wf-text);
-  cursor: pointer;
-  font: inherit;
-  padding: 8px 9px;
-  text-align: left;
-}
 
-.wf-timeline-entry:hover,
-.wf-timeline-entry:focus-visible {
-  border-color: var(--wf-border);
-  background: var(--wf-panel-muted);
-  outline: none;
-}
 
-.wf-timeline-entry[data-selected="true"] {
-  border-color: color-mix(in srgb, var(--wf-accent) 52%, var(--wf-border));
-  background: var(--wf-accent-soft);
-  box-shadow: inset 3px 0 0 var(--wf-accent);
-}
 
-.wf-timeline-icon {
-  display: inline-flex;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--wf-radius);
-}
 
-.wf-timeline-body {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 1px;
-}
 
-.wf-timeline-body strong {
-  overflow: hidden;
-  font-size: var(--studio-body-size);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.wf-timeline-body small {
-  overflow: hidden;
-  color: var(--wf-muted-text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: var(--studio-label-size);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.wf-timeline-body .wf-timeline-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-family: inherit;
-}
 
-.wf-timeline-body .wf-timeline-effect {
-  overflow: visible;
-  font-family: inherit;
-  font-size: 11px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-  text-overflow: clip;
-  white-space: normal;
-}
 
 .wf-activity-compensates {
   display: flex;
@@ -2606,24 +2524,8 @@
   cursor: pointer;
 }
 
-.wf-timeline-meta {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
-  color: var(--wf-muted-text);
-  font-size: var(--studio-label-size);
-  font-variant-numeric: tabular-nums;
-}
 
-.wf-timeline-meta time {
-  color: var(--wf-text);
-}
 
-.wf-timeline-pill {
-  flex: 0 0 auto;
-}
 
 .wf-node.wf-node-runtime {
   padding-bottom: 9px;
@@ -7003,14 +6905,11 @@ html[data-theme-material] .wf-instance-tab-content {
   background-size: var(--studio-material-panel-bg-size);
 }
 
-html[data-theme-material] .wf-timeline-entry:hover,
-html[data-theme-material] .wf-timeline-entry:focus-visible,
 html[data-theme-material] .wf-instance-activity:hover,
 html[data-theme-material] .wf-instance-incident:hover {
   background: var(--studio-material-hover-bg);
 }
 
-html[data-theme-material] .wf-timeline-entry[data-selected="true"],
 html[data-theme-material] .wf-instance-activity[data-selected="true"],
 html[data-theme-material] .wf-instance-incident[data-selected="true"] {
   background: var(--studio-material-active-bg);
