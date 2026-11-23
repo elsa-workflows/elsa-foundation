@@ -44,7 +44,7 @@ internal static class PublicOrderExample
             await using (var first = await ActivateAsync("order-owner"))
             {
                 await DriveAsync(first);
-                frame = (await HistoryAsync(actor)).Single(entry => entry is [_, null, "entry", "AwaitingPayment"])[0]!;
+                frame = (await HistoryAsync(actor)).Entries.Single(entry => entry is [_, null, "entry", "AwaitingPayment"])[0]!;
                 Require(await GetStatusAsync(actor) == Contract.ActorStatus.Running && Marks().SequenceEqual(["reserve stock", "book shipment"]),
                     "The order must wait for payment after executing stock and shipping activities.");
             }
@@ -55,14 +55,18 @@ internal static class PublicOrderExample
             var sent = await SignalAsync(actor, frame, "payment-decision", decision);
             Require(sent.Outcome == Contract.AdmissionOutcome.Accepted, "The payment decision must be admitted after owner replacement.");
             await DriveAsync(replacement);
-            var replay = await SignalAsync(actor, frame, "payment-decision", decision);
+            var (_, beforeReplay) = await HistoryAsync(actor);
+            Require(beforeReplay is not null, "The payment decision must leave a journal bookmark.");
+            var replay = await SignalAsync(actor, frame, "payment-decision", accepted ? decision : "shipment-released");
             Require(replay.Outcome == Contract.AdmissionOutcome.Duplicate, "The payment operation must keep its receipt across retry.");
             await DriveAsync(replacement);
+            Require((await reads.TailAsync(scope, actor, beforeReplay, token)).Items.Count == 0,
+                "Replaying the payment operation must add no journal entry.");
 
             if (!accepted)
             {
                 Require(await GetStatusAsync(actor) == Contract.ActorStatus.Running &&
-                    (await HistoryAsync(actor)).Count(entry => entry is [_, _, "entry", "ReleasingShipment"]) == 1 &&
+                    (await HistoryAsync(actor)).Entries.Count(entry => entry is [_, _, "entry", "ReleasingShipment"]) == 1 &&
                     Marks().SequenceEqual(["reserve stock", "book shipment", "release shipment"]),
                     "Releasing shipment must wait for its acknowledgement before releasing stock.");
                 var confirmation = await SignalAsync(actor, frame, "shipment-release-confirmed", "shipment-released");
@@ -77,7 +81,7 @@ internal static class PublicOrderExample
                 await DriveAsync(replacement);
             }
 
-            var history = await HistoryAsync(actor);
+            var (history, _) = await HistoryAsync(actor);
             var states = history.Where(entry => entry[2] == "entry").Select(entry => entry[3]);
             var expectedStates = accepted
                 ? new[] { "AwaitingPayment", "Fulfilled" }
@@ -122,7 +126,7 @@ internal static class PublicOrderExample
             }
         }
 
-        async Task<List<string?[]>> HistoryAsync(Contract.ActorRef actor)
+        async Task<(List<string?[]> Entries, Contract.PageToken? End)> HistoryAsync(Contract.ActorRef actor)
         {
             var entries = new List<string?[]>();
             Contract.PageToken? bookmark = null;
@@ -136,7 +140,7 @@ internal static class PublicOrderExample
                         json.RootElement.GetString() is { } item && item.StartsWith("statechart:", StringComparison.Ordinal))
                         entries.Add(JsonSerializer.Deserialize<string?[]>(item["statechart:".Length..])!);
                 }
-                if (page.Next is not { } next) return entries;
+                if (page.Next is not { } next) return (entries, bookmark);
                 if (next == bookmark) throw new InvalidOperationException("The journal cursor stopped advancing.");
                 bookmark = next;
             }
