@@ -29,6 +29,9 @@ internal static class PostgresPublicPreview
             var settings = new Npgsql.NpgsqlConnectionStringBuilder(connection);
             if (settings.Host != "127.0.0.1" || settings.SslMode != Npgsql.SslMode.Disable)
                 throw new ArgumentException("The wire meter requires a dedicated plaintext loopback PostgreSQL connection.");
+            if (settings.GssEncryptionMode == Npgsql.GssEncryptionMode.Require)
+                throw new ArgumentException("The wire meter cannot measure a connection that requires GSS encryption.");
+            settings.GssEncryptionMode = Npgsql.GssEncryptionMode.Disable;
             wire = Wire.Start("postgres", $"Host=127.0.0.1;Port={settings.Port}");
             settings.Port = wire.LocalPort;
             measuredConnection = settings.ConnectionString;
@@ -136,8 +139,37 @@ internal static class PostgresPublicPreview
                 Check(standbyTurns.Count == 0, "the duplicate started zero public actor turns on the standby");
             Report("replay including admission");
             var same = await ReadCheckpoint();
-            Check(same.Revision == before.Revision && same.State == before.State, "replay left the checkpoint byte for byte");
+            Check(same.Revision == before.Revision && same.State == before.State, "replay preserved the serialized workflow state and checkpoint revision");
             Check((await foundation.TailAsync(scope, actor, bookmark, stop)).Items.Count == 0, "replay added no journal entries");
+            if (phase == "terminal")
+            {
+                foreach (var invalidKind in new[] { new string('x', 257), "input\ud800" })
+                {
+                    var rejected = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "invalid-kind", invalidKind,
+                        cancellationToken: stop);
+                    Check(rejected is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null, Reason: null },
+                        "invalid ordinary kind metadata on the live root returned a generic refusal");
+                }
+                var normalStart = new Contract.StartSpec(PublicActor.ActorType, "definition");
+                foreach (var (operation, spec) in new[]
+                {
+                    ("~reserved", normalStart), ("extra-data", normalStart with { TypeData = new string('x', 16 * 1024 + 1) }),
+                    ("expanded-start", normalStart with { Input = new string('\0', 3 * 1024 * 1024) })
+                })
+                {
+                    var rejected = await foundation.SendAsync(scope, new Contract.Target.Start(spec), operation, Contract.Kinds.Start,
+                        cancellationToken: stop);
+                    Check(rejected is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null, Reason: null },
+                        "invalid metadata or oversized storage framing on a supported start returned a generic refusal");
+                }
+                var overflow = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "oversized", "notice",
+                    new string('\0', 3 * 1024 * 1024), cancellationToken: stop);
+                var missing = await foundation.SendAsync(new Contract.BoundScope("preview-other"), new Contract.Target.Ref(actor),
+                    "missing", "notice", cancellationToken: stop);
+                Check(overflow is { Outcome: Contract.AdmissionOutcome.Refused, Reason: null, Actor: null } &&
+                    missing is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch, Actor: null },
+                    "a valid root's physical size refusal and an unavailable tenant-bound target have distinct receipts");
+            }
 
             Reset();
             Check(await Approve("approval-2", "Grace", frame) == Contract.AdmissionOutcome.Accepted, "second approval admitted");
@@ -146,7 +178,7 @@ internal static class PostgresPublicPreview
             {
                 var extra = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "already-queued", CompositeSignal.Kind,
                     Json.Write(new CompositeSignal(frame, "approve", "third")), cancellationToken: stop);
-                Check(extra.Outcome == Contract.AdmissionOutcome.Accepted, "third input was admitted while the actor was still running");
+                Check(extra.Outcome == Contract.AdmissionOutcome.Accepted && extra.Actor == actor, "third input was admitted while the actor was still running");
                 var diagnosticAdmission = new PostgresRootAdmission(() => new(data), TimeSpan.Zero);
                 var pending = await diagnosticAdmission.ReadPendingDirectAsync(scope.Tenant, actor.Id, stop);
                 queued = pending.Single(input => input.Id == "already-queued");
@@ -213,9 +245,14 @@ internal static class PostgresPublicPreview
         }
         return 0;
 
-        async Task<Contract.AdmissionOutcome> Approve(string id, string name, string frame) =>
-            (await foundation.SendAsync(scope, new Contract.Target.Ref(actor), id, CompositeSignal.Kind,
-                Json.Write(new CompositeSignal(frame, "approve", name)), cancellationToken: stop)).Outcome;
+        async Task<Contract.AdmissionOutcome> Approve(string id, string name, string frame)
+        {
+            var receipt = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), id, CompositeSignal.Kind,
+                Json.Write(new CompositeSignal(frame, "approve", name)), cancellationToken: stop);
+            if (receipt.Outcome is Contract.AdmissionOutcome.Accepted or Contract.AdmissionOutcome.Duplicate)
+                Check(receipt.Actor == actor, $"the {id} receipt names the original workflow");
+            return receipt.Outcome;
+        }
 
         async Task<string> ReadFrame()
         {
@@ -264,7 +301,7 @@ internal static class PostgresPublicPreview
         {
             if (wire is not null)
                 Console.WriteLine($"wire {operation}: {wire.Trips - startTrips} TCP direction turns, {wire.ProtocolRequests - startGroups} PostgreSQL Sync/Query groups, {wire.Connections - startConnections} new TCP connections");
-            Console.WriteLine($"{operation}: {counter.Commands} commands, {counter.Transactions.Ended} transaction completions, {counter.Commands + counter.Transactions.Ended} measured round trips");
+            Console.WriteLine($"{operation}: {counter.Commands} commands, {counter.Transactions.Ended} transaction completions, EF round-trip estimate {counter.Commands + counter.Transactions.Ended}");
         }
     }
 
