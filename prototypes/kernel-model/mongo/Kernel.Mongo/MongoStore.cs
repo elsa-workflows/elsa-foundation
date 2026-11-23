@@ -644,8 +644,7 @@ public sealed partial class MongoStore : IKernelStore
     {
         // The node's document carries the primary's time of its last beat; the count and the free partitions are read
         // against that same time.
-        var beat = await _nodes.FindOneAndUpdateAsync(new BsonDocument("_id", node), NodeRenewal(),
-            new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After }, cancellationToken);
+        var beat = await RenewRegisteredNodeAsync(null, node, null, cancellationToken);
         return await MembershipAsync(beat["seenAt"].AsInt64, window, cancellationToken);
     }
 

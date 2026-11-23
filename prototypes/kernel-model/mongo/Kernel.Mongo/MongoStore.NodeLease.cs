@@ -16,7 +16,7 @@ public sealed partial class MongoStore
 
     /// <summary>A heartbeat records the issuing binary's readable kernel formats alongside primary time.
     /// A membership-only heartbeat keeps the existing lease unchanged.</summary>
-    private static UpdateDefinition<BsonDocument> NodeRenewal(TimeSpan? lease = null)
+    private static UpdateDefinition<BsonDocument> NodeRenewal(TimeSpan? lease, bool register = false)
     {
         var fields = new BsonDocument
         {
@@ -25,6 +25,7 @@ public sealed partial class MongoStore
             { "readableMessageProtocol", new BsonArray { MessageProtocol } },
             { "readableJournalCodec", new BsonArray { JournalCodec } }
         };
+        if (register) fields.Add("formatGrant", CurrentGrant);
         if (lease is { } duration)
             fields.Add("leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, (long)duration.TotalMilliseconds }));
         return Builders<BsonDocument>.Update.Pipeline(new BsonDocument[] { new("$set", fields) });
@@ -50,7 +51,7 @@ public sealed partial class MongoStore
             catch (MongoException e) when (e.HasErrorLabel("TransientTransactionError") && !cancellationToken.IsCancellationRequested)
             {
                 if (attempt >= 5)
-                    throw new StoreException(Failure.Transient, $"The take's transaction still conflicted after {attempt} attempts.", e);
+                    throw new StoreException(Failure.Transient, $"The node transaction still conflicted after {attempt} attempts.", e);
                 await Task.Delay(Random.Shared.Next(5, 30), cancellationToken);
             }
         }
@@ -92,7 +93,7 @@ public sealed partial class MongoStore
                         .Project(new BsonDocument("_id", 1)).ToListAsync(deadline.Token)).Select(d => d["_id"].AsString).ToHashSet(StringComparer.Ordinal);
                     foreach (var owner in owners.Where(o => !live.Contains(o))) expired.Add(owner);
                 }
-                await _nodes.UpdateOneAsync(session, new BsonDocument("_id", node), NodeRenewal(lease), new UpdateOptions { IsUpsert = true }, deadline.Token);
+                await RenewRegisteredNodeAsync(session, node, lease, deadline.Token);
             }
             catch (Exception e) when (Deadline(e, deadline, cancellationToken))
             {
@@ -139,7 +140,7 @@ public sealed partial class MongoStore
         var doc = await RetriedAsync(async session =>
         {
             await RequireVersionsAsync(session, cancellationToken);
-            await _nodes.UpdateOneAsync(session, new BsonDocument("_id", node), NodeRenewal(lease), new UpdateOptions { IsUpsert = true }, cancellationToken);
+            await RenewRegisteredNodeAsync(session, node, lease, cancellationToken);
             var taken = await _partitions.FindOneAndUpdateAsync(session, new BsonDocument { { "_id", partition }, { "owner", node }, { "epoch", epoch } },
                 Builders<BsonDocument>.Update.Pipeline(new BsonDocument[] { new("$set", set) }), new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken);
             if (taken is not null && countDeaths)
@@ -152,8 +153,9 @@ public sealed partial class MongoStore
     }
 
     /// <summary>
-    /// The node heartbeat: one single-document write to the node document (no transaction) under a timeout of a third of
-    /// the lease (maxTimeMS), then a separate find of this node's partitions with their epochs, then the membership reads.
+    /// A recurring heartbeat renews its live registered node with one document write. Cold registration and
+    /// an expired lease take the registration transaction. The renewal has a deadline of a third of the lease;
+    /// the existing reads of owned partitions and membership follow it.
     /// </summary>
     public async ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default)
     {
@@ -161,8 +163,13 @@ public sealed partial class MongoStore
         List<BsonDocument> owned;
         try
         {
-            beat = await _nodes.FindOneAndUpdateAsync(new BsonDocument("_id", node), NodeRenewal(lease),
-                new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After, MaxTime = lease / 3 }, cancellationToken);
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(lease / 3);
+            try { beat = await RenewRegisteredNodeAsync(null, node, lease, deadline.Token); }
+            catch (OperationCanceledException e) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                throw new StoreException(Failure.Unknown, "The heartbeat outlasted a third of the lease.", e);
+            }
             owned = await _partitions.Find(new BsonDocument("owner", node), new FindOptions { MaxTime = lease / 3 }).Project(new BsonDocument("epoch", 1)).Sort(new BsonDocument("_id", 1)).ToListAsync(cancellationToken);
         }
         catch (Exception e) when (Deadline(e, null, cancellationToken))

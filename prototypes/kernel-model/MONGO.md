@@ -302,3 +302,11 @@ the partition's next commit and every take. The kernel's default of 500 instance
 - A real replica set of three: failover, rollback, `$$NOW` jumping, majority reads lagging. All single node.
 - The stress test against EF PostgreSQL through the suite (its own stress test exists); SQLite under concurrency.
 - The `node` heartbeat, fair share, the projection row: not in the contract yet, so not in the suite.
+
+### Node registration before a format advance
+
+A node obtains its `formatGrant` in a transaction that writes the partition-count and format marker in `meta`, checks its three versions, and writes the node document. Flipping the `nodeRegistration` bit makes every registration contend with a migration that updates this marker. The first ownership heartbeat and renewal of an expired lease use this path. A node with a current grant and a live lease renews by changing its own document in one command. A membership-only heartbeat retains its existing lease. A take or retake performs registration when needed in its existing transaction.
+
+A future coordinated advance must check live nodes' advertised versions, revoke old grants, and publish its marker in one transaction. An active renewal writes the node that the migration must change to revoke its grant. A first registration writes the marker itself. A conflict requires a fresh snapshot and a fresh live-node check. This protocol requires a complete coordinated stop of binaries predating the grant predicate; their queued heartbeats can update a node document after revocation. The same stop protects owners already holding partitions when data formats change.
+
+`node-registration` runs two-session checks against a disposable replica set, with a test-only incompatible marker.
