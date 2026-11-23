@@ -92,6 +92,11 @@ internal static class RootTurnChecks
 
         await roots.AdmitDirectAsync(tenant, reference, "finish", "done", due: 0);
         var finish = (await roots.ReadPendingDirectAsync(tenant, reference)).Single(m => m.Id == "finish");
+        await Refused(() => store.CommitRootTurnAsync(tenant, reference, running, [finish], fence, timeout, InstanceStatus.Finished,
+            "terminal", 1, "layout2", labels, null), "finished checkpoint without a journal entry");
+        Check((await cold.ReadFirstRootAsync(tenant, reference)) is { Revision: 2, Status: InstanceStatus.Running, TerminalRevision: null, TerminalAt: null } &&
+            (await roots.ReadPendingDirectAsync(tenant, reference)).Contains(finish) && (await cold.ReadJournalOfAsync(home, id, 0)).Count == 2,
+            "missing terminal journal leaves the original revision, pending input and history intact");
         var legacyRow = new InstanceRow(id, "", "", InstanceStatus.Running, "overwritten", 3, null);
         await Refused(() => store.CommitAsync(Legacy(bare with { Row = legacyRow, Expected = 2 })), "legacy overwrite after a qualified revision");
         await roots.AdmitDirectAsync(tenant, reference, "queued-1", "step");

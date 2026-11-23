@@ -79,8 +79,11 @@ internal static class PostgresRootHistoryChecks
                 var delay = due!.Value - await Clock();
                 if (delay >= 0) await Task.Delay(TimeSpan.FromMilliseconds(delay + 1), ct);
                 var eligible = await store.PollAsync(0, epoch, TimeSpan.Zero, 8, ct);
-                Check(eligible.Now >= due && eligible.Messages is [var first] && first.Message.Kind == Kinds.Start,
-                    "the due creator is the sole candidate until its first checkpoint lands");
+                var creator = (await admissions.ReadPendingCreatorAsync(scope.Tenant, actor.Id, ct))!;
+                var seen = await db.Messages.Where(m => m.Id == creator.InboxKey.Id && m.InboxScope == 0).Select(m => m.Seen).SingleAsync(ct);
+                Check(eligible.Now >= due && (seen == epoch ? eligible.Messages.Count == 0 :
+                    eligible.Messages is [var first] && first.Message.InboxKey == creator.InboxKey),
+                    "at its deadline the exact creator is already seen or eligible while the direct input stays withheld");
             }
             var check = await Drive(delayed ? 2 : 1);
             var frame = Json.Read<NativeState>(check.State!).Frames.Single().Key;
