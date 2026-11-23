@@ -28,7 +28,8 @@ public sealed partial class MongoStore
     {
         if (expected != CurrentFormat && !(_options.ScopedJobRoots && expected == JobGenerationFormat) &&
             !(_options.ScopedJobResults && expected == ScopedJobRootFormat) &&
-            !(_options.ScopedJobSuspend && expected == JobResultFormat) && !(_options.ApplyJobSuspend && expected == JobSuspendFormat))
+            !(_options.ScopedJobSuspend && expected == JobResultFormat) && !(_options.ApplyJobSuspend && expected == JobSuspendFormat) &&
+            !(_options.ScopedJobResume && expected == AppliedSuspendFormat))
             throw new StoreFormatException($"This migrator reads source {CurrentFormat}. Requested source {expected}.");
         if (next == expected || next.StoreSchema < expected.StoreSchema || next.MessageProtocol < expected.MessageProtocol ||
             next.JournalCodec < expected.JournalCodec)

@@ -20,6 +20,7 @@ public sealed record MongoStoreOptions
     internal bool JobGenerations { get; init; }
     internal bool ScopedJobRoots { get; init; }
     internal bool ScopedJobResults { get; init; }
+    internal bool ScopedJobResume { get; init; }
     internal bool ApplyJobSuspend { get; init; }
     internal bool ScopedJobSuspend { get; init; }
 
@@ -62,7 +63,9 @@ public sealed partial class MongoStore : IKernelStore
             throw new ArgumentException("Scoped suspension requires the result format.", nameof(options));
         if (_options.ApplyJobSuspend && !_options.ScopedJobSuspend)
             throw new ArgumentException("Suspension application requires the staged operator protocol.", nameof(options));
-        _format = _options.ApplyJobSuspend ? AppliedSuspendFormat : _options.ScopedJobSuspend ? JobSuspendFormat : _options.ScopedJobResults ? JobResultFormat : _options.ScopedJobRoots ? ScopedJobRootFormat : _options.JobGenerations ? JobGenerationFormat : CurrentFormat;
+        if (_options.ScopedJobResume && !_options.ApplyJobSuspend)
+            throw new ArgumentException("Scoped resume requires the silent checkpoint format.", nameof(options));
+        _format = _options.ScopedJobResume ? ResumeFormat : _options.ApplyJobSuspend ? AppliedSuspendFormat : _options.ScopedJobSuspend ? JobSuspendFormat : _options.ScopedJobResults ? JobResultFormat : _options.ScopedJobRoots ? ScopedJobRootFormat : _options.JobGenerations ? JobGenerationFormat : CurrentFormat;
         _grant = new BsonDocument
         {
             { "storeSchema", _format.StoreSchema }, { "messageProtocol", _format.MessageProtocol }, { "journalCodec", _format.JournalCodec }
@@ -369,6 +372,8 @@ public sealed partial class MongoStore : IKernelStore
                         envelope.Add("rootRef", settlement.Reference).Add("tenant", settlement.Tenant)
                             .Add("senderCreation", message.SenderCreation).Add("targetCreation", message.TargetCreation!.Value)
                             .Add("resultOf", InboxId(settlement.Ticket));
+                        if (_options.ScopedJobResume)
+                            envelope.Add("inputOrder", await NextRootInputOrderAsync(session, settlement.Tenant, settlement.Reference, message, cancellationToken));
                     }
                     models.Add(new BulkWriteInsertOneModel<BsonDocument>(_messages.CollectionNamespace, envelope));
                 }

@@ -12,6 +12,10 @@ public sealed partial class MongoStore
 
     private static MongoStoreFormat JobResultFormat => new(4, 4, 1);
 
+    private static MongoStoreFormat ResumeFormat => new(6, 6, 1);
+    internal Task<bool> UpgradeRootResumeAsync(CancellationToken token = default) =>
+        AdvanceStoreFormatAsync(AppliedSuspendFormat, ResumeFormat, CheckLegacyInputOrderAsync, token);
+
     private static MongoStoreFormat AppliedSuspendFormat => new(5, 5, 1);
     internal Task<bool> UpgradeAppliedSuspendAsync(CancellationToken token = default) =>
         AdvanceStoreFormatAsync(JobSuspendFormat, AppliedSuspendFormat, cancellationToken: token);
@@ -71,7 +75,8 @@ public sealed partial class MongoStore
             : _options.ScopedJobRoots && JobGenerationFormat.Matches(marker) ? JobGenerationFormat
             : _options.ScopedJobResults && ScopedJobRootFormat.Matches(marker) ? ScopedJobRootFormat
             : _options.ScopedJobSuspend && JobResultFormat.Matches(marker) ? JobResultFormat
-            : _options.ApplyJobSuspend && JobSuspendFormat.Matches(marker) ? JobSuspendFormat : _format;
+            : _options.ApplyJobSuspend && JobSuspendFormat.Matches(marker) ? JobSuspendFormat
+            : _options.ScopedJobResume && AppliedSuspendFormat.Matches(marker) ? AppliedSuspendFormat : _format;
         RequireVersions(marker, readable);
     }
 
