@@ -719,7 +719,7 @@ describe("workflow run inputs", () => {
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
-  it("restores the original Run control when asynchronous contract loading already moved focus to body", () => {
+  it("restores the original Run control when asynchronous contract loading already moved focus to body", async () => {
     const opener = document.createElement("button");
     document.body.appendChild(opener);
     opener.focus();
@@ -731,8 +731,30 @@ describe("workflow run inputs", () => {
     );
     expect(document.activeElement).toBe(container.querySelector("input"));
     flushSync(() => active!.root.render(null));
-    expect(document.activeElement).toBe(opener);
+    await vi.waitFor(() => expect(document.activeElement).toBe(opener));
     opener.remove();
+  });
+
+  it("retains shared dialog focus restoration when no explicit original Run control is supplied", async () => {
+    const opener = document.createElement("button"); document.body.append(opener); opener.focus();
+    try {
+      render(<WorkflowRunInputDialog inputs={[]} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+      flushSync(() => active!.root.render(null));
+      await vi.waitFor(() => expect(document.activeElement).toBe(opener));
+    } finally { opener.remove(); }
+  });
+
+  it("does not steal newly assigned focus when the Run dialog closes", async () => {
+    const opener = document.createElement("button"), destination = document.createElement("button");
+    document.body.append(opener, destination); opener.focus();
+    try {
+      render(<WorkflowRunInputDialog inputs={[]} returnFocusTo={opener} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+      flushSync(() => active!.root.render(null));
+      destination.focus();
+      // The shared dialog dispatches close autofocus on the next task after unmount.
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      expect(document.activeElement).toBe(destination);
+    } finally { opener.remove(); destination.remove(); }
   });
 });
 

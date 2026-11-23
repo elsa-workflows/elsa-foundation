@@ -25,9 +25,9 @@
            Text="Missing prebuilt Studio browser asset: %(RequiredStudioBrowserAsset.Identity). Build the Studio frontend before packing Elsa.Studio.Hosting." />
   </Target>
   <ItemGroup>
-    <ProjectReference Include="../../../../Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
   </ItemGroup>
 </Project>

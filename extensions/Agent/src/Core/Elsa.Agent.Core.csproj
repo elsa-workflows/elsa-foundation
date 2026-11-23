@@ -12,6 +12,6 @@
     <InternalsVisibleTo Include="Elsa.Agent.Persistence.EntityFrameworkCore" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
   </ItemGroup>
 </Project>

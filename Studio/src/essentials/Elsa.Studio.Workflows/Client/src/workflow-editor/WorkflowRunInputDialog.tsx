@@ -44,9 +44,10 @@ export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, ret
 
   return (
     <StudioDialog open title="Run workflow" description={`Provide the workflow inputs for this run. Dates use ${resolveStudioTimeZone(timeZone)}. A repeated hour uses its earlier offset.`}
-      onCloseAutoFocus={event => {
-        if (returnFocusTo?.isConnected) { event.preventDefault(); returnFocusTo.focus(); }
-      }}
+      onCloseAutoFocus={returnFocusTo ? event => {
+        event.preventDefault();
+        if (document.activeElement === document.body && returnFocusTo.isConnected) returnFocusTo.focus();
+      } : undefined}
       onClose={onCancel} initialFocusRef={firstInput} dismissDisabled={busy} dismissOnOutsideClick={false}
       noValidate onSubmit={submit}
       footer={<StudioDialogFooter onCancel={onCancel} cancelDisabled={busy} confirmDisabled={busy}
