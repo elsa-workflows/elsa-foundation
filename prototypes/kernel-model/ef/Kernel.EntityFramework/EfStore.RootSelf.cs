@@ -49,7 +49,7 @@ public sealed partial class EfStore
             SELECT "Id", "InboxScope", "EventMatch", "Seq", "Partition", "Target", "Kind", "Start", "Sender", "Due",
                    "Seen", "Trial", "Attempts", "KeepUntil", "Done", "ReplyTo",
                    CASE WHEN "FoundationSelfContent" IS NULL THEN "Payload"
-                        ELSE "Payload" || chr(10) || encode("FoundationSelfContent", 'base64') END AS "Payload"
+                        ELSE "Payload" || chr(10) || encode("FoundationSelfContent", 'base64') END AS "Payload", "JobGeneration"
               FROM "Messages";
             """, token);
 
@@ -82,7 +82,7 @@ public sealed partial class EfStore
     private static Message DecodeRootSelf(MessageEntity row, FoundationSelfIssuer? issue)
     {
         var actor = row.InboxScope == RootSelfScope ? SelfActor(InboxKey.Issued(row.Id)) : null;
-        if (issue is null || actor != row.Target || row.Sender != actor || row.Kind != RootSelfWire ||
+        if (issue is null || row.JobGeneration != 0 || actor != row.Target || row.Sender != actor || row.Kind != RootSelfWire ||
             row.Payload is null || row.Start is not null || row.KeepUntil is not null || row.ReplyTo is not null)
             throw RootShape();
         var cut = row.Payload.IndexOf('\n');
