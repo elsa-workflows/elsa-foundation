@@ -23,6 +23,7 @@ public sealed partial class EfStore
 
     private abstract record QualifiedRootCheckpoint(long JournalRevision)
     {
+        internal virtual long RevisionFor(string actor) => JournalRevision;
         internal abstract Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken);
     }
 
@@ -101,11 +102,11 @@ public sealed partial class EfStore
     internal ValueTask<Committed> CommitFirstRootAsync(string tenant, string reference, Message creator,
         PartitionFence fence, TimeSpan lease, string? state, int stateVersion, string typeData,
         IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken = default) =>
-        WriteFirstRootAsync(tenant, reference, creator, fence, lease, state, stateVersion, typeData, labels, journal, cancellationToken, null);
+        CommitPreparedRootAsync(fence, lease, PrepareFirstRoot(tenant, reference, creator, fence, state, stateVersion, typeData, labels, journal), cancellationToken);
 
-    private ValueTask<Committed> WriteFirstRootAsync(string tenant, string reference, Message creator,
-        PartitionFence fence, TimeSpan lease, string? state, int stateVersion, string typeData,
-        IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken, CommitBatch? workerBatch)
+    private PreparedRoot PrepareFirstRoot(string tenant, string reference, Message creator,
+        PartitionFence fence, string? state, int stateVersion, string typeData,
+        IReadOnlyDictionary<string, string> labels, string journal)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("First root checkpoints require PostgreSQL.");
         if (creator.Start is not { Parent: null, Creation: { Generation: 1, Previous: 0 } } start ||
@@ -119,8 +120,7 @@ public sealed partial class EfStore
             History: start.History, StateVersion: stateVersion).WithFoundationState(storedState);
         // BindCheckpointAsync consumes the exact, due creator before this same transaction lands.
         var turn = new TurnCommit(row.Id, row, null, [], [], [], [], [], journal);
-        var batch = new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [turn], [], []);
-        return CommitRootBatchAsync(workerBatch is null ? batch : workerBatch with { Turns = [turn] }, new FirstRootCheckpoint(tenant, reference, creator, header), cancellationToken);
+        return new(turn, new FirstRootCheckpoint(tenant, reference, creator, header));
     }
 
     private static (string? State, string Header) EncodeRootContent(string model, string definition, string? state,

@@ -22,13 +22,37 @@ using Npgsql;
 string[] flags = ["--fence-in-batch", "--checked-fence", "--m5", "--rcsi-off", "--rc", "--ef-commit", "--owned-commit", "--fence-ignores-count"];
 switch (args)
 {
+    case ["sqlite", "node-formats", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckNodeFormatsAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "node-formats", .. var options]:
+        await new EfProvider(engine, connection, options).CheckNodeFormatsAsync();
+        return 0;
+    case ["sqlite", "version-take", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckTakeVersionsAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "version-take", .. var options]:
+        await new EfProvider(engine, connection, options).CheckTakeVersionsAsync();
+        return 0;
+    case ["sqlite", "version-services", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckServiceVersionsAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "version-services", .. var options]:
+        await new EfProvider(engine, connection, options).CheckServiceVersionsAsync();
+        return 0;
+    case ["sqlite", "format-migration", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckFormatMigrationAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "format-migration", .. var options]:
+        await new EfProvider(engine, connection, options).CheckFormatMigrationAsync();
+        return 0;
     case ["root-admission-writer"]:
         return await GeneratedRootChecks.WriteFromChildAsync();
     case ["postgres", var connection, "root-journal"]:
         await new EfProvider("postgres", connection, []).CheckRootJournalAsync();
         return 0;
-    case ["postgres", var connection, "root-direct-send"]:
-        await new EfProvider("postgres", connection, []).CheckDirectSendAsync();
+    case ["postgres", var connection, "root-direct-send", .. var options]:
+        await new EfProvider("postgres", connection, options).CheckDirectSendAsync();
         return 0;
     case ["postgres", var connection, "root-turn", .. var options]:
         await new EfProvider("postgres", connection, options).CheckRootTurnAsync();
@@ -124,6 +148,33 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         _ => null,
     };
 
+    internal async Task CheckNodeFormatsAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
+        await NodeAdvertisementChecks.Run(fixture.CreateContext, fixture.Store);
+    }
+
+    internal async Task CheckTakeVersionsAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
+        await VersionTakeChecks.Run(fixture.CreateContext, fixture.Store, fixture.NewClient());
+    }
+
+    internal async Task CheckServiceVersionsAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
+        await VersionServiceChecks.Run(fixture.CreateContext, fixture.Store);
+    }
+
+    internal async Task CheckFormatMigrationAsync()
+    {
+        await using (var fixture = (Provided)await CreateAsync(2, new StoreSetup()))
+            await FormatMigrationChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
+        await using var race = (Provided)await CreateAsync(2, new StoreSetup());
+        await FormatMigrationRaceChecks.Run(race.CreateContext,
+            interceptor => Store(race.CreateAdmin(interceptor), FenceInBatch), (EfStore)race.Store);
+    }
+
     public async Task<ProvidedStore> CreateAsync(int partitions, StoreSetup setup)
     {
         var counter = setup.Counting ? new Counting(Pg) : null;
@@ -175,6 +226,7 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         public override IKernelStore NewClient() => outside;
         public override ICostCounter? Counter => counter;
         public override Func<int, Task>? Reopen => partitions => outside.CreateAsync(partitions);
+        internal Func<KernelDb> CreateAdmin(params IInterceptor[] interceptors) => provider.Factory(admin, interceptors);
 
         // PostgreSQL refuses a NUL in text (22021), every time. SQLite, SQL Server and MySQL store any string the
         // instance row can hold: no refused row (the case is skipped).
