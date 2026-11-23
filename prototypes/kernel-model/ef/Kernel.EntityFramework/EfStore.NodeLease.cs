@@ -85,8 +85,8 @@ public sealed partial class EfStore
         Engine is null && !postgres ? db.Database.BeginTransactionAsync(cancellationToken) : db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
 
     /// <summary>
-    /// Steps 1 and 2 of a take, under one deadline of a third of the lease (the client's cancel; K4 qualifies the server
-    /// side). 1: the owners of <paramref name="ids"/> other than this node, then their node records: two plain reads,
+    /// The format marker and steps 1 and 2 of a take, under one deadline of a third of the lease (the client's cancel;
+    /// K4 qualifies the server side). 1: the owners of <paramref name="ids"/> other than this node, then their node records: two plain reads,
     /// neither a locking read nor a subquery of the update, so the read of a node record holds no partition row. A missing
     /// record counts as expired. 2: this node's own record (<c>SeenAt</c>, <c>LeaseUntil</c>), whatever the take gets.
     /// Returns the expired owners, which step 3 may take from.
@@ -97,6 +97,7 @@ public sealed partial class EfStore
         deadline.CancelAfter(lease / 3);
         try
         {
+            await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
             var expired = new List<string>();
             if (ids is not null)
             {
@@ -118,7 +119,7 @@ public sealed partial class EfStore
         }
         catch (Exception e) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            throw new StoreException(Failure.Transient, "The take's read of the node records and its own record's write outlasted a third of the lease.", e);
+            throw new StoreException(Failure.Transient, "The take's format check, node reads and own record write outlasted a third of the lease.", e);
         }
     }
 
@@ -127,8 +128,8 @@ public sealed partial class EfStore
         Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken, (long)lease.TotalMilliseconds) : (await db.Database.SqlQueryRaw<long>(
             // Database time read once, so LeaseUntil is exactly SeenAt plus the lease (as SQL Server's MERGE). SQLite needs
             // the WHERE before ON CONFLICT after a SELECT.
-            $"""INSERT INTO "Nodes" ("Id", "SeenAt", "LeaseUntil") SELECT {"{0}"}, t.now, t.now + {"{1}"} FROM (SELECT {Now} AS now) t WHERE true ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", "LeaseUntil" = excluded."LeaseUntil" RETURNING "SeenAt" AS "Value" """,
-            node, (long)lease.TotalMilliseconds).ToListAsync(cancellationToken))[0];
+            $"""INSERT INTO "Nodes" ("Id", "SeenAt", "LeaseUntil", {NodeAdvertisement.Columns}) SELECT {"{0}"}, t.now, t.now + {"{4}"}, {NodeAdvertisement.Parameters} FROM (SELECT {Now} AS now) t WHERE true ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", "LeaseUntil" = excluded."LeaseUntil", {NodeAdvertisement.Update} RETURNING "SeenAt" AS "Value" """,
+            NodeAdvertisement.Arguments(node, (long)lease.TotalMilliseconds)).ToListAsync(cancellationToken))[0];
 
     /// <summary>
     /// The node heartbeat: the node record's write and the read of this node's partitions with their epochs, one
@@ -149,6 +150,7 @@ public sealed partial class EfStore
                 await using var transaction = await BeginReadCommittedAsync(db, deadline.Token);
                 // PostgreSQL bounds the heartbeat on the server too (NL-10's bound rests on it); SET LOCAL ends with the transaction.
                 if (Engine is null && postgres) await db.Database.ExecuteSqlRawAsync(FormattableString.Invariant($"SET LOCAL statement_timeout = {Math.Max(1, (long)(lease / 3).TotalMilliseconds)}"), deadline.Token);
+                await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
                 now = await RenewAsync(db, node, lease, deadline.Token);
                 owned = await db.Partitions.AsNoTracking().Where(p => p.Owner == node).OrderBy(p => p.Id).Select(p => new OwnedEpoch(p.Id, p.Epoch)).ToListAsync(deadline.Token);
                 if (MembershipInHeartbeat) inside = await MembershipAsync(db, now, window, deadline.Token);     // MUTATION
