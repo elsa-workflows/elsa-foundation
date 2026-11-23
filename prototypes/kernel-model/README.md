@@ -72,7 +72,8 @@ The approval and replay rows include public admission and the Worker pass. Diagn
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 
 To measure TCP turns as well, use a dedicated loopback database with `Host=127.0.0.1`, its published port and
-`SSL Mode=Disable` in `KERNEL_PREVIEW_POSTGRES`:
+`SSL Mode=Disable` in `KERNEL_PREVIEW_POSTGRES`. The meter disables optional GSS encryption for its connection
+and refuses `GSS Encryption Mode=Require`.
 
 ```bash
 KERNEL_PREVIEW_MEASURE_WIRE=1 models/Native.Run/run-core-preview.sh

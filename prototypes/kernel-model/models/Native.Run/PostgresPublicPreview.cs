@@ -29,6 +29,9 @@ internal static class PostgresPublicPreview
             var settings = new Npgsql.NpgsqlConnectionStringBuilder(connection);
             if (settings.Host != "127.0.0.1" || settings.SslMode != Npgsql.SslMode.Disable)
                 throw new ArgumentException("The wire meter requires a dedicated plaintext loopback PostgreSQL connection.");
+            if (settings.GssEncryptionMode == Npgsql.GssEncryptionMode.Require)
+                throw new ArgumentException("The wire meter cannot measure a connection that requires GSS encryption.");
+            settings.GssEncryptionMode = Npgsql.GssEncryptionMode.Disable;
             wire = Wire.Start("postgres", $"Host=127.0.0.1;Port={settings.Port}");
             settings.Port = wire.LocalPort;
             measuredConnection = settings.ConnectionString;
@@ -246,7 +249,7 @@ internal static class PostgresPublicPreview
         {
             if (wire is not null)
                 Console.WriteLine($"wire {operation}: {wire.Trips - startTrips} TCP direction turns, {wire.ProtocolRequests - startGroups} PostgreSQL Sync/Query groups, {wire.Connections - startConnections} new TCP connections");
-            Console.WriteLine($"{operation}: {counter.Commands} commands, {counter.Transactions.Ended} transaction completions, {counter.Commands + counter.Transactions.Ended} measured round trips");
+            Console.WriteLine($"{operation}: {counter.Commands} commands, {counter.Transactions.Ended} transaction completions, EF round-trip estimate {counter.Commands + counter.Transactions.Ended}");
         }
     }
 
