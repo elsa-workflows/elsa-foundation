@@ -160,6 +160,7 @@ public sealed partial class MongoStore : IKernelStore
     /// partition id; one fence that matches nothing aborts it, so nothing of the batch lands.
     /// </summary>
     public bool OwnedSetsAvailable => true;
+    public bool SupportsJobTrialClear => true;
 
     /// <summary>Remedies of findings M2 and M3 (MONGO.md), switchable so that the stress test can show what they fix.</summary>
     public static bool AbortOnFailure { get; set; } = true;
@@ -175,7 +176,7 @@ public sealed partial class MongoStore : IKernelStore
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        StoreBatchRules.Validate(batch, ownedSets: true);
+        StoreBatchRules.Validate(batch, ownedSets: true, supportsJobTrialClear: SupportsJobTrialClear);
         CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         CommitClockFacts.RejectUnsupported(batch);
         if (batch.Window is not null) throw new NotSupportedException("MongoDB cannot enforce the requested commit window.");
@@ -339,6 +340,18 @@ public sealed partial class MongoStore : IKernelStore
             }
             Marks(batch.Seen, "seen");
             Marks(batch.Trial, "seen", "trial");
+
+            if (batch.ClearJobTrials.Count > 0)
+            {
+                // Match each pending ticket against the epoch of its own partition, also for a single fence.
+                var filter = Keys(batch.ClearJobTrials, notDone: true, bind: false);
+                filter["kind"] = Kinds.Job;
+                filter["trial"] = new BsonDocument("$gt", 0L);
+                filter["$or"] = new BsonArray(fences.Select(f => new BsonDocument { { "partition", f.Partition }, { "trial", f.Epoch } }));
+                checks.Add(new(models.Count, false, batch.ClearJobTrials.Count, CheckKind.Count));
+                models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, filter,
+                    new BsonDocument("$set", new BsonDocument("trial", 0L))) { Collation = Collation.Simple });
+            }
 
             if (models.Count > 0)
             {
