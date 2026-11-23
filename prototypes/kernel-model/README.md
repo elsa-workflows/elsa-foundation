@@ -134,7 +134,24 @@ checks that the exact journal belongs to a running plan. Cancellation stops late
 Previously admitted work may still answer. The outcome projection reports both
 migrations, and the workflows finish under the target definition. A second plan closes on its
 scheduled deadline and records an outcome that arrives after close. Operator API integration,
-automatic selection scheduling and provider qualification remain separate work.
+automatic selection and provider qualification are outside this example.
+
+### Run migration selection and completion
+
+```sh
+dotnet run -c Release --project sim -- --migration-plan-runner
+```
+
+The in-memory operator service selects through the public actor list, dispatches the committed
+batch, and requests completion once the result projection has reached the final selection
+and every selected life has answered. Step results report admission. The plan actor records
+the resulting transition in its own commit. The host grants tenant operator permission
+and invokes the runner as work becomes available.
+
+The example restarts after a lost selection admission answer, completes a plan over two actual
+Native workflows and closes an empty plan. Another plan keeps an unanswered deleted life
+pending until an operator closes it. Public HTTP and Studio endpoints, scheduling by the
+provider host and persisted outcome projection integration remain separate work.
 
 ## The simulation
 

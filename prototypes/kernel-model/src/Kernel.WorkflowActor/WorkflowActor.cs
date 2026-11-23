@@ -119,16 +119,25 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     private static WorkflowHeader ReadHeader(ActorHeader header) =>
         JsonSerializer.Deserialize<WorkflowHeader>(header.TypeData) ?? throw new InvalidOperationException("The workflow header is absent.");
 
-    internal static bool IsRunningMigrationPlan(ActorView? view, ActorRef plan)
+    internal static bool IsRunningMigrationPlan(ActorView? view, ActorRef plan) =>
+        IsMigrationPlan(view, plan, requireRunning: true);
+
+    internal static bool IsMigrationPlan(ActorView? view, ActorRef plan, bool requireRunning = false) =>
+        view?.Header is { } header && header.Ref == plan && TryReadWorkflow(header) is
+        { Model: MigrationPlanModel.ModelKey, Definition: MigrationPlanModel.ModelKey, Version: MigrationPlanModel.PlanVersion,
+          History: History.Full, Ephemeral: false } workflow &&
+        (!requireRunning || header.Status == ActorStatus.Running && !workflow.Suspended);
+
+    internal static bool CanSelectForMigration(ActorView view, string definition) =>
+        view.Header.Status == ActorStatus.Running && TryReadWorkflow(view.Header) is
+            { Definition: var current, Model: { Length: > 0 } and not MigrationPlanModel.ModelKey, Version: > 0, Ephemeral: false } &&
+        current == definition;
+
+    private static WorkflowHeader? TryReadWorkflow(ActorHeader header)
     {
-        if (view?.Header is not { Type: ActorType, Status: ActorStatus.Running } header || header.Ref != plan) return false;
-        try
-        {
-            return JsonSerializer.Deserialize<WorkflowHeader>(header.TypeData) is
-                { Model: MigrationPlanModel.ModelKey, Definition: MigrationPlanModel.ModelKey, Version: MigrationPlanModel.PlanVersion,
-                  History: History.Full, Ephemeral: false, Suspended: false };
-        }
-        catch (JsonException) { return false; }
+        if (header.Type != ActorType) return null;
+        try { return JsonSerializer.Deserialize<WorkflowHeader>(header.TypeData); }
+        catch (JsonException) { return null; }
     }
 
     private static object ReadState(IExecutionModel model, WorkflowHeader workflow, string? state, IReadOnlyList<Message> inbox)

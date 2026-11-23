@@ -2,6 +2,9 @@ using Kernel.Foundation.Contracts;
 
 namespace Kernel.WorkflowActor;
 
+internal sealed record MigrationPlanProgress(string From, long Number, PageToken? Cursor, bool AllSelected,
+    MigrationDispatchBatch? Pending);
+
 /// <summary>Replays committed plan transitions and retains the bookmark and at most one pending batch.</summary>
 internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorReads reads, MigrationPlanAuthority authority,
     BoundScope bound, ActorRef plan) : IMigrationDispatchState
@@ -10,9 +13,15 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
     private PageToken? _bookmark;
     private MigrationPlanJournal.Created? _created;
     private MigrationDispatchBatch? _pending;
+    private long _number;
+    private PageToken? _cursor;
+    private bool _allSelected;
     private bool _closed;
 
     public async ValueTask<MigrationDispatchBatch?> ReadPendingAsync(BoundScope scope, ActorRef target,
+        CancellationToken cancellationToken) => (await ReadProgressAsync(scope, target, cancellationToken))?.Pending;
+
+    internal async ValueTask<MigrationPlanProgress?> ReadProgressAsync(BoundScope scope, ActorRef target,
         CancellationToken cancellationToken)
     {
         CheckScope(scope, target);
@@ -31,8 +40,9 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
                     Apply(record);
                 _bookmark = page.Next;
             }
-            return _pending is { } batch && await IsRunning(cancellationToken)
-                ? batch with { Actors = batch.Actors.ToArray() } : null;
+            if (_closed || _created is null || !await IsRunning(cancellationToken)) return null;
+            var pending = _pending is { } batch ? batch with { Actors = batch.Actors.ToArray() } : null;
+            return new(_created.From, _number, _cursor, _allSelected, pending);
         }
         finally { _gate.Release(); }
     }
@@ -72,8 +82,11 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
             case MigrationPlanJournal.Created created:
                 _created = created;
                 break;
-            case MigrationPlanJournal.Selected { Number: > 0, Actors.Length: > 0 } selected when _created is { } created:
-                _pending = new(selected.Number, created.From, created.To, selected.Actors);
+            case MigrationPlanJournal.Selected { Number: > 0 } selected when _created is { } created:
+                _number = selected.Number;
+                _cursor = selected.After;
+                _allSelected = selected.AllSelected;
+                _pending = selected.Actors.Length > 0 ? new(selected.Number, created.From, created.To, selected.Actors) : null;
                 break;
             case MigrationPlanJournal.Dispatched dispatched when _pending?.Number == dispatched.Number:
                 _pending = null;

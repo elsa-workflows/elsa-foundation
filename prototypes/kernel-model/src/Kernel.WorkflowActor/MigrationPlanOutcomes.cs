@@ -67,11 +67,18 @@ internal sealed class MigrationPlanOutcomes(IActorReads reads, BoundScope scope,
     private PageToken? _bookmark;
     private bool _closed;
     private long _asOf;
+    private long _lastSelection;
+    private int _unanswered;
 
     internal MigrationPlanView Read()
     {
         lock (_gate)
             return new(_closed, _asOf, new Dictionary<ActorRef, MigrationPlanOutcome?>(_outcomes));
+    }
+
+    internal bool CanComplete(long selection)
+    {
+        lock (_gate) return !_closed && _lastSelection == selection && _unanswered == 0;
     }
 
     internal async Task<bool> ProjectNextAsync(CancellationToken cancellationToken = default)
@@ -101,11 +108,14 @@ internal sealed class MigrationPlanOutcomes(IActorReads reads, BoundScope scope,
         switch (record)
         {
             case MigrationPlanJournal.Selected batch when !_closed:
-                foreach (var actor in batch.Actors) _outcomes.TryAdd(actor, null);
+                _lastSelection = Math.Max(_lastSelection, batch.Number);
+                foreach (var actor in batch.Actors)
+                    if (_outcomes.TryAdd(actor, null)) _unanswered++;
                 break;
             case MigrationPlanJournal.Answered answer when
                 _outcomes.TryGetValue(answer.Actor, out var prior) && prior is null or MigrationPlanOutcome.NotAtSource:
                 // The first decisive answer wins. A repeated batch and a later receipt cannot erase it.
+                if (prior is null) _unanswered--;
                 _outcomes[answer.Actor] = answer.Outcome;
                 break;
             case MigrationPlanJournal.Closed:

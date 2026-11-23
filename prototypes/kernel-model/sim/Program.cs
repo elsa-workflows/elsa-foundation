@@ -310,6 +310,13 @@ if (args.Contains("--migration-plan-actor"))
     return failed ? 1 : 0;
 }
 
+if (args.Contains("--migration-plan-runner"))
+{
+    var failed = false;
+    await MigrationPlanRunnerChecks.RunAsync((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+
 if (args.Contains("--migration-plan-reads"))
 {
     try { await MigrationPlanReadChecks.RunAsync(); return 0; }
