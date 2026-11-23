@@ -83,18 +83,26 @@ internal static class JobTrialClearChecks
         Supported(c);
         if (!c.S.OwnedSetsAvailable) throw new SkipException("the store fences one partition per commit");
         var left = await c.Take(0);
-        _ = await c.Take(1);
-        var right = await c.Take(1);
+        var firstRight = await c.Take(1);
         var a = Job("left");
         var b = Job("right", 1);
-        await c.Lands(() => Send(c, left, a, b));
+        var stale = Job("older-right", 1);
+        await c.Lands(() => Send(c, left, a, b, stale));
+        await c.Lands(() => c.Commit(firstRight, 1, [], trial: [stale.InboxKey]));
+        var right = await c.Take(1);
         await c.Lands(() => c.Commit(left, 0, [], trial: [a.InboxKey]));
         await c.Lands(() => c.Commit(right, 1, [], trial: [b.InboxKey]));
         var batch = CommitBatch.Owned([new(0, left.Epoch, left.Position), new(1, right.Epoch, right.Position)],
             Context.Long, false, [], [], []) with { ClearJobTrials = [a.InboxKey, b.InboxKey] };
+        Context.That(firstRight.Epoch == left.Epoch && firstRight.Epoch != right.Epoch, "fixture requires an epoch shared with the other partition");
+        var crossed = batch with { ClearJobTrials = [a.InboxKey, stale.InboxKey] };
+        await c.Refused(() => c.S.CommitAsync(crossed).AsTask(), "a ticket whose trial matches a different partition's epoch");
+        Context.Equal(left.Epoch, (await c.All(0)).Single().Trial, "the valid member survives the refused set");
+
         await c.Lands(() => c.S.CommitAsync(batch).AsTask());
-        Context.That(left.Epoch != right.Epoch && (await c.All(0)).Single().Trial == 0 && (await c.All(1)).Single().Trial == 0,
-            "both trials cleared under their distinct epochs");
+        var rightRows = (await c.All(1)).ToDictionary(row => row.Message.InboxKey);
+        Context.That((await c.All(0)).Single().Trial == 0 && rightRows[b.InboxKey].Trial == 0 &&
+            rightRows[stale.InboxKey].Trial == firstRight.Epoch, "both selected trials clear under their own epoch and the older one stays marked");
     }
 
     private static async Task LostAnswer(Context c)
