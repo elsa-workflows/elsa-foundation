@@ -46,12 +46,14 @@ input and check that the actor advances once and that replay leaves the saved st
 measured PostgreSQL round trips for each phase. The [public-path preview](https://github.com/elsa-workflows/elsa-foundation/pull/5485)
 includes runnable restart and replay steps, with [TCP measurements](https://github.com/elsa-workflows/elsa-foundation/pull/5487)
 and a separate [abrupt owner loss demo](https://github.com/elsa-workflows/elsa-foundation/pull/5497) for a fixed Embedded
-partition. The program issue records the verified heads and the remaining landing work.
+partition. The program issue records the verified revisions and the remaining release work.
 [Owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7091776914)
 
 A separate two-process PostgreSQL Cluster demo runs a public Native workflow over 1,024 virtual partitions. It
-checkpoints roots on different partitions in one transaction. A surviving owner deduplicates replay and completes the
-workflow after the peer stops. [Run instructions and evidence](https://github.com/elsa-workflows/elsa-foundation/pull/5517#issuecomment-7104130045)
+checkpoints roots on different partitions in one transaction. After the peer stops, replay leaves the journal
+unchanged and the surviving owner completes the workflow after the second approval.
+[Graceful handover](https://github.com/elsa-workflows/elsa-foundation/pull/5517#issuecomment-7104130045)
+· [Abrupt peer exit](https://github.com/elsa-workflows/elsa-foundation/pull/5519#issuecomment-7104274136)
 
 Other increments can demonstrate Flowchart execution and inspecting or recovering a parked workflow. Publish demo
 readiness and milestone acceptance separately. Provider and operator qualification follow the milestones below. The
