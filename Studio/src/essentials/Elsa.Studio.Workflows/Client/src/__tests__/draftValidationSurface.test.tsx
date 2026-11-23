@@ -15,7 +15,7 @@ import { clearApiCapabilityCache } from "../api/capabilities";
 import { parsePromotionValidationErrors } from "../workflow-editor/useWorkflowOperations";
 import { ValidationPanel } from "../workflow-editor/editorPanels";
 import { flowchartStructureKind } from "../flowchartStartNode";
-import type { ActivityNode, WorkflowDraft } from "../workflowTypes";
+import type { ActivityNode, DraftValidationError, WorkflowDraft } from "../workflowTypes";
 
 function node(nodeId: string, extra: Record<string, unknown> = {}): ActivityNode {
   return { nodeId, activityVersionId: `${nodeId}-v`, inputs: [], outputs: [], ...extra };
@@ -203,6 +203,69 @@ describe("ValidationPanel", () => {
   });
 
   const draft = { validationErrors: [] } as unknown as WorkflowDraft;
+
+  async function endpointErrors(errors: DraftValidationError[]) {
+    const context = {
+      baseUrl: `test://validation-panel-${Math.random()}`,
+      http: {
+        getJson: vi.fn(async (url: string) => url === "/capabilities"
+          ? { capabilities: [{ id: "elsa.api.workflow-design", contractVersion: "1", links: [
+            { rel: "workflow-draft-validations", href: "design/workflows/drafts/{draftId}/validations", templated: true }
+          ] }] }
+          : { draftId: "draft-1", errors })
+      }
+    } as unknown as StudioEndpointContext;
+    return getDraftValidations(context, "draft-1");
+  }
+
+  it("renders mixed endpoint error and warning severities after authoritative projection and de-duplication", async () => {
+    const missingRead = {
+      code: "Scripts/UnresolvedVariableRead", message: "VF-READ-002: The script reads variable 'missingForValidation', but no variable with that name is visible.",
+      nodeId: "message", member: "inputs/text", severity: "Error"
+    };
+    const computedRead = {
+      code: "Scripts/ComputedVariableRead", message: "VF-READ-004: The script reads variables by a computed name. It could read: 'order'.",
+      nodeId: "message", member: "inputs/text", severity: "Warning"
+    };
+    const errors = combineValidationErrors({
+      serverErrors: await endpointErrors([missingRead, computedRead]),
+      // A stale reconciled severity must not override the authoritative endpoint's warning or add another finding.
+      draftErrors: [{ type: computedRead.code, message: computedRead.message, path: "message/inputs/text", severity: "Error" }]
+    });
+    flushSync(() => root.render(<ValidationPanel draft={draft} errors={errors} onRepair={() => {}} />));
+
+    const summary = container.querySelector(".wf-validation-summary")?.textContent ?? "";
+    expect(summary).toBe("1 error · 1 warning");
+    expect(summary).not.toContain("publishing is not blocked");
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-validation-toggle")!.click());
+    expect(Array.from(container.querySelectorAll(".wf-validation-severity")).map(badge => badge.textContent)).toEqual(["Error", "Warning"]);
+    expect(container.querySelector('[data-severity="error"]')?.closest("li")?.textContent).toContain("VF-READ-002");
+    expect(container.querySelector('[data-severity="warning"]')?.closest("li")?.textContent).toContain("VF-READ-004");
+    expect(container.querySelectorAll(".wf-validation-item")).toHaveLength(2);
+  });
+
+  it("renders warnings-only endpoint findings as non-blocking after projection and de-duplication", async () => {
+    const computedRead = {
+      code: "Scripts/ComputedVariableRead", message: "VF-READ-004: The script reads variables by a computed name. It could read: 'order'.",
+      nodeId: "message", member: "inputs/text", severity: "Warning"
+    };
+    const errors = combineValidationErrors({
+      serverErrors: await endpointErrors([computedRead]),
+      draftErrors: [{ type: computedRead.code, message: computedRead.message, path: "message/inputs/text", severity: "Error" }]
+    });
+    const selected: Array<{ id: string; path?: string }> = [];
+    flushSync(() => root.render(
+      <ValidationPanel draft={draft} errors={errors} onRepair={() => {}} onSelectNode={(id, path) => selected.push({ id, path })} />
+    ));
+
+    expect(container.querySelector(".wf-validation-summary")?.textContent).toBe("1 warning · publishing is not blocked");
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-validation-toggle")!.click());
+    expect(container.querySelectorAll('[data-severity="error"]')).toHaveLength(0);
+    expect(container.querySelector('[data-severity="warning"]')?.textContent).toBe("Warning");
+    expect(container.querySelectorAll(".wf-validation-item")).toHaveLength(1);
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-validation-node-action")!.click());
+    expect(selected).toEqual([{ id: "message", path: "message/inputs/text" }]);
+  });
 
   it("keeps full diagnostics collapsed until expanded and offers input navigation", () => {
     const selected: Array<{ id: string; path?: string }> = [];
