@@ -63,6 +63,21 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
 public sealed partial class EfStore
 {
     /// <summary>
+    /// Installs the ordinary generated-root preview on an initialized PostgreSQL store.
+    /// Run during setup or with existing owners and callers stopped. Retains issued references and bookmarks.
+    /// </summary>
+    public async Task InstallPreviewRootSchemaAsync(CancellationToken cancellationToken = default)
+    {
+        if (!postgres || Engine is not null)
+            throw new NotSupportedException("Generated-root preview installation requires PostgreSQL.");
+
+        await using var db = create();
+        if (!db.Database.IsNpgsql() || db.RequiredFormat != StoreFormat.Current)
+            throw new NotSupportedException("Installation requires the ordinary PostgreSQL generated-root preview.");
+        await PostgresRootAdmission.InstallAsync(db, cancellationToken, exclusiveFormat: true);
+    }
+
+    /// <summary>
     /// Opens durable starts of the configured type and ordinary sends to exact PostgreSQL root references.
     /// The trusted host supplies each BoundScope and installs the ordinary generated-root store before opening it.
     /// </summary>

@@ -154,7 +154,7 @@ if (args is ["pg-core-preview", "standby", var standbyRoot, var standbyBookmark,
     return await PostgresPublicPreview.RunAsync("standby", standbyRoot, standbyBookmark, epoch, peerPid, originalUntil);
 if (args is ["pg-core-preview", var probePhase and ("tenant-probe" or "format-probe"), var probeReference])
     return await PostgresPublicPreview.RunAsync(probePhase, probeReference);
-if (args is ["pg-core-preview", var replayPhase and ("restart" or "terminal"), var actorReference, var journalBookmark])
+if (args is ["pg-core-preview", var replayPhase and ("restart" or "terminal" or "install-probe"), var actorReference, var journalBookmark])
     return await PostgresPublicPreview.RunAsync(replayPhase, actorReference, journalBookmark);
 if (args is ["pg-flowchart-preview", "birth"]) return await PostgresPublicPreview.RunAsync("birth", flowchart: true);
 if (args is ["pg-flowchart-preview", "restart", var flowchartActor, var flowchartBookmark])

@@ -69,8 +69,8 @@ public sealed partial class EfStore
     internal static Task RequireStoreVersionsAsync(KernelDb db, CancellationToken cancellationToken)
         => RequireStoreVersionsAsync(db, cancellationToken, FormatLock.None);
 
-    internal static Task LockCompatibleStoreFormatAsync(KernelDb db, CancellationToken cancellationToken)
-        => RequireStoreVersionsAsync(db, cancellationToken, FormatLock.Shared);
+    internal static Task LockCompatibleStoreFormatAsync(KernelDb db, CancellationToken cancellationToken, bool exclusive = false)
+        => RequireStoreVersionsAsync(db, cancellationToken, exclusive ? FormatLock.Exclusive : FormatLock.Shared);
 
     internal static void RequireSnapshotFormat(StoreFormat expected, int? schema, int? protocol, int? codec)
     {
