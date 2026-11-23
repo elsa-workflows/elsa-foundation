@@ -12,6 +12,7 @@ public sealed partial class EfStore
     internal sealed record RootImage(CreationAddress Actor, string Model, string Definition, string TypeData,
         IReadOnlyDictionary<string, string> Labels, string? State, int StateVersion, long Revision)
     {
+        internal History History { get; init; }
         internal InstanceStatus Status { get; init; }
         internal long? TerminalRevision { get; init; }
         internal long? TerminalAt { get; init; }
@@ -99,7 +100,12 @@ public sealed partial class EfStore
     /// Later actor revisions and turns with effects require their own qualified paths.</summary>
     internal ValueTask<Committed> CommitFirstRootAsync(string tenant, string reference, Message creator,
         PartitionFence fence, TimeSpan lease, string? state, int stateVersion, string typeData,
-        IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken = default)
+        IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken = default) =>
+        WriteFirstRootAsync(tenant, reference, creator, fence, lease, state, stateVersion, typeData, labels, journal, cancellationToken, null);
+
+    private ValueTask<Committed> WriteFirstRootAsync(string tenant, string reference, Message creator,
+        PartitionFence fence, TimeSpan lease, string? state, int stateVersion, string typeData,
+        IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken, CommitBatch? workerBatch)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("First root checkpoints require PostgreSQL.");
         if (creator.Start is not { Parent: null, Creation: { Generation: 1, Previous: 0 } } start ||
@@ -114,7 +120,7 @@ public sealed partial class EfStore
         // BindCheckpointAsync consumes the exact, due creator before this same transaction lands.
         var turn = new TurnCommit(row.Id, row, null, [], [], [], [], [], journal);
         var batch = new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [turn], [], []);
-        return CommitAsync(batch, new FirstRootCheckpoint(tenant, reference, creator, header), cancellationToken);
+        return CommitRootBatchAsync(workerBatch is null ? batch : workerBatch with { Turns = [turn] }, new FirstRootCheckpoint(tenant, reference, creator, header), cancellationToken);
     }
 
     private static (string? State, string Header) EncodeRootContent(string model, string definition, string? state,
@@ -139,14 +145,14 @@ public sealed partial class EfStore
     }
 
     private sealed record PhysicalRoot(string Id, long Creation, string State, int StateVersion, long Revision, string Header,
-        InstanceStatus Status, long? TerminalRevision, long? TerminalAt, long AsOf);
+        History History, InstanceStatus Status, long? TerminalRevision, long? TerminalAt, long AsOf);
 
     internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
         await using var db = create();
         var physical = await db.Database.SqlQuery<PhysicalRoot>($"""
             SELECT i."Id", b."Creation", i."State", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
-                i."Status", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
+                i."History", i."Status", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
                 floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Reference" = i."FoundationReference"
                 AND b."Actor" = i."Id" AND b."Tenant" = i."FoundationTenant"
@@ -161,6 +167,9 @@ public sealed partial class EfStore
         var state = logical.FoundationNullState ? null : header.EscapedState ? DurableKeyJson.Read<string>(logical.State) : logical.State;
         return new(new(physical.Id, physical.Creation), header.Model, header.Definition, header.TypeData,
             header.Labels.ToDictionary(StringComparer.Ordinal), state, physical.StateVersion, physical.Revision)
-            { Status = physical.Status, TerminalRevision = physical.TerminalRevision, TerminalAt = physical.TerminalAt, AsOf = physical.AsOf };
+            {
+                History = physical.History, Status = physical.Status, TerminalRevision = physical.TerminalRevision,
+                TerminalAt = physical.TerminalAt, AsOf = physical.AsOf
+            };
     }
 }

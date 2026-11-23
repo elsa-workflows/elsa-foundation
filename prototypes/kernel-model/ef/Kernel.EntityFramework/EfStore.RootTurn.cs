@@ -43,6 +43,8 @@ public sealed partial class EfStore
                 """, cancellationToken);
             if (settled != Inputs.Length) return false;
             var finished = Status == InstanceStatus.Finished;
+            // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
+            // UnsubscribeAll here only when the exact root has no physical subscriptions.
             var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "State" = {State}, "FoundationHeader" = {Header}, "StateVersion" = {StateVersion},
                     "Status" = {(int)Status}, "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
@@ -50,6 +52,8 @@ public sealed partial class EfStore
                     "FoundationTerminalAt" = CASE WHEN {finished} THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint ELSE NULL END
                 WHERE "Id" = {Current.Actor.Id} AND "Partition" = {home} AND "FoundationTenant" = {Tenant}
                     AND "FoundationReference" = {Reference} AND "Revision" = {Current.Revision}
+                    AND (NOT {finished} OR NOT EXISTS (SELECT 1 FROM "Subscriptions"
+                        WHERE "Partition" = {home} AND "Instance" = {Current.Actor.Id}))
                 """, cancellationToken);
             return updated == 1;
         }
@@ -57,7 +61,12 @@ public sealed partial class EfStore
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, TimeSpan lease, InstanceStatus status, string? state, int stateVersion,
-        string typeData, IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken = default)
+        string typeData, IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken = default) =>
+        WriteRootTurnAsync(tenant, reference, current, inputs, fence, lease, status, state, stateVersion, typeData, labels, journal, cancellationToken, null);
+
+    private ValueTask<Committed> WriteRootTurnAsync(string tenant, string reference, RootImage current,
+        IReadOnlyList<Message> inputs, PartitionFence fence, TimeSpan lease, InstanceStatus status, string? state, int stateVersion,
+        string typeData, IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken, CommitBatch? workerBatch)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
@@ -75,6 +84,7 @@ public sealed partial class EfStore
         var root = new RootTurnCheckpoint(tenant, reference, current, status, PublicRootState + StoredState.Encode(image),
             header, stateVersion, accepted);
         var turn = new TurnCommit(image.Id, null, null, [], [], [], [], [], journal);
-        return CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, lease, false, [turn], [], []), root, cancellationToken);
+        var batch = workerBatch is null ? new(fence.Partition, fence.Epoch, fence.Position, lease, false, [turn], [], []) : workerBatch with { Turns = [turn] };
+        return CommitRootBatchAsync(batch, root, cancellationToken);
     }
 }

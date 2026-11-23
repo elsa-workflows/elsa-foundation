@@ -367,6 +367,11 @@ public sealed partial class EfStore
     {
         StoreBatchRules.RequireDistinct(owned);
         if (owned.Count == 0) return new([], 0);
+        if (_ordinaryRoot is not null)
+        {
+            var fence = owned.Single();
+            return await PollAsync(fence.Partition, fence.Epoch, horizon, limit, cancellationToken);
+        }
         var single = Q("""m."Partition" = {0} AND m."Seen" < {1}""");
         if (!PollSql.Contains(single, StringComparison.Ordinal)) throw new InvalidOperationException("The poll has no partition predicate where the set poll replaces it.");
         var set = Q($"""m."Partition" IN ({List(owned.Select(f => f.Partition).Order())}) AND m."Seen" < {EpochOf(owned, "m.\"Partition\"")}""");
