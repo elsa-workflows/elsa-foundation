@@ -289,6 +289,13 @@ if (args.Contains("--migration-plan-dispatch"))
     catch (InvalidOperationException error) { Console.Error.WriteLine(error.Message); return 1; }
 }
 
+if (args.Contains("--native-migration-validation"))
+{
+    var failed = false;
+    await StructuredMigrationChecks.RunAsync((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+
 if (args.Contains("--migration-plan-reads"))
 {
     try { await MigrationPlanReadChecks.RunAsync(); return 0; }

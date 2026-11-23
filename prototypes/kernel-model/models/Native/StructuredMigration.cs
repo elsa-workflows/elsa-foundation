@@ -1,0 +1,152 @@
+using System.Text.Json.Nodes;
+
+namespace Kernel.Native;
+
+internal enum StructuredMigrationFinding
+{
+    UnsupportedCheckpoint,
+    VariableDeclarations,
+    LiveNode,
+    LiveParent,
+    AuthoredNode,
+    SequencePrefix,
+    ChildLayout,
+}
+
+/// <summary>Checks the structured Native subset against a committed checkpoint without making a turn.</summary>
+internal static class StructuredMigration
+{
+    internal static StructuredMigrationFinding? Validate(Workflow source, Workflow target, NativeState state)
+    {
+        if (!state.Started || state.Mode is not (Modes.Balanced or Modes.Durable) ||
+            state.Waits.Values.Any(wait => wait.Kind == "job" || !state.Frames.ContainsKey(wait.Frame)) ||
+            state.InterventionEnabled || state.CheckpointControl || state.Inboxes is { Count: > 0 })
+            return StructuredMigrationFinding.UnsupportedCheckpoint;
+
+        // This slice compares the declaration set. Adding defaults to an existing scope belongs to the apply step.
+        if (!SameEntries(source.Variables, target.Variables, SameJson))
+            return StructuredMigrationFinding.VariableDeclarations;
+
+        var live = new HashSet<string>(state.Results.Keys, StringComparer.Ordinal);
+        if (state.TriggerNode is { } trigger) live.Add(trigger);
+        foreach (var frame in state.Frames.Values) live.Add(frame.Node);
+        foreach (var work in state.Agenda)
+            if (work.Node is { } node) live.Add(node);
+
+        foreach (var node in live.ToArray())
+            for (var parent = source.Parents.GetValueOrDefault(node); parent is not null; parent = source.Parents.GetValueOrDefault(parent.Id))
+                live.Add(parent.Id);
+
+        var comparisons = new List<(Node Before, Node After)>(live.Count);
+        foreach (var id in live.Order(StringComparer.Ordinal))
+        {
+            if (!source.Nodes.TryGetValue(id, out var before) || !target.Nodes.TryGetValue(id, out var after) ||
+                before.Type != after.Type)
+                return StructuredMigrationFinding.LiveNode;
+            if (source.Parents.GetValueOrDefault(id)?.Id != target.Parents.GetValueOrDefault(id)?.Id)
+                return StructuredMigrationFinding.LiveParent;
+            if (!SameAuthoredNode(before, after))
+                return StructuredMigrationFinding.AuthoredNode;
+            comparisons.Add((before, after));
+        }
+
+        var framesByNode = state.Frames.Values.ToLookup(frame => frame.Node, StringComparer.Ordinal);
+        var children = state.Frames.Values.Select(frame => (frame.Parent, Node: (string?)frame.Node))
+            .Concat(state.Agenda.Where(work => work.Node is not null).Select(work => (work.Parent, work.Node)))
+            .ToLookup(child => child.Parent, child => child.Node!, StringComparer.Ordinal);
+        foreach (var (before, after) in comparisons)
+        {
+            if (!typeof(CompositeActivity).IsAssignableFrom(before.Type)) continue;
+            var selected = framesByNode[before.Id].Select(frame => children[frame.Id].ToArray());
+            if (before.Type == typeof(Sequence))
+            {
+                if (!SameChildren(before.Children, after.Children) &&
+                    !CanEditSequence(before, after, selected))
+                    return StructuredMigrationFinding.SequencePrefix;
+            }
+            else if (before.Type == typeof(If))
+            {
+                if (!SameChildren(before.Children, after.Children) && !CanEditIf(before, after, selected))
+                    return StructuredMigrationFinding.ChildLayout;
+            }
+            else if (before.Type == typeof(Parallel))
+            {
+                if (!SameChildren(before.Children.OrderBy(child => child.Id, StringComparer.Ordinal),
+                        after.Children.OrderBy(child => child.Id, StringComparer.Ordinal)))
+                    return StructuredMigrationFinding.ChildLayout;
+            }
+            else if (before.Type == typeof(ForEach) || before.Type == typeof(While))
+            {
+                if (before.Children.Count != 1 || !SameChildren(before.Children, after.Children))
+                    return StructuredMigrationFinding.ChildLayout;
+            }
+            else
+            {
+                // A graph, statechart or custom composite may refer to additional nodes in private state.
+                return StructuredMigrationFinding.UnsupportedCheckpoint;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool CanEditSequence(Node before, Node after, IEnumerable<string[]> selections)
+    {
+        var active = selections.ToArray();
+        if (active.Length == 0) return false;
+        foreach (var selected in active)
+        {
+            if (selected.Length != 1) return false;
+            var index = before.Children.FindIndex(child => child.Id == selected[0]);
+            if (index < 0 || after.Children.Count <= index ||
+                !SameChildren(before.Children.Take(index + 1), after.Children.Take(index + 1)))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool CanEditIf(Node before, Node after, IEnumerable<string[]> selections)
+    {
+        var active = selections.ToArray();
+        if (active.Length == 0) return false;
+        foreach (var selected in active)
+        {
+            if (selected.Length != 1) return false;
+            var branch = before.Children.Find(child => child.Id == selected[0]);
+            if (branch is null || after.Children.FirstOrDefault(child => child.Slot == branch.Slot)?.Id != branch.Id)
+                return false;
+        }
+        return true;
+    }
+
+    private static bool SameChildren(IEnumerable<Node> before, IEnumerable<Node> after) =>
+        before.Select(child => (child.Id, child.Slot)).SequenceEqual(after.Select(child => (child.Id, child.Slot)));
+
+    private static bool SameAuthoredNode(Node before, Node after) =>
+        before.Slot == after.Slot &&
+        SameEntries(before.Inputs, after.Inputs, SameBinding) &&
+        SameEntries(before.Captures, after.Captures, StringComparer.Ordinal.Equals) &&
+        before.Connections.SequenceEqual(after.Connections) &&
+        SameEntries(before.Gateways, after.Gateways, (left, right) => left == right);
+
+    private static bool SameBinding(Binding before, Binding after) =>
+        (before, after) switch
+        {
+            (LiteralBinding left, LiteralBinding right) => SameJson(left.Value, right.Value),
+            (VariableBinding left, VariableBinding right) => left == right,
+            (ResultBinding left, ResultBinding right) => left == right,
+            (ExpressionBinding left, ExpressionBinding right) => left == right,
+            _ => false,
+        };
+
+    // Native expressions can stringify a JSON value, including its property order and numeric representation.
+    private static bool SameJson(JsonNode? before, JsonNode? after) => before?.ToJsonString() == after?.ToJsonString();
+
+    private static bool SameEntries<T>(IReadOnlyDictionary<string, T> before, IReadOnlyDictionary<string, T> after, Func<T, T, bool> equals)
+    {
+        if (before.Count != after.Count) return false;
+        var left = before.OrderBy(entry => entry.Key, StringComparer.Ordinal);
+        var right = after.OrderBy(entry => entry.Key, StringComparer.Ordinal);
+        return left.Zip(right).All(pair => pair.First.Key == pair.Second.Key && equals(pair.First.Value, pair.Second.Value));
+    }
+}

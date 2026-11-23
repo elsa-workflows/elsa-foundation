@@ -88,7 +88,20 @@ one result from each responding life. An authorization or input-size refusal lea
 before the plan consumes its acknowledgment receives one duplicate receipt for that same operation.
 
 The fixture uses the real in-memory public command route and a small actor that changes its selected definition.
-The product plan actor, Native migration validation and operator scheduling remain separate K11 work.
+The product plan actor and operator scheduling remain separate K11 work.
+
+### Validate a waiting Native checkpoint
+
+```sh
+dotnet run -c Release --project sim -- --native-migration-validation
+```
+
+This K11 check loads real Balanced and Durable checkpoints through the in-memory Actor Foundation.
+It tries a new Sequence tail, a change to the untaken If branch and a reordered Parallel, then checks
+that changes to live waits, their parent chain, an executed prefix or a Parallel branch set are refused.
+The validator is read-only. It restricts this slice to structured Native checkpoints with unchanged
+declarations. Applying a migration, adding defaults, outstanding jobs, Flowchart and StateMachine
+compatibility are separate work.
 
 ## The simulation
 
