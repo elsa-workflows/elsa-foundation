@@ -310,6 +310,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     private class PollRow
     {
+        public bool SplitEventPayload { get; set; }
         public long? JobGeneration { get; set; }
         public long? InboxScope { get; set; }
         public byte[]? IssuedWire { get; set; }
@@ -435,8 +436,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         if (postgres && Engine is null && (batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials)
             .Concat(batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])))
-            .Any(key => key.Scope is InboxKey.FoundationOccurrenceScope or RootSelfScope) ||
-            batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey.Scope == InboxKey.FoundationOccurrenceScope || root is null && message.InboxKey.Scope == RootSelfScope))))
+            .Any(key => key.Match is null && (key.Scope is InboxKey.FoundationOccurrenceScope or RootSelfScope)) ||
+            batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey is { Match: null } key &&
+                (key.Scope == InboxKey.FoundationOccurrenceScope || root is null && key.Scope == RootSelfScope)))))
             throw new StoreException(Failure.Definite, "Qualified PostgreSQL inputs require their root checkpoint writer.");
         StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable,
             supportsJobTrialClear:SupportsJobTrialClear);
@@ -685,6 +687,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
     private string RootPollFilter => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
+             AND m."EventMatch" IS NULL
              AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({InboxKey.FoundationOccurrenceScope}, {RootSelfScope}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
@@ -701,9 +704,14 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
            """
         : RootInboxSource + " m";
     private const string RootClockMilliseconds = "floor(extract(epoch from clock_timestamp()) * 1000)::bigint";
+    // Only PostgreSQL profiles with the private body column can have split historical event payloads.
+    // CASE avoids inspecting row content except for the single shared numeric event slot.
+    private string PollSplitEventPayload => postgres && _ordinaryRoots is null
+        ? $"""CASE WHEN m."InboxScope" = {RootSelfScope} AND m."EventMatch" IS NOT NULL THEN to_jsonb(m)->>'FoundationSelfContent' IS NOT NULL ELSE FALSE END"""
+        : False;
     private string PollSql => Engine?.Poll ??
         $"""
-         SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration"{PollBirthColumns}
+         SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration", {PollSplitEventPayload} AS "SplitEventPayload"{PollBirthColumns}
          FROM (SELECT {(RootSelfIssuer is { SupportsTimers: true } ? RootClockMilliseconds : Now)} AS now) t
          LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter}
          ORDER BY m."Seq" LIMIT {"{3}"}
@@ -720,6 +728,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
         {
+            if (r.SplitEventPayload) throw SplitEventPayload();
             var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };
@@ -736,7 +745,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                     : key.Scope == RootSelfScope ? DecodeRootSelf(entity, RootSelfIssuer) : PostgresRootAdmission.DecodeDirect(entity, root.Reference);
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
             }
-            if (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) || key.Scope == RootSelfScope)
+            if (key.Match is null &&
+                (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) || key.Scope == RootSelfScope))
                 throw new StoreException(Failure.Definite, "PostgreSQL public inputs require a qualified foundation owner.");
             return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo) { JobGeneration = r.JobGeneration!.Value }.WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
