@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using Kernel.Foundation.InMemory;
 using Kernel.Native;
 using Kernel.WorkflowActor;
@@ -20,7 +21,7 @@ internal static class MigrationPlanActorChecks
         var key = RandomNumberGenerator.GetBytes(32);
         var authority = new MigrationPlanAuthority(key);
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("real-plan"), "real-plan",
-            (_, kind) => kind is Contract.Kinds.Migrate or Contract.Kinds.Terminate);
+            (_, kind) => kind is Contract.Kinds.Migrate or Contract.Kinds.Terminate or Contract.Kinds.Delete);
         Contract.IActorReads reads = new ActorList(store, 1);
         var runtime = new PublicRuntime(ingress, reads);
         var tooWide = new string('é', 600);
@@ -63,9 +64,10 @@ internal static class MigrationPlanActorChecks
         var tooMany = Enumerable.Range(0, MigrationPlanModel.BatchLimit + 1)
             .Select(index => new Contract.ActorRef($"selected-{index}")).ToArray();
         await checkpoint.SendAsync(MigrationPlanControl.Select, "oversize", firstControl with { Actors = tooMany });
+        await checkpoint.SendAsync(MigrationPlanControl.Select, "empty-cursor", firstControl with { After = new("") });
         await Pump(owner);
         check(await checkpoint.ReadPendingAsync(scope, plan, default) is null,
-            "raw, cross-plan and oversized controls leave the batch slot empty");
+            "raw, cross-plan, oversized and empty-cursor controls leave the batch slot empty");
 
         await checkpoint.SendAsync(MigrationPlanControl.Select, "first-page", firstControl);
         await Pump(owner);
@@ -73,10 +75,10 @@ internal static class MigrationPlanActorChecks
         var second = secondPage.Items.Single().Header.Ref;
         var finalControl = new MigrationPlanControl(2, [second], Before: cursor, AllSelected: true);
         await checkpoint.SendAsync(MigrationPlanControl.Select, "early-page", finalControl);
-        await checkpoint.SendAsync(MigrationPlanControl.Complete, "early-close", new(1));
+        var earlyCompletion = await checkpoint.TryCompleteAsync();
         await Pump(owner);
         var pending = await checkpoint.ReadPendingAsync(scope, plan, default);
-        check(pending is { Number: 1, Actors: [var selected] } && selected == first &&
+        check(!earlyCompletion && pending is { Number: 1, Actors: [var selected] } && selected == first &&
             (await reads.GetAsync(scope, plan))?.Header.Status == Contract.ActorStatus.Running,
             "the real plan keeps one pending batch and rejects a premature page or completion");
 
@@ -110,17 +112,48 @@ internal static class MigrationPlanActorChecks
         check(opened is { Closed: false, AllAnswered: true } && opened.Results.Count == 2 &&
             opened.Results[first] == MigrationPlanOutcome.Migrated && opened.Results[second] == MigrationPlanOutcome.Migrated,
             "the journal projects both actual Native outcomes and ignores an outside result with no actor sender");
-        await nextReader.SendAsync(MigrationPlanControl.Complete, "complete-plan", new(2));
+        var requested = await nextReader.TryCompleteAsync();
         await Pump(successor);
         await Refresh(outcomes);
         var saved = store.ReadFoundationActor(scope.Tenant, plan.Id).Actor!.Row.State;
-        check(outcomes.Read().Closed && (await reads.GetAsync(scope, plan))?.Header.Status == Contract.ActorStatus.Finished &&
+        check(requested && outcomes.Read().Closed && (await reads.GetAsync(scope, plan))?.Header.Status == Contract.ActorStatus.Finished &&
             !saved.Contains(first.Id, StringComparison.Ordinal) && !saved.Contains(second.Id, StringComparison.Ordinal),
             "completion closes the plan while the model state retains counters and the cursor without per-actor outcomes");
 
         await ingress.SendAsync(scope, new Contract.Target.Event("event:approval"), "approve", "publish", "yes");
         await Pump(successor);
         check(FinishedUnderTarget(first) && FinishedUnderTarget(second), "both migrated Native waits resume under the target definition");
+
+        var unanswered = await StartPlan("unanswered-plan", deadline);
+        var departing = await StartWorkflow("departing-selection");
+        await Pump(successor);
+        var unansweredReader = NewReader(unanswered);
+        await unansweredReader.SendAsync(MigrationPlanControl.Select, "departure-batch", new(1, [departing], AllSelected: true));
+        await Pump(successor);
+        var departingTarget = new Contract.Target.Ref(departing);
+        await ingress.SendAsync(scope, departingTarget, "end-departing", Contract.Kinds.Terminate);
+        await Pump(successor);
+        var deletion = (await reads.GetAsync(scope, departing))!.Selection!;
+        await ingress.SendAsync(scope, departingTarget, "delete-departing", Contract.Kinds.Delete,
+            Json.Write(new Contract.OperatorCommand(deletion)));
+        await Pump(successor);
+        var missing = await new MigrationPlanDispatch(ingress, unansweredReader).DispatchAsync(scope, unanswered);
+        await Pump(successor);
+        check(missing is { Unavailable: 1 } && await unansweredReader.ReadPendingAsync(scope, unanswered, default) is null &&
+            !await unansweredReader.TryCompleteAsync() &&
+            (await reads.GetAsync(scope, unanswered))?.Header.Status == Contract.ActorStatus.Running,
+            "an acknowledged final page with a deleted, unanswered life cannot complete automatically");
+
+        var empty = await StartPlan("empty-plan", deadline);
+        await Pump(successor);
+        var emptyReader = NewReader(empty);
+        var beforeSelection = await emptyReader.TryCompleteAsync();
+        await emptyReader.SendAsync(MigrationPlanControl.Select, "empty-last-page", new(1, [], AllSelected: true));
+        await Pump(successor);
+        var afterSelection = await emptyReader.TryCompleteAsync();
+        await Pump(successor);
+        check(!beforeSelection && afterSelection && (await reads.GetAsync(scope, empty))?.Header.Status == Contract.ActorStatus.Finished,
+            "an explicit empty final page completes without a dispatch acknowledgment");
 
         var cancelled = await StartPlan("cancelled-plan", deadline);
         var secondSelection = await StartWorkflow("cancelled-selection");
@@ -131,8 +164,14 @@ internal static class MigrationPlanActorChecks
         await Pump(successor);
         check(await cancelledReader.ReadPendingAsync(scope, cancelled, default) is { Number: 1 },
             "the cancellation case begins with a cached committed batch");
+        var openPlan = (await reads.GetAsync(scope, cancelled))!;
+        var openState = store.ReadFoundationActor(scope.Tenant, cancelled.Id).Actor!.Row.State;
+        var growth = actorType.TerminalGrowth(openPlan.Header, openState);
         await ingress.SendAsync(scope, new Contract.Target.Ref(cancelled), "terminate-plan", Contract.Kinds.Terminate);
         await Pump(successor);
+        var cancelledState = store.ReadFoundationActor(scope.Tenant, cancelled.Id).Actor!.Row.State;
+        check(Encoding.UTF8.GetByteCount(cancelledState) - Encoding.UTF8.GetByteCount(openState) == 2 && growth >= 2,
+            "the reserved terminal growth covers clearing a one-digit pending batch");
         var cancelledOutcomes = new MigrationPlanOutcomes(reads, scope, cancelled);
         await Refresh(cancelledOutcomes);
         check((await reads.GetAsync(scope, cancelled))?.Header.Status == Contract.ActorStatus.Cancelled &&
@@ -146,13 +185,26 @@ internal static class MigrationPlanActorChecks
         var expiring = await StartPlan("expiring-plan", expiry);
         var waiting = await StartWorkflow("late-workflow");
         await Pump(successor);
+        var beforeExpiry = (await reads.GetAsync(scope, expiring))!;
+        var waitingState = store.ReadFoundationActor(scope.Tenant, expiring.Id).Actor!.Row.State;
+        var timer = (await reads.InboxAsync(scope, expiring)).Items.Single();
+        check(actorType.RestoreWaits(beforeExpiry.Header, waitingState).Timers is
+            [{ Id: var timerId, Kind: MigrationPlanControl.Deadline, Payload: null, Due: var due }] &&
+            timerId == timer.Id && due == expiry && timer.Due == expiry,
+            "the recovery recipe names the exact issued deadline and its original due time");
         var expiryReader = NewReader(expiring);
         await expiryReader.SendAsync(MigrationPlanControl.Select, "late-selection", new(1, [waiting], AllSelected: true));
         await Pump(successor);
+        check(await expiryReader.ReadPendingAsync(scope, expiring, default) is { Number: 1 },
+            "the pending selection can be released before the deadline");
         await ingress.SendAsync(scope, new Contract.Target.Ref(waiting), "delayed-migration", Contract.Kinds.Migrate,
             Json.Write(new MigrationRequest("source", "target", expiring)), new(DueAt: expiry + 100));
         var lateOutcomes = new MigrationPlanOutcomes(reads, scope, expiring);
         now = expiry;
+        check((await reads.GetAsync(scope, expiring))?.Header.Status == Contract.ActorStatus.Running &&
+            await expiryReader.ReadPendingAsync(scope, expiring, default) is null &&
+            await NewReader(expiring).ReadPendingAsync(scope, expiring, default) is null,
+            "the deadline stops both cached and cold dispatch while the owner has not run");
         await Pump(successor);
         await Refresh(lateOutcomes);
         check(lateOutcomes.Read() is { Closed: true } expired && expired.NoAnswer.SequenceEqual([waiting]) &&
@@ -193,7 +245,7 @@ internal static class MigrationPlanActorChecks
 
         public ValueTask TurnAsync(Models.ITurn turn, CancellationToken cancellationToken)
         {
-            turn.Record(new MigrationPlanJournal.Created("source", "target"));
+            turn.Record(new MigrationPlanJournal.Created("source", "target", long.MaxValue));
             turn.Record(new MigrationPlanJournal.Selected([(Contract.ActorRef)turn.State], Number: 1));
             return ValueTask.CompletedTask;
         }

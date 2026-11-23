@@ -18,7 +18,7 @@ internal abstract record MigrationPlanJournal(string Kind)
     private const string AnsweredKind = "migration-plan.answered.v1";
     private const string ClosedKind = "migration-plan.closed.v1";
 
-    internal sealed record Created(string From, string To) : MigrationPlanJournal(CreatedKind);
+    internal sealed record Created(string From, string To, long Deadline) : MigrationPlanJournal(CreatedKind);
     internal sealed record Selected(ActorRef[] Actors, long Number = 0, PageToken? After = null, bool AllSelected = false)
         : MigrationPlanJournal(SelectedKind);
     internal sealed record Dispatched(long Number) : MigrationPlanJournal(DispatchedKind);
@@ -30,12 +30,17 @@ internal abstract record MigrationPlanJournal(string Kind)
         using var document = JsonDocument.Parse(json);
         var record = document.RootElement;
         if (record.ValueKind == JsonValueKind.String && record.GetString() == "end") return new Closed();
+        if (record.ValueKind == JsonValueKind.Object && record.TryGetProperty("Operation", out var operation) &&
+            operation.ValueKind == JsonValueKind.String && record.TryGetProperty("Cleared", out var cleared) &&
+            cleared.ValueKind == JsonValueKind.Number && record.TryGetProperty("Outcome", out var outcome) &&
+            outcome.ValueKind == JsonValueKind.String && outcome.GetString() == "terminated")
+            return new Closed();
         if (record.ValueKind != JsonValueKind.Object || !record.TryGetProperty(nameof(Kind), out var kind) ||
             kind.ValueKind != JsonValueKind.String) return null;
         return kind.GetString() switch
         {
-            CreatedKind => record.Deserialize<Created>() is { From.Length: > 0, To.Length: > 0 } created
-                ? created : throw new InvalidOperationException("The migration plan needs both definitions."),
+            CreatedKind => record.Deserialize<Created>() is { From.Length: > 0, To.Length: > 0, Deadline: > 0 } created
+                ? created : throw new InvalidOperationException("The migration plan needs both definitions and a deadline."),
             SelectedKind => record.Deserialize<Selected>() is { Actors: { } actors } batch &&
                 (actors.Length > 0 || batch.Number > 0) &&
                 actors.All(actor => !string.IsNullOrEmpty(actor.Id))
@@ -67,11 +72,21 @@ internal sealed class MigrationPlanOutcomes(IActorReads reads, BoundScope scope,
     private PageToken? _bookmark;
     private bool _closed;
     private long _asOf;
+    private long? _deadline;
+    private long? _finalBatch;
+    private bool _finalDispatched;
 
     internal MigrationPlanView Read()
     {
         lock (_gate)
             return new(_closed, _asOf, new Dictionary<ActorRef, MigrationPlanOutcome?>(_outcomes));
+    }
+
+    internal (long Batch, long Deadline)? Completion()
+    {
+        lock (_gate)
+            return !_closed && _deadline is { } deadline && _finalBatch is { } batch && _finalDispatched &&
+                _outcomes.Values.All(result => result is not null) ? (batch, deadline) : null;
     }
 
     internal async Task<bool> ProjectNextAsync(CancellationToken cancellationToken = default)
@@ -100,8 +115,19 @@ internal sealed class MigrationPlanOutcomes(IActorReads reads, BoundScope scope,
     {
         switch (record)
         {
+            case MigrationPlanJournal.Created created:
+                _deadline = created.Deadline;
+                break;
             case MigrationPlanJournal.Selected batch when !_closed:
                 foreach (var actor in batch.Actors) _outcomes.TryAdd(actor, null);
+                if (batch is { AllSelected: true, Number: > 0 })
+                {
+                    _finalBatch = batch.Number;
+                    _finalDispatched = batch.Actors.Length == 0;
+                }
+                break;
+            case MigrationPlanJournal.Dispatched dispatch when _finalBatch == dispatch.Number:
+                _finalDispatched = true;
                 break;
             case MigrationPlanJournal.Answered answer when
                 _outcomes.TryGetValue(answer.Actor, out var prior) && prior is null or MigrationPlanOutcome.NotAtSource:

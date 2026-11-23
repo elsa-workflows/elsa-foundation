@@ -45,9 +45,9 @@ internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<
             cancellationToken.ThrowIfCancellationRequested();
             if (message.Kind == Kinds.Start)
             {
-                turn.Record(new MigrationPlanJournal.Created(state.Request.From, state.Request.To));
+                turn.Record(new MigrationPlanJournal.Created(state.Request.From, state.Request.To, state.Request.Deadline));
                 if (turn.Now < state.Request.Deadline)
-                    turn.Send(turn.Instance.Ref, MigrationPlanControl.Deadline, dueAt: state.Request.Deadline);
+                    state.DeadlineTimer = turn.Send(turn.Instance.Ref, MigrationPlanControl.Deadline, dueAt: state.Request.Deadline);
             }
 
             if (message.Kind == MigrationPlanResult.Kind)
@@ -89,7 +89,7 @@ internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<
         if (state.AllSelected || state.Pending is not null || state.Number == long.MaxValue ||
             control.Number != state.Number + 1 || control.Before != state.Cursor ||
             control.AllSelected != (control.After is null) || !control.AllSelected && control.After == control.Before ||
-            control.After is { Value.Length: > 1_024 } ||
+            control.After is { } after && after.Value is not { Length: > 0 and <= 1_024 } ||
             control.Actors is not { Length: <= BatchLimit } actors ||
             actors.Any(actor => actor == turn.Instance.Ref || actor.Id is not { Length: > 0 and <= 1_024 }) ||
             actors.Distinct().Count() != actors.Length) return;
@@ -138,8 +138,12 @@ internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<
     public bool HandlesMetadata(Message message) => message.Kind == MigrationPlanResult.Kind;
     public ValueTask MetadataAsync(ITurn turn, ActorStatus status, long? endedAt, CancellationToken cancellationToken)
     {
-        if (status is ActorStatus.Finished or ActorStatus.Cancelled && turn.State is PlanState { Closed: true } state)
+        if (status is ActorStatus.Finished or ActorStatus.Cancelled && turn.State is PlanState state)
+        {
+            state.Closed = true;
+            state.Pending = null;
             foreach (var message in turn.Inbox) RecordAnswer(turn, state, message);
+        }
         return ValueTask.CompletedTask;
     }
 
@@ -152,12 +156,18 @@ internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<
     public bool ProtectsDeletion(object state, long? endedAt, long now) => false;
     public object UpgradeState(string state, int fromVersion) => throw new NotSupportedException();
     public ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
-    public RestorePlan RestoreWaits(InstanceInfo instance, object state) => new([], [], []);
-    public long TerminalGrowth(InstanceInfo instance, object state) => 0;
+    public RestorePlan RestoreWaits(InstanceInfo instance, object state) =>
+        state is PlanState { Closed: false, DeadlineTimer: { } timer } plan
+            ? new([new(timer, MigrationPlanControl.Deadline, null, plan.Request.Deadline)], [], [])
+            : new([], [], []);
+
+    // Pending can grow from a single digit to null while Closed shrinks from false to true.
+    public long TerminalGrowth(InstanceInfo instance, object state) => 2;
 
     private sealed record PlanState(MigrationPlanStart Request)
     {
         public long Number { get; set; }
+        public string? DeadlineTimer { get; set; }
         public long? Pending { get; set; }
         public PageToken? Cursor { get; set; }
         public bool AllSelected { get; set; }
