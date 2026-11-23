@@ -33,12 +33,9 @@ internal static class PostgresRootHistoryChecks
         Task<long> Position() => db.Partitions.Select(p => p.Position).SingleAsync(ct);
         Task<long> Clock() => db.Database.SqlQueryRaw<long>("""SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value" """).SingleAsync(ct);
 
-        async Task SetCodecAsync(int from, int to, CancellationToken token)
-        {
-            var changed = await db.StoreVersions.Where(row => row.Id == StoreVersionEntity.MarkerId && row.JournalCodec == from)
+        static Task<int> SetCodecAsync(KernelDb database, int from, int to, CancellationToken token) =>
+            database.StoreVersions.Where(row => row.Id == StoreVersionEntity.MarkerId && row.JournalCodec == from)
                 .ExecuteUpdateAsync(update => update.SetProperty(row => row.JournalCodec, to), token);
-            Check(changed == 1, "the fixture moves only the expected codec marker");
-        }
 
         foreach (var history in new[] { Contract.History.Minimal, Contract.History.Full })
         {
@@ -107,9 +104,9 @@ internal static class PostgresRootHistoryChecks
                     "the public ordinary-profile list reads its marker and actor in one command");
                 var codec = db.RequiredFormat.JournalCodec;
                 var changed = codec + 1;
-                await SetCodecAsync(codec, changed, ct);
                 try
                 {
+                    Check(await SetCodecAsync(db, codec, changed, ct) == 1, "the fixture advances only the expected codec marker");
                     await RefusesCodecAsync(() => reads.TailAsync(scope, actor, cancellationToken: ct).AsTask(), "journal");
                     await RefusesCodecAsync(() => reads.ListAsync(scope, new Contract.ActorQuery(), cancellationToken: ct).AsTask(), "list");
                     await RefusesCodecAsync(() => reads.ListAsync(scope, new Contract.ActorQuery(Type: "absent"), cancellationToken: ct).AsTask(),
@@ -118,7 +115,11 @@ internal static class PostgresRootHistoryChecks
                 finally
                 {
                     using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    await SetCodecAsync(changed, codec, cleanup.Token);
+                    await using var restoration = Open();
+                    var affected = await SetCodecAsync(restoration, changed, codec, cleanup.Token);
+                    Check(affected == 1 || await restoration.StoreVersions.AnyAsync(
+                        row => row.Id == StoreVersionEntity.MarkerId && row.JournalCodec == codec, cleanup.Token),
+                        "cleanup restores the changed codec or observes the original marker");
                 }
 
                 async Task RefusesCodecAsync(Func<Task> read, string operation)
