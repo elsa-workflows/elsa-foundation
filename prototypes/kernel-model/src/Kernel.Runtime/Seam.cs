@@ -25,6 +25,13 @@ public interface IScopeHost
     ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default);
 }
 
+/// <summary>A host that can take several requested scopes together. It returns an activation only for scopes it holds.</summary>
+public interface IScopeSetGain
+{
+    bool SupportsSetGain { get; }
+    ValueTask<IReadOnlyList<IScopeActivation>> ActivateAsync(IReadOnlyList<int> scopes, CancellationToken cancellationToken = default);
+}
+
 /// <summary>A host whose worker can drain and give up several of its active scopes together.</summary>
 public interface IScopeSetRelease
 {

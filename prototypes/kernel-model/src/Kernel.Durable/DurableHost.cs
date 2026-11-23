@@ -16,7 +16,7 @@ namespace Kernel.Durable;
 /// and the simulation use it, and so does a node on a store without owned sets (<c>commit=ef</c>: one partition per worker).</item>
 /// </list>
 /// </summary>
-public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScopeSetRelease
+public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScopeSetRelease, IScopeSetGain
 {
     private NodeHeartbeat? _beat;       // K1b: the node's heartbeat over this host's Workers, made at the first heartbeat
     private (IKernelStore Store, int Placed, bool Part)? _counted;     // a node's host (ForNode): what its start checks
@@ -111,7 +111,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         {
             if (!await node.GainAsync(scope, cancellationToken)) return null;
             // The same activation each time: layer 1 holds the one it got, and gives up the one it holds.
-            return _scopes.TryGetValue(scope, out var known) ? known : _scopes[scope] = new NodeScope(this, scope);
+            return Scope(scope);
         }
         finally { _turn.Release(); }
     }
@@ -205,6 +205,22 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
             return node.Holds(scope.Scope)
                 ? new(_last, _lastAges.TryGetValue(scope.Scope, out var age) ? age : null)
                 : default;
+        }
+        finally { _turn.Release(); }
+    }
+
+    private NodeScope Scope(int scope) =>
+        _scopes.TryGetValue(scope, out var known) ? known : _scopes[scope] = new NodeScope(this, scope);
+
+    bool IScopeSetGain.SupportsSetGain => _node is not null;
+
+    async ValueTask<IReadOnlyList<IScopeActivation>> IScopeSetGain.ActivateAsync(IReadOnlyList<int> scopes, CancellationToken cancellationToken)
+    {
+        await _turn.WaitAsync(cancellationToken);
+        try
+        {
+            await _node!.GainSetAsync(scopes, cancellationToken);
+            return scopes.Where(_node.Holds).Select(Scope).ToArray();
         }
         finally { _turn.Release(); }
     }

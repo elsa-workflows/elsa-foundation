@@ -127,7 +127,7 @@ public sealed class Watcher
             if (_busy.TryGetValue((node, scope), out var now) && now == what) _busy.Remove((node, scope));
     }
 
-    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount, INodeLeaseHost, IScopeSetRelease
+    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount, INodeLeaseHost, IScopeSetRelease, IScopeSetGain
     {
         public bool SupportsSetRelease => inner is IScopeSetRelease { SupportsSetRelease: true };
 
@@ -163,12 +163,34 @@ public sealed class Watcher
 
         public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
         {
-            lock (watcher._lock)
-                if (watcher.Live(scope).Any(w => w.Node != node)) watcher.Second++;
-            watcher.Enter(node, scope, "activated");
+            BeginActivation(scope);
             IScopeActivation? activation;
             try { activation = await inner.ActivateAsync(scope, cancellationToken); }
             finally { watcher.Leave(node, scope, "activated"); }
+            return Record(scope, activation);
+        }
+
+        public bool SupportsSetGain => inner is IScopeSetGain { SupportsSetGain: true };
+
+        public async ValueTask<IReadOnlyList<IScopeActivation>> ActivateAsync(IReadOnlyList<int> scopes, CancellationToken cancellationToken = default)
+        {
+            foreach (var scope in scopes) BeginActivation(scope);
+            IReadOnlyList<IScopeActivation> gained;
+            try { gained = await ((IScopeSetGain)inner).ActivateAsync(scopes, cancellationToken); }
+            finally { foreach (var scope in scopes) watcher.Leave(node, scope, "activated"); }
+            var byScope = gained.ToDictionary(a => a.Scope);
+            return scopes.Select(s => Record(s, byScope.GetValueOrDefault(s))).OfType<IScopeActivation>().ToArray();
+        }
+
+        private void BeginActivation(int scope)
+        {
+            lock (watcher._lock)
+                if (watcher.Live(scope).Any(w => w.Node != node)) watcher.Second++;
+            watcher.Enter(node, scope, "activated");
+        }
+
+        private IScopeActivation? Record(int scope, IScopeActivation? activation)
+        {
             if (activation is null)
             {
                 lock (watcher._lock) watcher.Declined++;
