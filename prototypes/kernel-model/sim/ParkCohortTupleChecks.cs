@@ -12,10 +12,11 @@ internal static class ParkCohortTupleChecks
         await TiedCohort(poisonFirst: false, check, narrow: true);
         await TiedCohort(poisonFirst: true, check, narrow: true);
         await TiedOrdinaryPoison(check);
-        await InterruptedRelease(check);
+        await InterruptedRelease(check, endBeforeOlderRelease: false);
+        await InterruptedRelease(check, endBeforeOlderRelease: true);
     }
 
-    private static async Task InterruptedRelease(Action<bool, string> check)
+    private static async Task InterruptedRelease(Action<bool, string> check, bool endBeforeOlderRelease)
     {
         const long start = 1_702_610_003_000;
         const int maxAttempts = 3;
@@ -26,6 +27,24 @@ internal static class ParkCohortTupleChecks
         var ingress = new InMemoryIngress(store, new Requests("interrupted-suffix"), "interrupted-suffix",
             (_, kind) => kind == Contract.Kinds.Recover);
         var reads = new ActorList(store, 5);
+        var endedWithOlderPending = 0;
+        var settledOlder = 0;
+        var suffixKeptAtEnd = false;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (!landed || !endBeforeOlderRelease) return;
+            foreach (var turn in batch.Turns)
+            {
+                if (turn is { Row: { Status: InstanceStatus.Finished, ParkRecovery: not null } ended, FoundationRecoveryPage: null })
+                {
+                    endedWithOlderPending = store.Messages.Values.Count(row => !row.Done &&
+                        row.ReleasedBy is { } release && release.Generation < ended.ParkResolutionGeneration);
+                    suffixKeptAtEnd = Delivery("suffix").KeptBy == ParkKeepReason.Arrived;
+                }
+                if (turn is { Row: { } checkpoint, FoundationRecoveryPage: { TerminalInputs: true } page })
+                    settledOlder += page.Rows.Count(row => row.ReleasedBy is { } tag && tag.Generation < checkpoint.ParkResolutionGeneration);
+            }
+        });
         await using var first = await Activate(Owner("before-interruption"));
         var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "")), "start", Contract.Kinds.Start);
         var actor = birth.Actor!.Value;
@@ -65,23 +84,53 @@ internal static class ParkCohortTupleChecks
         check(reparks, "E-6 the exhausted first input re-parks before the older cohort reaches the actor");
         if (!reparks) return;
 
+        // A cold one-row poll keeps the earlier-position finisher and opens recovery before the older releases are polled.
+        if (endBeforeOlderRelease)
+            await successor.DisposeAsync();
+        await using var parkedOwner = endBeforeOlderRelease ? await Activate(Owner("parked-before-end", pollLimit: 1)) : null;
+        if (endBeforeOlderRelease)
+        {
+            // The admitted finisher spends the first page's credit and sorts before the prior release.
+            await ingress.SendAsync(scope, target, "early-end", "finish-recovery", new string('x', ParkRecoveryCredit.LimitBytes));
+            Delivery("early-end").Seq = Delivery(expected[0]).Seq - 2;
+        }
+
         await Open("release-again");
         Delivery("release-again").Seq = Delivery(expected[0]).Seq - 1;
+        if (endBeforeOlderRelease)
+        {
+            for (var pass = 0; pass < 12 && Delivery("early-end").KeptBy is null; pass++)
+                await Pump(parkedOwner!, passes: 1);
+            var kept = Delivery("early-end").KeptBy == ParkKeepReason.Arrived;
+            check(kept, "E-6(d) the early finisher is durably kept while the actor is parked again");
+            if (!kept) return;
+        }
+
         for (var pass = 0; pass < 3 * count && (Row().Status != InstanceStatus.Finished || Row().ParkRecovery is not null); pass++)
         {
             now += 11;
-            await Pump(successor, passes: 1);
+            await Pump(parkedOwner ?? successor, passes: 1);
         }
         var final = Row();
         var applied = Json.Read<List<string>>(final.State);
+        if (endBeforeOlderRelease)
+        {
+            check(endedWithOlderPending == count && suffixKeptAtEnd,
+                $"E-6(d) the actor ends during recovery while every older release is still pending ({endedWithOlderPending})");
+            check(final is { Status: InstanceStatus.Finished, ParkRecovery: null, EndedDuringParkRecovery: true } &&
+                applied.SequenceEqual(["early-end"]) && settledOlder == count &&
+                store.Messages.Values.All(row => row is { Done: true, KeptBy: null } && row.Message.Kind != Kinds.Drain),
+                $"E-6(d) terminal recovery settles the older release and kept suffix without another model delivery ({settledOlder} older cleared)");
+            return;
+        }
         check(final is { Status: InstanceStatus.Finished, ParkRecovery: null } &&
             final.ParkResolutionGeneration > released.ParkResolutionGeneration &&
             applied.SequenceEqual(expected.Append("suffix")) &&
             store.Messages.Values.All(row => row.KeptBy is null && row.Message.Kind != Kinds.Drain),
             $"E-6 the later generation applies the older release before the end suffix and completes (applied {applied.Count})");
 
-        Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, probe),
-            new WorkerOptions { Monotonic = () => now - start, MaxAttempts = maxAttempts, PassTurnBudget = 1 });
+        Worker Owner(string node, int pollLimit = 500) => new(node, 0, wire, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - start, MaxAttempts = maxAttempts, PassTurnBudget = 1, PollLimit = pollLimit });
         static async Task<IScopeActivation> Activate(Worker worker) => (await new DurableHost([worker]).ActivateAsync(0))!;
         InstanceRow Row() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row;
         InMemoryStore.MessageRow Delivery(string id) => store.Messages.Values.Single(row => row.Message.Id == id);
@@ -258,7 +307,7 @@ internal static class ParkCohortTupleChecks
                 if (message.Kind == "fault") throw new InvalidOperationException("Open the Park fixture.");
                 if (message.Kind == "finish-recovery")
                 {
-                    order.Add("suffix");
+                    order.Add(message.Id);
                     turn.End(Contract.ActorStatus.Finished);
                 }
                 if (message.Kind == "arm") turn.StartJob("exhausted");
