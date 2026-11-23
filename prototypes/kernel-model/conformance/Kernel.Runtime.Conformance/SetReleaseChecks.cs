@@ -13,7 +13,8 @@ public static class SetReleaseChecks
         var fixedWorkers = await CheckAsync(ownedSets: false);
         var expired = await ExpiredAsync();
         var cancelled = await CancelledAsync();
-        return owned && fixedWorkers && expired && cancelled ? 0 : 1;
+        var busy = await BusySurplusAsync();
+        return owned && fixedWorkers && expired && cancelled && busy ? 0 : 1;
     }
 
     private static async Task<bool> CheckAsync(bool ownedSets)
@@ -68,14 +69,18 @@ public static class SetReleaseChecks
         wire.Stall(TimeSpan.FromMinutes(1));
         var pass = runtime.PassAsync(0).AsTask();
         Task? balance = null;
+        Task<TimeSpan?>? surplusPass = null;
         var cancelled = false;
         var waited = false;
+        var blockedNewPass = false;
         try
         {
             if (!wire.Idle)
             {
                 balance = runtime.BalanceAsync(cancellation.Token);
                 waited = !balance.IsCompleted;
+                surplusPass = runtime.PassAsync(7).AsTask();
+                blockedNewPass = surplusPass.IsCompletedSuccessfully && surplusPass.Result is null;
                 cancellation.Cancel();
                 try { await balance.WaitAsync(TimeSpan.FromSeconds(2)); }
                 catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { cancelled = true; }
@@ -86,9 +91,10 @@ public static class SetReleaseChecks
         {
             wire.Resume();
             await pass.WaitAsync(TimeSpan.FromSeconds(2));
+            if (surplusPass is not null) await surplusPass.WaitAsync(TimeSpan.FromSeconds(2));
         }
         if (balance is not null && !cancelled) await balance.WaitAsync(TimeSpan.FromSeconds(2));
-        var expected = waited && cancelled && wire.SetReleases == 0
+        var expected = waited && blockedNewPass && cancelled && wire.SetReleases == 0
             && Enumerable.Range(0, Count).All(runtime.Owns)
             && store.Partitions.All(partition => partition.Owner == "first");
         Console.WriteLine($"{(expected ? "ok" : "FAIL")} cancellation while the handover waits preserves the registered activations and owners");
@@ -96,14 +102,45 @@ public static class SetReleaseChecks
         return expected;
     }
 
-    private static async Task<(InMemoryStore, NodeStore, DurableHost, PartitionRuntime)> ReadyToReleaseAsync(bool ownedSets, Func<long> clock)
+    private static async Task<bool> BusySurplusAsync()
+    {
+        var watcher = new Watcher();
+        var (store, wire, _, runtime) = await ReadyToReleaseAsync(ownedSets: true, () => 1_000L, watcher);
+        await runtime.Activation(7)!.WokenAsync(null);
+        wire.Stall(TimeSpan.FromMinutes(1));
+        var pass = runtime.PassAsync(7).AsTask();
+        var wasBlocked = !wire.Idle;
+        var balance = runtime.BalanceAsync();
+        bool deferred;
+        try
+        {
+            deferred = wasBlocked && balance.IsCompletedSuccessfully && wire.SetReleases == 0
+                && store.Partitions.All(partition => partition.Owner == "first");
+        }
+        finally
+        {
+            wire.Resume();
+            await pass.WaitAsync(TimeSpan.FromSeconds(2));
+            await balance.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        await runtime.BalanceAsync();
+        var expected = deferred && wire.SetReleases == 1 && watcher.Violations.Count == 0
+            && Enumerable.Range(0, Count).All(partition => runtime.Owns(partition) == (partition < 4));
+        Console.WriteLine($"{(expected ? "ok" : "FAIL")} a running surplus pass defers the group until a later round, " +
+            $"seam violations [{string.Join(", ", watcher.Violations)}]");
+        await runtime.StopAsync();
+        return expected;
+    }
+
+    private static async Task<(InMemoryStore, NodeStore, DurableHost, PartitionRuntime)> ReadyToReleaseAsync(
+        bool ownedSets, Func<long> clock, Watcher? watcher = null)
     {
         var store = new InMemoryStore(Count, clock);
         var wire = new NodeStore(store) { WithoutOwnedSets = !ownedSets };
         var host = DurableHost.ForNode("first", wire, new WorkflowInstance(Stress.Models()), Count,
             new WorkerOptions { Partitions = Count, Lease = Lease, Monotonic = clock });
         var runtime = new PartitionRuntime("first", wire, Count, Lease);
-        await runtime.StartAsync(host);
+        await runtime.StartAsync(watcher?.Wrap("first", host) ?? host);
         await runtime.HeartbeatAsync();
         await runtime.BalanceAsync();
         await store.NodeHeartbeatAsync("joining", Lease, Lease);
