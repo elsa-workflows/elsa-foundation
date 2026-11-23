@@ -67,7 +67,9 @@ The first decisive result survives replay. An unanswered actor is pending before
 Close fixes the selected set. A late reply for a selected actor still updates the closed plan. A closed empty plan
 has no missing answers. A cancelled page leaves its bookmark in place for a retry. A fresh projector recovers
 the same results from the journal. A plan runner tracks selection completion separately from answers to the
-selections the projector has already seen.
+selections the projector has already seen. The view’s `AsOf` is a lower bound on confirmed catch-up. An empty
+journal read at the current bookmark advances it to the database time of that read. While applying nonempty
+pages the view keeps its previous catch-up time, initially zero.
 
 The example stores its view and bookmark in memory and uses a fixture to write the plan journal from real actor turns.
 The persisted view and its paging are separate K9 work. K11 supplies the migration plan actor, exact-ref dispatch
