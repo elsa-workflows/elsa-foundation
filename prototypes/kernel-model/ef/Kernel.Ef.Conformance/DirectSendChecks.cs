@@ -203,7 +203,7 @@ internal static class DirectSendChecks
         await blocker.Database.ExecuteSqlRawAsync("""LOCK TABLE "Instances" IN ACCESS EXCLUSIVE MODE""");
         Check(!(await Commit(stale)).Landed, "a preparation lock timeout with a stale position refuses the batch");
         try { await Commit(held); }
-        catch (StoreException error) when (error.Failure == Failure.Transient && error.InnerException is PostgresException { SqlState: "55P03" })
+        catch (StoreException error) when (error.Failure == Failure.Transient && error.GetBaseException() is PostgresException { SqlState: "55P03" })
         {
             Console.WriteLine("ok a preparation lock timeout with the held fence retains its PostgreSQL transient classification");
             return;
