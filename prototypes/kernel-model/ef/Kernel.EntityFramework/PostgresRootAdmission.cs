@@ -29,6 +29,13 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal static bool IsIssuedReferenceShape(string? reference) =>
         FoundationRootCreator.IsGeneratedReference(reference);
 
+    internal static void RequireActorType(string actorType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorType);
+        if (!FoundationMetadataLimits.FitsName(actorType))
+            throw new ArgumentException("Invalid PostgreSQL root actor type.", nameof(actorType));
+    }
+
     internal async Task<FoundationReadCursor> OpenJournalCursorAsync(CancellationToken cancellationToken)
     {
         await using var db = create();
@@ -85,12 +92,19 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         await InstallDirectReceiptsAsync(db, cancellationToken);
         if (db.UsesRootOperatorProtocol)
             await InstallOperatorReceiptsAsync(db, cancellationToken);
-        var placementMatches = await db.Database.SqlQueryRaw<bool>("""
-            SELECT i."Partitions" = count(p."Id") AND min(p."Id") = 0 AND max(p."Id") = i."Partitions" - 1 AS "Value"
-            FROM "FoundationRootIssuer" i CROSS JOIN "Partitions" p GROUP BY i."Partitions"
-            """).SingleAsync(cancellationToken);
-        if (!placementMatches) throw new InvalidOperationException("The installed root placement no longer matches the virtual partitions.");
+        await ReadInstalledPartitionCountAsync(db, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    internal static async Task<int> ReadInstalledPartitionCountAsync(KernelDb db, CancellationToken cancellationToken)
+    {
+        var count = await db.Database.SqlQueryRaw<int>("""
+            SELECT i."Partitions" AS "Value" FROM "FoundationRootIssuer" i CROSS JOIN "Partitions" p
+            GROUP BY i."Partitions"
+            HAVING i."Partitions" = count(p."Id") AND min(p."Id") = 0 AND max(p."Id") = i."Partitions" - 1
+            """).SingleOrDefaultAsync(cancellationToken);
+        if (count == 0) throw new InvalidOperationException("The installed root placement no longer matches the virtual partitions.");
+        return count;
     }
 
     internal async Task<Receipt> AdmitAsync(string tenant, string operation, StartSpec spec, long? due = null,

@@ -437,6 +437,17 @@ PostgreSQL database and run the following after building `models/Native.Run` in 
 dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-roots 1024
 ```
 
+Each Native node starts through `PostgresPreviewHosting.StartAsync` in `Kernel.Foundation.Postgres`.
+The host passes the installed PostgreSQL context factory, a distinct node name and its public actor type.
+All nodes on the database use the same actor type and definitions. The launcher checks the installed
+partition layout and runs the owner-call watchdog. Supply a process-termination policy for a call
+that remains stuck after cancellation. The caller disposes the returned runtime to release ownership. The driver's start, direct input and journal reads use the EF
+provider's public surfaces. The Flowchart and StateMachine qualification fixtures keep their own setup.
+
+To check launcher validation, a plain public actor and watchdog escalation, run
+`pg-preview-host-watchdog` on a fresh disposable PostgreSQL database. The fixture stalls an entered
+heartbeat after the actor completes and observes the escalation callback before releasing the stall.
+
 The first node checkpoints roots on distinct partitions in one PostgreSQL transaction. A second OS process joins
 with its own RuntimeNode. A single store snapshot shows the two nodes each own half the partitions. The second
 node holds the same epoch from the first approval's admission through its checkpoint, then stops gracefully.

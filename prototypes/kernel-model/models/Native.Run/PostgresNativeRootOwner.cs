@@ -1,5 +1,6 @@
 using Kernel.EntityFramework;
 using Kernel.Foundation.InMemory;
+using Kernel.Foundation.Postgres;
 using PublicActor = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Kernel.Native.Run;
@@ -31,7 +32,7 @@ internal sealed class PostgresNativeRootOwner
     }
 
     internal static ActorAdapter Adapter(EfStore store, EfStore.WorkerRoots roots, WorkflowRegistry registry) =>
-        new(new Headers(roots), new PublicActor([new NativeExecutionModel(registry)]), store.RootSelfIssuer, store.RootJobHandle,
+        new(new PostgresPreviewHosting.RootHeaders(roots), new PublicActor([new NativeExecutionModel(registry)]), store.RootSelfIssuer, store.RootJobHandle,
             store.RootTimedJobIssuanceEnabled, store.RootTimedJobSettlementEnabled ? store.ReadRootTimedJobPublicationTimeAsync : null);
 
     internal static async Task<PostgresNativeRootOwner> PreparePartitionAsync(EfStore store, string node, int partition,
@@ -61,24 +62,5 @@ internal sealed class PostgresNativeRootOwner
     {
         var prepared = await PrepareAsync(store, node, tenant, reference, registry, cancellationToken);
         return await prepared.TryActivateAsync(cancellationToken) ?? throw new InvalidOperationException("The partition is already owned.");
-    }
-
-    internal sealed class Headers(EfStore.WorkerRoots roots) : IRootDispatchHeaders
-    {
-        public (string Tenant, string Reference) Creator(Message creator)
-        {
-            if (roots.Discover)
-            {
-                if (creator.FoundationRootBinding is not { } binding || binding.Actor != creator.Target.Id || !roots.Includes(creator.Target.Partition) ||
-                    creator.TargetCreation != 1 || creator.InboxKey != new InboxKey("root:" + binding.Actor))
-                    throw new InvalidOperationException("The polled creator needs its admitted root identity.");
-                return (binding.Tenant, binding.Reference);
-            }
-            var root = roots.ForActor(creator.Target.Id);
-            return root.Owns(creator.InboxKey) ? (root.Tenant, root.Reference) : throw new InvalidOperationException("Unexpected root creator.");
-        }
-
-        public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
-            throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
     }
 }
