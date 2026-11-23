@@ -113,8 +113,9 @@ dotnet run -c Release --project sim -- --native-migration-apply
 The public in-memory command suspends a waiting Native workflow, rebinds a compatible Sequence and
 delivers its result to a plan witness. The workflow resumes on the same event wait and executes the
 target tail. Balanced and Durable runs lose the answer before and after the migration commit. A cold
-owner completes the schedule with one result and one successful boundary in the Full journal. A run
-with an older model holds the original command, then a newer owner processes it. The plan witness
+owner completes the schedule with one result and one successful lifecycle entry under Full, State
+and Minimal history. A run with an older model holds the stale-source command before inspecting
+its source definition. A newer owner processes it. The plan witness
 exercises real actor delivery. The product plan actor, declaration mapping and graph and statechart
 migration remain separate work.
 

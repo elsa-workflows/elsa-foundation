@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Kernel.Foundation.InMemory;
 using Kernel.Native;
@@ -18,6 +19,7 @@ internal static class NativeMigrationApplyChecks
             await VerifyAsync(mode, loseAfterLanding, (ok, label) =>
                 check(ok, $"{mode}, {(loseAfterLanding ? "after landing" : "before landing")}: {label}"));
         await VerifyVersionHoldAsync(check);
+        await VerifyHeaderLimitAsync(check);
     }
 
     private static async Task VerifyVersionHoldAsync(Action<bool, string> check)
@@ -35,6 +37,7 @@ internal static class NativeMigrationApplyChecks
         var current = new PublicWorkflow([native, new PlanSink()]);
         var actor = (await runtime.StartAsync(scope, "version-start", NativeExecutionModel.Start("source"))).Actor!.Value;
         var plan = (await runtime.StartAsync(scope, "hold-plan", new(PlanSink.Key, "hold-plan"))).Actor!.Value;
+        var stalePlan = (await runtime.StartAsync(scope, "hold-stale-plan", new(PlanSink.Key, "hold-stale-plan"))).Actor!.Value;
         await using var first = await ActivateAsync("version-first", current);
         await PumpAsync(first);
         var state = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.State;
@@ -42,15 +45,20 @@ internal static class NativeMigrationApplyChecks
         now += 20_000;
         var oldModel = new OldNative(native.StateVersion - 1);
         await using var older = await ActivateAsync("version-older", new PublicWorkflow([oldModel, new PlanSink()]));
-        await edge.SendAsync(scope, new Contract.Target.Ref(actor), "wait-for-version", Contract.Kinds.Migrate,
+        var target = new Contract.Target.Ref(actor);
+        await edge.SendAsync(scope, target, "wait-for-stale", Contract.Kinds.Migrate,
+            Json.Write(new MigrationRequest("different source", "target", stalePlan)));
+        await edge.SendAsync(scope, target, "wait-for-version", Contract.Kinds.Migrate,
             Json.Write(new MigrationRequest("source", "target", plan)));
         await PumpAsync(older);
         var held = await reads.InboxAsync(scope, actor);
-        check(held.Items is [{ Id: "wait-for-version", State: Contract.DeliveryState.Held }] &&
+        check(held.Items is [{ Id: "wait-for-stale", State: Contract.DeliveryState.Held },
+                { Id: "wait-for-version", State: Contract.DeliveryState.Pending }] &&
             store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.State == state &&
             (await reads.InboxAsync(scope, plan)).Items.Count == 0 &&
+            (await reads.InboxAsync(scope, stalePlan)).Items.Count == 0 &&
             (await reads.TailAsync(scope, actor)).Items.All(row => row.Entry != "\"migrate\""),
-            "an older owner holds the migration and writes neither a result nor a migration marker");
+            "an older owner holds the stale-source migration ahead of the next command, without a result or marker");
 
         now += 20_000;
         await using var latest = await ActivateAsync("version-latest", current);
@@ -58,9 +66,11 @@ internal static class NativeMigrationApplyChecks
         await edge.SendAsync(scope, new Contract.Target.Ref(actor), "model-available", "wake");
         await PumpAsync(latest);
         var answers = Json.Read<PlanAnswer[]>(store.ReadFoundationActor(scope.Tenant, plan.Id).Actor!.Row.State);
+        var staleAnswers = Json.Read<PlanAnswer[]>(store.ReadFoundationActor(scope.Tenant, stalePlan.Id).Actor!.Row.State);
         check((await reads.GetAsync(scope, actor))?.Header.Labels.GetValueOrDefault("definition") == "target" &&
-            answers is [{ Actor: var sender, Result.Outcome: MigrationPlanOutcome.Migrated }] && sender == actor,
-            "a newer owner replays the same held command and produces one exact outcome");
+            answers is [{ Actor: var sender, Result.Outcome: MigrationPlanOutcome.Migrated }] && sender == actor &&
+            staleAnswers is [{ Actor: var staleSender, Result.Outcome: MigrationPlanOutcome.NotAtSource }] && staleSender == actor,
+            "a newer owner replays both original commands and classifies their source definitions");
 
         async Task<IScopeActivation> ActivateAsync(string node, PublicWorkflow model)
         {
@@ -96,7 +106,10 @@ internal static class NativeMigrationApplyChecks
             lost++;
             throw new StoreException(Failure.Unknown, "the migration's first commit answer was lost");
         });
-        var actor = await StartAsync("workflow", NativeExecutionModel.Start("source", mode));
+        var history = loseAfterLanding
+            ? mode == Modes.Balanced ? Contract.History.State : Contract.History.Minimal
+            : Contract.History.Full;
+        var actor = await StartAsync("workflow", NativeExecutionModel.Start("source", mode) with { History = history });
         var target = new Contract.Target.Ref(actor);
         var refuse = await StartPlanAsync("refuse");
         var apply = await StartPlanAsync("apply");
@@ -173,15 +186,21 @@ internal static class NativeMigrationApplyChecks
             finished.Results["wait"]?["Payload"]?.GetValue<string>() == "yes",
             "public resume consumes the existing wait once and executes the replacement tail");
 
-        var journal = (await reads.TailAsync(scope, actor)).Items.Select(row => Json.Read<JsonElement>(row.Entry)).ToArray();
-        check(journal.Count(item => item.ValueKind == JsonValueKind.Object && item.TryGetProperty("Target", out var definition) &&
-            definition.ValueKind == JsonValueKind.String && definition.GetString() == "target") == 1 &&
-            journal.Count(item => item.ValueKind == JsonValueKind.String && item.GetString()?.EndsWith(":wait", StringComparison.Ordinal) == true) == 1,
-            "the actual Full journal shows one successful definition boundary and one wait completion");
         await MigrateAsync("ended", "target", "source", ended);
         await PumpAsync(successor);
         check(Answers(ended) is [{ Actor: var final, Result: { Outcome: MigrationPlanOutcome.Refused, Finding: "Ended" } }] &&
             final == actor && await BoundDefinition() == "target", "an ended workflow refuses to change its definition");
+
+        var journal = (await reads.TailAsync(scope, actor)).Items.Select(row => Json.Read<JsonElement>(row.Entry)).ToArray();
+        var migratedEntries = journal.Count(item => item.ValueKind == JsonValueKind.String && item.GetString() == "migrate");
+        var activityEntries = journal.Count(item => item.ValueKind == JsonValueKind.String &&
+            item.GetString()?.EndsWith(":wait", StringComparison.Ordinal) == true);
+        var definitionEntries = journal.Count(item => item.ValueKind == JsonValueKind.Object &&
+            item.TryGetProperty("Target", out var definition) && definition.ValueKind == JsonValueKind.String &&
+            definition.GetString() == "target");
+        var expectedDetail = history == Contract.History.Full ? 1 : 0;
+        check(migratedEntries == 1 && activityEntries == expectedDetail && definitionEntries == expectedDetail,
+            $"the {history} journal records one successful lifecycle boundary and the applicable activity detail");
 
         async Task<Contract.ActorRef> StartAsync(string id, Models.WorkflowStart start) =>
             (await runtime.StartAsync(scope, id, start)).Actor ?? throw new InvalidOperationException("The witness could not start.");
@@ -201,6 +220,41 @@ internal static class NativeMigrationApplyChecks
         }
     }
 
+    private static async Task VerifyHeaderLimitAsync(Action<bool, string> check)
+    {
+        const int headerLimit = 16 * 1_024;
+        var store = new InMemoryStore(1, () => 1_701_800_000_000);
+        var scope = new Contract.BoundScope("acme");
+        Contract.IIngress edge = new InMemoryIngress(store, new Requests("header-limit"), "header-limit",
+            (_, kind) => kind == Contract.Kinds.Migrate);
+        Contract.IActorReads reads = new ActorList(store, 32);
+        var runtime = new PublicRuntime(edge, reads);
+        var type = new PublicWorkflow([new PlanSink(), new CappedHeaderModel()]);
+        var actor = (await runtime.StartAsync(scope, "capped-start", new(CappedHeaderModel.Key, "source"))).Actor!.Value;
+        var plan = (await runtime.StartAsync(scope, "capped-plan", new(PlanSink.Key, "plan"))).Actor!.Value;
+        var worker = new Worker("header-limit", 0, store, new ActorAdapter(store, type), new WorkerOptions { Monotonic = () => 0 });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await PumpAsync(owner);
+        var original = (await reads.GetAsync(scope, actor))!.Header.TypeData;
+        // SubStatus changes from the four characters null to a two-quote JSON string.
+        var fullness = new string('x', headerLimit - Encoding.UTF8.GetByteCount(original) + 2);
+        var target = new Contract.Target.Ref(actor);
+        await edge.SendAsync(scope, target, "fill", "set-substatus", fullness);
+        await PumpAsync(owner);
+        var full = (await reads.GetAsync(scope, actor))!.Header.TypeData;
+        var command = Json.Write(new MigrationRequest("source", "longer-target", plan));
+        await edge.SendAsync(scope, target, "capped", Contract.Kinds.Migrate, command);
+        await PumpAsync(owner);
+        await edge.SendAsync(scope, target, "capped-replay", Contract.Kinds.Migrate, command);
+        await PumpAsync(owner);
+        var after = (await reads.GetAsync(scope, actor))!.Header;
+        var answers = Json.Read<PlanAnswer[]>(store.ReadFoundationActor(scope.Tenant, plan.Id).Actor!.Row.State);
+        check(Encoding.UTF8.GetByteCount(full) == headerLimit && after.TypeData == full &&
+            after.Labels.GetValueOrDefault("definition") == "source" &&
+            answers is [{ Actor: var sender, Result: { Outcome: MigrationPlanOutcome.Refused, Finding: "HeaderLimit" } }] &&
+            sender == actor, "a full existing header refuses an expanding target and remembers the answer on replay");
+    }
+
     private static Workflow Definition(string id, string eventName, string tail) => Wf.Workflow(id,
         Wf.Sequence("sequence", Wf.Event("wait", eventName), Wf.Set("tail", "output", tail)), ("output", null));
 
@@ -215,6 +269,26 @@ internal static class NativeMigrationApplyChecks
     }
 
     private sealed record PlanAnswer(Contract.ActorRef Actor, MigrationPlanResult Result);
+
+    private sealed class CappedHeaderModel : Models.IExecutionModel, Models.ISimpleModelMigration
+    {
+        internal const string Key = "capped-header";
+        string Models.IExecutionModel.Key => Key;
+        public Type StateType => typeof(int);
+        public int StateVersion => 1;
+        public object CreateState(Models.WorkflowStart start) => 0;
+        public object UpgradeState(string state, int fromVersion) => throw new NotSupportedException();
+        public Contract.RestorePlan RestoreWaits(Models.InstanceInfo instance, object state) => new([], [], []);
+        public long TerminalGrowth(Models.InstanceInfo instance, object state) => 0;
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public string? ValidateMigration(Models.InstanceInfo source, object state, string target) => null;
+        public ValueTask TurnAsync(Models.ITurn turn, CancellationToken cancellationToken)
+        {
+            foreach (var message in turn.Inbox.Where(message => message.Kind == "set-substatus"))
+                turn.SetStatus(Contract.ActorStatus.Running, message.Payload);
+            return ValueTask.CompletedTask;
+        }
+    }
 
     private sealed class OldNative(int version) : Models.IExecutionModel
     {

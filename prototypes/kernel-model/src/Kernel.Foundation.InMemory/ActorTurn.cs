@@ -23,6 +23,7 @@ internal sealed partial class ActorAdapter
         private Contract.ActorStatus _status;
         private object? _output;
         private bool _emitted;
+        private bool _migrated;
 
         public ActorTurn(Durable.InMemoryStore store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient)
         {
@@ -149,6 +150,11 @@ internal sealed partial class ActorAdapter
 
         public void Record(object entry)
         {
+            if (entry is Contract.ActorLifecycle.Migrated && Inbox is [{ Kind: Contract.Kinds.Migrate }])
+            {
+                _migrated = true;
+                return;
+            }
             if (_row.History == Durable.History.Full) _entries.Add(System.Text.Json.JsonSerializer.SerializeToElement(entry));
         }
 
@@ -202,7 +208,7 @@ internal sealed partial class ActorAdapter
             }
             if (_input.Row is null) _entries.Insert(0, "start");
             if (ended) _entries.Add("end");
-            if (outcome.Consumed.Any(delivery => delivery.Message.Kind == Contract.Kinds.Migrate)) _entries.Add("migrate");
+            if (_migrated && outcome.Consumed.Any(delivery => delivery.Message.Kind == Contract.Kinds.Migrate)) _entries.Add("migrate");
             var entries = _input.Pending is List<object> pending ? [.. pending, .. _entries] : _entries;
             var journal = entries.Count > 0 ? Durable.Json.Write(entries) :
                 _row.History == Durable.History.State && State != (_row.FoundationNullState ? null : _row.State) ? "[]" : null;

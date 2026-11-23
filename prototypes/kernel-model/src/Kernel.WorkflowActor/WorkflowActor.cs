@@ -133,12 +133,14 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
             JsonSerializer.Deserialize(state, model.StateType) ?? throw new InvalidOperationException("The workflow state is absent.");
     }
 
-    private static void WriteHeader(IActorTurn turn, WorkflowHeader previous, WorkflowHeader next)
+    private static void WriteHeader(IActorTurn turn, WorkflowHeader previous, WorkflowHeader next, string? answeredPlan = null)
     {
-        if (previous == next) return;
+        if (previous == next && answeredPlan is null) return;
         var labels = new Dictionary<string, string>(StringComparer.Ordinal) { ["definition"] = next.Definition };
         if (next.Version is { } version) labels.Add("version", version.ToString(CultureInfo.InvariantCulture));
-        turn.SetHeader(JsonSerializer.Serialize(next), labels);
+        answeredPlan ??= turn.Header.Labels.GetValueOrDefault(AnsweredPlanLabel);
+        if (answeredPlan is not null) labels.Add(AnsweredPlanLabel, answeredPlan);
+        turn.SetHeader(previous == next ? turn.Header.TypeData : JsonSerializer.Serialize(next), labels);
     }
 
     private static InstanceInfo Instance(ActorHeader header, WorkflowHeader workflow) =>
@@ -149,9 +151,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     private static string JobArguments(string model, string? arguments) => JsonSerializer.Serialize(new WorkflowJobArguments(model, arguments));
 
     private sealed record WorkflowHeader(string Model, string Definition, int? Version, bool Suspended = false,
-        string? SubStatus = null, bool Ephemeral = false, History History = History.Full,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-        string? LastMigrationPlan = null);
+        string? SubStatus = null, bool Ephemeral = false, History History = History.Full);
 
     private sealed record WorkflowJobArguments(string Model, string? Arguments);
 

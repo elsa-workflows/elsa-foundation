@@ -10,6 +10,7 @@ public sealed partial class WorkflowActor
 {
     private const int DefinitionLimit = 1_024;
     private const int HeaderLimit = 16 * 1_024;
+    private const string AnsweredPlanLabel = "migration-plan";
 
     private void ApplyMigration(IActorTurn turn, WorkflowHeader workflow, Message command)
     {
@@ -22,22 +23,23 @@ public sealed partial class WorkflowActor
             return;
         }
 
-        var plan = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(request.Plan.Id)));
-        if (workflow.LastMigrationPlan == plan) return;
-
-        object? state = null;
-        IExecutionModel? model = null;
-        MigrationPlanResult result;
-        var next = workflow with { LastMigrationPlan = plan };
-        if (turn.Header.Status != ActorStatus.Running)
-            result = new(MigrationPlanOutcome.Refused, "Ended");
-        else if (workflow.Definition != request.From)
-            result = new(MigrationPlanOutcome.NotAtSource);
-        else if (!_models.TryGetValue(workflow.Model, out model) || workflow.Version > model.StateVersion)
+        _models.TryGetValue(workflow.Model, out var model);
+        if (turn.Header.Status == ActorStatus.Running && (model is null || workflow.Version > model.StateVersion))
         {
             turn.Hold(command);
             return;
         }
+
+        var plan = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(request.Plan.Id)));
+        if (turn.Header.Labels.GetValueOrDefault(AnsweredPlanLabel) == plan) return;
+
+        object? state = null;
+        MigrationPlanResult result;
+        var next = workflow;
+        if (turn.Header.Status != ActorStatus.Running)
+            result = new(MigrationPlanOutcome.Refused, "Ended");
+        else if (workflow.Definition != request.From)
+            result = new(MigrationPlanOutcome.NotAtSource);
         else if (turn.State is null || workflow.Ephemeral)
             result = new(MigrationPlanOutcome.Refused, "UnavailableCheckpoint");
         else if (model is not ISimpleModelMigration migration)
@@ -58,7 +60,6 @@ public sealed partial class WorkflowActor
 
         if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(next)) > HeaderLimit)
         {
-            // A legacy model header at the cap cannot retain the plan marker or rebind.
             result = new(MigrationPlanOutcome.Refused, "HeaderLimit");
             next = workflow;
         }
@@ -71,9 +72,13 @@ public sealed partial class WorkflowActor
             return;
         }
 
-        if (result.Outcome == MigrationPlanOutcome.Migrated && workflow.Version != model!.StateVersion)
-            turn.State = JsonSerializer.Serialize(state, model.StateType);
-        WriteHeader(turn, workflow, next);
+        if (result.Outcome == MigrationPlanOutcome.Migrated)
+        {
+            if (workflow.Version != model!.StateVersion)
+                turn.State = JsonSerializer.Serialize(state, model.StateType);
+            turn.Record(ActorLifecycle.Migrated);
+        }
+        WriteHeader(turn, workflow, next, plan);
         turn.Record(new
         {
             Migration = result.Outcome,
