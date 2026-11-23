@@ -23,8 +23,8 @@ public sealed partial class InMemoryStore
     {
         lock (_gate)
         {
-            if (BoundActor(tenant, reference) is not { } actor || actor.Row.Status != InstanceStatus.Faulted ||
-                actor.Row.ParkDiscard is not null || !_foundationParks.TryGetValue(actor.Binding.Address, out var park))
+            if (BoundActor(tenant, reference) is not { } actor ||
+                !_foundationParks.TryGetValue(actor.Binding.Address, out var park))
                 return null;
             var row = FoundationParkDelivery(actor.Row, key);
             var disposition = ReadTimerDispositions(actor.Row.ParkTimerDispositions).GetValueOrDefault(FoundationTimerDigest(key));

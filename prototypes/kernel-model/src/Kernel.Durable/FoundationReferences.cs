@@ -213,8 +213,8 @@ public sealed partial class InMemoryStore
             var now = clock();
             if (BoundActor(tenant, reference) is not { } found) return new(now, []);
             var address = found.Binding.Address;
-            var parked = found.Row.Status == InstanceStatus.Faulted && _foundationParks.ContainsKey(address);
-            var rows = Messages.Values.Where(row => (!row.Done || parked && row.KeptBy is not null) &&
+            var hasPark = _foundationParks.ContainsKey(address);
+            var rows = Messages.Values.Where(row => (!row.Done || hasPark && row.KeptBy is not null) &&
                     row.Message.DeliveryOrder(row.Seq) > after && row.Message.Target.Id == address.Id &&
                     row.Message.TargetCreation == address.Creation)
                 .OrderBy(row => row.Message.DeliveryOrder(row.Seq)).Take(take).Select(row =>

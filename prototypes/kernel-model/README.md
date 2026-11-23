@@ -66,8 +66,9 @@ An approval actor parks when its service is unavailable. The operator lists park
 `IActorReads`, opens the actor's inbox, and sees a consumed approval and an update that arrived
 during Park on separate pages. A retry command uses the consumed approval's opaque handle.
 After the service is available, the actor resumes and the journal confirms that each input
-applied once. The fixture uses the in-memory Actor Foundation. Provider projections, Studio
-integration and the remaining operator operations have their own milestone acceptance.
+applied once. A second Park is discarded. The example shows the inbox rows that remain in
+each open resolution. The fixture uses the in-memory Actor Foundation. Provider projections,
+Studio integration and the remaining operator operations have their own milestone acceptance.
 
 ## The simulation
 

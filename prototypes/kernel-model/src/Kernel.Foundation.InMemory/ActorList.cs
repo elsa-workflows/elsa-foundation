@@ -153,8 +153,16 @@ internal sealed class ActorList : IActorReads
             : null;
         var header = new ActorHeader(new(checkpoint.Reference), row.Model, tenant, (ActorStatus)row.Status,
             row.Fault, parent, checkpoint.EndedAt, checkpoint.Header.TypeData, checkpoint.Header.Labels);
+        var resolution = row.ParkDiscard?.Kind switch
+        {
+            Durable.ParkClearKind.Terminate => "terminating",
+            Durable.ParkClearKind.Discard => "discarding",
+            Durable.ParkClearKind.Expiry => "expiring",
+            Durable.ParkClearKind.Delete => "deleting",
+            _ => row.ParkRecovery is not null ? "recovering" : null
+        };
         var park = checkpoint.Park is { } mark
-            ? new ParkView(mark.At, row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate ? "terminating" : null)
+            ? new ParkView(mark.At, resolution)
             : null;
         return new(header, _store.SealFoundationSelection(tenant, checkpoint), park, asOf);
     }
