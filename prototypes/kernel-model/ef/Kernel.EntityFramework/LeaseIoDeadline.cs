@@ -33,7 +33,8 @@ internal sealed class LeaseIoDeadline : IAsyncDisposable
 
     internal CancellationToken Token => _source.Token;
     internal bool Expired => _source.IsCancellationRequested ||
-        (_relay is not null && Stopwatch.GetElapsedTime(_started) >= _budget);
+        (_relay is not null && _budget != Timeout.InfiniteTimeSpan && Stopwatch.GetElapsedTime(_started) >= _budget);
+    internal bool CallerCancelled => _relay is not null && _caller.IsCancellationRequested && _source.IsCancellationRequested;
 
     internal void CheckRenewalWindow()
     {
@@ -49,15 +50,18 @@ internal sealed class LeaseIoDeadline : IAsyncDisposable
         return callbackFailure is null ? operation : new AggregateException(operation, callbackFailure);
     }
 
+    internal async ValueTask<OperationCanceledException> CallerExceptionAsync(Exception operation) =>
+        new("The caller cancelled the MySQL node-lease operation.", await IncludeCallbackFailureAsync(operation).ConfigureAwait(false), _caller);
+
     private async Task<AggregateException?> RelayAsync(CancellationToken stop)
     {
-        try { await Task.Delay(_budget, stop); }
+        try { await Task.Delay(_budget, stop).ConfigureAwait(false); }
         catch (OperationCanceledException)
         {
             if (!_caller.IsCancellationRequested) return null;
         }
 
-        try { await _source.CancelAsync(); }
+        try { await _source.CancelAsync().ConfigureAwait(false); }
         catch (AggregateException error) { return error; }
         return null;
     }
@@ -69,6 +73,6 @@ internal sealed class LeaseIoDeadline : IAsyncDisposable
         if (wait is null) return;
         // Disarm the delay and let an already-started cancellation dispatch finish before disposing its token.
         wait.Cancel();
-        await _relay!;
+        await _relay!.ConfigureAwait(false);
     }
 }
