@@ -173,6 +173,8 @@ public sealed partial class EfStore
             if (command.HasFence) now = result.Now;
             seqs.AddRange(result.Seqs);
         }
+        if (batch.ClearJobTrials.Count != 0 && !await ClearSqliteJobTrialsAsync(db, batch, cancellationToken))
+            return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
         return new Committed(true, now, seqs);

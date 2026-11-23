@@ -243,6 +243,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private bool _windowInstalled;
     public bool PhysicalRetirementAvailable => true;
     public bool SupportsCommitWindow => _windowInstalled;
+    public bool SupportsJobTrialClear => !postgres && Engine is null; // SQLite on both commit paths.
 
     public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault(OwnedCommit) ?? true;
 
@@ -374,7 +375,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable);
+        StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable,
+            supportsJobTrialClear:SupportsJobTrialClear);
         // Marker shape uses the canonical row address. A raw update's alternate spelling is
         // authorized separately by the database-column predicate in AliasUpdateGuard.
         var qualification=batch.Turns.Any(t=>t.Row is {} r && t.Instance!=r.Id)
@@ -575,6 +577,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (turn.Delete)
                 await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0"""), [batch.Partition, turn.Instance], cancellationToken);
         }
+        if (batch.ClearJobTrials.Count != 0 && !await ClearSqliteJobTrialsAsync(db, batch, cancellationToken))
+            return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
         return new Committed(true, now, sent.Select(m => m.Seq).ToList());
