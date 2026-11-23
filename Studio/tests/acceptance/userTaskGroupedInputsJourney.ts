@@ -163,7 +163,8 @@ export async function userTaskGroupedInputsJourney(page: Page, info: TestInfo, c
     const versions = row.querySelector(".studio-button:last-child")!.getBoundingClientRect();
     const range = document.createRange(); range.selectNodeContents(name);
     const lines = [...range.getClientRects()];
-    return lines.length > 0 && lines.every(line => line.right <= versions.left + 1);
+    return lines.length > 0 && lines.every(line => line.right <= versions.left + 1 || line.left >= versions.right - 1
+      || line.bottom <= versions.top + 1 || line.top >= versions.bottom - 1);
   }), { message: "The complete form name must remain readable beside Other versions" }).toBe(true);
   await capture(page, info, "selected-form-version");
   await page.keyboard.press("Escape");

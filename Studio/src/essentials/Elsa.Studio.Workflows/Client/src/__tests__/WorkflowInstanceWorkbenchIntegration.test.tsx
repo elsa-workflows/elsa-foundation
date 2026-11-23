@@ -1948,7 +1948,7 @@ it.each(["pointerdown", "keydown", "wheel"] as const)("preserves independent exa
   const preparation = deferred<unknown>();
   historyApi.getWorkflowHistoryEvent.mockReturnValue(preparation.promise);
   api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => id === "slow-parent" ? ancestry.promise
-    : activityInspection({ ...rows[0], provenance: { parentActivityExecutionId: "slow-parent" } as ActivityExecutionInspection["provenance"] }));
+    : activityInspection({ ...rows[0], outcomeNames: [], provenance: { parentActivityExecutionId: "slow-parent" } as ActivityExecutionInspection["provenance"] }));
   api.browseActivityExecutions.mockImplementation(async (_context, _run, request: { anchorActivityExecutionId?: string }) => ({
     items: [{ execution: request.anchorActivityExecutionId === "slow-parent" ? { ...rows[0], activityExecutionId: "slow-parent" } : rows[0], position: 1 }],
     totalCount: 1, previousCursor: null, nextCursor: null
@@ -1968,11 +1968,11 @@ it.each(["pointerdown", "keydown", "wheel"] as const)("preserves independent exa
   click(activeTab);
   expect(historyApi.getWorkflowHistoryEvent.mock.calls.at(-1)?.[3]?.aborted).toBe(true);
   expect(api.getActivityExecutionInspection.mock.calls.find(call => call[2] === "slow-parent")?.[3]?.aborted).toBe(false);
-  ancestry.resolve(activityInspection({ ...rows[0], activityExecutionId: "slow-parent", provenance: {} as ActivityExecutionInspection["provenance"] }));
+  ancestry.resolve(activityInspection({ ...rows[0], outcomeNames: [], activityExecutionId: "slow-parent", provenance: {} as ActivityExecutionInspection["provenance"] }));
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
   expect(container.textContent).not.toContain("Resolving execution scope");
   expect(buttonByText(container, "Retry execution scope")).toBeFalsy();
-  preparation.resolve({ event: historyEvent({ activityExecutionId: rows[0].activityExecutionId }) });
+  preparation.resolve({ event: historyEvent(1, { activityExecutionId: rows[0].activityExecutionId }) });
 });
 
 it("keeps the chosen Diagram canvas visible when advancing playback on a phone", async () => {
