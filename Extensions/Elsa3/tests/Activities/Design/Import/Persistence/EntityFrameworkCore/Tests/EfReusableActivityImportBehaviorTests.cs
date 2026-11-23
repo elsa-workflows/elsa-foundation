@@ -407,7 +407,7 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
             const string empty = "{\"receipt\":null}";
             await import.Receipts.ExecuteUpdateAsync(set => set
                 .SetProperty(row => row.ContentJson, empty)
-                .SetProperty(row => row.ContentHash, EfRelationalIdentity.Hash(empty)));
+                .SetProperty(row => row.ContentHash, JsonHashInput.HashJson(empty)));
         }
 
         Assert.Equal("load collection", (await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>

@@ -29,4 +29,7 @@
     <Compile Include="..\..\..\..\..\..\..\..\..\Essentials\tests\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="../../../../../../../../../specs/1207-json-data-integrity-baseline/evidence/elsa3-import-content-hash-vectors.json" LogicalName="S9Elsa3ImportContentVectors.json" />
+  </ItemGroup>
 </Project>

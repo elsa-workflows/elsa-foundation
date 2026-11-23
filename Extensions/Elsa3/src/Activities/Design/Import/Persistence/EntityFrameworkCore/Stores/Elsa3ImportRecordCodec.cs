@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Serialization.Core;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Entities;
 using Elsa3.Activities.Design.Import.Services;
@@ -46,7 +47,7 @@ internal static class Elsa3ImportRecordCodec
             ExpiresAtUtcTicks = collection.ExpiresAt.UtcTicks,
             ContentLength = collection.ContentLength,
             ContentJson = json,
-            ContentHash = Hash(json)
+            ContentHash = JsonHashInput.HashJson(json)
         };
     }
 
@@ -94,7 +95,7 @@ internal static class Elsa3ImportRecordCodec
             CompletedAtUtcTicks = receipt.CompletedAt.UtcTicks,
             CommitAttemptId = commitAttemptId,
             ContentJson = json,
-            ContentHash = Hash(json)
+            ContentHash = JsonHashInput.HashJson(json)
         };
     }
 
@@ -196,7 +197,12 @@ internal static class Elsa3ImportRecordCodec
     private static void EnsureEnvelope(string schemaVersion, string contentJson, string contentHash)
     {
         EfSchemaVersion.EnsureReadable(Elsa3ImportEfModule.Chain, schemaVersion);
-        if (string.IsNullOrEmpty(contentJson) || !StringComparer.Ordinal.Equals(contentHash, Hash(contentJson)))
+        if (string.IsNullOrEmpty(contentJson))
+            throw new InvalidDataException("The Elsa 3 import row content does not match its content hash.");
+        string actual;
+        try { actual = JsonHashInput.HashJson(contentJson); }
+        catch (JsonException exception) { throw new InvalidDataException("The Elsa 3 import row content is not valid JSON.", exception); }
+        if (!StringComparer.Ordinal.Equals(contentHash, actual))
             throw new InvalidDataException("The Elsa 3 import row content does not match its content hash.");
     }
 
