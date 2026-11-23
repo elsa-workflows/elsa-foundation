@@ -67,10 +67,29 @@ and exits at the second wait. The next process opens the same database and reads
 It sends Ada's operation ID again with a different payload, then sends Grace's approval with a new ID. The stored
 checkpoint stays byte for byte through replay. The journal and final result verify that each approval applied once.
 
-The receipt counts EF commands and explicit transaction completions by phase. Their sum is the round-trip count at
-the provider command boundary, excluding connection setup. Setup, ownership and journal reads have their own rows.
+The default receipt estimates round trips by adding EF commands and explicit transaction completions. It excludes connection setup. Setup, ownership and journal reads have their own rows.
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
+
+To measure TCP turns as well, use a dedicated loopback database with `Host=127.0.0.1`, its published port and
+`SSL Mode=Disable` in `KERNEL_PREVIEW_POSTGRES`:
+
+```bash
+KERNEL_PREVIEW_MEASURE_WIRE=1 models/Native.Run/run-core-preview.sh
+```
+
+The meter counts the client's first send and each subsequent send after a server response. Pipelined requests can
+share one turn. Each process opened one measured TCP connection during setup and reused it for all rows below.
+Across three fresh databases, PostgreSQL 17.12 and Npgsql 10.0.3 gave these counts with pooling enabled and
+multiplexing disabled. The output also reports PostgreSQL Sync and Query groups and new connections per phase.
+
+| Operation | EF estimate | Observed TCP turns |
+|---|---:|---:|
+| Start admission | 5 | 7 |
+| Start turn | 12 | 12 |
+| First approval including admission | 18 | 20 |
+| Duplicate approval after restart including admission | 5 | 5 |
+| Finishing approval including admission | 19 | 21 |
 
 ## The simulation
 
