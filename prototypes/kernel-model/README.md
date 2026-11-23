@@ -91,6 +91,17 @@ multiplexing disabled. The output also reports PostgreSQL Sync and Query groups 
 | Duplicate approval after restart including admission | 5 | 5 |
 | Finishing approval including admission | 19 | 21 |
 
+To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
+
+```bash
+models/Native.Run/run-core-preview-failover.py
+```
+
+The fixture starts two Embedded host processes for the same root. The first keeps renewing its lease at the second
+wait. After PostgreSQL refuses the standby's take, the fixture sends SIGKILL to its first child. The same standby
+acquires a later epoch after the stored deadline, resumes the journal bookmark, replays Ada's input and records
+Grace's approval. This exercises one fixed partition. K5 covers Cluster placement and balancing across partitions.
+
 ## The simulation
 
 ```

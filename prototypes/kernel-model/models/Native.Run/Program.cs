@@ -12,7 +12,10 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
-if (args is ["pg-core-preview", "birth"]) return await PostgresPublicPreview.RunAsync("birth");
+if (args is ["pg-core-preview", var birthPhase and ("birth" or "hold-owner")]) return await PostgresPublicPreview.RunAsync(birthPhase);
+if (args is ["pg-core-preview", "standby", var standbyRoot, var standbyBookmark, var priorEpoch] &&
+    long.TryParse(priorEpoch, out var epoch) && epoch > 0)
+    return await PostgresPublicPreview.RunAsync("standby", standbyRoot, standbyBookmark, epoch);
 if (args is ["pg-core-preview", var replayPhase and ("restart" or "terminal"), var actorReference, var journalBookmark])
     return await PostgresPublicPreview.RunAsync(replayPhase, actorReference, journalBookmark);
 if (args is ["pg-root-worker", "birth"]) return await PostgresRootWorkerChecks.RunAsync("birth", null);
