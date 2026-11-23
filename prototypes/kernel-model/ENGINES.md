@@ -47,9 +47,11 @@ dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x watchdog <postgr
 ```
 
 The server reports the blocked worker commit. The fixture advances the watchdog's local clock to
-its cancellation threshold and checks that the commit returns while the competing transaction
-still holds the lock. A later owner starts at the unchanged journal position and commits one
-checkpoint and journal row. Repeat with `commit=ef` or `fence=checked` to exercise the other paths.
+its cancellation threshold while the competing transaction still holds the lock. PostgreSQL and
+SQL Server exercise command cancellation. The MySQL worker runs in a disposable process so the
+fixture can also exercise process escalation if the command stays blocked past the grace period.
+A later owner starts at the unchanged journal position and commits one checkpoint and journal row.
+Repeat with `commit=ef` or `fence=checked` to exercise the other paths.
 
 `EngineRun.cs` lists the options. The stress test is the one of FINDINGS section 4: three nodes, two partitions (four
 in the runs marked "no kills"), six workers on 150 ms leases, stalls of 150 to 500 ms, a busy worker session killed

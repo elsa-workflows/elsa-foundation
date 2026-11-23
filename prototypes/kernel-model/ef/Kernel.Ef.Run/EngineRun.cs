@@ -57,6 +57,7 @@ static class EngineRun
             }
         }
         if (args[0] == "locktimeout") options["pool"] = "1";     // one pooled session: LockTimeout.cs
+        if (args[0] == "watchdog-worker") return await ProviderWatchdog.RunWorkerAsync(args[1], options);
         var target = new Target(args[1], args[2], options);
         return args[0] switch
         {
@@ -70,7 +71,7 @@ static class EngineRun
             "lockorder" => await LockOrder(target),
             "nodelease" => await NodeLeaseRun.RunAsync(target),
             "locktimeout" => await LockTimeout.RunAsync(target),
-            "watchdog" => await ProviderWatchdog.RunAsync(target),
+            "watchdog" => await ProviderWatchdog.RunAsync(target, args[2], args[3..]),
             "setcost" => await SetCost.RunAsync(target),
             "setidle" => await SetCost.IdleAsync(target),
             _ => 2,
