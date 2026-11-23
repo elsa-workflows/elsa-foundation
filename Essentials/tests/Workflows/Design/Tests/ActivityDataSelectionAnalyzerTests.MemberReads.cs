@@ -257,7 +257,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     {
         using var provider = MemberProvider(Known());
 
-        var whole = await Analyzer(provider).AnalyzeAsync(VariableDocument(Input(new(new VariableReference("missing", "workflow"), "Variable"))));
+        var whole = await Analyzer(provider).AnalyzeAsync(VariableDocument(Input(Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("missing", "workflow"), "Variable"))));
         var member = await Analyzer(provider).AnalyzeAsync(VariableDocument(Input(VariableMember("missing", "workflow"))));
 
         Assert.Equal("Variable/UnresolvableReference", Assert.Single(whole.Findings).Type);
@@ -270,7 +270,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         using var provider = MemberProvider(Known());
 
         var offered = await Analyzer(provider).AnalyzeAsync(VariableDocument(), new("consumer", "CustomerId"),
-            new() { Source = new(new VariableReference("customer", "workflow"), "Variable"), MemberPath = ["a.b", ""] });
+            new() { Source = Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("customer", "workflow"), "Variable"), MemberPath = ["a.b", ""] });
         var binding = Assert.Single(offered.Sources).Binding!;
         var stored = await Analyzer(provider).AnalyzeAsync(VariableDocument(Input(binding)));
 

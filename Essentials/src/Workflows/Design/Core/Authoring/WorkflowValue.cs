@@ -39,7 +39,7 @@ public sealed class WorkflowRequestMember<T> : WorkflowValue<T>
     public string? Path { get; }
 
     internal override ArgumentValue Lower(MemberInfo? inputMember = null) => new(
-        JsonSerializer.SerializeToElement(new { memberKey = MemberKey, path = Path }),
+        JsonSerializer.SerializeToElement(new { memberKey = MemberKey, path = Path }, Elsa.Serialization.Core.JsonBaseline.Options),
         AuthoringExpressionTypes.WorkflowRequest);
 }
 
@@ -57,7 +57,7 @@ public sealed class VariableRead<T> : WorkflowValue<T>
     internal override WorkflowValueScope Scope => new(WorkflowValueScopeKind.Variable, DeclaringScopeId);
 
     internal override ArgumentValue Lower(MemberInfo? inputMember = null) => new(
-        JsonSerializer.SerializeToElement(new { referenceKey = ReferenceKey, declaringScopeId = DeclaringScopeId }),
+        JsonSerializer.SerializeToElement(new { referenceKey = ReferenceKey, declaringScopeId = DeclaringScopeId }, Elsa.Serialization.Core.JsonBaseline.Options),
         AuthoringExpressionTypes.Variable);
 }
 
@@ -82,7 +82,7 @@ public sealed class ActivityResultSource<T> : WorkflowValue<T>
             producerNodeId = ProducerNodeId,
             projectionKey = ProjectionKey,
             producerScopeId = ProducerScopeId
-        }),
+        }, Elsa.Serialization.Core.JsonBaseline.Options),
         AuthoringExpressionTypes.ActivityResult);
 }
 
