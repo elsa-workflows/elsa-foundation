@@ -33,6 +33,16 @@ if (args is ["variants", var variantMode]) return await VariantChecks.RunAsync(v
 if (args is ["replay-variants"]) return await ReplayVariantChecks.RunAsync();
 if (args is ["join-variants", var joinMode]) return await JoinVariantChecks.RunAsync(joinMode);
 if (args is ["join-replay-variants"]) return await JoinReplayVariantChecks.RunAsync();
+if (args is ["pg-flowchart-preview", "birth", var birthRoute and ("manual" or "automatic")])
+    return await PostgresFlowchartPreview.RunAsync(birthRoute);
+if (args is ["pg-flowchart-preview", "restart", var resumedRoute and ("manual" or "automatic"), var flowRef, var flowBookmark, var flowEpoch] &&
+    long.TryParse(flowEpoch, out var previousEpoch) && previousEpoch > 0)
+    return await PostgresFlowchartPreview.RunAsync(resumedRoute, flowRef, flowBookmark, previousEpoch);
+if (args is ["pg-flowchart-preview", "merge-early"])
+{
+    try { return await PostgresFlowchartPreview.RunAsync("automatic", mergeEarly: true); }
+    catch (InvalidOperationException error) { Console.Error.WriteLine(error.Message); return 1; }
+}
 if (args is ["park"]) return await ParkChecks.RunAsync();
 if (args is ["expr", var text, .. var vars])
 {

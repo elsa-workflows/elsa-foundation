@@ -132,6 +132,27 @@ wait. After PostgreSQL refuses the standby's take, the fixture sends SIGKILL to 
 acquires a later epoch after the stored deadline, resumes the journal bookmark, replays Ada's input and records
 Grace's approval. This exercises one fixed partition. K5 covers Cluster placement and balancing across partitions.
 
+### PostgreSQL Flowchart preview
+
+Use a fresh dedicated database in `KERNEL_PREVIEW_POSTGRES` for each run. From `prototypes/kernel-model`:
+
+```sh
+models/Native.Run/run-flowchart-preview.sh manual
+```
+
+The public runtime starts a Native purchase Flowchart. A decision selects manual risk review while finance waits in
+parallel. The risk review finishes, and a second Embedded host process takes the scope at a higher epoch. Replaying
+the risk operation with a finance payload leaves the checkpoint and journal unchanged. Finance then completes the
+last live branch. The journal shows one join, and the terminal checkpoint contains both decisions.
+
+Run with `automatic` on a separate fresh database to select the bypass path. Finance still has to finish. The distinct
+inactive risk branch cannot hold the join open. This is the Balanced and direct-input PostgreSQL preview. The scoped
+PostgreSQL owner still needs support for internally scheduled Native continuation messages before it can qualify
+Durable Flowchart execution.
+
+On a fresh database, `dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-flowchart-preview merge-early`
+replaces the join with a merge. The waiting assertion detects the premature finish.
+
 ## The simulation
 
 ```
