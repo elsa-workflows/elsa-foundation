@@ -148,7 +148,7 @@ internal static class PostgresRuntimeCluster
         if (wake)
         {
             var wait = Stopwatch.StartNew();
-            while (member.Hints.Count < 2 && wait.Elapsed < TimeSpan.FromSeconds(5))
+            while ((member.Hints.Count < 2 || member.Forwarded.Count < 2) && wait.Elapsed < TimeSpan.FromSeconds(5))
                 await Task.Delay(25, limit.Token);
         }
         await node.StopAsync(limit.Token);
@@ -160,6 +160,9 @@ internal static class PostgresRuntimeCluster
             var partition = new InstanceRef(turns[0]).Partition;
             Check(member.Hints.ToArray().SequenceEqual([partition, partition]), "the remote listener received two hints for its partition");
             Console.WriteLine($"second runtime received two PostgreSQL wake hints for partition {partition}");
+            Check(member.Forwarded.ToArray().SequenceEqual([(partition, partition), (partition, partition)]),
+                "the active scope forwarded both matching hints to its durable worker");
+            Console.WriteLine($"both hints reached the durable worker through activation {partition}");
         }
         Console.WriteLine($"second runtime stopped gracefully after two model turns for {turns[0]}");
         return 0;
@@ -178,10 +181,11 @@ internal static class PostgresRuntimeCluster
 
     private sealed class Member
     {
-        private readonly DurableHost _host;
+        private readonly IScopeHost _host;
         internal RuntimeNode Node { get; }
         internal ConcurrentQueue<string> Turns { get; } = new();
         internal ConcurrentQueue<int> Hints { get; } = new();
+        internal ConcurrentQueue<(int Scope, int Partition)> Forwarded { get; } = new();
 
         internal Member(Func<KernelDb> factory, bool wake)
         {
@@ -190,8 +194,9 @@ internal static class PostgresRuntimeCluster
                 Wf.Event("hear2", "second"), Wf.Set("record2", "second", Binding.Result("hear2", "Payload"))));
             var actors = new WorkflowInstance([new NativeModel(new WorkflowRegistry().Add(workflow))]);
             var id = NodeName(Environment.ProcessId);
-            _host = DurableHost.ForNode(id, store, actors, Partitions, new WorkerOptions
+            var host = DurableHost.ForNode(id, store, actors, Partitions, new WorkerOptions
                 { Partitions = Partitions, OnTurn = (actor, _, _) => Turns.Enqueue(actor.Id) });
+            _host = wake ? new ObservedHost(host, Forwarded) : host;
             var signal = wake ? new PostgresWakeSignal(Connection(), Partitions) : null;
             signal?.Listen(actor => Hints.Enqueue(actor.Partition));
             Node = new RuntimeNode(id, store, Partitions, new LoopOptions
@@ -201,6 +206,37 @@ internal static class PostgresRuntimeCluster
         }
 
         internal ValueTask StartAsync(CancellationToken token) => Node.StartAsync(_host, token);
+    }
+
+    // Observe the activation that the runtime actually chooses. Periodic polls pass null.
+    private sealed class ObservedHost(DurableHost host, ConcurrentQueue<(int, int)> forwarded)
+        : IScopeHost, IScopeCount, INodeLeaseHost
+    {
+        public TimeSpan? NodeLease => host.NodeLease;
+        public ValueTask CheckScopesAsync(int count, CancellationToken token) => host.CheckScopesAsync(count, token);
+        public ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken token) => host.HeartbeatAsync(window, token);
+        public ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken token) => host.PassAsync(token);
+
+        public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken token)
+        {
+            var active = await host.ActivateAsync(scope, token);
+            return active is null ? null : new ObservedActivation(active, forwarded);
+        }
+    }
+
+    private sealed class ObservedActivation(IScopeActivation inner, ConcurrentQueue<(int, int)> forwarded) : IScopeActivation
+    {
+        public int Scope => inner.Scope;
+        public bool Active => inner.Active;
+        public ValueTask<TimeSpan?> RunAsync(CancellationToken token) => inner.RunAsync(token);
+        public ValueTask<ScopePass> RunWithAgeAsync(CancellationToken token) => inner.RunWithAgeAsync(token);
+        public ValueTask DisposeAsync() => inner.DisposeAsync();
+
+        public async ValueTask WokenAsync(InstanceRef? actor, CancellationToken token)
+        {
+            await inner.WokenAsync(actor, token);
+            if (actor is { } target) forwarded.Enqueue((Scope, target.Partition));
+        }
     }
 
     private static void Check(bool result, string expectation)

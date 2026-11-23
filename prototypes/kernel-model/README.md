@@ -125,7 +125,8 @@ dotnet run -c Release --no-restore --project models/Native.Run -- pg-runtime-clu
 
 Append `wake` to use the optional PostgreSQL wake transport. The two processes listen on separate
 connections. After each of the first two admissions commits, the first node queues the target
-partition number for PostgreSQL `NOTIFY`. The receiving node reports both hints. After the second
+partition number for PostgreSQL `NOTIFY`. The receiving node checks both transport callbacks and confirms
+that its active partition forwarded both hints to the durable Worker. After the second
 node leaves, the first node applies the final approval through the inbox with no hint. Run it
 against another empty database to compare with the polling-only run.
 
