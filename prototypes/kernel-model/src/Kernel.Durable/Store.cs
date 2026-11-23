@@ -262,10 +262,14 @@ public enum Failure
     WindowExpired, // the entire transaction rolled back and its time-dependent decisions must be reconsidered
 }
 
-public sealed class StoreException(Failure failure, string message, Exception? inner = null) : Exception(message, inner)
+public class StoreException(Failure failure, string message, Exception? inner = null) : Exception(message, inner)
 {
     public Failure Failure => failure;
 }
+
+/// <summary>The process cannot read the durable store's format.</summary>
+public sealed class StoreFormatException(string message, Exception? inner = null) :
+    StoreException(Failure.Definite, message, inner);
 
 // Optional local scheduling data. These observations never issue a database call.
 internal interface IFoundationSchedulingStore

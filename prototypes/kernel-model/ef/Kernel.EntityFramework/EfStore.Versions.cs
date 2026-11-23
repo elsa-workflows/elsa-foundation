@@ -32,16 +32,16 @@ public sealed partial class EfStore
         }
         catch (Exception error) when (MissingVersionTable(error))
         {
-            throw new StoreException(Failure.Definite, "The kernel store version marker table is missing.", error);
+            throw new StoreFormatException("The kernel store version marker table is missing.", error);
         }
 
         if (stored is null)
-            throw new StoreException(Failure.Definite, "The kernel store version marker is missing.");
+            throw new StoreFormatException("The kernel store version marker is missing.");
 
         if (stored.StoreSchema != StoreVersionEntity.StoreSchemaVersion ||
             stored.MessageProtocol != StoreVersionEntity.MessageProtocolVersion ||
             stored.JournalCodec != StoreVersionEntity.JournalCodecVersion)
-            throw new StoreException(Failure.Definite,
+            throw new StoreFormatException(
                 $"Unsupported kernel store versions. Stored schema={stored.StoreSchema}, message protocol={stored.MessageProtocol}, journal codec={stored.JournalCodec}. " +
                 $"This build reads schema={StoreVersionEntity.StoreSchemaVersion}, message protocol={StoreVersionEntity.MessageProtocolVersion}, journal codec={StoreVersionEntity.JournalCodecVersion}.");
     }
