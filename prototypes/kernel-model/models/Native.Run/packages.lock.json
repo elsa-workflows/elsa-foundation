@@ -514,6 +514,12 @@
       "kernel.runtime": {
         "type": "Project"
       },
+      "kernel.runtime.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Runtime": "[1.0.0, )"
+        }
+      },
       "kernel.workflowactor": {
         "type": "Project",
         "dependencies": {

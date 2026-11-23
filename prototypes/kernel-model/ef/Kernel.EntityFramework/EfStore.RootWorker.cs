@@ -14,9 +14,11 @@ public sealed partial class EfStore
             : key.Scope == InboxKey.FoundationOccurrenceScope && key.Id.StartsWith(Reference + "/", StringComparison.Ordinal));
     }
 
-    internal sealed class WorkerRoots(int partition, IReadOnlyList<WorkerRoot> roots, bool discover = false)
+    internal sealed class WorkerRoots(int? partition, IReadOnlyList<WorkerRoot> roots, bool discover = false)
     {
-        internal int Partition { get; } = partition;
+        internal int? FixedPartition { get; } = partition;
+        internal int Partition => FixedPartition ?? throw new InvalidOperationException("This node serves a runtime-owned set.");
+        internal bool Includes(int home) => FixedPartition is null || FixedPartition == home;
         internal bool Discover { get; } = discover;
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
         private readonly Dictionary<string, WorkerRoot> _actors = roots.ToDictionary(r => r.Actor, StringComparer.Ordinal);
@@ -45,6 +47,13 @@ public sealed partial class EfStore
         return (InstallWorkerScope(new(partition, [], discover: true)), count);
     }
 
+    internal WorkerRoots BindWorkerNode()
+    {
+        if (!postgres || Engine is not null || !OwnedSetsAvailable)
+            throw new NotSupportedException("A public root node requires PostgreSQL owned-set commits.");
+        return InstallWorkerScope(new(null, [], discover: true));
+    }
+
     private WorkerRoots InstallWorkerScope(WorkerRoots scope) =>
         Interlocked.CompareExchange(ref _ordinaryRoots, scope, null) is null ? scope : throw new InvalidOperationException("The PostgreSQL owner is already bound.");
 
@@ -59,16 +68,16 @@ public sealed partial class EfStore
             var (name, creator) = InputBinding(key);
             (creator ? actorIds : references).Add(name);
         }
-        if (actorIds.Count + references.Count == 0) return new(scope.Partition, []);
+        if (actorIds.Count + references.Count == 0) return new(scope.FixedPartition, []);
         var ids = actorIds.ToArray();
         var refs = references.ToArray();
         await using var db = create();
         var found = await db.Database.SqlQuery<WorkerRoot>($"""
             SELECT "Tenant", "Reference", "Actor", "Partition", "Fingerprint" FROM "FoundationRootBirths"
-            WHERE "Partition" = {scope.Partition} AND "Creation" = 1 AND ("Actor" = ANY({ids}) OR "Reference" = ANY({refs}))
+            WHERE ({scope.FixedPartition}::integer IS NULL OR "Partition" = {scope.FixedPartition}) AND "Creation" = 1 AND ("Actor" = ANY({ids}) OR "Reference" = ANY({refs}))
             """).ToListAsync(token);
-        if (found.Any(root => new InstanceRef(root.Actor).Partition != scope.Partition)) throw RootShape();
-        return new(scope.Partition, found);
+        if (found.Any(root => !scope.Includes(root.Partition) || new InstanceRef(root.Actor).Partition != root.Partition)) throw RootShape();
+        return new(scope.FixedPartition, found);
     }
 
     public bool CreationIdentityAvailable => _ordinaryRoots is not null;
@@ -163,11 +172,16 @@ public sealed partial class EfStore
 
     private async ValueTask<Committed> CommitWorkerRootAsync(WorkerRoots roots, CommitBatch batch, CancellationToken cancellationToken)
     {
-        if (batch.Fenced is not [var fence] || fence.Partition != roots.Partition || batch.Partition != roots.Partition ||
-            batch.Epoch != fence.Epoch || batch.Position != fence.Position || batch.ClearJobTrials.Count != 0 ||
+        var fences = batch.Fenced;
+        if (fences.Count == 0 || fences.Any(f => !roots.Includes(f.Partition)) ||
+            fences[0] != new PartitionFence(batch.Partition, batch.Epoch, batch.Position) || batch.ClearJobTrials.Count != 0 ||
             batch.Window is not null || batch.PublicationReservation is not null || batch.DueBacklog is not null ||
             batch.Turns.Select(t => t.Instance).Distinct().Count() != batch.Turns.Count) throw RootShape();
 
+        StoreBatchRules.RequireDistinct(fences);
+        var byPartition = fences.ToDictionary(f => f.Partition);
+        PartitionFence FenceFor(WorkerRoot root) =>
+            byPartition.TryGetValue(root.Partition, out var fence) ? fence : throw RootShape();
         roots = await ResolveWorkerRootsAsync(roots, batch.Turns.Select(t => t.Instance), batch.Seen.Concat(batch.Trial), cancellationToken);
         var commands = new List<QualifiedRootCheckpoint>();
         var turns = new List<TurnCommit>();
@@ -175,10 +189,11 @@ public sealed partial class EfStore
         var seen = batch.Seen.ToLookup(roots.ForInput);
         var trials = batch.Trial.ToLookup(roots.ForInput);
         foreach (var root in seen.Select(g => g.Key).Union(trials.Select(g => g.Key)))
-            commands.Add(new ScopedMarks(root, batch.Epoch, seen[root].ToArray(), trials[root].ToArray()));
+            commands.Add(new ScopedMarks(root, FenceFor(root).Epoch, seen[root].ToArray(), trials[root].ToArray()));
         foreach (var turn in batch.Turns)
         {
-            var prepared = await PrepareWorkerTurnAsync(roots.ForActor(turn.Instance), turn, fence, cancellationToken);
+            var root = roots.ForActor(turn.Instance);
+            var prepared = await PrepareWorkerTurnAsync(root, turn, FenceFor(root), cancellationToken);
             if (prepared is null) return new(false, 0, []);
             commands.Add(prepared.Checkpoint);
             if (prepared.JournalTurn is { } journal)

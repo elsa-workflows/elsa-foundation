@@ -121,6 +121,20 @@ the creator. Direct inputs admitted before a scheduled birth become eligible aft
 checks that an independent ready root runs during that interval, a replay adds no turn, and the other partition keeps its pending work.
 This preview runs one registered workflow actor type on its dedicated database.
 
+To run two processes under the built-in Cluster runtime, point `KERNEL_PREVIEW_POSTGRES` at a fresh dedicated
+PostgreSQL database and run the following after building `models/Native.Run` in Release:
+
+```bash
+dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-roots 1024
+```
+
+The first node checkpoints roots on distinct partitions in one PostgreSQL transaction. A second OS process joins
+with its own RuntimeNode. Each gets half the partitions. The second node processes the first approval, then departs
+gracefully. The surviving node takes its partitions, recognizes a replay and completes the workflow with one new
+journal revision. The fixture observes the store's owners and epochs. Both hosts discover their roots from their
+assigned sets. This preview covers generated public roots, direct input and graceful handover with the PostgreSQL
+owned-SQL writer. Run `root-set` in PostgreSQL EF conformance for the stale-fence and per-partition Seen/Trial checks.
+
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
 ```bash

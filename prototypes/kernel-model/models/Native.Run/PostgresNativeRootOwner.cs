@@ -24,6 +24,15 @@ internal sealed class PostgresNativeRootOwner
         return await PrepareAsync(store, node, root, registry, requested.Count, cancellationToken, onTurn, 1);
     }
 
+    internal static DurableHost PrepareNode(EfStore store, string node, int partitions, WorkflowRegistry registry, WorkerOptions options)
+    {
+        var roots = store.BindWorkerNode();
+        return DurableHost.ForNode(node, store, Adapter(roots, registry), partitions, options);
+    }
+
+    private static ActorAdapter Adapter(EfStore.WorkerRoots roots, WorkflowRegistry registry) =>
+        new(new Headers(roots), new PublicActor([new NativeExecutionModel(registry)]));
+
     internal static async Task<PostgresNativeRootOwner> PreparePartitionAsync(EfStore store, string node, int partition,
         WorkflowRegistry registry, int pollLimit, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn = null)
     {
@@ -35,7 +44,7 @@ internal sealed class PostgresNativeRootOwner
     private static async Task<PostgresNativeRootOwner> PrepareAsync(EfStore store, string node, EfStore.WorkerRoots root,
         WorkflowRegistry registry, int pollLimit, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn, int partitions)
     {
-        var adapter = new ActorAdapter(new Headers(root), new PublicActor([new NativeExecutionModel(registry)]));
+        var adapter = Adapter(root, registry);
         var worker = new Worker(node, root.Partition, store, adapter, new WorkerOptions { PollLimit = pollLimit, OnTurn = onTurn, Partitions = partitions });
         var host = new DurableHost([worker]);
         var prepared = new PostgresNativeRootOwner(host, root.Partition);
@@ -59,7 +68,7 @@ internal sealed class PostgresNativeRootOwner
         {
             if (roots.Discover)
             {
-                if (creator.FoundationRootBinding is not { } binding || binding.Actor != creator.Target.Id || creator.Target.Partition != roots.Partition ||
+                if (creator.FoundationRootBinding is not { } binding || binding.Actor != creator.Target.Id || !roots.Includes(creator.Target.Partition) ||
                     creator.TargetCreation != 1 || creator.InboxKey != new InboxKey("root:" + binding.Actor))
                     throw new InvalidOperationException("The polled creator needs its admitted root identity.");
                 return (binding.Tenant, binding.Reference);
