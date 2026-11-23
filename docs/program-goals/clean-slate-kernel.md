@@ -542,7 +542,8 @@ cover higher and lower mismatches for all three families at ownership take, jour
 sweep. Rejected operations leave the committed state untouched. These checks retain the separate K12 rehearsal
 with running software versions and a recorded rollback floor.
 
-K4 remains open for the remaining physical K3 cases and provider-path coverage. MongoDB remains on the owner hold.
+K4 remains open for the remaining physical K3 cases and production provider integration, including the upgrade
+path. MongoDB remains on the owner hold.
 
 ### FC-8 on providers
 
