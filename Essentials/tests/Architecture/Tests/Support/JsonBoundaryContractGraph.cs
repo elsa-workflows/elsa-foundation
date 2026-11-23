@@ -63,7 +63,7 @@ internal static class JsonBoundaryContractGraph
                 property.Name, Type = Name(property.PropertyType), property.Order, property.IsRequired, property.IsGetNullable, property.IsSetNullable,
                 property.IsExtensionData, property.NumberHandling, property.ObjectCreationHandling,
                 Converter = property.CustomConverter is { } converter ? Name(converter.GetType()) : null,
-                EnumWire = EnumTokens(property.PropertyType, options, property.CustomConverter),
+                EnumWire = property.Get is null && property.Set is null ? null : EnumTokens(property.PropertyType, options, property.CustomConverter),
                 HasGet = property.Get is not null, HasSet = property.Set is not null, HasPredicate = property.ShouldSerialize is not null
             }).ToArray();
             var shape = JsonSerializer.Serialize(new

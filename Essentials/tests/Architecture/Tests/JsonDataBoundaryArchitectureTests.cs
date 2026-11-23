@@ -331,6 +331,33 @@ public sealed class JsonDataBoundaryArchitectureTests
         });
     }
 
+    [Fact]
+    public void An_ignored_enum_does_not_need_wire_metadata_but_removing_ignore_changes_the_graph()
+    {
+        var beforeOptions = JsonBaseline.CreateCopy();
+        beforeOptions.TypeInfoResolver = new RefusingEnumResolver(new DefaultJsonTypeInfoResolver());
+        beforeOptions.MakeReadOnly();
+        var before = InspectFixture(beforeOptions, [typeof(IgnoredEnumDocument)]);
+        Assert.Empty(before.Errors);
+        var hidden = "shape|fixture|" + JsonBoundaryContractGraph.Name(typeof(HiddenEnum));
+        Assert.DoesNotContain(hidden, before.Pins.Keys);
+        var afterOptions = JsonBaseline.CreateCopy();
+        var resolver = new DefaultJsonTypeInfoResolver();
+        resolver.Modifiers.Add(info =>
+        {
+            if (info.Type != typeof(IgnoredEnumDocument)) return;
+            var property = info.Properties.Single(property => property.Name == "hidden");
+            property.Get = _ => HiddenEnum.Choice;
+            property.ShouldSerialize = null;
+        });
+        afterOptions.TypeInfoResolver = resolver;
+        afterOptions.MakeReadOnly();
+        var after = InspectFixture(afterOptions, [typeof(IgnoredEnumDocument)]);
+        Assert.Empty(after.Errors);
+        Assert.Contains(hidden, after.Pins.Keys);
+        Assert.False(before.Pins.SequenceEqual(after.Pins));
+    }
+
     private static JsonSerializerOptions WithAddedMember(Type target)
     {
         var options = JsonBaseline.CreateCopy();
@@ -393,6 +420,13 @@ public sealed class JsonDataBoundaryArchitectureTests
         public override void Write(Utf8JsonWriter writer, ScalarRows value, JsonSerializerOptions options) => writer.WriteStringValue("owned-scalar");
     }
     public sealed class HiddenDocument { public object? InProcess { get; init; } }
+    public enum HiddenEnum { Choice }
+    public sealed class IgnoredEnumDocument { [JsonIgnore] public HiddenEnum Hidden { get; init; } }
+    private sealed class RefusingEnumResolver(IJsonTypeInfoResolver inner) : IJsonTypeInfoResolver
+    {
+        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options) => type == typeof(HiddenEnum)
+            ? throw new NotSupportedException("The ignored enum has no wire metadata.") : inner.GetTypeInfo(type, options);
+    }
     [JsonConverter(typeof(ScalarBoxConverterFactory))]
     public sealed class ScalarBox<T>;
     public sealed class ScalarBoxConverterFactory : JsonConverterFactory
