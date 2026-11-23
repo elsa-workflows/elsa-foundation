@@ -123,6 +123,17 @@ dotnet restore models/Native.Run --locked-mode
 dotnet run -c Release --no-restore --project models/Native.Run -- pg-runtime-cluster
 ```
 
+Append `wake` to use the optional PostgreSQL wake transport. The two processes listen on separate
+connections. After each of the first two admissions commits, the first node queues the target
+partition number for PostgreSQL `NOTIFY`. The receiving node checks both transport callbacks and confirms
+that its active partition forwarded both hints to the durable Worker. After the second
+node leaves, the first node applies the final approval through the inbox with no hint. Run it
+against another empty database to compare with the polling-only run.
+
+Wake hints carry a partition number. They never carry an actor name, tenant or command payload.
+The sender uses a bounded queue and a separate connection. A full queue or connection failure
+can drop a hint. The node still polls on its ordinary interval.
+
 Two operating-system processes run the built-in `RuntimeNode` and a durable Worker per node. PostgreSQL shows
 eight partitions on the first node, four each when the second joins, and all eight back on the first after the
 second stops gracefully. A Native workflow waits twice for approval events. The departing node records Ada, and
