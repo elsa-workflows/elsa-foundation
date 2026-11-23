@@ -75,7 +75,8 @@ test("the activity inspector preserves a JavaScript session across compact, expa
   await syntax.click();
   await page.getByRole("option", { name: "Liquid", exact: true }).click();
   await expect(syntax).toHaveAttribute("title", "Liquid");
-  await expect(page.getByRole("button", { name: /Liquid expression\. Activate to edit\./ })).toContainText("format");
+  await expect(compactEditor).toBeFocused();
+  await expect(compactEditor).toContainText("format");
 });
 
 test("fifty expression fields remain lightweight until the selected compact editor activates", async ({ page }) => {
@@ -145,10 +146,12 @@ for (const width of [390, 900]) {
         await page.getByRole("option", { name: language, exact: true }).click();
       }
       await expect(syntax).toHaveAttribute("title", language);
-      const preview = page.getByRole("button", { name: `${language} expression. Activate to edit.`, exact: true });
-      if (await preview.isVisible()) await preview.click();
+      if (language === "JavaScript") {
+        await page.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
+      }
       const editor = page.locator(".studio-code-editor-rich-compact .cm-editor");
       await expect(editor).toBeVisible();
+      await expect(editor.locator(".cm-content")).toBeFocused();
       const feedback = page.locator(".studio-code-editor-status");
       await expect(feedback).toContainText(`${language} IntelliSense is unavailable`);
       const editorBox = (await editor.boundingBox())!;
