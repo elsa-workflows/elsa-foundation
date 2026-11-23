@@ -77,8 +77,8 @@ internal static class NativeHttpEdgeChecks
 
             var begin = PostAsync("begin");
             await enteringCommit.Task.WaitAsync(token);
-            var startRequest = requests.All.Single();
-            Require(!begin.IsCompleted && requests.IsOpen(startRequest) && transport.Responses == 0 &&
+            var startRequest = requests.All.SingleOrDefault();
+            Require(!begin.IsCompleted && transport.Responses == 0 && startRequest is not null && requests.IsOpen(startRequest) &&
                     (await reads.ListAsync(scope, new(Status: Contract.ActorStatus.Running), cancellationToken: token)).Items.Count == 0,
                 "The HTTP response stays held while the first checkpoint commit is blocked.");
             releaseCommit.SetResult();
@@ -87,7 +87,7 @@ internal static class NativeHttpEdgeChecks
                     "The Native start returns its authored HTTP 201.");
             var approval = (await reads.ListAsync(scope, new(Status: Contract.ActorStatus.Running), cancellationToken: token)).Items.Single();
             var birthJournal = await reads.TailAsync(scope, approval.Header.Ref, cancellationToken: token);
-            Require(startRequest.Responses == 1 && birthJournal.Next is not null && birthJournal.Items.Count > 0 &&
+            Require(startRequest is { Responses: 1 } && birthJournal.Next is not null && birthJournal.Items.Count > 0 &&
                     birthJournal.Items.All(entry => entry.Revision == 1),
                 "The caller receives one response after the waiting actor's first committed journal revision.");
 
@@ -157,7 +157,7 @@ internal static class NativeHttpEdgeChecks
             Require(startRequest is { Responses: 1 } && expiring is { Responses: 0, Ends: 1, Error: "timeout" } &&
                     abandoned is { Responses: 0, Ends: 1, Error: "disconnected" },
                 "The start registration accepted one response. Timed-out and disconnected registrations kept their original outcome.");
-            Require(transport.WrongDestination is null, $"Every transport reply must target the receiving node. Unexpected destination '{transport.WrongDestination}'.");
+            Require(transport.WrongDestination is null, "Every transport reply targeted the receiving node.");
             return 0;
         }
         finally
