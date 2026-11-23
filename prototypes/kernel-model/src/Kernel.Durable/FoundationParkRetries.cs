@@ -26,30 +26,35 @@ public sealed partial class InMemoryStore
             if (BoundActor(tenant, reference) is not { } actor ||
                 !_foundationParks.TryGetValue(actor.Binding.Address, out var park))
                 return null;
-            var row = FoundationParkDelivery(actor.Row, key);
-            var disposition = ReadTimerDispositions(actor.Row.ParkTimerDispositions).GetValueOrDefault(FoundationTimerDigest(key));
-            var timer = IsFoundationTimerKey(actor.Row, key, row, disposition);
-            if (row is not { Done: true, KeptBy: not null } &&
-                !(timer && disposition != 0))
-                return null;
-
-            var (id, scope, match) = key;
-            if (id.Length == 0) return null;
-            // A re-arm replaces a timer row at the same minted key. Every other handle names one row incarnation.
-            var useDigest = id.Length > MaxRetryKeyUnits || match?.Length > MaxRetryMatchUnits;
-            if (useDigest && timer) return null;
-            var idBytes = useDigest ? FoundationEventIdentity.RetryKey(key) : DurableKeyJson.CodeUnits(id);
-            var matchBytes = useDigest || match is null ? [] : DurableKeyJson.CodeUnits(match);
-            var plain = new byte[RetryHeaderBytes + idBytes.Length + matchBytes.Length];
-            BinaryPrimitives.WriteInt64LittleEndian(plain, timer ? 0 : row!.Seq);
-            BinaryPrimitives.WriteInt64LittleEndian(plain.AsSpan(sizeof(long)), scope);
-            BinaryPrimitives.WriteUInt16LittleEndian(plain.AsSpan(2 * sizeof(long)), (ushort)idBytes.Length);
-            BinaryPrimitives.WriteUInt16LittleEndian(plain.AsSpan(RetryHeaderBytes - sizeof(ushort)),
-                useDigest ? DigestKey : match is null ? ushort.MaxValue : (ushort)matchBytes.Length);
-            idBytes.CopyTo(plain, RetryHeaderBytes);
-            matchBytes.CopyTo(plain, RetryHeaderBytes + idBytes.Length);
-            return SealReadCursor(RetryHandleContext(tenant, reference, actor.Row, park), plain);
+            return SealKeptHandle(actor.Row, RetryHandleContext(tenant, reference, actor.Row, park), key,
+                FoundationParkDelivery(actor.Row, key), ReadTimerDispositions(actor.Row.ParkTimerDispositions));
         }
+    }
+
+    private string? SealKeptHandle(InstanceRow actor, ReadOnlySpan<byte> context, InboxKey key, MessageRow? row,
+        IReadOnlyDictionary<string, byte> dispositions)
+    {
+        var disposition = key.HasIssuedOrigin && dispositions.Count != 0
+            ? dispositions.GetValueOrDefault(FoundationTimerDigest(key)) : (byte)0;
+        var timer = IsFoundationTimerKey(actor, key, row, disposition);
+        if (row is not { Done: true, KeptBy: not null } && !(timer && disposition != 0)) return null;
+
+        var (id, scope, match) = key;
+        if (id.Length == 0) return null;
+        // A re-arm replaces a timer row at the same minted key. Every other handle names one row incarnation.
+        var useDigest = id.Length > MaxRetryKeyUnits || match?.Length > MaxRetryMatchUnits;
+        if (useDigest && timer) return null;
+        var idBytes = useDigest ? FoundationEventIdentity.RetryKey(key) : DurableKeyJson.CodeUnits(id);
+        var matchBytes = useDigest || match is null ? [] : DurableKeyJson.CodeUnits(match);
+        var plain = new byte[RetryHeaderBytes + idBytes.Length + matchBytes.Length];
+        BinaryPrimitives.WriteInt64LittleEndian(plain, timer ? 0 : row!.Seq);
+        BinaryPrimitives.WriteInt64LittleEndian(plain.AsSpan(sizeof(long)), scope);
+        BinaryPrimitives.WriteUInt16LittleEndian(plain.AsSpan(2 * sizeof(long)), (ushort)idBytes.Length);
+        BinaryPrimitives.WriteUInt16LittleEndian(plain.AsSpan(RetryHeaderBytes - sizeof(ushort)),
+            useDigest ? DigestKey : match is null ? ushort.MaxValue : (ushort)matchBytes.Length);
+        idBytes.CopyTo(plain, RetryHeaderBytes);
+        matchBytes.CopyTo(plain, RetryHeaderBytes + idBytes.Length);
+        return SealReadCursor(context, plain);
     }
 
     internal static bool FitsFoundationRetryHandles(IReadOnlyList<string>? handles)

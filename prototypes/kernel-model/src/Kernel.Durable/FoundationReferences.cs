@@ -197,36 +197,40 @@ public sealed partial class InMemoryStore
         }
     }
 
-    internal sealed record ActorDelivery(long Seq, Message Message, bool Held, int Attempts, string? Sender,
-        ParkKeepReason? KeptBy, string Handle)
-    {
-        internal long Order => Message.DeliveryOrder(Seq);
-    }
+    internal sealed record ActorDelivery(ParkPageCursor Cursor, Message Message, bool Held, int Attempts, string? Sender,
+        ParkKeepReason? KeptBy, string Handle);
     internal sealed record ActorInboxRead(long AsOf, IReadOnlyList<ActorDelivery> Rows);
 
-    internal ActorInboxRead ReadFoundationInbox(string tenant, string? reference, long after, int take)
+    internal ActorInboxRead ReadFoundationInbox(string tenant, string? reference, ParkPageCursor? after, int take)
     {
         lock (_gate)
         {
             var now = clock();
             if (BoundActor(tenant, reference) is not { } found) return new(now, []);
             var address = found.Binding.Address;
-            var hasPark = _foundationParks.ContainsKey(address);
-            var rows = Messages.Values.Where(row => (!row.Done || hasPark && row.KeptBy is not null) &&
-                    row.Message.DeliveryOrder(row.Seq) > after && row.Message.Target.Id == address.Id &&
-                    row.Message.TargetCreation == address.Creation)
-                .OrderBy(row => row.Message.DeliveryOrder(row.Seq)).Take(take).Select(row =>
+            var park = _foundationParks.GetValueOrDefault(address);
+            var refId = found.Binding.Reference;
+            byte[]? retryContext = null;
+            Dictionary<string, byte>? timerDispositions = null;
+            var rows = Messages.Values.Where(row => (!row.Done || park is not null && row.KeptBy is not null) &&
+                    row.Message.Target.Id == address.Id && row.Message.TargetCreation == address.Creation)
+                .Select(row => (Row: row, Cursor: new ParkPageCursor(row.Message.DeliveryOrder(row.Seq), row.Message.InboxKey)))
+                .Where(item => !after.HasValue || item.Cursor.CompareTo(after.Value) > 0)
+                .OrderBy(item => item.Cursor).Take(take).Select(item =>
                 {
+                    var row = item.Row;
                     var message = row.Message;
                     var kept = row.Done ? row.KeptBy : null;
-                    var refId = found.Binding.Reference;
-                    // Seal a retry handle under the same lock as the Park and row read.
-                    var handle = kept is not null ? SealFoundationKeptHandle(tenant, refId, message.InboxKey) : null;
+                    // The page shares one Park and disposition snapshot under the read lock.
+                    var handle = kept is not null && park is not null
+                        ? SealKeptHandle(found.Row, retryContext ??= RetryHandleContext(tenant, refId, found.Row, park),
+                            item.Cursor.Key, row, timerDispositions ??= ReadTimerDispositions(found.Row.ParkTimerDispositions))
+                        : null;
                     var sender = message.Sender is { } from &&
                         _referenceBirths.TryGetValue(new(from, message.SenderCreation), out var binding) && binding.Tenant == tenant
                         ? binding.Reference : null;
-                    return new ActorDelivery(row.Seq, message, row.Held, row.Attempts, sender, kept,
-                        handle ?? DeliveryHandle(refId, row.Seq, message.InboxKey));
+                    return new ActorDelivery(item.Cursor, message, row.Held, row.Attempts, sender, kept,
+                        handle ?? DeliveryHandle(refId, row.Seq, item.Cursor.Key));
                 }).ToArray();
             return new(now, rows);
         }

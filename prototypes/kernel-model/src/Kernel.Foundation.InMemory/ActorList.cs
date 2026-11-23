@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Text.Json;
 using Kernel.Foundation.Contracts;
 using Durable = Kernel.Durable;
@@ -98,19 +97,18 @@ internal sealed class ActorList : IActorReads
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        var context = JsonSerializer.SerializeToUtf8Bytes(new { Read = "actor-inbox", scope.Tenant, Actor = actor.Id });
-        Span<byte> cursor = stackalloc byte[sizeof(long)];
-        if (from is { } token && !_store.TryOpenReadCursor(context, token.Value, cursor))
-            throw new ArgumentException("The continuation does not match this actor inbox.", nameof(from));
-        var after = from is null ? long.MinValue : BinaryPrimitives.ReadInt64LittleEndian(cursor);
+        var context = JsonSerializer.SerializeToUtf8Bytes(new { Read = "actor-inbox-v2", scope.Tenant, Actor = actor.Id });
+        Durable.ParkPageCursor? after = null;
+        if (from is { } token)
+        {
+            if (!_store.TryOpenActorInboxCursor(context, token.Value, out var cursor))
+                throw new ArgumentException("The continuation does not match this actor inbox.", nameof(from));
+            after = cursor;
+        }
         var snapshot = _store.ReadFoundationInbox(scope.Tenant, actor.Id, after, _pageSize + 1);
         var page = snapshot.Rows.Take(_pageSize).Select(Delivery).ToArray();
-        PageToken? next = null;
-        if (snapshot.Rows.Count > _pageSize)
-        {
-            BinaryPrimitives.WriteInt64LittleEndian(cursor, snapshot.Rows[_pageSize - 1].Order);
-            next = new(_store.SealReadCursor(context, cursor));
-        }
+        PageToken? next = snapshot.Rows.Count > _pageSize
+            ? new(_store.SealActorInboxCursor(context, snapshot.Rows[_pageSize - 1].Cursor)) : null;
         return new(new Page<DeliveryView>(page, next, snapshot.AsOf));
     }
 
@@ -138,13 +136,15 @@ internal sealed class ActorList : IActorReads
             : null;
         var header = new ActorHeader(new(checkpoint.Reference), row.Model, tenant, (ActorStatus)row.Status,
             row.Fault, parent, checkpoint.EndedAt, checkpoint.Header.TypeData, checkpoint.Header.Labels);
-        var resolution = row.ParkDiscard?.Kind switch
+        var resolution = row switch
         {
-            Durable.ParkClearKind.Terminate => "terminating",
-            Durable.ParkClearKind.Discard => "discarding",
-            Durable.ParkClearKind.Expiry => "expiring",
-            Durable.ParkClearKind.Delete => "deleting",
-            _ => row.ParkRecovery is not null ? "recovering" : null
+            { ParkDiscard.Deletion: not null } or { ParkRecovery.Deletion: not null } => "deleting",
+            { ParkDiscard.Kind: Durable.ParkClearKind.Terminate } => "terminating",
+            { ParkDiscard.Kind: Durable.ParkClearKind.Discard } => "discarding",
+            { ParkDiscard.Kind: Durable.ParkClearKind.Expiry } => "expiring",
+            { ParkDiscard.Kind: Durable.ParkClearKind.Delete } => "deleting",
+            { ParkRecovery: not null } => "recovering",
+            _ => null
         };
         var park = checkpoint.Park is { } mark
             ? new ParkView(mark.At, resolution)
