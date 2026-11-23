@@ -43,6 +43,12 @@ internal static class DirectSendChecks
               before.All(message => message.Target == creator.Target),
             "cold reads preserve actor life, FIFO, due presence, and exact kind and payload");
 
+        var valid = before[0].InboxKey.Id;
+        Check(PostgresRootAdmission.MatchesDirectOccurrence(reference, "first", valid) &&
+            !PostgresRootAdmission.MatchesDirectOccurrence(reference, "second", valid) &&
+            !PostgresRootAdmission.MatchesDirectOccurrence(reference, "first", valid[..^1] + "!"),
+            "occurrence validation binds the original operation and its generated suffix");
+
         await using (var db = create())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -57,6 +63,11 @@ internal static class DirectSendChecks
               after[2] is { Id: "first", Payload: "new occurrence", Due: 2_000_000_000_000 } &&
               after.Select(message => message.InboxKey).Distinct().Count() == 3,
             "reused operation has a separate physical occurrence and leaves earlier input untouched");
+        var current = (await store.ReadFirstRootAsync(tenant, reference))!;
+        Check((await store.CommitRootTurnAsync(tenant, reference, current, before, fence with { Position = fence.Position + 1 }, timeout,
+            InstanceStatus.Running, "applied", 14, current.TypeData, current.Labels, """["applied"]""")).Landed &&
+            (await cold.ReadPendingDirectAsync(tenant, reference)).Single().InboxKey == after[2].InboxKey,
+            "admitted occurrences settle after their original receipts were swept");
     }
 
     private static void Check(bool valid, string message)

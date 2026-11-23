@@ -117,7 +117,8 @@ dotnet "$dll" pg-discover-roots restart 0
 The first process activates an empty partition, admits roots and leaves a final approval ready. The second process
 takes the same partition and finishes that approval before the observer looks up any actor references. The poll
 joins eligible inbox rows to their admitted births, respects its row limit, and returns tenant and reference with
-the creator. The fixture checks that a replay adds no turn and that the other partition keeps its own pending work.
+the creator. Direct inputs admitted before a scheduled birth become eligible after its first checkpoint. The fixture
+checks that an independent ready root runs during that interval, a replay adds no turn, and the other partition keeps its pending work.
 This preview runs one registered workflow actor type on its dedicated database.
 
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:

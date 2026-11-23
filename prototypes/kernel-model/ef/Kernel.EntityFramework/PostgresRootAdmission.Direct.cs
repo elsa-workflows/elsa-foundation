@@ -122,18 +122,31 @@ internal sealed partial class PostgresRootAdmission
     {
         await using var db = create();
         var rows = await db.Messages.FromSqlInterpolated($"""
-            SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target"
+            SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b
+                ON b."Actor" = m."Target" AND b."Partition" = m."Partition" AND b."Creation" = 1
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
-                AND NOT m."Done" ORDER BY m."Seq"
+                AND m."EventMatch" IS NULL AND NOT m."Done" ORDER BY m."Seq"
             """).AsNoTracking().ToListAsync(cancellationToken);
-        return rows.Select(DecodeDirect).ToArray();
+        return rows.Select(row => DecodeDirect(row, reference)).ToArray();
     }
 
-    internal static Message DecodeDirect(MessageEntity row)
+    internal static bool MatchesDirectOccurrence(string reference, string operation, string occurrence)
+    {
+        if (!IsIssuedReferenceShape(reference) || operation is null || !FoundationMetadataLimits.IsOutsideMessageId(operation)) return false;
+        var prefix = $"{reference}/{FoundationRootCreator.OperationDigest(operation)}/";
+        if (occurrence.Length != prefix.Length + 32 || !occurrence.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        var suffix = occurrence.AsSpan(prefix.Length);
+        // Admission emits a lowercase, unhyphenated version-4 GUID.
+        return suffix[12] == '4' && "89ab".Contains(suffix[16]) && suffix.IndexOfAnyExcept("0123456789abcdef") < 0;
+    }
+
+    internal static Message DecodeDirect(MessageEntity row, string reference)
     {
         if (!IsStoredDirect(row.Start))
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
         var header = DurableKeyJson.Read<StoredDirect>(row.Start![DirectPrefix.Length..]);
+        if (header.Creation != 1 || !MatchesDirectOccurrence(reference, header.Operation, row.Id))
+            throw new StoreException(Failure.Definite, "Public input occurrence differs from its admitted identity.");
         var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;
         return new Message(header.Operation, new(row.Target), header.EscapedKind ?? row.Kind, payload,
             Due: row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, KeepUntil: row.KeepUntil, TargetCreation: header.Creation)

@@ -24,7 +24,7 @@ public sealed partial class EfStore
             var old = DurableKeyJson.Read<RootHeader>(headers[0]);
             if (old.Model != Current.Model || old.Definition != Current.Definition) return false;
 
-            if (!await SettleDirectInputsAsync(db, Current.Actor, Inputs.Select(input => input.InboxKey).ToArray(), Inputs, cancellationToken))
+            if (!await SettleDirectInputsAsync(db, Reference, Current.Actor, Inputs.Select(input => input.InboxKey).ToArray(), Inputs, cancellationToken))
                 return false;
             var finished = Status == InstanceStatus.Finished;
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
@@ -44,7 +44,7 @@ public sealed partial class EfStore
     }
 
     // Both a model turn and a terminal no-turn disposition settle the same due FIFO prefix.
-    private static async Task<bool> SettleDirectInputsAsync(KernelDb db, CreationAddress actor, IReadOnlyList<InboxKey> expected,
+    private static async Task<bool> SettleDirectInputsAsync(KernelDb db, string reference, CreationAddress actor, IReadOnlyList<InboxKey> expected,
         Message[]? expectedEnvelopes, CancellationToken cancellationToken)
     {
         var home = new InstanceRef(actor.Id).Partition;
@@ -54,7 +54,7 @@ public sealed partial class EfStore
                 AND NOT "Done" AND "Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
             ORDER BY "Seq" LIMIT {expected.Count} FOR UPDATE
             """).AsNoTracking().ToListAsync(cancellationToken);
-        var messages = rows.Select(PostgresRootAdmission.DecodeDirect).ToArray();
+        var messages = rows.Select(row => PostgresRootAdmission.DecodeDirect(row, reference)).ToArray();
         if (!messages.Select(m => m.InboxKey).SequenceEqual(expected) || messages.Any(m => m.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
 

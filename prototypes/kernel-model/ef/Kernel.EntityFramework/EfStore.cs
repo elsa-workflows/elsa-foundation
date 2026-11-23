@@ -631,7 +631,14 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     }
 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
-    private string RootPollFilter => _ordinaryRoots is { Discover: false } ? """ AND m."Target" = ANY({4})""" : "";
+    private string RootPollFilter => _ordinaryRoots is null ? "" :
+        (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
+             AND (m."InboxScope" <> {InboxKey.FoundationOccurrenceScope} OR EXISTS (
+                 SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
+                     ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
+                     AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
+                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired"))
+            """;
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
         ? """, b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
     private string PollMessages => _ordinaryRoots is { Discover: true }
@@ -665,7 +672,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
-                    : PostgresRootAdmission.DecodeDirect(entity);
+                    : PostgresRootAdmission.DecodeDirect(entity, root.Reference);
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
             }
             if (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start))

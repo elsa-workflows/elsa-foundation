@@ -32,11 +32,32 @@ internal static class PostgresDiscoveryChecks
         var prepared = await PostgresNativeRootOwner.PreparePartitionAsync(store, "discover-" + Environment.ProcessId, partition, registry, 1, stop,
             (actor, inputs, _) => turns.Add((actor.Id, inputs.Single().Id)));
         await using var owner = await prepared.TryActivateAsync(stop) ?? throw new InvalidOperationException("Partition already owned.");
+        Sample? future = null;
         if (birth)
         {
             await store.AddAsync(new Message("unrelated-input", InstanceRef.In(partition, "unregistered"), "work"), stop);
             await Pass();
             Check(turns.Count == 0, "an activated partition without admitted roots runs no turns");
+            // A direct input may be accepted before the durable root is first materialized.
+            for (var index = 0; future is null; index++)
+            {
+                var scope = new Contract.BoundScope("future");
+                var spec = WorkflowActor.WorkflowActor.Start(NativeExecutionModel.Start(DirectApprovalWorkflow.Definition));
+                var admitted = await api.SendAsync(scope, new Contract.Target.Start(spec), $"future-{index}", Contract.Kinds.Start,
+                    options: new(DueAt: long.MaxValue), cancellationToken: stop);
+                var reference = admitted.Actor!.Value;
+                var address = (await admission.ResolveAsync(scope.Tenant, reference.Id, stop))!;
+                var actor = new InstanceRef(address.Id);
+                if (actor.Partition == partition) future = new(scope, reference, actor);
+            }
+            var early = await api.SendAsync(future.Scope, new Contract.Target.Ref(future.Reference), "early", CompositeSignal.Kind,
+                cancellationToken: stop);
+            Check(early.Outcome == Contract.AdmissionOutcome.Accepted, "direct input accepted while its creator is pending");
+            var epoch = ((Worker)owner).Fences.Single().Epoch;
+            var empty = await store.PollAsync(partition, epoch, TimeSpan.Zero, 1, stop);
+            Check(empty.Messages.Count == 0 && empty.Now > 0, "the pending creator's input leaves a clock-only poll");
+            await Pass();
+            Check(turns.Count == 0, "premature direct input never entered a model turn");
         }
         else
         {
@@ -50,10 +71,22 @@ internal static class PostgresDiscoveryChecks
         while (locals.Count == 0 || samples.All(s => s.Actor.Partition == partition)) await SampleAsync();
         if (birth)
         {
+            var fixedClient = new EfStore(Open, postgres: true);
+            await fixedClient.BindWorkerRootsAsync([(future!.Scope.Tenant, future.Reference.Id),
+                (locals[0].Scope.Tenant, locals[0].Reference.Id)], stop);
+            var fixedPage = await fixedClient.PollAsync(partition, ((Worker)owner).Fences.Single().Epoch, TimeSpan.Zero, 1, stop);
+            Check(fixedPage.Messages is [var ready] && ready.Message.Target == locals[0].Actor,
+                "a fixed owner can poll the independent ready creator ahead of the pending root's direct input");
             meter.Reset();
             var poll = await store.PollAsync(partition, ((Worker)owner).Fences.Single().Epoch, TimeSpan.Zero, 1, stop);
             Check(poll.Messages.Count == 1 && meter.Commands == 1, "one PostgreSQL poll command returns one qualified creator with its binding");
             while (turns.Count < locals.Count) await Pass();
+        }
+        if (future is not null)
+        {
+            Check(await api.GetAsync(future.Scope, future.Reference, stop) is null &&
+                (await admission.ReadPendingDirectAsync(future.Scope.Tenant, future.Reference.Id, stop)).Single().Id == "early",
+                "a ready workflow committed and the pending root retained its direct input");
         }
         var first = locals[0];
         var earlier = locals.Count;

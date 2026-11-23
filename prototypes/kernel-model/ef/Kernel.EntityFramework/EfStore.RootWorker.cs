@@ -137,7 +137,7 @@ public sealed partial class EfStore
                     AND i."Status" = {(int)InstanceStatus.Finished} AND i."FoundationTerminalAt" IS NOT NULL
                     AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
                 """).ToListAsync(cancellationToken);
-            return terminal.Count == 1 && await SettleDirectInputsAsync(db, new(Root.Actor, 1), Done, null, cancellationToken);
+            return terminal.Count == 1 && await SettleDirectInputsAsync(db, Root.Reference, new(Root.Actor, 1), Done, null, cancellationToken);
         }
     }
 
@@ -242,9 +242,9 @@ public sealed partial class EfStore
                 current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))) throw RootShape();
         await using var db = create();
         var ids = turn.Done.Select(key => key.Id).ToArray();
-        var records = await db.Messages.AsNoTracking().Where(m => m.Target == root.Actor && m.InboxScope == InboxKey.FoundationOccurrenceScope &&
-            ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
-        var inputs = records.Select(PostgresRootAdmission.DecodeDirect).ToArray();
+        var records = await db.Messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
+            m.InboxScope == InboxKey.FoundationOccurrenceScope && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
+        var inputs = records.Select(row => PostgresRootAdmission.DecodeDirect(row, root.Reference)).ToArray();
         if (!inputs.Select(message => message.InboxKey).SequenceEqual(turn.Done)) return null;
         return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
             row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal);
