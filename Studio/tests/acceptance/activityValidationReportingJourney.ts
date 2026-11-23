@@ -7,18 +7,26 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
   await page.getByRole("textbox", { name: "Display name", exact: true }).fill(`Validation guidance ${info.project.name} ${Date.now()}`);
   const provider = page.getByRole("combobox", { name: "Implementation type", exact: true });
   if (await provider.count()) await provider.selectOption((await provider.locator('option[value^="elsa.activity-graph|"]').first().getAttribute("value"))!);
-  await page.locator("label.wf-root-card").filter({ has: page.getByRole("radio", { name: "Sequence", exact: true }) }).click();
+  const sequence = page.getByRole("radio", { name: "Sequence", exact: true });
+  await page.locator("label.wf-root-card").filter({ has: sequence }).click();
+  await expect(sequence).toBeChecked();
+  const sequenceVersionId = await sequence.inputValue();
+  expect(sequenceVersionId).not.toBe("");
   const loaded = page.waitForResponse(response => response.request().method() === "GET" && /\/design\/activities\/drafts\/[^/]+$/.test(new URL(response.url()).pathname));
   await page.getByRole("button", { name: "Create", exact: true }).click();
   const response = await loaded;
   expect(response.ok()).toBe(true);
   let draft = await response.json();
+  expect(draft.provider.payload.rootActivity).toMatchObject({ nodeId: "root", activityVersionId: sequenceVersionId });
+  expect(draft.provider.payload.rootActivity.structure).toEqual({ kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [] } });
   const draftUrl = response.url();
   const authorization = response.request().headers().authorization;
   const headers: Record<string, string> = authorization ? { Authorization: authorization } : {};
   await expect(page.locator("#activity-draft-title")).toContainText("Validation guidance");
-  await expect(page.getByRole("region", { name: "Provider implementation editor", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create Sequence block", exact: true })).toBeVisible();
+  const implementation = page.getByRole("region", { name: "Provider implementation editor", exact: true });
+  await expect(implementation).toBeVisible();
+  await expect(implementation.getByText("No steps yet", { exact: true })).toBeVisible();
+  await expect(implementation.getByRole("button", { name: "Add the first step", exact: true })).toBeVisible();
   await capture(page, info, "reference");
 
   const validateSaved = async () => {

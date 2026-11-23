@@ -25,6 +25,7 @@ import { playbackTransportJourney, playbackSeekingJourney, playbackLiveWaitJourn
 import { writeFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
+import { userTaskGroupedInputsJourney } from "./userTaskGroupedInputsJourney";
 import { userTasksJourney } from "./userTasksJourney";
 import { decisionsJourney } from "./decisionsJourney";
 import { settingsTabsJourney } from "./settingsTabsJourney";
@@ -105,6 +106,10 @@ test("user task authoring and workflow result", async ({ page }, info) => {
   await userTaskAuthoringJourney(page, info, capture, id => {
     creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
   }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("user task grouped inputs persist and reopen", async ({ page }, info) => {
+  await userTaskGroupedInputsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 test("activity validation explains and locates graph settings", async ({ page }, info) => activityValidationReportingJourney(page, info, capture));
 test("native block validation errors and retry", async ({ page }, info) => nativeBlockValidationJourney(page, info, capture));
