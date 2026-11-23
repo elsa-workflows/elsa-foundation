@@ -233,6 +233,13 @@ self inputs, and an unchanged journal on final replay. `KERNEL_PREVIEW_FENCE=che
 fence mode. This scoped path supports immediate sends back to the exact generated actor creation. Scheduled sends,
 cross-actor sends and other authored effects remain outside this preview.
 
+The Durable command creates a dedicated PostgreSQL database format (schema 2, message protocol 3,
+journal codec 1). Use an empty database for this profile. Fresh creation seeds that marker with the schema.
+Opening an ordinary database checks its existing marker before installing continuation tables or enabling sends.
+The ordinary PostgreSQL preview and other relational providers keep their existing format. Protocol 2 is reserved
+for the job-generation migration. A release migration from that format to 3, including physical data and
+the live-reader check, remains separate. An earlier reader refuses ownership on a continuation database.
+
 The public preview writes ordinary text directly. A payload containing NUL or an isolated UTF-16 unit uses a binary
 field in the same message row. It occupies the original UTF-8 byte budget, with three bytes per isolated unit.
 The adapter maps these inbox rows to a dedicated storage scope. The Worker sees its original issued key, and ordinary issued messages can use the same ID and application kind independently. To run the stored input, size and writer

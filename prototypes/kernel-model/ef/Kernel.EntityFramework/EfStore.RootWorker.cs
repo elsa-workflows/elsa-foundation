@@ -183,6 +183,7 @@ public sealed partial class EfStore
             batch.Window is not null || batch.PublicationReservation is not null || batch.DueBacklog is not null ||
             batch.Turns.Select(t => t.Instance).Distinct().Count() != batch.Turns.Count) throw RootShape();
 
+        if (RootSelfIssuer is null && batch.Seen.Concat(batch.Trial).Any(key => key.Scope == -1)) throw RootShape();
         StoreBatchRules.RequireDistinct(fences);
         (CommitBatch Batch, RootCheckpoints Checkpoints)? prepared;
         try { prepared = await PrepareWorkerBatchAsync(roots, batch, cancellationToken); }

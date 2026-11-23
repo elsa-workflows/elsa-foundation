@@ -111,8 +111,14 @@ public sealed class JournalEntity
     public string Entries { get; set; } = "";
 }
 
-public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
+public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
 {
+    // EF keys its model cache by context type. Fresh opt-in databases seed their marker in the
+    // same creation transaction as the schema. An existing database keeps its original marker.
+    private sealed class RootSelfDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    internal StoreFormat RequiredFormat => this is RootSelfDb ? StoreFormat.RootSelf : StoreFormat.Current;
+    internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => new RootSelfDb(options);
+
     internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> InsertAliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> GuardedAliases {get;}=new(StringComparer.Ordinal);
@@ -142,6 +148,8 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 
     protected override void OnModelCreating(ModelBuilder model)
     {
+        if (this is RootSelfDb && !Database.IsNpgsql())
+            throw new NotSupportedException("The continuation profile requires PostgreSQL.");
         model.Entity<StoreVersionEntity>(entity =>
         {
             entity.ToTable(StoreVersionEntity.Table);
@@ -150,7 +158,7 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
             {
                 Id = StoreVersionEntity.MarkerId,
                 StoreSchema = StoreVersionEntity.StoreSchemaVersion,
-                MessageProtocol = StoreVersionEntity.MessageProtocolVersion,
+                MessageProtocol = RequiredFormat.MessageProtocol,
                 JournalCodec = StoreVersionEntity.JournalCodecVersion
             });
         });
@@ -384,7 +392,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         await using var db = create();
         var now = Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken) : (await db.Database.SqlQueryRaw<long>(
             $"""INSERT INTO "Nodes" ("Id", "SeenAt", {NodeAdvertisement.Columns}) VALUES ({"{0}"}, {Now}, {NodeAdvertisement.Parameters}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", {NodeAdvertisement.Update} RETURNING "SeenAt" AS "Value" """,
-            NodeAdvertisement.Arguments(node)).ToListAsync(cancellationToken))[0];
+            NodeAdvertisement.Arguments(node, messageProtocol: db.RequiredFormat.MessageProtocol)).ToListAsync(cancellationToken))[0];
         return await MembershipAsync(db, now, window, cancellationToken);
     }
 

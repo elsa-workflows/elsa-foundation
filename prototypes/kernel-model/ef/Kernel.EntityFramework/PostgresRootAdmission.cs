@@ -30,6 +30,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         await using var db = create();
         if (!db.Database.IsNpgsql()) throw new InvalidOperationException("Root admission requires PostgreSQL.");
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
         // A second Embedded process can open the same preview database while the first is installing.
         await db.Database.ExecuteSqlRawAsync("""
             SELECT pg_advisory_xact_lock(48602345, 1);
@@ -53,7 +54,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             ON CONFLICT DO NOTHING
             """, cancellationToken);
         await EfStore.InstallFirstRootCheckpointsAsync(db, cancellationToken);
-        await EfStore.InstallRootSelfAsync(db, cancellationToken);
+        if (db.RequiredFormat == StoreFormat.RootSelf)
+            await EfStore.InstallRootSelfAsync(db, cancellationToken);
         await InstallDirectReceiptsAsync(db, cancellationToken);
         var placementMatches = await db.Database.SqlQueryRaw<bool>("""
             SELECT i."Partitions" = count(p."Id") AND min(p."Id") = 0 AND max(p."Id") = i."Partitions" - 1 AS "Value"

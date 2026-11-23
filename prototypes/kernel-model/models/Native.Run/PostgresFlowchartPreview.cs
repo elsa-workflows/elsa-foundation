@@ -21,7 +21,7 @@ internal static class PostgresFlowchartPreview
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Supply a dedicated preview database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => new(options);
+        KernelDb Open() => durable ? KernelDb.ForPostgresRootSelf(options) : new KernelDb(options);
         bool? inBatch = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_FENCE") switch
         {
             null => null, "checked" => false, "in-batch" => true,

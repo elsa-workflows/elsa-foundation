@@ -11,7 +11,7 @@ internal static class PostgresRootSelfChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a dedicated PostgreSQL preview database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => new(options);
+        KernelDb Open() => KernelDb.ForPostgresRootSelf(options);
         EfStore Client() => new(Open, postgres: true, fenceInBatch: inBatch)
             { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -22,11 +22,21 @@ internal static class PostgresRootSelfChecks
         const string tenant = "issued-content";
         await bare.CreateAsync(1);
         await ingress.InstallAsync(stop);
+        KernelDb Ordinary() => new(options);
+        var directOnly = new EfStore(Ordinary, postgres: true);
+        await RequireFormatRefusal(() => directOnly.PartitionCountAsync(stop).AsTask());
+        await RequireFormatRefusal(() => directOnly.TakeAsync(0, "old-reader", TimeSpan.FromMinutes(1), stop).AsTask());
+        await RequireFormatRefusal(() => new PostgresRootAdmission(Ordinary, TimeSpan.Zero).OpenJournalCursorAsync(stop));
         var reference = (await ingress.AdmitAsync(tenant, "birth", new("native", "wait"), cancellationToken: stop)).Reference;
         var creator = (await ingress.ReadPendingCreatorAsync(tenant, reference, stop))!;
         var actor = creator.Target.Id;
         var window = TimeSpan.FromMinutes(1);
         var lease = (await bare.TakeAsync(0, "check", window, stop))!;
+        await bare.NodeHeartbeatAsync("check", window, window, stop);
+        await using (var db = Open())
+            Check((await db.Nodes.SingleAsync(n => n.Id == "check", stop)).ReadableMessageProtocol == "3" &&
+                !await db.Nodes.AnyAsync(n => n.Id == "old-reader", stop),
+                "only the continuation reader holds ownership and advertises protocol 3");
         Check((await bare.CommitFirstRootAsync(tenant, reference, creator, lease.For(0), window, null, 1,
             "state", new Dictionary<string, string>(), """["start"]""", stop)).Landed, "creator");
         await scoped.EnableRootSelfSendsAsync(stop);
@@ -60,6 +70,19 @@ internal static class PostgresRootSelfChecks
         Check((await bare.CommitAsync(Batch(empty with { Sent = [ordinary] }), stop)).Landed,
             "ordinary issued input with the same ID and stored kind can coexist");
 
+        await ingress.AdmitDirectAsync(tenant, reference, "sibling", "next", cancellationToken: stop);
+        var sibling = (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single();
+        var disabled = Client();
+        await disabled.BindWorkerRootAsync(tenant, reference, stop);
+        foreach (var marks in new[] { Batch() with { Seen = [sibling.InboxKey, key] }, Batch() with { Trial = [sibling.InboxKey, key] } })
+        {
+            try { await disabled.CommitAsync(marks, stop); throw new InvalidOperationException("A disabled owner marked a private input."); }
+            catch (NotSupportedException) { }
+        }
+        await using (var db = Open())
+            Check(await db.Messages.CountAsync(m => (m.Id == sibling.InboxKey.Id || m.Id == key.Id) && !m.Done && m.Seen == 0 && m.Trial == 0, stop) == 3,
+                "disabled bound Seen and Trial leave the private input, ordinary twin and direct sibling untouched");
+
         var cold = Client();
         await cold.EnableRootSelfSendsAsync(stop);
         await cold.BindWorkerRootsAsync([(tenant, reference)], stop);
@@ -83,6 +106,13 @@ internal static class PostgresRootSelfChecks
             "qualified owner consumes the exact input with the next silent checkpoint");
 
         return 0;
+    }
+
+    private static async Task RequireFormatRefusal(Func<Task> check)
+    {
+        try { await check(); }
+        catch (StoreFormatException) { return; }
+        throw new InvalidOperationException("The ordinary reader accepted the continuation database.");
     }
 
     private static void Check(bool condition, string name)
