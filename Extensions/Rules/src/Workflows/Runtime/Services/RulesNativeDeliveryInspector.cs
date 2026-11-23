@@ -356,7 +356,7 @@ internal sealed class RulesNativeDeliveryInspector(
             var bytes = JsonMarshal.GetRawUtf8Value(json.Value);
             var observed = JsonSerializer.Deserialize<RuleTerminalResult>(bytes, WebJson);
             return observed is not null &&
-                   RuleRecordCodec.TerminalBytes(observed).AsSpan().SequenceEqual(
+                   Elsa.Serialization.Core.JsonCanonicalForm.EqualsUtf8(RuleRecordCodec.TerminalBytes(observed),
                        RuleRecordCodec.TerminalBytes(envelope.Result));
         }
         catch (Exception exception) when (IsMalformed(exception))
@@ -397,7 +397,7 @@ internal sealed class RulesNativeDeliveryInspector(
             if (bytes.Length > RuleLimits.MaxEnvelopeBytes)
                 return false;
             var result = RuleRecordCodec.ReadTerminal(bytes.ToArray());
-            return RuleRecordCodec.TerminalBytes(result).AsSpan().SequenceEqual(RuleRecordCodec.TerminalBytes(envelope.Result));
+            return Elsa.Serialization.Core.JsonCanonicalForm.EqualsUtf8(RuleRecordCodec.TerminalBytes(result), RuleRecordCodec.TerminalBytes(envelope.Result));
         }
         catch (Exception exception) when (IsMalformed(exception))
         {

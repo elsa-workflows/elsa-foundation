@@ -161,6 +161,14 @@ public sealed class JsonConversionContractTests
     }
 
     private static JsonElement Element(string json) => JsonSerializer.Deserialize<JsonElement>(json);
+
+    [Theory]
+    [InlineData("garbageT09:15+garbage")]
+    [InlineData("2026-02-30T09:15+99:99")]
+    [InlineData("2026-02-30T09:15:00Z")]
+    [InlineData("2026-10-28T09:15:00+02:00junk")]
+    public void Time_only_refuses_malformed_date_and_offset_wrappers(string text) =>
+        Assert.ThrowsAny<JsonException>(() => JsonConversionContract.Deserialize<TimeOnly>(JsonSerializer.Serialize(text, JsonBaseline.Options)));
     private sealed class Order { public string? CustomerName { get; set; } public int Total { get; set; } }
     private sealed class Inputs { [JsonConversion(CaseInsensitive = true)] public Order? One { get; set; } public Order? Two { get; set; } }
     private sealed class Container { public Order[]? Orders { get; set; } public Dictionary<string, Order>? ByKey { get; set; } public Extension? Extension { get; set; } }

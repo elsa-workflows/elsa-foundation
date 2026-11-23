@@ -15,7 +15,7 @@ internal static class EfModelCheckpointStaging
         var row = await context.Set<RuntimeModelExecutionEntity>().SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
             ?? throw new DbUpdateConcurrencyException("The native worker's authorizing model execution is absent.");
         var current = EfRuntimeModelExecutionReader.Read(row, scope, expected.ExecutionId);
-        if (RuntimeArtifactJson.Serialize(current) != RuntimeArtifactJson.Serialize(expected))
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(RuntimeArtifactJson.Serialize(current), RuntimeArtifactJson.Serialize(expected)))
             throw new DbUpdateConcurrencyException("The model decision changed before native worker admission.");
         // A read alone cannot order a concurrent cancellation against admission. Force the same physical
         // revision compare as model decisions while retaining the model's exact bytes and semantic revision.
@@ -49,7 +49,7 @@ internal static class EfModelCheckpointStaging
                 current.TenantId != state.TenantId || current.CreatedAt != state.CreatedAt || state.UpdatedAt < current.UpdatedAt ||
                 !WorkflowExecutionAuthoritySnapshot.Matches(current.Authority, state.Authority.SystemIdentity, state.Authority.RootInitiator, state.Authority.Metadata))
                 throw new InvalidOperationException("A model decision cannot change its execution authority or pinned material.");
-            if (retainsState && RuntimeArtifactJson.Serialize(current) != RuntimeArtifactJson.Serialize(state))
+            if (retainsState && !Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(RuntimeArtifactJson.Serialize(current), RuntimeArtifactJson.Serialize(state)))
                 throw new InvalidOperationException("A retained-state input cannot change the committed model state.");
             // A model may discover physical responsibility retained by an older prematurely settled writer.
             // Only terminal bookkeeping can change: the semantic result remains immutable, never Running.

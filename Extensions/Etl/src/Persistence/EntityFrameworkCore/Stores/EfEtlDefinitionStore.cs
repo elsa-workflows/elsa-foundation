@@ -197,7 +197,7 @@ internal sealed class EfEtlDefinitionStore(
             return new(EtlPublicationStatus.InvalidArtifact, null);
 
         var recompiledEnvelope = EtlDefinitionRecordCodec.ValidateArtifact(definitionId, recompiled);
-        if (!StringComparer.Ordinal.Equals(validated.ArtifactJson, recompiledEnvelope.ArtifactJson))
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(validated.ArtifactJson, recompiledEnvelope.ArtifactJson))
             return new(EtlPublicationStatus.InvalidArtifact, null);
 
         // A lost race is a transient write conflict (a serialization failure, a deadlock, a lock timeout, or a busy or locked
@@ -260,7 +260,7 @@ internal sealed class EfEtlDefinitionStore(
             }
 
             if (draft.FormatVersion != artifact.FormatVersion ||
-                !StringComparer.Ordinal.Equals(validated.PipelineJson, draft.PipelineJson) ||
+                !Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(validated.PipelineJson, draft.PipelineJson) ||
                 !StringComparer.Ordinal.Equals(validated.PipelineHash, draft.PipelineHash))
             {
                 await transaction.RollbackAsync(cancellationToken);
@@ -362,7 +362,7 @@ internal sealed class EfEtlDefinitionStore(
     {
         var existing = EtlDefinitionRecordCodec.ReadPublished(row, scope, definitionId);
         return StringComparer.Ordinal.Equals(row.ArtifactEnvelopeHash, validated.ArtifactEnvelopeHash) &&
-               StringComparer.Ordinal.Equals(row.ArtifactJson, validated.ArtifactJson)
+               Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(row.ArtifactJson, validated.ArtifactJson)
             ? new(EtlPublicationStatus.Replay, existing)
             : new(EtlPublicationStatus.Conflict, null);
     }

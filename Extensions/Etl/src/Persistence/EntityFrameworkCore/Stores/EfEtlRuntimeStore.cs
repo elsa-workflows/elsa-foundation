@@ -42,7 +42,7 @@ internal sealed partial class EfEtlRuntimeStore(
         {
             ValidateRun(existing, invocation.Scope, invocation.RunId);
             var status = StringComparer.Ordinal.Equals(existing.InvocationFingerprint, fingerprint) &&
-                         StringComparer.Ordinal.Equals(existing.BindingsJson, bindingsJson)
+                         Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(existing.BindingsJson, bindingsJson)
                 ? EtlStoreStatus.Replay
                 : EtlStoreStatus.Conflict;
             return new(status, await ReadViewAsync(existing, cancellationToken));

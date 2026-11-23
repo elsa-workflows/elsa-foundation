@@ -11,14 +11,25 @@ public sealed class JsonConversionContract
 {
     private static readonly ConditionalWeakTable<Type, JsonConversionContract> Types = new();
     private static readonly ConditionalWeakTable<MemberInfo, JsonConversionContract> Members = new();
+    private readonly JsonKnownNamingPolicy namingPolicy;
+    private readonly bool caseInsensitive;
+    private readonly (string Json, string Member)[] mappings;
+    private readonly Type? rootType;
 
     private JsonConversionContract(JsonConversionAttribute? selection, Type? rootType = null)
     {
-        var options = JsonBaseline.CreateCopy();
-        options.PropertyNamingPolicy = Naming(selection?.NamingPolicy ?? JsonKnownNamingPolicy.CamelCase);
-        options.PropertyNameCaseInsensitive = selection?.CaseInsensitive ?? false;
+        namingPolicy = selection?.NamingPolicy ?? JsonKnownNamingPolicy.CamelCase;
+        caseInsensitive = selection?.CaseInsensitive ?? false;
         RefuseUnmatchedMembers = selection?.RefuseUnmatchedMembers ?? false;
-        var mappings = (selection?.MemberMappings ?? []).Select(ParseMapping).ToArray();
+        mappings = (selection?.MemberMappings ?? []).Select(ParseMapping).ToArray();
+        this.rootType = rootType;
+    }
+
+    private JsonSerializerOptions CreateOptions()
+    {
+        var options = JsonBaseline.CreateCopy();
+        options.PropertyNamingPolicy = Naming(namingPolicy);
+        options.PropertyNameCaseInsensitive = caseInsensitive;
         options.TypeInfoResolver = new DefaultJsonTypeInfoResolver
         {
             Modifiers = { info =>
@@ -41,13 +52,15 @@ public sealed class JsonConversionContract
         options.Converters.Insert(0, new ScopedConverterFactory(rootType));
         StrictDateTimeConverters.Configure(options);
         options.MakeReadOnly();
-        Options = options;
+        return options;
     }
 
     /// <summary>Gets the default camelCase, exact-match, warn-and-continue contract.</summary>
     public static JsonConversionContract Default { get; } = new(null);
-    /// <summary>Gets the read-only options for this contract.</summary>
-    public JsonSerializerOptions Options { get; }
+    /// <summary>Gets read-only options with operation-local metadata for this contract.</summary>
+    /// <remarks>A stable root can carry collectible runtime types in object slots. Its cached contract
+    /// must not retain the serializer's discovered metadata for those types.</remarks>
+    public JsonSerializerOptions Options => CreateOptions();
     /// <summary>Gets whether unmatched members refuse conversion.</summary>
     public bool RefuseUnmatchedMembers { get; }
 

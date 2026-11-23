@@ -26,11 +26,10 @@ public sealed class EtlV2ArtifactIdentityTests
         Assert.False(restored.Artifact.Pipeline.GetProperty("http").TryGetProperty("maxRetainedMetadataBytes", out _));
     }
 
-    // Spec 1190 adds the "jsonl" source kind. These hashes of the canonical artifact bytes were verified on origin/main
-    // before the addition, so they pin that CSV and HTTP JSON artifacts, and so their artifact ids, stay unchanged.
+    // The approved S-9 migration pins each source projection through the shared exact JSON value contract.
     [Theory]
-    [InlineData("httpJson", "25cdcf9e8b97ac27d4f403d2158f0d468a47e8b47bfd677b69487ba13872dc21")]
-    [InlineData("csv", "f2634391e2dd6fe33de1dff277c83562744e527ca4fac2c5800f9f1e280e5f5f")]
+    [InlineData("httpJson", "962310e12e298598a58e2846826db07a1369ec563821b67327d98896fb66f2cc")]
+    [InlineData("csv", "c7bf1e707ac6dfe25872e8a5317b1bee1b30fe77467c893503dfc06b48f2450e")]
     public void Persisted_v2_artifacts_keep_their_canonical_hash_per_source_kind(string kind, string expectedHash)
     {
         var pipeline = EtlV2TestPipelines.Create();
@@ -44,6 +43,6 @@ public sealed class EtlV2ArtifactIdentityTests
         var artifact = Assert.IsType<EtlArtifact>(new EtlArtifactCompiler().Compile("orders", 1, pipeline).Artifact);
 
         Assert.Equal(kind, artifact.Pipeline.GetProperty("source").GetProperty("kind").GetString());
-        Assert.Equal(expectedHash, artifact.ContentHash);
+        Assert.True(expectedHash == artifact.ContentHash, "First-stable hash freeze: changes require an explicit identity/migration decision.");
     }
 }

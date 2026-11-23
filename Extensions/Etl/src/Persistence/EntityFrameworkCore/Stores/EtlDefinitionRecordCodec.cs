@@ -87,7 +87,7 @@ internal static class EtlDefinitionRecordCodec
         object pipeline;
         using (var document = JsonDocument.Parse(row.PipelineJson))
             pipeline = ReadPipeline(row.FormatVersion, document.RootElement);
-        if (!StringComparer.Ordinal.Equals(WritePipeline(pipeline), row.PipelineJson))
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(WritePipeline(pipeline), row.PipelineJson))
             throw new InvalidDataException("The ETL draft row is not in the canonical pipeline representation.");
         DateTimeOffset updatedAt;
         try
@@ -260,7 +260,7 @@ internal static class EtlDefinitionRecordCodec
         var validated = ValidateArtifact(definitionId, artifact);
         if (artifact.DefinitionVersion != row.DefinitionVersion || artifact.FormatVersion != row.FormatVersion ||
             !StringComparer.Ordinal.Equals(validated.PipelineHash, row.PipelineHash) ||
-            !StringComparer.Ordinal.Equals(validated.ArtifactJson, row.ArtifactJson))
+            !Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(validated.ArtifactJson, row.ArtifactJson))
             throw new InvalidDataException("The published ETL artifact row does not match its version or pipeline hash.");
         return artifact;
     }

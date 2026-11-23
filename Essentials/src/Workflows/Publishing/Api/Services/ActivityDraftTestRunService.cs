@@ -193,7 +193,7 @@ public sealed class ActivityDraftTestRunService(
             draft,
             candidateVersionId,
             candidateVersion,
-            Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(layout.Records)) + JsonSerializer.SerializeToUtf8Bytes(layout.ActivityPresentation).LongLength), cancellationToken);
+            Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(layout.Records, Elsa.Serialization.Core.JsonBaseline.Options)) + JsonSerializer.SerializeToUtf8Bytes(layout.ActivityPresentation, Elsa.Serialization.Core.JsonBaseline.Options).LongLength), cancellationToken);
         if (!compilation.IsSuccessful || compilation.Template is null)
             return await RejectValidationAsync(
                 receipt,

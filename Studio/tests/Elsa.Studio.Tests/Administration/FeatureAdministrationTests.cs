@@ -120,7 +120,10 @@ public sealed class FeatureAdministrationTests
         await store.SaveAsync(snapshot.Revision, snapshot.Features.Select(pair => new FeatureConfigurationChange(pair.Key, true, pair.Value)).ToArray());
         using var saved = JsonDocument.Parse(await File.ReadAllTextAsync(host.ShellsFile), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
         Assert.Equal(unrelated, saved.RootElement.GetProperty("preserve").GetRawText());
-        Assert.Equal(strict, (await store.LoadAsync()).Features["Configured"].GetRawText());
+        var reopened = await store.LoadAsync();
+        Assert.Equal(strict, reopened.Features["Configured"].GetRawText());
+        Assert.Equal(1, reopened.Features["On"].GetProperty("n").GetInt32());
+        Assert.Equal("ok", reopened.Features["On"].GetProperty("text").GetString());
     }
 
     [Fact]

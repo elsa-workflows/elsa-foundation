@@ -146,7 +146,7 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests
         var queued = await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
             .ListAllAsync(new RuntimeSchedulerWorkQuery(executionId));
         Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work, Elsa.Serialization.Core.JsonBaseline.Options),
-            JsonSerializer.SerializeToElement(Assert.Single(queued, candidate => candidate.WorkItemId == work.WorkItemId))));
+            JsonSerializer.SerializeToElement(Assert.Single(queued, candidate => candidate.WorkItemId == work.WorkItemId), Elsa.Serialization.Core.JsonBaseline.Options)));
     }
 
     private static async Task AssertNativeQueueEmptyAsync(WorkflowExecutionHarness harness, string executionId)

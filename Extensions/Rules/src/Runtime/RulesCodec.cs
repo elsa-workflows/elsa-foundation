@@ -37,7 +37,7 @@ internal static class RulesCodec
                 rule.GetProperty("id").GetString()!, ReadFacts(rule.GetProperty("premises")),
                 new RuleFact(rule.GetProperty("conclusion").GetString()!))).ToArray());
         var canonical = CreateArtifact(program);
-        Require(canonical.CanonicalBytes.Span.SequenceEqual(bytes.Span), "rules.noncanonical-artifact");
+        Require(Elsa.Serialization.Core.JsonCanonicalForm.EqualsUtf8(canonical.CanonicalBytes, bytes), "rules.noncanonical-artifact");
         return program;
     }
 

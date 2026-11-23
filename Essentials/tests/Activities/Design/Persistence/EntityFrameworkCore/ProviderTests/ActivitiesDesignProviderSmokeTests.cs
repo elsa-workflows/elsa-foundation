@@ -209,6 +209,14 @@ internal static class ActivitiesDesignProviderSmoke
             var kindColumn = sql.DelimitIdentifier(nameof(ActivityDefinitionManagementProjectionRevision.ContentAuthorityKind));
             var resourceColumn = sql.DelimitIdentifier(nameof(ActivityDefinitionManagementProjectionRevision.ResourceId));
             Assert.True(providerMaterial.ContentAuthorityIsValid, $"Provider projection validity failed for {expectedProviderName}: {providerMaterial.ContentAuthorityJson}, kind={providerMaterial.ContentAuthorityKind}.");
+            var authorityStore = new EfActivityDesignStores(context);
+            Assert.NotNull(await authorityStore.FindDefinitionAsync(projection.ResourceId, "tenant-a", projection.ValidFromSequence));
+            var caseDrift = providerMaterial.ContentAuthorityJson!.Replace("provider", "Provider", StringComparison.Ordinal);
+            Assert.NotEqual(providerMaterial.ContentAuthorityJson, caseDrift);
+            await context.Database.ExecuteSqlRawAsync(string.Concat("UPDATE ", table, " SET ", canonicalColumn, " = {0} WHERE ", resourceColumn, " = {1}"), caseDrift, projection.ResourceId);
+            Assert.Null(await authorityStore.FindDefinitionAsync(projection.ResourceId, "tenant-a", projection.ValidFromSequence));
+            await context.Database.ExecuteSqlRawAsync(string.Concat("UPDATE ", table, " SET ", canonicalColumn, " = {0} WHERE ", resourceColumn, " = {1}"), providerMaterial.ContentAuthorityJson, projection.ResourceId);
+            Assert.NotNull(await authorityStore.FindDefinitionAsync(projection.ResourceId, "tenant-a", projection.ValidFromSequence));
             var escapedProjection = Projection($"projection-escaped-{suffix}", "tenant-a", ActivityContentAuthorityKind.ProviderSource, "é<&+\u2028\\\"", "source-é<&+\u2028\\\"");
             context.ActivityDefinitionManagementProjections.Add(escapedProjection);
             await context.SaveChangesAsync();

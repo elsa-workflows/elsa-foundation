@@ -59,7 +59,7 @@ internal sealed class RuleRoundEvaluator : IRuleRoundValidator
             _ = RuleRecordCodec.ReceiptRecordBytes(candidate);
             var equivalent = bytes.Length <= RuleLimits.MaxEnvelopeBytes
                 && candidate.SemanticReceiptSha256 == expected.SemanticReceiptSha256
-                && bytes.AsSpan().SequenceEqual(RuleRecordCodec.ReceiptBytes(expected));
+                && Elsa.Serialization.Core.JsonCanonicalForm.EqualsUtf8(bytes, RuleRecordCodec.ReceiptBytes(expected));
             return ValueTask.FromResult(new RuleRoundValidationResult(
                 equivalent ? RuleValidationDisposition.Equivalent : RuleValidationDisposition.Invalid,
                 equivalent ? null : "rules.incomplete-or-conflicting-receipt"));

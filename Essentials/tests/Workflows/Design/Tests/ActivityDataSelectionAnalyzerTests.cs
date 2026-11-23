@@ -231,12 +231,33 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [InlineData("direct")]
     [InlineData("typed")]
     [InlineData("json")]
-    [InlineData("json-pascal")]
     public async Task Missing_producer_is_invalid_even_when_occurrence_is_optional(string form)
     {
         using var provider = Provider();
         var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Read(form, "missing", optional: true)))));
         Assert.Equal("consumer/inputs/CustomerId", Assert.Single(result.Findings, finding => finding.Type == "ValueFlow/UnavailableProducer").Path);
+    }
+
+    [Theory]
+    [InlineData("""{"kind":"Variable","declaringScopeNodeId":"missing","DeclaringScopeNodeId":"workflow","variableKey":"missing","VariableKey":"customer"}""")]
+    [InlineData("""{"kind":"WorkflowRequest","memberKey":"missing","MemberKey":"Customer"}""")]
+    public async Task Differently_cased_members_cannot_repair_an_invalid_canonical_identity(string parameter)
+    {
+        using var provider = Provider();
+        var document = Document(Sequence(Node("consumer", Input(PortableJson("\"parameters\":{\"p\":" + parameter + "}"))))) with
+        {
+            Variables = [Variable("customer", "Customer")],
+            Inputs = [new("customer", "Customer", new("String"), null, "Customer", null, true)]
+        };
+        Assert.NotEmpty((await Analyzer(provider).AnalyzeAsync(document)).Findings);
+    }
+
+    [Fact]
+    public async Task Pascal_case_portable_own_members_are_refused_instead_of_binding_a_different_contract()
+    {
+        using var provider = Provider();
+        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Read("json-pascal", "producer")))));
+        Assert.Contains(result.Findings, finding => finding.Type == "ActivityData/InvalidSource");
     }
 
     [Theory]
@@ -247,18 +268,18 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     public async Task Recognized_portable_json_refuses_malformed_contracts_without_guessing_discriminators(string parameter)
     {
         using var provider = Provider();
-        var value = PortableJson("\"Parameters\":{\"p\":" + parameter + "}");
+        var value = PortableJson("\"parameters\":{\"p\":" + parameter + "}");
         var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Input(value)))));
         Assert.Equal("consumer/inputs/CustomerId", Assert.Single(result.Findings, finding => finding.Type == "ActivityData/InvalidSource").Path);
     }
 
     [Theory]
-    [InlineData("""{"kind":"Variable","declaringScopeNodeId":"missing","DeclaringScopeNodeId":"workflow","variableKey":"missing","VariableKey":"customer"}""")]
-    [InlineData("""{"kind":"WorkflowRequest","memberKey":"missing","MemberKey":"Customer"}""")]
-    public async Task Portable_json_variable_and_request_aliases_resolve_the_effective_owned_identity(string parameter)
+    [InlineData("""{"kind":"Variable","declaringScopeNodeId":"workflow","DeclaringScopeNodeId":"missing","variableKey":"customer","VariableKey":"missing"}""")]
+    [InlineData("""{"kind":"WorkflowRequest","memberKey":"Customer","MemberKey":"missing"}""")]
+    public async Task Portable_json_resolves_exact_owned_identity_and_ignores_differently_cased_decoys(string parameter)
     {
         using var provider = Provider();
-        var document = Document(Sequence(Node("consumer", Input(PortableJson("\"Parameters\":{\"p\":" + parameter + "}"))))) with
+        var document = Document(Sequence(Node("consumer", Input(PortableJson("\"parameters\":{\"p\":" + parameter + "}"))))) with
         {
             Variables = [Variable("customer", "Customer")],
             Inputs = [new("customer", "Customer", new("String"), null, "Customer", null, true)]
@@ -271,7 +292,8 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     {
         using var provider = Provider();
         var value = PortableJson("""
-            "parameters":{},"Parameters":{"p":{"kind":"ActivityResult","producerNodeId":"producer","projectionKey":"$result","memberPath":["id"]}}
+            "parameters":{"p":{"kind":"ActivityResult","producerNodeId":"producer","projectionKey":"$result","memberPath":["id"]}},
+            "Parameters":{"p":{"kind":"ActivityResult","producerNodeId":"producer","projectionKey":"$result"}}
             """);
         var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Input(value)))));
         Assert.Contains(result.Findings, finding => finding.Type == "ActivityData/UnsupportedMemberSelection");
@@ -281,7 +303,6 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [InlineData("direct")]
     [InlineData("typed")]
     [InlineData("json")]
-    [InlineData("json-pascal")]
     public async Task Named_projection_is_resolved_from_the_actual_producer_contract_without_metadata(string form)
     {
         using var provider = Provider();
@@ -293,7 +314,6 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [InlineData("direct")]
     [InlineData("typed")]
     [InlineData("json")]
-    [InlineData("json-pascal")]
     public async Task Direct_and_portable_results_keep_the_same_structured_scope_boundary(string form)
     {
         using var provider = Provider();

@@ -31,7 +31,7 @@ internal sealed partial class EfEtlRuntimeStore
         {
             var prior = await ConnectorRowAsync(key, cancellationToken);
             if (prior is null) return new(EtlStoreStatus.Conflict, null);
-            var status = run.InvocationFingerprint == fingerprint && prior.BindingsJson == bindingsJson ? EtlStoreStatus.Replay : EtlStoreStatus.Conflict;
+            var status = run.InvocationFingerprint == fingerprint && Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(prior.BindingsJson, bindingsJson) ? EtlStoreStatus.Replay : EtlStoreStatus.Conflict;
             return new(status, await ConnectorViewAsync(run, prior, cancellationToken));
         }
         run = EtlRuntimeRecordCodec.RunRecord(invocation, key.RunKey, fingerprint, null, NowTicks());
@@ -114,7 +114,7 @@ internal sealed partial class EfEtlRuntimeStore
         try { preparedJson = EtlConnectorRecordCodec.ValidatePrepared(state.Pipeline, state.Bindings, prepared); }
         catch (Exception exception) when (exception is ArgumentException or OverflowException) { return EtlStoreStatus.Invalid; }
         if (connector.PreparedJson is not null)
-            return connector.PreparedJson == preparedJson ? EtlStoreStatus.Replay : EtlStoreStatus.Conflict;
+            return Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(connector.PreparedJson, preparedJson) ? EtlStoreStatus.Replay : EtlStoreStatus.Conflict;
         var now = NowTicks();
         if (!HasPreparationLease(run, lease, now)) return run.Status >= (int)EtlRunStatus.Succeeded ? EtlStoreStatus.Terminal : EtlStoreStatus.LeaseLost;
         var expiry = run.PreparationExpiresAtUtcTicks!.Value;
@@ -246,7 +246,7 @@ internal sealed partial class EfEtlRuntimeStore
         await ReadConnectorPositionAsync(row, state.Pipeline, state.Bindings, state.Prepared, cancellationToken);
         var now = NowTicks();
         if (run.Status != (int)EtlRunStatus.Running || !HasConnectorAuthority(row, lease.Owner, lease.Fence, now) ||
-            row.PositionJson != EtlConnectorRecordCodec.Write(lease.Position)) return EtlStoreStatus.LeaseLost;
+            !Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(row.PositionJson, EtlConnectorRecordCodec.Write(lease.Position))) return EtlStoreStatus.LeaseLost;
         var expiry = row.ExpiresAtUtcTicks!.Value;
         row.Owner = release ? null : row.Owner;
         row.ExpiresAtUtcTicks = release ? null : Expiry(now, options.PartitionLease);

@@ -21,6 +21,23 @@ public static class JsonCanonicalForm
     public static bool EqualsNodes(JsonNode? left, JsonNode? right) =>
         Equals(JsonHashInput.SerializeToElement(left), JsonHashInput.SerializeToElement(right));
 
+    /// <summary>Compares serialized JSON values exactly; a missing document remains distinct from the JSON null value.</summary>
+    public static bool EqualsJson(string? left, string? right)
+    {
+        if (left is null || right is null) return left is null && right is null;
+        using var a = JsonDocument.Parse(left, new JsonDocumentOptions { MaxDepth = 1000 });
+        using var b = JsonDocument.Parse(right, new JsonDocumentOptions { MaxDepth = 1000 });
+        return Equals(a.RootElement, b.RootElement);
+    }
+
+    /// <summary>Compares UTF-8 JSON documents by their exact values, independently of their retained spelling.</summary>
+    public static bool EqualsUtf8(ReadOnlyMemory<byte> left, ReadOnlyMemory<byte> right)
+    {
+        using var a = JsonDocument.Parse(left, new JsonDocumentOptions { MaxDepth = 1000 });
+        using var b = JsonDocument.Parse(right, new JsonDocumentOptions { MaxDepth = 1000 });
+        return Equals(a.RootElement, b.RootElement);
+    }
+
     internal static byte[] GetBytes(JsonElement value)
     {
         using var stream = new MemoryStream();

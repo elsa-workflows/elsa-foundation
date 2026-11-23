@@ -243,7 +243,9 @@ public sealed class ActivityVersionReconciler(
     {
         var incomingPalette = incomingVersion.DesignFacets.Where(facet => facet.Kind == "elsa.activity-palette").ToArray();
         var existingPalette = existingVersion.DesignFacets.Where(facet => facet.Kind == "elsa.activity-palette").ToArray();
-        if (JsonSerializer.Serialize(incomingPalette) != JsonSerializer.Serialize(existingPalette))
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(
+                JsonSerializer.SerializeToElement(incomingPalette, Elsa.Serialization.Core.JsonBaseline.Options),
+                JsonSerializer.SerializeToElement(existingPalette, Elsa.Serialization.Core.JsonBaseline.Options)))
         {
             var refresh = ActivityDefinitionVersion.From(existingVersion);
             refresh.TenantId = existingVersion.TenantId;

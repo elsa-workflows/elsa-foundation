@@ -27,8 +27,8 @@ internal sealed record ActivityDataReadBinding(
     /// <summary>Whether this reads one member of its source rather than the whole value.</summary>
     public bool IsMemberRead => Role is "ActivityResultMember" or "VariableMember";
 
-    // Match the publication compiler's descriptor payload profile, including case-insensitive
-    // properties, last-wins aliases and polymorphic metadata in canonicalized object order.
+    // Match the publication compiler's exact owned member names and permit polymorphic metadata
+    // in canonicalized object order. Dictionary keys remain exact.
     // Only existing expression contract types are deserialized; arbitrary authored CLR values
     // must never be serialized or inspected through their getters here.
     private static readonly JsonSerializerOptions PortableExpressionOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
@@ -79,9 +79,9 @@ internal sealed record ActivityDataReadBinding(
             yield break;
         }
         // Preserve the existing whole-role selection refusal on the effective parameters object.
-        // The serializer chooses the last case-insensitive property alias; dictionary keys remain exact.
+        // The serializer chooses the last exact member occurrence; a differently cased name is not that member.
         var parameters = payload.EnumerateObject().Last(property =>
-            property.Name.Equals("parameters", StringComparison.OrdinalIgnoreCase)).Value;
+            property.Name.Equals("parameters", StringComparison.Ordinal)).Value;
         foreach (var parameter in portable.Parameters)
         {
             var binding = Parameter(parameter.Value);

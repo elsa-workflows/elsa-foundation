@@ -799,7 +799,7 @@ public sealed class ActivityTemplatePlacer(
             if (entryChild is not null)
                 values["entryNodeId"] = JsonSerializer.SerializeToElement(entryChild.Root.ExecutableNodeId);
         }
-        return new(descriptor.ConsumerKey, descriptor.SchemaVersion, JsonSerializer.SerializeToElement(values));
+        return new(descriptor.ConsumerKey, descriptor.SchemaVersion, JsonSerializer.SerializeToElement(values, Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     // #1007: resolves the authored node id the top-level boundary must adopt as its ExecutableNodeId when the

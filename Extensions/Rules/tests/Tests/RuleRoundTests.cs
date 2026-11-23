@@ -96,12 +96,13 @@ public class RuleRoundTests
     }
 
     [Fact]
-    public void Noncanonical_artifact_bytes_are_rejected_even_with_matching_content_hash()
+    public void Artifact_accepts_equal_JSON_spelling_with_the_same_content_hash()
     {
         var artifact = RulesCodec.CreateArtifact(Witness());
         var padded = Encoding.UTF8.GetBytes(" " + Encoding.UTF8.GetString(artifact.CanonicalBytes.Span));
         var hash = RuleRecordCodec.JsonHash(padded);
-        Assert.Throws<InvalidDataException>(() => RulesCodec.ReadArtifact(new(1, "rules:" + hash, hash, padded)));
+        Assert.Equal(artifact.Sha256, hash);
+        Assert.Equal(artifact.Sha256, RulesCodec.CreateArtifact(RulesCodec.ReadArtifact(new(1, "rules:" + hash, hash, padded))).Sha256);
     }
 
     [Fact]

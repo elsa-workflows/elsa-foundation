@@ -77,6 +77,10 @@ public static class StrictDateTimeConverters
             var text = ReadText(ref reader, type);
             if (text.IndexOf('T') is var separator && separator >= 0)
             {
+                // Validate the complete supplied ISO wrapper before selecting its wall-clock time.
+                // Parsing only the time would silently discard malformed dates and offsets.
+                var valid = HasOffset(text) ? reader.TryGetDateTimeOffset(out _) : reader.TryGetDateTime(out _);
+                if (!valid) throw new JsonException("Invalid ISO 8601 TimeOnly.");
                 text = text[(separator + 1)..];
                 var offset = text.IndexOfAny(['Z', '+', '-']);
                 if (offset >= 0) text = text[..offset];

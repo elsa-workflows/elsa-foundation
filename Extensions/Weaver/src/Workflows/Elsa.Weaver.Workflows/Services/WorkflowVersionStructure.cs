@@ -142,10 +142,10 @@ internal static class WorkflowVersionStructure
             if (inputs.Length > 0) aspects.Add("inputs");
             if (Differing(item.Outputs, other.Outputs).Length > 0) aspects.Add("outputs");
             if (!item.ScopePath.SequenceEqual(other.ScopePath, StringComparer.Ordinal) || item.Slot != other.Slot) aspects.Add("scope");
-            if (item.Intrinsic != other.Intrinsic) aspects.Add("intrinsic");
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(item.Intrinsic, other.Intrinsic)) aspects.Add("intrinsic");
             if (item.Placement != other.Placement) aspects.Add("placement");
-            if (item.Structure != other.Structure) aspects.Add("structure");
-            if (item.ContainerMetadata != other.ContainerMetadata) aspects.Add("containerMetadata");
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(item.Structure, other.Structure)) aspects.Add("structure");
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(item.ContainerMetadata, other.ContainerMetadata)) aspects.Add("containerMetadata");
             var reordered = item.SlotOrder
                 .Where(slot => other.SlotOrder.TryGetValue(slot.Key, out var before)
                     && !slot.Value.Where(before.Contains).SequenceEqual(before.Where(slot.Value.Contains), StringComparer.Ordinal))
@@ -161,7 +161,7 @@ internal static class WorkflowVersionStructure
         var connectionsRemoved = theirConnections.Keys.Where(item => !mineConnections.ContainsKey(item)).ToArray();
         // The same connection in both whose endpoints (rewired) or metadata (its label, default flag, policy or configuration) changed.
         var connectionsChanged = mineConnections.Values
-            .Where(item => theirConnections.TryGetValue(item, out var before) && (before.Metadata != item.Metadata || !before.SameEndpoints(item)))
+            .Where(item => theirConnections.TryGetValue(item, out var before) && (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(before.Metadata, item.Metadata) || !before.SameEndpoints(item)))
             .Select(item => (Now: item, Before: theirConnections[item])).ToArray();
         var reasons = version.IncompleteReasons.Concat(comparedTo.IncompleteReasons).Distinct().ToArray();
         return new
@@ -200,15 +200,15 @@ internal static class WorkflowVersionStructure
     private static object ChangedConnectionRow(Connection now, Connection before) => new
     {
         container = now.Container, connectionId = now.Key, source = now.Source, sourcePort = now.SourcePort, target = now.Target, targetPort = now.TargetPort,
-        aspects = new[] { now.SameEndpoints(before) ? null : "endpoints", now.Metadata == before.Metadata ? null : "metadata" }.OfType<string>().ToArray()
+        aspects = new[] { now.SameEndpoints(before) ? null : "endpoints", Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(now.Metadata, before.Metadata) ? null : "metadata" }.OfType<string>().ToArray()
     };
 
     private static string[] Differing(IReadOnlyDictionary<string, string> left, IReadOnlyDictionary<string, string> right) =>
         left.Keys.Union(right.Keys, StringComparer.Ordinal)
-            .Where(key => !left.TryGetValue(key, out var mine) || !right.TryGetValue(key, out var theirs) || mine != theirs)
+            .Where(key => !left.TryGetValue(key, out var mine) || !right.TryGetValue(key, out var theirs) || !Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(mine, theirs))
             .Order(StringComparer.Ordinal).ToArray();
 
-    // Each argument's whole authored state by its reference key, compared as JSON text and never disclosed.
+    // Each argument's whole authored state by its reference key, compared as a JSON value and never disclosed.
     private static IReadOnlyDictionary<string, string> Arguments(IEnumerable<ArgumentState>? arguments)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);

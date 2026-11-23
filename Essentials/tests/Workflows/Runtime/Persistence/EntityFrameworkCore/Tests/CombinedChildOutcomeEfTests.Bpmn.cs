@@ -76,7 +76,7 @@ public sealed partial class CombinedChildOutcomeEfTests
             try
             {
                 var actualQueued = await cut.Enqueued.Task.WaitAsync(TimeSpan.FromSeconds(30));
-                Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(actualQueued)));
+                Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(actualQueued, Elsa.Serialization.Core.JsonBaseline.Options)));
                 var inflight = Assert.IsType<RuntimePostCommitOutboxItem>(await FindOutboxItemAsync(second, failedSource.OutboxItemId));
                 Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, inflight.Status);
                 Assert.True(inflight.DeliveryFencingToken > 0);

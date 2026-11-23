@@ -605,22 +605,15 @@ internal static class ActivityAuthorityIntegrity
         string? sourceId,
         ActivityContentAuthorityKind kind)
     {
-        var material = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new
+        // Physical row witness, paired with ActivityAuthorityValiditySql.SqlServer. This binds
+        // stored spellings, token columns and decoded scalars; it is not JSON value identity.
+        // In particular, canonical JSON equality cannot detect corruption of a same-write witness.
+        var material = string.Join("|", new[]
         {
-            HasRaw = raw is not null, Raw = Parse(raw),
-            HasCanonical = canonical is not null, Canonical = Parse(canonical),
-            HasAuthorityKeyToken = authorityKeyToken is not null, AuthorityKeyToken = Parse(authorityKeyToken),
-            HasSourceIdToken = sourceIdToken is not null, SourceIdToken = Parse(sourceIdToken),
-            authorityKey, sourceId, kind
-        }, _ => null);
-        return Elsa.Serialization.Core.JsonHashInput.Hash(material).ToUpperInvariant();
-    }
-
-    private static JsonElement? Parse(string? value)
-    {
-        if (value is null) return null;
-        using var document = JsonDocument.Parse(value);
-        return document.RootElement.Clone();
+            raw, canonical, authorityKeyToken, sourceIdToken, authorityKey, sourceId,
+            ((int)kind).ToString(CultureInfo.InvariantCulture)
+        }.Select(value => value is null ? "-1:" : $"{value.Length.ToString(CultureInfo.InvariantCulture)}:{value}"));
+        return Convert.ToHexString(SHA256.HashData(Encoding.Unicode.GetBytes(material)));
     }
 }
 
