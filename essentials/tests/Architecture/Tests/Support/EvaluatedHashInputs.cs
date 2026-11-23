@@ -7,6 +7,8 @@ namespace Elsa.Architecture.Tests;
 internal sealed class EvaluatedHashInputs(string configuration)
 {
     private readonly Dictionary<string, IReadOnlyList<string>> cache = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IReadOnlySet<string>> compileSources = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> intermediateRoots = new(StringComparer.Ordinal);
     private readonly HashSet<string> evaluating = new(StringComparer.Ordinal);
 
     internal IReadOnlyList<string> Read(string project)
@@ -21,11 +23,17 @@ internal sealed class EvaluatedHashInputs(string configuration)
             // Resolve through PATH so an installed build-slot wrapper remains in force. The shared
             // helper clears inherited testhost MSBuild variables and bounds/cleans up the process.
             var startDirectory = Path.GetDirectoryName(project)!;
-            var (code, text) = ChildProcess.Run("dotnet", [.. common, "-getProperty:MSBuildAllProjects", "-getItem:Compile,AdditionalFiles,EditorConfigFiles,Analyzer,ProjectReference"], workingDirectory: startDirectory, timeout: TimeSpan.FromMinutes(5));
+            var (code, text) = ChildProcess.Run("dotnet", [.. common, "-getProperty:MSBuildAllProjects,IntermediateOutputPath", "-getItem:Compile,AdditionalFiles,EditorConfigFiles,Analyzer,ProjectReference"], workingDirectory: startDirectory, timeout: TimeSpan.FromMinutes(5));
             if (code != 0) throw new InvalidOperationException($"SDK input evaluation failed for {project}: {text}");
             var beginning = text.IndexOf('{');
             if (beginning < 0) throw new InvalidOperationException($"SDK input evaluation returned no JSON for {project}.");
             using var document = JsonDocument.Parse(text[beginning..]);
+            compileSources[project] = document.RootElement.GetProperty("Items").GetProperty("Compile").EnumerateArray()
+                .Select(item => Path.GetFullPath(item.GetProperty("FullPath").GetString()!))
+                .ToHashSet(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            var intermediate = document.RootElement.GetProperty("Properties").GetProperty("IntermediateOutputPath").GetString();
+            if (string.IsNullOrWhiteSpace(intermediate)) throw new InvalidOperationException($"SDK input evaluation omitted IntermediateOutputPath for {project}.");
+            intermediateRoots[project] = Path.GetFullPath(intermediate, startDirectory);
             var (importCode, importOutput) = ChildProcess.Run("dotnet", [.. common, "-preprocess:" + imports], workingDirectory: startDirectory, timeout: TimeSpan.FromMinutes(5));
             if (importCode != 0) throw new InvalidOperationException($"SDK import evaluation failed for {project}: {importOutput}");
             var settings = ParseImports(File.ReadAllText(imports));
@@ -43,6 +51,9 @@ internal sealed class EvaluatedHashInputs(string configuration)
             if (File.Exists(imports)) File.Delete(imports);
         }
     }
+
+    internal IReadOnlySet<string> CompileSources(string project) { _ = Read(project); return compileSources[Path.GetFullPath(project)]; }
+    internal string IntermediateRoot(string project) { _ = Read(project); return intermediateRoots[Path.GetFullPath(project)]; }
 
     internal static IReadOnlyList<string> Close(IReadOnlyList<string> own, IEnumerable<IReadOnlyList<string>> dependencies) =>
         own.Concat(dependencies.SelectMany(files => files)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();

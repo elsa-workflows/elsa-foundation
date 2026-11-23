@@ -4,6 +4,90 @@ namespace Elsa.Architecture.Tests;
 
 public sealed class JsonHashSourceDocumentsTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4096)]
+    public void Authenticated_generated_source_can_be_read_from_raw_or_compressed_PDB_content(int padding)
+    {
+        using var fixture = new Sources();
+        var path = Path.Join(fixture.Root, "obj", "generated", "Recipe.g.cs");
+        var image = fixture.Build("public static class Recipe { public static int Run() => 1; } //" + new string('x', padding), true, path);
+        var bytes = File.ReadAllBytes(path);
+        File.Delete(path);
+        var map = JsonHashSourceDocuments.Read(image, fixture.Root, generatedSourceRoots: [Path.Join(fixture.Root, "obj")]);
+        Assert.Empty(map.Errors);
+        var document = Assert.Single(map.Documents.Values);
+        Assert.Equal("embedded-generated", document.Origin);
+        Assert.Equal(bytes, document.EmbeddedSource);
+        Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)), document.Sha256);
+        Assert.Contains(map.Methods.Values, method => method.Documents.Contains("obj/generated/Recipe.g.cs"));
+    }
+
+    [Fact]
+    public void Embedded_source_does_not_waive_a_missing_authored_file_or_a_changed_generated_file()
+    {
+        using var fixture = new Sources();
+        var image = fixture.Build("public static class Recipe { public static int Run() => 1; }", true);
+        File.Delete(Path.Join(fixture.Root, "Recipe.cs"));
+        Assert.Contains(JsonHashSourceDocuments.Read(image, fixture.Root, generatedSourceRoots: [Path.Join(fixture.Root, "obj")]).Errors,
+            error => error.StartsWith("Missing PDB source document", StringComparison.Ordinal));
+        var generated = Path.Join(fixture.Root, "obj", "Recipe.g.cs");
+        image = fixture.Build("public static class Recipe { public static int Run() => 1; }", true, generated);
+        File.WriteAllText(generated, "public static class Recipe { public static int Run() => 2; }");
+        Assert.Contains(JsonHashSourceDocuments.Read(image, fixture.Root, generatedSourceRoots: [Path.Join(fixture.Root, "obj")]).Errors,
+            error => error.StartsWith("PDB source checksum mismatch", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void External_sources_require_an_exact_evaluated_compile_item_and_the_matching_source_checksum()
+    {
+        using var fixture = new Sources();
+        using var dependency = new Sources();
+        var external = Path.Join(dependency.Root, "Recipe.cs");
+        var image = fixture.Build("public static class Recipe { public static int Run() => 1; }", sourcePath: external);
+        Assert.Contains(JsonHashSourceDocuments.Read(image, fixture.Root).Errors, error => error.StartsWith("Unmapped", StringComparison.Ordinal));
+        Assert.Contains(JsonHashSourceDocuments.Read(image, fixture.Root, externalCompileSources: new HashSet<string> { external + ".other" }).Errors,
+            error => error.StartsWith("Unmapped", StringComparison.Ordinal));
+        var inputs = new HashSet<string> { external };
+        var map = JsonHashSourceDocuments.Read(image, fixture.Root, externalCompileSources: inputs);
+        Assert.Empty(map.Errors);
+        var document = Assert.Single(map.Documents.Values);
+        Assert.Equal("external-compile", document.Origin);
+        Assert.Equal(external, document.Path);
+        Assert.Null(document.EmbeddedSource);
+        File.WriteAllText(external, "public static class Recipe { public static int Run() => 2; }");
+        Assert.Contains(JsonHashSourceDocuments.Read(image, fixture.Root, externalCompileSources: inputs).Errors,
+            error => error.StartsWith("PDB source checksum mismatch", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_compile_item_cannot_reclassify_an_ambiguous_checkout_mapping_as_external()
+    {
+        using var fixture = new Sources();
+        var image = fixture.Build("public static class Recipe { public static int Run() => 1; }");
+        var path = Path.Join(fixture.Root, "Recipe.cs");
+        var maps = new Dictionary<string, string> { [fixture.Root] = Path.Join(fixture.Root, "other") };
+        Assert.Contains(JsonHashSourceDocuments.Read(image, fixture.Root, maps, new HashSet<string> { path }).Errors,
+            error => error.StartsWith("Unmapped or ambiguous", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void An_outside_compile_item_cannot_erase_ambiguous_explicit_checkout_mappings()
+    {
+        using var fixture = new Sources();
+        using var dependency = new Sources();
+        var external = Path.Join(dependency.Root, "shared", "Recipe.cs");
+        var image = fixture.Build("public static class Recipe { public static int Run() => 1; }", sourcePath: external);
+        var maps = new Dictionary<string, string>
+        {
+            [dependency.Root] = Path.Join(fixture.Root, "a"),
+            [Path.Join(dependency.Root, "shared")] = Path.Join(fixture.Root, "b")
+        };
+        Assert.Null(JsonHashSourceDocuments.Resolve(external, fixture.Root, maps));
+        Assert.Contains(JsonHashSourceDocuments.Read(image, fixture.Root, maps, new HashSet<string> { external }).Errors,
+            error => error.StartsWith("Unmapped or ambiguous", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Matching_symbols_bind_verified_source_and_async_kickoff()
     {
@@ -160,11 +244,12 @@ public sealed class JsonHashSourceDocumentsTests
     {
         internal string Root { get; } = Path.Join(RepoPaths.RepoRoot, ".agent-prefs", "s9-pdb-source-" + Guid.NewGuid().ToString("N"));
         internal Sources() => Directory.CreateDirectory(Root);
-        internal string Build(string source)
+        internal string Build(string source, bool embedSources = false, string? sourcePath = null)
         {
-            var path = Path.Join(Root, "Recipe.cs");
+            var path = sourcePath ?? Path.Join(Root, "Recipe.cs");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, source);
-            var compiled = FixtureCompiler.CompilePortable("S9.PdbRecipe", path);
+            var compiled = FixtureCompiler.CompilePortable("S9.PdbRecipe", embedSources, path);
             var image = Path.Join(Root, "S9.PdbRecipe.dll");
             File.WriteAllBytes(image, compiled.Image);
             File.WriteAllBytes(Path.ChangeExtension(image, ".pdb"), compiled.Symbols);

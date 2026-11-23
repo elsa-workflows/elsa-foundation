@@ -9,7 +9,8 @@ namespace Elsa.Architecture.Tests;
 /// <summary>The hash inventory includes executable hosts and Studio assemblies as well as runtime libraries.</summary>
 internal sealed class ShippingHashAssemblies : IDisposable
 {
-    internal sealed record Project(string Path, string AssemblyPath, string? ImageSha256 = null, Guid? ImageMvid = null);
+    internal sealed record Project(string Path, string AssemblyPath, string? ImageSha256 = null, Guid? ImageMvid = null,
+        IReadOnlySet<string>? CompileSources = null, string? IntermediateRoot = null);
     internal IReadOnlyList<Project> Projects { get; }
     internal IReadOnlyList<Assembly> Assemblies { get; }
     internal IReadOnlyList<string> Errors { get; }
@@ -25,12 +26,15 @@ internal sealed class ShippingHashAssemblies : IDisposable
     internal static ShippingHashAssemblies Load(string repoRoot, string configuration, Func<Project, IReadOnlyList<string>>? evaluatedInputs = null)
     {
         var projects = Discover(repoRoot, configuration);
-        var errors = ValidateInputs(repoRoot, projects, configuration, evaluatedInputs);
+        var evaluator = new EvaluatedHashInputs(configuration);
+        var errors = ValidateInputs(repoRoot, projects, configuration, evaluatedInputs ?? (project => evaluator.Read(project.Path)));
         if (errors.Count != 0) return new(projects, [], errors, static (_, _) => null);
         projects = projects.Select(project => project with
         {
             ImageSha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(project.AssemblyPath))),
-            ImageMvid = ImageMvid(project.AssemblyPath)
+            ImageMvid = ImageMvid(project.AssemblyPath),
+            CompileSources = evaluatedInputs is null ? evaluator.CompileSources(project.Path) : null,
+            IntermediateRoot = evaluatedInputs is null ? evaluator.IntermediateRoot(project.Path) : null
         }).ToArray();
         var paths = projects.Where(project => File.Exists(project.AssemblyPath))
             .GroupBy(project => AssemblyName.GetAssemblyName(project.AssemblyPath).Name!, StringComparer.Ordinal)

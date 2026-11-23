@@ -65,18 +65,22 @@ internal static class FixtureCompiler
     }
 
     internal static PortableImage CompilePortable(string assemblyName, params string[] sources)
+        => CompilePortable(assemblyName, embedSources: false, sources);
+
+    internal static PortableImage CompilePortable(string assemblyName, bool embedSources, params string[] sources)
     {
         var trees = sources.Select(path =>
         {
             using var stream = File.OpenRead(path);
-            return CSharpSyntaxTree.ParseText(SourceText.From(stream, Encoding.UTF8, SourceHashAlgorithm.Sha256),
+            return CSharpSyntaxTree.ParseText(SourceText.From(stream, Encoding.UTF8, SourceHashAlgorithm.Sha256, canBeEmbedded: embedSources),
                 new CSharpParseOptions(LanguageVersion.Latest), path);
-        });
+        }).ToArray();
         var compilation = CSharpCompilation.Create(assemblyName, trees, Platform.Value.References,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Debug));
         using var image = new MemoryStream();
         using var symbols = new MemoryStream();
         var result = compilation.Emit(image, pdbStream: symbols,
+            embeddedTexts: embedSources ? trees.Select(tree => EmbeddedText.FromSource(tree.FilePath, tree.GetText())) : [],
             options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb, pdbFilePath: assemblyName + ".pdb",
                 pdbChecksumAlgorithm: System.Security.Cryptography.HashAlgorithmName.SHA256));
         if (!result.Success) throw new InvalidOperationException(string.Join(Environment.NewLine, result.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));

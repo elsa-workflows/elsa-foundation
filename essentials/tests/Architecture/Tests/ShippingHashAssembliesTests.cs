@@ -84,11 +84,13 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
             var maps = new Dictionary<string, string> { ["/_/"] = RepoPaths.RepoRoot };
             foreach (var project in inventory.Projects)
             {
-                var sources = JsonHashSourceDocuments.Read(project.AssemblyPath, RepoPaths.RepoRoot, maps);
+                var sources = JsonHashSourceDocuments.Read(project.AssemblyPath, RepoPaths.RepoRoot, maps, project.CompileSources,
+                    project.IntermediateRoot is null ? null : [project.IntermediateRoot]);
                 if (sources.ImageMvid != project.ImageMvid) sourceErrors.Add($"Source/image MVID mismatch: {project.Path}");
                 sourceErrors.AddRange(sources.Errors);
                 foreach (var document in sources.Documents.Values)
-                    yield return new { Project = Path.GetRelativePath(RepoPaths.RepoRoot, project.Path).Replace('\\', '/'), project.ImageMvid, document.Path, document.Sha256 };
+                    yield return new { Project = Path.GetRelativePath(RepoPaths.RepoRoot, project.Path).Replace('\\', '/'), project.ImageMvid,
+                        document.Path, document.Sha256, document.Origin, document.EmbeddedSource };
             }
         }
 
