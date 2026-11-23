@@ -11,8 +11,9 @@ namespace Kernel.Native.Run;
 internal static class PostgresRootOperatorChecks
 {
     internal const string SuspendId = "pause/\0once";
+    private const string ResumeId = "resume-after-restart";
 
-    internal static async Task<int> RunAsync(string[]? previous, bool owned = true, bool inBatch = false)
+    internal static async Task<int> RunAsync(string[]? previous, bool owned = true, bool inBatch = false, bool resume = false)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a fresh dedicated PostgreSQL database.");
@@ -49,19 +50,19 @@ internal static class PostgresRootOperatorChecks
             await using (var owner = await host.TryActivateAsync(ct) ?? throw new InvalidOperationException("Expected a new partition owner."))
             {
                 while (await basic.GetAsync(blue, a, ct) is null || await basic.GetAsync(blue, b, ct) is null || await store.ReadFirstRootAsync(PostgresMultiRootClient.Secondary, c.Id, ct) is null ||
-                    await basic.GetAsync(blue, completed, ct) is null) await RunPass();
+                    await basic.GetAsync(blue, completed, ct) is null) await Pass(owner);
                 var ending = (await store.ReadFirstRootAsync("blue", completed.Id, ct))!;
                 var frame = Json.Read<NativeState>(ending.State!).Frames.Values.Single().Id;
-                await basic.SendAsync(blue, new Contract.Target.Ref(completed), "finish", CompositeSignal.Kind, Json.Write(new CompositeSignal(frame, "approve", "done")), cancellationToken: ct);
-                while ((await basic.GetAsync(blue, completed, ct))?.Header.Status != Contract.ActorStatus.Finished) await RunPass();
+                await PostgresMultiRootClient.Send(basic, blue, completed, "finish", Json.Write(new CompositeSignal(frame, "approve", "done")),
+                    Contract.AdmissionOutcome.Accepted, ct);
+                Check((await Send(blue, completed, "pending-terminal-op", Contract.Kinds.Suspend)).Outcome == Contract.AdmissionOutcome.Accepted,
+                    "a waiting root admits Suspend after its final ordinary input");
+                var command = (await admission.ReadDueRootOperatorAsync(blue.Tenant, completed.Id, ct))!;
+                while (await admission.ReadDueRootOperatorAsync(blue.Tenant, completed.Id, ct) is not null) await Pass(owner);
+                var terminal = await Image(completed);
+                Check(terminal.Status == InstanceStatus.Finished && terminal.Revision == ending.Revision + 1 && !terminal.Suspended &&
+                    await Settled(command, currentCheckpoint: false), "an admitted Suspend after terminal completion settles without a new checkpoint");
 
-                async Task RunPass()
-                {
-                    await owner.WokenAsync(null, ct);
-                    await owner.RunAsync(ct);
-                    if (!((Worker)owner).Owns) throw new InvalidOperationException("The workflow owner lost its fence.");
-                    await Task.Delay(10, ct);
-                }
             }
             Check((await Send(blue, completed, "terminal-op", Contract.Kinds.Suspend)).Outcome == Contract.AdmissionOutcome.Refused,
                 "a new suspension refuses a finished workflow");
@@ -81,8 +82,9 @@ internal static class PostgresRootOperatorChecks
                 "an authorized exact-ref suspension is admitted");
             Check((await basic.SendAsync(blue, new Contract.Target.Ref(a), SuspendId, Contract.Kinds.Suspend, cancellationToken: ct)).Outcome ==
                 Contract.AdmissionOutcome.Refused, "replay checks the current host grant");
-            Check((await basic.SendAsync(blue, new Contract.Target.Ref(a), "after-command", "input", "pending", cancellationToken: ct)).Outcome ==
-                Contract.AdmissionOutcome.Accepted, "an ordinary input can be queued behind the command");
+            await Approve(a, "after-command", "Ada");
+            Check((await Send(blue, a, "pause-again", Contract.Kinds.Suspend)).Outcome == Contract.AdmissionOutcome.Accepted,
+                "an ordinary approval and repeated Suspend are queued behind the command");
             Check((await Send(blue, b, SuspendId, Contract.Kinds.Resume)) is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var replay } && replay == a,
                 "changed target and kind replay the original bound receipt");
             Check((await basic.SendAsync(blue, new Contract.Target.Ref(b), "independent", "input", "next", cancellationToken: ct)).Outcome ==
@@ -110,6 +112,55 @@ internal static class PostgresRootOperatorChecks
         }
 
         var refs = previous.Select(id => new Contract.ActorRef(id)).ToArray();
+        if (resume)
+        {
+            var root = refs[0];
+            var suspended = await Image(root);
+            Check(suspended is { Status: InstanceStatus.Running, Suspended: true } &&
+                HeaderSuspended((await basic.GetAsync(blue, root, ct))!.Header.TypeData), "cold read restores the suspended Native header");
+            var epoch = await PartitionEpoch();
+            var host = await PostgresNativeRootOwner.PrepareAsync(store, "operator-resume", blue.Tenant, root.Id,
+                new WorkflowRegistry().Add(DirectApprovalWorkflow.Build()), ct);
+            await using var owner = await host.TryActivateAsync(ct) ?? throw new InvalidOperationException("Expected a new partition owner.");
+            Check(((Worker)owner).Epoch > epoch, "a fresh owner opens the suspended root at a higher epoch");
+            await Approve(root, "while-suspended", "Grace");
+            for (var i = 0; i < 3; ++i) await Pass(owner);
+            var pending = await admission.ReadPendingDirectAsync(blue.Tenant, root.Id, ct);
+            Check(pending.Select(message => message.Id).SequenceEqual(["after-command", "while-suspended"]) &&
+                (await Image(root)).Revision == suspended.Revision, "suspension keeps both approvals pending across takeover and owner passes");
+            Check((await Send(blue, root, ResumeId, Contract.Kinds.Resume)).Outcome == Contract.AdmissionOutcome.Accepted,
+                "the suspended root accepts Resume behind its pending approvals");
+            var command = (await admission.ReadDueRootOperatorAsync(blue.Tenant, root.Id, ct))!;
+            Check((await store.PollAsync(0, ((Worker)owner).Epoch, TimeSpan.Zero, 1, ct)).Messages.Single().Message == command,
+                "Resume is the first bounded candidate while ordinary approvals are withheld");
+            while ((await Image(root)).Suspended) await Pass(owner);
+            Check(await Settled(command), "the resumed checkpoint and exact occurrence share a transaction");
+            while ((await Image(root)).Status != InstanceStatus.Finished) await Pass(owner);
+            var finished = await Image(root);
+            var entries = (await basic.TailAsync(blue, root, cancellationToken: ct)).Items;
+            Check(finished.Revision >= suspended.Revision + 2 && !HeaderSuspended(finished.TypeData) &&
+                entries.Where(entry => entry.Entry.StartsWith("\"approved:", StringComparison.Ordinal)).Select(entry => Json.Read<string>(entry.Entry))
+                    .SequenceEqual(["approved:after-command", "approved:while-suspended"]) && entries[^1].Entry == Json.Write("end") &&
+                (await admission.ReadPendingDirectAsync(blue.Tenant, root.Id, ct)).Count == 0,
+                "the resumed Native frame completes after both original approvals in order and once each");
+            var occurrence = command.InboxKey.Id;
+            var separator = occurrence.LastIndexOf('/') + 1;
+            var prefix = occurrence[..separator];
+            await using (var db = Open())
+            {
+                var occurrences = db.Messages.Where(row => row.InboxScope == command.InboxKey.Scope && row.Id.StartsWith(prefix))
+                    .OrderBy(row => row.Id).Select(row => row.Id);
+                var beforeReplay = await occurrences.ToListAsync(ct);
+                var replay = await Send(blue, root, ResumeId, Contract.Kinds.Resume);
+                Check(replay is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var original } && original == root &&
+                    beforeReplay.SequenceEqual([occurrence]) && (await occurrences.ToListAsync(ct)).SequenceEqual(beforeReplay),
+                    "a receipt replay after completion creates no new command");
+            }
+            await Pass(owner);
+            Check((await Image(root)).Revision == finished.Revision, "replay leaves the finished checkpoint unchanged");
+            Console.WriteLine($"resumed {Environment.ProcessId} {root.Id}");
+            return 0;
+        }
         var first = await admission.ReadDueRootOperatorAsync("blue", refs[0].Id, ct);
         var second = await admission.ReadDueRootOperatorAsync("blue", refs[1].Id, ct);
         var third = await admission.ReadDueRootOperatorAsync(PostgresMultiRootClient.Secondary, refs[2].Id, ct);
@@ -121,10 +172,10 @@ internal static class PostgresRootOperatorChecks
         var ordered = await admission.ReadPendingDirectAsync("blue", refs[0].Id, ct);
         var independent = (await admission.ReadPendingDirectAsync("blue", refs[1].Id, ct)).Single();
         Check(await admission.ReadDueRootOperatorAsync("blue", refs[2].Id, ct) is null &&
-            ordered is [{ Id: "before-command", Payload: "first", Operator: null }, { Id: "after-command", Payload: "pending", Operator: null }], "operator occurrences stay in their tenant and outside ordinary reads");
+            ordered is [{ Id: "before-command", Payload: "first", Operator: null }, { Id: "after-command", Kind: CompositeSignal.Kind, Operator: null }], "operator occurrences stay in their tenant and outside ordinary reads");
         await using (var db = Open())
         {
-            Check(await db.Messages.CountAsync(m => m.InboxScope == InboxKey.FoundationOccurrenceScope && m.Id.StartsWith("operator/") && !m.Done, ct) == 7 &&
+            Check(await db.Messages.CountAsync(m => m.InboxScope == InboxKey.FoundationOccurrenceScope && m.Id.StartsWith("operator/") && !m.Done, ct) == 8 &&
                 await db.Messages.AnyAsync(m => m.Target == image.Actor.Id && m.Due == long.MaxValue && !m.Done, ct), "sweeping a receipt preserves its pending occurrence");
             var operation = FoundationRootCreator.OperationDigest(SuspendId);
             Check(await db.Database.SqlQuery<bool>($"""
@@ -183,7 +234,7 @@ internal static class PostgresRootOperatorChecks
         var lease = (await store.TakeAsync(0, "operator-cold", duration, ct))!;
         var horizon = TimeSpan.FromHours(2);
         var polled = await store.PollAsync(0, lease.Epoch, horizon, 8, ct);
-        Check(polled.Messages.Select(m => m.Message).SequenceEqual([ordered[0], independent]) &&
+        Check(polled.Messages.Select(m => m.Message).SequenceEqual([ordered[0], independent, third]) &&
             (await store.PollAsync(0, lease.Epoch, TimeSpan.Zero, 1, ct)).Messages.Single().Message == ordered[0],
             "discovery offers the ordinary prefix and independent root before applying the page limit");
         await using (var db = Open())
@@ -212,7 +263,7 @@ internal static class PostgresRootOperatorChecks
             await admission.ReadDueRootOperatorAsync("blue", refs[0].Id, ct) == first,
             "a due command preserves the waiting checkpoint and prevents a later ordinary commit at the current fence");
         var other = (await store.ReadFirstRootAsync("blue", refs[1].Id, ct))!;
-        Check((await store.PollAsync(0, current.Epoch, horizon, 1, ct)).Messages.Single().Message == independent &&
+        Check((await store.PollAsync(0, current.Epoch, horizon, 2, ct)).Messages.Select(item => item.Message).SequenceEqual([first, independent]) &&
             await Apply(refs[1], other, independent, next) &&
             (await store.ReadFirstRootAsync("blue", refs[1].Id, ct))?.Revision == other.Revision + 1 &&
             (await admission.ReadPendingDirectAsync("blue", refs[1].Id, ct)).Count == 0 &&
@@ -228,14 +279,92 @@ internal static class PostgresRootOperatorChecks
             }
             catch (StoreException e) when (e.Failure == Failure.Definite) { return false; }
         }
-        Console.WriteLine($"read {Environment.ProcessId} {refs[0].Id} {refs[1].Id} {refs[2].Id}");
+        await store.ReleaseAsync(0, current.Epoch, ct);
+        var actor = refs[0];
+        var workflow = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
+        var staleStore = NewStore();
+        var takeoverEpoch = 0L;
+        var staleEpoch = 0L;
+        var stale = await PostgresNativeRootOwner.PrepareAsync(staleStore, "operator-stale", blue.Tenant, actor.Id, workflow, ct,
+            (_, inputs, _) =>
+            {
+                if (inputs is not [var command] || command != first || takeoverEpoch != 0) return;
+                staleStore.ReleaseAsync(0, staleEpoch, ct).AsTask().GetAwaiter().GetResult();
+                takeoverEpoch = staleStore.TakeAsync(0, "operator-fence-test", duration, ct).AsTask().GetAwaiter().GetResult()!.Epoch;
+            });
+        await using (var owner = await stale.TryActivateAsync(ct) ?? throw new InvalidOperationException("Expected the stale-test owner."))
+        {
+            staleEpoch = ((Worker)owner).Epoch;
+            while (takeoverEpoch == 0 || ((Worker)owner).Owns)
+            {
+                await owner.WokenAsync(null, ct);
+                await owner.RunAsync(ct);
+                await Task.Delay(10, ct);
+            }
+        }
+        Check(takeoverEpoch > staleEpoch && (await Image(actor)).Revision == after.Revision &&
+            await admission.ReadDueRootOperatorAsync(blue.Tenant, actor.Id, ct) == first && !await Settled(first!, currentCheckpoint: false),
+            "a Suspend that loses ownership before commit leaves its exact command and checkpoint intact");
+        await staleStore.ReleaseAsync(0, takeoverEpoch, ct);
+        var applied = new List<Message>();
+        var apply = await PostgresNativeRootOwner.PrepareAsync(NewStore(), "operator-suspend", blue.Tenant, actor.Id, workflow, ct,
+            (_, inputs, _) => applied.AddRange(inputs));
+        await using (var owner = await apply.TryActivateAsync(ct) ?? throw new InvalidOperationException("Expected the replacement owner."))
+        {
+            while (await admission.ReadDueRootOperatorAsync(blue.Tenant, actor.Id, ct) is not null) await Pass(owner);
+            var suspended = await Image(actor);
+            Check(applied is [{ Id: SuspendId }, { Id: "pause-again" }, ..] && applied.All(input => input.Id is SuspendId or "pause-again" or "race") &&
+                suspended.Revision == after.Revision + applied.Count && suspended.Suspended && HeaderSuspended(suspended.TypeData) &&
+                suspended.State == after.State && suspended.StateVersion == after.StateVersion &&
+                (await admission.ReadPendingDirectAsync(blue.Tenant, actor.Id, ct)).Single() == ordered[1],
+                "the new owner applies Suspend in command order and preserves the Native frame and ordinary tail");
+            Check(await Settled(first!, currentCheckpoint: false) && await Settled(applied[^1]),
+                "the suspended checkpoint and its settled occurrence share a transaction");
+        }
+        Console.WriteLine($"suspended {Environment.ProcessId} {refs[0].Id} {refs[1].Id} {refs[2].Id}");
         return 0;
+
+        async Task Pass(IScopeActivation owner)
+        {
+            await owner.WokenAsync(null, ct);
+            await owner.RunAsync(ct);
+            if (!((Worker)owner).Owns) throw new InvalidOperationException("The workflow owner lost its fence.");
+            await Task.Delay(10, ct);
+        }
+
+        async Task<bool> Settled(Message message, bool currentCheckpoint = true)
+        {
+            await using var db = Open();
+            return await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "Messages" m JOIN "Instances" i ON i."Id" = m."Target" AND i."Partition" = m."Partition"
+                    WHERE m."Target" = {message.Target.Id} AND m."Id" = {message.InboxKey.Id} AND m."InboxScope" = {message.InboxKey.Scope}
+                        AND m."Done" AND m."Start" IS NULL AND (NOT {currentCheckpoint} OR m.xmin = i.xmin)) AS "Value"
+                """).SingleAsync(ct);
+        }
+
+        async Task<long> PartitionEpoch()
+        {
+            await using var db = Open();
+            return await db.Partitions.Where(partition => partition.Id == 0).Select(partition => partition.Epoch).SingleAsync(ct);
+        }
+
+        async Task<EfStore.RootImage> Image(Contract.ActorRef root) => (await store.ReadFirstRootAsync(blue.Tenant, root.Id, ct))!;
+
+        async Task Approve(Contract.ActorRef root, string id, string name)
+        {
+            var image = await Image(root);
+            var frame = Json.Read<NativeState>(image.State!).Frames.Values.Single().Id;
+            await PostgresMultiRootClient.Send(basic, blue, root, id, Json.Write(new CompositeSignal(frame, "approve", name)),
+                Contract.AdmissionOutcome.Accepted, ct);
+        }
 
         ValueTask<Contract.Admission> Send(Contract.BoundScope scope, Contract.ActorRef actor, string id, string kind, Contract.AddOptions? add = null) =>
             operatorApi.SendAsync(scope, new Contract.Target.Ref(actor), id, kind, options: add, cancellationToken: ct);
         async Task<Contract.ActorRef> Start(Contract.BoundScope scope, string op) =>
             (await runtime.StartAsync(scope, op, NativeExecutionModel.Start(DirectApprovalWorkflow.Definition), cancellationToken: ct)).Actor!.Value;
     }
+
+    private static bool HeaderSuspended(string json) => JsonNode.Parse(json)!["Suspended"]!.GetValue<bool>();
 
     private static void Check(bool holds, string name)
     {

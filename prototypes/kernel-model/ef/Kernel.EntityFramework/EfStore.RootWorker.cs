@@ -13,7 +13,8 @@ public sealed partial class EfStore
         {
             0 => key.Id == "root:" + Actor,
             -1 => SelfActor(key) == Actor,
-            InboxKey.FoundationOccurrenceScope => key.Id.StartsWith(Reference + "/", StringComparison.Ordinal),
+            InboxKey.FoundationOccurrenceScope => key.Id.StartsWith(Reference + "/", StringComparison.Ordinal) ||
+                key.Id.StartsWith(PostgresRootAdmission.OperatorOccurrencePrefix + Reference + "/", StringComparison.Ordinal),
             _ => false
         };
     }
@@ -40,8 +41,12 @@ public sealed partial class EfStore
     {
         if (key.Match is null && key.Scope == 0 && key.Id.StartsWith("root:", StringComparison.Ordinal)) return (key.Id[5..], true);
         if (SelfActor(key) is { } self) return (self, true);
-        var split = key.Id.IndexOf('/');
-        if (key.Match is null && key.Scope == InboxKey.FoundationOccurrenceScope && split > 0) return (key.Id[..split], false);
+        if (key.Match is null && key.Scope == InboxKey.FoundationOccurrenceScope)
+        {
+            var start = PostgresRootAdmission.IsOperatorOccurrence(key) ? PostgresRootAdmission.OperatorOccurrencePrefix.Length : 0;
+            var split = key.Id.IndexOf('/', start);
+            if (split > start) return (key.Id[start..split], false);
+        }
         throw RootShape();
     }
 
@@ -112,7 +117,7 @@ public sealed partial class EfStore
 
     private static InstanceRow WorkerRow(WorkerRoot root, RootImage image) =>
         new InstanceRow(image.Actor.Id, image.Model, image.Definition, image.Status, "null", image.Revision, null,
-            History: image.History, StateVersion: image.StateVersion, Creation: image.Actor.Creation, StartIntent: root.Fingerprint)
+            History: image.History, Suspended: image.Suspended, StateVersion: image.StateVersion, Creation: image.Actor.Creation, StartIntent: root.Fingerprint)
             .WithFoundationState(image.State) with { NextJobGeneration = 0, FoundationDispatchHeader = new(root.Tenant, root.Reference, new(image.TypeData, image.Labels)) };
 
     private sealed record ScopedMarks(WorkerRoot Root, long Epoch, IReadOnlyList<InboxKey> Seen, IReadOnlyList<InboxKey> Trial) : QualifiedRootCheckpoint(0)
@@ -151,7 +156,7 @@ public sealed partial class EfStore
                     AND i."Status" = {(int)InstanceStatus.Finished} AND i."FoundationTerminalAt" IS NOT NULL
                     AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
                 """).ToListAsync(cancellationToken);
-            return terminal.Count == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys, null, Issue, cancellationToken);
+            return terminal.Count == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys, null, Issue, false, cancellationToken);
         }
     }
 
@@ -264,9 +269,10 @@ public sealed partial class EfStore
         // Record equality checks the full shape, including extension fields. Adding a new durable effect
         // fails closed here until the qualified SQL writer can represent it.
         var supported = new TurnCommit(turn.Instance, row, turn.Expected, turn.Consumed, turn.Done, turn.Sent,
-            turn.Subscribed, turn.Unsubscribed, turn.Journal, turn.Unsubscribe, turn.Held) { FoundationHeader = turn.FoundationHeader, FoundationSelfRecalls = recalls };
+            turn.Subscribed, turn.Unsubscribed, turn.Journal, turn.Unsubscribe, turn.Held)
+        { FoundationHeader = turn.FoundationHeader, FoundationRootOperator = turn.FoundationRootOperator, FoundationSelfRecalls = recalls };
         var supportedRow = new InstanceRow(row.Id, row.Model, row.Definition, row.Status, row.State, row.Revision, null,
-            History: row.History, StateVersion: row.StateVersion, Creation: 1, StartIntent: root.Fingerprint)
+            History: row.History, Suspended: row.Suspended, StateVersion: row.StateVersion, Creation: 1, StartIntent: root.Fingerprint)
             { NextJobGeneration = row.NextJobGeneration, FoundationNullState = row.FoundationNullState, FoundationDispatchHeader = header };
         if (turn != supported || row != supportedRow) throw RootShape();
         var change = turn.FoundationHeader;
@@ -280,7 +286,7 @@ public sealed partial class EfStore
         if (turn.Expected is null)
         {
             if (turn.Journal is null || turn.Consumed is not [var key] || key != new InboxKey("root:" + root.Actor) ||
-                turn.Done.Count != 0 || row.Status != InstanceStatus.Running || change is null) throw RootShape();
+                turn.Done.Count != 0 || row.Status != InstanceStatus.Running || row.Suspended || change is null) throw RootShape();
             var creator = await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;
             if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History) throw RootShape();
@@ -300,8 +306,18 @@ public sealed partial class EfStore
         var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
         var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
             (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == RootSelfScope) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
-        var inputs = records.Select(row => row.InboxScope == RootSelfScope ? DecodeRootSelf(row, RootSelfIssuer) : PostgresRootAdmission.DecodeDirect(row, root.Reference)).ToArray();
+        var inputs = records.Select(record => DecodeRootInput(record, root.Reference, RootSelfIssuer)).ToArray();
         if (!SameInputs(inputs, turn.Done.Concat(turn.Consumed))) return null;
+        if (turn.FoundationRootOperator is { } command)
+        {
+            if (inputs is not [var persisted] || persisted != command) return null;
+            if (!db.UsesRootOperatorProtocol || row.Status != InstanceStatus.Running ||
+                row.Suspended != (command.Kind == Kinds.Suspend) || row.StateVersion != current.StateVersion || state != current.State ||
+                turn.Sent.Count != 0 || recalls is not null || turn.Journal is not null) throw RootShape();
+            return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
+                row.StateVersion, header.Header.TypeData, header.Header.Labels, null, operatorSuspension: row.Suspended);
+        }
+        if (row.Suspended != current.Suspended || inputs.Any(input => input.Operator is not null)) throw RootShape();
         return WithSends(PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
             row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, recalls?.Select(key => key.Id).ToArray()));
     }

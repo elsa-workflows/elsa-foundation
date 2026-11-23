@@ -684,9 +684,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (root.Discover)
             {
                 var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
-                return ToGeneratedPoll(page, root);
+                return ToGeneratedPoll(page, root, db.UsesRootOperatorProtocol);
             }
-            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root);
+            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db.UsesRootOperatorProtocol);
         }
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
     }
@@ -702,13 +702,25 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
                  WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired")))
             """;
+    // Commands are exposed only when database time makes them due. On a suspended root the
+    // first due command can pass withheld ordinary inputs. Running roots first clear their ready FIFO prefix.
     private static readonly string RootOperatorPollFilter = $"""
-         AND NOT (m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" LIKE 'operator/%')
-         AND (m."InboxScope" = 0 OR NOT EXISTS (
-             SELECT 1 FROM "Messages" op
-             WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
-               AND op."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND op."Id" LIKE 'operator/%'
-               AND NOT op."Done" AND op."Due" <= t.now))
+         AND (m."InboxScope" = 0 OR EXISTS (
+             SELECT 1 FROM "Instances" target
+             WHERE target."Id" = m."Target" AND target."Partition" = m."Partition"
+               AND (CASE WHEN m."Id" LIKE 'operator/%' THEN
+                   m."Due" <= t.now AND NOT EXISTS (
+                       SELECT 1 FROM "Messages" prior
+                       WHERE prior."Partition" = m."Partition" AND prior."Target" = m."Target" AND prior."Seq" < m."Seq"
+                         AND prior."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND prior."EventMatch" IS NULL
+                         AND NOT prior."Done" AND prior."Due" <= t.now
+                         AND (NOT target."Suspended" OR prior."Id" LIKE 'operator/%'))
+                   ELSE NOT target."Suspended" AND NOT EXISTS (
+                       SELECT 1 FROM "Messages" op
+                       WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
+                         AND op."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND op."Id" LIKE 'operator/%'
+                         AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now)
+                   END)))
         """;
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
         ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
@@ -733,14 +745,14 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
 
-    private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope)
+    private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope, bool operators)
     {
         var found = page.Where(r => r.Target is not null).Select(r =>
             new WorkerRoot(r.BirthTenant!, r.BirthReference!, r.Target!, r.BirthPartition!.Value, r.BirthFingerprint!)).Distinct().ToArray();
-        return ToPolled(page, new(scope.FixedPartition, found));
+        return ToPolled(page, new(scope.FixedPartition, found), operators);
     }
 
-    private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null)
+    private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null, bool operators = false)
     {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
         {
@@ -748,9 +760,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };
-            // Only the scoped public owner can decode and commit these persisted envelopes.
-            if (PostgresRootAdmission.IsStoredOperator(r.Start))
-                throw new StoreException(Failure.Definite, "The ordinary PostgreSQL owner cannot apply this staged operator command.");
+            if (PostgresRootAdmission.IsOperatorOccurrence(key) && (!operators || bindings is null))
+                throw new StoreException(Failure.Definite, "PostgreSQL operator inputs require the qualified operator owner.");
             if (bindings is not null)
             {
                 if (r.Target is null) throw RootShape();
@@ -760,11 +771,12 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     JobGeneration = r.JobGeneration!.Value, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
-                    : key.Scope == RootSelfScope ? DecodeRootSelf(entity, RootSelfIssuer) : PostgresRootAdmission.DecodeDirect(entity, root.Reference);
+                    : DecodeRootInput(entity, root.Reference, RootSelfIssuer);
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
             }
             if (key.Match is null &&
-                (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) || key.Scope == RootSelfScope))
+                (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) ||
+                    PostgresRootAdmission.IsStoredOperator(r.Start) || key.Scope == RootSelfScope))
                 throw new StoreException(Failure.Definite, "PostgreSQL public inputs require a qualified foundation owner.");
             return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo) { JobGeneration = r.JobGeneration!.Value }.WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
