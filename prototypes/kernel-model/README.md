@@ -899,6 +899,20 @@ $MOR "$MO" [--fence-in-batch] cost
 $MOR "$MO" probe crash|limits
 ```
 
+### MySQL node-lease cancellation
+
+From `prototypes/kernel-model`, use an isolated TLS-enabled MySQL test server with an administrative fixture
+connection. Build the EF conformance runner with a locked restore, then run:
+
+```sh
+dotnet run -c Release --project ef/Kernel.Ef.Conformance -- mysql "$MY" lease-cancellation --owned-commit --checked-fence
+```
+
+Repeat with `--fence-in-batch`. This check injects a throwing cancellation callback at heartbeat connection
+opening and during a take's renewal. The kernel keeps the one-third-lease deadline, classifies the elapsed
+operations as `Unknown` and `Transient`, and verifies that neither published a renewal. Caller cancellation
+remains cancellation. Connector/NET's own connection timeout remains a separate [K4 qualification case](../../docs/program-goals/clean-slate-kernel.md#k4-relational-qualification).
+
 ## Stress and cost on the EF engines
 
 ```
