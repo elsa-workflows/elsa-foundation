@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 
 namespace Kernel.EntityFramework;
@@ -11,20 +12,11 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
 {
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
-    private sealed record GuardedIssuer(byte[]? Key, int? Partitions, int? StoreSchema, int? MessageProtocol, int? JournalCodec);
     private sealed record StartWrite(bool Claimed, bool Enqueued);
     private sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput, bool ExplicitZeroDue = false);
     private const string CreatorPrefix = "!kernel-root/1:";
     // Bound the formatting and payload cost of a duplicate that loses the batched receipt claim.
     private const int BatchedStartInputCodeUnits = 8 * 1024;
-    private const string AdmissionFormat = """
-        WITH admission_format AS MATERIALIZED (
-            SELECT "StoreSchema", "MessageProtocol", "JournalCodec" FROM "KernelStoreVersions"
-            WHERE "Id" = {0} FOR SHARE
-        )
-        """;
-    private const string CompatibleAdmissionFormat =
-        """f."StoreSchema" = {1} AND f."MessageProtocol" = {2} AND f."JournalCodec" = {3}""";
     private const string ClaimReceiptSql = """
         INSERT INTO "FoundationRootReceipts" AS r ("Tenant","Operation","Reference","Until")
         SELECT {0}, {1}, {2}, floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {3}
@@ -179,38 +171,46 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         if (!lockOrdinaryWrites)
             return await db.Database.SqlQueryRaw<Issuer>("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """).SingleAsync(token);
 
-        var row = await ReadGuardedAdmissionAsync<GuardedIssuer>(db, $$"""
-
-            SELECT i."Key", i."Partitions", f."StoreSchema", f."MessageProtocol", f."JournalCodec"
-            FROM (SELECT 1) report
-            LEFT JOIN admission_format f ON true
-            LEFT JOIN "FoundationRootIssuer" i ON {{CompatibleAdmissionFormat}}
-            """, token);
-        EfStore.RequireSnapshotFormat(db.RequiredFormat, row.StoreSchema, row.MessageProtocol, row.JournalCodec);
-        if (row.Key is null || row.Partitions is null)
-            throw new InvalidOperationException("The generated-root issuer is missing.");
-        return new(row.Key, row.Partitions.Value);
+        var issuer = await ReadGuardedAdmissionAsync(db, new("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """),
+            static reader => new Issuer(reader.GetFieldValue<byte[]>(0), reader.GetInt32(1)), token);
+        return issuer ?? throw new InvalidOperationException("The generated-root issuer is missing.");
     }
 
-    private static async Task<TRow> ReadGuardedAdmissionAsync<TRow>(KernelDb db, string lookup, CancellationToken token,
-        params object[] lookupArguments)
+    private static async Task<TRow?> ReadGuardedAdmissionAsync<TRow>(KernelDb db, NpgsqlBatchCommand lookup,
+        Func<NpgsqlDataReader, TRow> read, CancellationToken token) where TRow : class
     {
-        var expected = db.RequiredFormat;
-        object[] arguments = [StoreVersionEntity.MarkerId, expected.StoreSchema, expected.MessageProtocol, expected.JournalCodec,
-            ..lookupArguments];
+        var current = db.Database.CurrentTransaction!;
         try
         {
-            return await db.Database.SqlQueryRaw<TRow>(AdmissionFormat + lookup, arguments).SingleAsync(token);
+            // PostgreSQL executes the first statement before it parses or binds the second. The batch holds
+            // the marker before touching either source table, matching the lock order of schema migration.
+            var marker = new NpgsqlBatchCommand("""
+                SELECT "StoreSchema", "MessageProtocol", "JournalCodec" FROM "KernelStoreVersions"
+                WHERE "Id" = $1 FOR SHARE
+                """);
+            marker.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
+            var transaction = (NpgsqlTransaction)current.GetDbTransaction();
+            await using var batch = new NpgsqlBatch(transaction.Connection, transaction) { BatchCommands = { marker, lookup } };
+            if (db.Database.GetCommandTimeout() is { } timeout)
+                batch.Timeout = timeout;
+            await using var reader = await batch.ExecuteReaderAsync(token);
+            if (!await reader.ReadAsync(token))
+                throw new StoreFormatException("The kernel store version marker is missing.");
+            EfStore.RequireSnapshotFormat(db.RequiredFormat, reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2));
+            if (!await reader.NextResultAsync(token))
+                throw new InvalidOperationException("The guarded root lookup did not return a result.");
+            return await reader.ReadAsync(token) ? read(reader) : null;
         }
         catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
         {
             throw new StoreFormatException("The generated-root admission schema is unreadable.", error);
         }
-        catch (PostgresException error) when (error.SqlState.StartsWith("42", StringComparison.Ordinal) &&
-            error.SqlState != PostgresErrorCodes.InsufficientPrivilege)
+        catch (PostgresException error) when (
+            error.SqlState == PostgresErrorCodes.FeatureNotSupported ||
+            error.SqlState.StartsWith("42", StringComparison.Ordinal) && error.SqlState != PostgresErrorCodes.InsufficientPrivilege)
         {
-            // An incompatible column type can prevent SQL analysis before the marker lock runs.
-            await db.Database.CurrentTransaction!.RollbackAsync(token);
+            // A shape error can surface while the batch is being read or drained, even on a cached plan.
+            await current.RollbackAsync(token);
             await EfStore.RequireStoreVersionsAsync(db, token);
             throw;
         }

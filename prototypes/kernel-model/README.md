@@ -295,14 +295,14 @@ The Embedded preview composes `IIngress` through `EfStore.OpenPreviewRootIngress
 A trusted host supplies a bound scope, the actor type and the receipt retention window. The provider accepts
 durable starts for that type and ordinary direct input to exact roots. Opening the adapter checks the
 installed schema. Each admission holds the shared store-format lock in its write transaction.
-The same statement locks the marker and reads the issuer or exact root, preserving the admission round-trip
-count. The ordinary adapter refuses privileged controls. Held requests and event-based starts fall outside
+A PostgreSQL batch first locks the marker and then reads the issuer or exact root in one round trip. The ordinary adapter refuses privileged controls. Held requests and event-based starts fall outside
 this adapter's scope.
 
 For a format-refusal check, run the Native `pg-core-preview birth` phase in a fresh disposable database,
 then run `pg-core-preview format-probe <reference>` in a new process against the same database.
-The probe changes the format marker and then renames two admission tables after opening ingress.
-It verifies typed refusal at both write paths and restores the marker and tables. Its accepted control writes leave test data in that database.
+The probe verifies typed refusal after the format changes. It also starts admission while a migration
+holds the marker, confirms the admission is waiting, then runs the migration's DDL. Both write paths
+must refuse the changed schema without a lock cycle. The probe restores the marker and tables. Its accepted control writes leave test data in that database.
 
 A host can use `EfStore.OpenPreviewRootReadsAsync` to open `IActorReads` for an already-installed ordinary
 PostgreSQL generated-root store. Compose the store with the public `new KernelDb(options)` PostgreSQL context.
@@ -514,7 +514,8 @@ Use `ef` for the EF writer, or `checked` for a separate fence statement. The mea
 admission and ends at the fenced terminal checkpoint, on an already-bound Embedded owner with warmed connections.
 The report lists bind, heartbeat and take separately. Schema setup, replay and verification reads are outside
 the measured interval. The meter reports wire direction turns (round trips), PostgreSQL Sync/Query groups, EF
-commands and transaction completions separately.
+commands and transaction completions separately. The provider's direct admission batch appears in the wire
+count. EF command counters cover commands executed by EF.
 
 PostgreSQL 17 measured **16 round trips in-batch and 17 checked** with both writers. Each public admission cost
 3 trips. Polling and the terminal commit used 13 in-batch or 14 checked. The initial qualified path took 22 and

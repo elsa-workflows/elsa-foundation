@@ -349,17 +349,65 @@ internal static class PostgresPublicPreview
         try
         {
             Check(await SetSchemaAsync(db, original, changed, token) == 1, "the fixture advances only its expected marker");
-            await RefusesFormat(start, "format-new-start", Contract.Kinds.Start, $"Stored schema={changed},");
-            await RefusesFormat(direct, "format-direct", "notice", $"Stored schema={changed},");
-            await db.Database.ExecuteSqlRawAsync("""
-                ALTER TABLE "FoundationRootIssuer" RENAME TO "FoundationRootIssuer_FormatProbe";
-                ALTER TABLE "FoundationRootBirths" RENAME TO "FoundationRootBirths_FormatProbe"
-                """, token);
-            const string unreadable = "The generated-root admission schema is unreadable.";
-            await RefusesFormat(start, "format-new-start", Contract.Kinds.Start, unreadable);
-            await RefusesFormat(direct, "format-direct", "notice", unreadable);
+            await RefusesFormat(ingress.SendAsync(scope, start, "format-new-start", Contract.Kinds.Start, cancellationToken: token),
+                Contract.Kinds.Start, $"Stored schema={changed},");
+            await RefusesFormat(ingress.SendAsync(scope, direct, "format-direct", "notice", cancellationToken: token),
+                "notice", $"Stored schema={changed},");
         }
         finally
+        {
+            await RestoreAsync();
+        }
+
+        await CheckMigrationOverlapAsync(start, "format-new-start", Contract.Kinds.Start, """
+            ALTER TABLE "FoundationRootIssuer" RENAME TO "FoundationRootIssuer_FormatProbe"
+            """);
+        await CheckMigrationOverlapAsync(direct, "format-direct", "notice", """
+            ALTER TABLE "FoundationRootBirths" RENAME TO "FoundationRootBirths_FormatProbe"
+            """);
+
+        Check((await ingress.SendAsync(scope, start, "format-new-start", Contract.Kinds.Start, cancellationToken: token)).Outcome ==
+            Contract.AdmissionOutcome.Accepted, "the refused start did not claim its receipt");
+        Check((await ingress.SendAsync(scope, direct, "format-direct", "notice", cancellationToken: token)).Outcome ==
+            Contract.AdmissionOutcome.Accepted, "the refused direct input did not claim its receipt");
+
+        async Task CheckMigrationOverlapAsync(Contract.Target target, string id, string kind, string change)
+        {
+            using var admissionStop = CancellationTokenSource.CreateLinkedTokenSource(token);
+            try
+            {
+                await using var migration = await db.Database.BeginTransactionAsync(token);
+                await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '3s'", token);
+                var pid = await db.Database.SqlQueryRaw<int>("""SELECT pg_backend_pid() AS "Value" """).SingleAsync(token);
+                Check(await SetSchemaAsync(db, original, changed, token) == 1, "the migration holds the marker before DDL");
+                var waiting = ingress.SendAsync(scope, target, id, kind, cancellationToken: admissionStop.Token).AsTask();
+
+                using var poll = CancellationTokenSource.CreateLinkedTokenSource(token);
+                poll.CancelAfter(TimeSpan.FromSeconds(5));
+                await using var observer = new KernelDb(options);
+                while (!await observer.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (
+                        SELECT 1 FROM pg_stat_activity activity
+                        WHERE activity.datname = current_database() AND {pid} = ANY(pg_blocking_pids(activity.pid))
+                    ) AS "Value"
+                    """).SingleAsync(poll.Token))
+                {
+                    if (waiting.IsCompleted) throw new InvalidOperationException("Admission returned before the migration ran.");
+                    await Task.Delay(25, poll.Token);
+                }
+                Console.WriteLine($"ok the {kind} admission waits on the migration lock");
+                await db.Database.ExecuteSqlRawAsync(change, token);
+                await migration.CommitAsync(token);
+                await RefusesFormat(new(waiting), kind, "The generated-root admission schema is unreadable.");
+            }
+            finally
+            {
+                admissionStop.Cancel();
+                await RestoreAsync();
+            }
+        }
+
+        async Task RestoreAsync()
         {
             using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await using var restoration = new KernelDb(options);
@@ -372,10 +420,6 @@ internal static class PostgresPublicPreview
                 row => row.Id == StoreVersionEntity.MarkerId && row.StoreSchema == original, cleanup.Token),
                 "cleanup restores or observes the expected marker");
         }
-        Check((await ingress.SendAsync(scope, start, "format-new-start", Contract.Kinds.Start, cancellationToken: token)).Outcome ==
-            Contract.AdmissionOutcome.Accepted, "the refused start did not claim its receipt");
-        Check((await ingress.SendAsync(scope, direct, "format-direct", "notice", cancellationToken: token)).Outcome ==
-            Contract.AdmissionOutcome.Accepted, "the refused direct input did not claim its receipt");
 
         static Task<int> SetSchemaAsync(KernelDb database, int from, int to, CancellationToken cancellationToken) =>
             database.Database.ExecuteSqlInterpolatedAsync($"""
@@ -383,11 +427,11 @@ internal static class PostgresPublicPreview
                 WHERE "Id" = {StoreVersionEntity.MarkerId} AND "StoreSchema" = {from}
                 """, cancellationToken);
 
-        async Task RefusesFormat(Contract.Target target, string id, string kind, string reason)
+        static async Task RefusesFormat(ValueTask<Contract.Admission> admission, string kind, string reason)
         {
             try
             {
-                await ingress.SendAsync(scope, target, id, kind, cancellationToken: token);
+                await admission;
                 throw new InvalidOperationException($"Accepted {kind} after the store format changed.");
             }
             catch (StoreFormatException error) when (error.Message.Contains(reason, StringComparison.Ordinal))

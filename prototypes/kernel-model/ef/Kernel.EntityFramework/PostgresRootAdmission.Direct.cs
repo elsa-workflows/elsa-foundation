@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Kernel.EntityFramework;
 
@@ -153,19 +154,14 @@ internal sealed partial class PostgresRootAdmission
             WHERE "Tenant" = {tenant} AND "Reference" = {reference}
             """).SingleOrDefaultAsync(cancellationToken);
 
-    private sealed record GuardedAddress(string? Id, long? Creation, int? StoreSchema, int? MessageProtocol, int? JournalCodec);
-
-    private static async Task<CreationAddress?> GuardedRootAddressAsync(KernelDb db, string tenant, string reference, CancellationToken token)
+    private static Task<CreationAddress?> GuardedRootAddressAsync(KernelDb db, string tenant, string reference, CancellationToken token)
     {
-        var row = await ReadGuardedAdmissionAsync<GuardedAddress>(db, $$"""
-
-            SELECT b."Actor" AS "Id", b."Creation", f."StoreSchema", f."MessageProtocol", f."JournalCodec"
-            FROM (SELECT 1) report
-            LEFT JOIN admission_format f ON true
-            LEFT JOIN "FoundationRootBirths" b ON b."Tenant" = {4} AND b."Reference" = {5} AND {{CompatibleAdmissionFormat}}
-            """, token, tenant, reference);
-        EfStore.RequireSnapshotFormat(db.RequiredFormat, row.StoreSchema, row.MessageProtocol, row.JournalCodec);
-        return row.Id is null || row.Creation is null ? null : new(row.Id, row.Creation.Value);
+        var lookup = new NpgsqlBatchCommand("""
+            SELECT "Actor", "Creation" FROM "FoundationRootBirths" WHERE "Tenant" = $1 AND "Reference" = $2
+            """);
+        lookup.Parameters.Add(new NpgsqlParameter<string> { TypedValue = tenant });
+        lookup.Parameters.Add(new NpgsqlParameter<string> { TypedValue = reference });
+        return ReadGuardedAdmissionAsync(db, lookup, static reader => new CreationAddress(reader.GetString(0), reader.GetInt64(1)), token);
     }
 
     // AdmissionStatusAsync already holds a share lock on this exact checkpoint until the receipt lookup ends.
