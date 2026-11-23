@@ -229,6 +229,26 @@ route table, built from the definitions, read nothing at request time) and `Http
 Not done: client disconnect mapped to cancel, streaming, bodies by reference (the request sits in `Results` and in
 captured variables, so in state: 571 bytes for http-reference).
 
+### HTTP over the public Actor Foundation
+
+From `prototypes/kernel-model`, run:
+
+```bash
+dotnet run -c Release --project sim -- --public-http-edge-check
+```
+
+This check starts Kestrel on a dynamically assigned loopback port and runs actual HTTP requests against the
+public Actor Foundation with an in-memory Embedded owner. It starts a Native approval, pauses its first
+checkpoint to check that the response stays held, and resumes it with a JSON request. Public reads confirm
+the same actor at its first and second journal revisions. It also checks a 404
+with no publication, a 503 on owner reset, a 504 at the reply deadline, a 500 when a held response's turn parks,
+and completion after the client disconnects. Run with `--flaw EmitBeforeCommit` to make the held-response
+assertion fail before the checkpoint lands.
+
+This run covers the default commit-before-release route on one live receiving node. The local process kill
+between commit and release, remote-owner recovery before and after the reply deadline, provider-backed
+replies and cross-tenant routing still have their own K8 acceptance cases.
+
 ## 5. What it costs
 
 Run, with the counting of FINDINGS section 5: PostgreSQL round trips are command executions plus COMMITs (Npgsql
