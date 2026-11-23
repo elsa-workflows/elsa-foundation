@@ -4,6 +4,9 @@
     <RootNamespace>Kernel.Runtime.Hosting</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Kernel.Native.Run" />
+    <InternalsVisibleTo Include="Kernel.Statecharts.Run" />
+    <ProjectReference Include="../../src/Kernel.Foundation.Contracts/Kernel.Foundation.Contracts.csproj" />
     <ProjectReference Include="../../src/Kernel.Runtime/Kernel.Runtime.csproj" />
   </ItemGroup>
 </Project>

@@ -26,16 +26,16 @@
 .ad-draft-context .wf-editor-save-status { flex: 0 1 auto; width: auto; }
 
 .ad-authoring-toolbar-actions {
-  /* Columns mirror the workflow toolbar's publication, Save, Test Run and overflow actions. */
+  /* Give each toolbar action its own intrinsic-width column. */
   display: grid;
-  grid-template-columns: minmax(0, 16rem) repeat(3, max-content);
+  grid-template-columns: repeat(4, max-content);
   flex: 0 0 auto;
   max-width: 100%;
   align-items: start;
   justify-content: flex-end;
 }
 
-.ad-authoring-toolbar-actions:has(.wf-canvas-command-host) { grid-template-columns: max-content minmax(0, 16rem) repeat(3, max-content); }
+.ad-authoring-toolbar-actions:has(.wf-canvas-command-host) { grid-template-columns: repeat(5, max-content); }
 .wf-canvas-command-host { display: contents; }
 
 /* Status occupies its own final row, so feedback never moves the action targets. */
@@ -111,18 +111,14 @@
 .ad-publication-toolbar-status.is-attention {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
-  gap: .65rem;
-  padding: .65rem .75rem;
-  border: 1px solid var(--studio-warning-fg);
-  border-radius: var(--studio-radius);
+  gap: .45rem;
   color: var(--studio-warning-fg);
-  background: var(--studio-surface-muted);
-  font-size: var(--studio-body-size);
 }
 
-.ad-publication-toolbar-status.is-attention > div { flex: 1 1 12rem; min-width: 0; }
-.ad-publication-toolbar-status.is-attention p { margin: .25rem 0 0; color: var(--studio-text); }
+.ad-publication-toolbar-status.is-attention > div { flex: 0 1 auto; min-width: 0; text-align: right; }
+.ad-publication-toolbar-status.is-attention p { margin: 0; color: var(--studio-text-muted); text-align: right; overflow-wrap: anywhere; }
 .ad-draft-diagnostics-link { display: inline-flex; align-items: center; gap: .3rem; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
 .ad-draft-diagnostics-link:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 3px; }
 .ad-diagnostics-panel:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
@@ -334,20 +330,30 @@
 }
 
 .ad-test-run-body { display: grid; align-content: start; gap: .75rem; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.ad-test-run-result-heading { display: grid; justify-items: start; gap: .35rem; }
-.ad-test-run-result { display: grid; gap: .7rem; min-width: 0; }
-.ad-test-run-result > h3,
-.ad-test-run-result h4,
-.ad-test-run-recorded-inputs h4 { margin: 0; font-size: var(--studio-section-title-size); }
-.ad-test-run-outputs,
-.ad-test-run-outcome,
-.ad-test-run-recorded-inputs { display: grid; gap: .45rem; min-width: 0; }
-.ad-test-run-output-list,
-.ad-test-run-input-list { display: grid; gap: .45rem; min-width: 0; }
-.ad-test-run-details > summary { color: var(--studio-accent); cursor: pointer; font-weight: 650; }
-.ad-test-run-details-content { display: grid; gap: .75rem; min-width: 0; padding-top: .6rem; }
-.ad-test-run-details-content > .ad-selected-record { margin: 0; }
+/* Result: one summary line (status, outcome, duration), the outputs list, then an optional details disclosure. */
+.ad-test-run-evidence { display: grid; gap: 1rem; min-width: 0; }
+.ad-test-run-summary { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.25rem; min-width: 0; }
+.ad-test-run-summary > p { flex-basis: 100%; margin: 0; color: var(--studio-text-muted); }
+.ad-test-run-summary-fact { display: inline-flex; align-items: baseline; gap: .4rem; min-width: 0; }
+.ad-test-run-summary-fact > span { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.ad-test-run-summary-fact > strong { overflow-wrap: anywhere; font-weight: 600; }
+.ad-test-run-result,
+.ad-test-run-recorded-inputs { display: grid; gap: .5rem; min-width: 0; }
+.ad-test-run-evidence h3 { margin: 0; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 600; }
+.ad-test-run-note { margin: 0; color: var(--studio-text-muted); }
+.ad-test-run-value-list { min-width: 0; }
+.ad-test-run-value-list .wf-runtime-input { grid-template-columns: minmax(8rem, .6fr) minmax(0, 1.4fr); }
+.ad-test-run-details { border-top: 1px solid var(--studio-border); padding-top: .75rem; }
+.ad-test-run-details > summary { display: inline-flex; align-items: center; gap: .35rem; color: var(--studio-text-muted); cursor: pointer; font-weight: 600; list-style: none; }
+.ad-test-run-details > summary::-webkit-details-marker { display: none; }
+.ad-test-run-details > summary:hover { color: var(--studio-text); }
+.ad-test-run-details > summary:focus-visible { border-radius: var(--studio-radius-sm); outline: 2px solid var(--studio-focus); outline-offset: 2px; }
+.ad-test-run-details-chevron { transition: transform .15s ease; }
+.ad-test-run-details[open] .ad-test-run-details-chevron { transform: rotate(90deg); }
+.ad-test-run-details-content { display: grid; gap: .75rem; min-width: 0; padding-top: .75rem; }
+.ad-test-run-details-content > h3 { margin-bottom: -.25rem; }
 .ad-test-run-open-evidence { justify-self: start; }
+.ad-test-run-expiry { margin: 0; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
 .ad-test-run-dialog .ad-test-run-technical { margin: 0; }
 .ad-test-run-dialog .ad-test-run-identity { display: flex; align-items: center; gap: .35rem; }
 .ad-test-run-dialog .ad-test-run-identity > a { min-width: 0; color: var(--studio-accent); }
@@ -373,8 +379,13 @@
 .ad-test-run-dialog .ad-test-run-history li { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 .ad-test-run-dialog .ad-test-run-history li > code { min-width: 0; overflow-wrap: anywhere; }
 
+@media (prefers-reduced-motion: reduce) {
+  .ad-test-run-details-chevron { transition: none; }
+}
+
 @media (max-width: 560px) {
   .ad-test-run-dialog .ad-test-run-technical { grid-template-columns: minmax(0, 1fr); }
+  .ad-test-run-value-list .wf-runtime-input { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 1100px) {

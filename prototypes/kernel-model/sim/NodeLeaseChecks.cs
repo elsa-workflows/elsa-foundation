@@ -87,7 +87,7 @@ internal static class NodeLeaseChecks
 
     // CodeRabbit 4636945436 (review B of #4870): an empty Worker's first take hangs. Once it has been in flight for a lease
     // the Worker is not live: the host withholds its heartbeat and takes nothing more. The late reply leaves 0 pending (a
-    // reply past its send time plus the lease renews nothing), and the next heartbeat and pass retake it.
+    // reply past its send time plus the lease renews nothing). A pending-only pass reopens the gate, then the next answer retakes it.
     private static async Task HungFirstTakeClosesTheGate(Action<bool, string> check)
     {
         var (store, clock, advance) = World(1, out _);
@@ -102,11 +102,13 @@ internal static class NodeLeaseChecks
         await take;
         var pending = !worker.Holds(0) && worker.Pending.ContainsKey(0);
         var late = pending ? worker.Pending[0] : 0L;
-        var live = worker.Live;
-        await beat.BeatAsync();
+        var stillClosed = !worker.Live && await beat.BeatAsync() is null && beat.Withheld == 2;
+        await worker.RunAsync();        // the pending-only worker completed a pass
+        var renewed = await beat.BeatAsync() is not null;
         await worker.RunAsync();        // the answer's retake of 0
-        check(closed && pending && live && worker.Holds(0) && worker.EpochOf(0) > late,
-            $"a first take in flight for a lease closes the gate: closed {closed}, unheld and pending after the late reply {pending}, live after {live}, holds 0 at last {worker.Holds(0)} epoch {worker.EpochOf(0)} (late {late})");
+        check(closed && pending && stillClosed && renewed && worker.Holds(0) && worker.EpochOf(0) > late,
+            $"a first take in flight for a lease keeps the gate closed through its late reply: pending {pending}, withheld {stillClosed}, " +
+            $"renewed after the pass {renewed}, holds 0 at epoch {worker.EpochOf(0)} (late {late})");
     }
 
     // The same take answered within the lease: the gate stays open while it is in flight, so a fresh node heartbeats and takes.

@@ -112,15 +112,16 @@ public sealed partial class EfStore
                 var state = c.P(instances.FindProperty("State")!, StoredState.Encode(row));
                 var (model, definition) = (c.P(instances.FindProperty("Model")!, row.Model), c.P(instances.FindProperty("Definition")!, row.Definition));
                 var (jobs, handles, parent, fault, children) = (Text(instances, "Jobs", row.Jobs), Text(instances, "CustomHandles", row.CustomHandles), Text(instances, "Parent", row.Parent), Text(instances, "Fault", row.Fault), Text(instances, "Children", row.Children));
+                var nextJobGeneration = row.NextJobGeneration is { } gen ? Lit(gen) : "NULL";
                 if (turn.Expected is not { } expected)
                 {
-                    rows.Row(RowGroups.Kind.InstanceInsert, RowGroups.Instances, [id, Lit(home), model, definition, Lit((int)row.Status), state, jobs, handles, Lit(row.Revision), parent, fault, Lit((int)row.History), Bool(row.Suspended), children, Lit(row.StateVersion), Bool(false)]);
+                    rows.Row(RowGroups.Kind.InstanceInsert, RowGroups.Instances, [id, Lit(home), model, definition, Lit((int)row.Status), state, jobs, handles, Lit(row.Revision), parent, fault, Lit((int)row.History), Bool(row.Suspended), children, Lit(row.StateVersion), Bool(false), nextJobGeneration]);
                     if (alias is not null) rows.AliasCheck(id, c.P(instances.FindProperty("Id")!, alias));
                 }
                 else
                 {
                     var actor = alias is null ? "" : $" AND \"Id\" = {c.P(instances.FindProperty("Id")!, alias)}";
-                    rows.Checked(RowGroups.Kind.InstanceUpdate, $"""UPDATE "Instances" SET "Partition" = {Lit(home)}, "Model" = {model}, "Definition" = {definition}, "Status" = {Lit((int)row.Status)}, "State" = {state}, "Jobs" = {jobs}, "CustomHandles" = {handles}, "Revision" = {Lit(row.Revision)}, "Parent" = {parent}, "Fault" = {fault}, "History" = {Lit((int)row.History)}, "Suspended" = {Bool(row.Suspended)}, "Children" = {children}, "StateVersion" = {Lit(row.StateVersion)}, "Retired" = {Bool(row.Retired)} WHERE "Id" = {id}{actor} AND "Revision" = {Lit(expected)}""");
+                    rows.Checked(RowGroups.Kind.InstanceUpdate, $"""UPDATE "Instances" SET "Partition" = {Lit(home)}, "Model" = {model}, "Definition" = {definition}, "Status" = {Lit((int)row.Status)}, "State" = {state}, "Jobs" = {jobs}, "CustomHandles" = {handles}, "Revision" = {Lit(row.Revision)}, "Parent" = {parent}, "Fault" = {fault}, "History" = {Lit((int)row.History)}, "Suspended" = {Bool(row.Suspended)}, "Children" = {children}, "StateVersion" = {Lit(row.StateVersion)}, "Retired" = {Bool(row.Retired)}, "NextJobGeneration" = {nextJobGeneration} WHERE "Id" = {id}{actor} AND "Revision" = {Lit(expected)}""");
                 }
             }
             foreach (var key in turn.Consumed) Keyed(RowGroups.Kind.MessageConsume, """DELETE FROM "Messages" """, key);
@@ -132,7 +133,7 @@ public sealed partial class EfStore
                 var m = ToEntity(message, batch.HandOver && epochs.TryGetValue(message.Target.Partition, out var mine) ? mine : 0, 0);
                 // seq: identity on the server engines; on SQLite the store assigns max + i inside the statement (SqliteCommitDialect.Seq).
                 rows.Row(RowGroups.Kind.MessageInsert, RowGroups.Messages, [Lit(m.InboxScope), c.P(messages.FindProperty("Id")!, m.Id), Lit(m.Partition), c.P(messages.FindProperty("Target")!, m.Target), c.P(messages.FindProperty("Kind")!, m.Kind), Text(messages, "Payload", m.Payload), Text(messages, "Sender", m.Sender), Text(messages, "Start", m.Start),
-                    Lit(m.Due), Lit(m.Seen), "0", "0", m.KeepUntil is { } keep ? Lit(keep) : "NULL", dialect.False, Text(messages, "ReplyTo", m.ReplyTo), m.EventMatch is null ? "NULL" : c.P(messages.FindProperty("EventMatch")!, m.EventMatch),
+                    Lit(m.Due), Lit(m.Seen), "0", "0", m.KeepUntil is { } keep ? Lit(keep) : "NULL", dialect.False, Text(messages, "ReplyTo", m.ReplyTo), Lit(m.JobGeneration), m.EventMatch is null ? "NULL" : c.P(messages.FindProperty("EventMatch")!, m.EventMatch),
                     .. exact ? [c.P(messages.FindProperty("IssuedWire")!, m.IssuedWire)] : Array.Empty<string>(), .. dialect.Seq(++sent) is { } seq ? [seq] : Array.Empty<string>()]);
             }
             if (turn.Journal is not null)
@@ -173,6 +174,8 @@ public sealed partial class EfStore
             if (command.HasFence) now = result.Now;
             seqs.AddRange(result.Seqs);
         }
+        if (batch.ClearJobTrials.Count != 0 && !await ClearJobTrialsAsync(db, batch, cancellationToken))
+            return new Committed(false, 0, []);
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
@@ -367,7 +370,7 @@ public sealed partial class EfStore
     {
         StoreBatchRules.RequireDistinct(owned);
         if (owned.Count == 0) return new([], 0);
-        if (_ordinaryRoots is not null)
+        if (_ordinaryRoots?.FixedPartition is not null)
         {
             var fence = owned.Single();
             return await PollAsync(fence.Partition, fence.Epoch, horizon, limit, cancellationToken);
@@ -377,6 +380,7 @@ public sealed partial class EfStore
         var set = Q($"""m."Partition" IN ({List(owned.Select(f => f.Partition).Order())}) AND m."Seen" < {EpochOf(owned, "m.\"Partition\"")}""");
         var sql = string.Format(System.Globalization.CultureInfo.InvariantCulture, PollSql.Replace(single, set, StringComparison.Ordinal), 0, 0, (long)horizon.TotalMilliseconds, limit);
         await using var db = create();
+        if (_ordinaryRoots is { } root) return ToGeneratedPoll(await db.Database.SqlQueryRaw<GeneratedPollRow>(sql).ToListAsync(cancellationToken), root);
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql).ToListAsync(cancellationToken));
     }
 }
@@ -391,9 +395,9 @@ public sealed partial class EfStore
 /// </summary>
 internal sealed class RowGroups(CommitDialect dialect, bool exact)
 {
-    public const string Instances = """INSERT INTO "Instances" ("Id", "Partition", "Model", "Definition", "Status", "State", "Jobs", "CustomHandles", "Revision", "Parent", "Fault", "History", "Suspended", "Children", "StateVersion", "Retired") VALUES """;
+    public const string Instances = """INSERT INTO "Instances" ("Id", "Partition", "Model", "Definition", "Status", "State", "Jobs", "CustomHandles", "Revision", "Parent", "Fault", "History", "Suspended", "Children", "StateVersion", "Retired", "NextJobGeneration") VALUES """;
     public const string Journal = """INSERT INTO "Journal" ("Partition", "Position", "Instance", "Revision", "Entries") VALUES """;
-    public const string Messages = """INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done", "ReplyTo", "EventMatch" """;
+    public const string Messages = """INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done", "ReplyTo", "JobGeneration", "EventMatch" """;
 
     /// <summary>The order statements are written in.</summary>
     public enum Kind { InstanceDelete, InstanceUpdate, InstanceInsert, AliasCheck, MessageConsume, MessageDone, MessageHeld, MessageSeen, MessageTrial, MessageInsert, JournalInsert, Wait, UnsubscribeAll, JournalDelete }

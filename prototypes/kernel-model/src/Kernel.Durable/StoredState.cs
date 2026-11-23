@@ -17,8 +17,8 @@ public static class StoredState
     }
     public static InstanceRow Restore(InstanceRow physical)
     {
-        var state=Decode(physical.State);
-        var absent = physical.State == Absent;
+        var state=DecodeEnvelope(physical.State);
+        var absent = state.Absent;
         if (physical.FoundationNullState && !absent)
             throw new StoreException(Failure.Definite, "Contradictory physical and logical absent-state markers.");
         if(physical.IdentityOnly && !state.IdentityOnly || physical.IdentityMetadataRequired && !state.IdentityMetadataRequired)
@@ -27,14 +27,23 @@ public static class StoredState
         StoreBatchRules.ValidateIdentity(row);
         return row;
     }
+    /// <summary>Decodes a present state cell. Use Restore for rows that can carry absent state.</summary>
     public static (string State,bool IdentityOnly,bool IdentityMetadataRequired) Decode(string stored)
     {
-        if(!stored.StartsWith(Family,StringComparison.Ordinal))return(stored,false,false);
-        if (stored == Absent) return ("null", false, false);
-        if(stored==Identity)return("null",true,false);
-        if(stored==MetadataIdentity)return("null",true,true);
+        var state = DecodeEnvelope(stored);
+        if (state.Absent)
+            throw new StoreException(Failure.Definite, "An absent state cell requires row restoration.");
+        return (state.State, state.IdentityOnly, state.IdentityMetadataRequired);
+    }
+
+    private static (string State,bool IdentityOnly,bool IdentityMetadataRequired,bool Absent) DecodeEnvelope(string stored)
+    {
+        if(!stored.StartsWith(Family,StringComparison.Ordinal))return(stored,false,false,false);
+        if (stored == Absent) return ("null", false, false, true);
+        if(stored==Identity)return("null",true,false,false);
+        if(stored==MetadataIdentity)return("null",true,true,false);
         if(stored.StartsWith(Data,StringComparison.Ordinal) && stored[Data.Length..].StartsWith(Family,StringComparison.Ordinal))
-            return(stored[Data.Length..],false,false);
+            return(stored[Data.Length..],false,false,false);
         throw new StoreException(Failure.Definite,"Unsupported or malformed physical state control envelope; original bytes must be retained.");
     }
 }

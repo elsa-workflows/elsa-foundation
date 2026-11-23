@@ -5,7 +5,7 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
-        string State, string Header, int StateVersion, Message[] Inputs, Func<string, string>? Issue, string[]? Recalls) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
+        string State, string Header, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -54,14 +54,14 @@ public sealed partial class EfStore
 
     // Both a model turn and a terminal no-turn disposition settle the same due FIFO prefix.
     private static async Task<bool> SettleRootInputsAsync(KernelDb db, string reference, CreationAddress actor, IReadOnlyList<InboxKey> expected,
-        Message[]? expectedEnvelopes, Func<string, string>? issue, CancellationToken cancellationToken)
+        Message[]? expectedEnvelopes, FoundationSelfIssuer? issue, CancellationToken cancellationToken)
     {
         var home = new InstanceRef(actor.Id).Partition;
         var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
         var rows = await db.Messages.FromSqlRaw($$"""
             SELECT * FROM {{source}} WHERE "Target" = {0} AND "Partition" = {1}
                 AND "InboxScope" IN ({2}, {3}) AND "EventMatch" IS NULL
-                AND NOT "Done" AND "Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}}
             ORDER BY "Seq" LIMIT {4} FOR UPDATE
             """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count).AsNoTracking().ToListAsync(cancellationToken);
         // A ready operator occurrence precedes any later ordinary input at the same root.
@@ -87,7 +87,7 @@ public sealed partial class EfStore
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, TimeSpan lease, InstanceStatus status, string? state, int stateVersion,
-        string typeData, IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken = default) =>
+        string typeData, IReadOnlyDictionary<string, string> labels, string? journal, CancellationToken cancellationToken = default) =>
         CommitPreparedRootAsync(fence, lease, PrepareRootTurn(tenant, reference, current, inputs, fence, status, state, stateVersion, typeData, labels, journal), cancellationToken);
 
     private PreparedRoot PrepareRootTurn(string tenant, string reference, RootImage current,
@@ -99,8 +99,10 @@ public sealed partial class EfStore
             new InstanceRef(current.Actor.Id).Partition != fence.Partition ||
             status is not (InstanceStatus.Running or InstanceStatus.Finished))
             throw new ArgumentException("Invalid running root or target disposition.", nameof(current));
+        if (status == InstanceStatus.Finished && journal is null)
+            throw new ArgumentException("A finished public root requires its terminal journal entry.", nameof(journal));
         var accepted = inputs.ToArray();
-        if (accepted.Length == 0 || accepted.Any(message => (message.InboxKey.Scope != InboxKey.FoundationOccurrenceScope && (RootSelfIssuer is null || !FoundationSelfSend.IsSelfInput(message, current.Actor.Id, current.Actor.Creation))) ||
+        if (accepted.Length == 0 || accepted.Any(message => (message.InboxKey.Scope != InboxKey.FoundationOccurrenceScope && (RootSelfIssuer is null || !RootSelfIssuer.Allows(message.Due) || !FoundationSelfSend.IsSelfInput(message, current.Actor.Id, current.Actor.Creation))) ||
             message.InboxKey.Match is not null || message.Target.Id != current.Actor.Id || message.TargetCreation != current.Actor.Creation) ||
             accepted.Select(message => message.InboxKey).Distinct().Count() != accepted.Length)
             throw new ArgumentException("The turn requires distinct ordinary inputs for its exact actor creation.", nameof(inputs));
