@@ -27,12 +27,12 @@ namespace Elsa.Activities.Bpmn.Tests;
 public sealed partial class BpmnDirectExecutionTests
 {
     [Fact]
-    public async Task An_original_queued_cancelled_result_recovers_without_waiting_for_its_obsolete_native_retry()
+    public async Task A_current_writer_queued_cancelled_result_recovers_without_waiting_for_its_obsolete_native_retry()
     {
-        await using (var input = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ActualDelayedCompensation.sqlite.gz")))
+        await using (var input = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "CurrentDelayedCompensation.sqlite.gz")))
         await using (var gzip = new GZipStream(input, CompressionMode.Decompress))
         await using (var output = File.Create(database)) await gzip.CopyToAsync(output);
-        Assert.Equal("dedc7041baf31ad6d0b3de251049de7d55ff421dbe7e65e3059b6e35f9bf9e63",
+        Assert.Equal("175a6880fe295970c6b1de3c4e2e43a23ced75b58a55d94413ad798538289fdd",
             Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(database))));
         await using var host = await OpenAsync(admitNewExecutions: false,
             configure: services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(TimeProvider.System)));
@@ -66,6 +66,42 @@ public sealed partial class BpmnDirectExecutionTests
         Assert.Equal(before.MaterialIncarnationId, settled.MaterialIncarnationId);
         Assert.True(WorkflowExecutionAuthoritySnapshot.Matches(settled.Authority,
             before.Authority.SystemIdentity, before.Authority.RootInitiator, before.Authority.Metadata));
+    }
+
+    [Fact]
+    public async Task An_archived_pre_migration_model_hash_is_refused_without_advancing_retained_state()
+    {
+        await using (var input = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ArchivedDelayedCompensation.sqlite.gz")))
+        await using (var gzip = new GZipStream(input, CompressionMode.Decompress))
+        await using (var output = File.Create(database)) await gzip.CopyToAsync(output);
+        Assert.Equal("dedc7041baf31ad6d0b3de251049de7d55ff421dbe7e65e3059b6e35f9bf9e63",
+            Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(database))));
+        var before = await RetainedDocumentsAsync();
+        await using (var host = await OpenAsync(admitNewExecutions: false))
+        await using (var scope = await ScopeAsync(host))
+        {
+            var error = await Assert.ThrowsAsync<InvalidDataException>(async () =>
+                await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindMaterialAsync(
+                    "sha256:8f4c88b9ad0dd93267b5ec40e827f154e84cdae040834823006e863cf029e5c1"));
+            Assert.Equal("The persisted model material payload is corrupt.", error.Message);
+            Assert.IsType<ArgumentException>(error.InnerException);
+        }
+        Assert.Equal(before, await RetainedDocumentsAsync());
+
+        async Task<string[]> RetainedDocumentsAsync()
+        {
+            var documents = new List<string>();
+            await using var connection = new SqliteConnection($"Data Source={database};Pooling=False");
+            await connection.OpenAsync();
+            foreach (var table in new[] { "model_execution", "model_input", "workflow_execution_state", "post_commit_outbox", "scheduler_work_item" })
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText = "SELECT ContentJson FROM elsa_runtime_" + table + " ORDER BY Id";
+                await using var rows = await command.ExecuteReaderAsync();
+                while (await rows.ReadAsync()) documents.Add(table + ":" + rows.GetString(0));
+            }
+            return documents.ToArray();
+        }
     }
 
     [Fact]
