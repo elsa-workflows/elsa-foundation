@@ -82,6 +82,8 @@ public sealed class JsonBaselineArchitectureTests
     [InlineData("class C { void M() { JsonSerializer.Serialize(value, options: null); } }", "optionless")]
     [InlineData("class C { void M() { JsonSerializer.Serialize(value, default(JsonSerializerOptions)); } }", "optionless")]
     [InlineData("class C { void M() { JsonSerializer.Serialize(value, (JsonSerializerOptions?)null); } }", "optionless")]
+    [InlineData("class C { void M() { JsonSerializer.Serialize(value, options: null!); } }", "optionless")]
+    [InlineData("class C { void M() { Results.Json(value, options: default(JsonSerializerOptions)!); } }", "optionless")]
     [InlineData("class C { void M() { JsonSerializerOptions? profile = null; JsonSerializer.Serialize(value, profile); } }", "optionless")]
     [InlineData("class C { void M() { payload.Deserialize<T>((JsonSerializerOptions?)null); } }", "optionless")]
     [InlineData("class C { void M() { Results.Json(data, options: default(JsonSerializerOptions)); } }", "optionless")]
@@ -159,6 +161,12 @@ public sealed class JsonBaselineArchitectureTests
     {
         const string source = "class C { JsonSerializerOptions options = new(JsonBaseline.Options); void M() { options.PropertyNameCaseInsensitive = false; options.NumberHandling = JsonNumberHandling.Strict; JsonSerializer.Serialize(value, options); JsonSerializer.Serialize(value, Context.WireContext.Value); /* new JsonSerializerOptions() */ var text = \"JsonSerializer.Serialize(value)\"; } }";
         Assert.Empty(JsonBaselineSourceScan.Scan(source));
+    }
+
+    [Fact]
+    public void Reordered_explicit_baseline_profile_and_null_body_are_accepted()
+    {
+        Assert.Empty(JsonBaselineSourceScan.Scan("class C { void M() { JsonSerializer.Serialize(options: JsonBaseline.Options, value: (object?)null); } }"));
     }
 
     [Fact]

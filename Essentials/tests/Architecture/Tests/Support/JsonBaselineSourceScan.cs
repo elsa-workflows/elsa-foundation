@@ -145,8 +145,9 @@ internal static class JsonBaselineSourceScan
                 var minimum = name == "SerializeAsync" || name == "Serialize" && effective.Length > 0 &&
                     DeclaredType(effective[0].Expression, call) is "Utf8JsonWriter" or "System.Text.Json.Utf8JsonWriter" ? 2 : 1;
                 var last = effective.LastOrDefault()?.Expression;
-                if (effective.Length == minimum || last is not null && IsNullProfile(last, call) ||
-                    effective.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" && IsNullProfile(argument.Expression, call)) ||
+                var namedProfile = effective.FirstOrDefault(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo");
+                if (namedProfile is not null ? IsNullProfile(namedProfile.Expression, call) :
+                    effective.Length == minimum || last is not null && IsNullProfile(last, call) ||
                     effective.Length == minimum + 1 && last is not null && IsTypeExpression(last, call)) Add("optionless", call);
             }
             else if (!serializer && member is not null && name is "Deserialize" or "DeserializeAsync" &&
@@ -378,6 +379,7 @@ internal static class JsonBaselineSourceScan
         if (expression.IsKind(SyntaxKind.NullLiteralExpression) || expression.IsKind(SyntaxKind.DefaultLiteralExpression) || expression is DefaultExpressionSyntax) return true;
         if (expression is ParenthesizedExpressionSyntax parentheses) return IsNullProfile(parentheses.Expression, site, visited);
         if (expression is CastExpressionSyntax cast) return IsNullProfile(cast.Expression, site, visited);
+        if (expression is PostfixUnaryExpressionSyntax suppression && suppression.IsKind(SyntaxKind.SuppressNullableWarningExpression)) return IsNullProfile(suppression.Operand, site, visited);
         if (expression is not IdentifierNameSyntax name) return false;
         visited ??= new(StringComparer.Ordinal);
         if (!visited.Add(name.Identifier.ValueText)) return false;
