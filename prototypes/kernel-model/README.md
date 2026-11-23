@@ -189,6 +189,18 @@ approval. The journal records the cancelled frame once. This Embedded preview su
 self inputs on a generated root. Same-turn retraction, whole-workflow operator termination, Park and Cluster timer
 recovery fall outside this case.
 
+### PostgreSQL operator admission preview
+
+On a fresh dedicated PostgreSQL database, set `KERNEL_PREVIEW_POSTGRES` and run `models/Native.Run/run-root-operator-preview.sh`.
+The first process starts real Native workflows, admits one-way Suspend and Resume commands through an explicitly
+authorized host, and races two requests using the same operation ID. The receipt is per tenant and operation. Replaying
+against another valid reference returns the original target. A second process reads the due commands from the stored
+inbox and verifies that an ordinary input queued behind a due command cannot advance the checkpoint.
+
+This increment covers admission and candidate reads. The workflows remain at their waiting checkpoints. Applying the
+command with its ownership fence, persisting the suspension header and reopening ordinary delivery on Resume follow
+in the dispatcher increment. The existing preview host grants no operator permissions by default.
+
 ## The simulation
 
 ```

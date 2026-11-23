@@ -37,35 +37,15 @@ internal sealed partial class PostgresRootAdmission
 
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
-        var address = await db.Database.SqlQuery<CreationAddress>($"""
-            SELECT "Actor" AS "Id", "Creation" FROM "FoundationRootBirths"
-            WHERE "Tenant" = {tenant} AND "Reference" = {reference}
-            """).SingleOrDefaultAsync(cancellationToken);
+        var address = await RootAddressAsync(db, tenant, reference, cancellationToken);
         if (address is null) return await RefuseAsync();
         var escapedKind = kind.Contains('\0') ? kind : null;
         var header = DirectPrefix + DurableKeyJson.Write(new StoredDirect(id, address.Creation, escaped, due == 0, escapedKind));
         if (Encoding.UTF8.GetByteCount(header) + (body is null ? 0L : Encoding.UTF8.GetByteCount(body)) >
             16 * 1024 * 1024 - 24 * 1024) return await RefuseAsync();
 
-        var status = await LockStatusAsync();
-        if (status is null)
-        {
-            var pending = await db.Database.SqlQuery<string>($"""
-                SELECT m."Id" AS "Value" FROM "Messages" m
-                JOIN "FoundationRootBirths" b ON b."Creator" = m."Id" AND b."Actor" = m."Target"
-                WHERE b."Reference" = {reference} AND m."InboxScope" = 0 AND NOT m."Done"
-                    AND NOT EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = b."Actor")
-                FOR SHARE OF m
-                """).ToListAsync(cancellationToken);
-            // If the creator disappeared while the SELECT waited on its lock, the first checkpoint may now be live.
-            if (pending.Count == 0)
-            {
-                status = await LockStatusAsync();
-                if (status is null) return await RefuseAsync();
-            }
-        }
-
-        if (status is not (null or InstanceStatus.Running))
+        var status = await AdmissionStatusAsync(db, address, tenant, reference, cancellationToken);
+        if (status != InstanceStatus.Running)
         {
             if (status == InstanceStatus.Finished && await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "FoundationDirectReceipts"
@@ -108,6 +88,28 @@ internal sealed partial class PostgresRootAdmission
             await transaction.RollbackAsync(cancellationToken);
             return null;
         }
+    }
+
+    private static Task<CreationAddress?> RootAddressAsync(KernelDb db, string tenant, string reference, CancellationToken cancellationToken) =>
+        db.Database.SqlQuery<CreationAddress>($"""
+            SELECT "Actor" AS "Id", "Creation" FROM "FoundationRootBirths"
+            WHERE "Tenant" = {tenant} AND "Reference" = {reference}
+            """).SingleOrDefaultAsync(cancellationToken);
+
+    // A pending creator admits its first inputs. Re-read the checkpoint when the first commit wins the lock.
+    private static async Task<InstanceStatus?> AdmissionStatusAsync(KernelDb db, CreationAddress address, string tenant, string reference,
+        CancellationToken cancellationToken)
+    {
+        var status = await LockStatusAsync();
+        if (status is not null) return status;
+        var pending = await db.Database.SqlQuery<string>($"""
+            SELECT m."Id" AS "Value" FROM "Messages" m
+            JOIN "FoundationRootBirths" b ON b."Creator" = m."Id" AND b."Actor" = m."Target"
+            WHERE b."Reference" = {reference} AND m."InboxScope" = 0 AND NOT m."Done"
+                AND NOT EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = b."Actor")
+            FOR SHARE OF m
+            """).ToListAsync(cancellationToken);
+        return pending.Count != 0 ? InstanceStatus.Running : await LockStatusAsync();
 
         Task<InstanceStatus?> LockStatusAsync() =>
             db.Database.SqlQuery<InstanceStatus?>($"""
@@ -125,7 +127,7 @@ internal sealed partial class PostgresRootAdmission
             SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b
                 ON b."Actor" = m."Target" AND b."Partition" = m."Partition" AND b."Creation" = 1
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope}
-                AND m."EventMatch" IS NULL AND NOT m."Done" ORDER BY m."Seq"
+                AND m."EventMatch" IS NULL AND NOT m."Done" AND m."Id" NOT LIKE 'operator/%' ORDER BY m."Seq"
             """).AsNoTracking().ToListAsync(cancellationToken);
         return rows.Select(row => DecodeDirect(row, reference)).ToArray();
     }

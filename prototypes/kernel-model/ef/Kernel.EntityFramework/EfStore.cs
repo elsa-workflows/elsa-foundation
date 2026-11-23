@@ -665,6 +665,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };
             // Only the scoped public owner can decode and commit these persisted envelopes.
+            if (PostgresRootAdmission.IsStoredOperator(r.Start))
+                throw new StoreException(Failure.Definite, "The ordinary PostgreSQL owner cannot apply this staged operator command.");
             if (bindings is not null)
             {
                 if (r.Target is null) throw RootShape();

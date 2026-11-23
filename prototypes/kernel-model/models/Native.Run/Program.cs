@@ -12,6 +12,10 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["pg-root-operators", "admit"])
+    return await PostgresRootOperatorChecks.RunAsync(null);
+if (args is ["pg-root-operators", "read", var operatorA, var operatorB, var operatorC])
+    return await PostgresRootOperatorChecks.RunAsync([operatorA, operatorB, operatorC]);
 if (args is ["pg-discover-roots", var discoveryPhase and ("birth" or "restart"), var discoveryScope] && int.TryParse(discoveryScope, out var selectedPartition))
     return await PostgresDiscoveryChecks.RunAsync(selectedPartition, discoveryPhase == "birth");
 if (args is ["pg-multi-root", var writer and ("owned" or "ef"), var fence and ("in-batch" or "checked"), .. var phaseArgs])

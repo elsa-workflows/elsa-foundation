@@ -8,7 +8,8 @@ internal sealed class PostgresPreviewFoundation(
     PostgresRootAdmission admission,
     EfStore store,
     PostgresRootJournalReader journal,
-    string actorType) : Contract.IIngress, Contract.IActorReads
+    string actorType,
+    Func<Contract.BoundScope, string, bool>? authorizeOperator = null) : Contract.IIngress, Contract.IActorReads
 {
     public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
@@ -17,6 +18,16 @@ internal sealed class PostgresPreviewFoundation(
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(kind);
+        if (kind is Contract.Kinds.Suspend or Contract.Kinds.Resume)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (target is not Contract.Target.Ref exact || authorizeOperator?.Invoke(scope, kind) != true ||
+                payload is not null || !FoundationMetadataLimits.IsOutsideMessageId(id) ||
+                !PostgresRootAdmission.IsIssuedReferenceShape(exact.Actor.Id)) return new(Contract.AdmissionOutcome.Refused);
+            var control = await admission.AdmitRootOperatorAsync(scope.Tenant, exact.Actor.Id, id, kind, options?.DueAt, options?.KeepFor, cancellationToken);
+            return control is null ? new(Contract.AdmissionOutcome.Refused) :
+                new(control.Duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(control.Reference));
+        }
         if (target is Contract.Target.Start start)
         {
             var spec = start.Spec;
