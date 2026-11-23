@@ -6,7 +6,13 @@ namespace Kernel.Durable;
 /// What an owner sends to a caller that waits: an item a turn emitted, or the end of the observation. <c>Key</c> is the
 /// same however often it is sent. An end has no channel: the instance's status, or an error ("lost", "missing").
 /// </summary>
-public sealed record Reply(string Request, string Key, string? Channel, object? Item, InstanceStatus? Status = null, string? Error = null);
+public sealed record Reply(string Request, string Key, string? Channel, object? Item, InstanceStatus? Status = null, string? Error = null)
+{
+    /// <summary>The bound tenant of the delivery that supplied the route. Legacy replies leave it empty.</summary>
+    public string? Tenant { get; init; }
+}
+
+internal readonly record struct LiveReplyRoute(string Address, string? Tenant);
 
 /// <summary>
 /// The runtime's transport between nodes for live output. Not durable: a reply may be dropped, delayed or delivered
@@ -101,6 +107,9 @@ public sealed class Requests
     private readonly string _incarnation;
     private readonly Flaw _flaws;
     private long _next;
+    private long _rejectedTenantReplies;
+
+    public long RejectedTenantReplies => Interlocked.Read(ref _rejectedTenantReplies);
 
     public Requests(Flaw flaws = Flaw.None) : this(Guid.NewGuid().ToString("N"), flaws) { }
 
@@ -154,6 +163,11 @@ public sealed class Requests
         lock (_gate)
         {
             if (!_open.TryGetValue(reply.Request, out var request)) return false;
+            if (!string.Equals(request.Tenant, reply.Tenant, StringComparison.Ordinal))
+            {
+                Interlocked.Increment(ref _rejectedTenantReplies);
+                return false;
+            }
             var wasOpen = !request.Done;
             var again = (_flaws & Flaw.ReplyTwice) != 0;
             request.Receive(reply, again);

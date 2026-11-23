@@ -268,7 +268,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public IEnumerable<string> Unwritten => _slots.Where(s => s.Value.Unwritten).Select(s => s.Key);
 
     /// <summary>The reply addresses of the callers this owner holds, for tests of decision 6.</summary>
-    public IEnumerable<string> Callers => _slots.Values.SelectMany(s => s.Replies);
+    public IEnumerable<string> Callers => _slots.Values.SelectMany(slot => slot.Replies).Select(route => route.Address);
     private long _used;
 
     public bool CreationIdentityAvailable => _store.CreationIdentityAvailable;
@@ -1335,8 +1335,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         var items = _items.Values.Where(i => handedOver(i.Message.Target.Id)).ToList();
         var slots = _slots.Where(s => handedOver(s.Key)).ToList();
-        foreach (var to in slots.SelectMany(s => s.Value.Replies).Concat(items.Where(i => !i.Message.SuppliedCreator || _slots.TryGetValue(Canonical(i.Message.Target.Id), out var slot) && slot.CurrentRow is not null).Select(i => i.Message.ReplyTo).OfType<string>()).Distinct().ToList())
-            Send(to, "lost", null, null, error: "lost");
+        LoseCallers(slots.Select(entry => entry.Value), items);
         foreach (var item in items)
         {
             Forget(item);
@@ -1359,6 +1358,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
+    private void LoseCallers(IEnumerable<Slot> slots, IEnumerable<Delivery> items)
+    {
+        var pending = items.Where(item => !item.Message.SuppliedCreator ||
+                _slots.TryGetValue(Canonical(item.Message.Target.Id), out var slot) && slot.CurrentRow is not null)
+            .Select(item => item.ReplyRoute).OfType<LiveReplyRoute>();
+        foreach (var route in slots.SelectMany(slot => slot.Replies).Concat(pending).Distinct().ToList())
+            Send(route, "lost", null, null, error: "lost");
+    }
+
     /// <summary>Recovery after any doubt is the same path as start-up: drop everything; the host takes the partition again.</summary>
     private void Reset()
     {
@@ -1373,8 +1381,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _polling = _loading = _flushing = _meeting = _releasing = _aliasesChangedDuringLoad = _retryAliases = false;
             foreach (var item in _items.Values.ToList()) CancelJobDriver(item);
             // Every caller this memory knows of is told at once; a new owner answers only what is still in the rows.
-            foreach (var to in _slots.Values.SelectMany(s => s.Replies).Concat(_items.Values.Where(i => !i.Message.SuppliedCreator || _slots.TryGetValue(Canonical(i.Message.Target.Id), out var slot) && slot.CurrentRow is not null).Select(i => i.Message.ReplyTo).OfType<string>()).Distinct().ToList())
-                Send(to, "lost", null, null, error: "lost");
+            LoseCallers(_slots.Values, _items.Values);
             _slots.Clear();
             _passTurns.Clear();
             _aliases.Clear();
@@ -1435,7 +1442,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts,
                 // A released hold is local to the owner that made it. A cold owner requalifies it by trial.
                 suspect: (!row.PersistedHold || row.ReleasedBy is not null) && Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0,
-                cancellationToken: cancellationToken, persistedHold: row.PersistedHold && row.ReleasedBy is null, releasedBy: row.ReleasedBy);
+                cancellationToken: cancellationToken, persistedHold: row.PersistedHold && row.ReleasedBy is null, releasedBy: row.ReleasedBy, replyTenant: row.ReplyTenant);
             if (!LeaseUsable()) return;
         }
         if (ParkDrainMetrics.Enabled)
@@ -1471,7 +1478,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void LoseInlineStart(Message creator)
     {
-        if (creator.ReplyTo is { } route) Send(route, "lost", null, null, error: "lost");
+        if (creator.ReplyTo is { } route) Send(new(route, creator.Start?.FoundationInlineTenant), "lost", null, null, error: "lost");
     }
 
     /// <summary>
@@ -1485,7 +1492,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         message = message.AsOrdinary();
         if (_releasing || !LeaseUsable() || !Holds(message.Target.Partition)) return false;
         Hold(message, long.MaxValue / 2 + ++_local, durable: false, marked: true, fresh: fresh && !message.Target.GeneratedAddress && message.Kind != Kinds.JobFinished,
-            starterAmbient: message.Start is not null && !message.SuppliedCreator && message.Kind != Kinds.JobFinished ? ambient : null);
+            starterAmbient: message.Start is not null && !message.SuppliedCreator && message.Kind != Kinds.JobFinished ? ambient : null,
+            replyTenant: message.Start?.FoundationInlineTenant);
         return LeaseUsable();
     }
 
@@ -1560,7 +1568,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
 
-    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false, string? requestAddress = null, CancellationToken cancellationToken = default, object? starterAmbient = null, bool persistedHold = false, ParkRelease? releasedBy = null)
+    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false, string? requestAddress = null, CancellationToken cancellationToken = default, object? starterAmbient = null, bool persistedHold = false, ParkRelease? releasedBy = null, string? replyTenant = null)
     {
         if (message.ReplyTo is not null && (message.Kind == Kinds.JobFinished ||
             message.InboxScope == 0 && message.Kind is Kinds.Job or Kinds.Meet or Kinds.Publish or Kinds.JobDeadline))
@@ -1584,6 +1592,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 promoted.Again = again;
                 promoted.RecoveryOrdering |= again;
                 promoted.Seq = seq;
+                if (message.ReplyTo is not null) promoted.ReplyTenant = replyTenant;
                 if (waiting is null) return;
                 if ((promoted.CompletedOrder == 0 || promoted.Message.FoundationHeldJobResult) && waiting.Inbox.Remove(promoted)) Insert(waiting, promoted);
                 RefreshPoisonBoundary(waiting);
@@ -1600,7 +1609,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // process. The process can rule out a death for trial accounting, not reconstruct its lost inbox.
         var item = new Delivery(message, seq)
         {
-            StarterAmbient = starterAmbient, RequestAddress = requestAddress, Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts,
+            StarterAmbient = starterAmbient, ReplyTenant = replyTenant, RequestAddress = requestAddress, Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts,
             Again = again, RecoveryOrdering = again, Held = persistedHold, ReleasedBy = releasedBy, Taken = _cancelling.Contains(message.InboxKey),
             ObservedOrder = Interlocked.Increment(ref _observed), ObservedAt = Now
         };
@@ -3497,7 +3506,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             var reply = unit.Replied[i];
             if ((reply.FromFoundation && ReplyTo.Parse(reply.To).BeforeCommit) != early) continue;
-            Send(reply.To, $"{Origin(unit)}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item, refusedInput: reply.RefusedInput);
+            Send(reply.Route, $"{Origin(unit)}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item, refusedInput: reply.RefusedInput);
         }
     }
 
@@ -3515,7 +3524,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void Unpin()
     {
-        foreach (var slot in _slots.Values) slot.Replies.RemoveWhere(Expired);
+        foreach (var slot in _slots.Values) slot.Replies.RemoveWhere(route => Expired(route.Address));
     }
 
     private void Evict()
@@ -3538,10 +3547,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (unit.Slot is not { } slot) return;
         // An explicit winner also supersedes a route attached by an earlier turn of this actor.
         foreach (var reply in unit.Replied)
-            if (reply.FromFoundation) slot.Replies.Remove(reply.To);
+            if (reply.FromFoundation) slot.Replies.Remove(reply.Route);
         foreach (var item in unit.Consumed)
-            if (item.Message.ReplyTo is { } to && !Expired(to) && !unit.Replied.Any(r => r.Message == item.Message.InboxKey)) slot.Replies.Add(to);
-        var callers = slot.Replies.Where(to => Has(Flaw.EmitBeforeCommit) || ReplyTo.Parse(to).BeforeCommit == early).ToList();
+            if (item.ReplyRoute is { } route && !Expired(route.Address) && !unit.Replied.Any(r => r.Message == item.Message.InboxKey))
+                slot.Replies.Add(route);
+        var callers = slot.Replies.Where(route => Has(Flaw.EmitBeforeCommit) || ReplyTo.Parse(route.Address).BeforeCommit == early).ToList();
         for (var i = 0; i < unit.Emitted.Count; i++)
             foreach (var to in callers) Send(to, $"{Origin(unit)}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item, revision: unit.Revision, release: release);
         if (early || unit.Status == InstanceStatus.Running) return;
@@ -3551,12 +3561,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private static string Origin(TurnOutcome unit) => CreationProtocol.Origin(unit.Instance, (unit.Row ?? unit.Slot?.Row)?.Creation ?? 0);
 
-    private void Send(string to, string key, string? channel, object? item, InstanceStatus? status = null, string? error = null, long revision = 0, ReplyRelease? release = null, Message? refusedInput = null)
+    private void Send(LiveReplyRoute route, string key, string? channel, object? item, InstanceStatus? status = null, string? error = null, long revision = 0, ReplyRelease? release = null, Message? refusedInput = null)
     {
-        if (Expired(to)) return;        // decision 6: past its deadline the reply is dropped
-        var (node, request, _, _) = ReplyTo.Parse(to);
+        if (Expired(route.Address)) return;        // decision 6: past its deadline the reply is dropped
+        var (node, request, _, _) = ReplyTo.Parse(route.Address);
         if (_options.Transport is not { } transport) return;
-        var reply = new Reply(request, key, channel, item, status, error);
+        var reply = new Reply(request, key, channel, item, status, error) { Tenant = route.Tenant };
         try { transport.Send(node, reply); }
         catch (Exception) { return; } // Losing live output cannot abandon a prepared or landed commit.
         if (release is { } phase) _options.OnEmittedReply?.Invoke(node, reply, revision, phase);
@@ -3705,7 +3715,7 @@ internal sealed class Slot
     public long Used;               // when a turn last started or it was loaded: the least recent idle one goes first
     public readonly List<Delivery> Inbox = [];
     public object? Ambient;                         // from the starter on this node; gone with this memory
-    public readonly HashSet<string> Replies = [];   // callers waiting for what the instance emits
+    public readonly HashSet<LiveReplyRoute> Replies = [];   // callers waiting for what the instance emits
     public Message? UnwrittenCreator;                // optional observer: selected birth until its first physical disposition
     public bool Unwritten;                          // decision 4: Row is in memory only, never written
     public long Until;                              // and may stay so until then

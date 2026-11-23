@@ -53,6 +53,7 @@ public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, 
     internal bool PersistedHold { get; init; }
     internal ParkRelease? ReleasedBy { get; init; }
     internal int PayloadLength { get; init; }
+    internal string? ReplyTenant { get; init; }
 }
 
 /// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
