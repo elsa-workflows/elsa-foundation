@@ -123,7 +123,15 @@ admission, rollback, expiry, tenant and physical inbox cases. The preview uses o
 text for a representable input and a reversible envelope for text containing NUL or unpaired UTF-16
 units. It refuses an encoded row above the storage budget before its transaction commits.
 
-Public actor execution and its fenced checkpoint remain a subsequent slice. The legacy Worker
+The first generated-root Running checkpoint now consumes the exact creator, stores revision 1
+in `Instances` and appends its journal in the existing fenced PostgreSQL commit. That transaction
+checks the tenant, reference, partition, creator and start fingerprint before commit. Its qualified
+point read returns the creation, nullable state, model version, type data and labels. Ordinary
+readers refuse the qualified state format. The preview protects this first checkpoint from legacy
+updates and deletes. Run `postgres "<server connection>" root-checkpoint` with either commit and
+fence mode to exercise the stored transition and its refusal cases.
+
+Public actor execution with emitted effects and later revisions remains ahead. The legacy Worker
 refuses any poll containing a public creator, so use this ingress only in its dedicated database.
 The existing Native workflow restart demonstration uses the prototype adapter.
 

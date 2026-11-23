@@ -40,6 +40,7 @@ internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan dedu
             INSERT INTO "FoundationRootIssuer" SELECT true, {RandomNumberGenerator.GetBytes(32)}, count(*)::integer FROM "Partitions"
             ON CONFLICT DO NOTHING
             """, cancellationToken);
+        await EfStore.InstallFirstRootCheckpointsAsync(db, cancellationToken);
         var placementMatches = await db.Database.SqlQueryRaw<bool>("""
             SELECT i."Partitions" = count(p."Id") AND min(p."Id") = 0 AND max(p."Id") = i."Partitions" - 1 AS "Value"
             FROM "FoundationRootIssuer" i CROSS JOIN "Partitions" p GROUP BY i."Partitions"
