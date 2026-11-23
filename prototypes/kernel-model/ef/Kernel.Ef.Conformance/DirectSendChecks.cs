@@ -55,7 +55,7 @@ internal static class DirectSendChecks
               before.All(message => message.Target == creator.Target),
             "cold reads preserve actor life, FIFO, due presence, and exact kind and payload");
 
-        await CheckDirectReadFailures(create, store, cold, tenant, reference, another.Reference,
+        fence = await CheckDirectReadFailures(create, store, cold, tenant, reference, another.Reference,
             before[0], fence with { Position = fence.Position + 1 }, timeout);
 
         var valid = before[0].InboxKey.Id;
@@ -79,7 +79,7 @@ internal static class DirectSendChecks
               after.Select(message => message.InboxKey).Distinct().Count() == 3,
             "reused operation has a separate physical occurrence and leaves earlier input untouched");
         var current = (await store.ReadFirstRootAsync(tenant, reference))!;
-        Check((await store.CommitRootTurnAsync(tenant, reference, current, before, fence with { Position = fence.Position + 1 }, timeout,
+        Check((await store.CommitRootTurnAsync(tenant, reference, current, before, fence, timeout,
             InstanceStatus.Running, "applied", 14, current.TypeData, current.Labels, """["applied"]""")).Landed &&
             (await cold.ReadPendingDirectAsync(tenant, reference)).Single().InboxKey == after[2].InboxKey,
             "admitted occurrences settle after their original receipts were swept");
@@ -97,7 +97,7 @@ internal static class DirectSendChecks
             "a physical size refusal releases its receipt reservation for a smaller retry");
     }
 
-    private static async Task CheckDirectReadFailures(Func<KernelDb> create, EfStore store, PostgresRootAdmission admission,
+    private static async Task<PartitionFence> CheckDirectReadFailures(Func<KernelDb> create, EfStore store, PostgresRootAdmission admission,
         string tenant, string reference, string otherReference, Message input, PartitionFence fence, TimeSpan lease)
     {
         await using var db = create();
@@ -117,6 +117,27 @@ internal static class DirectSendChecks
         var before = await snapshot.SingleAsync();
         var journal = await store.ReadJournalOfAsync(fence.Partition, current.Actor.Id, 0);
 
+        var bound = new EfStore(create, postgres: true, fenceInBatch: store.FenceInBatch) { CommitSql = store.CommitSql };
+        await bound.BindWorkerRootAsync(tenant, reference);
+        var live = (await bound.LoadAsync([current.Actor.Id])).Single();
+        var turn = new TurnCommit(live.Id, live with { Revision = live.Revision + 1 }, live.Revision, [], [input.InboxKey], [], [], [], """["next"]""");
+        ValueTask<Committed> WorkerCommit(PartitionFence f) => bound.CommitAsync(new(f.Partition, f.Epoch, f.Position, lease, false, [turn], [], []));
+
+        // A journal entry for a sibling moves the position while this root's revision remains current.
+        var oldPosition = fence;
+        for (var n = 0; ; n++)
+        {
+            if (n == 100) throw new InvalidOperationException("No sibling was placed on the test partition.");
+            var sibling = await admission.AdmitAsync(tenant, $"fence-sibling-{n}", new StartSpec("workflow", "definition"));
+            var creator = (await admission.ReadPendingCreatorAsync(tenant, sibling.Reference))!;
+            if (creator.Target.Partition != fence.Partition) continue;
+            var saved = await store.CommitFirstRootAsync(tenant, sibling.Reference, creator, fence, lease, "sibling", 1,
+                "runtime", new Dictionary<string, string>(), """["sibling"]""");
+            Check(saved.Landed, "a sibling checkpoint advances the shared position");
+            fence = fence with { Position = fence.Position + 1 };
+            break;
+        }
+
         // Simulate a future envelope codec while keeping the admitted operation, physical key and payload intact.
         row.Start = "!kernel-direct/2:" + originalHeader[(originalHeader.IndexOf(':') + 1)..];
         await db.SaveChangesAsync();
@@ -128,6 +149,16 @@ internal static class DirectSendChecks
             await RequireDefinite(async () => { await Commit(fence); });
             Check(!(await Commit(fence with { Position = fence.Position - 1 })).Landed,
                 "the stale position refuses a commit on the unreadable input");
+            Check(!(await WorkerCommit(oldPosition)).Landed,
+                "the root-bound worker refuses the sibling's former position before surfacing the codec failure");
+            var oldEpoch = fence;
+            var retaken = await store.RetakeAsync(fence.Partition, "direct-fence", fence.Epoch, lease);
+            Check(retaken is not null && retaken.Epoch == oldEpoch.Epoch + 1 && retaken.Position == fence.Position,
+                "the same owner's retake advances only the epoch");
+            fence = fence with { Epoch = retaken!.Epoch };
+            Check(!(await WorkerCommit(oldEpoch)).Landed, "the root-bound worker refuses an old epoch at the current position");
+            await RequireDefinite(async () => { await WorkerCommit(fence); });
+
             var stored = await db.Messages.AsNoTracking().SingleAsync(m => m.Id == row.Id && m.InboxScope == row.InboxScope);
             Check(!stored.Done && stored.Start == row.Start && stored.Payload == row.Payload &&
                 (await snapshot.SingleAsync()).Equals(before) &&
@@ -140,6 +171,8 @@ internal static class DirectSendChecks
             row.Start = originalHeader;
             await db.SaveChangesAsync();
         }
+
+        return fence;
 
         static async Task RequireDefinite(Func<Task> attempt)
         {

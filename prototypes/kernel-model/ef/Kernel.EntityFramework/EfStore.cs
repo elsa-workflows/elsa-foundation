@@ -458,10 +458,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 // moved the position itself.
                 if (FenceInBatch && !DefiniteBeatsFence && failure.Failure is Failure.Definite or Failure.Transient)
                 {
-                    bool holds;
-                    try { holds = await HoldsAsync(batch, cancellationToken); }
-                    catch (Exception check) { throw new StoreException(Failure.Unknown, "the fence could not be read after a failed commit: " + check.Message, check); }
-                    if (!holds)
+                    if (!await HoldsAfterFailureAsync(batch, cancellationToken))
                     {
                         Interlocked.Increment(ref _keyViolationsAsFence);
                         return new Committed(false, 0, []);
@@ -618,6 +615,12 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // partition's owner writes its instances' waits, under the fence, so nothing else writes these rows meanwhile.
     private const string SubscribeIfAbsent = """INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ({0}, {1}, {2}, {3}) ON CONFLICT DO NOTHING""";
     private const string Unsubscribing = """DELETE FROM "Subscriptions" WHERE "Key" = {0} AND "Instance" = {1} AND "Wait" = {2} AND "Partition" = {3}""";
+
+    private async Task<bool> HoldsAfterFailureAsync(CommitBatch batch, CancellationToken cancellationToken)
+    {
+        try { return await HoldsAsync(batch, cancellationToken); }
+        catch (Exception check) { throw new StoreException(Failure.Unknown, "the fence could not be read after a failed commit: " + check.Message, check); }
+    }
 
     /// <summary>Whether every fence of the batch still holds: one read over its k rows.</summary>
     private async Task<bool> HoldsAsync(CommitBatch batch, CancellationToken cancellationToken)

@@ -168,6 +168,20 @@ public sealed partial class EfStore
             batch.Window is not null || batch.PublicationReservation is not null || batch.DueBacklog is not null ||
             batch.Turns.Select(t => t.Instance).Distinct().Count() != batch.Turns.Count) throw RootShape();
 
+        (CommitBatch Batch, RootCheckpoints Checkpoints)? prepared;
+        try { prepared = await PrepareWorkerBatchAsync(roots, batch, fence, cancellationToken); }
+        catch (StoreException failure) when (failure.Failure is Failure.Definite or Failure.Transient)
+        {
+            // Preparation reads inputs before either transactional fence mode has run.
+            if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new(false, 0, []);
+            throw;
+        }
+        return prepared is { } work ? await CommitAsync(work.Batch, work.Checkpoints, cancellationToken) : new(false, 0, []);
+    }
+
+    private async Task<(CommitBatch, RootCheckpoints)?> PrepareWorkerBatchAsync(WorkerRoots roots, CommitBatch batch,
+        PartitionFence fence, CancellationToken cancellationToken)
+    {
         roots = await ResolveWorkerRootsAsync(roots, batch.Turns.Select(t => t.Instance), batch.Seen.Concat(batch.Trial), cancellationToken);
         var commands = new List<QualifiedRootCheckpoint>();
         var turns = new List<TurnCommit>();
@@ -179,7 +193,7 @@ public sealed partial class EfStore
         foreach (var turn in batch.Turns)
         {
             var prepared = await PrepareWorkerTurnAsync(roots.ForActor(turn.Instance), turn, fence, cancellationToken);
-            if (prepared is null) return new(false, 0, []);
+            if (prepared is null) return null;
             commands.Add(prepared.Checkpoint);
             if (prepared.JournalTurn is { } journal)
             {
@@ -187,7 +201,7 @@ public sealed partial class EfStore
                 revisions.Add(journal.Instance, prepared.Checkpoint.JournalRevision);
             }
         }
-        return await CommitAsync(batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions), cancellationToken);
+        return (batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions));
     }
 
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
