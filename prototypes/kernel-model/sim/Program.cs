@@ -159,6 +159,21 @@ if (args.Contains("--sequential-cascade-check"))
     await SequentialCascadeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--public-http-edge-check"))
+{
+    try { return await NativeHttpEdgeChecks.RunAsync(flaws); }
+    catch (InvalidOperationException error)
+    {
+        Console.Error.WriteLine(error.Message);
+        return 1;
+    }
+}
+if (args.Contains("--native-detached-handles-check"))
+{
+    var failed = false;
+    await NativeDetachedHandleChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--cascade-pages-check"))
 {
     var failed = false;
@@ -295,6 +310,13 @@ if (args.Contains("--migration-plan-reads"))
     catch (InvalidOperationException error) { Console.Error.WriteLine(error.Message); return 1; }
 }
 
+
+if (args.Contains("--native-direct-preview-check"))
+{
+    var failed = false;
+    await DirectApprovalPreviewChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--public-owner-check"))
 {
     var failed = false;

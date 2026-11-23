@@ -429,12 +429,21 @@ public sealed class DurableTurn
         return Send(id, target, kind, payload, new SendOptions(TargetCreation: targetCreation, DueAt: dueAt), actorAuthored: true);
     }
 
+    internal string SendToSelf(Func<string, string> issue, string kind, string? payload, long? dueAt)
+    {
+        Kinds.RequireApplicationSend(kind);
+        var id = FoundationSelfSend.Issue(issue, Origin, Revision, _ordinal++, dueAt);
+        _sent.Add(FoundationSelfSend.Create(Id, _input.Creation, id, kind, payload, dueAt));
+        return id;
+    }
+
     internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt)
     {
         Kinds.RequireApplicationSend(kind);
+        if (target == Actor && targetCreation == _input.Creation)
+            return SendToSelf(store.MessageHandle, kind, payload, dueAt);
         var issued = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal++:D4}");
-        var id = dueAt is not null && target == Actor && targetCreation == _input.Creation
-            ? store.FoundationTimerHandle(Origin, issued) : store.MessageHandle("send:" + issued);
+        var id = store.MessageHandle("send:" + issued);
         _sent.Add(new Message(id, target, kind, payload, Id, Due: dueAt, TargetCreation: targetCreation, SenderCreation: _input.Creation)
             { ActorAuthored = true, StorageId = Origin + "#" + id }.AsIssued());
         return id;
@@ -726,7 +735,12 @@ public sealed class DurableTurn
         // Received and recalled rows lose their old memberships. Only surviving sends establish new ones:
         // retracting a staged twin leaves a previously committed row and its old membership intact.
         foreach (var message in _sent)
-            if (message.InboxKey.Scope == InboxKey.ChildCreatorScope || message.InboxKey == InboxKey.Custom(Origin, message.Id)) _custom.Add(message.Id);
+        {
+            // A public detached start returns the child's reference. It never issues a recall handle for its creator.
+            var retainsCreator = message.InboxKey.Scope == InboxKey.ChildCreatorScope &&
+                (!message.BindFoundationChild || message.Start?.Parent is not null);
+            if (retainsCreator || message.InboxKey == InboxKey.Custom(Origin, message.Id)) _custom.Add(message.Id);
+        }
         unit.Row = row with
         {
             CommitTimes = ((TurnClock)Clock).Snapshot(), CustomHandles = _custom.Count == 0 ? null : DurableKeyJson.WriteKeys(_custom),
