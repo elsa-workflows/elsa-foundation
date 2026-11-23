@@ -17,6 +17,7 @@ public sealed class ActorTypeRouter(IActorType fallback, IReadOnlyDictionary<str
     }
 
     public bool SupportsFoundationOperator(InstanceRow? row) => For(row?.Model).SupportsFoundationOperator(row);
+    bool IActorType.AcceptsFoundationOperator(InstanceRow? row, Message message) => For(row?.Model).AcceptsFoundationOperator(row, message);
     bool IActorType.SupportsFoundationInlineStart(string type) => For(type).SupportsFoundationInlineStart(type);
     bool IActorType.SupportsTrialWithdrawal => fallback.SupportsTrialWithdrawal || types.Values.Any(type => type.SupportsTrialWithdrawal);
     bool IActorType.AuthorizesTrialWithdrawal(InstanceRow? row, Message message, Message? creator) =>

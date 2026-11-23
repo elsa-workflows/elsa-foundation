@@ -14,6 +14,7 @@ public sealed partial class EfStore
     {
         internal History History { get; init; }
         internal InstanceStatus Status { get; init; }
+        internal bool Suspended { get; init; }
         internal long? TerminalRevision { get; init; }
         internal long? TerminalAt { get; init; }
         internal long AsOf { get; init; }
@@ -154,14 +155,14 @@ public sealed partial class EfStore
     }
 
     private sealed record PhysicalRoot(string Id, long Creation, string State, int StateVersion, long Revision, string Header,
-        History History, InstanceStatus Status, long? TerminalRevision, long? TerminalAt, long AsOf);
+        History History, InstanceStatus Status, bool Suspended, long? TerminalRevision, long? TerminalAt, long AsOf);
 
     internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
         await using var db = create();
         var physical = await db.Database.SqlQuery<PhysicalRoot>($"""
             SELECT i."Id", b."Creation", i."State", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
-                i."History", i."Status", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
+                i."History", i."Status", i."Suspended", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
                 floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Reference" = i."FoundationReference"
                 AND b."Actor" = i."Id" AND b."Tenant" = i."FoundationTenant"
@@ -177,7 +178,7 @@ public sealed partial class EfStore
         return new(new(physical.Id, physical.Creation), header.Model, header.Definition, header.TypeData,
             header.Labels.ToDictionary(StringComparer.Ordinal), state, physical.StateVersion, physical.Revision)
             {
-                History = physical.History, Status = physical.Status, TerminalRevision = physical.TerminalRevision,
+                History = physical.History, Status = physical.Status, Suspended = physical.Suspended, TerminalRevision = physical.TerminalRevision,
                 TerminalAt = physical.TerminalAt, AsOf = physical.AsOf
             };
     }

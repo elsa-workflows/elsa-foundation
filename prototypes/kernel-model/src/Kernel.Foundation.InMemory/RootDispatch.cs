@@ -28,6 +28,14 @@ internal sealed partial class ActorAdapter
             null, null, metadata.Header.TypeData, metadata.Header.Labels);
     }
 
+    private static bool IsRootSuspension(Durable.Message message) => message is
+    {
+        Kind: Durable.Kinds.Suspend or Durable.Kinds.Resume,
+        InboxScope: Durable.InboxKey.FoundationOccurrenceScope, StorageId: not null, TargetCreation: 1, KeepUntil: not null,
+        Operator: { Selection: null, DeleteTarget: null, RetentionDelete: false, RecoverMode: null, RecoverHandles: null },
+        Start: null, Payload: null, ReplyTo: null, EventMatch: null, Sender: null, SenderCreation: 0, ActorAuthored: false, JobGeneration: 0
+    };
+
     private string? RootRefusal(Durable.TurnInput input)
     {
         if ((input.Row?.Model ?? input.Spec?.Model) != actor.Type) return "UnknownActorType";
@@ -36,6 +44,9 @@ internal sealed partial class ActorAdapter
             row.ParkRecovery is not null || row.ParkCohort is not null || row.ParkDiscard is not null || row.Cascade is not null ||
             row.Jobs is not null || row.Children is not null))
             return "RootDispatchUnavailable";
+
+        if (input.Row is not null && input.Taken is [var command] && command.Durable && IsRootSuspension(command.Message) &&
+            command.Message.Target.Id == input.Actor) return null;
 
         foreach (var delivery in input.Taken)
         {
