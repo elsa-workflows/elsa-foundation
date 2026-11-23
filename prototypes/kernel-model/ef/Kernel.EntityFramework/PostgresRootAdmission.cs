@@ -10,7 +10,7 @@ internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan dedu
 {
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
-    private sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput);
+    private sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput, bool ExplicitZeroDue = false);
     private const string CreatorPrefix = "!kernel-root/1:";
 
     internal async Task InstallAsync(CancellationToken cancellationToken = default)
@@ -95,7 +95,7 @@ internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan dedu
         var escaped = spec.Input is { } input && (input.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(input));
         var payload = escaped ? null : spec.Input;
         var storedSpec = escaped ? creator.Start! : creator.Start! with { Input = null };
-        var header = CreatorPrefix + DurableKeyJson.Write(new StoredRoot(creator.Id, storedSpec, escaped));
+        var header = CreatorPrefix + DurableKeyJson.Write(new StoredRoot(creator.Id, storedSpec, escaped, due == 0));
         // Reserve the 24 KiB fixed frame even for the exceptional encoded representation.
         if (Encoding.UTF8.GetByteCount(header) + (payload is null ? 0 : Encoding.UTF8.GetByteCount(payload)) > 16 * 1024 * 1024 - 24 * 1024)
             throw new ArgumentException("The encoded PostgreSQL creator exceeds the physical message envelope.", nameof(spec));
@@ -145,6 +145,6 @@ internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan dedu
             (stored.EscapedInput ? row.Payload is not null : stored.Spec.Input is not null))
             throw new StoreException(Failure.Definite, "Invalid PostgreSQL generated root creation or input.");
         var spec = stored.Spec with { Input = stored.EscapedInput ? stored.Spec.Input : row.Payload };
-        return FoundationRootCreator.Create(new(row.Target), stored.Id, digest, spec, row.Due == 0 ? null : row.Due, row.ReplyTo);
+        return FoundationRootCreator.Create(new(row.Target), stored.Id, digest, spec, row.Due != 0 || stored.ExplicitZeroDue ? row.Due : null, row.ReplyTo);
     }
 }

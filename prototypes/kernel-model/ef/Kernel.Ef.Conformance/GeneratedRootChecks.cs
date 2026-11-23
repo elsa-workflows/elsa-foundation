@@ -93,6 +93,14 @@ internal static class GeneratedRootChecks
                 $"raw or escaped input round-trips ({input?.Length.ToString() ?? "absent"} code units)");
         }
 
+        foreach (var due in new long?[] { null, 0, 2_000_000_000_000 })
+        {
+            var receipt = await admission.AdmitAsync(tenant, Guid.NewGuid().ToString("N"), spec, due: due);
+            var reopened = await next.ReadPendingCreatorAsync(tenant, receipt.Reference);
+            Check(reopened is not null && reopened.Due == due,
+                $"cold read preserves due time {due?.ToString() ?? "absent"}");
+        }
+
         var messageCount = await db.Messages.CountAsync();
         var receiptCount = await Count("receipts");
         try
