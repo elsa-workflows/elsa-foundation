@@ -86,14 +86,26 @@ internal static class PostgresRootTimedJobIssuance
             "The cold owner must take the same journal position at a higher epoch.");
         var image = (await store.LoadAsync([root.Actor], stop)).Single();
         var checkpoint = Json.Read<NativeState>(image.State);
-        var wait = checkpoint.Waits.Values.Single();
+        var (waitAddress, wait) = checkpoint.Waits.Single();
         var pair = await store.ReadRootTimedJobIssuanceAsync(root, stop);
         var ticket = pair.Ticket.Read<JobTicket>();
         using var wrapped = JsonDocument.Parse(ticket.Arguments!);
+        Check(image is { Model: WorkflowActor.WorkflowActor.ActorType, FoundationDispatchHeader: { Tenant: Tenant } binding } &&
+            image.Id == root.Actor && binding.Reference == actorId,
+            "The cold checkpoint must load the exact bound workflow actor and public reference.");
+        using var dispatch = JsonDocument.Parse(image.FoundationDispatchHeader!.Header.TypeData);
+        var nativeModel = dispatch.RootElement.GetProperty("Model").GetString();
+        Check(dispatch.RootElement.GetProperty("Definition").GetString() == Definition &&
+            nativeModel == NativeExecutionModel.ModelKey,
+            "The persisted dispatch header must name the exact Native model and definition.");
+        Check(ticket.Model == image.Model, "The kernel ticket must name the persisted workflow actor type.");
+        Check(wrapped.RootElement.GetProperty("Model").GetString() == nativeModel,
+            "The workflow job arguments must name the persisted Native model.");
+        Check(waitAddress == ticket.Key, "The Native wait dictionary must address the exact issued job key.");
+        Check(wait.Key == ticket.Key, "The Native wait must carry the exact issued job key.");
         var arguments = wrapped.RootElement.GetProperty("Arguments").GetString();
         var deadline = at + (long)JobTimeout.TotalMilliseconds;
         Check(image is { Creation: 1, Revision: 1, Status: InstanceStatus.Running, NextJobGeneration: 1 } &&
-            image.FoundationDispatchHeader?.Reference == actorId &&
             wait.Kind == "job" && wait.Job is { } saved && saved.Key == ticket.Key && saved.Arguments == arguments && saved.Deadline == deadline &&
             JobRegistry.Read(image.Jobs).SequenceEqual([new(ticket.Key, 0)]) &&
             pair.Ticket.JobGeneration == 0 && ticket.Deadline == deadline && ticket.Timer == pair.Deadline.Id &&

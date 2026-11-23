@@ -11,13 +11,20 @@ internal static class NativeRecoveryMaterial
     {
         ["workflow"] = workflow.Id, ["root"] = workflow.Root.Id, ["variables"] = Values.From(workflow.Variables),
         ["parents"] = Values.From(workflow.Parents.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => new { p.Key, Parent = p.Value.Id })),
-        ["nodes"] = Values.From(workflow.Nodes.Values.OrderBy(n => n.Id, StringComparer.Ordinal).Select(n => new
+        ["nodes"] = new JsonArray(workflow.Nodes.Values.OrderBy(n => n.Id, StringComparer.Ordinal).Select(DescribeNode).ToArray())
+    };
+
+    private static JsonObject DescribeNode(Node n)
+    {
+        var material = JsonSerializer.SerializeToNode(new
         {
             n.Id, Type = n.Type.AssemblyQualifiedName, Module = n.Type.Module.ModuleVersionId, n.Slot, n.External, n.Background,
             Children = n.Children.Select(c => c.Id).ToArray(), n.Connections,
             Gateways = n.Gateways.OrderBy(p => p.Key, StringComparer.Ordinal).ToArray(), Captures = n.Captures.OrderBy(p => p.Key, StringComparer.Ordinal).ToArray(),
             Inputs = n.Inputs.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => new
                 { p.Key, Kind = p.Value.GetType().FullName, Value = JsonSerializer.SerializeToNode(p.Value, p.Value.GetType()) }).ToArray()
-        }))
-    };
+        })!.AsObject();
+        if (n.JobTimeout is { } timeout) material["JobTimeoutTicks"] = timeout.Ticks;
+        return material;
+    }
 }
