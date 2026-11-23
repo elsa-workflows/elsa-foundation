@@ -456,7 +456,7 @@ Reasoned.
 - GraphActivity, CreateUserTask, HumanReview, RunEtl, RunRules and EvaluateDecision; Switch, For, Do, CompensationScope.
 - Incident strategies; retries of faulted activities.
 
-### Detached creator handles
+## Detached creator handles
 
 A Native detached dispatch through the public contract returns the child's exact reference. Its creator is still
 inserted atomically with the parent's turn. Public recall accepts an issued self-timer handle, so the parent has
