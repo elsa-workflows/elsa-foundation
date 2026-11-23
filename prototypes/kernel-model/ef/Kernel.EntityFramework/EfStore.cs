@@ -243,7 +243,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private bool _windowInstalled;
     public bool PhysicalRetirementAvailable => true;
     public bool SupportsCommitWindow => _windowInstalled;
-    public bool SupportsJobTrialClear => !postgres && Engine is null; // SQLite on both commit paths.
+    public bool SupportsJobTrialClear => Engine is null && _ordinaryRoot is null;
 
     public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault(OwnedCommit) ?? true;
 
@@ -585,7 +585,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (turn.Delete)
                 await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0"""), [batch.Partition, turn.Instance], cancellationToken);
         }
-        if (batch.ClearJobTrials.Count != 0 && !await ClearSqliteJobTrialsAsync(db, batch, cancellationToken))
+        if (batch.ClearJobTrials.Count != 0 && !await ClearJobTrialsAsync(db, batch, cancellationToken))
             return new Committed(false, 0, []);
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
