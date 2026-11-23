@@ -125,6 +125,27 @@ internal static class PostgresRootOperatorChecks
                     WHERE r."Tenant" = 'blue' AND r."Operation" = {operation} AND r."Reference" = {refs[0].Id} AND m."Id" = {first!.InboxKey.Id}) AS "Value"
                 """).SingleAsync(ct), "the receipt and exact command were inserted by one PostgreSQL transaction");
         }
+        await using (var db = Open())
+        {
+            var exact = db.Messages.Where(m => m.Target == image.Actor.Id && m.InboxScope == InboxKey.FoundationOccurrenceScope &&
+                m.Id == first!.InboxKey.Id);
+            Check(await exact.ExecuteUpdateAsync(change => change.SetProperty(m => m.JobGeneration, 1L), ct) == 1,
+                "the fixture sets one mismatched generation");
+            try
+            {
+                _ = await admission.ReadDueRootOperatorAsync("blue", refs[0].Id, ct);
+                throw new InvalidOperationException("The cold reader accepted the mismatched generation.");
+            }
+            catch (StoreException error) when (error.Failure == Failure.Definite &&
+                error.Message == "Unexpected stored one-way operator envelope.")
+            {
+                Console.WriteLine("ok the cold reader refuses a mismatched generation");
+            }
+            finally
+            {
+                await exact.ExecuteUpdateAsync(change => change.SetProperty(m => m.JobGeneration, 0L), ct);
+            }
+        }
         await store.BindWorkerPartitionAsync(0, ct);
         var duration = TimeSpan.FromSeconds(30);
         var lease = (await store.TakeAsync(0, "operator-cold", duration, ct))!;

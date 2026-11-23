@@ -90,7 +90,8 @@ internal sealed partial class PostgresRootAdmission
             """).AsNoTracking().SingleOrDefaultAsync(token);
         if (row is null) return null;
         if (!IsStoredOperator(row.Start) || row.Kind is not (Kinds.Suspend or Kinds.Resume) ||
-            row.EventMatch is not null || row.Payload is not null || row.ReplyTo is not null || row.Sender is not null || row.KeepUntil is not { } until)
+            row.EventMatch is not null || row.Payload is not null || row.ReplyTo is not null || row.Sender is not null ||
+            row.JobGeneration != 0 || row.KeepUntil is not { } until)
             throw new StoreException(Failure.Definite, "Unexpected stored one-way operator envelope.");
         var header = DurableKeyJson.Read<StoredOperator>(row.Start![OperatorPrefix.Length..]);
         if (header.Reference != reference || header.Creation != 1 || header.Kind != row.Kind ||
