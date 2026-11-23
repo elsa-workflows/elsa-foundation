@@ -22,6 +22,12 @@ using Npgsql;
 string[] flags = ["--fence-in-batch", "--checked-fence", "--m5", "--rcsi-off", "--rc", "--ef-commit", "--owned-commit", "--fence-ignores-count"];
 switch (args)
 {
+    case ["sqlite", "job-generation-format", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckJobGenerationFormatAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "job-generation-format", .. var options]:
+        await new EfProvider(engine, connection, options).CheckJobGenerationFormatAsync();
+        return 0;
     case ["sqlite", "node-formats", .. var options]:
         await new EfProvider("sqlite", null, options).CheckNodeFormatsAsync();
         return 0;
@@ -117,6 +123,12 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     {
         await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
         await VersionServiceChecks.Run(fixture.CreateAdmin(), fixture.Store);
+    }
+
+    internal async Task CheckJobGenerationFormatAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
+        await JobGenerationFormatChecks.Run(fixture.CreateAdmin(), fixture, () => Store(fixture.CreateAdmin(), FenceInBatch));
     }
 
     internal async Task CheckFormatMigrationAsync()

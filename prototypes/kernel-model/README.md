@@ -317,3 +317,19 @@ counted and sent round trips do not.
 
 All monotonic clocks tick at the database's rate; wall clocks are skewed and jump. Bounded drift of the monotonic
 clock is not modelled. The simulation and the stress tests use their own short leases; the kernel's default is 10 s.
+
+
+### Relational job-generation format
+
+The relational provider records store schema 2, message protocol 2 and journal codec 1.
+During the coordinated stop, call `EfStore.UpgradeJobGenerationFormatAsync` on a
+versioned (1, 1, 1) database before reopening it. Checkpoints that predate the
+creation's next-job counter read as null. Existing tickets read as generation zero.
+MySQL prepares the two additive columns on a separate connection while the migration
+holds the version marker. An interrupted preparation can be retried. The rollback
+floor after the advance is a build that reads (2, 2, 1).
+
+Run `job-generation-format` with the EF conformance executable to exercise the
+migration and cold field reads. The legacy writer still refuses qualified Foundation
+job turns. K4's Worker, Park, current-generation result and job-entry cases require
+the qualified relational writer.

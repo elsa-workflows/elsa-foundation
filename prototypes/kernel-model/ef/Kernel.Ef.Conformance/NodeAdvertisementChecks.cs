@@ -78,7 +78,7 @@ internal static class NodeAdvertisementChecks
     }
 
     private static bool Advertises(NodeEntity row) => row is
-        { ReadableStoreSchema: "1", ReadableMessageProtocol: "1", ReadableJournalCodec: "1" };
+        { ReadableStoreSchema: "2", ReadableMessageProtocol: "2", ReadableJournalCodec: "1" };
 
     private static void Check(bool result, string message)
     {

@@ -36,6 +36,7 @@ public sealed class InstanceEntity
     public InstanceStatus Status { get; set; }
     public string State { get; set; } = "";
     public string? Jobs { get; set; }
+    public long? NextJobGeneration { get; set; }
     public string? CustomHandles { get; set; }
     public long Revision { get; set; }
     public string? Parent { get; set; }
@@ -63,6 +64,7 @@ public sealed class ViewEntity
 
 public sealed class MessageEntity
 {
+    public long JobGeneration { get; set; }
     public long InboxScope { get; set; }
     public byte[] IssuedWire { get; set; } = [];
     public byte[]? EventMatch { get; set; }
@@ -183,6 +185,7 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
         model.Entity<MessageEntity>(e =>
         {
             e.ToTable("Messages");
+            e.Property(m => m.JobGeneration).HasDefaultValue(0L).ValueGeneratedNever();
             var exactIssued = Database.IsSqlServer() || Database.ProviderName == "MySql.EntityFrameworkCore";
             var key = exactIssued ? e.HasKey(m => new { m.Id, m.InboxScope, m.IssuedWire }) : e.HasKey(m => new { m.Id, m.InboxScope });
             if (exactIssued)
@@ -282,6 +285,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     private sealed class PollRow
     {
+        public long? JobGeneration { get; set; }
         public long? InboxScope { get; set; }
         public byte[]? IssuedWire { get; set; }
         public byte[]? EventMatch { get; set; }
@@ -326,6 +330,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         await db.Database.EnsureCreatedAsync();
         await RequireStoreVersionsAsync(db, CancellationToken.None);
         await PhysicalRetirement.InstallAsync(db, Engine, postgres);
+        await InstallJobGenerationGuard(db, CancellationToken.None);
         if (postgres && Engine is null) await db.Database.ExecuteSqlRawAsync(EventInsert.InstallPostgres);
         if (enableCommitWindow)
         {
@@ -542,7 +547,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 var entity = new InstanceEntity
                 {
                     Id = row.Id, Partition = batch.Partition, Model = row.Model, Definition = row.Definition, Status = row.Status,
-                    State = StoredState.Encode(row), Jobs = row.Jobs, CustomHandles = row.CustomHandles, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended, Children = row.Children, StateVersion = row.StateVersion, Retired = row.Retired,
+                    State = StoredState.Encode(row), Jobs = row.Jobs, NextJobGeneration = row.NextJobGeneration, CustomHandles = row.CustomHandles, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended, Children = row.Children, StateVersion = row.StateVersion, Retired = row.Retired,
                 };
                 if (turn.Expected is not { } expected) db.Add(entity);
                 else
@@ -627,7 +632,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
     private string PollSql => Engine?.Poll ??
         $"""
-         SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
+         SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration"
          FROM (SELECT {Now} AS now) t
          LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"}
          ORDER BY m."Seq" LIMIT {"{3}"}
@@ -640,7 +645,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };
-            return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo).WithInboxScope(key.Scope, key.Match),
+            return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo) { JobGeneration = r.JobGeneration!.Value }.WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
         }).ToList();
         return new Polled(messages, rows[0].Now);
@@ -685,7 +690,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private static InstanceRow Snapshot(InstanceEntity i)
     {
         return StoredState.Restore(new(i.Id,i.Model,i.Definition,i.Status,i.State,i.Revision,i.Parent,i.Fault,i.Jobs,i.History,
-            i.Suspended,i.Children,i.StateVersion,Retired:i.Retired,CustomHandles:i.CustomHandles));
+            i.Suspended,i.Children,i.StateVersion,Retired:i.Retired,CustomHandles:i.CustomHandles) { NextJobGeneration = i.NextJobGeneration });
     }
 
     private sealed class RequestedActor
@@ -905,6 +910,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         entity.Target = m.Target.Id;
         entity.Kind = m.Kind;
         entity.Payload = m.Payload;
+        entity.JobGeneration = m.JobGeneration;
         entity.Sender = m.Sender;
         entity.Start = m.Start is null ? null : Json.Write(m.Start);
         entity.Due = m.Due ?? 0;
@@ -920,7 +926,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         {
             if (Engine?.Classify(inner) is { } failure) return new StoreException(failure, inner.Message, e);
             if (inner is PostgresException pg)
-                return new StoreException(pg.SqlState is "40001" or "40P01" or "55P03" ? Failure.Transient : pg.SqlState.StartsWith("22") || pg.SqlState.StartsWith("23") ? Failure.Definite : Failure.Unknown, pg.MessageText, e);
+                return new StoreException(pg.SqlState is "40001" or "40P01" or "55P03" ? Failure.Transient : pg.SqlState == "KJG01" || pg.SqlState.StartsWith("22") || pg.SqlState.StartsWith("23") ? Failure.Definite : Failure.Unknown, pg.MessageText, e);
             if (inner is SqliteException lite)
                 return new StoreException(lite.SqliteErrorCode is 5 or 6 ? Failure.Transient : lite.SqliteErrorCode == 19 ? Failure.Definite : Failure.Unknown, lite.Message, e);     // BUSY is retry, not reset
         }

@@ -34,8 +34,8 @@ internal static class FormatMigrationChecks
             "migration with an unadvertised live node");
         await SetNode(node =>
         {
-            node.ReadableStoreSchema = "1";
-            node.ReadableMessageProtocol = "1";
+            node.ReadableStoreSchema = "2";
+            node.ReadableMessageProtocol = "2";
             node.ReadableJournalCodec = "12";
         });
         await VersionTakeChecks.Refuses(() => store.AdvanceStoreFormatAsync(current, next), "journal codec=[12]",
@@ -74,10 +74,10 @@ internal static class FormatMigrationChecks
         await SetNode(node =>
         {
             node.LeaseUntil = long.MaxValue;
-            node.ReadableMessageProtocol = "1,2";
+            node.ReadableMessageProtocol = "2,3";
             node.ReadableJournalCodec = "1,2";
         });
-        var newer = next with { MessageProtocol = 2 };
+        var newer = next with { MessageProtocol = 3 };
         Check(await store.AdvanceStoreFormatAsync(next, newer) && await ReadVersion() == newer,
             "a live node that advertises every target version can remain present");
 
