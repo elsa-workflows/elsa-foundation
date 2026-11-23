@@ -149,7 +149,18 @@ internal static class StructuredMigration
         };
 
     // Native expressions can stringify a JSON value, including its property order and numeric representation.
-    private static bool SameJson(JsonNode? before, JsonNode? after) => before?.ToJsonString() == after?.ToJsonString();
+    private static bool SameJson(JsonNode? before, JsonNode? after) => (before, after) switch
+    {
+        (null, null) => true,
+        (JsonObject left, JsonObject right) =>
+            (left.Options?.PropertyNameCaseInsensitive ?? false) == (right.Options?.PropertyNameCaseInsensitive ?? false) &&
+            left.Count == right.Count && left.Zip(right).All(pair =>
+                pair.First.Key == pair.Second.Key && SameJson(pair.First.Value, pair.Second.Value)),
+        (JsonArray left, JsonArray right) =>
+            left.Count == right.Count && left.Zip(right).All(pair => SameJson(pair.First, pair.Second)),
+        (JsonValue left, JsonValue right) => left.ToJsonString() == right.ToJsonString(),
+        _ => false,
+    };
 
     private static bool SameEntries<T>(IReadOnlyDictionary<string, T> before, IReadOnlyDictionary<string, T> after, Func<T, T, bool> equals)
     {

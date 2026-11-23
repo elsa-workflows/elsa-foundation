@@ -18,7 +18,16 @@ internal static class StructuredMigrationChecks
             await CheckContainers(mode, Check);
             await CheckLoopAndGraph(mode, Check);
             await CheckStoredReferences(mode, Check);
+            await CheckLiteralLookup(mode, Check);
             await CheckFinished(mode, Check);
+            var job = Wf.Workflow("pending-job", Wf.Call("service", "migration"));
+            await using var withJob = await WaitingActor.StartAsync(job, mode, singleTurn: true);
+            var checkpoint = Json.Read<NativeState>(withJob.Checkpoint());
+            var wait = checkpoint.Waits.Values.Single();
+            Check(wait.Kind == "job" && checkpoint.Frames[wait.Frame].Node == "service" && withJob.HasPendingJob(wait.Key),
+                "the stored background wait has its exact pending ticket");
+            Check(StructuredMigration.Validate(job, job, checkpoint) == StructuredMigrationFinding.UnsupportedCheckpoint,
+                "an outstanding background job refuses migration even to the same definition");
         }
         await CheckQueuedWork(check);
     }
@@ -182,6 +191,42 @@ internal static class StructuredMigrationChecks
         }
     }
 
+    private static async Task CheckLiteralLookup(string mode, Action<bool, string> check)
+    {
+        foreach (var ignoreCase in new[] { false, true })
+        {
+            var source = WithLookup(ignoreCase);
+            await using var actor = await WaitingActor.StartAsync(source, mode);
+            var state = Json.Read<NativeState>(actor.Checkpoint());
+            check(state.Waits.Values.Single().Key == "event:ready" &&
+                StructuredMigration.Validate(source, WithLookup(ignoreCase), state) is null,
+                $"a waiting custom leaf keeps its nested JSON lookup setting ({ignoreCase})");
+            check(StructuredMigration.Validate(source, WithLookup(!ignoreCase), state) == StructuredMigrationFinding.AuthoredNode,
+                "identical JSON text cannot change case lookup in a waiting leaf's nested object");
+            await actor.PublishAsync();
+            check(actor.Status() == InstanceStatus.Finished &&
+                Json.Read<NativeState>(actor.Checkpoint()).Results["lookup"]?.GetValue<bool>() == ignoreCase,
+                $"the resumed leaf observes its authored nested JSON lookup setting ({ignoreCase})");
+        }
+
+        static Workflow WithLookup(bool ignoreCase)
+        {
+            var value = new JsonArray(new JsonObject(new JsonNodeOptions { PropertyNameCaseInsensitive = ignoreCase })
+                { ["Name"] = "present" });
+            return Wf.Workflow("literal-lookup",
+                Wf.Node<LookupOnResume>("lookup", (nameof(LookupOnResume.Settings), Binding.Literal(value))));
+        }
+    }
+
+    public sealed class LookupOnResume : StatefulActivity<bool, int, JsonNode?>
+    {
+        [Input] public JsonArray Settings { get; set; } = [];
+        protected override ValueTask<Transition> ExecuteAsync(StartContext<JsonNode?> context) =>
+            new(Suspend(0, new EventTrigger("ready")));
+        protected override ValueTask<Transition> ResumeAsync(ResumeContext<int, JsonNode?> context) =>
+            new(Complete(Settings[0]?["name"] is not null));
+    }
+
     private static async Task CheckFinished(string mode, Action<bool, string> check)
     {
         var source = Definition("finished-source", Prefix());
@@ -227,6 +272,11 @@ internal static class StructuredMigrationChecks
 
         internal string Checkpoint() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor?.Row.State
             ?? throw new InvalidOperationException("The Native checkpoint was not committed.");
+        internal bool HasPendingJob(string key)
+        {
+            var row = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row;
+            return store.Messages.GetValueOrDefault(InboxKey.Ticket(row.Id, key, row.Creation)) is { Done: false };
+        }
         internal InstanceStatus Status() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.Status;
 
         internal async Task PublishAsync(string key = "ready")
