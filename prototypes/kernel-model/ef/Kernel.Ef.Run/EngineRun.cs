@@ -12,7 +12,7 @@ using Npgsql;
 
 /// <summary>
 /// The runs of ENGINES.md: the stress test, the cost count and the probes of Program.cs, on any of the four engines.
-///   x stress|cost|probe|block|definite|deadlock|fence|lockorder|nodelease|locktimeout|watchdog|setcost|setidle postgres|sqlserver|mysql|sqlite "connection" [key=value ...]   (setcost, setidle: SetCost.cs)
+///   x stress|cost|reference-cost|probe|block|definite|deadlock|fence|lockorder|nodelease|locktimeout|watchdog|setcost|setidle postgres|sqlserver|mysql|sqlite "connection" [key=value ...]   (setcost, setidle: SetCost.cs)
 /// Options: fence=checked|batch (default: the engine's, batch on every engine since 16 November for the owned commit; checked is SQL Server's 13 November fallback and its default with commit=ef, E9)  commit=ef|owned (default: the engine's; COMMIT-SQL.md)  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  fencecount=0 (the owned fence ignores its matched count)  unordered=1 (lockorder: the k fence rows locked in the batch's order, the negative)  case=heartbeat|mutual|heartbeats mutation=subquery|rr|membership|rr-subquery|share expect=none|deadlock (nodelease: NL-9, NodeLeaseRun.cs)  stalelease=1 (the Worker commits past its local lease deadline: stale owners reach the fence; a pin's harness)  seconds=40  messages=5000  partitions=2  nodes=3
 ///          kill=0 (no sessions killed)   rcsi=0 (locking; default on) readpast=1 xactabort=1 (SQL Server)   isolation=rc takerr=1 (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
 ///          role=workers name=b signal=path (a second process on the same database)   locks=1 (cost)
@@ -27,7 +27,15 @@ static class EngineRun
     {
         if (args is ["size-check"]) return await StateSizeChecks.RunAsync();
         if (args.Length < 3) return 2;
+        var referenceCost = args[0] == "reference-cost";
+        if (referenceCost && (args[1] is not ("postgres" or "sqlserver" or "mysql" or "sqlite") ||
+            args.Length != 4 || args[3] != "disposable=1"))
+        {
+            Console.Error.WriteLine("Usage: x reference-cost postgres|sqlserver|mysql|sqlite <disposable connection> disposable=1");
+            return 2;
+        }
         var options = args.Skip(3).Select(a => a.Split('=', 2)).ToDictionary(a => a[0], a => a.Length > 1 ? a[1] : "1");
+        if (referenceCost) options["proxy"] = "1";
         int[]? sizes = null;
         if (args[0] == "cost")
         {
@@ -67,7 +75,7 @@ static class EngineRun
         return args[0] switch
         {
             "stress" => await Stress(target),
-            "cost" => await Cost(target, sizes!),
+            "cost" or "reference-cost" => await Cost(target, sizes),
             "probe" => await Probe(target),
             "block" => await Block(target),
             "definite" => await Definite(target),
@@ -383,13 +391,19 @@ static class EngineRun
 
     // ---- what a run costs ----------------------------------------------------------------------------------------------
 
-    private static async Task<int> Cost(Target target, int[] sizes)
+    private static async Task<int> Cost(Target target, int[]? sizes)
     {
         var counter = new Counting();
         var (locks, opens, saves) = (new Locks(target), new Opens(), new Saves());
         var create = target.Has("locks") ? target.Workers(counter, counter.Transactions, opens, saves, locks) : target.Workers(counter, counter.Transactions, opens, saves);
+        var provider = target.Store(create);
+        if (sizes is null && (!provider.OwnedCommit || !target.FenceInBatch))
+        {
+            Console.Error.WriteLine("The reference cost requires the default owned writer and in-batch fence.");
+            return 1;
+        }
         await target.ResetAsync(2);
-        var tally = new Tally(target.Store(create));     // also proves each size trial landed ten commits; no round trip
+        var tally = new Tally(provider);     // also proves each size trial landed ten commits; no round trip
         IKernelStore store = tally;
         // A cost run counts the work, not the lease's upkeep: with an hour's lease no pass renews it inside a row, however slow the engine.
         var owner = new Worker("owner", 0, store, target.Actors(Models()), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000, Lease = TimeSpan.FromHours(1), Partitions = 2 });
@@ -403,7 +417,7 @@ static class EngineRun
         if (target.Writes is { } described) Console.WriteLine("writes: " + await described.DescribeAsync() + $"; history {target.Get("history", "as the models say")}, pad {target.Int("pad", 0)} bytes");
         Console.WriteLine("counted: commands, COMMITs and (but for PostgreSQL) BEGINs, as FINDINGS.md section 5 counts; sent: what the driver sends, one per request (see ENGINES.md)");
         Console.WriteLine($"{"run",-58} {"commands",8} {"begin",6} {"commit",6} {"opens",6} {"saves",6} {"counted",8} {"sent",6} {"server",8} {"tcp",6}");
-        async Task Row(string name, Func<Task> body, Func<Task>? before = null)
+        async Task<(int Counted, long? RoundTrips)> Row(string name, Func<Task> body, Func<Task>? before = null)
         {
             // With writes=1 the setup's WAL is measured too: for the rows whose setup only adds outside messages, it is their inserts.
             var setupFrom = target.Writes is { } ws && before is not null ? await ws.TakeAsync() : null;
@@ -423,13 +437,55 @@ static class EngineRun
             var delta = (await target.WireByKindAsync()).Select(k => (k.Key, n: k.Value - kinds.GetValueOrDefault(k.Key))).Where(k => k.n > 0).ToList();
             var counted = counter.Commands + counter.Transactions.Ended + (target.Engine == "postgres" ? 0 : counter.Transactions.Begun);
             var sent = counter.Commands + counter.Transactions.Ended + target.BeginTrips * counter.Transactions.Begun + target.OpenTrips * opens.Count + target.SaveTrips * (saves.Set + saves.Released);
-            var tcp = target.Proxy is { } proxy ? (proxy.Trips - trips).ToString() : "";
+            long? tcp = target.Proxy is { } proxy ? proxy.Trips - trips : null;
             Console.WriteLine($"{name,-58} {counter.Commands,8} {counter.Transactions.Begun,6} {counter.Transactions.Ended,6} {opens.Count,6} {saves.Set + saves.Released,6} {counted,8} {sent,6} {(wire < 0 ? "" : wire.ToString()),8} {tcp,6}");
             if(target.Engine=="postgres" && target.Proxy is {} pg)Console.WriteLine($"    PostgreSQL frames (groups include pipelined BEGIN, not RTT): groups={pg.ProtocolRequests-groups}, Flush={pg.Flushes-pgBefore.Item1}, Execute={pg.Executes-pgBefore.Item2}, nonzero-limit={pg.LimitedExecutes-pgBefore.Item3}, named-portal={pg.NamedExecutes-pgBefore.Item4}");
             if (locks.Largest != "") Console.WriteLine("    locks held at the largest commit: " + locks.Largest);
             if (walLine is not null) Console.WriteLine(walLine);
             if (setupLine is not null) Console.WriteLine(setupLine);
             if (target.Has("wire") && target.Engine == "mysql") Console.WriteLine("    server: " + string.Join(", ", delta.OrderBy(k => k.Key).Select(k => $"{k.Key.Replace("statement/", "")} x{k.n}")));
+            return (counted, tcp);
+        }
+
+        if (sizes is null)
+        {
+            var start = Start(Sequence.Balanced);
+            var unitsBefore = tally.Units;
+            var measured = await Row("ten no-ops, balanced, started on the owner", async () =>
+            {
+                owner.Post(start, fresh: true);
+                await Drain(owner, poll: false);
+            });
+            var row = (await store.LoadAsync([start.Target.Id])).SingleOrDefault();
+            var journal = await store.ReadJournalOfAsync(start.Target.Partition, start.Target.Id, 0);
+            var activities = Enumerable.Range(1, 10).ToArray();
+            if (tally.Units - unitsBefore != 1 ||
+                row is not { Status: InstanceStatus.Finished, Revision: 1 } ||
+                !Json.Read<SequenceState>(row.State).Done.SequenceEqual(activities) ||
+                journal is not [{ Position: 1, Revision: 1 } entry] ||
+                !Json.Read<List<string>>(entry.Entries).SequenceEqual(activities.Select(activity => $"activity {activity}")))
+            {
+                Console.Error.WriteLine("The reference workflow must persist ten ordered activities in one finished revision and journal row.");
+                return 1;
+            }
+
+            var (budget, units) = target.Engine switch
+            {
+                "postgres" => (2, "wire round trips"),
+                "sqlserver" => (3, "wire round trips"),
+                "sqlite" => (3, "engine calls"),
+                _ => (0, "wire round trips"),
+            };
+            var observed = target.Engine == "sqlite" ? measured.Counted : measured.RoundTrips;
+            if (observed is null or <= 0 || budget > 0 && observed > budget)
+            {
+                Console.Error.WriteLine($"Reference cost failed on {target.Engine}: {observed?.ToString() ?? "unavailable"} {units}, budget {budget}.");
+                return 1;
+            }
+            Console.WriteLine(budget > 0
+                ? $"PASS {target.Engine}: {observed} {units} within budget {budget}, ten activities in one revision."
+                : $"RECORDED {target.Engine}: {observed} {units}, ten activities in one revision.");
+            return 0;
         }
 
         foreach (var mode in new[] { Sequence.Ephemeral, Sequence.Balanced, Sequence.Durable })
