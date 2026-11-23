@@ -27,4 +27,13 @@ describe("history investigation URLs", () => {
     writeRunHistoryLocation({ ...state, view: "diagram" }, { href: "https://studio.example/run?bookmark=one" }, history);
     expect(history.replaceState).toHaveBeenCalledWith(history.state, "", "https://studio.example/run?bookmark=one&view=diagram");
   });
+  it("defaults to lifecycle detail and round-trips highlights and all detail levels", () => {
+    const defaultState = readRunHistoryLocation("");
+    expect(defaultState.filters.detail).toBe("lifecycle");
+    expect(new URL(withRunHistoryLocation("https://studio.example/run", defaultState)).searchParams.has("historyDetail")).toBe(false);
+
+    const highlights = readRunHistoryLocation("?historyDetail=highlights");
+    expect(highlights.filters.detail).toBe("highlights");
+    expect(new URL(withRunHistoryLocation("https://studio.example/run", highlights)).searchParams.get("historyDetail")).toBe("highlights");
+  });
 });

@@ -58,7 +58,7 @@ internal sealed class WorkflowDashboardQuerySource(
             problems.Add(new("UNSUPPORTED_QUERY", "query.groupBy", "Time grouping requires an explicit hour/day bucket and currently supports a single period. Use definition/folder grouping for comparisons."));
         if (query.GroupBy.Any(field => field is "completedAt" or "durationMs"))
             problems.Add(new("UNSUPPORTED_QUERY", "query.groupBy", "This field is not a supported workflow grouping dimension."));
-        context.Results.Add(new(problems.Count == 0, problems, Interpretation(context.Query)));
+        context.Results.Add(new(problems.Count == 0, problems, Interpretation(context.Query, query.Form == "records")));
     }
 
     private static void ValidateDiscreteFilters(DashboardPredicate? predicate, DashboardQueryContext context, List<DashboardQueryProblem> problems)
@@ -383,7 +383,7 @@ internal sealed class WorkflowDashboardQuerySource(
             : comparison * (sort.Direction == "ascending" ? 1 : -1);
     }
 
-    private DashboardQueryResult Records(DashboardQueryContext context, IReadOnlyList<SourceRow> rows, IReadOnlyList<string> fields) => BaseResult(context) with
+    private DashboardQueryResult Records(DashboardQueryContext context, IReadOnlyList<SourceRow> rows, IReadOnlyList<string> fields) => BaseResult(context, records: true) with
     {
         Columns = fields.Select(field => Column(context, field)).ToArray(),
         Rows = rows.Select(row => new DashboardResultRow(row.State.WorkflowExecutionId,
@@ -434,20 +434,40 @@ internal sealed class WorkflowDashboardQuerySource(
         return new(field, declaration.Label, declaration.Type, declaration.Unit);
     }
 
-    private static DashboardQueryResult BaseResult(DashboardQueryContext context) => new()
+    private static DashboardQueryResult BaseResult(DashboardQueryContext context, bool records = false) => new()
     {
         DatasetId = DatasetId, SchemaRevision = SchemaRevision, QueryFingerprint = context.QueryFingerprint,
-        Interpretation = Interpretation(context), Periods = context.Periods,
+        Interpretation = Interpretation(context, records), Periods = context.Periods,
         Coverage = new("unknown", "Results cover retained, individually authorized runs only. Collection/retention completeness is not attested; deleted or uncaptured runs are absent.")
     };
 
-    private static string Interpretation(DashboardQueryContext context) =>
-        (context.Periods.Count == 0 ? "Retained runs after explicit filters and current run/organization authorization. " :
-            "Current outcomes of retained runs started in each displayed [from,to) cohort, after current run and requested organization authorization and explicit filters. ") +
-        "Failure rate is faulted/started including incomplete runs; no denominator is null. Change is percentage points, not relative growth. " +
-        "Durations use valid terminal start/completion pairs; other pairs are excluded. Unknown run kind is not production attribution. " +
-        (NeedsOrganization(context.Request.Query) ? "Folder grouping uses current readable Design organization, not historical folders. " : string.Empty) +
-        "Collection/retention coverage is unknown.";
+    private static string Interpretation(DashboardQueryContext context, bool records)
+    {
+        var query = context.Request.Query;
+        var parts = new List<string>
+        {
+            records
+                ? (context.Periods.Count == 0
+                    ? "Authorized retained runs matching the current filters."
+                    : "Authorized retained runs started in the displayed [from,to) window after filters.")
+                : (context.Periods.Count == 0
+                    ? "Current outcomes of authorized retained runs matching the current filters."
+                    : "Current outcomes of authorized retained runs started in each displayed [from,to) cohort.")
+        };
+        if (!records)
+        {
+            var hasFailureRate = query.Metrics.Any(metric => metric.Metric == "workflow.failure-rate");
+            if (hasFailureRate)
+                parts.Add("Failure rate is faulted/started including incomplete runs; no denominator is null.");
+            if (hasFailureRate && query.Comparison is not null)
+                parts.Add("Change is percentage points, not relative growth.");
+            if (query.Metrics.Any(metric => metric.Metric is "workflow.average-duration-ms" or "workflow.eligible-duration-count" || metric.Field == "durationMs"))
+                parts.Add("Durations use valid terminal start/completion pairs; other pairs are excluded.");
+        }
+        if (NeedsOrganization(query))
+            parts.Add("Folder grouping uses current readable Design organization, not historical folders.");
+        return string.Join(' ', parts);
+    }
 
     private static bool NeedsOrganization(DashboardQueryDefinition query) => query.Fields.Concat(query.GroupBy)
         .Concat(query.Sort.Select(sort => sort.Reference)).Concat(FilterFields(query.Filters)).Any(field => field is "currentFolder" or "currentFolderId");

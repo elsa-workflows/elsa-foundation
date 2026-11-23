@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useAuthSession, usePermissions, useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceWhenActive, studioNavigationRequestedEvent, notifyStudioNavigationGuardReleased, type StudioNavigationRequest, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { useAuthSession, usePermissions, useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceWhenActive, studioNavigationRequestedEvent, notifyStudioNavigationGuardReleased, type StudioDashboardRecordLinkContribution, type StudioNavigationRequest, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { StudioNewResourceDialog, type StudioResourceMetadata, studioRowInteraction, OverflowMenu, PeerViewSwitch, SkeletonRows, StudioButton, StudioDialogFooter, StudioField, StudioTimestamp, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { createHomeLayoutScope } from "../homeLayout";
 import { DashboardApi } from "./api";
 import { QueryControls } from "./QueryControls";
 import { ResultView } from "./ResultView";
-import { DashboardDependencyReview, HistoryDialog, NativeDialog, ShareDialog, TileOptionsDialog, QuestionPickerDialog } from "./ResourceDialogs";
+import { AddToDashboardDialog, DashboardDependencyReview, DrillRecordsDialog, HistoryDialog, NativeDialog, ShareDialog, TileOptionsDialog, QuestionPickerDialog } from "./ResourceDialogs";
+import { mergeDrillPages, summarizeDrillRow } from "./resultExport";
 import { accessLost, errorMessage, initialDefinition, resourcePath, type DashboardResource, type DashboardTile, type DatasetDeclaration, type QueryResult, type QueryRow, type QuestionDefinition, type QueryProblem } from "./types";
 import { useRequestLifetime } from "./useRequestLifetime";
 import { dashboardActorScope } from "./requestScheduler";
@@ -25,10 +26,11 @@ export function NamedDashboardsRoute(props: RouteProps) {
   const scope = JSON.stringify(createHomeLayoutScope(props.api, session));
   const segments = pathname.split("/").filter(Boolean);
   const id = props.view === "detail" || props.view === "edit" ? decodeURIComponent(segments[segments.length - (props.view === "edit" ? 2 : 1)] ?? "") : undefined;
+  const initialQuestionId = props.kind === "dashboard" && props.view === "create" ? location.searchParams.get("questionId")?.trim() || undefined : undefined;
   const actorScope = dashboardActorScope(props.api.backendSession?.identity ?? session);
   const native = useMemo(() => new DashboardApi(props.api.backend, actorScope), [props.api.backend, actorScope]);
-  const key = `${scope}:${props.kind}:${props.view}:${id ?? ""}`;
-  return props.view === "list" ? <ResourceCollection key={key} {...props} native={native} /> : <ResourceRoute key={key} {...props} native={native} id={id} />;
+  const key = `${scope}:${props.kind}:${props.view}:${id ?? initialQuestionId ?? ""}`;
+  return props.view === "list" ? <ResourceCollection key={key} {...props} native={native} /> : <ResourceRoute key={key} {...props} native={native} id={id} initialQuestionId={initialQuestionId} />;
 }
 
 function ResourceCollection({ api, native, kind, navigate }: RouteProps & { native: DashboardApi }) {
@@ -90,12 +92,12 @@ function ResourceCollection({ api, native, kind, navigate }: RouteProps & { nati
     } finally { operation.finish(); }
   };
   const showActions = items.some(item => item.capabilities.canDelete);
-  return <StudioPage className="named-workspace" data-studio-collection><StudioPageHeader headingLevel={2} title={title} description={kind === "question" ? "Save a question once. Reuse it with your current data access." : "Arrange saved questions into personal and shared views."} refresh={{ id: `saved-${kind}s`, label: `Refresh ${title.toLowerCase()}`, onRefresh: () => load(appliedSearch), refreshing: loading, disabled: Boolean(deletingId), autoRefresh: true }}
+  return <StudioPage className="named-workspace" data-studio-collection><StudioPageHeader headingLevel={2} title={title} description={kind === "question" ? "Save reusable queries and visualizations over your data. Run them standalone or place them on dashboards." : "Arrange saved questions into personal and shared views."} refresh={{ id: `saved-${kind}s`, label: `Refresh ${title.toLowerCase()}`, onRefresh: () => load(appliedSearch), refreshing: loading, disabled: Boolean(deletingId), autoRefresh: true }}
       actions={canCreate ? <StudioButton variant="primary" onClick={() => navigate(`${resourcePath(kind)}/new`)}>New {kind}</StudioButton> : undefined} />
     <StudioCollectionToolbar><form className="named-search" onSubmit={event => { event.preventDefault(); void load(search); }}><StudioSearchInput ref={searchInput} aria-label={`Search ${title.toLowerCase()}`} value={search} onChange={event => setSearch(event.target.value)} /><StudioButton type="submit">Search</StudioButton></form><PeerViewSwitch ariaLabel="Ownership" value={ownership} onChange={setOwnership}
       views={[{ id: "mine", label: "Mine" }, { id: "shared", label: "Shared with me" }]} /></StudioCollectionToolbar>
     {deleteError ? <div className="named-inline-error" role="alert"><p>{deleteError}</p></div> : null}
-    {loading && !items.length ? <SkeletonRows label={`Loading ${title.toLowerCase()}`} /> : error ? <StudioResultState tone="danger" title={`${title} could not be loaded`} description={error} actions={<StudioButton onClick={() => void load(appliedSearch)}>Retry</StudioButton>} /> : !items.length ? <StudioResultState title={appliedSearch ? "No matching definitions" : ownership === "shared" ? "Nothing has been shared with you" : `No ${title.toLowerCase()} yet`} description={appliedSearch ? "Change your search to see other definitions." : kind === "question" ? "Create a supported question using ordinary controls or Weaver." : "Create a dashboard and add accessible saved questions."} actions={appliedSearch ? <StudioButton onClick={() => { setSearch(""); void load(""); }}>Clear search</StudioButton> : canCreate ? <StudioButton onClick={() => navigate(`${resourcePath(kind)}/new`)}>New {kind}</StudioButton> : undefined} /> : <StudioTableContainer role="region" aria-label={title} tabIndex={0}><table className="studio-table named-resource-table"><thead><tr><th scope="col">Name</th><th scope="col">Description</th><th scope="col">Access</th><th scope="col">Updated</th>{showActions ? <th scope="col">Actions</th> : null}</tr></thead><tbody>{items.map(item => <tr key={item.id} {...studioRowInteraction<HTMLTableRowElement>(() => navigate(resourcePath(kind, item.id)))}><td><a className="studio-row-link" href={resourcePath(kind, item.id)} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); navigate(resourcePath(kind, item.id)); } }}>{item.name}</a></td><td>{item.description}</td><td>{item.capabilities.canShare ? "Owner" : item.capabilities.canEdit ? "Can edit" : "Can view"}</td><td><StudioTimestamp value={item.updatedAt} /></td>{showActions ? <td>{item.capabilities.canDelete ? <OverflowMenu ariaLabel={`Actions for ${item.name}`} items={[{ id: "delete", label: "Delete", destructive: true, disabled: deletingId !== undefined, onSelect: () => void deleteResource(item) }]} /> : null}</td> : null}</tr>)}</tbody></table></StudioTableContainer>}
+    {loading && !items.length ? <SkeletonRows label={`Loading ${title.toLowerCase()}`} /> : error ? <StudioResultState tone="danger" title={`${title} could not be loaded`} description={error} actions={<StudioButton onClick={() => void load(appliedSearch)}>Retry</StudioButton>} /> : !items.length ? <StudioResultState title={appliedSearch ? "No matching definitions" : ownership === "shared" ? "Nothing has been shared with you" : `No ${title.toLowerCase()} yet`} description={appliedSearch ? "Change your search to see other definitions." : ownership === "shared" ? kind === "question" ? "Questions shared with you appear here and always run with your current data access." : "Dashboards shared with you appear here and always run with your current data access." : kind === "question" ? "Build a query and visualization using controls or Weaver. Run it directly, share it, or reuse it across dashboards." : "Create a dashboard and arrange accessible saved questions as tiles."} actions={appliedSearch ? <StudioButton onClick={() => { setSearch(""); void load(""); }}>Clear search</StudioButton> : canCreate ? <StudioButton onClick={() => navigate(`${resourcePath(kind)}/new`)}>New {kind}</StudioButton> : undefined} /> : <StudioTableContainer role="region" aria-label={title} tabIndex={0}><table className="studio-table named-resource-table"><thead><tr><th scope="col">Name</th><th scope="col">Description</th><th scope="col">Access</th><th scope="col">Updated</th>{showActions ? <th scope="col">Actions</th> : null}</tr></thead><tbody>{items.map(item => <tr key={item.id} {...studioRowInteraction<HTMLTableRowElement>(() => navigate(resourcePath(kind, item.id)))}><td><a className="studio-row-link" href={resourcePath(kind, item.id)} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); navigate(resourcePath(kind, item.id)); } }}>{item.name}</a></td><td>{item.description}</td><td>{item.capabilities.canShare ? "Owner" : item.capabilities.canEdit ? "Can edit" : "Can view"}</td><td><StudioTimestamp value={item.updatedAt} /></td>{showActions ? <td>{item.capabilities.canDelete ? <OverflowMenu ariaLabel={`Actions for ${item.name}`} items={[{ id: "delete", label: "Delete", destructive: true, disabled: deletingId !== undefined, onSelect: () => void deleteResource(item) }]} /> : null}</td> : null}</tr>)}</tbody></table></StudioTableContainer>}
     {!error && items.length ? <StudioCollectionFooter>{items.length} {items.length === 1 ? kind : title.toLowerCase()} loaded{cursor ? <StudioButton disabled={loading} onClick={() => void load(appliedSearch, cursor)}>Load more</StudioButton> : null}</StudioCollectionFooter> : null}
   </StudioPage>;
 }
@@ -116,7 +118,7 @@ function reconcileTileDisclosure(local: DashboardTile[] | undefined, previous: D
 }
 
 type AccessReview = { state: "checking" | "available" | "unavailable" | "denied"; message?: string };
-function ResourceRoute({ api, native, kind, id, navigate, authoring, view }: RouteProps & { native: DashboardApi; id?: string }) {
+function ResourceRoute({ api, native, kind, id, initialQuestionId, navigate, authoring, view }: RouteProps & { native: DashboardApi; id?: string; initialQuestionId?: string }) {
   const permissions = usePermissions();
   const [resource, setResource] = useState<DashboardResource>();
   const [datasets, setDatasets] = useState<DatasetDeclaration[]>([]);
@@ -132,11 +134,11 @@ function ResourceRoute({ api, native, kind, id, navigate, authoring, view }: Rou
     if (kind === "question") void native.datasets(controller.signal).then(page => { if (!controller.signal.aborted) { setDatasets(page.items); setSourceError(undefined); } }).catch(cause => { if (!controller.signal.aborted) setSourceError(errorMessage(cause)); });
     if (id) void native.get(kind, id, controller.signal).then(value => { if (!controller.signal.aborted) { setResource(value); setReview({ state: "available" }); } }).catch(cause => { if (!controller.signal.aborted) setReview({ state: accessLost(cause) ? "denied" : "unavailable", message: errorMessage(cause) }); });
     else {
-      setResource(current => current ?? { id: "", kind, name: "", description: "", revision: "", ownerId: "", capabilities: { canRead: true, canEdit: true, canShare: false, canDelete: false, canCopy: false }, definition: kind === "question" ? initialDefinition() : undefined, definitionState: "available", tiles: [], createdAt: "", updatedAt: "" });
+      setResource(current => current ?? { id: "", kind, name: "", description: "", revision: "", ownerId: "", capabilities: { canRead: true, canEdit: true, canShare: false, canDelete: false, canCopy: false }, definition: kind === "question" ? initialDefinition() : undefined, definitionState: "available", tiles: kind === "dashboard" && initialQuestionId ? [{ id: uuid(), questionId: initialQuestionId, size: "medium", referenceState: "available" }] : [], createdAt: "", updatedAt: "" });
       setReview({ state: "available" });
     }
     return () => controller.abort();
-  }, [native, kind, id, attempt]);
+  }, [native, kind, id, initialQuestionId, attempt]);
   if (!id && kind === "dashboard" && view === "create" && !permissions.has("*") && !permissions.has("studio/dashboards:create")) return <StudioPage className="named-workspace"><StudioPageHeader headingLevel={2} title="Dashboard creation unavailable" /><StudioResultState tone="danger" title="You cannot create dashboards" description="Ask an administrator for dashboard creation access." actions={<StudioButton onClick={() => navigate(resourcePath(kind))}>Back to dashboards</StudioButton>} /></StudioPage>;
   if (!resource && review.message) return <StudioPage className="named-workspace"><StudioPageHeader headingLevel={2} title={kind === "question" ? "Question unavailable" : "Dashboard unavailable"} /><StudioResultState tone="danger" title="Definition could not be opened" description={review.message} actions={<><StudioButton onClick={() => setAttempt(value => value + 1)}>Retry</StudioButton><StudioButton onClick={() => navigate(resourcePath(kind))}>Back to collection</StudioButton></>} /></StudioPage>;
   if (!resource) return <StudioPage className="named-workspace"><SkeletonRows label="Loading definition" /></StudioPage>;
@@ -150,6 +152,7 @@ function ResourceRoute({ api, native, kind, id, navigate, authoring, view }: Rou
 function ResourceEditor({ api, native, initial, newMetadata, review, datasets, sourceError, onReload, onRetryAccess, navigate, authoring, view }: { api: ElsaStudioModuleApi; native: DashboardApi; initial: DashboardResource; newMetadata?: StudioResourceMetadata; review: AccessReview; authoring?: DashboardAuthoringController; datasets: DatasetDeclaration[]; sourceError?: string; onReload(): void; onRetryAccess(): void; navigate(path: string): void; view: RouteProps["view"] }) {
   const permissions = usePermissions();
   const canCreateQuestion = permissions.has("*") || permissions.has("studio/questions:create");
+  const canCreateDashboard = permissions.has("*") || permissions.has("studio/dashboards:create");
   const [saved, setSaved] = useState(initial);
   const [draft, replaceDraft] = useState(() => newMetadata ? { ...initial, ...newMetadata } : initial);
   const draftRef = useRef(draft);
@@ -172,7 +175,7 @@ function ResourceEditor({ api, native, initial, newMetadata, review, datasets, s
   const [revisionConflict, setRevisionConflict] = useState(false);
   const [accessUnavailable, setAccessUnavailable] = useState(false);
   const accessUnavailableRef = useRef(false);
-  const [dialog, setDialog] = useState<"share" | "history" | "questions" | "copy" | null>(null);
+  const [dialog, setDialog] = useState<"share" | "history" | "questions" | "copy" | "add-to-dashboard" | null>(null);
   const [copyDependenciesReady, setCopyDependenciesReady] = useState(false);
   const [result, setResult] = useState<QueryResult>();
   const resultRef = useRef(result); resultRef.current = result;
@@ -185,8 +188,11 @@ function ResourceEditor({ api, native, initial, newMetadata, review, datasets, s
   const [resultWithheld, setResultWithheld] = useState(false);
   const [drillResult, setDrillResult] = useState<QueryResult>();
   const [drillSource, setDrillSource] = useState<QueryRow>();
+  const [drillRowSummary, setDrillRowSummary] = useState<string>();
   const [drilling, setDrilling] = useState(false);
+  const [drillLoadingMore, setDrillLoadingMore] = useState(false);
   const [drillError, setDrillError] = useState<string>();
+  const recordLinks = api.dashboardRecordLinks?.list() ?? [];
   const [refresh, setRefresh] = useState(0);
   const [announcement, setAnnouncement] = useState("");
   const [editingTile, setEditingTile] = useState<DashboardTile>();
@@ -222,7 +228,7 @@ function ResourceEditor({ api, native, initial, newMetadata, review, datasets, s
   const withholdResults = useCallback(() => {
     // Neither a failed nor a cancelled read reauthorizes earlier facts.
     previewRequest.current?.abort(); setQuerying(false);
-    lifetime.cancel("drill"); setDrilling(false); setDrillSource(undefined); setDrillResult(undefined);
+    lifetime.cancel("drill"); setDrilling(false); setDrillLoadingMore(false); setDrillSource(undefined); setDrillRowSummary(undefined); setDrillResult(undefined);
     const hadResult = Boolean(resultRef.current);
     setResultWithheld(previous => previous || hadResult); setResult(undefined); setResultDefinition(undefined); setResultResource(undefined);
     setResultFingerprint(undefined); setResultCanDrill(false); setStale(false);
@@ -494,16 +500,21 @@ function ResourceEditor({ api, native, initial, newMetadata, review, datasets, s
   };
   const drill = async (row: QueryRow, cursor?: string) => {
     if (!resultDefinition || !row.drill) return;
-    const request = lifetime.begin("drill"); setDrilling(true); setDrillSource(row); setDrillError(undefined); setDrillResult(undefined);
+    const request = lifetime.begin("drill");
+    if (cursor) {
+      setDrillLoadingMore(true); setDrillError(undefined);
+    } else {
+      setDrilling(true); setDrillLoadingMore(false); setDrillSource(row); setDrillRowSummary(summarizeDrillRow(row, resultRef.current?.columns)); setDrillError(undefined); setDrillResult(undefined);
+    }
     try {
       const response = resultResource ? await native.savedDrill(resultResource, row.drill, request.signal, cursor) : await native.drill({ question: resultDefinition, descriptor: row.drill, pageSize: 25, cursor }, request.signal);
-      if (request.current()) setDrillResult(response);
-    } catch (cause) { if (request.current()) { setDrillError(errorMessage(cause)); if (accessLost(cause)) { setError(errorMessage(cause)); denyProtectedContent(); } else withholdResults(); } }
-    finally { if (request.current()) setDrilling(false); request.finish(); }
+      if (request.current()) setDrillResult(current => cursor ? mergeDrillPages(current, response) : response);
+    } catch (cause) { if (request.current()) { setDrillError(errorMessage(cause)); setDrillResult(undefined); setDrillRowSummary(undefined); if (accessLost(cause)) { setError(errorMessage(cause)); denyProtectedContent(); } else withholdResults(); } }
+    finally { if (request.current()) { setDrilling(false); setDrillLoadingMore(false); } request.finish(); }
   };
   const closeDrill = () => {
-    if (drilling) { withholdResults(); setError("Investigation cancelled. No saved definition was changed."); }
-    lifetime.cancel("drill"); setDrilling(false); setDrillSource(undefined); setDrillResult(undefined); setDrillError(undefined);
+    if (drilling || drillLoadingMore) { withholdResults(); setError("Investigation cancelled. No saved definition was changed."); }
+    lifetime.cancel("drill"); setDrilling(false); setDrillLoadingMore(false); setDrillSource(undefined); setDrillRowSummary(undefined); setDrillResult(undefined); setDrillError(undefined);
   };
 
   const moveTile = (tileId: string, delta: number) => {
@@ -552,16 +563,33 @@ function ResourceEditor({ api, native, initial, newMetadata, review, datasets, s
   const previewContent = <section className="named-preview" aria-label="Question results"><h3>Results</h3><p>Results use your current access.</p>
     {querying ? <p role="status">Querying the current source…</p> : null}
     {querying ? <StudioButton onClick={cancelPreview}>Cancel query</StudioButton> : null}
-    {result ? <ResultView result={result} visualization={resultDefinition?.visualization ?? definition?.visualization ?? { kind: "table", y: [] }} stale={stale} outdated={outdated} onDrill={resultCanDrill ? row => void drill(row) : undefined} /> : <p role="status">Preview to see source results and coverage.</p>}
+    {result ? <ResultView result={result} visualization={resultDefinition?.visualization ?? definition?.visualization ?? { kind: "table", y: [] }} stale={stale} outdated={outdated} datasetId={resultDefinition?.query.dataset.id ?? definition?.query.dataset.id} recordLinks={recordLinks} navigate={navigate} enableSort exportFilename={draft.name || saved.name || "question-results"} onDrill={resultCanDrill ? row => void drill(row) : undefined} /> : <p role="status">Preview to see source results and coverage.</p>}
     {resultWithheld ? <p role="status">Previous result values are withheld because current data access could not be established. Your draft remains available. Retry the preview or refresh.</p> : null}
     {result && !resultCanDrill ? <p className="named-help">Save this question before investigating its changed definition.</p> : null}
   </section>;
+  const recordDashboardUse = (dashboard: DashboardResource) => {
+    const currentId = savedRef.current.id;
+    const countFromResponse = dashboard.tiles?.filter(tile => tile.questionId === currentId).length;
+    const mergeUses = (uses: DashboardResource["uses"]) => {
+      const list = uses ?? [];
+      const existing = list.find(use => use.id === dashboard.id);
+      const tileCount = countFromResponse || (existing ? existing.tileCount + 1 : 1);
+      return existing
+        ? list.map(use => use.id === dashboard.id ? { ...use, name: dashboard.name, tileCount } : use)
+        : [...list, { id: dashboard.id, name: dashboard.name, tileCount }];
+    };
+    const nextSaved = { ...savedRef.current, uses: mergeUses(savedRef.current.uses) };
+    const nextDraft = { ...draftRef.current, uses: mergeUses(draftRef.current.uses) };
+    savedRef.current = nextSaved; setSaved(nextSaved);
+    draftRef.current = nextDraft; replaceDraft(nextDraft);
+    notify(`Added to "${dashboard.name}"`);
+  };
   const questionMenuItems: OverflowMenuItem[] = saved.id ? [
     ...(saved.capabilities.canCopy ? [{ id: "copy", label: "Copy saved version", disabled: busy, onSelect: copySavedVersion }] : []),
     ...(dirty && definition && draft.definitionState !== "withheld" && canCreateQuestion ? [{ id: "save-as", label: "Save draft as new question", disabled: busy, onSelect: () => void saveDraftAsNew() }] : []),
     ...(saved.capabilities.canShare ? [{ id: "share", label: "Share", disabled: busy || dirty, onSelect: () => setDialog("share") }] : []),
     { id: "history", label: "History", disabled: busy, onSelect: () => setDialog("history") },
-    { id: "arrange", label: "Arrange on a dashboard", onSelect: () => navigate("/dashboards") }
+    { id: "arrange", label: "Add to dashboard…", disabled: busy, onSelect: () => setDialog("add-to-dashboard") }
   ] : [];
   if (!accessUnavailable && review.state !== "available") return <StudioPage className="named-workspace"><StudioPageHeader headingLevel={2} title={review.state === "checking" ? "Checking current access" : "Current access unavailable"} /><p role="status">{review.message || (dashboardViewer ? "Revalidating this dashboard. Protected results remain withheld." : "Revalidating this retained editor. Its unsaved working state is preserved; protected previews remain withheld.")}</p>{review.state === "unavailable" ? <StudioButton onClick={onRetryAccess}>Retry current access</StudioButton> : null}</StudioPage>;
   if (accessUnavailable) return <StudioPage className="named-workspace"><StudioPageHeader headingLevel={2} title="Definition unavailable" /><StudioResultState tone="danger" title="Current access could not authorize this definition" description={error || "Protected definition and result content has been cleared. Reload to check your current access."} actions={<><StudioButton onClick={onReload}>Reload current access</StudioButton><StudioButton onClick={() => navigate(resourcePath(kind))}>Back to collection</StudioButton></>} /></StudioPage>;
@@ -576,7 +604,7 @@ function ResourceEditor({ api, native, initial, newMetadata, review, datasets, s
       ]} />
     </>} />
     {error ? <div className="named-inline-error" role="alert"><p>{error}</p></div> : null}
-    {!saved.tiles?.length ? <StudioResultState title="No questions on this dashboard" description="This dashboard does not have any saved questions yet." /> : <div className="named-tile-grid">{saved.tiles.map((tile, index) => <article className="named-tile" data-size={tile.size} data-tile-id={tile.id} key={tile.id}><header><h3>Question {index + 1}</h3></header>{tile.referenceState === "unavailable" || !tile.questionId ? <div className="named-tile-body" role="status">This question is unavailable under your current access.</div> : <QuestionTile api={native} dashboard={saved} tile={tile} refresh={refresh} draftLayout={false} position={index + 1} navigate={navigate} />}</article>)}</div>}
+    {!saved.tiles?.length ? <StudioResultState title="No questions on this dashboard" description={canEdit ? "This dashboard does not have any saved questions yet. Edit the dashboard to add existing questions or create a new one." : "This dashboard does not have any saved questions yet."} actions={canEdit ? <StudioButton onClick={() => navigate(`${resourcePath("dashboard", saved.id)}/edit`)}>Add questions</StudioButton> : undefined} /> : <div className="named-tile-grid">{saved.tiles.map((tile, index) => <article className="named-tile" data-size={tile.size} data-tile-id={tile.id} key={tile.id}><header><h3>Question {index + 1}</h3></header>{tile.referenceState === "unavailable" || !tile.questionId ? <div className="named-tile-body" role="status">This question is unavailable under your current access.</div> : <QuestionTile api={native} dashboard={saved} tile={tile} refresh={refresh} draftLayout={false} position={index + 1} recordLinks={recordLinks} navigate={navigate} />}</article>)}</div>}
     {dialog === "copy" ? <NativeDialog title="Review dashboard copy dependencies" onClose={() => setDialog(null)}
       footer={<StudioDialogFooter confirmType="button" onCancel={() => setDialog(null)} confirmLabel="Continue with retained references"
         confirmDisabled={!copyDependenciesReady || busy} onConfirm={() => { setDialog(null); copySavedVersion(); }} />}>
@@ -598,8 +626,8 @@ function ResourceEditor({ api, native, initial, newMetadata, review, datasets, s
       {!canEdit ? <p className="named-access-note">Read-only definition. Data uses your current access.</p> : null}
       {error ? <div className="named-inline-error" role="alert"><p>{error}</p>{saved.id ? <StudioButton onClick={() => { const current = lifetime.capture(); void api.dialogs.confirm({ message: "Reload the saved definition? Unsaved changes will be discarded." }).then(yes => { if (yes && current()) onReload(); }); }}>Reload saved definition</StudioButton> : null}<p>Your editable draft remains here. A successful local edit does not mean it was saved.</p></div> : null}
       <div className="named-definition-meta"><StudioField label="Name"><input maxLength={200} value={draft.name} disabled={!canEdit || busy} onChange={event => setDraft({ ...draft, name: event.target.value })} /></StudioField><StudioField label="Description"><textarea maxLength={2000} value={draft.description ?? ""} disabled={!canEdit || busy} onChange={event => setDraft({ ...draft, description: event.target.value })} /></StudioField></div>
-      <div className="named-actions">{canEdit ? <StudioButton disabled={busy || (draft.tiles?.length ?? 0) >= 50} onClick={openPicker}>Add saved question</StudioButton> : null}</div>
-      {!draft.tiles?.length ? <StudioResultState title="No questions on this dashboard" description="Add an accessible saved question. Each tile can use its own size and presentation." /> : <div className="named-tile-grid">{draft.tiles.map((tile, index) => <article className="named-tile" data-size={tile.size} data-tile-id={tile.id} key={tile.id}><header><h3>Question {index + 1}</h3>{canEdit ? <div className="named-actions"><StudioButton data-move="-1" disabled={busy || index === 0} aria-label={`Move question ${index + 1} earlier`} onClick={() => moveTile(tile.id, -1)}>Move earlier</StudioButton><StudioButton data-move="1" disabled={busy || index === draft.tiles!.length - 1} aria-label={`Move question ${index + 1} later`} onClick={() => moveTile(tile.id, 1)}>Move later</StudioButton><StudioField label={<>Size for question {index + 1}</>}><select disabled={busy} value={tile.size} onChange={event => setDraft({ ...draft, tiles: draft.tiles?.map(item => item.id === tile.id ? { ...item, size: event.target.value as DashboardTile["size"] } : item) })}>{["small", "medium", "wide", "full"].map(item => <option key={item}>{item}</option>)}</select></StudioField>{tile.referenceState !== "unavailable" && tile.questionId ? <StudioButton disabled={busy} onClick={() => setEditingTile(tile)}>Settings for question {index + 1}</StudioButton> : null}<StudioButton disabled={busy} onClick={() => setDraft({ ...draft, tiles: draft.tiles?.filter(item => item.id !== tile.id) })}>Remove tile {index + 1}</StudioButton></div> : null}</header>{tile.referenceState === "unavailable" || !tile.questionId ? <div className="named-tile-body" role="status">This question is unavailable under your current access. Its reference is preserved during layout saves.</div> : <QuestionTileEditor api={native} tile={tile} position={index + 1} navigate={navigate} />}</article>)}</div>}
+      <div className="named-actions">{canEdit ? <StudioButton disabled={busy || (draft.tiles?.length ?? 0) >= 50} onClick={openPicker}>Add saved question</StudioButton> : null}{canEdit && canCreateQuestion ? <StudioButton disabled={busy} onClick={() => navigate("/questions/new")}>New question</StudioButton> : null}</div>
+      {!draft.tiles?.length ? <StudioResultState title="No questions on this dashboard" description="Add an accessible saved question or create a new one. Each tile can use its own size and presentation." /> : <div className="named-tile-grid">{draft.tiles.map((tile, index) => <article className="named-tile" data-size={tile.size} data-tile-id={tile.id} key={tile.id}><header><h3>Question {index + 1}</h3>{canEdit ? <div className="named-actions"><StudioButton data-move="-1" disabled={busy || index === 0} aria-label={`Move question ${index + 1} earlier`} onClick={() => moveTile(tile.id, -1)}>Move earlier</StudioButton><StudioButton data-move="1" disabled={busy || index === draft.tiles!.length - 1} aria-label={`Move question ${index + 1} later`} onClick={() => moveTile(tile.id, 1)}>Move later</StudioButton><StudioField label={<>Size for question {index + 1}</>}><select disabled={busy} value={tile.size} onChange={event => setDraft({ ...draft, tiles: draft.tiles?.map(item => item.id === tile.id ? { ...item, size: event.target.value as DashboardTile["size"] } : item) })}>{["small", "medium", "wide", "full"].map(item => <option key={item}>{item}</option>)}</select></StudioField>{tile.referenceState !== "unavailable" && tile.questionId ? <StudioButton disabled={busy} onClick={() => setEditingTile(tile)}>Settings for question {index + 1}</StudioButton> : null}<StudioButton disabled={busy} onClick={() => setDraft({ ...draft, tiles: draft.tiles?.filter(item => item.id !== tile.id) })}>Remove tile {index + 1}</StudioButton></div> : null}</header>{tile.referenceState === "unavailable" || !tile.questionId ? <div className="named-tile-body" role="status">This question is unavailable under your current access. Its reference is preserved during layout saves.</div> : <QuestionTileEditor api={native} tile={tile} position={index + 1} navigate={navigate} />}</article>)}</div>}
       <p aria-live="polite" className="named-announcement">{announcement}</p>
     </>}
     {saved.id && saved.capabilities.canDelete ? <div className="named-danger-actions"><StudioButton disabled={busy} onClick={() => { const current = lifetime.capture(); void api.dialogs.confirm({ title: `Delete ${kind}`, message: kind === "question" ? "Delete this question? Dashboard references will become unavailable. Underlying records will remain." : "Delete this dashboard? Its saved questions will remain.", tone: "danger" }).then(yes => { if (yes && current()) void deleteResource(); }); }}>Delete {kind}</StudioButton></div> : null}
@@ -611,8 +639,21 @@ function ResourceEditor({ api, native, initial, newMetadata, review, datasets, s
     </NativeDialog> : null}
     {dialog === "share" ? <ShareDialog api={native} resource={saved} onClose={() => setDialog(null)} onSaved={resource => { accepted(resource); notify("Audience saved"); }} /> : null}
     {dialog === "history" ? <HistoryDialog api={native} resource={saved} hasUnsavedChanges={dirty} onAccessLost={historyAccessLost} onClose={() => setDialog(null)} onRestored={resource => { accepted(resource); notify("Definition restored as a new revision"); }} /> : null}
-    {dialog === "questions" ? <QuestionPickerDialog api={native} onClose={() => setDialog(null)} onPick={question => { setDraft({ ...draftRef.current, tiles: [...(draftRef.current.tiles ?? []), { id: uuid(), questionId: question.id, size: "medium", referenceState: "available" }] }); setDialog(null); }} onCreate={() => navigate("/questions/new")} /> : null}
-    {drilling || drillResult || drillError ? <NativeDialog title="Matching source records" onClose={closeDrill}>{drilling ? <p role="status">Loading authorized source records…</p> : drillError ? <p role="alert">{drillError}</p> : drillResult ? <><ResultView result={drillResult} visualization={{ kind: "table", y: [] }} />{drillResult.nextCursor && drillSource ? <StudioButton onClick={() => void drill(drillSource, drillResult.nextCursor)}>Next matching records</StudioButton> : null}</> : null}</NativeDialog> : null}
+    {dialog === "questions" ? <QuestionPickerDialog api={native} canCreate={canCreateQuestion} onClose={() => setDialog(null)} onPick={question => { setDraft({ ...draftRef.current, tiles: [...(draftRef.current.tiles ?? []), { id: uuid(), questionId: question.id, size: "medium", referenceState: "available" }] }); setDialog(null); }} onCreate={() => navigate("/questions/new")} /> : null}
+    {dialog === "add-to-dashboard" && saved.id ? <AddToDashboardDialog api={native} question={saved} dirty={dirty} canCreateDashboard={canCreateDashboard} onClose={() => setDialog(null)} onAdded={recordDashboardUse} onOpenDashboard={dashboardId => { setDialog(null); navigate(resourcePath("dashboard", dashboardId)); }} onCreateDashboard={() => { setDialog(null); navigate(`/dashboards/new?questionId=${encodeURIComponent(saved.id)}`); }} /> : null}
+    {drilling || drillLoadingMore || drillResult || drillError ? <DrillRecordsDialog
+      questionName={draft.name || saved.name || undefined}
+      rowSummary={drillRowSummary}
+      datasetId={resultDefinition?.query.dataset.id ?? definition?.query.dataset.id}
+      recordLinks={recordLinks}
+      navigate={navigate}
+      result={drillResult}
+      loading={drilling}
+      loadingMore={drillLoadingMore}
+      error={drillError}
+      onLoadMore={drillResult?.nextCursor && drillSource ? () => void drill(drillSource, drillResult.nextCursor) : undefined}
+      onClose={closeDrill}
+    /> : null}
   </div></StudioPage>;
 }
 
@@ -634,7 +675,7 @@ function QuestionTileEditor({ api, tile, position, navigate }: QuestionTileEdito
   return <div className="named-tile-body"><a href={resourcePath("question", question.id)} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); navigate(resourcePath("question", question.id)); } }}>{question.name}</a><p>Results are shown on the dashboard view.</p></div>;
 }
 
-type QuestionTileProps = { api: DashboardApi; dashboard: DashboardResource; tile: DashboardTile; refresh: number; draftLayout: boolean; position?: number; navigate(path: string): void };
+type QuestionTileProps = { api: DashboardApi; dashboard: DashboardResource; tile: DashboardTile; refresh: number; draftLayout: boolean; position?: number; recordLinks?: readonly StudioDashboardRecordLinkContribution[]; navigate(path: string): void };
 export function QuestionTile(props: QuestionTileProps) {
   const { dashboard, tile, refresh, draftLayout } = props;
   // A new binding owns fresh protected state before paint, including retained tile IDs.
@@ -643,16 +684,19 @@ export function QuestionTile(props: QuestionTileProps) {
   return <QuestionTileContent key={binding} {...props} />;
 }
 
-function QuestionTileContent({ api, dashboard, tile, draftLayout, position, navigate }: QuestionTileProps) {
+function QuestionTileContent({ api, dashboard, tile, draftLayout, position, recordLinks, navigate }: QuestionTileProps) {
   const [question, setQuestion] = useState<DashboardResource>();
   const [result, setResult] = useState<QueryResult>();
+  const resultRef = useRef(result); resultRef.current = result;
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [withheld, setWithheld] = useState(false);
   const [drilled, setDrilled] = useState<QueryResult>();
   const [drillError, setDrillError] = useState<string>();
   const [drilling, setDrilling] = useState(false);
+  const [drillLoadingMore, setDrillLoadingMore] = useState(false);
   const [drillSource, setDrillSource] = useState<QueryRow>();
+  const [drillRowSummary, setDrillRowSummary] = useState<string>();
   const [retry, setRetry] = useState(0);
   const refreshRequest = useRef<AbortController | undefined>(undefined);
   const drillRequest = useRef<AbortController | undefined>(undefined);
@@ -660,17 +704,49 @@ function QuestionTileContent({ api, dashboard, tile, draftLayout, position, navi
   const drill = async (row: QueryRow, cursor?: string) => {
     if (!question || !row.drill) return;
     drillRequest.current?.abort(); const controller = new AbortController(); drillRequest.current = controller;
-    setDrilling(true); setDrillSource(row); setDrillError(undefined); setDrilled(undefined);
-    try { const response = await api.tileDrill(dashboard, tile.id, question.revision, row.drill, controller.signal, cursor); if (!controller.signal.aborted) setDrilled(response); }
-    catch (cause) { if (!controller.signal.aborted) { setDrillError(errorMessage(cause)); setResult(undefined); setDrilled(undefined); setWithheld(true); if (accessLost(cause)) setQuestion(undefined); } }
-    finally { if (!controller.signal.aborted) setDrilling(false); }
+    if (cursor) {
+      setDrillLoadingMore(true); setDrillError(undefined);
+    } else {
+      setDrilling(true); setDrillLoadingMore(false); setDrillSource(row); setDrillRowSummary(summarizeDrillRow(row, resultRef.current?.columns)); setDrillError(undefined); setDrilled(undefined);
+    }
+    try {
+      const response = await api.tileDrill(dashboard, tile.id, question.revision, row.drill, controller.signal, cursor);
+      if (!controller.signal.aborted) setDrilled(current => cursor ? mergeDrillPages(current, response) : response);
+    }
+    catch (cause) { if (!controller.signal.aborted) { setDrillError(errorMessage(cause)); setResult(undefined); setDrilled(undefined); setDrillRowSummary(undefined); setWithheld(true); if (accessLost(cause)) setQuestion(undefined); } }
+    finally { if (!controller.signal.aborted) { setDrilling(false); setDrillLoadingMore(false); } }
+  };
+  const closeDrill = () => {
+    if (drilling || drillLoadingMore) { setResult(undefined); setWithheld(true); setError("Investigation cancelled. Refresh the dashboard to retry."); }
+    drillRequest.current?.abort(); setDrilling(false); setDrillLoadingMore(false); setDrillSource(undefined); setDrillRowSummary(undefined); setDrilled(undefined); setDrillError(undefined);
   };
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError(undefined); setResult(undefined); setQuestion(undefined); setWithheld(false);
     refreshRequest.current = controller;
-    drillRequest.current?.abort(); setDrilled(undefined); setDrillError(undefined); setDrilling(false);
+    drillRequest.current?.abort(); setDrilled(undefined); setDrillError(undefined); setDrilling(false); setDrillLoadingMore(false); setDrillRowSummary(undefined);
     void (async () => { try { const resource = await api.get("question", tile.questionId!, controller.signal); if (controller.signal.aborted) return; setQuestion(resource); if (!dashboard.id || draftLayout) return; const response = await api.tile(dashboard, tile.id, resource.revision, controller.signal); if (!controller.signal.aborted) setResult(response); } catch (cause) { if (!controller.signal.aborted) { setError(errorMessage(cause)); setResult(undefined); setDrilled(undefined); setWithheld(true); if (accessLost(cause)) setQuestion(undefined); } } finally { if (!controller.signal.aborted) setLoading(false); } })();
     return () => controller.abort();
   }, [api, dashboard, tile.id, tile.questionId, draftLayout, retry]);
-  return <div className="named-tile-body">{question ? <a href={resourcePath("question", question.id)} onClick={event => { event.preventDefault(); navigate(resourcePath("question", question.id)); }}>{question.name}</a> : null}{loading ? <><p role="status">Refreshing question…</p><StudioButton aria-label={position ? `Cancel refresh for question ${position}` : `Cancel refresh for ${question?.name ?? "this question"}`} onClick={() => { refreshRequest.current?.abort(); drillRequest.current?.abort(); setLoading(false); setDrilling(false); setResult(undefined); setDrilled(undefined); setWithheld(true); setError("Refresh cancelled. No saved definition was changed."); }}>Cancel refresh</StudioButton></> : null}{error ? <p role="alert">{error}</p> : null}{withheld ? <p role="status">Result values are withheld because current data access could not be established. Refresh the dashboard to retry.</p> : null}{!loading && (error || withheld) && !draftLayout ? <StudioButton aria-label={position ? `Retry refresh for question ${position}` : `Retry refresh for ${question?.name ?? "this question"}`} onClick={() => setRetry(value => value + 1)}>Retry refresh</StudioButton> : null}{draftLayout ? <p role="status">Save this layout to execute its exact tile bindings.</p> : result ? <ResultView result={result} visualization={tile.presentation ?? question?.definition?.visualization ?? { kind: "table", y: [] }} compactProvenance onDrill={row => void drill(row)} /> : !loading && !error ? <p role="status">Results have not been loaded.</p> : null}{drilling || drilled || drillError ? <NativeDialog title="Matching source records" onClose={() => { if (drilling) { setResult(undefined); setWithheld(true); setError("Investigation cancelled. Refresh the dashboard to retry."); } drillRequest.current?.abort(); setDrilling(false); setDrillSource(undefined); setDrilled(undefined); setDrillError(undefined); }}>{drilling ? <p role="status">Loading authorized source records…</p> : drillError ? <p role="alert">{drillError}</p> : drilled ? <><ResultView result={drilled} visualization={{ kind: "table", y: [] }} />{drilled.nextCursor && drillSource ? <StudioButton onClick={() => void drill(drillSource, drilled.nextCursor)}>Next matching records</StudioButton> : null}</> : null}</NativeDialog> : null}</div>;
+  const datasetId = question?.definition?.query.dataset.id;
+  return <div className="named-tile-body">
+    {question ? <a href={resourcePath("question", question.id)} onClick={event => { event.preventDefault(); navigate(resourcePath("question", question.id)); }}>{question.name}</a> : null}
+    {loading ? <><p role="status">Refreshing question…</p><StudioButton aria-label={position ? `Cancel refresh for question ${position}` : `Cancel refresh for ${question?.name ?? "this question"}`} onClick={() => { refreshRequest.current?.abort(); drillRequest.current?.abort(); setLoading(false); setDrilling(false); setDrillLoadingMore(false); setResult(undefined); setDrilled(undefined); setWithheld(true); setError("Refresh cancelled. No saved definition was changed."); }}>Cancel refresh</StudioButton></> : null}
+    {error ? <p role="alert">{error}</p> : null}
+    {withheld ? <p role="status">Result values are withheld because current data access could not be established. Refresh the dashboard to retry.</p> : null}
+    {!loading && (error || withheld) && !draftLayout ? <StudioButton aria-label={position ? `Retry refresh for question ${position}` : `Retry refresh for ${question?.name ?? "this question"}`} onClick={() => setRetry(value => value + 1)}>Retry refresh</StudioButton> : null}
+    {draftLayout ? <p role="status">Save this layout to execute its exact tile bindings.</p> : result ? <ResultView result={result} visualization={tile.presentation ?? question?.definition?.visualization ?? { kind: "table", y: [] }} compactProvenance datasetId={datasetId} recordLinks={recordLinks} navigate={navigate} enableSort exportFilename={question?.name || "dashboard-tile"} onDrill={row => void drill(row)} /> : !loading && !error ? <p role="status">Results have not been loaded.</p> : null}
+    {drilling || drillLoadingMore || drilled || drillError ? <DrillRecordsDialog
+      questionName={question?.name}
+      rowSummary={drillRowSummary}
+      datasetId={datasetId}
+      recordLinks={recordLinks}
+      navigate={navigate}
+      result={drilled}
+      loading={drilling}
+      loadingMore={drillLoadingMore}
+      error={drillError}
+      onLoadMore={drilled?.nextCursor && drillSource ? () => void drill(drillSource, drilled.nextCursor) : undefined}
+      onClose={closeDrill}
+    /> : null}
+  </div>;
 }

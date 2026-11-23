@@ -178,6 +178,8 @@ public sealed class WorkflowDashboardQueryTests
         var descriptor = Assert.Single(preview.Rows).Drill!;
         var first = await host.Queries.DrillAsync(Caller, new(question, descriptor, 1));
         Assert.Single(first.Rows);
+        Assert.DoesNotContain("Failure rate is faulted/started", first.Interpretation);
+        Assert.DoesNotContain("percentage points", first.Interpretation);
         Assert.NotNull(first.NextCursor);
         var next = await host.Queries.DrillAsync(Caller, new(question, descriptor, 1, first.NextCursor));
         Assert.Single(next.Rows);
