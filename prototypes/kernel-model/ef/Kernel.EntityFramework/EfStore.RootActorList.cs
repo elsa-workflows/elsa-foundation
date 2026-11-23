@@ -98,6 +98,13 @@ public sealed partial class EfStore
         {
             throw new StoreFormatException("The root actor projection has an unreadable schema.", error);
         }
+        catch (PostgresException error) when (error.SqlState.StartsWith("42", StringComparison.Ordinal) &&
+            error.SqlState != PostgresErrorCodes.InsufficientPrivilege)
+        {
+            // PostgreSQL may reject a changed schema during query analysis, before evaluating the marker join.
+            await RequireStoreVersionsAsync(db, cancellationToken);
+            throw;
+        }
         if (row.StoreSchema is not { } schema || row.MessageProtocol is not { } protocol || row.JournalCodec is not { } codec)
             throw new StoreFormatException("The kernel store version marker is missing.");
         var stored = new StoreFormat(schema, protocol, codec);

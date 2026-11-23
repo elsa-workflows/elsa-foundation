@@ -190,6 +190,16 @@ internal static class PostgresRootListChecks
         catch (StoreFormatException) { }
         await db.Database.ExecuteSqlRawAsync("""
             ALTER TABLE "FoundationActorList" RENAME COLUMN "FutureHeader" TO "Header";
+            ALTER TABLE "FoundationActorList" ALTER COLUMN "Reference" TYPE bytea USING convert_to("Reference", 'UTF8');
+            """, ct);
+        try
+        {
+            await api.GetAsync(blue, completed, ct);
+            throw new InvalidOperationException("Point lookup accepted a changed reference type.");
+        }
+        catch (StoreFormatException) { }
+        await db.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE "FoundationActorList" ALTER COLUMN "Reference" TYPE text COLLATE "C" USING convert_from("Reference", 'UTF8');
             UPDATE "KernelStoreVersions" SET "StoreSchema" = "StoreSchema" - 1;
             """, ct);
         Check(await api.GetAsync(blue, completed, ct) is { Header.Status: ActorStatus.Finished },
