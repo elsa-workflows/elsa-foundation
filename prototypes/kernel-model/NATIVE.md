@@ -456,6 +456,29 @@ Reasoned.
 - GraphActivity, CreateUserTask, HumanReview, RunEtl, RunRules and EvaluateDecision; Switch, For, Do, CompensationScope.
 - Incident strategies; retries of faulted activities.
 
+## Detached creator handles
+
+A Native detached dispatch through the public contract returns the child's exact reference. Its creator is still
+inserted atomically with the parent's turn. Public recall accepts an issued self-timer handle, so the parent has
+no operation that can use the detached creator's internal ID. New public detached starts leave that ID out of the
+parent checkpoint. The rule applies while the creator is pending, so it needs no check of the child's inbox.
+
+The authored check leaves the first child creator pending, opens a successor, and finishes the child. It
+dispatches a second detached child and an attached child, then sends a qualified terminate to the parent.
+Both detached children complete at revision 1. The attached child remains registered and receives the cascade.
+Run the check in Balanced and Durable from `prototypes/kernel-model`:
+
+```bash
+dotnet run -c Release --project sim -- --native-detached-handles-check
+```
+
+The terminal projection still counts every handle carried in a checkpoint. Older handles stay stored because the
+checkpoint lacks the metadata to distinguish a detached creator from an attached creator. If repeated growth
+parks an older parent, inspect the Park and its retained inputs before retrying. Retrying the same operation
+against the same checkpoint can reach the bound again. An authorized operator can discard the selected Park and
+all its retained inputs, or terminate the selected instance through the existing qualified command. Discard leaves
+the instance faulted. The provider-encoding and near-limit termination cases retain their own checks.
+
 ## 10. Private durable lexical-resource probe
 
 The [lexical runner](models/Native.Scopes.Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.

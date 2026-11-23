@@ -159,6 +159,12 @@ if (args.Contains("--sequential-cascade-check"))
     await SequentialCascadeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--native-detached-handles-check"))
+{
+    var failed = false;
+    await NativeDetachedHandleChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--cascade-pages-check"))
 {
     var failed = false;
