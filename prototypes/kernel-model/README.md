@@ -75,6 +75,30 @@ The example stores its view and bookmark in memory and uses a fixture to write t
 The persisted view and its paging are separate K9 work. K11 supplies the migration plan actor, exact-ref dispatch
 and operator controls.
 
+### Persisted plan outcomes in SQLite
+
+From `prototypes/kernel-model`, build the runner and give it a new SQLite file:
+
+```sh
+dotnet restore models/Native.Run --locked-mode
+dotnet build -c Release models/Native.Run --no-restore
+dll=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+scratch=$(mktemp -d)
+dotnet "$dll" sqlite-plan-projection build "$scratch/plan.db"
+dotnet "$dll" sqlite-plan-projection inspect "$scratch/plan.db" <plan-ref> <digest>
+```
+
+Use the plan reference and SHA-256 digest printed by `build`. The inspector checks the exact actor/outcome pairs, closed flag, catch-up time and source bookmark against that receipt. A fixture actor records batches and the exact senders' outcomes in
+the public journal. A SQLite transaction persists each page and its source bookmark together. A failed insert
+rolls back both. Cancelling after either an empty or a populated source read preserves the page for retry. Two projectors can read the same source page, with one committing it. A new projector resumes
+at the stored bookmark. The stored `AsOf` is a lower bound on confirmed catch-up. A partial page keeps the
+previous time. An empty tail advances it only if the stored bookmark still matches, including the first empty
+read. The independent `inspect` process reads three stable pages with one migrated, one refused
+and one unanswered actor from the closed plan. A separately tenant-bound reader checks the populated neighboring scope.
+
+This verifies the physical SQLite view and local keyset reads. The journal producer in the fixture uses the
+in-memory Actor Foundation. Operator API tokens, other view providers and K11 migration orchestration remain open.
+
 ## PostgreSQL Core Preview
 
 Set `KERNEL_PREVIEW_POSTGRES` to the connection string of an empty PostgreSQL 17 database dedicated to the preview.
