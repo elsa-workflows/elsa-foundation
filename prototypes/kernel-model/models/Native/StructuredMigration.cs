@@ -16,9 +16,12 @@ internal enum StructuredMigrationFinding
 /// <summary>Checks the structured Native subset against a committed checkpoint without making a turn.</summary>
 internal static class StructuredMigration
 {
+    // The caller verifies that the actor is running or suspended, its bound definition is source,
+    // and the checkpoint is at a readable model and activity version.
     internal static StructuredMigrationFinding? Validate(Workflow source, Workflow target, NativeState state)
     {
         if (!state.Started || state.Mode is not (Modes.Balanced or Modes.Durable) ||
+            (state.Frames.Count == 0 && state.Agenda.Count == 0) ||
             state.Waits.Values.Any(wait => wait.Kind == "job" || !state.Frames.ContainsKey(wait.Frame)) ||
             state.InterventionEnabled || state.CheckpointControl || state.Inboxes is { Count: > 0 })
             return StructuredMigrationFinding.UnsupportedCheckpoint;

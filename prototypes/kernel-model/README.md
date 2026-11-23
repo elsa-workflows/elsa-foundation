@@ -97,11 +97,12 @@ dotnet run -c Release --project sim -- --native-migration-validation
 ```
 
 This K11 check loads real Balanced and Durable checkpoints through the in-memory Actor Foundation.
-It tries a new Sequence tail, a change to the untaken If branch and a reordered Parallel, then checks
-that changes to live waits, their parent chain, an executed prefix or a Parallel branch set are refused.
-The validator is read-only. It restricts this slice to structured Native checkpoints with unchanged
-declarations. Applying a migration, adding defaults, outstanding jobs, Flowchart and StateMachine
-compatibility are separate work.
+It tries a new Sequence tail, a change to the untaken If branch and a reordered Parallel. The check
+also covers loop bodies and nodes referenced only by a stored result, scheduled child or pending trigger.
+The validator is read-only and handles structured Native checkpoints with unchanged declarations.
+Callers must verify actor status, source definition and version readability before using it.
+Applying a migration, adding defaults, outstanding jobs, Flowchart and StateMachine compatibility are
+separate work.
 
 ## The simulation
 
