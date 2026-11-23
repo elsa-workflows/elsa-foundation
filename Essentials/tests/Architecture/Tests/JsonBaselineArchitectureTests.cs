@@ -96,6 +96,8 @@ public sealed class JsonBaselineArchitectureTests
     [InlineData("class C { void M() { JsonSerializer.DeserializeAsyncEnumerable<JsonElement>(stream, (true)); } }", "optionless")]
     [InlineData("class C { void M(Utf8JsonWriter? writer, object data) { JsonSerializer.Serialize(writer!, data); } }", "optionless")]
     [InlineData("using Writer = System.Text.Json.Utf8JsonWriter; class C { void M(Writer writer, object data) { JsonSerializer.Serialize(writer, data); } }", "optionless")]
+    [InlineData("class UserJsonContext { public JsonElement Data {get;set;} } class C { void M(Utf8JsonWriter writer, JsonElement raw) { JsonSerializer.Serialize(writer, new UserJsonContext { Data = raw }); } }", "optionless")]
+    [InlineData("class CustomJsonSerializerOptions { public JsonElement Data {get;set;} } class C { void M(Utf8JsonWriter writer, JsonElement raw) { JsonSerializer.Serialize(writer, new CustomJsonSerializerOptions { Data = raw }); } }", "optionless")]
     [InlineData("class C { void M(Utf8JsonWriter writer, object data) { JsonSerializer.Serialize(inputType: typeof(object), value: data, writer: writer); } }", "optionless")]
     [InlineData("class C { void M() { payload.Deserialize<T>(); } }", "optionless")]
     [InlineData("class C { void M() { payload.Deserialize<T>(options: null); } }", "optionless")]

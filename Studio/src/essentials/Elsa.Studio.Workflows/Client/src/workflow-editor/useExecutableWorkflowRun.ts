@@ -47,6 +47,7 @@ export function findPublishedRunReference(
 interface PendingExecutableRun {
   target: ExecutableWorkflowRunTarget;
   inputs: WorkflowInput[];
+  opener: HTMLElement | null;
 }
 
 export function createExecutableWorkflowRunFeedback({ setStatus, setLastRun, setError }: {
@@ -91,12 +92,15 @@ export function useExecutableWorkflowRun({ context, onDispatchStart, onStarted, 
 
   const request = async (target: ExecutableWorkflowRunTarget) => {
     if (runningArtifactId) return;
+    // Loading the input contract disables Run and can move browser focus to body.
+    // Retain the invoking control before that asynchronous state change.
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setRunningArtifactId(target.artifactId);
     try {
       const version = await getWorkflowDefinitionVersion(context, target.definitionVersionId);
       const inputs = readWorkflowInputs(version.state?.inputs);
       setRunningArtifactId(null);
-      if (inputs.length > 0) setPending({ target, inputs });
+      if (inputs.length > 0) setPending({ target, inputs, opener });
       else await dispatch(target, {});
     } catch (error) {
       setRunningArtifactId(null);

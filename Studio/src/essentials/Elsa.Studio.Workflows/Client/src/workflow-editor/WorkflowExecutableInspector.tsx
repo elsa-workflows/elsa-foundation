@@ -267,6 +267,7 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
       {executableRun.pending ? (
         <WorkflowRunInputDialog
           inputs={executableRun.pending.inputs}
+          returnFocusTo={executableRun.pending.opener}
           editors={runInputEditors}
           onSubmit={values => { void executableRun.confirm(values); }}
           onCancel={executableRun.cancel}

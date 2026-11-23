@@ -162,6 +162,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
       {executableRun.pending ? (
         <WorkflowRunInputDialog
           inputs={executableRun.pending.inputs}
+          returnFocusTo={executableRun.pending.opener}
           editors={runInputEditors}
           onSubmit={values => { void executableRun.confirm(values); }}
           onCancel={executableRun.cancel}
@@ -531,6 +532,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
       {executableRun.pending ? (
         <WorkflowRunInputDialog
           inputs={executableRun.pending.inputs}
+          returnFocusTo={executableRun.pending.opener}
           editors={runInputEditors}
           onSubmit={values => { void executableRun.confirm(values); }}
           onCancel={executableRun.cancel}

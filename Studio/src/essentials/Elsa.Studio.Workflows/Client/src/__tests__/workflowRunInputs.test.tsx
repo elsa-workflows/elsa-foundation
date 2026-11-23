@@ -648,6 +648,22 @@ describe("workflow run inputs", () => {
     first.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(onCancel).toHaveBeenCalledOnce();
   });
+
+  it("restores the original Run control when asynchronous contract loading already moved focus to body", () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    opener.blur(); // Browsers blur Run while its input contract is loading and the button is disabled.
+    expect(document.activeElement).toBe(document.body);
+    const container = render(
+      <WorkflowRunInputDialog inputs={[workflowInput("when", "When", "DateTimeOffset", true)]}
+        returnFocusTo={opener} onSubmit={vi.fn()} onCancel={vi.fn()} />
+    );
+    expect(document.activeElement).toBe(container.querySelector("input"));
+    flushSync(() => active!.root.render(null));
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
 });
 
 function render(ui: React.ReactElement) {

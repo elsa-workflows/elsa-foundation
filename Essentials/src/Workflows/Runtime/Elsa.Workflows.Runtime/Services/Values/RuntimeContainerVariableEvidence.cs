@@ -76,7 +76,7 @@ public static class RuntimeContainerVariableEvidence
     private static JsonElement SerializeValue(object? value) =>
         value is JsonElement json
             ? json.Clone()
-            : JsonSerializer.SerializeToElement(value, options: value?.GetType() ?? typeof(object));
+            : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value);
 
     private static RuntimeValueTypeDescriptor TypeDescriptorFor(object? value) =>
         new("clr", value?.GetType().FullName ?? typeof(object).FullName, null);

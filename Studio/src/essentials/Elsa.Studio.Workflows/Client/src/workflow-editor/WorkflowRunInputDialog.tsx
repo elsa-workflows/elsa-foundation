@@ -11,14 +11,14 @@ import {
   type WorkflowRunInputValues
 } from "../workflowRunInputs";
 
-export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, onSubmit, onCancel }: {
+export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, returnFocusTo, onSubmit, onCancel }: {
   inputs: WorkflowInput[];
   editors?: StudioWorkflowRunInputEditorContribution[];
   busy?: boolean;
+  returnFocusTo?: HTMLElement | null;
   onSubmit(values: WorkflowRunInputValues): void;
   onCancel(): void;
 }) {
-  useStudioTimeZone();
   const timeZone = useStudioTimeZone();
   const titleId = useId();
   const dialogRef = useRef<HTMLElement>(null);
@@ -27,10 +27,10 @@ export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, onS
   const [failedEditorKeys, setFailedEditorKeys] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previouslyFocused = returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     dialogRef.current?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
-    return () => previouslyFocused?.focus();
-  }, []);
+    return () => { if (previouslyFocused?.isConnected) previouslyFocused.focus(); };
+  }, [returnFocusTo]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();

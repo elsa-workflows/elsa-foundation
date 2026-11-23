@@ -373,8 +373,13 @@ internal static class JsonBaselineSourceScan
             type = type.TrimEnd('?');
             var alias = site.SyntaxTree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>().FirstOrDefault(usingDirective => usingDirective.Alias?.Name.Identifier.ValueText == type);
             type = alias?.Name?.ToString() ?? type;
-            return type.EndsWith("JsonSerializerOptions", StringComparison.Ordinal) || type.Contains("JsonTypeInfo", StringComparison.Ordinal) ||
-                type.EndsWith("JsonSerializerContext", StringComparison.Ordinal) || type.EndsWith("JsonContext", StringComparison.Ordinal);
+            type = type.Replace("global::", "", StringComparison.Ordinal);
+            return type is "JsonSerializerOptions" or "System.Text.Json.JsonSerializerOptions" or
+                "JsonTypeInfo" or "System.Text.Json.Serialization.Metadata.JsonTypeInfo" or
+                "JsonSerializerContext" or "System.Text.Json.Serialization.JsonSerializerContext" ||
+                type.StartsWith("JsonTypeInfo<", StringComparison.Ordinal) ||
+                type.StartsWith("System.Text.Json.Serialization.Metadata.JsonTypeInfo<", StringComparison.Ordinal) ||
+                FindContextNames([site.SyntaxTree.GetRoot()]).Contains(type.Split('.').Last());
         }
         return IsBaselineExpression(expression);
     }
