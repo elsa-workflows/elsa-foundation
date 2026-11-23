@@ -151,3 +151,59 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(len(state["results"]), 4)
         self.assertTrue(all(row["state"] == "error" for row in state["results"]))
         self.assertEqual(len(state["errors"]), 2)
+
+    def test_partial_image_and_scan_failure_report_only_affected_digests(self):
+        release = [[{"tag_name": self.tag, "prerelease": True, "draft": False}]]
+        status = self.status()
+        inventories = {child: self.path / platform.replace("/", "-") for platform, child in self.entry["children"].items()}
+        for path in inventories.values():
+            path.write_text(path.name)
+        studio = self.catalog[self.tag]["images"][1]
+        def images(entry, directory):
+            if entry["product"] == studio["product"]:
+                raise monitor.MissingInventory("missing SPDX", [studio["children"]["linux/arm64"]])
+            return inventories
+        def scan(path, revision):
+            if path.name == "linux-amd64":
+                raise subprocess.TimeoutExpired("grype", 12)
+            return {"state": "no-findings", "matches": [], "inventory": monitor.sha(path.read_bytes())}
+        with patch.object(monitor, "image_inventories", side_effect=images), patch.object(monitor, "scan", side_effect=scan), patch.object(
+                monitor, "run", side_effect=[json.dumps(release), b"", json.dumps(status)]):
+            path = self.path / "report.json"
+            self.assertEqual(monitor.monitor(path), 1)
+        rows = json.loads(path.read_text())["results"]
+        self.assertEqual([row["state"] for row in rows], ["error", "no-findings", "error", "missing"])
+        self.assertIn("another platform", rows[2]["detail"])
+
+    def test_truncated_archive_rejected_before_identity(self):
+        import verify
+        entry = {"id": "Elsa.Test", "version": "1", "feed": verify.FEED, "sha256": "sha256:" + "f" * 64}
+        def truncated(feed, name, version, package):
+            package.write_bytes(b"truncated bytes")
+        with patch.object(verify, "download", truncated):
+            with self.assertRaisesRegex(ValueError, "differs from release"):
+                monitor.package_inventory(entry, self.path)
+            entry["sha256"] = monitor.sha(b"truncated bytes")
+            with self.assertRaises(monitor.FAILURES):
+                monitor.package_inventory(entry, self.path)
+
+    def test_unchanged_subject_reuses_scan_across_release_references(self):
+        path = self.path / "bom.json"
+        path.write_text("test inventory")
+        scanned = {}
+        records = [{"digest": "sha256:" + "1" * 64, "detail": "pending", "release": release} for release in ("4.0.0", "4.1.0")]
+        with patch.object(monitor, "scan", return_value={"state": "findings", "inventory": monitor.sha(path.read_bytes()),
+                                                        "matches": [{"advisory": "test"}]}) as scanner:
+            for row in records:
+                monitor.scan_subject(row, path, {}, scanned)
+            self.assertEqual(scanner.call_count, 1)
+            self.assertEqual(len(scanned), 1)
+            self.assertEqual([row["matchCount"] for row in records], [1, 1])
+            path.write_text("different verified inventory")
+            with self.assertRaisesRegex(ValueError, "disagree"):
+                monitor.scan_subject({"digest": records[0]["digest"]}, path, {}, scanned)
+
+    def test_legacy_gap_stays_visible_after_next_checkpoint(self):
+        tags = [self.tag, "contributor-preview-2026-11-01.1", "contributor-preview-2026-11-14.2"]
+        selected = monitor.release_tags([{"tag_name": tag, "draft": False, "prerelease": True} for tag in tags])
+        self.assertEqual(selected, {self.tag, tags[-1]})

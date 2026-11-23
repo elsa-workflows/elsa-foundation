@@ -7,6 +7,8 @@ import re
 import subprocess
 import sys
 import tempfile
+import zipfile
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,8 +26,15 @@ CHECKPOINT = re.compile(r"contributor-preview-(\d{4}-\d{2}-\d{2})\.([1-9]\d*)")
 STABLE = re.compile(r"v?\d+\.\d+\.\d+")
 
 
+FAILURES = (ValueError, OSError, KeyError, TypeError, AttributeError, zipfile.BadZipFile, ET.ParseError, subprocess.SubprocessError)
+
+
 class MissingInventory(ValueError):
     """A reachable registry returned an explicitly incomplete inventory set."""
+
+    def __init__(self, message, missing):
+        super().__init__(message)
+        self.missing = set(missing)
 
 
 def require(condition, message):
@@ -50,6 +59,8 @@ def release_tags(releases):
             date, ordinal = CHECKPOINT.fullmatch(tag).groups()
             return datetime.strptime(date, "%Y-%m-%d"), int(ordinal)
         stable.add(max(previews, key=order))
+        if "contributor-preview-2026-10-07.1" in previews:
+            stable.add("contributor-preview-2026-10-07.1")
     require(stable, "No published compatibility checkpoint or stable release discovered")
     return stable
 
@@ -89,8 +100,9 @@ def image_inventories(entry, directory):
         # The original metadata-only checkpoint names immutable legacy indexes. Recheck their predicates.
         require(all(kinds and SPDX not in kinds for kinds in coverage.values()), "Legacy predicate set changed")
         return None
-    if not all(SPDX in kinds for kinds in coverage.values()):
-        raise MissingInventory("Index lacks an attached SPDX inventory for an expected platform")
+    missing = {child for child, kinds in coverage.items() if SPDX not in kinds}
+    if missing:
+        raise MissingInventory("Index lacks an attached SPDX inventory for an expected platform", missing)
     commit, producer = entry["publisherCommit"], entry["producerRun"]
     require(re.fullmatch(r"[0-9a-f]{40}", commit) and type(producer) is int and producer > 0, "Invalid producer")
     path = ".github/workflows/studio-docker.yml" if product == "elsa-studio" else ".github/workflows/docker.yml"
@@ -107,6 +119,7 @@ def image_inventories(entry, directory):
                 "--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
                 "--certificate-identity", "https://github.com/docker/github-builder/.github/workflows/build.yml@refs/tags/v1.16.0",
                 "--certificate-github-workflow-repository", REPO, "--certificate-github-workflow-sha", commit,
+                "--certificate-github-workflow-name", "Docker Images", "--certificate-github-workflow-ref", "refs/heads/main",
                 repository + "@" + descriptor["digest"])
     run(sys.executable, ROOT / "tools/ci/verify_image_evidence.py", reference, "--application", app,
         "--builder-run", f"https://github.com/{REPO}/actions/runs/{producer}", "--output", directory, timeout=240)
@@ -121,12 +134,12 @@ def package_inventory(entry, directory):
     require(entry["feed"] in (verify.FEED, "https://api.nuget.org/v3/index.json"), "Unexpected official feed")
     package = directory / "subject.nupkg"
     verify.download(entry["feed"], name, version, package)
-    require((name, version) == verify.identity(package)[:2] and "sha256:" + verify.sha256(package) == entry["sha256"],
+    require("sha256:" + verify.sha256(package) == entry["sha256"] and (name, version) == verify.identity(package)[:2],
             "Downloaded package differs from release subject")
     try:
         bom = verify.signed_inventory(package)
     except verify.NoAttestations as error:
-        raise MissingInventory(str(error)) from error
+        raise MissingInventory(str(error), [entry["sha256"]]) from error
     output = directory / "signed.cdx.json"
     output.write_text(json.dumps(bom))
     return output
@@ -179,10 +192,21 @@ def subjects(tag, release):
     return records
 
 
+def scan_subject(row, path, revision, scanned):
+    digest, inventory = row["digest"], sha(path.read_bytes())
+    # Identical independently versioned packages can belong to more than one release.
+    if digest not in scanned:
+        scanned[digest] = scan(path, revision)
+    result = scanned[digest]
+    require(result["inventory"] == inventory, "Verified releases disagree on the inventory for one subject")
+    row.update(state=result["state"], inventory=inventory, matchCount=len(result["matches"]))
+    del row["detail"]
+
+
 def monitor(report_file):
     catalog = json.loads(Path(__file__).with_name("supported.json").read_text())
     reports, work = [], []
-    report = {"scanner": "grype " + SCANNER, "database": None, "results": reports, "errors": []}
+    report = {"scanner": "grype " + SCANNER, "database": None, "results": reports, "scans": {}, "errors": []}
 
     def save():
         staging = report_file.with_suffix(".tmp")
@@ -217,17 +241,22 @@ def monitor(report_file):
                                 if paths is None:
                                     row.update(state="unavailable", detail="Checkpoint index predates attached SPDX inventories")
                                 else:
-                                    row.update(scan(paths[row["digest"]], revision))
-                                    del row["detail"]
+                                    try:
+                                        scan_subject(row, paths[row["digest"]], revision, report["scans"])
+                                    except FAILURES as error:
+                                        row["detail"] = str(error)
                                 save()
-                    except (ValueError, OSError, KeyError, TypeError, subprocess.SubprocessError) as error:
+                    except FAILURES as error:
                         for row in rows:
                             if row["state"] == "error":
                                 row["detail"] = str(error)
                                 if isinstance(error, MissingInventory):
-                                    row["state"] = "missing"
+                                    if row["digest"] in error.missing:
+                                        row["state"] = "missing"
+                                    else:
+                                        row["detail"] = "The complete image index could not be verified: another platform lacks SPDX"
                         save()
-    except (ValueError, OSError, KeyError, TypeError, subprocess.SubprocessError) as error:
+    except FAILURES as error:
         report["errors"].append(str(error))
     save()
     print(f"Grype {SCANNER}; advisory database: {report['database']}")
