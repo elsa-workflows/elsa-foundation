@@ -240,9 +240,10 @@ dotnet run -c Release --project sim -- --public-http-edge-check
 This check starts Kestrel on a dynamically assigned loopback port and runs actual HTTP requests against the
 public Actor Foundation with an in-memory Embedded owner. It starts a Native approval, pauses its first
 checkpoint to check that the response stays held, and resumes it with a JSON request. Public reads confirm
-the same actor at its first and second journal revisions. It also checks a 404
-with no publication, a 503 on owner reset, a 504 at the reply deadline, a 500 when a held response's turn parks,
-and completion after the client disconnects. Run with `--flaw EmitBeforeCommit` to make the held-response
+the same actor at its first and second journal revisions. An unmatched HTTP event with `KeepFor`
+returns 404 and leaves no publication, delivery or caller registration. Retrying the same event ID
+after the wait commits delivers the new payload. The check also covers 503 on owner reset, 504 at the
+reply deadline, 500 when a held response's turn parks, and completion after the client disconnects. Run with `--flaw EmitBeforeCommit` to make the held-response
 assertion fail before the checkpoint lands.
 
 The companion check keeps the HTTP receiver live while its remote logical owner is lost:

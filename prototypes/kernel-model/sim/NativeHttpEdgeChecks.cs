@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -20,6 +21,10 @@ internal static partial class NativeHttpEdgeChecks
     {
         const long initial = 1_703_400_000_000;
         const int requestTime = 2_000;
+        const string retryId = "approval-retry";
+        const string retryHeader = "X-Fixture-Event-Retry";
+        var approvalKey = HttpRoutes.Key("POST", "approve");
+        var retention = TimeSpan.FromMinutes(1);
         long timestamp = initial;
         long Now() => Interlocked.Read(ref timestamp);
         var store = new InMemoryStore(1, Now);
@@ -27,7 +32,7 @@ internal static partial class NativeHttpEdgeChecks
         const string node = "http-edge-owner";
         var requests = new Requests(node);
         var reads = new ActorList(store, 16);
-        Contract.IIngress ingress = new InMemoryIngress(store, requests, node);
+        var ingress = new RecordingIngress(new InMemoryIngress(store, requests, node), approvalKey);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var token = deadline.Token;
         var enteringCommit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -71,9 +76,12 @@ internal static partial class NativeHttpEdgeChecks
         using var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
         try
         {
-            using (var missing = await PostAsync("approve"))
-                Require(missing.StatusCode == HttpStatusCode.NotFound && store.FoundationEvents.Count == 0,
-                    $"An unmatched HTTP event returns 404 and leaves no publication. Observed {(int)missing.StatusCode} and {store.FoundationEvents.Count} publications.");
+            using (var missing = await PostApprovalRetryAsync("abandoned"))
+                Require(missing.StatusCode == HttpStatusCode.NotFound &&
+                    await missing.Content.ReadAsStringAsync(token) == "no workflow waits on this route" &&
+                    store.FoundationEvents.Count == 0 && store.EventRows.Count == 0 && store.Messages.Count == 0 && requests.All.Count == 0 &&
+                    ingress.Attempts.ToArray() is [var miss] && miss == new EventAttempt(retryId, retention),
+                    $"An unmatched HTTP event with KeepFor returns 404 and leaves no publication, delivery or reply registration. Observed {(int)missing.StatusCode} and {store.FoundationEvents.Count} publications.");
 
             var begin = PostAsync("begin");
             await enteringCommit.Task.WaitAsync(token);
@@ -91,13 +99,16 @@ internal static partial class NativeHttpEdgeChecks
                     birthJournal.Items.All(entry => entry.Revision == 1),
                 "The caller receives one response after the waiting actor's first committed journal revision.");
 
-            using (var approvalBody = JsonContent.Create(new { Name = "Ada" }))
-            using (var resumed = await client.PostAsync("approve", approvalBody, token))
+            using (var resumed = await PostApprovalRetryAsync("Ada"))
             {
                 var answer = await resumed.Content.ReadAsStringAsync(token);
                 Require(resumed.StatusCode == HttpStatusCode.OK && answer == "Ada",
-                    $"The second HTTP request resumes the Native workflow with its authored input. Observed {(int)resumed.StatusCode} and '{answer}'.");
+                    $"Retrying the same event ID delivers the new payload to the committed Native wait. Observed {(int)resumed.StatusCode} and '{answer}'.");
             }
+            Require(ingress.Attempts.ToArray() is [var first, var retry] && first == new EventAttempt(retryId, retention) && retry == first &&
+                store.FoundationEvents.TryGetValue(($"{scope.Tenant}_{approvalKey}", retryId), out var publication) &&
+                publication.KeepUntil == Now() + (long)retention.TotalMilliseconds,
+                "Both HTTP attempts reach event admission with the same ID and KeepFor. Only the retry leaves a retained publication.");
             var resumedJournal = await reads.TailAsync(scope, approval.Header.Ref, birthJournal.Next, token);
             Require(await reads.GetAsync(scope, approval.Header.Ref, token) is { Header.Status: Contract.ActorStatus.Finished } &&
                     resumedJournal.Items.Count > 0 && resumedJournal.Items.All(entry => entry.Revision == 2),
@@ -168,8 +179,18 @@ internal static partial class NativeHttpEdgeChecks
             await app.StopAsync();
         }
 
-        Task<IResult> HandleAsync(HttpContext context) => DispatchAsync(context, scope, routes, ingress, Now() + requestTime, token);
+        Task<IResult> HandleAsync(HttpContext context) => context.Request.Headers.ContainsKey(retryHeader)
+            ? DispatchAsync(context, scope, routes, ingress, Now() + requestTime, token,
+                retryId, new(KeepFor: retention))
+            : DispatchAsync(context, scope, routes, ingress, Now() + requestTime, token);
         Task<HttpResponseMessage> PostAsync(string path) => client.PostAsync(path, null, token);
+
+        async Task<HttpResponseMessage> PostApprovalRetryAsync(string name)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "approve") { Content = JsonContent.Create(new { Name = name }) };
+            request.Headers.Add(retryHeader, "true");
+            return await client.SendAsync(request, token);
+        }
 
         async Task<Contract.ActorView> WaitForAsync(Contract.ActorStatus status, Contract.ActorRef? actor = null)
         {
@@ -184,7 +205,8 @@ internal static partial class NativeHttpEdgeChecks
     }
 
     private static async Task<IResult> DispatchAsync(HttpContext context, Contract.BoundScope scope, HttpRoutes routes,
-        Contract.IIngress ingress, long deadline, CancellationToken stopping)
+        Contract.IIngress ingress, long deadline, CancellationToken stopping,
+        string? eventId = null, Contract.AddOptions? eventOptions = null)
     {
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stopping);
         var token = stop.Token;
@@ -199,7 +221,7 @@ internal static partial class NativeHttpEdgeChecks
                     NativeExecutionModel.Start(route.Workflow, triggerNode: route.Node, trigger: Values.From(message)))),
                 id, Contract.Kinds.Start, null, null, options, token)
             : await ingress.RequestAsync(scope, new Contract.Target.Event(HttpRoutes.Key(message.Method, message.Path)),
-                id, Contract.Kinds.Event, JsonSerializer.Serialize(message), null, options, token);
+                eventId ?? id, Contract.Kinds.Event, JsonSerializer.Serialize(message), eventOptions, options, token);
 
         return reply switch
         {
@@ -234,6 +256,28 @@ internal static partial class NativeHttpEdgeChecks
     {
         if (!condition) throw new InvalidOperationException(description);
         Console.WriteLine(description);
+    }
+
+    private sealed record EventAttempt(string Id, TimeSpan? KeepFor);
+
+    private sealed class RecordingIngress(Contract.IIngress inner, string correlationKey) : Contract.IIngress
+    {
+        internal ConcurrentQueue<EventAttempt> Attempts { get; } = new();
+
+        public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
+            string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default)
+        {
+            if (target is Contract.Target.Event @event && @event.CorrelationKey == correlationKey)
+                Attempts.Enqueue(new(id, add?.KeepFor));
+            return inner.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken);
+        }
+
+        public ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
+            string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default) =>
+            inner.SendAsync(scope, target, id, kind, payload, options, cancellationToken);
+
+        public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
+            CancellationToken cancellationToken = default) => inner.SetStartAsync(scope, key, wait, spec, cancellationToken);
     }
 
     private sealed class LocalTransport(string localNode, Requests requests) : IReplyTransport
