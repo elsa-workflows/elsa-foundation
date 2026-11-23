@@ -28,7 +28,10 @@ public sealed class JsonModuleReflectionTests
             Assert.Equal(JsonNumberHandling.Strict, options.NumberHandling);
             Assert.Equal(JsonIgnoreCondition.Never, options.DefaultIgnoreCondition);
             Assert.Same(JavaScriptEncoder.UnsafeRelaxedJsonEscaping, options.Encoder);
-            Assert.IsType<RawJsonElementConverter>(options.Converters.First(converter => converter.CanConvert(typeof(JsonElement))));
+            var rawConverter = Assert.IsAssignableFrom<JsonConverter<JsonElement>>(options.Converters.First(converter => converter.CanConvert(typeof(JsonElement))));
+            const string raw = """{ "OrderTotal":1.00, "text":"Ren\u00e9 <>&", "explicit":null, "large":9007199254740993 }""";
+            using var data = JsonDocument.Parse(raw);
+            Assert.Equal(raw, Write(rawConverter, data.RootElement, options).GetRawText());
 
             var date = Assert.IsAssignableFrom<JsonConverter<DateTime>>(options.Converters.First(converter => converter.CanConvert(typeof(DateTime))));
             var offset = Assert.IsAssignableFrom<JsonConverter<DateTimeOffset>>(options.Converters.First(converter => converter.CanConvert(typeof(DateTimeOffset))));
