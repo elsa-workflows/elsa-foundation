@@ -141,7 +141,7 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
     {
         model.Entity<StoreVersionEntity>(entity =>
         {
-            entity.ToTable("KernelStoreVersions");
+            entity.ToTable(StoreVersionEntity.Table);
             entity.Property(row => row.Id).ValueGeneratedNever();
             entity.HasData(new StoreVersionEntity
             {

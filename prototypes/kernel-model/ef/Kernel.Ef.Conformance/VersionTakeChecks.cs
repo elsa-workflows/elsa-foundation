@@ -1,5 +1,7 @@
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Kernel.Ef.Conformance;
 
@@ -44,6 +46,15 @@ internal static class VersionTakeChecks
         await Refuses(async () => { await cold.TakeAsync(0, "missing", lease); }, "version marker is missing");
         await Refuses(() => ((EfStore)cold).CreateAsync(2), "version marker is missing");
         Check(known.Same(await Snapshot()), "take and reopen refuse an absent marker without changing ownership");
+
+        await using (var db = create())
+        {
+            var table = db.GetService<ISqlGenerationHelper>().DelimitIdentifier(StoreVersionEntity.Table);
+            await db.Database.ExecuteSqlRawAsync($"DROP TABLE {table}");
+        }
+        await Refuses(async () => { await cold.TakeAsync(0, "unversioned", lease); }, "version marker table is missing");
+        await Refuses(() => ((EfStore)cold).CreateAsync(2), "version marker table is missing");
+        Check(known.Same(await Snapshot()), "an unversioned database is left untouched");
         return;
 
         async Task Set(Action<StoreVersionEntity> change)

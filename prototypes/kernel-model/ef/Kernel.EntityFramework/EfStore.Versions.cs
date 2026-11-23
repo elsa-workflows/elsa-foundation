@@ -1,9 +1,14 @@
+using Microsoft.Data.SqlClient;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using MySql.Data.MySqlClient;
+using Npgsql;
 
 namespace Kernel.EntityFramework;
 
 internal sealed class StoreVersionEntity
 {
+    internal const string Table = "KernelStoreVersions";
     internal const int MarkerId = 1;
     internal const int StoreSchemaVersion = 1;
     internal const int MessageProtocolVersion = 1;
@@ -19,8 +24,17 @@ public sealed partial class EfStore
 {
     private static async Task RequireStoreVersionsAsync(KernelDb db, CancellationToken cancellationToken)
     {
-        var stored = await db.StoreVersions.AsNoTracking()
-            .SingleOrDefaultAsync(row => row.Id == StoreVersionEntity.MarkerId, cancellationToken);
+        StoreVersionEntity? stored;
+        try
+        {
+            stored = await db.StoreVersions.AsNoTracking()
+                .SingleOrDefaultAsync(row => row.Id == StoreVersionEntity.MarkerId, cancellationToken);
+        }
+        catch (Exception error) when (MissingVersionTable(error))
+        {
+            throw new StoreException(Failure.Definite, "The kernel store version marker table is missing.", error);
+        }
+
         if (stored is null)
             throw new StoreException(Failure.Definite, "The kernel store version marker is missing.");
 
@@ -31,4 +45,15 @@ public sealed partial class EfStore
                 $"Unsupported kernel store versions. Stored schema={stored.StoreSchema}, message protocol={stored.MessageProtocol}, journal codec={stored.JournalCodec}. " +
                 $"This build reads schema={StoreVersionEntity.StoreSchemaVersion}, message protocol={StoreVersionEntity.MessageProtocolVersion}, journal codec={StoreVersionEntity.JournalCodecVersion}.");
     }
+
+    private static bool MissingVersionTable(Exception error) => error switch
+    {
+        PostgresException { SqlState: PostgresErrorCodes.UndefinedTable } => true,
+        SqlException { Number: 208 } => true,
+        MySqlException { Number: 1146 } => true,
+        // SQLite reports both missing tables and ordinary SQL errors as SQLITE_ERROR.
+        SqliteException { SqliteErrorCode: 1 } sqlite =>
+            sqlite.Message.Contains("no such table: " + StoreVersionEntity.Table, StringComparison.Ordinal),
+        _ => false
+    };
 }
