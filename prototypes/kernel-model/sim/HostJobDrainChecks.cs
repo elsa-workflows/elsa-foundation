@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Kernel.Foundation.InMemory;
+using Kernel.Runtime;
 using Kernel.Runtime.Hosting;
 using Contract = Kernel.Foundation.Contracts;
 
@@ -14,6 +15,7 @@ internal static class HostJobDrainChecks
     {
         await GracefulAsync(ownedSet: true);
         await GracefulAsync(ownedSet: false);
+        await ConcurrentStopAsync();
         await DisposedSourceAsync();
         await BeforeEntryAsync();
         await AbruptAsync(duringStop: false);
@@ -86,6 +88,54 @@ internal static class HostJobDrainChecks
             "the same partition runtime can explicitly start and take its scope again");
         await node.Runtime.StopAsync();
         Check(fixture.Fence.Owner is null, "the next start has its own orderly stop");
+    }
+
+    private static async Task ConcurrentStopAsync()
+    {
+        var fixture = new Fixture();
+        var released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releases = 0;
+        var store = new CountingStore(fixture.Store, static () => { }, afterRelease: async () =>
+        {
+            if (Interlocked.Increment(ref releases) != 1) return;
+            released.TrySetResult();
+            await finishRelease.Task.WaitAsync(Timeout);
+        });
+        var runtime = new PartitionRuntime("overlapping-stops", store, 1, Timeout);
+        IActorRuntime lifecycle = runtime;
+        var host = new DurableHost([new Worker(runtime.Node, 0, store, new ActorAdapter(fixture.Store, new JobProbe()), fixture.Options)]);
+        await lifecycle.StartAsync(host);
+        Check(await runtime.ActivateAsync(0) is { Active: true }, "the direct runtime starts with a real fence");
+        var oldEpoch = fixture.Fence.Epoch;
+
+        var first = lifecycle.StopAsync().AsTask();
+        Task second;
+        Task restart;
+        try
+        {
+            await released.Task.WaitAsync(Timeout);
+            Check(fixture.Fence.Owner is null && !first.IsCompleted, "the store released the old fence while the first stop still awaits its answer");
+            second = lifecycle.StopAsync().AsTask();
+            Check(!second.IsCompleted, "a concurrent stop waits for the same pending release");
+
+            using var disconnected = new CancellationTokenSource();
+            var caller = lifecycle.StopAsync(disconnected.Token).AsTask();
+            disconnected.Cancel();
+            await caller.WaitAsync(Timeout);
+            Check(!first.IsCompleted && !second.IsCompleted, "canceling a joined stop wait leaves the shared release pending");
+
+            restart = lifecycle.StartAsync(host).AsTask();
+            Check(!restart.IsCompleted, "a concurrent start waits until the old shutdown completes");
+        }
+        finally { finishRelease.TrySetResult(); }
+
+        await Task.WhenAll(first, second, restart).WaitAsync(Timeout);
+        Check(releases == 1 && await runtime.ActivateAsync(0) is { Active: true } && runtime.Owns(0) &&
+            fixture.Fence.Owner == runtime.Node && fixture.Fence.Epoch > oldEpoch,
+            "one release completes both stops and the fresh start can own a new fence");
+        await lifecycle.StopAsync().AsTask().WaitAsync(Timeout);
+        Check(releases == 2 && fixture.Fence.Owner is null, "the restarted runtime can stop and release its own new fence");
     }
 
     private static async Task DisposedSourceAsync()

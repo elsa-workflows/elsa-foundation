@@ -32,7 +32,9 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     private readonly IScopeActivation?[] _active = new IScopeActivation?[partitions];
     private readonly bool[] _activating = new bool[partitions], _passing = new bool[partitions];
     private readonly bool[] _releasing = new bool[partitions];
+    private readonly object _lifecycle = new();
     private IScopeHost? _host;
+    private Task? _stopping;
     private bool _balancing, _listening;
     private Cluster? _cluster;      // K1b: what the node's last renewing heartbeat saw, for the balancing round
 
@@ -45,12 +47,25 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     public async ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
     {
         if (host is IScopeCount counted) await counted.CheckScopesAsync(partitions, cancellationToken);     // refuses a mismatch
-        _host = host;
-        if (!_listening)
+        bool listen;
+        while (true)
         {
-            Wake.Listen(actor => _ = Woken(actor));
-            _listening = true;
+            Task stopping;
+            lock (_lifecycle)
+            {
+                if (_stopping is not { } pending)
+                {
+                    _host = host;
+                    listen = !_listening;
+                    _listening = true;
+                    break;
+                }
+                stopping = pending;
+            }
+            await stopping.WaitAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
         }
+        if (listen) Wake.Listen(actor => _ = Woken(actor));
     }
 
     private async Task Woken(InstanceRef actor)
@@ -64,18 +79,59 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask StopAsync(CancellationToken cancellationToken = default)
+    /// <summary>End this run once. Concurrent callers share the shutdown and a new start waits for it to finish.</summary>
+    public ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
-        // A cancelled token ends it: what is not given up yet runs out by its lease, as after a crash.
-        if (_host is not { } host || cancellationToken.IsCancellationRequested) return;
-        try { await host.PrepareToStopAsync(cancellationToken); }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
-        for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++) await DeactivateAsync(scope, cancellationToken);
-        if (cancellationToken.IsCancellationRequested) return;
-        Array.Clear(_active);
-        Volatile.Write(ref _cluster, null);
-        _host = null;
-        host.Stopped();
+        if (cancellationToken.IsCancellationRequested) return default;
+        IScopeHost host;
+        TaskCompletionSource stopped;
+        lock (_lifecycle)
+        {
+            if (_stopping is { } pending) return WaitForStopAsync(pending, cancellationToken);
+            if (_host is not { } started) return default;
+            host = started;
+            stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _stopping = stopped.Task;
+        }
+        _ = StopRunAsync(host, stopped, cancellationToken);
+        return new(stopped.Task);
+    }
+
+    private static async ValueTask WaitForStopAsync(Task stopped, CancellationToken cancellationToken)
+    {
+        try { await stopped.WaitAsync(cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+    }
+
+    private async Task StopRunAsync(IScopeHost host, TaskCompletionSource stopped, CancellationToken cancellationToken)
+    {
+        // The first caller sets the stop deadline. Other callers can give up their own wait.
+        // What is not given up yet runs out by its lease, as after a crash.
+        var released = false;
+        Exception? failure = null;
+        try
+        {
+            await host.PrepareToStopAsync(cancellationToken);
+            for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++)
+                await DeactivateAsync(scope, cancellationToken);
+            if (cancellationToken.IsCancellationRequested) return;
+            Array.Clear(_active);
+            Volatile.Write(ref _cluster, null);
+            host.Stopped();
+            released = true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception error) { failure = error; }
+        finally
+        {
+            lock (_lifecycle)
+            {
+                if (released) _host = null;
+                _stopping = null;
+                if (failure is null) stopped.SetResult();
+                else stopped.SetException(failure);
+            }
+        }
     }
 
     /// <summary>This node holds the scope's fence, as far as layer 2 knows.</summary>
