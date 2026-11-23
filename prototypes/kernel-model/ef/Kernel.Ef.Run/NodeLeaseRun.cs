@@ -50,15 +50,22 @@ static class NodeLeaseRun
             _ => "as built",
         };
         Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; case {kind}; take {take}; expect {expect}");
+        var verifyExchange = kind == "mutual" && !negative;
+        if (verifyExchange) await SeedJournalAsync(target.Store(target.Workers()));
         var held = new Dictionary<string, OwnedLease>();
         foreach (var (node, set) in kind == "mutual" ? new[] { ("a", new[] { 1, 2 }), ("b", [3, 4]) } : [("r", [1]), ("p", [2, 3])])     // heartbeats: as heartbeat
             if ((held[node] = await store.TakeAsync(set, node, Brief)).Taken.Count != set.Length) { Console.WriteLine($"the probe could not set up {node}"); return 2; }
         await Task.Delay(Brief + TimeSpan.FromMilliseconds(500));     // every node lease above has expired
         var deadlocks = await target.DeadlocksAsync(admin);
         var clock = Stopwatch.StartNew();
-        var hold = await HoldAsync(target, kind == "mutual"
-            ? """UPDATE "Nodes" SET "SeenAt" = "SeenAt" + 1 WHERE "Id" IN ('a', 'b')"""
-            : """UPDATE "Partitions" SET "WindowStart" = 1 WHERE "Id" = 0""");
+        var lockingReads = target.Engine == "sqlserver" && target.Get("rcsi", "1") == "0";
+        // Update locks on the ordered locking-read setup allow both peer reads to reach
+        // their expiry decision. The two sessions then wait on renewal until the hold ends.
+        var hold = await HoldAsync(target, kind != "mutual"
+            ? """UPDATE "Partitions" SET "WindowStart" = 1 WHERE "Id" = 0"""
+            : verifyExchange && lockingReads
+                ? """SELECT 1 FROM "Nodes" WITH (UPDLOCK, ROWLOCK) WHERE "Id" IN ('a', 'b')"""
+                : """UPDATE "Nodes" SET "SeenAt" = "SeenAt" + 1 WHERE "Id" IN ('a', 'b')""");
         var sent = new List<(string What, Task<string> Outcome)>();
         void Send(string what, Func<Task<string>> run) => sent.Add((what, Task.Run(async () =>
         {
@@ -66,11 +73,12 @@ static class NodeLeaseRun
             catch (Exception e) { return "failed: " + Tally.Code(e); }
         })));
         bool waited;
+        OwnedLease? takenByA = null, takenByB = null;
         if (kind == "mutual")
         {
-            Send("a's take of {3, 4}", async () => "took " + Ids(await store.TakeAsync([3, 4], "a", Lease)));
+            Send("a's take of {3, 4}", async () => "took " + Ids(takenByA = await store.TakeAsync([3, 4], "a", Lease)));
             waited = await target.WaitForWaitersAsync(1);
-            Send("b's take of {1, 2}", async () => "took " + Ids(await store.TakeAsync([1, 2], "b", Lease)));
+            Send("b's take of {1, 2}", async () => "took " + Ids(takenByB = await store.TakeAsync([1, 2], "b", Lease)));
             waited &= await target.WaitForWaitersAsync(2);
             await hold.DisposeAsync();
         }
@@ -102,11 +110,8 @@ static class NodeLeaseRun
             .Select(p => new { p.Id, p.Owner, p.Epoch, p.Position }).ToListAsync();
         // A mutual probe has exactly two eligible outgoing owners and one taker per partition.
         // A refusal can look deadlock-free while leaving the old owners and epochs in place.
-        var verifyExchange = kind == "mutual" && !negative;
         var exchanged = !verifyExchange ||
-            outcomes.Select(outcome => outcome.Answer).SequenceEqual(["took 3 4", "took 1 2"]) &&
-            held["a"].Taken.All(fence => ChangedOwner(fence, "b")) &&
-            held["b"].Taken.All(fence => ChangedOwner(fence, "a"));
+            ValidExchange(held["a"].Taken, takenByB, "b") && ValidExchange(held["b"].Taken, takenByA, "a");
         var takeLevels = starts.Levels.ToArray();
         var readCommitted = !verifyExchange || takeLevels.Length >= 4 && takeLevels.All(level => level == IsolationLevel.ReadCommitted);
         Console.WriteLine($"sessions waiting before the release: {(waited ? "yes" : "NO (the interleaving was not forced)")}; {clock.ElapsedMilliseconds} ms");
@@ -120,7 +125,7 @@ static class NodeLeaseRun
         var victim = outcomes.Any(o => o.Answer.Contains(target.DeadlockCode, StringComparison.Ordinal));
         var deadlocked = target.Engine == "postgres" ? victim : counted > 0 || victim;
         var clean = done && !deadlocked && outcomes.All(o => !o.Answer.StartsWith("failed", StringComparison.Ordinal) && o.Answer != "HUNG");
-        var (expectDeadlock, lockingReads) = (expect == "deadlock", target.Engine == "sqlserver" && target.Get("rcsi", "1") == "0");
+        var expectDeadlock = expect == "deadlock";
         var forced = kind == "mutual" || lockingReads;      // where the hold makes the sessions wait
         var met = done && (waited || !forced) && (expectDeadlock ? deadlocked : clean) && (!negative || deadlocked) && exchanged && readCommitted;
         Console.WriteLine($"nodelease{(negative ? " negative" : "")}: {(deadlocked ? "DEADLOCKED, broken by the engine" : clean ? "no deadlock; every outcome landed or was refused" : "other")}; " +
@@ -128,8 +133,28 @@ static class NodeLeaseRun
             $"{(forced && !waited ? "; the forced wait did not occur" : "")}{(negative && !deadlocked ? "; a negative must deadlock" : "")}");
         return met ? 0 : 1;
 
-        bool ChangedOwner(PartitionFence before, string owner) => owners.Any(row => row.Id == before.Partition &&
-            row.Owner == owner && row.Epoch == before.Epoch + 1 && row.Position == before.Position);
+        bool ValidExchange(IReadOnlyList<PartitionFence> before, OwnedLease? taken, string owner)
+        {
+            if (taken is null || taken.Taken.Count != before.Count) return false;
+            return before.All(old => old.Position == old.Partition &&
+                taken.Taken.Contains(old with { Epoch = old.Epoch + 1 }) &&
+                owners.Any(row => row.Id == old.Partition && row.Owner == owner &&
+                    row.Epoch == old.Epoch + 1 && row.Position == old.Position));
+        }
+    }
+
+    private static async Task SeedJournalAsync(EfStore store)
+    {
+        var seed = await store.TakeAsync([1, 2, 3, 4], "fixture-journal", Lease);
+        var turns = seed.Taken.SelectMany(fence => Enumerable.Range(0, fence.Partition).Select(index =>
+        {
+            var id = $"{fence.Partition}/fixture-{index}";
+            var checkpoint = new InstanceRow(id, "m", "d", InstanceStatus.Running, "{}", 1, null);
+            return new TurnCommit(id, checkpoint, null, [], [], [], [], [], """["seed"]""");
+        })).ToArray();
+        if (seed.Taken.Count != 4 || !(await store.CommitAsync(CommitBatch.Owned(seed.Taken, Lease, false, turns, [], []))).Landed)
+            throw new InvalidOperationException("The ordered mutual fixture could not seed nonzero journal positions.");
+        await store.ReleaseAsync(seed.Taken);
     }
 
     private sealed class TransactionLevels : DbTransactionInterceptor

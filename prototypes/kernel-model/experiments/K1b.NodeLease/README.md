@@ -120,11 +120,12 @@ Under the node lease, a take whose transaction is a deadlock victim or timed out
 it as `failed: Transient mssql 1205`.
 
 Safety held in every run:
+
 - every partition ends with exactly one owner;
 - each deadlock victim's transaction rolled back whole: a losing take's rows keep their old owner and epoch.
 
-
-An ordered mutual run verifies the returned partition sets and reads the resulting owner rows from a
-separate connection. Both ranges must change owner, each epoch must advance once and the journal positions
-must stay fixed. The runner also records the isolation levels reported by the providers for the take
-transactions. The ordered mutual cases require `ReadCommitted` even under a repeatable-read server default.
+The ordered mutual fixture seeds four distinct nonzero positions with a fenced journal commit.
+Both ranges must change owner at the next epochs and retain those positions. The returned fences are
+compared with the persisted owner rows from a separate connection. On SQL Server with locking reads,
+the ordered hold uses update locks so both peer reads can finish before the renewals proceed.
+The provider-reported take transaction levels must be `ReadCommitted` even under a repeatable-read server default.
