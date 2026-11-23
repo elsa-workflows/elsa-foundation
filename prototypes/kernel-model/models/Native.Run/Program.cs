@@ -83,6 +83,11 @@ if (args is ["pg-write-budget", var budgetWriter and ("owned" or "ef"), var budg
     budgetOptions is [] or ["--require-budget"])
     return await PostgresWriteBudget.RunAsync(budgetWriter == "owned" ? CommitSql.Owned : CommitSql.EntityFramework,
         budgetFence == "in-batch", budgetOptions.Length != 0);
+if (args is ["pg-root-value-check", var valueFence and ("checked" or "in-batch"), "birth"])
+    return await PostgresRootValueChecks.RunAsync(valueFence == "in-batch", null);
+if (args is ["pg-root-value-check", var valueRestartFence and ("checked" or "in-batch"), "restart", var valueActor, var valueEpoch] &&
+    long.TryParse(valueEpoch, out var priorValueEpoch) && priorValueEpoch > 0)
+    return await PostgresRootValueChecks.RunAsync(valueRestartFence == "in-batch", new(valueActor, priorValueEpoch));
 if (args is ["pg-timed-job-worker", var jobFence and ("checked" or "in-batch")])
     return await PostgresTimedJobChecks.RunAsync(jobFence == "in-batch");
 if (args is ["pg-root-timed-job-issuance", var timedFence and ("checked" or "in-batch"), .. var timedPhase])

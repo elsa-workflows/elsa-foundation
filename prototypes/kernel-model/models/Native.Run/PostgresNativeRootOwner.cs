@@ -62,7 +62,7 @@ internal sealed class PostgresNativeRootOwner
         return await prepared.TryActivateAsync(cancellationToken) ?? throw new InvalidOperationException("The partition is already owned.");
     }
 
-    private sealed class Headers(EfStore.WorkerRoots roots) : IRootDispatchHeaders
+    internal sealed class Headers(EfStore.WorkerRoots roots) : IRootDispatchHeaders
     {
         public (string Tenant, string Reference) Creator(Message creator)
         {

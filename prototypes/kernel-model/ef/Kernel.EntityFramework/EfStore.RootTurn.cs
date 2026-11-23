@@ -6,7 +6,8 @@ public sealed partial class EfStore
 {
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
         string State, string Header, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
-        bool? OperatorSuspension, RootJobState? JobState, RootJobCompletion? JobCompletion) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
+        bool? OperatorSuspension, RootJobState? JobState, RootJobCompletion? JobCompletion,
+        IReadOnlyList<FoundationValue>? Values) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -48,8 +49,9 @@ public sealed partial class EfStore
             var nextJobGeneration = JobState is null ? Current.NextJobGeneration : JobState.NextGeneration;
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
             // UnsubscribeAll here only when the exact root has no physical subscriptions.
+            var encoded = RootStateFamily(db) + State;
             var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Instances" SET "State" = {State}, "FoundationHeader" = {Header}, "StateVersion" = {StateVersion},
+                UPDATE "Instances" SET "State" = {encoded}, "FoundationHeader" = {Header}, "StateVersion" = {StateVersion},
                     "Status" = {(int)Status}, "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "Suspended" = {OperatorSuspension ?? Current.Suspended},
                     "Jobs" = {jobs}, "NextJobGeneration" = {nextJobGeneration},
@@ -60,7 +62,8 @@ public sealed partial class EfStore
                     AND (NOT {finished} OR NOT EXISTS (SELECT 1 FROM "Subscriptions"
                         WHERE "Instance" = {Current.Actor.Id}))
                 """, cancellationToken);
-            return updated == 1;
+            return updated == 1 && (Values is not { Count: > 0 } values ||
+                await WriteRootValuesAsync(db, Current.Actor, values, cancellationToken));
         }
     }
 
@@ -114,7 +117,8 @@ public sealed partial class EfStore
 
     private PreparedRoot PrepareRootTurn(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,
-        string typeData, IReadOnlyDictionary<string, string> labels, string? journal, string[]? recalls = null, bool? operatorSuspension = null, RootJobState? jobState = null, RootJobCompletion? jobCompletion = null)
+        string typeData, IReadOnlyDictionary<string, string> labels, string? journal, string[]? recalls = null, bool? operatorSuspension = null,
+        RootJobState? jobState = null, RootJobCompletion? jobCompletion = null, IReadOnlyList<FoundationValue>? values = null)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
@@ -132,8 +136,8 @@ public sealed partial class EfStore
         var (stored, header) = EncodeRootContent(current.Model, current.Definition, state, stateVersion, typeData, labels, journal);
         var image = new InstanceRow(current.Actor.Id, "", "", status, "null", checked(current.Revision + 1), null)
             .WithFoundationState(stored);
-        var root = new RootTurnCheckpoint(tenant, reference, current, status, PublicRootState + StoredState.Encode(image),
-            header, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, jobState, jobCompletion);
+        var root = new RootTurnCheckpoint(tenant, reference, current, status, StoredState.Encode(image),
+            header, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, jobState, jobCompletion, values);
         var turn = new TurnCommit(image.Id, null, null, [], [], [], [], [], journal);
         return new(turn, root);
 
