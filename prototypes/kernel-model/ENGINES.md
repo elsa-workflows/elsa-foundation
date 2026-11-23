@@ -110,6 +110,23 @@ from the row, so the check always passes).
 
 The test can fail on every engine. On MySQL and SQLite before the merge it failed narrowly (1 and 7 violations).
 
+### PostgreSQL public root admission in the Core Preview
+
+On a dedicated preview database, `PostgresRootAdmission` installs a persistent reference issuer for the
+existing virtual partitions. A generated start writes a tenant-scoped operation receipt, its exact
+creation binding and one inbox row in one transaction. An independent client can resolve the reference
+and read the pending creator after the writer exits. Receipt expiry permits a new life, and each
+earlier reference continues to name its original creation.
+
+Run `ef/Kernel.Ef.Conformance` with `postgres "<server connection>" root-admission` for the concurrent
+admission, rollback, expiry, tenant and physical inbox cases. The preview uses ordinary PostgreSQL
+text for a representable input and a reversible envelope for text containing NUL or unpaired UTF-16
+units. It refuses an encoded row above the storage budget before its transaction commits.
+
+Public actor execution and its fenced checkpoint remain a subsequent slice. The legacy Worker
+refuses any poll containing a public creator, so use this ingress only in its dedicated database.
+The existing Native workflow restart demonstration uses the prototype adapter.
+
 ### The store conformance suite. Run
 
 `conformance/Kernel.Store.Conformance` (merged from `6097f0174b`), 46 semantic cases, against the merged store with
