@@ -679,8 +679,9 @@ clock is not modelled. The simulation and the stress tests use their own short l
 
 A physical event slot can share a number with a private continuation. The event match keeps their identities
 distinct. On a reopened continuation or timer database, enabling the writer verifies the active private-body
-trigger. If an older trigger split a matched event payload, opening that writer and delivering the affected
-event stop with a format error. Restore the exact envelope from its authoritative event source before resuming.
+trigger. Reinstalling an older trigger is refused if it left a split matched payload. Generic delivery refuses
+the affected row even when the current trigger is active. Restore the exact envelope from its authoritative
+event source before resuming delivery.
 
 ### Relational job-generation format
 
