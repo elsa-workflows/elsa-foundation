@@ -295,6 +295,50 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
             await command.ExecuteNonQueryAsync();
         };
 
+        public override Task<Committed> StartPartitionContenderAsync(CommitBatch batch)
+        {
+            if (file is null) return base.StartPartitionContenderAsync(batch);
+
+            // SQLite can block synchronously and has no independent lock-wait view. Bound the busy timeout
+            // and keep the holder open until the contender reports the actual transient failure.
+            var connection = new SqliteConnectionStringBuilder(admin) { DefaultTimeout = 1 }.ToString();
+            var contender = provider.Store(provider.Factory(connection), provider.FenceInBatch, store.Unfenced);
+            return Task.Run(async () => await contender.CommitAsync(batch));
+        }
+
+        public override async Task<bool> ObservePartitionContentionAsync(Task attempt)
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var stop = timeout.Token;
+            if (file is not null)
+            {
+                await Task.WhenAny(attempt).WaitAsync(stop);
+                return false;
+            }
+
+            await using var connection = Connect();
+            await connection.OpenAsync(stop);
+            await using var command = connection.CreateCommand();
+            command.CommandText = provider.Engine switch
+            {
+                "postgres" => "SELECT COUNT(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'",
+                "sqlserver" => "SELECT COUNT(*) FROM sys.dm_exec_requests WHERE blocking_session_id <> 0 AND database_id = DB_ID()",
+                "mysql" => """
+                    SELECT COUNT(*) FROM performance_schema.data_lock_waits w
+                    JOIN performance_schema.data_locks l ON l.ENGINE = w.ENGINE AND l.ENGINE_LOCK_ID = w.REQUESTING_ENGINE_LOCK_ID
+                    WHERE l.OBJECT_SCHEMA = DATABASE()
+                    """,
+                _ => throw new InvalidOperationException("The conformance provider requires a lock-wait observation."),
+            };
+            // Every conformance case has its own fresh database. The contender is the only running writer.
+            while (!attempt.IsCompleted)
+            {
+                if (Convert.ToInt64(await command.ExecuteScalarAsync(stop)) > 0) return true;
+                await Task.Delay(20, stop);
+            }
+            return false;
+        }
+
         public override async Task<IAsyncDisposable?> HoldPartitionAsync(int partition)
         {
             var connection = Connect();
