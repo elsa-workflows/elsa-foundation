@@ -10,7 +10,8 @@ internal sealed partial class ActorAdapter
 {
     private sealed class ActorTurn : Contract.IActorTurn
     {
-        private readonly Durable.InMemoryStore _store;
+        private readonly Durable.InMemoryStore? _inMemory;
+        private Durable.InMemoryStore Store => _inMemory ?? throw new NotSupportedException("The ordinary-root provider does not implement this authored effect.");
         private readonly Durable.TurnInput _input;
         private readonly Durable.DurableTurn _turn;
         private readonly List<Durable.CreationAddress> _children;
@@ -24,9 +25,9 @@ internal sealed partial class ActorAdapter
         private object? _output;
         private bool _emitted;
 
-        public ActorTurn(Durable.InMemoryStore store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient)
+        public ActorTurn(Durable.InMemoryStore? store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient)
         {
-            _store = store;
+            _inMemory = store;
             _input = input;
             _turn = new(input, foundation: true);
             Header = header;
@@ -70,18 +71,18 @@ internal sealed partial class ActorAdapter
             HeaderLimits.RequireKind(kind, nameof(kind));
             HeaderLimits.RequireContent(payload, nameof(payload));
             var address = target == Header.Ref ? new Durable.CreationAddress(_row.Id, _row.Creation)
-                : _stagedChildren.GetValueOrDefault(target) ?? _store.FoundationTarget(Header.Tenant, target.Id) ??
+                : _stagedChildren.GetValueOrDefault(target) ?? Store.FoundationTarget(Header.Tenant, target.Id) ??
                   throw new ArgumentException("The actor reference was not found.", nameof(target));
             if (kind is Contract.Kinds.Start or Contract.Kinds.Event or Contract.Kinds.ChildFinished or Contract.Kinds.JobFinished)
                 throw new ArgumentException("The foundation issues this message kind.", nameof(kind));
-            return _turn.SendFromActor(_store, new(address.Id), address.Creation, kind, payload, dueAt);
+            return _turn.SendFromActor(Store, new(address.Id), address.Creation, kind, payload, dueAt);
         }
 
         public void Recall(string id)
         {
             if (id.Length != 65 || id[0] != '~' || id.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEF") >= 0)
                 throw new ArgumentException("Recall requires an issued message id.", nameof(id));
-            _turn.RecallFromActor(_store, id);
+            _turn.RecallFromActor(Store, id);
         }
 
         public Contract.ActorRef Start(Contract.StartSpec spec, Contract.Placement placement = Contract.Placement.WithParent, bool detached = false)
@@ -93,7 +94,7 @@ internal sealed partial class ActorAdapter
             var creator = new Durable.StartSpec(spec.Type, spec.TypeData, spec.Input, detached ? null : _row.Id, spec.Ephemeral,
                 (Durable.History)spec.History, ParentCreation: detached ? 0 : _row.Creation);
             var child = new Durable.CreationAddress(_turn.StartFoundationChild(creator, destination).Id, 1);
-            var reference = new Contract.ActorRef(_store.ReferenceFor(Header.Tenant, child));
+            var reference = new Contract.ActorRef(Store.ReferenceFor(Header.Tenant, child));
             _stagedChildren.Add(reference, child);
             if (!detached) _children.Add(child);
             return reference;
@@ -115,16 +116,16 @@ internal sealed partial class ActorAdapter
         {
             if (_turn.JobGeneration(key) is not { } generation) return;
             var ticketKey = Durable.InboxKey.Ticket(_row.Id, key, _row.Creation, generation);
-            var ticket = _store.FoundationJob(_row.Id, _row.Creation, key, generation).Ticket;
+            var ticket = Store.FoundationJob(_row.Id, _row.Creation, key, generation).Ticket;
             if (ticket is null && _input.VolatileMessage(ticketKey) is { Kind: Durable.Kinds.Job } local)
                 ticket = local.Read<Durable.JobTicket>();
 
             var pending = ticket is null ? (Durable.InboxKey?)null : ticketKey;
-            if (_store.HasFoundationJobResult(_row.Id, _row.Creation, key, generation))
+            if (Store.HasFoundationJobResult(_row.Id, _row.Creation, key, generation))
                 pending = Durable.InboxKey.JobResult(_row.Id, key, _row.Creation, generation);
 
             var deadline = ticket?.Timer;
-            if (deadline is not null && !_store.HasStoredJobDeadline(_row.Id, _row.Creation, deadline) &&
+            if (deadline is not null && !Store.HasStoredJobDeadline(_row.Id, _row.Creation, deadline) &&
                 _input.VolatileMessage(Durable.InboxKey.Issued(deadline)) is not { Kind: Durable.Kinds.JobDeadline })
                 deadline = null;
 
@@ -144,7 +145,7 @@ internal sealed partial class ActorAdapter
         {
             HeaderLimits.RequireName(key, nameof(key));
             HeaderLimits.RequireContent(payload, nameof(payload), Durable.FoundationMetadataLimits.EventContentBytes);
-            return _turn.Publish(Qualify(key), payload, keepFor, _store, Header.Tenant);
+            return _turn.Publish(Qualify(key), payload, keepFor, Store, Header.Tenant);
         }
 
         public void Record(object entry)
@@ -244,11 +245,11 @@ internal sealed partial class ActorAdapter
         private Contract.Message Project(Durable.Message message)
         {
             var sender = message.Sender == _row.Id && message.SenderCreation == _row.Creation ? Header.Ref
-                : _store.FoundationReferenceOf(Header.Tenant, message.Sender, message.SenderCreation) is { } reference
+                : message.Sender is not null && Store.FoundationReferenceOf(Header.Tenant, message.Sender, message.SenderCreation) is { } reference
                     ? new Contract.ActorRef(reference) : (Contract.ActorRef?)null;
             var logicalId = message.Kind == Contract.Kinds.JobFinished && !message.FoundationJobResult ? message.Id + "/result" : message.Id;
             var id = (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null
-                ? _store.MessageHandle("inbox:" + logicalId) : message.Id;
+                ? Store.MessageHandle("inbox:" + logicalId) : message.Id;
             if (message.Start is null && Durable.Events.MatchFor(message) is { } match)
             {
                 if (!match.Key.StartsWith(Qualify(""), StringComparison.Ordinal))
