@@ -1,4 +1,5 @@
 using Kernel.EntityFramework;
+using Kernel.Foundation.InMemory;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
@@ -88,6 +89,10 @@ internal sealed class PostgresPreviewFoundation(
     public ValueTask<Contract.Page<Contract.ActorView>> ListAsync(Contract.BoundScope scope, Contract.ActorQuery query,
         Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
         reads.ListAsync(scope, query, from, cancellationToken);
+
+    internal ValueTask<Contract.Page<WorkflowRunView>> ListRunsAsync(Contract.BoundScope scope, WorkflowRunQuery query,
+        Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
+        reads.ListRunsAsync(scope, actorType, query, from, cancellationToken);
 
     public ValueTask<Contract.Page<Contract.DeliveryView>> InboxAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
