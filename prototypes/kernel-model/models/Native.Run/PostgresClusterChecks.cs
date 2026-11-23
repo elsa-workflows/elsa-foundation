@@ -14,7 +14,7 @@ internal static class PostgresClusterChecks
     private sealed record Root(Contract.ActorRef Ref, InstanceRef Actor);
     private sealed record Ownership(string? Node, long Epoch);
 
-    internal static async Task<int> RunAsync(int partitions, bool peer)
+    internal static async Task<int> RunAsync(int partitions, bool peer, bool abrupt = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         var stop = timeout.Token;
@@ -89,18 +89,30 @@ internal static class PostgresClusterChecks
             await Send(target, "approve-1", "Ada", Contract.AdmissionOutcome.Accepted);
             await Until(async () => await Image(target) is { Revision: 2 });
             Check(await Placement(target) == beforeApproval, "the same peer epoch spans approval admission and the second checkpoint");
-            await child.StandardInput.WriteLineAsync("stop");
-            await child.WaitForExitAsync(stop);
-            Check(child.ExitCode == 0, "peer stopped cleanly");
+            var prefix = await api.TailAsync(scope, target.Ref, cancellationToken: stop);
+            Check(prefix.Items.Count(e => e.Revision == 2 && PostgresPublicPreview.Decode(e) == "approved:approve-1") == 1 && prefix.Next is not null,
+                "the public journal records the first approval once before peer departure");
+            if (abrupt)
+                await PostgresClusterExit.ObserveAsync(Open, target.Actor.Partition, Peer, beforeApproval.Epoch, Primary, child, stop);
+            else
+            {
+                await child.StandardInput.WriteLineAsync("stop");
+                await child.WaitForExitAsync(stop);
+                Check(child.ExitCode == 0, "peer stopped cleanly");
+            }
             await Until(async () => await Count(Primary) == partitions);
             var afterDeparture = await Placement(target);
             Check(afterDeparture.Node == Primary && afterDeparture.Epoch > beforeApproval.Epoch, "remaining node assumed the exact root's partition at a later epoch");
             await Send(target, "approve-1", "changed", Contract.AdmissionOutcome.Duplicate);
+            Check((await api.TailAsync(scope, target.Ref, prefix.Next, stop)).Items.Count == 0, "replay added no public journal entry");
             await Send(target, "approve-2", "Grace", Contract.AdmissionOutcome.Accepted);
             await Until(async () => await Image(target) is { Status: InstanceStatus.Finished });
             var image = (await Image(target))!;
             var results = Json.Read<NativeState>(image.State!).Results["approve"]!.AsArray().Select(x => x!.GetValue<string>());
             var journal = await api.TailAsync(scope, target.Ref, cancellationToken: stop);
+            Check(journal.Items.Count(e => PostgresPublicPreview.Decode(e) == "approved:approve-1") == 1 &&
+                journal.Items.Count(e => e.Revision == 3 && PostgresPublicPreview.Decode(e) == "approved:approve-2") == 1,
+                "public journal contains both applied approvals once");
             Check(image.Revision == 3 && results.SequenceEqual(["Ada", "Grace"]) &&
                 journal.Items.Select(x => x.Revision).Distinct().SequenceEqual([1L, 2L, 3L]), "exactly one approval of each kind landed across handover");
             Check(await api.GetAsync(new("other"), target.Ref, stop) is null, "public read stayed tenant bound");
