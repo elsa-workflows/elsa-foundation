@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Kernel.EntityFramework;
 using Kernel.Native.Preview;
@@ -14,7 +15,7 @@ internal static class PostgresClusterChecks
     private sealed record Root(Contract.ActorRef Ref, InstanceRef Actor);
     private sealed record Ownership(string? Node, long Epoch);
 
-    internal static async Task<int> RunAsync(int partitions, bool peer)
+    internal static async Task<int> RunAsync(int partitions, bool peer, bool flowchart = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         var stop = timeout.Token;
@@ -32,7 +33,34 @@ internal static class PostgresClusterChecks
         }
         var name = peer ? Peer : Primary;
         var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
-        var host = PostgresNativeRootOwner.PrepareNode(store, name, partitions, registry, new WorkerOptions { Partitions = partitions });
+        var applied = new ConcurrentDictionary<InboxKey, int>();
+        var worker = new WorkerOptions { Partitions = partitions };
+        if (flowchart)
+        {
+            await store.EnableRootSelfSendsAsync(stop);
+            registry.Add(PostgresFlowchartPreview.Build());
+            int? emitting = null;
+            worker = worker with
+            {
+                OnPreparedCheckpoint = (turn, _, _) =>
+                {
+                    if (peer && turn.Row is { Revision: 1 } && turn.Sent.Any(m => m.InboxKey.Scope == -1))
+                        emitting = new InstanceRef(turn.Instance).Partition;
+                },
+                OnJournal = written =>
+                {
+                    // Hold only this fixture child's pass after its emitter commit has landed. The test parent ends it.
+                    if (peer && emitting is { } home && written.Contains(home)) stop.WaitHandle.WaitOne();
+                },
+                OnTurn = (_, messages, _) =>
+                {
+                    if (!peer)
+                        foreach (var m in messages.Where(m => m.InboxKey.Scope == -1))
+                            applied.AddOrUpdate(m.InboxKey, 1, (_, count) => count + 1);
+                }
+            };
+        }
+        var host = PostgresNativeRootOwner.PrepareNode(store, name, partitions, registry, worker);
         await using var node = new RuntimeNode(name, store, partitions, new LoopOptions
             { BalanceEvery = TimeSpan.FromMilliseconds(150), Window = TimeSpan.FromSeconds(2), PollInterval = TimeSpan.FromMilliseconds(150) });
         if (peer)
@@ -63,7 +91,7 @@ internal static class PostgresClusterChecks
 
         var info = new ProcessStartInfo("dotnet") { RedirectStandardInput = true, UseShellExecute = false };
         info.ArgumentList.Add(typeof(PostgresClusterChecks).Assembly.Location);
-        info.ArgumentList.Add("pg-cluster-peer");
+        info.ArgumentList.Add(flowchart ? "pg-cluster-flowchart-peer" : "pg-cluster-peer");
         info.ArgumentList.Add(partitions.ToString(System.Globalization.CultureInfo.InvariantCulture));
         using var child = Process.Start(info) ?? throw new InvalidOperationException("Could not start second RuntimeNode.");
         try
@@ -75,6 +103,13 @@ internal static class PostgresClusterChecks
                     .Select(g => new { Node = g.Key!, Count = g.Count() }).ToDictionaryAsync(g => g.Node, g => g.Count, stop);
                 return split.GetValueOrDefault(Primary) == partitions / 2 && split.GetValueOrDefault(Peer) == partitions / 2;
             });
+            if (flowchart)
+            {
+                await FlowchartHandoverAsync(child);
+                await node.StopAsync(stop);
+                Healthy();
+                return 0;
+            }
             Root? selected = null;
             while (selected is null)
             {
@@ -119,9 +154,80 @@ internal static class PostgresClusterChecks
             }
         }
 
-        async Task Start()
+        async Task FlowchartHandoverAsync(Process peerProcess)
         {
-            var reply = await workflow.StartAsync(scope, "cluster-start-" + roots.Count, NativeExecutionModel.Start(DirectApprovalWorkflow.Definition), cancellationToken: stop);
+            Root target;
+            Ownership before;
+            do
+            {
+                await Start(purchase: true);
+                target = roots[^1];
+                before = await Placement(target);
+            } while (before.Node != Peer);
+
+            // The peer stops at a landed commit while its process and its lease are still live.
+            string? persisted = null;
+            await Until(async () =>
+            {
+                await using var db = Open();
+                persisted = await db.Database.SqlQuery<string>($"""
+                    SELECT m."Id" AS "Value" FROM "Messages" m JOIN "Instances" i
+                         ON i."Id" = m."Target" AND i."Partition" = m."Partition" AND i.xmin = m.xmin
+                    WHERE i."Id" = {target.Actor.Id} AND i."Revision" = 1 AND m."InboxScope" = {EfStore.RootSelfScope}
+                        AND NOT m."Done" AND m."Sender" = i."Id"
+                    """).SingleOrDefaultAsync(stop);
+                return persisted is not null;
+            });
+            Check(!peerProcess.HasExited && await Placement(target) == before, "the publishing peer retained its exact epoch");
+            var birth = await api.TailAsync(scope, target.Ref, cancellationToken: stop);
+            Check(birth.Next is not null && birth.Items.All(j => !PostgresFlowchartPreview.IsJoin(j)), "a pre-join journal bookmark is available");
+            peerProcess.Kill();
+            await peerProcess.WaitForExitAsync(stop);
+            await Until(async () => await Count(Primary) == partitions);
+            var after = await Placement(target);
+            Check(after.Node == Primary && after.Epoch > before.Epoch, "the surviving runtime took the partition at a later epoch");
+            await Until(async () => await Image(target) is { } i && PostgresFlowchartPreview.State(i) is { Agenda.Count: 0 } s &&
+                s.Frames.Values.Any(f => f.Node == "risk") && s.Frames.Values.Any(f => f.Node == "finance"));
+            var state = PostgresFlowchartPreview.State((await Image(target))!);
+            var finance = PostgresFlowchartPreview.Frame(state, "finance");
+            async Task Signal(string op, string frame, string value, Contract.AdmissionOutcome outcome)
+            {
+                var input = Json.Write(new CompositeSignal(frame, "approve", value));
+                Check((await api.SendAsync(scope, new Contract.Target.Ref(target.Ref), op, CompositeSignal.Kind, input, cancellationToken: stop)).Outcome == outcome, op);
+            }
+            await Signal("risk-approval", PostgresFlowchartPreview.Frame(state, "risk"), "Risk accepted", Contract.AdmissionOutcome.Accepted);
+            await Until(async () => await Image(target) is { } i && PostgresFlowchartPreview.State(i) is { Agenda.Count: 0 } s &&
+                s.Results.ContainsKey("risk") && s.Frames.Values.All(f => f.Node != "risk"));
+            var waiting = (await Image(target))!;
+            await Signal("risk-approval", finance, "changed body", Contract.AdmissionOutcome.Duplicate);
+            await Signal("finance-approval", finance, "Finance accepted", Contract.AdmissionOutcome.Accepted);
+            await Until(async () => await Image(target) is { Status: InstanceStatus.Finished });
+            var finished = (await Image(target))!;
+            state = PostgresFlowchartPreview.State(finished);
+            var suffix = await api.TailAsync(scope, target.Ref, birth.Next, stop);
+            Check(finished.Revision == 7 && waiting.Revision < finished.Revision &&
+                state.Results["risk"]?.GetValue<string>() == "Risk accepted" &&
+                state.Results["finance"]?.GetValue<string>() == "Finance accepted" &&
+                state.Variables["ready"]?.GetValue<bool>() == true && suffix.Items.Count(PostgresFlowchartPreview.IsJoin) == 1 &&
+                applied.GetValueOrDefault(InboxKey.Issued(persisted!)) == 1, "the successor applied the original stored continuation and joined once");
+            await Signal("finance-approval", finance, "changed again", Contract.AdmissionOutcome.Duplicate);
+            Check((await Image(target))!.Revision == finished.Revision && (await api.TailAsync(scope, target.Ref, birth.Next, stop)).Items.SequenceEqual(suffix.Items) &&
+                await api.GetAsync(new("other"), target.Ref, stop) is null && await Placement(target) == after, "stable public result and tenant-qualified read");
+            await using var final = Open();
+            var journal = await final.Journal.Where(j => j.Instance == target.Actor.Id).OrderBy(j => j.Position).Select(j => j.Revision).ToListAsync(stop);
+            var positions = await final.Journal.Where(j => j.Partition == target.Actor.Partition).OrderBy(j => j.Position).Select(j => j.Position).ToListAsync(stop);
+            Check(journal.SequenceEqual([1L, 2L, 3L, 6L, 7L]) && positions.SequenceEqual(Enumerable.Range(1, positions.Count).Select(i => (long)i)) &&
+                !await final.Messages.AnyAsync(m => m.Target == target.Actor.Id && m.InboxScope == EfStore.RootSelfScope, stop),
+                "silent actor revisions preserve the gapless partition journal and leave no private message");
+            Console.WriteLine($"ok PostgreSQL Durable Flowchart Cluster: {partitions} partitions, processes {Environment.ProcessId} and {peerProcess.Id}, partition {target.Actor.Partition}, peer epoch {before.Epoch}, successor epoch {after.Epoch}, original continuation applied once, revisions 1/2/3/6/7, one join.");
+        }
+
+        async Task Start(bool purchase = false)
+        {
+            var spec = purchase
+                ? NativeExecutionModel.Start(PostgresFlowchartPreview.Definition, Modes.Durable, Wf.Object(("manualReview", true)))
+                : NativeExecutionModel.Start(DirectApprovalWorkflow.Definition);
+            var reply = await workflow.StartAsync(scope, "cluster-start-" + roots.Count, spec, cancellationToken: stop);
             Check(reply.Outcome == Contract.AdmissionOutcome.Accepted, "fresh public start");
             var reference = reply.Actor!.Value;
             var address = (await admission.ResolveAsync(scope.Tenant, reference.Id, stop))!;

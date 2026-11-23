@@ -12,6 +12,8 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flowchart-peer"), var flowSize] && int.TryParse(flowSize, out var flowPartitions))
+    return await PostgresClusterChecks.RunAsync(flowPartitions, flowClusterMode == "pg-cluster-flowchart-peer", flowchart: true);
 if (args is [var clusterMode and ("pg-cluster-roots" or "pg-cluster-peer"), var size] && int.TryParse(size, out var clusterPartitions))
     return await PostgresClusterChecks.RunAsync(clusterPartitions, clusterMode == "pg-cluster-peer");
 if (args is ["pg-discover-roots", var discoveryPhase and ("birth" or "restart"), var discoveryScope] && int.TryParse(discoveryScope, out var selectedPartition))
@@ -43,6 +45,8 @@ if (args is ["pg-durable-flowchart-preview", "wait", var waitRoute and ("manual"
 if (args is [var resumedMode and ("pg-flowchart-preview" or "pg-durable-flowchart-preview"), "restart", var resumedRoute and ("manual" or "automatic"), var flowRef, var flowBookmark, var flowEpoch] &&
     long.TryParse(flowEpoch, out var previousEpoch) && previousEpoch > 0)
     return await PostgresFlowchartPreview.RunAsync(resumedRoute, flowRef, flowBookmark, previousEpoch, durable: resumedMode == "pg-durable-flowchart-preview");
+if (args is ["pg-root-self-set", var setWriter and ("ef" or "owned"), var setFence and ("checked" or "in-batch")])
+    return await PostgresSelfSetChecks.RunAsync(setWriter == "owned", setFence == "in-batch");
 if (args is ["pg-root-self", var selfWriter and ("ef" or "owned"), var selfFence and ("checked" or "in-batch")])
     return await PostgresRootSelfChecks.RunAsync(selfWriter == "owned", selfFence == "in-batch");
 if (args is ["pg-flowchart-preview", "merge-early"])

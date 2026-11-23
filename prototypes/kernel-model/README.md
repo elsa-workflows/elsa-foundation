@@ -147,6 +147,24 @@ wait. After PostgreSQL refuses the standby's take, the fixture sends SIGKILL to 
 acquires a later epoch after the stored deadline, resumes the journal bookmark, replays Ada's input and records
 Grace's approval. This exercises one fixed partition. K5 covers Cluster placement and balancing across partitions.
 
+For a Durable Flowchart handover, use a fresh database and run:
+
+```sh
+dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-flowchart 1024
+```
+
+The two RuntimeNodes establish an equal split. A public purchase Flowchart starts on the peer. A fixture callback
+pauses that process after its creator's commit, and the parent checks that the checkpoint and pending continuation
+share a PostgreSQL transaction ID. The fixture ends its own peer process there. The surviving RuntimeNode takes
+the partition at a higher epoch, applies that exact continuation once, and runs both approval branches to one join.
+A changed-body approval replay preserves the original result. Two actor revisions are silent. The partition journal
+keeps consecutive positions. The check also runs with eight virtual partitions.
+
+For the grouped storage operations alone, run `pg-root-self-set <owned|ef> <checked|in-batch>` with the same
+runner on a fresh database. This uses two homes with different epochs. Two checkpoints and their private
+continuations commit together. A stale sibling's fence rolls back a mixed consume, and the current set advances
+only the home that writes a journal entry.
+
 ### PostgreSQL Flowchart preview
 
 Use a fresh dedicated database in `KERNEL_PREVIEW_POSTGRES` for each run. From `prototypes/kernel-model`:
