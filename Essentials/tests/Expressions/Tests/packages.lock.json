@@ -156,6 +156,14 @@
           "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.activities.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.events": {
         "type": "Project",
         "dependencies": {
@@ -276,6 +284,7 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
