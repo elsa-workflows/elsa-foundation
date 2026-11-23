@@ -84,7 +84,10 @@ internal sealed partial class PostgresRootAdmission
         if (status is null) return await RefuseAsync(DirectResult.MissingTarget);
         if (status != InstanceStatus.Running)
         {
-            if (status == InstanceStatus.Finished && await db.Database.SqlQuery<bool>($"""
+            var terminal = status == InstanceStatus.Finished ||
+                status == InstanceStatus.Faulted && db.UsesRootTimedJobSettlement &&
+                await IsTimedFaultTerminalAsync(db, address, tenant, reference, cancellationToken);
+            if (terminal && await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "FoundationDirectReceipts"
                     WHERE "Reference" = {reference} AND "Operation" = {digest}
                         AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
@@ -147,6 +150,17 @@ internal sealed partial class PostgresRootAdmission
             SELECT "Actor" AS "Id", "Creation" FROM "FoundationRootBirths"
             WHERE "Tenant" = {tenant} AND "Reference" = {reference}
             """).SingleOrDefaultAsync(cancellationToken);
+
+    // AdmissionStatusAsync already holds a share lock on this exact checkpoint until the receipt lookup ends.
+    private static Task<bool> IsTimedFaultTerminalAsync(KernelDb db, CreationAddress address, string tenant, string reference,
+        CancellationToken cancellationToken) =>
+        db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM "Instances"
+                WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
+                    AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
+                    AND "Status" = {(int)InstanceStatus.Faulted} AND starts_with("State", {EfStore.TimedRootStateFamily})
+                    AND "FoundationTerminalAt" IS NOT NULL AND "FoundationTerminalRevision" = "Revision") AS "Value"
+            """).SingleAsync(cancellationToken);
 
     // A pending creator admits its first inputs. Re-read the checkpoint when the first commit wins the lock.
     private static async Task<InstanceStatus?> AdmissionStatusAsync(KernelDb db, CreationAddress address, string tenant, string reference,

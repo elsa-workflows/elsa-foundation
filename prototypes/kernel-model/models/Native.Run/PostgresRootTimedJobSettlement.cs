@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
+using System.Text.Json;
 using Kernel.EntityFramework;
 using Kernel.Native;
 using Kernel.Native.Preview;
@@ -19,9 +20,14 @@ internal static class PostgresRootTimedJobSettlement
     private const string First = "issue";
     private const string Second = "settle";
     private const string Third = "apply";
+    private const string Fourth = "discard-ended-input";
+    private const string DelayedInput = "after-timeout";
 
-    internal static async Task<int> RunAsync(bool inBatch, bool timeoutWins, bool delayedClock)
+    internal static async Task<int> RunAsync(bool inBatch, string scenario)
     {
+        var unhandled = scenario == "unhandled-timeout";
+        var timeoutWins = scenario != "complete";
+        var delayedClock = scenario == "late-clock";
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Supply a dedicated PostgreSQL fixture database.");
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(40));
@@ -52,10 +58,12 @@ internal static class PostgresRootTimedJobSettlement
         var receipt = await new WorkflowRuntime(api, api).StartAsync(scope, "issue", NativeExecutionModel.Start(Definition), cancellationToken: stop);
         var actor = receipt.Actor ?? throw new InvalidOperationException("The Native workflow was not admitted.");
         Check(receipt.Outcome == Contract.AdmissionOutcome.Accepted, "The fixture must admit a fresh root.");
-        var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition, Wf.Node<CatchTimeout>("finish").With(
-            new Node(Background, typeof(ControlledJob)) { JobTimeout = TimeSpan.FromSeconds(6) })));
+        var work = new Node(Background, typeof(ControlledJob)) { JobTimeout = TimeSpan.FromSeconds(6) };
+        var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition, unhandled ? work : Wf.Node<CatchTimeout>("finish").With(work)));
         ControlledJob.Attempts.Clear();
         TurnCommit? winningTurn = null;
+        TurnCommit? applyingTurn = null;
+        var cleanupTurns = 0;
         await using var first = await Take(firstStore, First);
         await Drive(first, () => Task.FromResult(ControlledJob.Attempts.Count == 1));
         var initial = (await firstStore.ReadFirstRootAsync(Tenant, actor.Id, stop))!;
@@ -149,8 +157,43 @@ internal static class PostgresRootTimedJobSettlement
         await Expire(delayedClock ? First : Second);
         var thirdStore = Store();
         await using var third = await Take(thirdStore, Third);
-        Check(third.Fences.Single().Epoch > settling.Epoch, "Result application must start with a cold take.");
-        await Drive(third, async () => (await thirdStore.ReadFirstRootAsync(Tenant, actor.Id, stop))?.Status == InstanceStatus.Finished);
+        var applyingFence = third.Fences.Single();
+        Check(applyingFence.Epoch > settling.Epoch, "Result application must start with a cold take.");
+        if (unhandled || !timeoutWins)
+        {
+            var waiting = (await thirdStore.LoadAsync([before.Id], stop)).Single();
+            var recorded = RootJobTicket.RecordedResult(before.Id, selected.Key, resultRow.JobGeneration, resultRow.Payload!);
+            var unsupported = new TurnCommit(before.Id, waiting with { Status = InstanceStatus.Faulted, Revision = 3, Jobs = null },
+                2, [recorded.InboxKey], [], [], [], [], Json.Write(new[] { "end" }), Unsubscribe: true)
+            {
+                OpensPark = unhandled
+            };
+            try
+            {
+                await Commit(thirdStore, applyingFence, unsupported);
+                throw new InvalidOperationException(unhandled
+                    ? "The fixed-root writer accepted a Park over a recorded timeout."
+                    : "The fixed-root writer accepted a fault over a successful result.");
+            }
+            catch (NotSupportedException) { }
+            Check((await Rows(before.Id)).Single().Id == resultRow.Id &&
+                (await thirdStore.ReadFirstRootAsync(Tenant, actor.Id, stop)) is { Revision: 2, Status: InstanceStatus.Running },
+                "Refusing an unsupported fault must preserve the settled result and its waiting checkpoint.");
+        }
+        MessageEntity? queued = null;
+        if (unhandled)
+        {
+            var due = await Now() + 5_000;
+            const string payload = "kept-until-due";
+            var accepted = await api.SendAsync(scope, new Contract.Target.Ref(actor), DelayedInput, "probe", payload,
+                new(DueAt: due), stop);
+            queued = (await Rows(before.Id)).Single(row => row.InboxScope == InboxKey.FoundationOccurrenceScope);
+            Check(accepted is { Outcome: Contract.AdmissionOutcome.Accepted } && accepted.Actor == actor &&
+                !queued.Done && queued.Due == due && queued.Payload == payload,
+                "A delayed input must be admitted while the workflow is still running.");
+        }
+        var status = unhandled ? InstanceStatus.Faulted : InstanceStatus.Finished;
+        await Drive(third, async () => (await thirdStore.ReadFirstRootAsync(Tenant, actor.Id, stop))?.Status == status);
         await first.RunAsync(stop);
         if (replacement is not null) await replacement.RunAsync(stop);
         await third.RunAsync(stop);
@@ -158,15 +201,85 @@ internal static class PostgresRootTimedJobSettlement
         await RefuseLegacyCheckpointReads();
         var history = await thirdStore.ReadJournalOfAsync(0, before.Id, 0, stop);
         var entries = history.SelectMany(entry => Json.Read<string[]>(entry.Entries)).ToArray();
-        Check(end is { Revision: 3, Status: InstanceStatus.Finished, NextJobGeneration: 1, Jobs: null } &&
-            Json.Read<NativeState>(end.State!).Results["finish"]?.GetValue<string>() == expected && (await Rows(before.Id)).Length == 0 &&
+        var native = Json.Read<NativeState>(end.State!);
+        Check(end is { Revision: 3, TerminalRevision: 3, NextJobGeneration: 1, Jobs: null } && end.Status == status &&
+            native is { Frames.Count: 0, Waits.Count: 0, Agenda.Count: 0 } &&
+            (unhandled ? !native.Results.ContainsKey(Background) : native.Results["finish"]?.GetValue<string>() == expected) &&
+            (await Rows(before.Id)).Select(row => row.Id).SequenceEqual(queued is null ? [] : [queued.Id]) &&
             history.Select(entry => entry.Revision).SequenceEqual([1L, 3L]) && entries.Count(entry => entry == "end") == 1 &&
             entries.Count(entry => entry.EndsWith(":" + Background, StringComparison.Ordinal) &&
                 entry.StartsWith(timeoutWins ? "f:" : "c:", StringComparison.Ordinal)) == 1 &&
             ControlledJob.Attempts.Count == (timeoutWins ? 1 : 2) && ControlledJob.Attempts.All(entry => entry.Actor == actor.Id),
-            "The fresh Native model must apply the same actor's stored result once, with one end and an empty inbox.");
-        var outcome = delayedClock ? "late-clock timeout" : expected;
-        Console.WriteLine($"ok Native timed job {(inBatch ? "in-batch" : "checked")} {outcome}, epochs {old.Epoch}->{settling.Epoch}->{third.Fences.Single().Epoch}, " +
+            "The fresh Native model must apply the same actor's stored result once, with one end and no job input left.");
+        long? cleanupEpoch = null;
+        if (queued is not null)
+        {
+            var due = queued.Due;
+            var coldApi = new PostgresPreviewFoundation(admission, thirdStore,
+                new(thirdStore, await admission.OpenJournalCursorAsync(stop), 16), WorkflowActor.WorkflowActor.ActorType);
+            var view = await coldApi.GetAsync(scope, actor, stop)
+                ?? throw new InvalidOperationException("The cold public read did not return the faulted root.");
+            using var header = JsonDocument.Parse(view.Header.TypeData);
+            var authored = applyingTurn ?? throw new InvalidOperationException("The Worker did not prepare the authored fault.");
+            var afterEnd = await coldApi.SendAsync(scope, new Contract.Target.Ref(actor), "after-end", "probe", cancellationToken: stop);
+            var replay = await coldApi.SendAsync(scope, new Contract.Target.Ref(actor), DelayedInput, "probe", "changed", cancellationToken: stop);
+            var sharesJournal = await db.Database.SqlQuery<bool>($"""
+                SELECT count(*) = 1 AND bool_and(i.xmin = j.xmin) AS "Value" FROM "Instances" i
+                JOIN "Journal" j ON j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j."Revision" = i."Revision"
+                WHERE i."Id" = {before.Id} AND i."Revision" = 3
+                """).SingleAsync(stop);
+            Check(view is { Header: { Status: Contract.ActorStatus.Faulted, Fault: null }, Park: null } &&
+                view.Header.Ref == actor && end.TerminalAt >= deadline && end.TerminalAt <= await Now() &&
+                view.Header.EndedAt == end.TerminalAt && header.RootElement.GetProperty("SubStatus").GetString() == "job" &&
+                authored is { Row.Status: InstanceStatus.Faulted, Unsubscribe: true, OpensPark: false, FoundationCascade: null } &&
+                authored.Consumed.SequenceEqual([timeoutResult.InboxKey]) && sharesJournal &&
+                !(await Commit(thirdStore, third.Fences.Single(), authored)).Landed &&
+                afterEnd.Outcome == Contract.AdmissionOutcome.Refused && end.TerminalAt < due &&
+                SameQueued((await Rows(before.Id)).Single()),
+                "The cold owner must persist the authored fault and leave the exact future occurrence pending.");
+
+            var input = (await admission.ReadPendingDirectAsync(Tenant, actor.Id, stop)).Single();
+            var rowless = new TurnCommit(before.Id, null, null, [], [input.InboxKey], [], [], [], null);
+            await Expire(Third);
+            var fourthStore = Store();
+            await using var fourth = await Take(fourthStore, Fourth);
+            var fourthFence = fourth.Fences.Single();
+            cleanupEpoch = fourthFence.Epoch;
+            var position = await db.Partitions.Where(part => part.Id == fourthFence.Partition).Select(part => part.Position).SingleAsync(stop);
+            Check(fourthFence.Epoch > applyingFence.Epoch && await Now() < due &&
+                !(await Commit(fourthStore, fourthFence, rowless)).Landed && SameQueued((await Rows(before.Id)).Single()),
+                "Even after a cold take, the exact terminal input must remain pending until its database due time.");
+            while (await Now() < due) await Task.Delay(10, stop);
+
+            Check(!(await Commit(thirdStore, applyingFence, rowless)).Landed && SameQueued((await Rows(before.Id)).Single()),
+                "A displaced owner must leave the due occurrence pending.");
+            for (var pass = 0; pass < 8 && !(await Rows(before.Id)).Single().Done; pass++)
+            {
+                await fourth.WokenAsync(null, stop);
+                await fourth.RunAsync(stop);
+                await Task.Delay(10, stop);
+            }
+            var disposed = (await Rows(before.Id)).Single();
+            var after = await fourthStore.ReadFirstRootAsync(Tenant, actor.Id, stop);
+            var afterHistory = await fourthStore.ReadJournalOfAsync(0, before.Id, 0, stop);
+            var replayAfter = await coldApi.SendAsync(scope, new Contract.Target.Ref(actor), DelayedInput, "probe", cancellationToken: stop);
+            Check(replay.Outcome == Contract.AdmissionOutcome.Duplicate && replay.Actor == actor &&
+                replayAfter.Outcome == Contract.AdmissionOutcome.Duplicate && replayAfter.Actor == actor,
+                "The live receipt must remain Duplicate both before and after settling the delayed input.");
+            Check(disposed is { Done: true, Payload: null, Start: null, ReplyTo: null } &&
+                disposed.Id == queued.Id && disposed.Seq == queued.Seq && disposed.Due == due && disposed.KeepUntil == queued.KeepUntil &&
+                after is { Revision: 3, Status: InstanceStatus.Faulted, TerminalRevision: 3 } &&
+                after.TerminalAt == end.TerminalAt && after.State == end.State && after.TypeData == end.TypeData &&
+                cleanupTurns == 0 && afterHistory.SequenceEqual(history) &&
+                await db.Partitions.Where(part => part.Id == fourthFence.Partition).Select(part => part.Position).SingleAsync(stop) == position,
+                "The cold owner must settle the original due input without an authored turn or a change to checkpoint, journal or position.");
+            Console.WriteLine("ok live receipt replay before and after cold terminal settlement of the original delayed input");
+
+            bool SameQueued(MessageEntity row) => !row.Done && row.Id == queued.Id && row.Seq == queued.Seq &&
+                row.Due == due && row.KeepUntil == queued.KeepUntil && row.Payload == queued.Payload && row.Start == queued.Start;
+        }
+        var outcome = delayedClock ? "late-clock timeout" : unhandled ? "unhandled timeout Faulted" : expected;
+        Console.WriteLine($"ok Native timed job {(inBatch ? "in-batch" : "checked")} {outcome}, epochs {old.Epoch}->{settling.Epoch}->{third.Fences.Single().Epoch}{(cleanupEpoch is { } epoch ? $"->{epoch}" : "")}, " +
             $"revisions 1->2->3, {sampled.Count} PostgreSQL publication clock queries");
         return 0;
 
@@ -198,9 +311,11 @@ internal static class PostgresRootTimedJobSettlement
                 new WorkerOptions
                 {
                     PassTurnBudget = 1,
+                    OnTurn = name == Fourth ? (_, _, _) => cleanupTurns++ : null,
                     OnPreparedCheckpoint = (turn, _, _) =>
                     {
                         if (turn.Sent.Any(message => message.FoundationJobResult)) winningTurn = turn;
+                        if (name == Third) applyingTurn = turn;
                     }
                 });
             Check(await new DurableHost([worker]).ActivateAsync(roots.Partition, stop) == worker, "The fixture must take ownership.");
