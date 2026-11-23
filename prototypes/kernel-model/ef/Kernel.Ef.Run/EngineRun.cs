@@ -397,8 +397,8 @@ static class EngineRun
         var counter = new Counting();
         var (locks, opens, saves) = (new Locks(target), new Opens(), new Saves());
         var create = target.Has("locks") ? target.Workers(counter, counter.Transactions, opens, saves, locks) : target.Workers(counter, counter.Transactions, opens, saves);
-        var provider = target.Store(create);
-        if (sizes is null && (!provider.OwnedCommit || !target.FenceInBatch))
+        var provider = target.Store(create, useProviderFenceDefault: sizes is null);
+        if (sizes is null && (!provider.OwnedCommit || !provider.FenceInBatch))
         {
             Console.Error.WriteLine("The reference cost requires the default owned writer and in-batch fence.");
             return 1;
@@ -414,7 +414,7 @@ static class EngineRun
         var keep = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 3_600_000;
         Message Start(string mode, int count = 10) => new($"m{++n}", InstanceRef.In(0, $"{mode}{n}"), Kinds.Start, Start: Sequence.Spec(count, mode));
 
-        Console.WriteLine($"\n{target.Engine}: {await target.DescribeAsync()}; fence {(target.FenceInBatch ? "in the batch" : "checked")}; commit {target.CommitWriter}");
+        Console.WriteLine($"\n{target.Engine}: {await target.DescribeAsync()}; fence {(provider.FenceInBatch ? "in the batch" : "checked")}; commit {target.CommitWriter}");
         if (target.Writes is { } described) Console.WriteLine("writes: " + await described.DescribeAsync() + $"; history {target.Get("history", "as the models say")}, pad {target.Int("pad", 0)} bytes");
         Console.WriteLine("counted: commands, COMMITs and (but for PostgreSQL) BEGINs, as FINDINGS.md section 5 counts; sent: what the driver sends, one per request (see ENGINES.md)");
         Console.WriteLine($"{"run",-58} {"commands",8} {"begin",6} {"commit",6} {"opens",6} {"saves",6} {"counted",8} {"sent",6} {"server",8} {"tcp",6}");
@@ -871,7 +871,8 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
         return () => new KernelDb(built);
     }
 
-    public EfStore Store(Func<KernelDb> create) => new(create, postgres: engine != "sqlite", FenceInBatch)
+    public EfStore Store(Func<KernelDb> create, bool useProviderFenceDefault = false) =>
+        new(create, postgres: engine != "sqlite", useProviderFenceDefault ? null : FenceInBatch)
     {
         Unfenced = Has("unfenced"), DefiniteBeatsFence = Has("m5"), FenceIgnoresCount = Get("fencecount", "1") == "0", UnorderedFenceLocks = Has("unordered"),
         NodeReadInUpdate = Get("mutation", "") is "subquery" or "rr-subquery",
