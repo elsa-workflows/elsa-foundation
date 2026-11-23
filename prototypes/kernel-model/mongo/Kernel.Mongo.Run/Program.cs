@@ -23,6 +23,11 @@ if (rest.Remove("--no-abort")) MongoStore.AbortOnFailure = false;
 if (rest.Remove("--no-backoff")) MongoStore.BackOffOnTransient = false;
 if (rest.Remove("--labels-only")) MongoStore.LabelsOnly = true;
 if (rest.Remove("--cuts-only")) MongoProvider.CutsOnly = true;
+if (rest is ["format-migration"])
+{
+    await FormatMigrationChecks.RunAsync(connection, options);
+    return 0;
+}
 if (rest is ["node-registration"])
 {
     await NodeRegistrationChecks.RunAsync(connection, options);
