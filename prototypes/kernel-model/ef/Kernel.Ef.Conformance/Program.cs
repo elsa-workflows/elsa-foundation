@@ -121,8 +121,11 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
 
     internal async Task CheckFormatMigrationAsync()
     {
-        await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
-        await FormatMigrationChecks.Run(fixture.CreateAdmin(), (EfStore)fixture.Store, (EfStore)fixture.NewClient());
+        await using (var fixture = (Provided)await CreateAsync(2, new StoreSetup()))
+            await FormatMigrationChecks.Run(fixture.CreateAdmin(), (EfStore)fixture.Store, (EfStore)fixture.NewClient());
+        await using var race = (Provided)await CreateAsync(2, new StoreSetup());
+        await FormatMigrationRaceChecks.Run(race.CreateAdmin(),
+            interceptor => Store(race.CreateAdmin(interceptor), FenceInBatch), (EfStore)race.Store);
     }
 
     public async Task<ProvidedStore> CreateAsync(int partitions, StoreSetup setup)
@@ -175,7 +178,7 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         public override IKernelStore NewClient() => outside;
         public override ICostCounter? Counter => counter;
         public override Func<int, Task>? Reopen => partitions => outside.CreateAsync(partitions);
-        internal Func<KernelDb> CreateAdmin() => provider.Factory(admin);
+        internal Func<KernelDb> CreateAdmin(params IInterceptor[] interceptors) => provider.Factory(admin, interceptors);
 
         // PostgreSQL refuses a NUL in text (22021), every time. SQLite, SQL Server and MySQL store any string the
         // instance row can hold: no refused row (the case is skipped).
