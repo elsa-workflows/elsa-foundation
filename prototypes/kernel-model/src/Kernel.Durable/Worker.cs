@@ -624,12 +624,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     /// <summary>What the host records just before it sends the node's heartbeat, to judge its answer by (K1b).</summary>
-    public sealed record HeartbeatSent(long At, long Generation, IReadOnlyList<PartitionFence> Held, long Takes = 0, bool Taking = false);
+    public sealed record HeartbeatSent(long At, long Generation, IReadOnlyList<PartitionFence> Held, long Takes = 0, bool Taking = false)
+    {
+        internal IReadOnlyDictionary<int, long>? PendingAtSend { get; init; }
+    }
 
     /// <summary>Taken by the host just before it sends the heartbeat: the monotonic time, this generation, what is held and the takes so far.</summary>
     public HeartbeatSent BeforeHeartbeat()
     {
-        lock (_turnSync) return new(_options.Monotonic(), _generation, Fences, Interlocked.Read(ref _takesStarted), _taking);
+        lock (_turnSync) return new(_options.Monotonic(), _generation, Fences, Interlocked.Read(ref _takesStarted), _taking)
+        {
+            PendingAtSend = _pending.Count == 0 ? null : new Dictionary<int, long>(_pending)
+        };
     }
 
     /// <summary>
@@ -678,7 +684,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// The other way: a partition the answer lists as this process's, at an epoch the Worker does not hold, is released at
     /// that epoch, unless a take of this Worker ran since the send, it is pending, or <c>sibling</c> (another Worker of the
     /// host) claims it; a release that fails is retried at the next answer. A pending partition listed at its epoch is
-    /// retaken, counting the death; one listed otherwise, or not at all, is no longer pending.
+    /// retaken, counting the death. An omitted or different epoch retires only a claim already pending at the send.
+    /// A later take may have established a new pending epoch while the heartbeat or its pass was waiting.
     /// </summary>
     private async Task AnsweredAsync(CancellationToken cancellationToken)
     {
@@ -698,7 +705,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var listed = answer.Owned.ToDictionary(o => o.Partition, o => o.Epoch);
             foreach (var (partition, epoch) in _pending.ToList())
                 if (listed.GetValueOrDefault(partition, -1) == epoch) retake.Add(partition);
-                else _pending.Remove(partition);
+                else if (sent.PendingAtSend?.GetValueOrDefault(partition, -1) == epoch) _pending.Remove(partition);
             if (!Has(Flaw.KeepUnheldRows) && (Has(Flaw.ReleaseDuringTake) || !sent.Taking && !_taking && sent.Takes == Interlocked.Read(ref _takesStarted)))
                 release = [.. listed.Where(l => !(_held.TryGetValue(l.Key, out var held) && held.Epoch == l.Value) && !_pending.ContainsKey(l.Key))
                     .Select(l => new PartitionFence(l.Key, l.Value, 0))];

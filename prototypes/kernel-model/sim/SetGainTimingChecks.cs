@@ -4,12 +4,76 @@ internal static class SetGainTimingChecks
 {
     internal static async Task Run(Action<bool, string> check)
     {
+        await HeartbeatBeforeFirstGain(check);
+        await OlderHeartbeatAfterRetake(check, queued: true, peerTakes: false);
+        await OlderHeartbeatAfterRetake(check, queued: false, peerTakes: false);
+        await OlderHeartbeatAfterRetake(check, queued: true, peerTakes: true);
         await CancelGrantedGain(check);
         await LateResetRetake(check);
         await LateSingleAfterHeartbeat(check, countingRetake: false);
         await LateSingleAfterHeartbeat(check, countingRetake: true);
         await LateGainAfterHeartbeat(check, alreadyHolding: false);
         await LateGainAfterHeartbeat(check, alreadyHolding: true);
+    }
+
+    private static async Task HeartbeatBeforeFirstGain(Action<bool, string> check)
+    {
+        long now = 100_000;
+        var store = new InMemoryStore(3, () => now);
+        var wire = new DelayedCommit(store) { DelayTake = true };
+        var worker = Worker.ForNode("a", wire, new WorkflowInstance([new Counter()]), new() { Monotonic = () => now });
+        var sent = worker.BeforeHeartbeat();
+        var empty = await store.NodeHeartbeatAsync("a", Defaults.Lease, Defaults.Lease);
+        var gain = worker.GainSetAsync([0, 2], default);
+        await wire.Taken.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        now += (long)Defaults.Lease.TotalMilliseconds;
+        wire.TakeReply.SetResult();
+        await gain;
+        worker.HeartbeatAnswered(sent, empty);
+        await worker.RunAsync();
+        var carried = worker.Pending.Keys.Order().SequenceEqual([0, 2]);
+        sent = worker.BeforeHeartbeat();
+        worker.HeartbeatAnswered(sent, await store.NodeHeartbeatAsync("a", Defaults.Lease, Defaults.Lease));
+        await worker.RunAsync();
+        check(carried && worker.Pending.Count == 0 && worker.EpochOf(0) == 2 && worker.EpochOf(2) == 2,
+            "a heartbeat sent before the first gain preserves both new pending claims for the fresh confirming heartbeat");
+    }
+
+    private static async Task OlderHeartbeatAfterRetake(Action<bool, string> check, bool queued, bool peerTakes)
+    {
+        long now = 100_000;
+        var store = new InMemoryStore(2, () => now);
+        var wire = new DelayedCommit(store);
+        var worker = Worker.ForNode("a", wire, new WorkflowInstance([new Counter()]), new() { Monotonic = () => now });
+        await worker.GainSetAsync([0, 1], default);
+        await store.AddAsync(new Message("trial", InstanceRef.In(0, "waiting"), "work"));
+        var trial = store.Messages["trial"];
+        trial.Trial = worker.EpochOf(0);
+        now += (long)Defaults.Lease.TotalMilliseconds + 1;
+        await worker.PollAsync();       // both epoch-1 claims are pending
+        var sibling = await store.TakeAsync(1, "peer", Defaults.Lease);
+        var sent = worker.BeforeHeartbeat();
+        var old = await store.NodeHeartbeatAsync("a", Defaults.Lease, Defaults.Lease);
+        if (queued) worker.HeartbeatAnswered(sent, old);
+
+        wire.DelayRetake = true;
+        var taking = worker.GainAsync(0);
+        await wire.Retaken.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        now += (long)Defaults.Lease.TotalMilliseconds + 1;
+        wire.RetakeReply.SetResult();
+        await taking;
+        if (!queued) worker.HeartbeatAnswered(sent, old);
+        await worker.RunAsync();
+        var carried = worker.Pending.Count == 1 && worker.Pending.GetValueOrDefault(0) == 2
+            && store.Partitions[0].Owner == "a" && store.Partitions[0].Epoch == 2;
+        if (peerTakes) await store.TakeAsync(0, "peer", Defaults.Lease);
+        sent = worker.BeforeHeartbeat();
+        worker.HeartbeatAnswered(sent, await store.NodeHeartbeatAsync("a", Defaults.Lease, Defaults.Lease));
+        await worker.RunAsync();
+        check(sibling?.Epoch == 2 && old.Owned is [{ Partition: 0, Epoch: 1 }] && carried && worker.Pending.Count == 0 && worker.Holds(0) == !peerTakes && !worker.Holds(1)
+            && store.Partitions[0].Owner == (peerTakes ? "peer" : "a") && store.Partitions[0].Epoch == 3
+            && store.Partitions[1].Owner == "peer" && store.Partitions[1].Epoch == 2 && trial.Attempts == 1,
+            $"the {(queued ? "queued" : "delayed")} old heartbeat removes the unchanged missing claim, preserves the new pending epoch, and a fresh heartbeat {(peerTakes ? "confirms the peer" : "brings it back")}");
     }
 
     private static async Task LateGainAfterHeartbeat(Action<bool, string> check, bool alreadyHolding)
