@@ -53,6 +53,12 @@ internal static class PostgresRootTimedJobSettlement
         await using var first = await Take(firstStore, First);
         await Drive(first, () => Task.FromResult(ControlledJob.Attempts.Count == 1));
         var initial = (await firstStore.ReadFirstRootAsync(Tenant, actor.Id, stop))!;
+        try
+        {
+            await issuingFormat.ReadFirstRootAsync(Tenant, actor.Id, stop);
+            throw new InvalidOperationException("The issuance profile accepted a populated settlement checkpoint.");
+        }
+        catch (StoreFormatException) { }
         var physical = await Rows(initial.Actor.Id);
         var timer = physical.Single(row => row.Kind == Kinds.JobDeadline);
         var ticket = physical.Single(row => row.Kind == Kinds.Job);
