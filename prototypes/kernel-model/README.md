@@ -64,7 +64,10 @@ dotnet run -c Release --project sim -- --migration-plan-reads
 This K9 example projects one plan's committed journal through `IActorReads`, using its opaque page token.
 It counts each selected exact actor reference once. An answer of `NotAtSource` can be replaced by a decisive result.
 The first decisive result survives replay. An unanswered actor is pending before close and has no answer after close.
-A late reply still updates the closed plan. A fresh projector recovers the same results from the journal.
+Close fixes the selected set. A late reply for a selected actor still updates the closed plan. A closed empty plan
+has no missing answers. A cancelled page leaves its bookmark in place for a retry. A fresh projector recovers
+the same results from the journal. A plan runner tracks selection completion separately from answers to the
+selections the projector has already seen.
 
 The example stores its view and bookmark in memory and uses a fixture to write the plan journal from real actor turns.
 The persisted view and its paging are separate K9 work. K11 supplies the migration plan actor, exact-ref dispatch

@@ -39,7 +39,8 @@ internal sealed record MigrationPlanView(bool Closed, long AsOf, IReadOnlyDictio
 {
     internal IEnumerable<ActorRef> Pending => Closed ? [] : Results.Where(row => row.Value is null).Select(row => row.Key);
     internal IEnumerable<ActorRef> NoAnswer => Closed ? Results.Where(row => row.Value is null).Select(row => row.Key) : [];
-    internal bool AllAnswered => Results.Count > 0 && Results.Values.All(result => result is not null);
+    // This describes projected selections. The dispatcher establishes that selection is complete separately.
+    internal bool AllAnswered => (Closed || Results.Count > 0) && Results.Values.All(result => result is not null);
 }
 
 /// <summary>Projects one plan's committed journal. Each atomic page advances the opaque bookmark and the result rows together.</summary>
@@ -67,9 +68,9 @@ internal sealed class MigrationPlanOutcomes(IActorReads reads, BoundScope scope,
             if (page.Items.Count > 0 && (page.Next is null || page.Next == before))
                 throw new InvalidOperationException("A nonempty plan journal page needs an advancing bookmark.");
             var records = page.Items.Select(item => MigrationPlanJournal.Read(item.Entry)).ToArray();
-            cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (_bookmark != before) continue;
                 foreach (var record in records) Apply(record);
                 if (page.Items.Count > 0) _bookmark = page.Next;
@@ -83,7 +84,7 @@ internal sealed class MigrationPlanOutcomes(IActorReads reads, BoundScope scope,
     {
         switch (record)
         {
-            case MigrationPlanJournal.Selected batch:
+            case MigrationPlanJournal.Selected batch when !_closed:
                 foreach (var actor in batch.Actors) _outcomes.TryAdd(actor, null);
                 break;
             case MigrationPlanJournal.Answered answer when

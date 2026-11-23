@@ -68,13 +68,14 @@ internal static class MigrationPlanReadChecks
             "Close identifies missing answers and replay preserves the first decisive outcome.");
 
         now++;
+        await SendAsync(plan, "selection-after-close", "selected", new[] { first, unrelated });
         await AnswerAsync(last, "late-answer", Outcome.Migrated);
         await PumpAsync();
         await ProjectAsync(projection);
         var final = projection.Read();
         Require(final.Closed && final.AllAnswered && !final.NoAnswer.Any() && final.Results[last] == Outcome.Migrated &&
-            final.AsOf == now && closed.NoAnswer.SequenceEqual([last]),
-            "The closed plan accepts its late answer and previous snapshots stay stable.");
+            final.AsOf == now && !final.Results.ContainsKey(unrelated) && closed.NoAnswer.SequenceEqual([last]),
+            "The closed plan fixes membership, accepts its late answer and preserves earlier snapshots.");
 
         var reopened = new MigrationPlanOutcomes(reads, scope, plan);
         var replayPages = await ProjectAsync(reopened);
@@ -82,6 +83,31 @@ internal static class MigrationPlanReadChecks
         Require(replayPages >= 3 && rebuilt.Closed && rebuilt.AllAnswered &&
             rebuilt.Results.Count == final.Results.Count && rebuilt.Results.All(pair => final.Results[pair.Key] == pair.Value) &&
             !await reopened.ProjectNextAsync(stop), "A fresh projector reads multiple pages and reconstructs the same plan.");
+
+        var emptyPlan = await StartAsync("empty-plan");
+        var empty = new MigrationPlanOutcomes(reads, scope, emptyPlan);
+        await PumpAsync();
+        await ProjectAsync(empty);
+        Require(!empty.Read().Closed && !empty.Read().AllAnswered, "An open plan without projected selections is incomplete.");
+        await SendAsync(emptyPlan, "close-empty", "closed");
+        await PumpAsync();
+        await ProjectAsync(empty);
+        Require(empty.Read() is { Closed: true, AllAnswered: true, Results.Count: 0 },
+            "A closed plan with no selections has no missing answers.");
+
+        using var cancel = new CancellationTokenSource();
+        var cancelledRead = new CancelledTail(reads, cancel);
+        var retry = new MigrationPlanOutcomes(cancelledRead, scope, plan);
+        var cancelled = false;
+        try { await retry.ProjectNextAsync(cancel.Token); }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested) { cancelled = true; }
+        Require(cancelled && retry.Read() is { AsOf: 0, Results.Count: 0, Closed: false },
+            "Cancellation after the journal read leaves the projected page unapplied.");
+        await ProjectAsync(retry);
+        var afterRetry = retry.Read();
+        Require(cancelledRead.From.Take(2).SequenceEqual([null, null]) && afterRetry.Closed &&
+            afterRetry.Results.All(pair => final.Results[pair.Key] == pair.Value) && afterRetry.Results.Count == final.Results.Count,
+            "A retry reads the same bookmark and rebuilds the complete view.");
 
         var foreign = new MigrationPlanOutcomes(reads, new Contract.BoundScope("other"), plan);
         Require(await ProjectAsync(foreign) == 0 && foreign.Read().Results.Count == 0 && !foreign.Read().Closed,
@@ -125,6 +151,31 @@ internal static class MigrationPlanReadChecks
     {
         if (!ok) throw new InvalidOperationException(message);
         Console.WriteLine(message);
+    }
+
+    private sealed class CancelledTail(Contract.IActorReads inner, CancellationTokenSource cancel) : Contract.IActorReads
+    {
+        internal List<Contract.PageToken?> From { get; } = [];
+
+        public async ValueTask<Contract.Page<Contract.JournalEntry>> TailAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+            Contract.PageToken? from = null, CancellationToken cancellationToken = default)
+        {
+            From.Add(from);
+            var page = await inner.TailAsync(scope, actor, from, cancellationToken);
+            if (From.Count == 1) cancel.Cancel();
+            return page;
+        }
+
+        public ValueTask<Contract.ActorView?> GetAsync(Contract.BoundScope scope, Contract.ActorRef actor, CancellationToken cancellationToken = default) =>
+            inner.GetAsync(scope, actor, cancellationToken);
+
+        public ValueTask<Contract.Page<Contract.ActorView>> ListAsync(Contract.BoundScope scope, Contract.ActorQuery query,
+            Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
+            inner.ListAsync(scope, query, from, cancellationToken);
+
+        public ValueTask<Contract.Page<Contract.DeliveryView>> InboxAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+            Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
+            inner.InboxAsync(scope, actor, from, cancellationToken);
     }
 
     private sealed record Reply(Contract.ActorRef Plan, Outcome Outcome);
