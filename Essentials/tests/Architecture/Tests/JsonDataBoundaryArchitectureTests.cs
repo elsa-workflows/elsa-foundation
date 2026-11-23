@@ -199,6 +199,65 @@ public sealed class JsonDataBoundaryArchitectureTests
         Assert.Contains(shape.RootElement.GetProperty("EnumWire").EnumerateArray(), token => token.GetString() == "\"ready\"");
     }
 
+    [Theory]
+    [InlineData(typeof(System.Collections.ArrayList))]
+    [InlineData(typeof(System.Collections.Hashtable))]
+    public void Untyped_collections_expose_their_implicit_object_contract(Type collection)
+    {
+        Assert.True(JsonBoundaryContractGraph.ContainsObject(collection));
+        var snapshot = InspectFixture(JsonBaseline.Options, [collection]);
+        Assert.Empty(snapshot.Errors);
+        Assert.Contains("shape|fixture|System.Object", snapshot.Pins.Keys);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Member_enum_converter_names_are_pinned_including_factories_and_nullable_members(bool expanded, bool nullable)
+    {
+        JsonSerializerOptions Options(JsonNamingPolicy naming)
+        {
+            var options = JsonBaseline.CreateCopy();
+            var resolver = new DefaultJsonTypeInfoResolver();
+            resolver.Modifiers.Add(info =>
+            {
+                if (info.Type != typeof(EnumDocument)) return;
+                var property = info.Properties.Single(property => property.Name == (nullable ? "optional" : "state"));
+                var factory = new JsonStringEnumConverter<WireState>(naming);
+                property.CustomConverter = expanded ? factory.CreateConverter(typeof(WireState), options) : factory;
+            });
+            options.TypeInfoResolver = resolver;
+            options.MakeReadOnly();
+            return options;
+        }
+        var left = Options(JsonNamingPolicy.CamelCase);
+        var right = Options(JsonNamingPolicy.SnakeCaseLower);
+        var before = InspectFixture(left, [typeof(EnumDocument)]);
+        var after = InspectFixture(right, [typeof(EnumDocument)]);
+        Assert.Empty(before.Errors);
+        Assert.Empty(after.Errors);
+        var key = "shape|fixture|" + JsonBoundaryContractGraph.Name(typeof(EnumDocument));
+        Assert.NotEqual(before.Pins[key], after.Pins[key]);
+        var unchangedEnum = "shape|fixture|" + JsonBoundaryContractGraph.Name(typeof(WireState));
+        Assert.Equal(before.Pins[unchangedEnum], after.Pins[unchangedEnum]);
+        var value = new EnumDocument { State = WireState.FirstChoice, Optional = WireState.FirstChoice };
+        var member = nullable ? "optional" : "state";
+        Assert.Equal("firstChoice", JsonSerializer.SerializeToElement(value, left).GetProperty(member).GetString());
+        Assert.Equal("first_choice", JsonSerializer.SerializeToElement(value, right).GetProperty(member).GetString());
+    }
+
+    [Fact]
+    public void An_owned_scalar_converter_does_not_expose_the_underlying_untyped_collection_as_a_wire_object_slot()
+    {
+        var snapshot = InspectFixture(JsonBaseline.Options, [typeof(ScalarDocument)]);
+        Assert.Empty(snapshot.Errors);
+        Assert.Empty(snapshot.LooseMembers);
+        Assert.DoesNotContain("shape|fixture|System.Object", snapshot.Pins.Keys);
+        Assert.Single(snapshot.OpaqueConverters);
+    }
+
     private static JsonSerializerOptions WithAddedMember(Type target)
     {
         var options = JsonBaseline.CreateCopy();
@@ -235,6 +294,15 @@ public sealed class JsonDataBoundaryArchitectureTests
         public sealed class Second { public JsonElement Data { get; init; } }
     }
     public enum WireState { FirstChoice, [JsonStringEnumMemberName("ready")] ReadyChoice }
+    public sealed class EnumDocument { public WireState State { get; init; } public WireState? Optional { get; init; } }
+    public sealed class ScalarDocument { public ScalarRows? Scalar { get; init; } }
+    [JsonConverter(typeof(ScalarRowsConverter))]
+    public sealed class ScalarRows : System.Collections.ArrayList;
+    public sealed class ScalarRowsConverter : JsonConverter<ScalarRows>
+    {
+        public override ScalarRows Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => new();
+        public override void Write(Utf8JsonWriter writer, ScalarRows value, JsonSerializerOptions options) => writer.WriteStringValue("owned-scalar");
+    }
     [JsonPolymorphic, JsonDerivedType(typeof(FirstAlternative), "first")]
     public abstract class OwnedUnion;
     public sealed class FirstAlternative : OwnedUnion { public JsonElement Data { get; init; } }

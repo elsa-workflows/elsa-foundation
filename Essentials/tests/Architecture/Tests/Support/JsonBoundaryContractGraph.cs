@@ -63,6 +63,7 @@ internal static class JsonBoundaryContractGraph
                 property.Name, Type = Name(property.PropertyType), property.Order, property.IsRequired, property.IsGetNullable, property.IsSetNullable,
                 property.IsExtensionData, property.NumberHandling, property.ObjectCreationHandling,
                 Converter = property.CustomConverter is { } converter ? Name(converter.GetType()) : null,
+                EnumWire = EnumTokens(property.PropertyType, options, property.CustomConverter),
                 HasGet = property.Get is not null, HasSet = property.Set is not null, HasPredicate = property.ShouldSerialize is not null
             }).ToArray();
             var shape = JsonSerializer.Serialize(new
@@ -74,7 +75,7 @@ internal static class JsonBoundaryContractGraph
                 Derived = info.PolymorphismOptions?.DerivedTypes.Select(derived => new { Type = Name(derived.DerivedType), Discriminator = derived.TypeDiscriminator })
                     .OrderBy(derived => derived.Type, StringComparer.Ordinal).ToArray(),
                 Enum = type.IsEnum ? Enum.GetNames(type).Select(name => name + "=" + Enum.Format(type, Enum.Parse(type, name), "D")).ToArray() : null,
-                EnumWire = type.IsEnum ? Enum.GetNames(type).Select(name => JsonSerializer.Serialize(Enum.Parse(type, name), type, options)).ToArray() : null
+                EnumWire = EnumTokens(type, options)
             });
             shapes[identity] = shape;
             pins.Add(identity, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(shape))));
@@ -82,7 +83,9 @@ internal static class JsonBoundaryContractGraph
                 opaque.Add(owner + "|" + Name(type) + "|" + Name(info.Converter.GetType()));
             foreach (var property in info.Properties.Where(property => property.Get is not null || property.Set is not null))
             {
-                if (ContainsObject(property.PropertyType)) loose.Add(owner + "|" + Name(type) + "." + property.Name);
+                if (property.CustomConverter is null && (property.PropertyType == typeof(object) ||
+                    options.GetTypeInfo(property.PropertyType).Kind != JsonTypeInfoKind.None && ContainsObject(property.PropertyType)))
+                    loose.Add(owner + "|" + Name(type) + "." + property.Name);
                 Visit(property.PropertyType, options, owner);
             }
             if (type.IsArray) Visit(type.GetElementType()!, options, owner);
@@ -108,12 +111,39 @@ internal static class JsonBoundaryContractGraph
     {
         var contracts = type.GetInterfaces().Prepend(type).Where(candidate => candidate.IsGenericType).ToArray();
         if (kind == JsonTypeInfoKind.Dictionary)
-            return contracts.Where(candidate => candidate.GetGenericTypeDefinition() == typeof(IDictionary<,>) ||
-                candidate.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)).SelectMany(candidate => candidate.GetGenericArguments()).Distinct();
+        {
+            var arguments = contracts.Where(candidate => candidate.GetGenericTypeDefinition() == typeof(IDictionary<,>) ||
+                candidate.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)).SelectMany(candidate => candidate.GetGenericArguments()).Distinct().ToArray();
+            return arguments.Length != 0 ? arguments : typeof(System.Collections.IDictionary).IsAssignableFrom(type) ? [typeof(object)] : [];
+        }
         if (kind == JsonTypeInfoKind.Enumerable)
-            return contracts.Where(candidate => candidate.GetGenericTypeDefinition() == typeof(IEnumerable<>))
-                .Select(candidate => candidate.GetGenericArguments()[0]).Distinct();
+        {
+            var elements = contracts.Where(candidate => candidate.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                .Select(candidate => candidate.GetGenericArguments()[0]).Distinct().ToArray();
+            return elements.Length != 0 ? elements : typeof(System.Collections.IEnumerable).IsAssignableFrom(type) && type != typeof(string) ? [typeof(object)] : [];
+        }
         return [];
+    }
+
+    private static string[]? EnumTokens(Type declared, JsonSerializerOptions options, JsonConverter? converter = null)
+    {
+        var type = Nullable.GetUnderlyingType(declared) ?? declared;
+        if (!type.IsEnum) return null;
+        if (converter is null)
+            return Enum.GetNames(type).Select(name => JsonSerializer.Serialize(Enum.Parse(type, name), declared, options)).ToArray();
+
+        var target = converter.CanConvert(declared) ? declared : type;
+        if (converter is JsonConverterFactory factory)
+            converter = factory.CreateConverter(target, options) ?? throw new InvalidDataException("An enum member converter factory returned no converter.");
+        var write = converter.GetType().GetMethod("Write", BindingFlags.Public | BindingFlags.Instance, null,
+            [typeof(Utf8JsonWriter), target, typeof(JsonSerializerOptions)], null)
+            ?? throw new InvalidDataException("The enum member converter has no matching writer: " + Name(converter.GetType()));
+        return Enum.GetNames(type).Select(name =>
+        {
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream)) write.Invoke(converter, [writer, Enum.Parse(type, name), options]);
+            return Encoding.UTF8.GetString(stream.ToArray());
+        }).ToArray();
     }
 
     private static bool IsLeaf(Type type) => IsJsonData(type) || type == typeof(string) || type.IsPrimitive || type.IsEnum ||
