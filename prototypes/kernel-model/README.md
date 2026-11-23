@@ -144,8 +144,10 @@ dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-cr
 
 The coordinator terminates only its spawned peer process while the workflow waits for its second approval.
 The fixture reads the peer's live lease after process exit. A temporary diagnostic trigger on the workflow's
-partition records the owner, epoch and database clock inside the takeover transaction. It checks that the
-survivor takes directly from the expired peer. The public journal bookmark spans process loss and replay.
+partition records the peer lease deadline, owner, epoch and both the successful UPDATE's statement start and its
+row-trigger time. The fixture requires that UPDATE to start after the deadline. The provider samples the lease
+earlier in the same transaction. The observer records committed ownership changes. The public journal bookmark
+spans process loss and replay.
 
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 

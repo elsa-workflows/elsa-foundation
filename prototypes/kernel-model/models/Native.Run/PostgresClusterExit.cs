@@ -10,7 +10,7 @@ internal static class PostgresClusterExit
 {
     private sealed record LeaseSample(string? Owner, long Epoch, long LeaseUntil, long Observed);
     private sealed record Change(string? PreviousOwner, long PreviousEpoch, string? NextOwner, long NextEpoch,
-        bool Died, long LeaseUntil, long Observed);
+        bool Died, long LeaseUntil, long StatementAt, long TriggerAt);
 
     internal static async Task ObserveAsync(Func<KernelDb> open, int partition, string peer, long epoch, string survivor,
         Process child, CancellationToken stop)
@@ -18,11 +18,12 @@ internal static class PostgresClusterExit
         await using var db = open();
         await db.Database.ExecuteSqlRawAsync($"""
             CREATE TABLE preview_exit_changes ("PreviousOwner" text, "PreviousEpoch" bigint, "NextOwner" text,
-                "NextEpoch" bigint, "Died" boolean, "LeaseUntil" bigint, "Observed" bigint);
+                "NextEpoch" bigint, "Died" boolean, "LeaseUntil" bigint, "StatementAt" bigint, "TriggerAt" bigint);
             CREATE FUNCTION preview_record_exit() RETURNS trigger LANGUAGE plpgsql AS $$
             BEGIN
                 INSERT INTO preview_exit_changes VALUES (OLD."Owner", OLD."Epoch", NEW."Owner", NEW."Epoch", NEW."Died",
                     (SELECT "LeaseUntil" FROM "Nodes" WHERE "Id" = OLD."Owner"),
+                    floor(extract(epoch from statement_timestamp()) * 1000)::bigint,
                     floor(extract(epoch from clock_timestamp()) * 1000)::bigint);
                 RETURN NEW;
             END $$;
@@ -55,9 +56,9 @@ internal static class PostgresClusterExit
             } while (changes.Count == 0);
             if (changes is not [var change] || change.PreviousOwner != peer || change.PreviousEpoch != epoch ||
                 change.NextOwner != survivor || change.NextEpoch != epoch + 1 || !change.Died ||
-                change.LeaseUntil < left.LeaseUntil || change.Observed <= change.LeaseUntil)
+                change.LeaseUntil < left.LeaseUntil || change.StatementAt <= change.LeaseUntil)
                 throw new InvalidOperationException("Expected one direct takeover from the exited peer after its database lease expired.");
-            Console.WriteLine($"ok peer exit {child.Id}, partition {partition}, live lease after exit {left.LeaseUntil - left.Observed} ms, takeover {change.Observed - change.LeaseUntil} ms after expiry, epochs {epoch}->{change.NextEpoch}");
+            Console.WriteLine($"ok peer exit {child.Id}, partition {partition}, live lease after exit {left.LeaseUntil - left.Observed} ms, owner update started {change.StatementAt - change.LeaseUntil} ms after expiry, row trigger ran {change.TriggerAt - change.LeaseUntil} ms after expiry, epochs {epoch}->{change.NextEpoch}");
         }
         finally
         {
