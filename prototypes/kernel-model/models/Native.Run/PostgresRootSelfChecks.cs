@@ -38,15 +38,16 @@ internal static class PostgresRootSelfChecks
         var payload = new string('"', FoundationMetadataLimits.MessageContentBytes - Encoding.UTF8.GetByteCount(suffix)) + suffix;
         var logical = FoundationSelfSend.Issue(scoped.RootSelfIssuer!, CreationProtocol.Origin(actor, 1), 2, 0, null);
         var sent = FoundationSelfSend.Create(actor, 1, logical, "ordinary\0step", payload);
-        Message Timer(int ordinal, long due)
+        Message Timer(string owner, int ordinal, long due)
         {
-            var handle = FoundationSelfSend.Issue(scoped.RootSelfIssuer!, CreationProtocol.Origin(actor, 1), 2, ordinal, due);
-            return FoundationSelfSend.Create(actor, 1, handle, "wake", null, due);
+            var handle = FoundationSelfSend.Issue(scoped.RootSelfIssuer!, CreationProtocol.Origin(owner, 1), 2, ordinal, due);
+            return FoundationSelfSend.Create(owner, 1, handle, "wake", null, due);
         }
-        var zero = Timer(1, 0);
-        var future = Timer(2, long.MaxValue);
+        var zero = Timer(actor, 1, 0);
+        var future = Timer(actor, 2, long.MaxValue);
+        var sibling = Timer(actor, 3, long.MaxValue - 1);
         CommitBatch Batch(params TurnCommit[] turns) => new(0, lease.Epoch, 1, window, false, turns, [], []);
-        var emit = new TurnCommit(actor, row with { Revision = 2 }, 1, [], [direct.InboxKey], [sent, zero, future], [], [], null);
+        var emit = new TurnCommit(actor, row with { Revision = 2 }, 1, [], [direct.InboxKey], [sent, zero, future, sibling], [], [], null);
         Check((await scoped.CommitAsync(Batch(emit), stop)).Landed, "silent checkpoint and full-size emitted input");
         var key = sent.InboxKey;
         var stored = key with { Scope = EfStore.RootSelfScope };
@@ -129,12 +130,51 @@ internal static class PostgresRootSelfChecks
             Check((await db.Messages.SingleAsync(m => m.Id == future.InboxKey.Id, stop)).InboxScope == -1 &&
                 (await cold.LoadAsync([actor], stop)).Single().Revision == 5,
                 "the ordinary neighbour survives the committed recall");
+        Check(await PendingTimer(sibling), "the other private timer on the same root survives recall");
         await ingress.AdmitDirectAsync(tenant, reference, "recall-again", "change", cancellationToken: stop);
         var again = (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single();
         row = (await cold.LoadAsync([actor], stop)).Single();
         Check((await cold.CommitAsync(Batch(withdraw with { Row = row with { Revision = 6 }, Expected = 5, Done = [again.InboxKey] }), stop)).Landed,
             "recalling the absent private timer again is idempotent");
+        Check(await PendingTimer(sibling), "the same private sibling survives an absent recall replay");
+
+        var peerRef = (await ingress.AdmitAsync(tenant, "peer", new("native", "wait"), cancellationToken: stop)).Reference;
+        var peerCreator = (await ingress.ReadPendingCreatorAsync(tenant, peerRef, stop))!;
+        var peer = peerCreator.Target.Id;
+        Check((await bare.CommitFirstRootAsync(tenant, peerRef, peerCreator, lease.For(0) with { Position = 1 }, window,
+            null, 1, "state", new Dictionary<string, string>(), """["start"]""", stop)).Landed, "second root created on the same partition");
+        var peerClient = Client();
+        await peerClient.EnableRootSelfSendsAsync(stop);
+        await peerClient.BindWorkerRootsAsync([(tenant, peerRef)], stop);
+        await ingress.AdmitDirectAsync(tenant, peerRef, "issue", "step", cancellationToken: stop);
+        var peerInput = (await ingress.ReadPendingDirectAsync(tenant, peerRef, stop)).Single();
+        var peerRow = (await peerClient.LoadAsync([peer], stop)).Single();
+        var peerTimer = Timer(peer, 0, long.MaxValue);
+        var issue = new TurnCommit(peer, peerRow with { Revision = 2 }, 1, [], [peerInput.InboxKey], [peerTimer], [], [], null);
+        Check((await peerClient.CommitAsync(Batch(issue) with { Position = 2 }, stop)).Landed && await PendingTimer(peerTimer),
+            "second root issues its own pending private timer");
+
+        await ingress.AdmitDirectAsync(tenant, reference, "another-change", "step", cancellationToken: stop);
+        var input = (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single();
+        row = (await cold.LoadAsync([actor], stop)).Single();
+        var mismatched = withdraw with { Row = row with { Revision = 7 }, Expected = 6, Done = [input.InboxKey],
+            FoundationSelfRecalls = new HashSet<InboxKey> { peerTimer.InboxKey } };
+        refused = false;
+        try { await cold.CommitAsync(Batch(mismatched) with { Position = 2 }, stop); }
+        catch (NotSupportedException) { refused = true; }
+        Check(refused && await PendingTimer(peerTimer) && await PendingTimer(sibling) &&
+            (await cold.LoadAsync([actor], stop)).Single().Revision == 6 &&
+            (await peerClient.LoadAsync([peer], stop)).Single().Revision == 2 &&
+            (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single() == input,
+            "a scoped recall for the other root is refused and preserves both timers, checkpoints and the input");
         return 0;
+
+        async Task<bool> PendingTimer(Message timer)
+        {
+            await using var db = Open();
+            return await db.Messages.AnyAsync(m => m.Id == timer.InboxKey.Id && m.Target == timer.Target.Id &&
+                m.InboxScope == EfStore.RootSelfScope && m.Due == timer.Due && !m.Done, stop);
+        }
     }
 
     private static void Check(bool condition, string name)
