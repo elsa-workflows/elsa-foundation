@@ -23,7 +23,7 @@ public sealed partial class EfStore
             throw new StoreFormatException("Immediate public continuations require the PostgreSQL continuation protocol.");
         await RequireStoreVersionsAsync(db, token);
         var install = await db.Database.SqlQueryRaw<SelfInstallation>("""
-            SELECT "Key", to_regprocedure('kernel_root_self_insert_v2()') IS NOT NULL AS "Installed" FROM "FoundationRootIssuer"
+            SELECT "Key", to_regprocedure('kernel_root_self_insert_v3()') IS NOT NULL AS "Installed" FROM "FoundationRootIssuer"
             """).SingleAsync(token);
         if (!install.Installed) await new PostgresRootAdmission(create, TimeSpan.Zero).InstallAsync(token);
         RootSelfIssuer = new(seed => FoundationSelfSend.Handle(install.Key, seed), db.RequiredFormat == StoreFormat.RootTimers);
@@ -34,7 +34,7 @@ public sealed partial class EfStore
     internal static Task InstallRootSelfAsync(KernelDb db, CancellationToken token) =>
         db.Database.ExecuteSqlRawAsync($"""
             ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "FoundationSelfContent" bytea;
-            CREATE OR REPLACE FUNCTION kernel_root_self_insert_v2() RETURNS trigger LANGUAGE plpgsql AS $fn$
+            CREATE OR REPLACE FUNCTION kernel_root_self_insert_v3() RETURNS trigger LANGUAGE plpgsql AS $fn$
             DECLARE head text := split_part(NEW."Payload", chr(10), 1);
             BEGIN
                 IF left(head, 1) = 'B' THEN
@@ -44,7 +44,7 @@ public sealed partial class EfStore
                 RETURN NEW;
             END $fn$;
             CREATE OR REPLACE TRIGGER kernel_root_self_insert BEFORE INSERT ON "Messages" FOR EACH ROW
-            WHEN (NEW."InboxScope" = {RootSelfScope}) EXECUTE FUNCTION kernel_root_self_insert_v2();
+            WHEN (NEW."InboxScope" = {RootSelfScope} AND NEW."EventMatch" IS NULL) EXECUTE FUNCTION kernel_root_self_insert_v3();
             CREATE OR REPLACE VIEW "FoundationRootMessages" AS
             SELECT "Id", "InboxScope", "EventMatch", "Seq", "Partition", "Target", "Kind", "Start", "Sender", "Due",
                    "Seen", "Trial", "Attempts", "KeepUntil", "Done", "ReplyTo",
@@ -81,7 +81,7 @@ public sealed partial class EfStore
 
     private static Message DecodeRootSelf(MessageEntity row, FoundationSelfIssuer? issue)
     {
-        var actor = row.InboxScope == RootSelfScope ? SelfActor(InboxKey.Issued(row.Id)) : null;
+        var actor = row.InboxScope == RootSelfScope && row.EventMatch is null ? SelfActor(InboxKey.Issued(row.Id)) : null;
         if (issue is null || row.JobGeneration != 0 || actor != row.Target || row.Sender != actor || row.Kind != RootSelfWire ||
             row.Payload is null || row.Start is not null || row.KeepUntil is not null || row.ReplyTo is not null)
             throw RootShape();

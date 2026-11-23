@@ -127,6 +127,20 @@ internal static class PostgresRootSelfChecks
         Check((await cold.CommitAsync(Batch(new TurnCommit(actor, row with { Revision = 3 }, 2, [key], [], [], [], [], null)), stop)).Landed,
             "qualified owner consumes the exact input with the next silent checkpoint");
 
+        const string eventPayload = "Body\nYQ==";
+        foreach (var eventKey in new[] { "event-a", "event-b", "event-c", "event-d" })
+        {
+            var match = Events.Route(new(eventKey, "shared", eventPayload, long.MaxValue), new(eventKey, actor, "wait"));
+            Check(await bare.AddEventAsync(match, stop), "each event match inserts under the shared wire ID");
+        }
+        await using (var db = Open())
+        {
+            var alias = await db.Messages.SingleAsync(m => m.InboxScope == EfStore.RootSelfScope && m.EventMatch != null, stop);
+            Check(alias.Payload == eventPayload, "the private trigger leaves a matched event in its original representation");
+        }
+        Check((await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 10, stop)).Messages.All(m => m.Message.EventMatch is null),
+            "a scoped root poll leaves generic event matches outside its inbox");
+
         if (!timers) return 0;
         var ready = (await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop)).Messages.Select(m => m.Message).ToArray();
         Check(ready.SequenceEqual([zero, sibling]) && ready[0].Due == 0 && zero.Id != FoundationSelfSend.Issue(

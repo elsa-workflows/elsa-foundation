@@ -738,6 +738,9 @@ public static class Semantics
                 Context.Equal((wanted.Event, wanted.Wait), Events.Delivered(actual)!.Value, "an ambiguous wire is decoded by its persisted match");
                 Context.Equal(match.Message.Id, actual.Id, "unchanged wire representation");
             }
+            var identities = rows.Select(row => row.InboxKey).ToArray();
+            await c.Lands(() => c.Commit(lease, 0, [], seen: identities));
+            Context.That((await c.All(0)).All(row => row.Seen == lease.Epoch), "every exact match is marked even when its physical slot overlaps a private namespace");
             await c.Lands(() => c.Commit(0, lease.Epoch, 0, [Make.Turn("0/a", consumed: [rows[0].InboxKey])]));
             Context.Equal(routes.Length - 1, (await c.All(0)).Count, "consume only the selected tuple");
             var deleted = rows[0];
