@@ -7,6 +7,13 @@ using Kernel.Sim.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 
+if (args is ["--public-order"] or ["--public-order", "--omit-stock-release"])
+{
+    try { await PublicOrderExample.RunAsync(args.Length == 2); }
+    catch (InvalidOperationException error) { Console.Error.WriteLine(error.Message); Environment.ExitCode = 1; }
+    return;
+}
+
 if (args is ["--outcomes-list"]) { foreach (var n in NativeOutcomeWitness.Names.Concat(NativeOutcomeWitness.LegacyNames).Concat(NativeOutcomeReaders.ReaderNames).Concat(NativeOutcomeReaders.RefusalNames).Concat(NativeOutcomeReaders.TamperNames).Concat(NativeOutcomeGateWitness.Names)) Console.WriteLine(n); return; }
 if (args is ["--outcomes"]) { NativeOutcomeWitness.Run(); NativeOutcomeReaders.Run(); NativeOutcomeGateWitness.Run(); return; }
 if (args is ["--outcome-readers"]) { NativeOutcomeReaders.Run(); return; }

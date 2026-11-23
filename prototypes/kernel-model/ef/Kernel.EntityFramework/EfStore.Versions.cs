@@ -10,7 +10,7 @@ internal sealed class StoreVersionEntity
 {
     internal const string Table = "KernelStoreVersions";
     internal const int MarkerId = 1;
-    internal const int StoreSchemaVersion = 2;
+    internal const int StoreSchemaVersion = 3;
     internal const int MessageProtocolVersion = 2;
     internal const int JournalCodecVersion = 1;
 
@@ -27,6 +27,9 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat Current { get; } = new(StoreVersionEntity.StoreSchemaVersion,
         StoreVersionEntity.MessageProtocolVersion, StoreVersionEntity.JournalCodecVersion);
 
+    // The dedicated PostgreSQL continuation profile retains its own message protocol.
+    internal static StoreFormat RootSelf => Current with { MessageProtocol = 3 };
+
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
 }
@@ -40,24 +43,28 @@ internal static class NodeAdvertisement
     internal const string Update = "\"ReadableStoreSchema\" = {1}, \"ReadableMessageProtocol\" = {2}, \"ReadableJournalCodec\" = {3}";
 
     private static readonly string Schema = StoreVersionEntity.StoreSchemaVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    private static readonly string Protocol = StoreVersionEntity.MessageProtocolVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private static readonly string Codec = StoreVersionEntity.JournalCodecVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    internal static object[] Arguments(string node, long? lease = null) => lease is { } ms
-        ? [node, Schema, Protocol, Codec, ms]
-        : [node, Schema, Protocol, Codec];
+    internal static object[] Arguments(string node, long? lease = null, int messageProtocol = StoreVersionEntity.MessageProtocolVersion)
+    {
+        var protocol = messageProtocol.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return lease is { } ms ? [node, Schema, protocol, Codec, ms] : [node, Schema, protocol, Codec];
+    }
 }
 
 public sealed partial class EfStore
 {
     private enum FormatLock { None, Shared, Exclusive }
 
+    internal static Task RequireStoreVersionsAsync(KernelDb db, CancellationToken cancellationToken)
+        => RequireStoreVersionsAsync(db, cancellationToken, FormatLock.None);
+
     private static async Task RequireStoreVersionsAsync(KernelDb db, CancellationToken cancellationToken,
-        FormatLock formatLock = FormatLock.None)
+        FormatLock formatLock)
     {
         var stored = await ReadStoreFormatAsync(db, formatLock, cancellationToken);
-        if (stored != StoreFormat.Current)
-            throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {StoreFormat.Current}.");
+        if (stored != db.RequiredFormat)
+            throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {db.RequiredFormat}.");
     }
 
     private static async Task<StoreFormat> ReadStoreFormatAsync(KernelDb db, FormatLock formatLock, CancellationToken cancellationToken)

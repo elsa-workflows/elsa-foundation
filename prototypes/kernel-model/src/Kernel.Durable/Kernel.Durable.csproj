@@ -6,6 +6,8 @@
   <ItemGroup>
     <ProjectReference Include="../Kernel.Runtime/Kernel.Runtime.csproj" />
     <InternalsVisibleTo Include="Kernel.Foundation.InMemory" />
+    <InternalsVisibleTo Include="Kernel.EntityFramework" />
+    <InternalsVisibleTo Include="Kernel.Native.Run" />
     <InternalsVisibleTo Include="Kernel.Workflows" />
     <InternalsVisibleTo Include="Kernel.EntityFramework" />
     <InternalsVisibleTo Include="Kernel.Ef.Conformance" />

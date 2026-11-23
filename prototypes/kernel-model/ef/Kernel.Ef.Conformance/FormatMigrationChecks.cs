@@ -1,3 +1,4 @@
+using System.Globalization;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
@@ -5,7 +6,7 @@ namespace Kernel.Ef.Conformance;
 
 internal static class FormatMigrationChecks
 {
-    internal static async Task Run(Func<KernelDb> create, EfStore store, EfStore oldBuild)
+    internal static async Task Run(Func<KernelDb> create, EfStore store, EfStore previousFormatReader)
     {
         var current = StoreFormat.Current;
         var next = current with { JournalCodec = 2 };
@@ -34,8 +35,8 @@ internal static class FormatMigrationChecks
             "migration with an unadvertised live node");
         await SetNode(node =>
         {
-            node.ReadableStoreSchema = "2";
-            node.ReadableMessageProtocol = "2";
+            node.ReadableStoreSchema = current.StoreSchema.ToString(CultureInfo.InvariantCulture);
+            node.ReadableMessageProtocol = current.MessageProtocol.ToString(CultureInfo.InvariantCulture);
             node.ReadableJournalCodec = "12";
         });
         await VersionTakeChecks.Refuses(() => store.AdvanceStoreFormatAsync(current, next), "journal codec=[12]",
@@ -61,15 +62,17 @@ internal static class FormatMigrationChecks
             "the advance publishes the data and format together without changing leases");
         Check(!await store.AdvanceStoreFormatAsync(current, next, UnexpectedMigration),
             "a retry observes the same advance without executing the data change again");
-        await VersionTakeChecks.Refuses(() => oldBuild.TakeAsync(1, "original", lease).AsTask(), "journal codec=2",
-            "an old cold owner");
-        await VersionTakeChecks.Refuses(() => oldBuild.NodeHeartbeatAsync("original", lease, lease).AsTask(), "journal codec=2",
-            "an old owner renewing after the format advanced");
-        await VersionTakeChecks.Refuses(() => oldBuild.SweepAsync().AsTask(), "journal codec=2", "an old sweeper");
-        var runtime = new PartitionRuntime("old-runtime", oldBuild, 2, lease);
-        var host = DurableHost.ForNode("old-runtime", oldBuild, new WorkflowInstance([]), 2);
-        await VersionTakeChecks.Refuses(() => runtime.StartAsync(host).AsTask(), "journal codec=2", "an old counted runtime starting");
-        Check(await ReadLease() == 0, "the old process cannot renew a lease or acquire a partition");
+        await VersionTakeChecks.Refuses(() => previousFormatReader.TakeAsync(1, "original", lease).AsTask(), "journal codec=2",
+            "a lock-aware cold owner that reads the previous format");
+        await VersionTakeChecks.Refuses(() => previousFormatReader.NodeHeartbeatAsync("original", lease, lease).AsTask(), "journal codec=2",
+            "a lock-aware owner renewing after the format advanced");
+        await VersionTakeChecks.Refuses(() => previousFormatReader.SweepAsync().AsTask(), "journal codec=2", "a sweeper that reads the previous format");
+        var runtime = new PartitionRuntime("previous-reader", previousFormatReader, 2, lease);
+        var host = DurableHost.ForNode("previous-reader", previousFormatReader, new WorkflowInstance([]), 2);
+        await VersionTakeChecks.Refuses(() => runtime.StartAsync(host).AsTask(), "journal codec=2",
+            "a counted runtime that reads the previous format");
+        Check(!await runtime.HeartbeatAsync(), "the refused counted runtime cannot publish a heartbeat");
+        Check(await ReadLease() == 0, "the previous-format reader cannot renew a lease or acquire a partition");
 
         await SetNode(node =>
         {

@@ -20,7 +20,7 @@ internal static class JobGenerationFormatChecks
         await store.AddAsync(Make.M("old-input", 0));
         await using (var db = create())
         {
-            // Recreate the relevant v1 table definitions and keep the seeded rows.
+            // Recreate the preceding schema-2 table definitions and keep the seeded rows.
             var guardDrop = db.Database.IsNpgsql()
                 ? """DROP TRIGGER kernel_job_generation ON "Instances" """ : "DROP TRIGGER kernel_job_generation";
             await db.Database.ExecuteSqlRawAsync(guardDrop);
@@ -36,12 +36,12 @@ internal static class JobGenerationFormatChecks
             var sql = db.GetService<ISqlGenerationHelper>();
             foreach (var (table, column) in new[] { ("Instances", "NextJobGeneration"), ("Messages", "JobGeneration") })
                 await db.Database.ExecuteSqlRawAsync($"ALTER TABLE {sql.DelimitIdentifier(table)} DROP COLUMN {sql.DelimitIdentifier(column)}");
-            await db.StoreVersions.ExecuteUpdateAsync(set => set.SetProperty(x => x.StoreSchema, 1).SetProperty(x => x.MessageProtocol, 1));
+            await db.StoreVersions.ExecuteUpdateAsync(set => set.SetProperty(x => x.StoreSchema, 2).SetProperty(x => x.MessageProtocol, 1));
             db.Nodes.Add(new NodeEntity { Id = "old-owner", LeaseUntil = long.MaxValue,
-                ReadableStoreSchema = "1", ReadableMessageProtocol = "1", ReadableJournalCodec = "1" });
+                ReadableStoreSchema = "2", ReadableMessageProtocol = "1", ReadableJournalCodec = "1" });
             await db.SaveChangesAsync();
         }
-        await VersionTakeChecks.Refuses(() => restart().CreateAsync(2), "schema=1, message protocol=1", "old store before migration");
+        await VersionTakeChecks.Refuses(() => restart().CreateAsync(2), "schema=2, message protocol=1", "old store before migration");
         await VersionTakeChecks.Refuses(() => store.UpgradeJobGenerationFormatAsync(), "Live node 'old-owner'", "incompatible live node");
         await using (var db = create())
         {
@@ -54,7 +54,7 @@ internal static class JobGenerationFormatChecks
                     await db.Database.ExecuteSqlRawAsync("ALTER TABLE Messages ADD JobGeneration BIGINT NOT NULL DEFAULT 0");
             }
         }
-        Context.That(await store.UpgradeJobGenerationFormatAsync(), "a stopped format-1 store upgrades");
+        Context.That(await store.UpgradeJobGenerationFormatAsync(), "a stopped schema-2, protocol-1 store upgrades");
         Context.That(!await store.UpgradeJobGenerationFormatAsync(), "the completed migration is idempotent");
         var cold = restart();
         await cold.CreateAsync(2);

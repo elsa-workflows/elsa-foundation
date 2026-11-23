@@ -15,9 +15,10 @@ internal static class VersionTakeChecks
 
         foreach (var change in new (Action<StoreVersionEntity> Set, string Versions)[]
         {
-            (row => row.StoreSchema = 3, "schema=3, message protocol=2, journal codec=1"),
-            (row => row.MessageProtocol = 3, "schema=2, message protocol=3, journal codec=1"),
-            (row => row.JournalCodec = 0, "schema=2, message protocol=2, journal codec=0")
+            (row => row.StoreSchema++, $"Stored schema={StoreVersionEntity.StoreSchemaVersion + 1},"),
+            (row => row.StoreSchema--, $"Stored schema={StoreVersionEntity.StoreSchemaVersion - 1},"),
+            (row => row.MessageProtocol++, $"message protocol={StoreVersionEntity.MessageProtocolVersion + 1},"),
+            (row => row.JournalCodec--, $"journal codec={StoreVersionEntity.JournalCodecVersion - 1}.")
         })
         {
             await Set(change.Set);

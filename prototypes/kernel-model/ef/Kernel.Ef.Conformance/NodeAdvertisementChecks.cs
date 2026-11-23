@@ -77,8 +77,10 @@ internal static class NodeAdvertisementChecks
             row.LeaseUntil == row.SeenAt + (long)lease.TotalMilliseconds;
     }
 
-    private static bool Advertises(NodeEntity row) => row is
-        { ReadableStoreSchema: "2", ReadableMessageProtocol: "2", ReadableJournalCodec: "1" };
+    private static bool Advertises(NodeEntity row) =>
+        row.ReadableStoreSchema == StoreVersionEntity.StoreSchemaVersion.ToString(System.Globalization.CultureInfo.InvariantCulture) &&
+        row.ReadableMessageProtocol == StoreVersionEntity.MessageProtocolVersion.ToString(System.Globalization.CultureInfo.InvariantCulture) &&
+        row.ReadableJournalCodec == StoreVersionEntity.JournalCodecVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     private static void Check(bool result, string message)
     {

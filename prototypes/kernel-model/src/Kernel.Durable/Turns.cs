@@ -429,9 +429,19 @@ public sealed class DurableTurn
         return Send(id, target, kind, payload, new SendOptions(TargetCreation: targetCreation, DueAt: dueAt), actorAuthored: true);
     }
 
+    internal string SendImmediateToSelf(Func<string, string> issue, string kind, string? payload)
+    {
+        Kinds.RequireApplicationSend(kind);
+        var id = issue(FoundationSelfSend.Seed(Origin, Revision, _ordinal++));
+        _sent.Add(FoundationSelfSend.Create(Id, _input.Creation, id, kind, payload));
+        return id;
+    }
+
     internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt)
     {
         Kinds.RequireApplicationSend(kind);
+        if (target == Actor && targetCreation == _input.Creation && dueAt is null)
+            return SendImmediateToSelf(store.MessageHandle, kind, payload);
         var issued = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal++:D4}");
         var id = dueAt is not null && target == Actor && targetCreation == _input.Creation
             ? store.FoundationTimerHandle(Origin, issued) : store.MessageHandle("send:" + issued);
@@ -726,7 +736,12 @@ public sealed class DurableTurn
         // Received and recalled rows lose their old memberships. Only surviving sends establish new ones:
         // retracting a staged twin leaves a previously committed row and its old membership intact.
         foreach (var message in _sent)
-            if (message.InboxKey.Scope == InboxKey.ChildCreatorScope || message.InboxKey == InboxKey.Custom(Origin, message.Id)) _custom.Add(message.Id);
+        {
+            // A public detached start returns the child's reference. It never issues a recall handle for its creator.
+            var retainsCreator = message.InboxKey.Scope == InboxKey.ChildCreatorScope &&
+                (!message.BindFoundationChild || message.Start?.Parent is not null);
+            if (retainsCreator || message.InboxKey == InboxKey.Custom(Origin, message.Id)) _custom.Add(message.Id);
+        }
         unit.Row = row with
         {
             CommitTimes = ((TurnClock)Clock).Snapshot(), CustomHandles = _custom.Count == 0 ? null : DurableKeyJson.WriteKeys(_custom),

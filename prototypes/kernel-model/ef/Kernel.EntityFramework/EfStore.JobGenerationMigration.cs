@@ -5,13 +5,23 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    private static readonly StoreFormat BeforeJobGenerations = new(1, 1, 1);
-    private static readonly StoreFormat WithJobGenerations = new(2, 2, 1);
-
-    /// <summary>Run during the coordinated stop. Existing rows keep the pre-counter checkpoint
-    /// and generation-zero ticket semantics. A retry after completion returns false.</summary>
-    public Task<bool> UpgradeJobGenerationFormatAsync(CancellationToken cancellationToken = default) =>
-        AdvanceStoreFormatAsync(BeforeJobGenerations, WithJobGenerations, AddGenerationColumns, cancellationToken);
+    /// <summary>Run during the coordinated stop. The store retains its ordinary or PostgreSQL
+    /// continuation profile. Existing checkpoints and messages retain null/zero generation.</summary>
+    public async Task<bool> UpgradeJobGenerationFormatAsync(CancellationToken cancellationToken = default)
+    {
+        // Select the migration from the persisted protocol. AdvanceStoreFormatAsync rechecks its
+        // exact source and target under the marker lock before any DDL or marker publication.
+        await using var db = create();
+        var stored = await ReadStoreFormatAsync(db, FormatLock.None, cancellationToken);
+        var continuation = db.Database.IsNpgsql() && stored.MessageProtocol == 3;
+        var expected = new StoreFormat(2, continuation ? 3 : 1, 1);
+        var next = new StoreFormat(3, continuation ? 3 : 2, 1);
+        return await AdvanceStoreFormatAsync(expected, next, async (transaction, token) =>
+        {
+            await AddGenerationColumns(transaction, token);
+            if (continuation) await InstallRootSelfAsync(transaction, token);
+        }, cancellationToken);
+    }
 
     private async Task AddGenerationColumns(KernelDb db, CancellationToken token)
     {
