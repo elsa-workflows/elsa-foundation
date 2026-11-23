@@ -107,6 +107,15 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     {
         await using var provided = (Provided)await CreateAsync(2, new());
         await DirectSendChecks.Run(provided.CreateContext, (EfStore)provided.Store);
+        await CheckDeadline(false);
+        if (((EfStore)provided.Store).OwnedSetsAvailable) await CheckDeadline(true);
+
+        async Task CheckDeadline(bool grouped)
+        {
+            await using var deadline = (Provided)await CreateAsync(2, new());
+            await RootPreparationDeadlineChecks.Run(deadline.CreateContext,
+                delay => Store(deadline.CreateAdmin(delay), FenceInBatch), (EfStore)deadline.Store, grouped);
+        }
     }
 
     internal async Task CheckRootTurnAsync()

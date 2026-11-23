@@ -154,7 +154,7 @@ public sealed partial class EfStore
 
     private ValueTask<Committed> CommitPreparedRootAsync(PartitionFence fence, TimeSpan lease, PreparedRoot prepared, CancellationToken token) =>
         CommitAsync(new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [prepared.JournalTurn!], [], []),
-            prepared.Checkpoint, token);
+            prepared.Checkpoint, System.Diagnostics.Stopwatch.GetTimestamp(), token);
 
     private sealed record RootCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> Commands, IReadOnlyDictionary<string, long> Revisions)
         : QualifiedRootCheckpoint(0)
@@ -170,7 +170,7 @@ public sealed partial class EfStore
 
     private static NotSupportedException RootShape() => new("The PostgreSQL root owner cannot persist this batch without dropping effects.");
 
-    private async ValueTask<Committed> CommitWorkerRootAsync(WorkerRoots roots, CommitBatch batch, CancellationToken cancellationToken)
+    private async ValueTask<Committed> CommitWorkerRootAsync(WorkerRoots roots, CommitBatch batch, long sentAt, CancellationToken cancellationToken)
     {
         var fences = batch.Fenced;
         if (fences.Count == 0 || fences.Any(f => !roots.Includes(f.Partition)) ||
@@ -189,7 +189,7 @@ public sealed partial class EfStore
             if (ReferenceEquals(error, failure)) throw;
             throw failure;
         }
-        return prepared is { } work ? await CommitAsync(work.Batch, work.Checkpoints, cancellationToken) : new(false, 0, []);
+        return prepared is { } work ? await CommitAsync(work.Batch, work.Checkpoints, sentAt, cancellationToken) : new(false, 0, []);
     }
 
     private async Task<(CommitBatch, RootCheckpoints)?> PrepareWorkerBatchAsync(WorkerRoots roots, CommitBatch batch,
