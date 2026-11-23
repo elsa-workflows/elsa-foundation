@@ -17,14 +17,17 @@ public sealed partial class WorkflowActor
         MigrationRequest? request;
         try { request = command.Payload is { } payload ? JsonSerializer.Deserialize<MigrationRequest>(payload) : null; }
         catch (JsonException) { request = null; }
-        if (request is not { From.Length: > 0, To.Length: > 0, Plan.Id.Length: > 0 } || request.Plan == turn.Header.Ref)
+        if (request is not { Plan.Id.Length: > 0 } || request.Plan == turn.Header.Ref)
         {
             turn.Record(new MigrationPlanResult(MigrationPlanOutcome.Refused, "InvalidRequest"));
             return;
         }
 
         _models.TryGetValue(workflow.Model, out var model);
-        if (turn.Header.Status == ActorStatus.Running && (model is null || workflow.Version > model.StateVersion))
+        var unreadable = model is null
+            ? workflow.Version is not null || turn.Header.Status == ActorStatus.Running
+            : workflow.Version > model.StateVersion;
+        if (unreadable)
         {
             turn.Hold(command);
             return;
@@ -36,7 +39,9 @@ public sealed partial class WorkflowActor
         object? state = null;
         MigrationPlanResult result;
         var next = workflow;
-        if (turn.Header.Status != ActorStatus.Running)
+        if (request is not { From.Length: > 0, To.Length: > 0 })
+            result = new(MigrationPlanOutcome.Refused, "InvalidRequest");
+        else if (turn.Header.Status != ActorStatus.Running)
             result = new(MigrationPlanOutcome.Refused, "Ended");
         else if (workflow.Definition != request.From)
             result = new(MigrationPlanOutcome.NotAtSource);

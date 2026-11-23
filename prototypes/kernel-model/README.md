@@ -142,8 +142,9 @@ The public in-memory command suspends a waiting Native workflow, rebinds a compa
 delivers its result to a plan witness. The workflow resumes on the same event wait and executes the
 target tail. Balanced and Durable runs lose the answer before and after the migration commit. A cold
 owner completes the schedule with one result and one successful lifecycle entry under Full, State
-and Minimal history. A run with an older model holds the stale-source command before inspecting
-its source definition. A newer owner processes it. The plan witness
+and Minimal history. An older model holds commands on unreadable running and finished checkpoints.
+A newer owner processes those commands when fresh input releases the hold. A request with a usable
+plan address and a missing definition receives one durable refusal across repeated inputs. The plan witness
 exercises real actor delivery. The product plan actor, declaration mapping and graph and statechart
 migration remain separate work.
 
