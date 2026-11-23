@@ -145,7 +145,7 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     internal async Task CheckNodeFormatsAsync()
     {
         await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
-        await NodeAdvertisementChecks.Run(fixture.CreateAdmin(), fixture.Store);
+        await NodeAdvertisementChecks.Run(fixture.CreateContext, fixture.Store);
     }
 
     internal async Task CheckTakeVersionsAsync()
