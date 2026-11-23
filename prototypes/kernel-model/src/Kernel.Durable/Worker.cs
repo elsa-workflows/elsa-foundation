@@ -90,6 +90,7 @@ public sealed record WorkerOptions
     public Action? OnExpiredJob { get; init; }
     /// <summary>Called inside the scheduler just before the job's generation/deadline check; for deterministic witnesses.</summary>
     public Action? BeforeScheduledJobCheck { get; init; }
+    internal Action? AfterJobPublication { get; init; }
 }
 
 /// <summary>
@@ -2332,6 +2333,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         static async Task CancelAsync(CancellationTokenSource source)
         {
             try { await source.CancelAsync().ConfigureAwait(false); }
+            // The owner may have committed a posted result and disposed this attempt before the publisher exited.
+            catch (ObjectDisposedException) { }
             catch (AggregateException) { } // Activity cleanup cannot interrupt ownership or checkpoint bookkeeping.
         }
     }
@@ -2528,6 +2531,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     if (ticket.WithdrawingJob || ticket.JobDeadlineClosed || job.Deadline is { } deadline && at >= deadline) return;
                     publications.Enqueue(new(ticket, slot, token, completed, at, Interlocked.Increment(ref _observed)));
                 }
+                if (completed is not null) _options.AfterJobPublication?.Invoke();
             }
             finally { if (entered) ExitJob(source); }
         }

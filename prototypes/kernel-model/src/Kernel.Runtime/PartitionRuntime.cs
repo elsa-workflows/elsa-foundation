@@ -33,7 +33,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     private readonly bool[] _activating = new bool[partitions], _passing = new bool[partitions];
     private readonly bool[] _releasing = new bool[partitions];
     private IScopeHost? _host;
-    private bool _balancing;
+    private bool _balancing, _listening;
     private Cluster? _cluster;      // K1b: what the node's last renewing heartbeat saw, for the balancing round
 
     public string Node => node;
@@ -46,7 +46,11 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     {
         if (host is IScopeCount counted) await counted.CheckScopesAsync(partitions, cancellationToken);     // refuses a mismatch
         _host = host;
-        Wake.Listen(actor => _ = Woken(actor));
+        if (!_listening)
+        {
+            Wake.Listen(actor => _ = Woken(actor));
+            _listening = true;
+        }
     }
 
     private async Task Woken(InstanceRef actor)
@@ -67,7 +71,11 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         try { await host.PrepareToStopAsync(cancellationToken); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
         for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++) await DeactivateAsync(scope, cancellationToken);
-        if (!cancellationToken.IsCancellationRequested) host.Stopped();
+        if (cancellationToken.IsCancellationRequested) return;
+        Array.Clear(_active);
+        Volatile.Write(ref _cluster, null);
+        _host = null;
+        host.Stopped();
     }
 
     /// <summary>This node holds the scope's fence, as far as layer 2 knows.</summary>

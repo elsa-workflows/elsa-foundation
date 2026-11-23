@@ -14,6 +14,7 @@ internal static class HostJobDrainChecks
     {
         await GracefulAsync(ownedSet: true);
         await GracefulAsync(ownedSet: false);
+        await DisposedSourceAsync();
         await BeforeEntryAsync();
         await AbruptAsync(duringStop: false);
         await AbruptAsync(duringStop: true);
@@ -23,7 +24,7 @@ internal static class HostJobDrainChecks
     private static async Task GracefulAsync(bool ownedSet)
     {
         var fixture = new Fixture();
-        var type = new JobProbe();
+        var type = new JobProbe(pauseRestart: true);
         var exitsBeforeRelease = false;
         var store = new CountingStore(fixture.Store, static () => { }, beforeRelease: () => exitsBeforeRelease = type.Exited.Task.IsCompleted);
         await using var node = fixture.Node("job-drain");
@@ -64,12 +65,80 @@ internal static class HostJobDrainChecks
         // The same durable host may be used by a fresh runtime. Its first job recovers the existing ticket.
         await using var successor = fixture.Node(node.Node);
         await successor.StartAsync(host);
+        try
+        {
+            await type.Restarted.Task.WaitAsync(Timeout);
+            var repeatedStop = node.Runtime.StopAsync().AsTask();
+            var completed = await Task.WhenAny(repeatedStop, type.RestartCanceled.Task).WaitAsync(Timeout);
+            Check(completed == repeatedStop && !type.RestartCanceled.Task.IsCompleted && successor.Runtime.Owns(0),
+                "a repeated stop on the old runtime leaves the reused host's new job and fence intact");
+        }
+        finally { type.FinishRestart.TrySetResult(); }
         await WaitFor(() => fixture.Checkpoint(actor) is { Revision: 2, Status: InstanceStatus.Finished });
         Check(type.Starts == 2 && !fixture.Store.Messages.ContainsKey(ticket.Message.InboxKey) && ticket.Attempts == 0 &&
             fixture.Checkpoint(actor)!.State == Json.Write("completed") &&
             fixture.Store.Journal.Values.Count(row => row.Entries.Contains("completed", StringComparison.Ordinal)) == 1,
             "a fresh runtime reusing the host completes the durable job exactly once without a death attempt");
         await successor.StopAsync();
+
+        await node.Runtime.StartAsync(host);
+        Check(await node.Runtime.ActivateAsync(0) is { Active: true } && node.Runtime.Owns(0),
+            "the same partition runtime can explicitly start and take its scope again");
+        await node.Runtime.StopAsync();
+        Check(fixture.Fence.Owner is null, "the next start has its own orderly stop");
+    }
+
+    private static async Task DisposedSourceAsync()
+    {
+        var fixture = new Fixture();
+        var type = new JobProbe(holdResult: true);
+        using var finishPublisher = new ManualResetEventSlim();
+        var published = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var options = fixture.Options with
+        {
+            AfterJobPublication = () =>
+            {
+                published.TrySetResult();
+                if (!finishPublisher.Wait(Timeout)) throw new TimeoutException("The publisher was never released.");
+            }
+        };
+        await using var node = fixture.Node("held-result");
+        await node.StartAsync(fixture.Host(node, type, fixture.Store, ownedSet: true, options));
+        try
+        {
+            var actor = await fixture.StartActorAsync(node);
+            await type.Entered.Task.WaitAsync(Timeout);
+            type.Finish.TrySetResult();
+            await published.Task.WaitAsync(Timeout);
+            await WaitFor(() => JobSourceDisposed(type.JobToken));
+            var held = fixture.Store.Messages.Values.Single(delivery => delivery.Message.FoundationHeldJobResult);
+            var checkpoint = fixture.Checkpoint(actor);
+            Check(held.Held && checkpoint is { Revision: 2, Status: InstanceStatus.Running },
+                "the owner has committed and disposed the held result while its publisher is paused");
+
+            var stopped = node.StopAsync().AsTask();
+            try
+            {
+                Check(await Task.WhenAny(stopped, Task.Delay(250)) != stopped && node.Runtime.Owns(0),
+                    "graceful stop waits for the paused publisher with a disposed cancellation source");
+            }
+            finally { finishPublisher.Set(); }
+            await stopped.WaitAsync(Timeout);
+            Check(fixture.Fence.Owner is null && fixture.Checkpoint(actor) == checkpoint &&
+                fixture.Store.Messages.GetValueOrDefault(held.Message.InboxKey) == held,
+                "publisher exit lets graceful stop release and preserve the committed held result");
+        }
+        finally
+        {
+            type.Finish.TrySetResult();
+            finishPublisher.Set();
+        }
+
+        static bool JobSourceDisposed(CancellationToken token)
+        {
+            try { _ = token.WaitHandle; return false; }
+            catch (ObjectDisposedException) { return true; }
+        }
     }
 
     private static async Task BeforeEntryAsync()
@@ -208,7 +277,7 @@ internal static class HostJobDrainChecks
         internal InMemoryStore.MessageRow JobTicket() => Store.Messages.Values.Single(row => row.Message.Kind == Kinds.Job);
     }
 
-    private sealed class JobProbe : Contract.IActorType
+    private sealed class JobProbe(bool holdResult = false, bool pauseRestart = false) : Contract.IActorType
     {
         internal const string TypeKey = "host-drain-job-probe";
         private int _starts;
@@ -217,6 +286,10 @@ internal static class HostJobDrainChecks
         internal TaskCompletionSource Canceled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource Finish { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource Exited { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Restarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource FinishRestart { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource RestartCanceled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal CancellationToken JobToken { get; private set; }
 
         public string Type => TypeKey;
         public bool Withholds(Contract.ActorHeader header) => false;
@@ -234,6 +307,13 @@ internal static class HostJobDrainChecks
             }
             foreach (var message in turn.Inbox.Where(message => message.Kind == Contract.Kinds.JobFinished))
             {
+                if (holdResult)
+                {
+                    turn.Hold(message);
+                    turn.State = Json.Write("held");
+                    turn.Record("held");
+                    continue;
+                }
                 var result = Json.Read<Contract.JobFinished>(message.Payload!);
                 if (result.Result != Json.Write("completed")) throw new InvalidOperationException("The successor must complete the job.");
                 turn.State = result.Result;
@@ -245,7 +325,18 @@ internal static class HostJobDrainChecks
 
         public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
         {
-            if (Interlocked.Increment(ref _starts) > 1) return "completed";
+            if (Interlocked.Increment(ref _starts) > 1)
+            {
+                if (pauseRestart)
+                {
+                    using var restarted = cancellationToken.Register(() => RestartCanceled.TrySetResult());
+                    Restarted.TrySetResult();
+                    await FinishRestart.Task;
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+                return "completed";
+            }
+            JobToken = cancellationToken;
             using var registration = cancellationToken.Register(() => Canceled.TrySetResult());
             Entered.TrySetResult();
             try { await Finish.Task; }
