@@ -29,15 +29,18 @@ def generate():
              ('large-a', '{"x":9007199254740993}'), ('large-b', '{"x":9007199254740992}')]
     elapsed = datetime.datetime(2026, 10, 26) - datetime.datetime(1, 1, 1)
     ticks = elapsed.days * 86400 * 10_000_000
-    for name, raw in [*cases, ('absent', None), ('explicit-null', 'null')]:
+    for name, raw in [*cases, ('absent', None), ('explicit-null', 'null'), ('wait-delay', '{"x":1.0}')]:
         value = None if raw is None else helper.load_json(raw)
-        strings = ['elsa.post-commit.intent.v1', 'send', 'publisher', 'publish', str(ticks), 'activity', 'key', None, None, None]
+        rich = name == 'wait-delay'
+        strings = ['elsa.post-commit.intent.v1', 'send', 'publisher', 'publish', str(ticks), 'activity', 'key',
+                   'wait' if rich else None, '3' if rich else None, str(ticks + 60 * 10_000_000) if rich else None]
         frame = b''.join(frame_component(None if item is None else item.encode('utf-16-le')) for item in strings)
         frame += frame_component(None if raw is None else helper.canonical(value).encode('utf-8'))
-        frame += b''.join(frame_component(item.encode('utf-16-le')) for item in ['1', 'routing', 'saved'])
+        metadata = ['2', 'a', 'first', 'z', 'last'] if rich else ['1', 'routing', 'saved']
+        frame += b''.join(frame_component(item.encode('utf-16-le')) for item in metadata)
         vectors.append(dict(family='intent', name=name, payload=raw, frameHex=frame.hex(),
                             sha256=hashlib.sha256(frame).hexdigest()))
-        if raw in (None, 'null'):
+        if raw in (None, 'null') or rich:
             continue
         pin = {key: opaque(text) for key, text in dict(artifactId='artifact', definitionId='definition',
                definitionVersionId='version', artifactVersion='1.0.0', artifactHash='hash').items()}

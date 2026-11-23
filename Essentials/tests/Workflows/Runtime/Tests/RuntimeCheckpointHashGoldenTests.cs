@@ -19,10 +19,15 @@ public sealed class RuntimeCheckpointHashGoldenTests
     {
         var raw = vector.GetProperty("payload").GetString();
         using var document = raw is null ? null : JsonDocument.Parse(raw);
+        var rich = vector.GetProperty("name").GetString() == "wait-delay";
+        var at = new DateTimeOffset(2026, 10, 26, 0, 0, 0, TimeSpan.Zero);
         var actual = vector.GetProperty("family").GetString() == "intent"
             ? RuntimeCheckpointCommitFingerprint.ComputeIntent(new("send", "publisher", "publish",
-                new DateTimeOffset(2026, 10, 26, 0, 0, 0, TimeSpan.Zero), "activity", "key", document?.RootElement,
-                new Dictionary<string, string> { ["routing"] = "saved" }))
+                rich ? at.ToOffset(TimeSpan.FromHours(2)) : at, "activity", "key", document?.RootElement,
+                rich ? new Dictionary<string, string> { ["z"] = "last", ["a"] = "first" } : new Dictionary<string, string> { ["routing"] = "saved" },
+                dependsOnWaitRegistrationId: rich ? "wait" : null,
+                waitFailurePolicy: rich ? RuntimeWaitDependentIntentFailurePolicy.KeepWaitingManualIntervention : null,
+                notBefore: rich ? at.AddMinutes(1).ToOffset(TimeSpan.FromHours(2)) : null))
             : RuntimeCheckpointCommitFingerprint.ComputeModelInput(new(new("artifact", "definition", "version", "1.0.0", "hash"),
                 "incarnation", "input", "start", document!.RootElement,
                 new("system", "initiator", new Dictionary<string, string> { ["tenant"] = "tenant-a" }), "tenant-a"));
