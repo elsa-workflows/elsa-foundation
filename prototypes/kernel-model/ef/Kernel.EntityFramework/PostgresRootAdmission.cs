@@ -52,6 +52,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             ON CONFLICT DO NOTHING
             """, cancellationToken);
         await EfStore.InstallFirstRootCheckpointsAsync(db, cancellationToken);
+        await EfStore.InstallRootSelfAsync(db, cancellationToken);
         await InstallDirectReceiptsAsync(db, cancellationToken);
         var placementMatches = await db.Database.SqlQueryRaw<bool>("""
             SELECT i."Partitions" = count(p."Id") AND min(p."Id") = 0 AND max(p."Id") = i."Partitions" - 1 AS "Value"

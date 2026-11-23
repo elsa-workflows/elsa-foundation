@@ -110,6 +110,7 @@ public sealed partial class EfStore
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
+            if (Seen.Concat(Trial).Any(k => k.Scope == -1)) await QualifySelfWriterAsync(db, cancellationToken);
             return await Mark(Seen, false) && await Mark(Trial, true);
 
             async Task<bool> Mark(IReadOnlyList<InboxKey> keys, bool trial)
@@ -261,7 +262,8 @@ public sealed partial class EfStore
                 current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))) throw RootShape();
         await using var db = create();
         var ids = turn.Done.Concat(turn.Consumed).Select(key => key.Id).ToArray();
-        var records = await db.Messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
+        var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
+        var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
             (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == -1 && m.Kind == RootSelfWire) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
         var inputs = records.Select(row => row.InboxScope == -1 ? DecodeRootSelf(row, RootSelfIssuer) : PostgresRootAdmission.DecodeDirect(row, root.Reference)).ToArray();
         if (!SameInputs(inputs, turn.Done.Concat(turn.Consumed))) return null;

@@ -48,17 +48,19 @@ public sealed partial class EfStore
         Message[]? expectedEnvelopes, Func<string, string>? issue, CancellationToken cancellationToken)
     {
         var home = new InstanceRef(actor.Id).Partition;
-        var rows = await db.Messages.FromSqlInterpolated($"""
-            SELECT * FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
-                AND ("InboxScope" = {InboxKey.FoundationOccurrenceScope} OR ("InboxScope" = -1 AND "Kind" = {RootSelfWire})) AND "EventMatch" IS NULL
+        var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
+        var rows = await db.Messages.FromSqlRaw($$"""
+            SELECT * FROM {{source}} WHERE "Target" = {0} AND "Partition" = {1}
+                AND ("InboxScope" = {2} OR ("InboxScope" = -1 AND "Kind" = {3})) AND "EventMatch" IS NULL
                 AND NOT "Done" AND "Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
-            ORDER BY "Seq" LIMIT {expected.Count} FOR UPDATE
-            """).AsNoTracking().ToListAsync(cancellationToken);
+            ORDER BY "Seq" LIMIT {4} FOR UPDATE
+            """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfWire, expected.Count).AsNoTracking().ToListAsync(cancellationToken);
         var messages = rows.Select(row => row.InboxScope == -1 ? DecodeRootSelf(row, issue) : PostgresRootAdmission.DecodeDirect(row, reference)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(m => m.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
 
         var consumed = expected.Where(k => k.Scope == -1).Select(k => k.Id).ToArray();
+        if (consumed.Length > 0) await QualifySelfWriterAsync(db, cancellationToken);
         if (consumed.Length > 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "InboxScope" = -1 AND "Id" = ANY({consumed}) AND "Kind" = {RootSelfWire}
                  AND "Target" = {actor.Id} AND "Partition" = {home} AND NOT "Done" AND "EventMatch" IS NULL AND "KeepUntil" IS NULL

@@ -644,11 +644,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         ? """, b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
     private string PollMessages => _ordinaryRoots is { Discover: true }
         ? $"""
-           ("Messages" m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
+           ({RootInboxSource} m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
               AND b."Creation" = 1 AND m."EventMatch" IS NULL
               AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" = {InboxKey.FoundationOccurrenceScope} OR (m."InboxScope" = -1 AND m."Kind" = '{RootSelfWire}')))
            """
-        : "\"Messages\" m";
+        : RootInboxSource + " m";
     private string PollSql => Engine?.Poll ??
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"{PollBirthColumns}

@@ -41,6 +41,8 @@ if (args is ["pg-durable-flowchart-preview", "wait", var waitRoute and ("manual"
 if (args is [var resumedMode and ("pg-flowchart-preview" or "pg-durable-flowchart-preview"), "restart", var resumedRoute and ("manual" or "automatic"), var flowRef, var flowBookmark, var flowEpoch] &&
     long.TryParse(flowEpoch, out var previousEpoch) && previousEpoch > 0)
     return await PostgresFlowchartPreview.RunAsync(resumedRoute, flowRef, flowBookmark, previousEpoch, durable: resumedMode == "pg-durable-flowchart-preview");
+if (args is ["pg-root-self", var selfWriter and ("ef" or "owned"), var selfFence and ("checked" or "in-batch")])
+    return await PostgresRootSelfChecks.RunAsync(selfWriter == "owned", selfFence == "in-batch");
 if (args is ["pg-flowchart-preview", "merge-early"])
 {
     try { return await PostgresFlowchartPreview.RunAsync("automatic", mergeEarly: true); }

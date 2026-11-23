@@ -156,6 +156,12 @@ self inputs, and an unchanged journal on final replay. `KERNEL_PREVIEW_FENCE=che
 fence mode. This scoped path supports immediate sends back to the exact generated actor creation. Scheduled sends,
 cross-actor sends and other authored effects remain outside this preview.
 
+The public preview writes ordinary text directly. A payload containing NUL or an isolated UTF-16 unit uses a binary
+field in the same message row. It occupies the original UTF-8 byte budget, with three bytes per isolated unit.
+The qualified checkpoint writer marks and consumes these inbox rows. To run the stored input, size and writer
+checks on a fresh PostgreSQL database, use `pg-root-self owned checked` with the Native runner. The other choices
+are `ef` for the writer and `in-batch` for the fence.
+
 On a fresh database, `dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-flowchart-preview merge-early`
 replaces the join with a merge. The waiting assertion detects the premature finish.
 
