@@ -6,7 +6,7 @@ public sealed partial class EfStore
 {
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
         string State, string Header, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
-        bool? OperatorSuspension, RootJobState? JobState, RootJobCompletion? JobCompletion,
+        bool? OperatorSuspension, RootJobState? JobState, RootJobCompletion? JobCompletion, bool TimedJob,
         IReadOnlyList<FoundationValue>? Values) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
@@ -28,7 +28,11 @@ public sealed partial class EfStore
             if (old.Model != Current.Model || old.Definition != Current.Definition) return false;
 
             if (OperatorSuspension is not null && !db.UsesRootOperatorProtocol) return false;
-            if (Inputs is [var job] && job.Kind == Kinds.Job)
+            if (TimedJob)
+            {
+                if (!await ConsumeRootTimedInputsAsync(db, Current.Actor, Inputs, JobCompletion, cancellationToken)) return false;
+            }
+            else if (Inputs is [var job] && job.Kind == Kinds.Job)
             {
                 if (Current.Suspended || JobCompletion is not { } completed ||
                     !await ConsumeRootJobAsync(db, Current.Actor, completed.Original, cancellationToken)) return false;
@@ -101,10 +105,11 @@ public sealed partial class EfStore
         return settled == ids.Length;
     }
 
-    private static Message DecodeRootInput(MessageEntity row, string reference, FoundationSelfIssuer? issue, bool jobs = false, bool replies = false) =>
+    private static Message DecodeRootInput(MessageEntity row, string reference, FoundationSelfIssuer? issue, bool jobs = false, bool timed = false, bool replies = false) =>
         row.InboxScope switch
         {
             RootJobScope => jobs ? DecodeRootJob(row) : throw RootShape(),
+            RootTimedJobScope => timed ? DecodeRootTimedRow(row) : throw RootShape(),
             RootSelfScope => DecodeRootSelf(row, issue),
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
                 ? PostgresRootAdmission.DecodeOperator(row, reference) : PostgresRootAdmission.DecodeDirect(row, reference, replies)
@@ -118,7 +123,7 @@ public sealed partial class EfStore
     private PreparedRoot PrepareRootTurn(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,
         string typeData, IReadOnlyDictionary<string, string> labels, string? journal, string[]? recalls = null, bool? operatorSuspension = null,
-        RootJobState? jobState = null, RootJobCompletion? jobCompletion = null, IReadOnlyList<FoundationValue>? values = null)
+        RootJobState? jobState = null, RootJobCompletion? jobCompletion = null, bool timedJob = false, IReadOnlyList<FoundationValue>? values = null)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
@@ -137,11 +142,11 @@ public sealed partial class EfStore
         var image = new InstanceRow(current.Actor.Id, "", "", status, "null", checked(current.Revision + 1), null)
             .WithFoundationState(stored);
         var root = new RootTurnCheckpoint(tenant, reference, current, status, StoredState.Encode(image),
-            header, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, jobState, jobCompletion, values);
+            header, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, jobState, jobCompletion, timedJob, values);
         var turn = new TurnCommit(image.Id, null, null, [], [], [], [], [], journal);
         return new(turn, root);
 
-        bool QualifiedInput(Message message) => message.InboxKey.Scope == InboxKey.FoundationOccurrenceScope ||
+        bool QualifiedInput(Message message) => timedJob || message.InboxKey.Scope == InboxKey.FoundationOccurrenceScope ||
             jobState is not null && accepted.Length == 1 && RootJobTicket.Read(message, current.Actor.Id, current.Model) is not null ||
             RootSelfIssuer is { } issue && issue.Allows(message.Due) && FoundationSelfSend.IsSelfInput(message, current.Actor.Id, current.Actor.Creation);
     }

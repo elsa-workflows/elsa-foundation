@@ -102,6 +102,8 @@ if (args is ["pg-timed-job-worker", var jobFence and ("checked" or "in-batch")])
     return await PostgresTimedJobChecks.RunAsync(jobFence == "in-batch");
 if (args is ["pg-root-timed-job-issuance", var timedFence and ("checked" or "in-batch"), .. var timedPhase])
     return await PostgresRootTimedJobIssuance.RunAsync(timedFence, timedPhase);
+if (args is ["pg-root-timed-job-settlement", var settleFence and ("checked" or "in-batch"), var winner and ("complete" or "timeout" or "late-clock")])
+    return await PostgresRootTimedJobSettlement.RunAsync(settleFence == "in-batch", winner != "complete", winner == "late-clock");
 if (args is [var runtimeCluster and ("pg-runtime-cluster" or "pg-runtime-cluster-member"), .. var clusterOptions])
 {
     var wake = clusterOptions.LastOrDefault() == "wake";

@@ -124,8 +124,10 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     private sealed class RootTimedJobIssuanceDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootValueDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootReplyDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootTimedJobSettlementDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     internal StoreFormat RequiredFormat => this switch
     {
+        RootTimedJobSettlementDb => StoreFormat.RootTimedJobSettlement,
         RootReplyDb => StoreFormat.RootReplies,
         RootValueDb => StoreFormat.RootValues,
         RootTimedJobIssuanceDb => StoreFormat.RootTimedJobIssuance,
@@ -136,14 +138,16 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
         _ => StoreFormat.Current
     };
     internal bool UsesRootSelfProtocol => this is RootSelfDb or RootTimerDb;
-    internal bool UsesRootJobProtocol => this is RootJobDb or RootTimedJobIssuanceDb;
+    internal bool UsesRootJobProtocol => this is RootJobDb or RootTimedJobIssuanceDb or RootTimedJobSettlementDb;
     internal bool UsesRootTimedJobIssuance => this is RootTimedJobIssuanceDb;
+    internal bool UsesRootTimedJobSettlement => this is RootTimedJobSettlementDb;
     internal bool UsesRootReplyProtocol => this is RootReplyDb;
     internal static KernelDb ForPostgresRootReplies(DbContextOptions<KernelDb> options) => new RootReplyDb(options);
     internal bool UsesRootValueProtocol => this is RootValueDb;
     internal static KernelDb ForPostgresRootValues(DbContextOptions<KernelDb> options) => new RootValueDb(options);
     internal static KernelDb ForPostgresRootJobs(DbContextOptions<KernelDb> options) => new RootJobDb(options);
     internal static KernelDb ForPostgresRootTimedJobIssuance(DbContextOptions<KernelDb> options) => new RootTimedJobIssuanceDb(options);
+    internal static KernelDb ForPostgresRootTimedJobSettlement(DbContextOptions<KernelDb> options) => new RootTimedJobSettlementDb(options);
     internal bool UsesRootOperatorProtocol => this is RootOperatorDb;
     internal static KernelDb ForPostgresRootOperators(DbContextOptions<KernelDb> options) => new RootOperatorDb(options);
     internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => new RootTimerDb(options);
@@ -716,7 +720,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     }
 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
-    private string RootInputScopes => $"{InboxKey.FoundationOccurrenceScope}, {RootSelfScope}{(RootJobsEnabled ? $", {RootJobScope}" : "")}";
+    private string RootInputScopes => $"{InboxKey.FoundationOccurrenceScope}, {RootSelfScope}" +
+        (RootTimedJobSettlementEnabled ? $", {RootTimedJobScope}" : RootJobsEnabled ? $", {RootJobScope}" : "");
     private string RootPollFilter(bool operators) => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
@@ -765,7 +770,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string PollSql(bool operators) => Engine?.Poll ??
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration", {PollSplitEventPayload} AS "SplitEventPayload"{PollBirthColumns}
-         FROM (SELECT {(operators || RootSelfIssuer is { SupportsTimers: true } ? RootClockMilliseconds : Now)} AS now) t
+         FROM (SELECT {(operators || RootTimedJobSettlementEnabled || RootSelfIssuer is { SupportsTimers: true } ? RootClockMilliseconds : Now)} AS now) t
          LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter(operators)}
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
@@ -795,7 +800,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     JobGeneration = r.JobGeneration!.Value, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
-                    : DecodeRootInput(entity, root.Reference, RootSelfIssuer, RootJobsEnabled, replies);
+                    : DecodeRootInput(entity, root.Reference, RootSelfIssuer, RootJobsEnabled, RootTimedJobSettlementEnabled, replies);
                 if (root != bindings.ForInput(message.InboxKey)) throw RootShape();
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value)
                 {
