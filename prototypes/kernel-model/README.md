@@ -113,7 +113,8 @@ dotnet "$dll" pg-multi-root owned in-batch restart "$first_ref" "$second_ref" "$
 ```
 
 The fixture checks the PostgreSQL transaction IDs for two journal rows at different actor revisions, replays a
-direct input after restart, and checks that a terminal refusal on one root rolls back both turns. The writer choices
+direct input after restart, and checks that a terminal refusal on one root rolls back both turns. The second
+tenant issues its public requests in a separate process bound to that tenant. The writer choices
 are `owned` and `ef`. The fence choices are `in-batch` and `checked`.
 
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
