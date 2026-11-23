@@ -706,7 +706,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private const string RootClockMilliseconds = "floor(extract(epoch from clock_timestamp()) * 1000)::bigint";
     // Only PostgreSQL profiles with the private body column can have split historical event payloads.
     // CASE avoids inspecting row content except for the single shared numeric event slot.
-    private string PollSplitEventPayload => postgres
+    private string PollSplitEventPayload => postgres && _ordinaryRoots is null
         ? $"""CASE WHEN m."InboxScope" = {RootSelfScope} AND m."EventMatch" IS NOT NULL THEN to_jsonb(m)->>'FoundationSelfContent' IS NOT NULL ELSE FALSE END"""
         : "0";
     private string PollSql => Engine?.Poll ??

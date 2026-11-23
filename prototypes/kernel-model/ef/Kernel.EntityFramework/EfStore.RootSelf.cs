@@ -11,7 +11,7 @@ public sealed partial class EfStore
     private const string RootSelfWire = "!foundation-self/1";
     private sealed record RootSelfHeader(long Revision, int Ordinal, string Kind,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? Due = null);
-    private string RootInboxSource => RootSelfIssuer is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
+    private string RootInboxSource => _ordinaryRoots is null || RootSelfIssuer is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
     internal FoundationSelfIssuer? RootSelfIssuer { get; private set; }
 
     private sealed record SelfInstallation(byte[] Key, bool Installed);
@@ -62,8 +62,7 @@ public sealed partial class EfStore
             SELECT "Id", "InboxScope", "EventMatch", "Seq", "Partition", "Target", "Kind", "Start", "Sender", "Due",
                    "Seen", "Trial", "Attempts", "KeepUntil", "Done", "ReplyTo",
                    CASE WHEN "FoundationSelfContent" IS NULL THEN "Payload"
-                        ELSE "Payload" || chr(10) || encode("FoundationSelfContent", 'base64') END AS "Payload",
-                   "JobGeneration", "FoundationSelfContent"
+                        ELSE "Payload" || chr(10) || encode("FoundationSelfContent", 'base64') END AS "Payload", "JobGeneration"
               FROM "Messages";
             """, token);
     }

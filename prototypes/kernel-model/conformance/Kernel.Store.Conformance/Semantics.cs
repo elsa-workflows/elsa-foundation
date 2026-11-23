@@ -722,6 +722,7 @@ public static class Semantics
                 ("ka", "e", "0/a", "b:c"),
                 ("ka", "e", "0/a:b", "c"),
                 ("kb", "e", "0/a", "b:c"),
+                ("kc", "e", "0/a", "b:c"),
                 ("ka", "e:0/a", "0/x", "w:0/x:q"),
             };
             var routes = pairs.Select(p => Events.Route(new(p.Item1, p.Item2, "p", now + 60_000), new(p.Item1, p.Item3, p.Item4))).ToArray();

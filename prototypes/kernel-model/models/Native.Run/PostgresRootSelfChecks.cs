@@ -141,7 +141,12 @@ internal static class PostgresRootSelfChecks
         Check((await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 10, stop)).Messages.All(m => m.Message.EventMatch is null),
             "a scoped root poll leaves generic event matches outside its inbox");
 
-        if (!timers) return await CheckHistoricalEventsAsync();
+        if (!timers)
+        {
+            Check((await cold.CommitAsync(Batch() with { Seen = [sibling.InboxKey] }, stop)).Landed,
+                "the qualified owner marks its direct sibling before generic event polling");
+            return await CheckHistoricalEventsAsync();
+        }
         var ready = (await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop)).Messages.Select(m => m.Message).ToArray();
         Check(ready.SequenceEqual([zero, sibling]) && ready[0].Due == 0 && zero.Id != FoundationSelfSend.Issue(
             scoped.RootSelfIssuer!.Handle, CreationProtocol.Origin(actor, 1), 2, 1, null),
@@ -258,6 +263,11 @@ internal static class PostgresRootSelfChecks
                 """;
             await db.Database.ExecuteSqlRawAsync(oldTrigger, stop);
             await Client().EnableRootSelfSendsAsync(stop);
+            Check(await db.Database.SqlQueryRaw<string>("""
+                SELECT attname::text AS "Value" FROM pg_attribute
+                WHERE attrelid = '"FoundationRootMessages"'::regclass AND attnum > 0 AND NOT attisdropped
+                ORDER BY attnum DESC LIMIT 1
+                """).SingleAsync(stop) == "JobGeneration", "the installed view retains the predecessor's column signature");
             Check(await db.Database.SqlQueryRaw<bool>("""
                 SELECT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = '"Messages"'::regclass AND tgname = 'kernel_root_self_insert'
                     AND tgfoid = to_regprocedure('kernel_root_self_insert_v3()')) AS "Value"
@@ -269,8 +279,8 @@ internal static class PostgresRootSelfChecks
                 var match = Events.Route(new(eventKey, "previous", eventPayload, long.MaxValue), new(eventKey, actor, "wait"));
                 Check(await bare.AddEventAsync(match, stop), "the previous store records each matched event");
             }
-            await RequireFormatRefusal(() => Client().EnableRootSelfSendsAsync(stop));
-            await RequireFormatRefusal(() => bare.PollAsync(0, lease.Epoch, TimeSpan.Zero, 20, stop).AsTask());
+            await RequireFormatRefusal(() => Client().EnableRootSelfSendsAsync(stop), "split payload");
+            await RequireFormatRefusal(() => bare.PollAsync(0, lease.Epoch, TimeSpan.Zero, 20, stop).AsTask(), "split payload");
             Check(await db.Database.SqlQueryRaw<int>("""
                 SELECT count(*)::int AS "Value" FROM "Messages" WHERE "EventMatch" IS NOT NULL
                     AND "Payload" = 'Body' AND "FoundationSelfContent" = convert_to('a', 'UTF8')
@@ -299,10 +309,10 @@ internal static class PostgresRootSelfChecks
         }
     }
 
-    private static async Task RequireFormatRefusal(Func<Task> check)
+    private static async Task RequireFormatRefusal(Func<Task> check, string? reason = null)
     {
         try { await check(); }
-        catch (StoreFormatException) { return; }
+        catch (StoreFormatException error) when (reason is null || error.Message.Contains(reason, StringComparison.Ordinal)) { return; }
         throw new InvalidOperationException("The ordinary reader accepted the continuation database.");
     }
 
