@@ -1,0 +1,82 @@
+using Kernel.Foundation.Contracts;
+
+namespace Kernel.WorkflowActor;
+
+/// <summary>Replays committed plan transitions and retains the bookmark and at most one pending batch.</summary>
+internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorReads reads, MigrationPlanAuthority authority,
+    BoundScope bound, ActorRef plan) : IMigrationDispatchState
+{
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private PageToken? _bookmark;
+    private MigrationPlanJournal.Created? _created;
+    private MigrationDispatchBatch? _pending;
+    private bool _closed;
+
+    public async ValueTask<MigrationDispatchBatch?> ReadPendingAsync(BoundScope scope, ActorRef target,
+        CancellationToken cancellationToken)
+    {
+        CheckScope(scope, target);
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            while (!_closed)
+            {
+                var page = await reads.TailAsync(scope, plan, _bookmark, cancellationToken);
+                if (page.Items.Count == 0) break;
+                if (page.Next is null || page.Next == _bookmark)
+                    throw new InvalidOperationException("A plan journal page must advance its bookmark.");
+                var records = page.Items.Select(row => MigrationPlanJournal.Read(row.Entry)).ToArray();
+                foreach (var record in records)
+                    Apply(record);
+                _bookmark = page.Next;
+            }
+            return _pending is { } batch ? batch with { Actors = batch.Actors.ToArray() } : null;
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async ValueTask AcknowledgeAsync(BoundScope scope, ActorRef target, long batch, string operationId,
+        CancellationToken cancellationToken)
+    {
+        CheckScope(scope, target);
+        await SendAsync(MigrationPlanControl.Acknowledge, operationId, new(batch), cancellationToken);
+    }
+
+    internal async ValueTask SendAsync(string kind, string operationId, MigrationPlanControl control,
+        CancellationToken cancellationToken = default)
+    {
+        var id = authority.OperationId(bound.Tenant, plan, kind, operationId);
+        var payload = authority.Protect(bound.Tenant, plan, kind, id, control);
+        var receipt = await ingress.SendAsync(bound, new Target.Ref(plan), id, kind, payload,
+            cancellationToken: cancellationToken);
+        if (receipt.Actor != plan || receipt.Outcome is not (AdmissionOutcome.Accepted or AdmissionOutcome.Duplicate))
+            throw new InvalidOperationException($"The exact plan refused {kind} ({receipt.Outcome}, {receipt.Reason}).");
+    }
+
+    private void CheckScope(BoundScope scope, ActorRef target)
+    {
+        if (scope.Tenant != bound.Tenant || target != plan)
+            throw new ArgumentException("This reader belongs to one tenant and exact plan.");
+    }
+
+    private void Apply(MigrationPlanJournal? entry)
+    {
+        if (_closed) return;
+        switch (entry)
+        {
+            case MigrationPlanJournal.Created created:
+                _created = created;
+                break;
+            case MigrationPlanJournal.Selected { Number: > 0, Actors.Length: > 0 } selected when _created is { } created:
+                _pending = new(selected.Number, created.From, created.To, selected.Actors);
+                break;
+            case MigrationPlanJournal.Dispatched dispatched when _pending?.Number == dispatched.Number:
+                _pending = null;
+                break;
+            case MigrationPlanJournal.Closed:
+                _pending = null;
+                _closed = true;
+                break;
+        }
+    }
+}

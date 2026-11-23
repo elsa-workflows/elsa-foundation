@@ -12,11 +12,16 @@ internal sealed record MigrationPlanResult(MigrationPlanOutcome Outcome, string?
 
 internal abstract record MigrationPlanJournal(string Kind)
 {
+    private const string CreatedKind = "migration-plan.created.v1";
     private const string SelectedKind = "migration-plan.selected.v1";
+    private const string DispatchedKind = "migration-plan.dispatched.v1";
     private const string AnsweredKind = "migration-plan.answered.v1";
     private const string ClosedKind = "migration-plan.closed.v1";
 
-    internal sealed record Selected(ActorRef[] Actors) : MigrationPlanJournal(SelectedKind);
+    internal sealed record Created(string From, string To) : MigrationPlanJournal(CreatedKind);
+    internal sealed record Selected(ActorRef[] Actors, long Number = 0, PageToken? After = null, bool AllSelected = false)
+        : MigrationPlanJournal(SelectedKind);
+    internal sealed record Dispatched(long Number) : MigrationPlanJournal(DispatchedKind);
     internal sealed record Answered(ActorRef Actor, MigrationPlanOutcome Outcome) : MigrationPlanJournal(AnsweredKind);
     internal sealed record Closed() : MigrationPlanJournal(ClosedKind);
 
@@ -28,9 +33,14 @@ internal abstract record MigrationPlanJournal(string Kind)
             kind.ValueKind != JsonValueKind.String) return null;
         return kind.GetString() switch
         {
-            SelectedKind => record.Deserialize<Selected>() is { Actors: { Length: > 0 } actors } batch &&
+            CreatedKind => record.Deserialize<Created>() is { From.Length: > 0, To.Length: > 0 } created
+                ? created : throw new InvalidOperationException("The migration plan needs both definitions."),
+            SelectedKind => record.Deserialize<Selected>() is { Actors: { } actors } batch &&
+                (actors.Length > 0 || batch.Number > 0) &&
                 actors.All(actor => !string.IsNullOrEmpty(actor.Id))
                     ? batch : throw new InvalidOperationException("The migration batch needs exact actor references."),
+            DispatchedKind => record.Deserialize<Dispatched>() is { Number: > 0 } dispatched
+                ? dispatched : throw new InvalidOperationException("The acknowledgment needs its batch number."),
             AnsweredKind => record.Deserialize<Answered>() is { Actor.Id.Length: > 0 } answer &&
                 record.TryGetProperty(nameof(Answered.Outcome), out _) && Enum.IsDefined(answer.Outcome)
                     ? answer : throw new InvalidOperationException("The migration answer needs an exact actor reference and outcome."),

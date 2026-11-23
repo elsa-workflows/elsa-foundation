@@ -119,6 +119,21 @@ its source definition. A newer owner processes it. The plan witness
 exercises real actor delivery. The product plan actor, declaration mapping and graph and statechart
 migration remain separate work.
 
+### Dispatch a real migration plan
+
+```sh
+dotnet run -c Release --project sim -- --migration-plan-actor
+```
+
+The in-memory demo pages two Native workflows from the public instance read model. The plan model
+records one undispatched page in its Full journal. An independent runner reads the committed page
+and dispatches migrations to the exact actor references. A fresh runner reconstructs the same
+batch after ownership changes. An authenticated acknowledgment clears the batch. The operator host
+provides a shared control key to plan owners and runners. The outcome projection reports both
+migrations, and the workflows finish under the target definition. A second plan closes on its
+scheduled deadline and records an outcome that arrives after close. Operator API integration,
+automatic selection scheduling and provider qualification remain separate work.
+
 ## The simulation
 
 ```
