@@ -82,9 +82,9 @@ sealed class Wire
     {
         return _referenceEngine switch
         {
-            "postgres" => new NpgsqlConnectionStringBuilder(connection) { Host = "127.0.0.1", Port = LocalPort }.ConnectionString,
-            "mysql" => new MySqlConnectionStringBuilder(connection) { Server = "127.0.0.1", Port = (uint)LocalPort }.ConnectionString,
-            "sqlserver" => new SqlConnectionStringBuilder(connection) { DataSource = $"127.0.0.1,{LocalPort}" }.ConnectionString,
+            "postgres" => new NpgsqlConnectionStringBuilder(connection) { Host = _host, Port = LocalPort }.ConnectionString,
+            "mysql" => new MySqlConnectionStringBuilder(connection) { Server = _host, Port = (uint)LocalPort }.ConnectionString,
+            "sqlserver" => new SqlConnectionStringBuilder(connection) { DataSource = $"{_host},{LocalPort}" }.ConnectionString,
             _ => System.Text.RegularExpressions.Regex.Replace(connection, @"(Server=[^,;]+,)\d+|(Port=)\d+", m => (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value) + LocalPort, System.Text.RegularExpressions.RegexOptions.IgnoreCase),
         };
     }
