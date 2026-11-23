@@ -18,7 +18,7 @@ internal abstract record MigrationPlanJournal(string Kind)
     private const string AnsweredKind = "migration-plan.answered.v1";
     private const string ClosedKind = "migration-plan.closed.v1";
 
-    internal sealed record Created(string From, string To) : MigrationPlanJournal(CreatedKind);
+    internal sealed record Created(string From, string To, string? Model = null) : MigrationPlanJournal(CreatedKind);
     internal sealed record Selected(ActorRef[] Actors, long Number = 0, PageToken? After = null, bool AllSelected = false)
         : MigrationPlanJournal(SelectedKind);
     internal sealed record Dispatched(long Number) : MigrationPlanJournal(DispatchedKind);
@@ -79,6 +79,13 @@ internal sealed class MigrationPlanOutcomes(IActorReads reads, BoundScope scope,
     internal bool CanComplete(long selection)
     {
         lock (_gate) return !_closed && _lastSelection == selection && _unanswered == 0;
+    }
+
+    internal ActorRef[]? Unselected(long selection, IEnumerable<ActorRef> candidates, int take)
+    {
+        lock (_gate)
+            return _closed || _lastSelection != selection ? null
+                : candidates.Where(actor => !_outcomes.ContainsKey(actor)).Distinct().Take(take).ToArray();
     }
 
     internal async Task<bool> ProjectNextAsync(CancellationToken cancellationToken = default)

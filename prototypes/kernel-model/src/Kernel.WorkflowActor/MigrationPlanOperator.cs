@@ -12,6 +12,7 @@ internal sealed class MigrationPlanOperator(IIngress ingress, IActorReads reads,
         CancellationToken cancellationToken = default)
     {
         Demand(scope);
+        if (request.Model is null) throw new ArgumentException("Automatic migration requires an exact execution model.", nameof(request));
         return new WorkflowRuntime(ingress, reads).StartAsync(scope, operation, model.Start(request), cancellationToken: cancellationToken);
     }
 
@@ -39,7 +40,7 @@ internal sealed class MigrationPlanOperator(IIngress ingress, IActorReads reads,
             await _gate.WaitAsync(cancellationToken);
             try
             {
-                if (await state.ReadProgressAsync(scope, plan, cancellationToken) is not { } progress)
+                if (await state.ReadProgressAsync(scope, plan, cancellationToken) is not { Model: { } executionModel } progress)
                     return MigrationPlanStep.Idle;
                 if (progress.Pending is not null)
                 {
@@ -48,8 +49,7 @@ internal sealed class MigrationPlanOperator(IIngress ingress, IActorReads reads,
                 }
                 if (!progress.AllSelected)
                 {
-                    await SelectAsync(progress, cancellationToken);
-                    return MigrationPlanStep.SelectionAdmitted;
+                    return await SelectAsync(progress, executionModel, cancellationToken) ? MigrationPlanStep.SelectionAdmitted : MigrationPlanStep.Idle;
                 }
 
                 await RefreshOutcomesAsync(cancellationToken);
@@ -60,22 +60,26 @@ internal sealed class MigrationPlanOperator(IIngress ingress, IActorReads reads,
             finally { _gate.Release(); }
         }
 
-        private async Task SelectAsync(MigrationPlanProgress progress, CancellationToken cancellationToken)
+        private async Task<bool> SelectAsync(MigrationPlanProgress progress, string executionModel, CancellationToken cancellationToken)
         {
             var query = new ActorQuery(WorkflowActor.ActorType, ActorStatus.Running,
                 new Dictionary<string, string> { ["definition"] = progress.From });
             var page = await reads.ListAsync(scope, query, progress.Cursor, cancellationToken);
             if (page.Next is { } next && (next == progress.Cursor || next.Value.Length > 1_024))
                 throw new InvalidOperationException("The instance list must return an advancing, bounded cursor.");
-            var actors = page.Items.Where(view => view.Header.Tenant == scope.Tenant &&
-                    WorkflowActor.CanSelectForMigration(view, progress.From))
-                .Select(view => view.Header.Ref).Distinct().ToArray();
-            if (actors.Length > MigrationPlanModel.BatchLimit)
-                throw new InvalidOperationException("The instance-list page exceeds the migration batch capacity.");
+            var candidates = page.Items.Where(view => view.Header.Tenant == scope.Tenant &&
+                    WorkflowActor.CanSelectForMigration(view, executionModel, progress.From))
+                .Select(view => view.Header.Ref);
+            await RefreshOutcomesAsync(cancellationToken);
+            var actors = _outcomes.Unselected(progress.Number, candidates, MigrationPlanModel.BatchLimit + 1);
+            if (actors is null) return false;
 
             var number = checked(progress.Number + 1);
-            var control = new MigrationPlanControl(number, actors, progress.Cursor, page.Next, AllSelected: page.Next is null);
+            var keepCursor = actors.Length > MigrationPlanModel.BatchLimit;
+            var control = new MigrationPlanControl(number, keepCursor ? actors[..MigrationPlanModel.BatchLimit] : actors,
+                progress.Cursor, keepCursor ? progress.Cursor : page.Next, AllSelected: !keepCursor && page.Next is null, KeepCursor: keepCursor);
             await state.SendAsync(MigrationPlanControl.Select, FormattableString.Invariant($"select-{number}"), control, cancellationToken);
+            return true;
         }
 
         internal async Task<MigrationPlanView?> ReadOutcomesAsync(CancellationToken cancellationToken = default)

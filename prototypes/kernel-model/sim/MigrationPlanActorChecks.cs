@@ -26,7 +26,9 @@ internal static class MigrationPlanActorChecks
         var tooWide = new string('é', 600);
         var registry = new WorkflowRegistry().Add(Definition("source", "old")).Add(Definition("target", "new"))
             .Add(Definition(tooWide, "too wide"));
-        var plans = new MigrationPlanModel(authority, (from, to) => registry.TryGet(from, out _) && registry.TryGet(to, out _));
+        var plans = new MigrationPlanModel(authority, (executionModel, from, to) =>
+            (executionModel is null || executionModel == NativeExecutionModel.ModelKey) &&
+            registry.TryGet(from, out _) && registry.TryGet(to, out _));
         var actorType = new PublicWorkflow([new NativeExecutionModel(registry), plans, new ReadOnlyJournalModel()]);
         var deadline = now + 600_000;
         var invalid = false;

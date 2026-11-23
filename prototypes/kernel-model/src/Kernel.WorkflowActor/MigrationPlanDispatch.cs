@@ -4,8 +4,8 @@ using Kernel.Foundation.Contracts;
 
 namespace Kernel.WorkflowActor;
 
-internal sealed record MigrationDispatchBatch(long Number, string From, string To, ActorRef[] Actors);
-internal sealed record MigrationRequest(string From, string To, ActorRef Plan);
+internal sealed record MigrationDispatchBatch(long Number, string From, string To, ActorRef[] Actors, string? Model = null);
+internal sealed record MigrationRequest(string From, string To, ActorRef Plan, string? Model = null);
 internal sealed record MigrationDispatchReceipt(int Accepted, int Duplicate, int Unavailable);
 
 /// <summary>The committed plan read and the authorized acknowledgment path.</summary>
@@ -23,7 +23,7 @@ internal sealed class MigrationPlanDispatch(IIngress ingress, IMigrationDispatch
         ArgumentNullException.ThrowIfNull(scope);
         var batch = await state.ReadPendingAsync(scope, plan, cancellationToken);
         if (batch is null) return null;
-        var payload = JsonSerializer.Serialize(new MigrationRequest(batch.From, batch.To, plan));
+        var payload = JsonSerializer.Serialize(new MigrationRequest(batch.From, batch.To, plan, batch.Model));
         var accepted = 0;
         var duplicate = 0;
         var unavailable = 0;

@@ -144,14 +144,20 @@ dotnet run -c Release --project sim -- --migration-plan-runner
 
 The in-memory operator service selects through the public actor list, dispatches the committed
 batch, and requests completion once the result projection has reached the final selection
-and every selected life has answered. Step results report admission. The plan actor records
+and every selected life has answered. Each automatic plan binds one execution model.
+A provider page can span several 128-actor batches. The runner keeps the read cursor until
+it has recorded a selection for every eligible life on the page. Step results report admission.
+The plan actor records
 the resulting transition in its own commit. The host grants tenant operator permission
 and invokes the runner as work becomes available.
 
 The example restarts after a lost selection admission answer, completes a plan over two actual
-Native workflows and closes an empty plan. Another plan keeps an unanswered deleted life
+Native workflows and closes an empty plan. A 129-actor page completes in two batches even
+when all selected actors refuse migration and remain at the source. Another plan keeps an unanswered deleted life
 pending until an operator closes it. Public HTTP and Studio endpoints, scheduling by the
 provider host and persisted outcome projection integration remain separate work.
+Earlier draft plans without a model binding still support their explicit batches. The automatic
+runner requires a binding when it creates a plan.
 
 ## The simulation
 

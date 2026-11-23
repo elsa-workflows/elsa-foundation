@@ -2,7 +2,7 @@ using Kernel.Foundation.Contracts;
 
 namespace Kernel.WorkflowActor;
 
-internal sealed record MigrationPlanProgress(string From, long Number, PageToken? Cursor, bool AllSelected,
+internal sealed record MigrationPlanProgress(string From, string? Model, long Number, PageToken? Cursor, bool AllSelected,
     MigrationDispatchBatch? Pending);
 
 /// <summary>Replays committed plan transitions and retains the bookmark and at most one pending batch.</summary>
@@ -42,7 +42,7 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
             }
             if (_closed || _created is null || !await IsRunning(cancellationToken)) return null;
             var pending = _pending is { } batch ? batch with { Actors = batch.Actors.ToArray() } : null;
-            return new(_created.From, _number, _cursor, _allSelected, pending);
+            return new(_created.From, _created.Model, _number, _cursor, _allSelected, pending);
         }
         finally { _gate.Release(); }
     }
@@ -86,7 +86,7 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
                 _number = selected.Number;
                 _cursor = selected.After;
                 _allSelected = selected.AllSelected;
-                _pending = selected.Actors.Length > 0 ? new(selected.Number, created.From, created.To, selected.Actors) : null;
+                _pending = selected.Actors.Length > 0 ? new(selected.Number, created.From, created.To, selected.Actors, created.Model) : null;
                 break;
             case MigrationPlanJournal.Dispatched dispatched when _pending?.Number == dispatched.Number:
                 _pending = null;

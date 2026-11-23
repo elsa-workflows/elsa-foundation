@@ -38,7 +38,7 @@ public sealed partial class WorkflowActor
         var next = workflow;
         if (turn.Header.Status != ActorStatus.Running)
             result = new(MigrationPlanOutcome.Refused, "Ended");
-        else if (workflow.Definition != request.From)
+        else if (workflow.Definition != request.From || request.Model is { } expectedModel && workflow.Model != expectedModel)
             result = new(MigrationPlanOutcome.NotAtSource);
         else if (turn.State is null || workflow.Ephemeral)
             result = new(MigrationPlanOutcome.Refused, "UnavailableCheckpoint");

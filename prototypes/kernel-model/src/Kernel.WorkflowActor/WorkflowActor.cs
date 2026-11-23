@@ -124,14 +124,14 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
 
     internal static bool IsMigrationPlan(ActorView? view, ActorRef plan, bool requireRunning = false) =>
         view?.Header is { } header && header.Ref == plan && TryReadWorkflow(header) is
-        { Model: MigrationPlanModel.ModelKey, Definition: MigrationPlanModel.ModelKey, Version: MigrationPlanModel.PlanVersion,
+        { Model: MigrationPlanModel.ModelKey, Definition: MigrationPlanModel.ModelKey, Version: > 0 and <= MigrationPlanModel.PlanVersion,
           History: History.Full, Ephemeral: false } workflow &&
         (!requireRunning || header.Status == ActorStatus.Running && !workflow.Suspended);
 
-    internal static bool CanSelectForMigration(ActorView view, string definition) =>
+    internal static bool CanSelectForMigration(ActorView view, string model, string definition) =>
         view.Header.Status == ActorStatus.Running && TryReadWorkflow(view.Header) is
-            { Definition: var current, Model: { Length: > 0 } and not MigrationPlanModel.ModelKey, Version: > 0, Ephemeral: false } &&
-        current == definition;
+            { Definition: var current, Model: var currentModel, Version: > 0, Ephemeral: false } &&
+        current == definition && currentModel == model;
 
     private static WorkflowHeader? TryReadWorkflow(ActorHeader header)
     {
