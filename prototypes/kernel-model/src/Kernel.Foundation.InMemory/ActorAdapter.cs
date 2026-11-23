@@ -97,8 +97,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "TargetMismatch");
         if (input.Row is { ParkDiscard: not null } draining)
         {
-            if (message is { Kind: Contract.Kinds.Delete, Operator: not null } && draining.ParkDiscard.DeletesAtComplete)
-                return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "InProgress", draining.ParkDiscard.Operation);
+            if (message is { Kind: Contract.Kinds.Delete, Operator.Selection: { } deleteSelection })
+                return TakeOverParkClear(input, draining, deleteSelection);
             return RefuseDuringResolution(input, draining);
         }
         if (message.Kind == Contract.Kinds.Terminate &&
@@ -220,7 +220,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
 
     private Durable.TurnOutcome? RetentionRefusal(Durable.TurnInput input, Durable.InstanceRow row)
     {
-        var operation = row.ParkDiscard is { DeletesAtComplete: true } drain ? drain.Operation : row.ParkRecovery?.Deletion?.Operation;
+        var operation = row.ParkDiscard is { DeletesAtComplete: true } drain ? drain.DeleteOperation : row.ParkRecovery?.Deletion?.Operation;
         if (operation is not null)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InProgress", operation);
 

@@ -2,12 +2,16 @@ namespace Kernel.Durable;
 
 internal enum ParkClearKind { Discard, Expiry, Terminate, Delete }
 
+internal sealed record ParkDrainDeletion(string Operation, string Selection);
+
 internal sealed record ParkDiscardDrain(string Operation, ParkPageCursor? Cursor, long Cleared, long Serial, InboxKey Control)
 {
     internal ParkClearKind Kind { get; init; }
     internal bool Expired => Kind == ParkClearKind.Expiry;
     internal bool ThenDelete { get; init; }
-    internal bool DeletesAtComplete => Kind == ParkClearKind.Delete || ThenDelete;
+    internal ParkDrainDeletion? Deletion { get; init; }
+    internal bool DeletesAtComplete => Kind == ParkClearKind.Delete || ThenDelete || Deletion is not null;
+    internal string DeleteOperation => Deletion?.Operation ?? Operation;
 }
 
 internal sealed record ParkDrainEnvelope(long Creation, long ParkRevision, long ParkAt, long Generation)
@@ -115,6 +119,11 @@ public sealed partial class InMemoryStore
             (turn.Delete || turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Any(IsOutstandingDrain))))
             throw InvalidDrain();
 
+        if (after?.Deletion is { } attachment && before?.Deletion != attachment)
+        {
+            ValidateParkDeleteTakeover(turn, previous, before, next!, after, attachment, epochs, now);
+            return null;
+        }
         var retiring = before?.DeletesAtComplete == true && turn.Delete && after is null;
         if (before is not null && (turn.Delete && !retiring || turn.FoundationKept is { Count: > 0 })) throw InvalidDrain();
         var expiry = previous is null ? null : _foundationParkExpiries.GetValueOrDefault(new(previous.Id, previous.Creation));
@@ -233,7 +242,7 @@ public sealed partial class InMemoryStore
                     Status = terminal ? InstanceStatus.Cancelled : previous.Status, Suspended = !terminal && previous.Suspended
                 };
                 // CreationProtocol.Validate already checked the submitted obligation against the prior registries.
-                var source = before.ThenDelete ? previous with { Status = InstanceStatus.Cancelled } : previous;
+                var source = previous with { Status = expired.Status };
                 var expected = retiring ? CreationProtocol.Retire(source, next.HeldCascade) : expired;
                 if (next != expected || !MatchesFinalNotice(turn.Sent, expired) || turn.Unsubscribe != retiring ||
                     turn.Journal != ParkDeleteJournal(retiring, before))
@@ -242,7 +251,7 @@ public sealed partial class InMemoryStore
             return null;
         }
         else if (turn.FoundationParkClear is not { } page || page.Park != park || next.ParkDiscarded ||
-            after.Operation != before.Operation || after.Kind != before.Kind || after.ThenDelete != before.ThenDelete || after.Cursor != page.Rows[^1].Cursor || after.Cleared != before.Cleared + page.Rows.Count ||
+            after.Operation != before.Operation || after.Kind != before.Kind || after.ThenDelete != before.ThenDelete || after.Deletion != before.Deletion || after.Cursor != page.Rows[^1].Cursor || after.Cleared != before.Cleared + page.Rows.Count ||
             after.Serial != before.Serial + 1 ||
             !page.Rows.Select(row => row.Cursor).SequenceEqual(
                 ReadFoundationKeptPage(new(next.Id, next.Creation), park, before.Cursor)!.Select(row => row.Cursor)))
@@ -261,6 +270,29 @@ public sealed partial class InMemoryStore
             ParkDrainEnvelope.For(previous, park).MatchesExpiry(input, previous, expiry);
     }
 
+    private void ValidateParkDeleteTakeover(TurnCommit turn, InstanceRow? previous, ParkDiscardDrain? before,
+        InstanceRow next, ParkDiscardDrain after, ParkDrainDeletion deletion, IReadOnlyDictionary<int, long> epochs, long now)
+    {
+        if (previous is not { Status: InstanceStatus.Faulted, Retired: false } || before is not { DeletesAtComplete: false } ||
+            _foundationParks.GetValueOrDefault(new(previous.Id, previous.Creation)) is not { } park ||
+            Messages.GetValueOrDefault(before.Control) is not { Done: false, Message: { } control } ||
+            !ParkDrainEnvelope.For(previous, park).MatchesIssued(control, previous, before) ||
+            after != (before with { Deletion = deletion }) ||
+            next != (previous with { Revision = checked(previous.Revision + 1), ParkDiscard = after }) ||
+            turn.Delete || turn.OpensPark || turn.Journal is not null || turn.FoundationParkClear is not null ||
+            turn.FoundationKept is not null || turn.FoundationHeader is not null || turn.FoundationCascade is not null ||
+            turn.Sent.Count != 0 || turn.Held is { Count: > 0 } || turn.FoundationReleasedHolds is { Count: > 0 } ||
+            turn.Unsubscribe || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 ||
+            StoreBatchRules.AddressPartition(next.Id) is not { } partition || !epochs.ContainsKey(partition) ||
+            turn.Consumed.Concat(turn.Done).ToArray() is not [var key] ||
+            Messages.GetValueOrDefault(key) is not { Done: false, Message: { Kind: Kinds.Delete, Operator: { RetentionDelete: false } command } input } ||
+            input.Target.Id != next.Id || input.TargetCreation != next.Creation || input.Due > now ||
+            input.Id != deletion.Operation || command.Selection != deletion.Selection ||
+            !_referenceBirths.TryGetValue(new(next.Id, next.Creation), out var binding) ||
+            !MatchesFoundationSelection(binding.Tenant, binding.Reference, deletion.Selection, requireTerminal: true))
+            throw InvalidDrain();
+    }
+
     private static bool MatchesFinalNotice(IReadOnlyList<Message> sent, InstanceRow row) => row.Parent is null
         ? sent.Count == 0
         : sent is [var notice] && notice == FoundationChildNotice.Create(row, null, final: true);
@@ -270,11 +302,24 @@ public sealed partial class InMemoryStore
 
     internal static string ParkDeleteJournal(bool retiring, ParkDiscardDrain drain)
     {
+        if (drain.Deletion is { } deletion)
+            return Json.Write(new
+            {
+                Outcome = retiring ? "deleted" : "protected", deletion.Operation,
+                Drain = new { Outcome = ParkClearOutcome(drain.Kind), drain.Operation, drain.Cleared }
+            });
         if (drain.ThenDelete)
             return Json.Write(new { Outcome = retiring ? "deleted" : "protected", Disposition = "terminated", drain.Operation, drain.Cleared });
         return retiring ? Json.Write(new { Outcome = "deleted", drain.Operation, drain.Cleared })
             : Json.Write(new { Outcome = "protected", Disposition = "discarded", drain.Operation, drain.Cleared });
     }
+
+    internal static string ParkClearOutcome(ParkClearKind kind) => kind switch
+    {
+        ParkClearKind.Terminate => "terminated",
+        ParkClearKind.Expiry => "expired",
+        _ => "discarded"
+    };
 
     private bool IsOutstandingDrain(InboxKey key) =>
         key.Scope == ParkDrainEnvelope.Scope && Messages.GetValueOrDefault(key) is { Done: false, Message.Kind: Kinds.Drain } control &&
