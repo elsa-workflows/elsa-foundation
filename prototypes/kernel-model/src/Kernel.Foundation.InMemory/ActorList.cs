@@ -119,7 +119,7 @@ internal sealed class ActorList : IActorReads
             throw new ArgumentException("The continuation does not match this actor inbox.", nameof(from));
         var after = from is null ? long.MinValue : BinaryPrimitives.ReadInt64LittleEndian(cursor);
         var snapshot = _store.ReadFoundationInbox(scope.Tenant, actor.Id, after, _pageSize + 1);
-        var page = snapshot.Rows.Take(_pageSize).Select(row => Delivery(actor, row)).ToArray();
+        var page = snapshot.Rows.Take(_pageSize).Select(Delivery).ToArray();
         PageToken? next = null;
         if (snapshot.Rows.Count > _pageSize)
         {
@@ -129,15 +129,20 @@ internal sealed class ActorList : IActorReads
         return new(new Page<DeliveryView>(page, next, snapshot.AsOf));
     }
 
-    private DeliveryView Delivery(ActorRef actor, Durable.InMemoryStore.ActorDelivery row)
+    private DeliveryView Delivery(Durable.InMemoryStore.ActorDelivery row)
     {
         var message = row.Message;
-        var handle = _store.DeliveryHandle(actor.Id, row.Seq, message.InboxKey);
         var id = message.Start is null && Durable.Events.MatchFor(message) is { } match ? match.Event :
             (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null ? _store.MessageHandle("inbox:" + message.Id) : message.Id;
-        return new(handle, id, message.Start is null ? message.Kind : Kinds.Start,
-            row.Sender is { } sender ? new ActorRef(sender) : null, message.Due,
-            row.Held ? DeliveryState.Held : DeliveryState.Pending, row.Attempts, JsonSerializer.SerializeToUtf8Bytes(message).LongLength);
+        var state = row.KeptBy switch
+        {
+            Durable.ParkKeepReason.Arrived => DeliveryState.Arrived,
+            Durable.ParkKeepReason.Consumed or Durable.ParkKeepReason.Selected => DeliveryState.Consumed,
+            _ => row.Held ? DeliveryState.Held : DeliveryState.Pending
+        };
+        return new(row.Handle, id, message.Start is null ? message.Kind : Kinds.Start,
+            row.Sender is { } sender ? new ActorRef(sender) : null, message.Due, state, row.Attempts,
+            JsonSerializer.SerializeToUtf8Bytes(message).LongLength);
     }
 
     private ActorView View(string tenant, Durable.InMemoryStore.ActorCheckpoint checkpoint, long asOf)

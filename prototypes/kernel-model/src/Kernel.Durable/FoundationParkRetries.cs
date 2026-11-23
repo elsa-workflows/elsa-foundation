@@ -18,7 +18,7 @@ public sealed partial class InMemoryStore
     private const int MaxRetryPlainBytes = RetryHeaderBytes + 2 * (MaxRetryKeyUnits + MaxRetryMatchUnits);
     internal const int MaxRetryTokenChars = (MaxRetryPlainBytes + CursorNonceBytes + CursorTagBytes + 2) / 3 * 4;
 
-    // This is the store issuer for the K3 harness. A public Kept view can call it for the rows it projects.
+    // The stored Park and exact row incarnation qualify a handle for a later operator retry.
     internal string? SealFoundationKeptHandle(string tenant, string reference, InboxKey key)
     {
         lock (_gate)

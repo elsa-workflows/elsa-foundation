@@ -199,7 +199,8 @@ public sealed partial class InMemoryStore
         }
     }
 
-    internal sealed record ActorDelivery(long Seq, Message Message, bool Held, int Attempts, string? Sender)
+    internal sealed record ActorDelivery(long Seq, Message Message, bool Held, int Attempts, string? Sender,
+        ParkKeepReason? KeptBy, string Handle)
     {
         internal long Order => Message.DeliveryOrder(Seq);
     }
@@ -212,11 +213,23 @@ public sealed partial class InMemoryStore
             var now = clock();
             if (BoundActor(tenant, reference) is not { } found) return new(now, []);
             var address = found.Binding.Address;
-            var rows = Messages.Values.Where(row => !row.Done && row.Message.DeliveryOrder(row.Seq) > after && row.Message.Target.Id == address.Id &&
+            var parked = found.Row.Status == InstanceStatus.Faulted && _foundationParks.ContainsKey(address);
+            var rows = Messages.Values.Where(row => (!row.Done || parked && row.KeptBy is not null) &&
+                    row.Message.DeliveryOrder(row.Seq) > after && row.Message.Target.Id == address.Id &&
                     row.Message.TargetCreation == address.Creation)
-                .OrderBy(row => row.Message.DeliveryOrder(row.Seq)).Take(take).Select(row => new ActorDelivery(row.Seq, row.Message, row.Held, row.Attempts,
-                    row.Message.Sender is { } sender && _referenceBirths.TryGetValue(new(sender, row.Message.SenderCreation), out var senderBinding)
-                        && senderBinding.Tenant == tenant ? senderBinding.Reference : null)).ToArray();
+                .OrderBy(row => row.Message.DeliveryOrder(row.Seq)).Take(take).Select(row =>
+                {
+                    var message = row.Message;
+                    var kept = row.Done ? row.KeptBy : null;
+                    var refId = found.Binding.Reference;
+                    // Seal a retry handle under the same lock as the Park and row read.
+                    var handle = kept is not null ? SealFoundationKeptHandle(tenant, refId, message.InboxKey) : null;
+                    var sender = message.Sender is { } from &&
+                        _referenceBirths.TryGetValue(new(from, message.SenderCreation), out var binding) && binding.Tenant == tenant
+                        ? binding.Reference : null;
+                    return new ActorDelivery(row.Seq, message, row.Held, row.Attempts, sender, kept,
+                        handle ?? DeliveryHandle(refId, row.Seq, message.InboxKey));
+                }).ToArray();
             return new(now, rows);
         }
     }
