@@ -31,6 +31,29 @@ public sealed class JsonBaselineArchitectureTests
     [InlineData("class C { void M() { options.TypeInfoResolver.Modifiers.Add(ChangeData); } }", "modifier:ChangeData")]
     [InlineData("class C { void M() { resolver.WithAddedModifier(ChangeData); } }", "modifier:ChangeData")]
     [InlineData("class C { void M() { JsonSerializer.Serialize(value); } }", "optionless")]
+    [InlineData("class C { void M(Utf8JsonWriter writer, object value) { JsonSerializer.Serialize(writer, value); } }", "optionless")]
+    [InlineData("class C { void M(object value, Type target) { JsonSerializer.Serialize(value, target); } }", "optionless")]
+    [InlineData("class C { void M(object value) { var target = typeof(UserType); JsonSerializer.Serialize(value, target); } }", "optionless")]
+    [InlineData("class C { void M(JsonElement value, Type target) { value.Deserialize(target); } }", "optionless")]
+    [InlineData("class C { object x = new JsonSerializerOptions(NotJsonBaseline.Options); }", "construction")]
+    [InlineData("class C { void M() { var wire = JsonBaseline.CreateCopy(); wire.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase; } }", "DictionaryKeyPolicy")]
+    [InlineData("class C { object x = new JsonSerializerOptions { Converters = { converter } }; }", "converter:converter")]
+    [InlineData("class C { object x = new DefaultJsonTypeInfoResolver { Modifiers = { ChangeData } }; }", "modifier:ChangeData")]
+    [InlineData("class C { void M() { builder.HasColumnType(\"jsonb\"); } }", "storage:jsonb")]
+    [InlineData("class C { void M() { var payloadType = provider switch { 1 => \"jsonb\", _ => \"text\" }; builder.HasColumnType(payloadType); } }", "storage:jsonb")]
+    [InlineData("class C { void M() { table.Column<string>(type: \"json\", nullable: false); } }", "storage:json")]
+    [InlineData("class C { void M(OwnedNavigationBuilder builder) { builder.ToJson(); } }", "storage:owned-json")]
+    [InlineData("class C { void M() { builder.ToJson(); } }", "json-method:ToJson")]
+    [InlineData("class C { void M() { migration.AlterColumn<string>(name: \"Data\", type: \"jsonb\"); } }", "storage:jsonb")]
+    [InlineData("class C { [Column(TypeName = \"json\")] public string Data { get; set; } }", "storage:json")]
+    [InlineData("[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)] class C {}", "source-generation-defaults")]
+    [InlineData("class C { void M() { JsonSerializer.Serialize(value, OwnerJsonContext.Default.Value); } }", "context-default")]
+    [InlineData("class OwnerContext : JsonSerializerContext {} class C { object options = OwnerContext.Default.Options; }", "context-default")]
+    [InlineData("class C { void M() { request.ReadFromJsonAsync<Request>(); } }", "optionless")]
+    [InlineData("class C { void M() { Results.Json(value); } }", "optionless")]
+    [InlineData("class C { void M() { Results.Json(\"Fake.WireContext.Value\"); } }", "optionless")]
+    [InlineData("class C { void M() { var value = \"Fake.WireContext.Value\"; Results.Json(value); } }", "optionless")]
+    [InlineData("class C { void M() { TypedResults.Ok(value); } }", "optionless")]
     [InlineData("class C { void M() { JsonSerializer.Serialize(value, options: null); } }", "optionless")]
     [InlineData("class C { void M() { JsonSerializer.SerializeToElement(value, value.GetType()); } }", "optionless")]
     [InlineData("class C { void M() { JsonSerializer.SerializeAsync(stream, value); } }", "optionless")]
@@ -52,10 +75,31 @@ public sealed class JsonBaselineArchitectureTests
     public void A_reasoned_register_entry_accounts_only_for_its_file_and_specific_setting()
     {
         var finding = Assert.Single(JsonBaselineSourceScan.Scan("class C { object x = new JsonSerializerOptions(); }"));
-        var register = JsonBaselineSourceScan.ReadRegister("## Baseline deviations\n| File | Setting | Reason | Approved by |\n|---|---|---|---|\n| `owner.cs` | `construction` | Own format projection. | ADR 0091 |\n");
+        var register = JsonBaselineSourceScan.ReadRegister("## Baseline deviations\n| File | Setting | Reason | Approved by |\n|---|---|---|---|\n| `owner.cs` | `" + JsonBaselineSourceScan.RegistrationKey(finding) + "` | Own format projection. | ADR 0091 |\n");
         Assert.True(JsonBaselineSourceScan.IsAccounted("owner.cs", finding, new HashSet<string>(), register));
         Assert.False(JsonBaselineSourceScan.IsAccounted("foreign.cs", finding, new HashSet<string>(), register));
         Assert.False(JsonBaselineSourceScan.IsAccounted("owner.cs", finding with { Setting = "Encoder" }, new HashSet<string>(), register));
+    }
+
+    [Fact]
+    public void A_same_setting_addition_cannot_borrow_an_existing_deviation_receipt()
+    {
+        var findings = JsonBaselineSourceScan.Scan("class C { void M() { options.Converters.Add(new LossyConverter()); options.Converters.Add(new LossyConverter()); } }");
+        var original = findings[0];
+        var register = new[] { new JsonBaselineSourceScan.Registration("owner.cs", new HashSet<string> { JsonBaselineSourceScan.RegistrationKey(original) }, "One owned converter call.", "ADR 0091 decision 7") };
+        Assert.True(JsonBaselineSourceScan.IsAccounted("owner.cs", original, new HashSet<string>(), register));
+        Assert.False(JsonBaselineSourceScan.IsAccounted("owner.cs", findings[1], new HashSet<string>(), register));
+    }
+
+    [Theory]
+    [InlineData("class NewOwner { void M(object data) { JsonSerializer.Serialize(data); } }")]
+    [InlineData("class NewOwner { void M(JsonElement data) { JsonSerializer.Serialize(data); } }")]
+    [InlineData("class NewOwner { void M<T>(T data) { JsonSerializer.Serialize<T>(data); } }")]
+    [InlineData("class NewOwner { void M(JsonElement data, Type type) { data.Deserialize(type); } }")]
+    public void A_new_data_owner_cannot_join_the_own_contract_legacy_list(string source)
+    {
+        var call = Assert.Single(JsonBaselineSourceScan.Scan(source));
+        Assert.False(JsonBaselineSourceScan.IsAccounted("FutureDataOwner.cs", call, new HashSet<string> { JsonBaselineSourceScan.Identity("FutureDataOwner.cs", call) }, []));
     }
 
     [Fact]
@@ -95,19 +139,24 @@ public sealed class JsonBaselineArchitectureTests
             .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
             .Where(path => !RepoPaths.IsBuildOutput(path) && ModuleRoots.IsNotTestFile(path)).Distinct().ToArray();
         Assert.NotEmpty(paths);
+        var storageRoots = paths.Select(path => Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path).GetRoot()).ToArray();
         Assert.All(register, row => Assert.True(File.Exists(Path.Join(RepoPaths.RepoRoot, row.File)), $"Stale register path: {row.File}"));
         var failures = new List<string>();
         var observedLegacy = new HashSet<string>(StringComparer.Ordinal);
+        var observedDeviations = new HashSet<(string File, string Setting)>();
         foreach (var path in paths)
         {
             var relative = Path.GetRelativePath(RepoPaths.RepoRoot, path).Replace('\\', '/');
-            foreach (var finding in JsonBaselineSourceScan.Scan(File.ReadAllText(path)))
+            foreach (var finding in JsonBaselineSourceScan.Scan(File.ReadAllText(path), storageRoots))
             {
                 if (finding.Setting == "optionless") observedLegacy.Add(JsonBaselineSourceScan.Identity(relative, finding));
+                else observedDeviations.Add((relative, JsonBaselineSourceScan.RegistrationKey(finding)));
                 if (!JsonBaselineSourceScan.IsAccounted(relative, finding, legacy, register)) failures.Add($"{relative}:{finding.Line} | {finding.Setting} | {finding.Signature}");
             }
         }
         failures.AddRange(legacy.Except(observedLegacy).Select(identity => "Remove stale migrated legacy receipt: " + identity));
+        failures.AddRange(register.SelectMany(row => row.Settings.Select(setting => (row.File, Setting: setting)))
+            .Except(observedDeviations).Select(site => "Remove stale deviation receipt: " + site.File + " | " + site.Setting));
         Assert.True(failures.Count == 0, "Unregistered JSON options or new/workflow-data option-less calls:\n" + string.Join('\n', failures));
     }
 

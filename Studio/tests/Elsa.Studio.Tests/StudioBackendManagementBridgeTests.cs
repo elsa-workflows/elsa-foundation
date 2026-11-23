@@ -39,7 +39,7 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncLifetime
         using var client = await StartConfiguredHostAsync(RespondingWith(_ => JsonOk(raw)));
         var envelope = await GetRegistryAsync(client);
         Assert.Equal(raw, envelope.GetProperty("registry").GetRawText());
-        Assert.EndsWith("Z", envelope.GetProperty("checkedAt").GetString());
+        Assert.EndsWith("+00:00", envelope.GetProperty("checkedAt").GetString());
     }
 
     // ---- Status read ----
