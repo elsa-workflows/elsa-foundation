@@ -15,8 +15,8 @@ public sealed class ActivityTokenSigningOptions
 
 /// <summary>
 /// The signed token format those codecs share: <c>base64url(JSON state) "." base64url(HMAC-SHA256(key, canonical JSON state))</c>.
-/// Clients hold tokens across requests, so the format and the signature input are a wire contract and must not
-/// change. Each codec keeps its own state validation and its own invalid-token exception.
+/// After the approved pre-stable migration, the format and signature input freeze with Elsa 4's first stable
+/// release. Each codec keeps its own state validation and its own invalid-token exception.
 /// </summary>
 internal sealed class HmacTokenCodec<TState> where TState : class
 {

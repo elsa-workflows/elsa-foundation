@@ -728,6 +728,21 @@ public sealed partial class RuntimeCheckpointCoalescingTests(ITestOutputHelper o
     }
 
     [Fact]
+    public void Coalescing_continuation_pins_its_projection_and_refuses_a_null_cursor()
+    {
+        const string binding = "coalesced-activity-state:workflow:wfexec-1";
+        var token = CoalescingRuntimeStoreContinuation.Encode(binding, new("a", null, true));
+        Assert.True(token.Split('.')[2] == "aIrhJZzH3TP4JzGtuNi3h1kg6aMgmjrp2eD_H-mZnlM",
+            "First-stable hash freeze: changes require an explicit identity/migration decision.");
+        Assert.Equal(new CoalescingRuntimeStoreCursor("a", null, true),
+            CoalescingRuntimeStoreContinuation.Decode(token, binding, "continuation"));
+        var malformed = Encoding.UTF8.GetBytes("""{"binding":"coalesced-activity-state:workflow:wfexec-1","cursor":null}""");
+        var checksum = Convert.FromHexString(Elsa.Serialization.Core.JsonHashInput.HashUtf8(malformed));
+        var invalid = $"crsp1.{EncodeBase64Url(malformed)}.{EncodeBase64Url(checksum)}";
+        Assert.Throws<ArgumentException>(() => CoalescingRuntimeStoreContinuation.Decode(invalid, binding, "continuation"));
+    }
+
+    [Fact]
     public async Task Coalesced_page_merger_keeps_legacy_continuations_and_rejects_invalid_bindings()
     {
         const string workflowExecutionId = "wfexec-1";

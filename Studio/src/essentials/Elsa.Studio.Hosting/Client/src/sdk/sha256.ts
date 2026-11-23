@@ -1,9 +1,9 @@
 /**
- * A small synchronous SHA-256 (FIPS 180-4), owned by this module.
+ * The SDK's synchronous SHA-256 primitive (FIPS 180-4).
  *
  * The working-state content revision is compared inside a synchronous reducer (`workflowDocument.ts`), and
  * `crypto.subtle` is asynchronous and missing on non-secure origins, so Web Crypto cannot be used there. The
- * implementation is checked against the NIST example vectors (`__tests__/sha256.test.ts`).
+ * implementation is checked against the Workflows consumer's NIST example vectors (`__tests__/sha256.test.ts`).
  */
 
 const K = new Uint32Array([

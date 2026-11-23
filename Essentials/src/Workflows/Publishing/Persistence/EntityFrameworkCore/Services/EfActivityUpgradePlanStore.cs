@@ -591,9 +591,9 @@ public sealed class EfActivityUpgradePlanStore(
         layout.TenantId = source.TenantId;
         layout.CreatedAt = stamped;
         layout.LastModifiedAt = stamped;
-        // Layout columns carry the same Web-defaults JSON the Workflows Design EF lane writes them with.
-        layout.RecordsJson = JsonSerializer.Serialize(layout.Records.ToArray(), JsonSerializerOptions.Web);
-        layout.ActivityPresentationJson = JsonSerializer.Serialize(layout.ActivityPresentation.ToArray(), JsonSerializerOptions.Web);
+        // Layout columns use the same baseline as the Workflows Design EF lane.
+        layout.RecordsJson = JsonSerializer.Serialize(layout.Records.ToArray(), Elsa.Serialization.Core.JsonBaseline.Options);
+        layout.ActivityPresentationJson = JsonSerializer.Serialize(layout.ActivityPresentation.ToArray(), Elsa.Serialization.Core.JsonBaseline.Options);
         lane.Workflows.Drafts.Add(draft);
         lane.Workflows.DraftLayouts.Add(layout);
         applied.Add(new("WorkflowDraft", id, source.DefinitionId, EfWorkflowDraftRevision.Of(stamped), true, source.Id));

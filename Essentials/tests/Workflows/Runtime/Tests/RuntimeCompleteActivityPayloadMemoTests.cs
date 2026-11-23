@@ -65,7 +65,7 @@ public sealed class RuntimeCompleteActivityPayloadMemoTests : RuntimePipelineTes
     {
         var payload = NewParentOutcomePayload();
 
-        var json = JsonSerializer.SerializeToElement(payload);
+        var json = JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options);
         var deserialized = json.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options);
 
         Assert.NotNull(deserialized);
@@ -102,7 +102,7 @@ public sealed class RuntimeCompleteActivityPayloadMemoTests : RuntimePipelineTes
         ]);
 
         Assert.NotNull(constructor);
-        Assert.False(json.TryGetProperty(nameof(RuntimeCompleteActivityCommandPayload.ParentOutcome), out _));
+        Assert.False(json.TryGetProperty("parentOutcome", out _));
         Assert.Null(json.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)?.ParentOutcome);
     }
 
@@ -141,8 +141,8 @@ public sealed class RuntimeCompleteActivityPayloadMemoTests : RuntimePipelineTes
     [Fact]
     public void ParentOutcomePayload_RejectsUnknownVersionDuringDeserialization()
     {
-        var json = JsonNode.Parse(JsonSerializer.Serialize(NewParentOutcomePayload()))!.AsObject();
-        json[nameof(RuntimeCompleteActivityCommandPayload.ParentOutcome)]![nameof(RuntimeParentOutcome.Version)] = RuntimeParentOutcome.CurrentVersion + 1;
+        var json = JsonNode.Parse(JsonSerializer.Serialize(NewParentOutcomePayload(), Elsa.Serialization.Core.JsonBaseline.Options))!.AsObject();
+        json["parentOutcome"]!["version"] = RuntimeParentOutcome.CurrentVersion + 1;
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() => json.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options));
         Assert.Equal("version", exception.ParamName);

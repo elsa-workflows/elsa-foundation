@@ -34,6 +34,7 @@ public sealed class RuntimeGeneratorEmissionScheduler : IRuntimeGeneratorEmissio
         _schedulerWorkQueue = schedulerWorkQueue;
         _timeProvider = timeProvider;
         _payloadJsonSerializerOptions = new JsonSerializerOptions(payloadJsonSerializerOptions);
+        Elsa.Serialization.Core.JsonBaseline.Configure(_payloadJsonSerializerOptions);
     }
 
     public async ValueTask<RuntimeGeneratorEmissionScheduleResult> ScheduleAsync(

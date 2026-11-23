@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Modularity.Core.Models;
 using Elsa.Specifications.PackageManifests;
@@ -23,7 +22,17 @@ public static class PackageManifestCatalogMapper
             return PackageManifestReadResult.Missing("Package manifest was empty.");
 
         // Catalog content identity includes unknown members, but not BOM, whitespace or JSON spelling.
-        var hash = Elsa.Serialization.Core.JsonHashInput.HashUtf8(StripByteOrderMark(bytes).ToArray());
+        string hash;
+        try
+        {
+            hash = Elsa.Serialization.Core.JsonHashInput.HashUtf8(StripByteOrderMark(bytes).ToArray());
+        }
+        catch (InvalidOperationException exception)
+        {
+            // Extension values may remain JsonElement during typed parsing. Refuse invalid Unicode in
+            // those values through the same per-package manifest error path as malformed JSON syntax.
+            throw new JsonException("Package manifest contains an invalid JSON value.", exception);
+        }
         return PackageManifestReadResult.Found(path, hash, manifest);
     }
 

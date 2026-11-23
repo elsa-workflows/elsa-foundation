@@ -103,14 +103,20 @@ internal static class JsonBaselineSourceScan
         }
         foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>().Where(x => x.Left.ToString() == "Converters"))
             foreach (var converter in assignment.Right.DescendantNodesAndSelf().OfType<ObjectCreationExpressionSyntax>()) Add("converter:" + ConverterName(converter), converter);
-        return findings;
+        // An inserted identical call must not borrow an existing receipt. Preserve a stable ordinal
+        // within its fully qualified declaration and exact normalized expression.
+        return findings.GroupBy(finding => (finding.Site, finding.Signature, finding.Setting))
+            .SelectMany(group => group.Select((finding, index) => finding with { Site = finding.Site + "#" + (index + 1) })).ToArray();
 
         void Add(string setting, SyntaxNode node) => findings.Add(new(setting, node.WithoutTrivia().NormalizeWhitespace().ToFullString().Replace("\r", "", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal), node.GetLocation().GetLineSpan().StartLinePosition.Line + 1, Site(node)));
     }
 
     private static string Site(SyntaxNode node)
     {
-        var owner = node.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText ?? "<global>";
+        var types = node.Ancestors().OfType<TypeDeclarationSyntax>().Reverse().Select(type => type.Identifier.ValueText);
+        var namespaces = node.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().Reverse().Select(space => space.Name.ToString());
+        var owner = string.Join(".", namespaces.Concat(types));
+        if (owner.Length == 0) owner = "<global>";
         var method = node.Ancestors().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault();
         var name = method switch { MethodDeclarationSyntax declaration => declaration.Identifier.ValueText, ConstructorDeclarationSyntax declaration => declaration.Identifier.ValueText, _ => node.Ancestors().OfType<PropertyDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText ?? node.Ancestors().OfType<VariableDeclaratorSyntax>().FirstOrDefault()?.Identifier.ValueText ?? "<initializer>" };
         return owner + "::" + name + (method is null ? "" : "(" + string.Join(",", method.ParameterList.Parameters.Select(parameter => parameter.Type?.ToString())) + ")");

@@ -247,7 +247,7 @@ public sealed class EtlArtifactCompilerTests
         Assert.NotNull(exact.Artifact);
         Assert.Equal(limit, JsonSerializer.SerializeToUtf8Bytes(exact.Artifact, Elsa.Serialization.Core.JsonBaseline.Options).Length);
         var services = new ServiceCollection();
-        new EtlRuntimeFeature().ConfigureServices(services);
+        new EtlRuntimeFeature { SnapshotRoot = Path.Combine(Path.GetTempPath(), "elsa-s9-exact-envelope") }.ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         var read = scope.ServiceProvider.GetRequiredService<EtlExecutableReader>().Read(exact.Artifact);

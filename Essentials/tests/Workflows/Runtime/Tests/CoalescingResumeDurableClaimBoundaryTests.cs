@@ -1826,7 +1826,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
             var results = new List<RuntimePostCommitOutboxProcessedItem>(claims.Count);
             foreach (var claim in claims)
             {
-                var schedulerWorkItem = claim.Item.Intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>() ??
+                var schedulerWorkItem = claim.Item.Intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options) ??
                     throw new InvalidOperationException($"Outbox intent '{claim.Item.Intent.IntentId}' has no scheduler-work payload.");
                 await intentDispatcher.DispatchAsync(claim.Item.Intent, cancellationToken);
                 var durableQueueItems = await innerQueue.ListAsync(

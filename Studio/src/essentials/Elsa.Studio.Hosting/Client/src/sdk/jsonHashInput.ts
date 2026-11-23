@@ -16,12 +16,12 @@ export function canonicalJsonValue(value: unknown): string {
   return canonicalJsonText(json);
 }
 
-/** Hash JSON text without narrowing its number tokens through JavaScript Number. */
+/** Hash JSON projection text with unique member names, without narrowing number tokens through JavaScript Number. */
 export function hashJsonText(json: string): string {
   return sha256Hex(canonicalJsonText(json));
 }
 
-/** The same hash through Web Crypto for callers whose cancellation/generation guards span an await. */
+/** The unique-member projection hash through Web Crypto for callers whose generation guards span an await. */
 export async function hashJsonTextAsync(json: string): Promise<string> {
   const canonical = canonicalJsonText(json);
   if (!globalThis.crypto?.subtle) return sha256Hex(canonical);

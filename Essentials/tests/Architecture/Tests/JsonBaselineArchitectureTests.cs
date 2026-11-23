@@ -75,12 +75,29 @@ public sealed class JsonBaselineArchitectureTests
         Assert.NotEmpty(paths);
         Assert.All(register, row => Assert.True(File.Exists(Path.Join(RepoPaths.RepoRoot, row.File)), $"Stale register path: {row.File}"));
         var failures = new List<string>();
+        var observedLegacy = new HashSet<string>(StringComparer.Ordinal);
         foreach (var path in paths)
         {
             var relative = Path.GetRelativePath(RepoPaths.RepoRoot, path).Replace('\\', '/');
             foreach (var finding in JsonBaselineSourceScan.Scan(File.ReadAllText(path)))
+            {
+                if (finding.Setting == "optionless") observedLegacy.Add(JsonBaselineSourceScan.Identity(relative, finding));
                 if (!JsonBaselineSourceScan.IsAccounted(relative, finding, legacy, register)) failures.Add($"{relative}:{finding.Line} | {finding.Setting} | {finding.Signature}");
+            }
         }
+        failures.AddRange(legacy.Except(observedLegacy).Select(identity => "Remove stale migrated legacy receipt: " + identity));
         Assert.True(failures.Count == 0, "Unregistered JSON options or new/workflow-data option-less calls:\n" + string.Join('\n', failures));
+    }
+
+    [Fact]
+    public void Duplicate_calls_and_same_named_types_cannot_share_a_legacy_receipt()
+    {
+        var source = "namespace A { class C { void M() { JsonSerializer.Serialize(value); JsonSerializer.Serialize(value); } } } namespace B { class C { void M() { JsonSerializer.Serialize(value); } } }";
+        var calls = JsonBaselineSourceScan.Scan(source);
+        Assert.Equal(3, calls.Count);
+        Assert.Equal(3, calls.Select(call => JsonBaselineSourceScan.Identity("owner.cs", call)).Distinct().Count());
+        var legacy = new HashSet<string> { JsonBaselineSourceScan.Identity("owner.cs", calls[0]) };
+        Assert.True(JsonBaselineSourceScan.IsAccounted("owner.cs", calls[0], legacy, []));
+        Assert.All(calls.Skip(1), call => Assert.False(JsonBaselineSourceScan.IsAccounted("owner.cs", call, legacy, [])));
     }
 }

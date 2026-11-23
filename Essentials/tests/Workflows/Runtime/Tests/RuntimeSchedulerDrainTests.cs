@@ -824,7 +824,7 @@ public sealed class RuntimeSchedulerDrainTests
         await queue.EnqueueAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
-            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload())));
+            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(), Elsa.Serialization.Core.JsonBaseline.Options)));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1));
 
@@ -847,7 +847,7 @@ public sealed class RuntimeSchedulerDrainTests
         await queue.EnqueueAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.Checkpoint,
-            payload: JsonSerializer.SerializeToElement(NewCheckpointPayload())));
+            payload: JsonSerializer.SerializeToElement(NewCheckpointPayload(), Elsa.Serialization.Core.JsonBaseline.Options)));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
 
@@ -882,7 +882,7 @@ public sealed class RuntimeSchedulerDrainTests
         var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
         await activityStateStore.SaveAsync(NewActivityState("actexec-1", ActivityExecutionStatus.Completed));
         var handler = NewCheckpointHandler(activityStateStore, checkpointWriter);
-        var workItem = NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.Checkpoint, payload: JsonSerializer.SerializeToElement(NewCheckpointPayload()));
+        var workItem = NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.Checkpoint, payload: JsonSerializer.SerializeToElement(NewCheckpointPayload(), Elsa.Serialization.Core.JsonBaseline.Options));
         var context = new WorkflowRuntimePipelineContext(workItem);
 
         await handler.HandleAsync(workItem, context);
@@ -902,7 +902,7 @@ public sealed class RuntimeSchedulerDrainTests
         var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
         await activityStateStore.SaveAsync(NewActivityState("actexec-1", ActivityExecutionStatus.Completed));
         var handler = NewCheckpointHandler(activityStateStore, checkpointWriter);
-        var workItem = NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.Checkpoint, payload: JsonSerializer.SerializeToElement(NewCheckpointPayload()));
+        var workItem = NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.Checkpoint, payload: JsonSerializer.SerializeToElement(NewCheckpointPayload(), Elsa.Serialization.Core.JsonBaseline.Options));
 
         await handler.HandleAsync(workItem);
 
@@ -943,7 +943,7 @@ public sealed class RuntimeSchedulerDrainTests
         await queue.EnqueueAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.Checkpoint,
-            payload: JsonSerializer.SerializeToElement(NewCheckpointPayload())));
+            payload: JsonSerializer.SerializeToElement(NewCheckpointPayload(), Elsa.Serialization.Core.JsonBaseline.Options)));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
 
@@ -965,7 +965,7 @@ public sealed class RuntimeSchedulerDrainTests
         await handler.HandleAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
-            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(parentActivityExecutionId: "actexec-parent"))));
+            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(parentActivityExecutionId: "actexec-parent"), Elsa.Serialization.Core.JsonBaseline.Options)));
 
         var parentWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, parentWork.CommandKind);
@@ -992,7 +992,7 @@ public sealed class RuntimeSchedulerDrainTests
         await handler.HandleAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
-            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(parentActivityExecutionId: null))));
+            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(parentActivityExecutionId: null), Elsa.Serialization.Core.JsonBaseline.Options)));
 
         var continuationWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, continuationWork.CommandKind);
@@ -1025,7 +1025,7 @@ public sealed class RuntimeSchedulerDrainTests
                 branchId: "branch-parent",
                 outcomeNames: ["ParentDone"],
                 completionKind: SchedulerCompletionKind.ParentCompletionEvaluation,
-                completedChildActivityExecutionId: "actexec-1"))));
+                completedChildActivityExecutionId: "actexec-1"), Elsa.Serialization.Core.JsonBaseline.Options)));
 
         var continuationWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, continuationWork.CommandKind);
@@ -1065,7 +1065,7 @@ public sealed class RuntimeSchedulerDrainTests
                 branchId: "branch-parent",
                 outcomeNames: ["ParentDone"],
                 completionKind: SchedulerCompletionKind.ParentCompletionEvaluation,
-                completedChildActivityExecutionId: "actexec-1"))));
+                completedChildActivityExecutionId: "actexec-1"), Elsa.Serialization.Core.JsonBaseline.Options)));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
         var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
@@ -1098,7 +1098,7 @@ public sealed class RuntimeSchedulerDrainTests
                 parentActivityExecutionId: "actexec-grandparent",
                 branchId: "branch-parent",
                 outcomeNames: ["ParentDone"],
-                completionKind: SchedulerCompletionKind.ContinuationScheduling))));
+                completionKind: SchedulerCompletionKind.ContinuationScheduling), Elsa.Serialization.Core.JsonBaseline.Options)));
 
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
@@ -1121,7 +1121,7 @@ public sealed class RuntimeSchedulerDrainTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
-            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(parentActivityExecutionId: "actexec-missing")))).AsTask());
+            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(parentActivityExecutionId: "actexec-missing"), Elsa.Serialization.Core.JsonBaseline.Options))).AsTask());
 
         Assert.Contains("missing parent activity execution 'actexec-missing'", exception.Message);
     }

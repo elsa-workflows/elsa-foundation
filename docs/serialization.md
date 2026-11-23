@@ -1,42 +1,41 @@
 # Serialization rule
 
-**The rule:** any JSON that another component will read (a *domain payload*) is written and read through `IPayloadSerializer`, from `Elsa.Serialization.Core`. Do not hand-roll `System.Text.Json.JsonSerializer` or `JsonDocument` for such data.
+Every ordinary JSON option set derives from the read-only `JsonBaseline.Options` in
+[`Elsa.Serialization.Core`](../Essentials/src/Serialization/Core/JsonBaseline.cs). Use `JsonBaseline.CreateCopy()`
+when an owner needs its own resolver or a registered wire-format converter. Modules contribute resolvers for their
+owned contracts; they do not change host-wide HTTP JSON settings.
+
+The baseline writes camelCase CLR member names, reads those names exactly, preserves dictionary keys and explicit
+nulls, and uses strict JSON numbers. Carried `JsonElement` data keeps its original spelling, whitespace, number tokens
+and escapes through writes and reads. Changed data uses the relaxed encoder. These rules also apply to HTTP and
+persistence owners; crossing a boundary does not justify a different data contract.
 
 ```csharp
-// Do: inject the shared serializer
-public sealed class MyStore(IPayloadSerializer serializer)
-{
-    string Save(MyState state) => serializer.Serialize(state);
-    MyState Load(string json) => serializer.Deserialize<MyState>(json);
-}
-
-// Don't: raw defaults use different naming and converters, so the round trip silently breaks
-var json = JsonSerializer.Serialize(state);
+var options = JsonBaseline.CreateCopy();
+var json = JsonSerializer.Serialize(ownedRecord, options);
+var record = JsonSerializer.Deserialize<OwnedRecord>(json, options);
 ```
 
-Link to this page from gates, specs and skills instead of restating the rule.
+`IPayloadSerializer` remains the injected owner serializer where a component already uses it. Its options derive
+from the same baseline. Its configured ordering and alias converters are recorded below, rather than granting every
+caller an unrestricted option set.
 
-## Why it matters
+## Typed user values, equality and hashes
 
-`IPayloadSerializer` ([`JsonPayloadSerializer`](../Essentials/src/Serialization/SystemText/Services/JsonPayloadSerializer.cs))
-is the single, configured contract for domain payloads: it applies the agreed naming policy
-(camelCase own member names, exact matching on read, verbatim dictionary keys) and the registry of converters contributed at startup. When one
-component serializes with it and another deserializes with raw `JsonSerializer` defaults, the round-trip
-silently breaks (e.g. casing mismatches). Routing every domain payload through the one contract keeps
-write and read symmetrical.
+A conversion to or from a user CLR type uses `JsonConversionContract`, selected on the type or input member with
+`JsonConversionAttribute`. The default is camelCase, exact matching and unmatched-member warnings. API wire dates
+require an explicit offset; user conversion and API write modes have distinct rules for `DateTimeKind.Unspecified`.
+The [conversion contract](../specs/1207-json-data-integrity-baseline/contracts/json-baseline.md) defines diagnostics,
+date handling and the scoped override surface.
 
-## What it covers
+Data-carrying API, store and message members use `JsonElement` or `JsonNode`. Typed owner metadata stays typed.
+Do not deserialize raw data into `object`, a dictionary or a convenient POCO merely to retain or forward it.
+An explicit conversion validates the requested type while the retained data keeps its original representation.
 
-Anything persisted or handed across a component boundary as JSON:
-
-- Entity `*Source` shadow columns (e.g. `InputsSource`, `StateSource`) — the saving/loading handlers
-  already use `IPayloadSerializer`.
-- The opaque activity `DescriptorPayload` — serialized on save and rehydrated on load via
-  `IPayloadSerializer`; the owning runtime constructor also deserializes the descriptor through it.
-- Reconciliation / import models that carry serialized values.
-
-Inject `IPayloadSerializer` and use `Serialize` / `SerializeToElement` / `Deserialize<T>` rather than
-touching `JsonSerializer` directly.
+Use `JsonCanonicalForm.Equals` to compare JSON values. Every JSON hash or fingerprint goes through `JsonHashInput`,
+including JSON components of framed and keyed protocols. Its independent fixed option set is the sole hash-profile
+entry below. Canonical bytes belong to equality and hashing; they do not replace the bytes of stored or forwarded
+data. See [ADR 0091](adr/0091-json-data-passes-through-unchanged-and-every-serializer-derives-from-one-baseline.md).
 
 ## Types are stored by alias
 
@@ -49,27 +48,15 @@ under the shared `TypeAliasConvention` (a reserved bare alias for BCL primitives
 `TypeInformation` (namespace/assembly/version) has been removed, so a package bump never breaks
 resolution or construction.
 
-## Approved exceptions
+## Owner composition
 
-These deliberately do **not** use `IPayloadSerializer`, because the JSON never crosses a domain
-boundary or the use needs options the payload serializer can't provide:
+An owner may add a resolver for its own contracts or a converter required by its established metadata format.
+Specific deviations are recorded below with their reason and decision authority. HTTP, EF value converters,
+expression helpers and runtime persistence all follow the baseline; none has a blanket exemption.
 
-- **EF Core `ValueConverter`s** — a converter both serializes and deserializes a column within the
-  persistence layer; nobody else depends on its format (e.g. the layout/validation converters).
-- **HTTP boundary** — FastEndpoints request/response and `Elsa.Http` content factories serialize at the
-  transport edge with their own options.
-- **Expression / scripting** — JavaScript/Liquid helpers serialize within an expression's execution
-  scope.
-- **Custom `JsonConverter`s** — they participate in the `System.Text.Json` pipeline by definition.
-- **The Runtime EF Core persistence module**
-  — it writes and reads its own runtime state rows entirely within the persistence layer; no other
-  component parses their payload JSON. It owns a baseline-derived `JsonSerializerOptions` independent of the mutable `IPayloadSerializer` registry: this is the *durability* format of suspended workflow state,
-  evolved only through EF Core migrations (plus a golden-fixture suite for the Distributed leaf's
-  placement/transport payloads specifically). Adopting the mutable,
-  startup-contributed converter registry of `IPayloadSerializer` would itself be an unstamped format
-  change — the exact class of drift the module exists to eliminate.
-- **JSON hashes** use `JsonHashInput`, whose fixed options and exact canonical form are independent of wire/store defaults.
-  See [ADR 0091](adr/0091-json-data-passes-through-unchanged-and-every-serializer-derives-from-one-baseline.md).
+The Runtime EF persistence owner keeps a baseline-derived durability format independent of startup-contributed
+`IPayloadSerializer` converters. Its retained JSON data still passes through raw. Provider column normalization and
+wire-format differences need the specific register entries and round-trip evidence described by spec 1207.
 
 ## Baseline deviations
 

@@ -6,10 +6,7 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
 public sealed class WorkflowSchedulerPauseGate : IWorkflowSchedulerPauseGate
 {
-    private static readonly JsonSerializerOptions PayloadJsonSerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
-    {
-        PropertyNameCaseInsensitive = true
-    };
+    private static readonly JsonSerializerOptions PayloadJsonSerializerOptions = Elsa.Serialization.Core.JsonBaseline.Options;
 
     private readonly IRuntimePauseDecisionProvider _pauseDecisionProvider;
     private readonly TimeProvider _timeProvider;

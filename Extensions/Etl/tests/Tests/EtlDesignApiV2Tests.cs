@@ -28,7 +28,7 @@ public sealed partial class EtlDesignApiHttpTests
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         var (_, saved) = await ReadConnectorDraftPipelineAsync(created);
         Assert.Equal(raw, Assert.Single(saved.Filters).Value.GetRawText());
-        using var reopened = await host.SendAsync(HttpMethod.Get, "/etl/v2/definitions/raw-filter/draft",
+        using var reopened = await host.SendAsync(HttpMethod.Get, "/etl/v2/definitions/raw-filter",
             permissions: [EtlDesignPermissions.ReadDefinitions]);
         Assert.Equal(HttpStatusCode.OK, reopened.StatusCode);
         var (_, read) = await ReadConnectorDraftPipelineAsync(reopened);

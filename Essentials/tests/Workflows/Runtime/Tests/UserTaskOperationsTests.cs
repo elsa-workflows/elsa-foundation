@@ -21,7 +21,7 @@ public sealed class UserTaskOperationsTests
         var store = Store();
         var task = Task() with { Prefill = Json(raw), AssigneeId = "alice", GroupId = null,
             Form = new("raw", "1", "Raw values", UserTaskProtocol.BasicForms,
-                [new("OrderID", "Order", "number"), new("nil", "Optional", "text"), new("amount", "Amount", "number"), new("text", "Text", "text")]) };
+                [new("OrderID", "Order", "number"), new("empty", "Optional", "text"), new("amount", "Amount", "number"), new("text", "Text", "text")]) };
         Assert.True(await store.TryWriteAsync(task, null));
         Assert.Equal(raw, (await store.FindAsync("tenant", "task"))!.Prefill.GetRawText());
         Assert.Equal(raw, UserTaskRules.Copy(task).Prefill.GetRawText());

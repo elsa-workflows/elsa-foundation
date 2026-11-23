@@ -104,7 +104,7 @@ public sealed class InlineNoGapTests
             ScheduleWasDurableAtFirstBody = durableQueue.ListAllAsync(workflowExecutionId).AsTask().GetAwaiter().GetResult()
                 .Any(item => item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity &&
                              item.Payload is { } payload &&
-                             payload.GetProperty(nameof(RuntimeScheduleActivityCommandPayload.ActivityExecutionId)).GetString() == activityExecutionId);
+                             payload.GetProperty("activityExecutionId").GetString() == activityExecutionId);
         }
 
         // The first durable commit after the first body ran stops the host: the body ran, its completion is not durable.

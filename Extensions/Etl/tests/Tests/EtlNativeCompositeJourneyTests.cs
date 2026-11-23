@@ -759,7 +759,7 @@ public sealed partial class EtlNativeCompositeJourneyTests
                     WorkflowExecutionActorActivationReason.ControlPlaneCommand, now, requestedBy: "etl-native-test",
                     requiredCapabilities: WorkflowExecutionActorCapabilities.None, partition: WorkflowExecutionHarness.Partition));
             var command = new WorkflowExecutionCommand(commandId, WorkflowExecutionId, WorkflowExecutionCommandKind.CancelActivityScope,
-                now, JsonSerializer.SerializeToElement(new CancelActivityScopeCommand(boundary.InvocationId, boundary.ExecutionScopeId!, "ETL composite fixture cancellation")),
+                now, JsonSerializer.SerializeToElement(new CancelActivityScopeCommand(boundary.InvocationId, boundary.ExecutionScopeId!, "ETL composite fixture cancellation"), Elsa.Serialization.Core.JsonBaseline.Options),
                 new Dictionary<string, string>());
             var dispatched = await agent.EnqueueAsync(new WorkflowExecutionCommandEnvelope(commandId, WorkflowExecutionId, command,
                 $"{WorkflowExecutionId}:cancel-scope:{boundary.InvocationId}", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now,
