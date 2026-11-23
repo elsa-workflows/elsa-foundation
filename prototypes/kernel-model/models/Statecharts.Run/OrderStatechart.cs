@@ -1,0 +1,30 @@
+using Kernel.Native;
+using Kernel.Statecharts;
+using Kernel.Statecharts.Native;
+
+internal static class OrderStatechart
+{
+    internal const string Definition = "order", Node = "order-machine";
+
+    internal static Workflow Build(bool omitStockRelease = false)
+    {
+        var chart = new StructuralDefinition(
+            [new("Order", NodeKind.Root, Initial: "AwaitingPayment"),
+             new("AwaitingPayment", NodeKind.Atomic, "Order", Entry: "prepare"),
+             new("Fulfilled", NodeKind.Final, "Order", Entry: "fulfill"),
+             new("ReleasingShipment", NodeKind.Atomic, "Order", Entry: "reverse-shipment"),
+             new("ReleasingStock", NodeKind.Atomic, "Order", Entry: omitStockRelease ? null : "release-stock"),
+             new("Reversed", NodeKind.Final, "Order")],
+            [new("approved", 0, "AwaitingPayment", "Fulfilled", VisitMode.Reenter, "approved"),
+             new("declined", 1, "AwaitingPayment", "ReleasingShipment", VisitMode.Reenter, "declined"),
+             new("shipment-released", 2, "ReleasingShipment", "ReleasingStock", VisitMode.Reenter, "shipment-released"),
+             new("stock-released", 3, "ReleasingStock", "Reversed", VisitMode.Reenter, "stock-released")]);
+        var machine = Wf.Node<StateMachine>(Node, ("StructuralDefinition", Binding.Literal(chart)))
+            .With(Wf.Sequence("prepare", Wf.WriteLine("reserve-stock", Binding.Literal("reserve stock")),
+                    Wf.WriteLine("book-shipment", Binding.Literal("book shipment"))),
+                Wf.WriteLine("fulfill", Binding.Literal("fulfill order")),
+                Wf.WriteLine("reverse-shipment", Binding.Literal("release shipment")),
+                Wf.WriteLine("release-stock", Binding.Literal("release stock")));
+        return Wf.Workflow(Definition, machine);
+    }
+}

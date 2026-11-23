@@ -402,6 +402,29 @@ journal records one completion revision.
 This is a runnable K7 case on the public Embedded preview. The full Flowchart corpus and Cluster qualification
 remain part of K7.
 
+### Order StateMachine restart on the public PostgreSQL preview
+
+Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database and run from `prototypes/kernel-model`:
+
+```sh
+models/Native.Run/run-statechart-preview.sh
+```
+
+The Embedded processes use Balanced persistence and run the same Native order chart as the
+[public in-memory example](models/Statecharts.Run/README.md#order-statemachine-on-the-public-actor-foundation).
+The first process starts the order through `WorkflowRuntime`. A declined payment enters
+`ReleasingShipment` and runs the shipment release activity. The process admits the shipment acknowledgement
+through the public Foundation ingress and exits before offering it to the machine.
+
+A second process takes the partition at a higher epoch. It reads the same persisted chart configuration and
+pending acknowledgement, then drives the same order to `ReleasingStock`. The stock release activity runs once.
+The public journal after the saved bookmark shows one evaluated and handled transition, including its exit
+and entry. Replaying the acknowledgement's operation ID with a stock release payload leaves the order, inbox
+and journal unchanged.
+
+This is one K7 Embedded restart case with a pending direct input and Full history. The broader StateMachine
+invariants, Durable persistence and Cluster qualification have separate K7 acceptance cases.
+
 ### Parallel paths in the PostgreSQL Flowchart preview
 
 Use a fresh dedicated database in `KERNEL_PREVIEW_POSTGRES` for each run. From `prototypes/kernel-model`:

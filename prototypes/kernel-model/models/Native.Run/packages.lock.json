@@ -521,6 +521,19 @@
           "Kernel.Runtime": "[1.0.0, )"
         }
       },
+      "kernel.statecharts": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Model.Contracts": "[1.0.0, )"
+        }
+      },
+      "kernel.statecharts.native": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Native": "[1.0.0, )",
+          "Kernel.Statecharts": "[1.0.0, )"
+        }
+      },
       "kernel.workflowactor": {
         "type": "Project",
         "dependencies": {
