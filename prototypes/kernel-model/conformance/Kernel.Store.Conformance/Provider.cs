@@ -53,8 +53,8 @@ public abstract class ProvidedStore : IAsyncDisposable
     /// </summary>
     public virtual Task<IAsyncDisposable?> HoldPartitionAsync(int partition) => Task.FromResult<IAsyncDisposable?>(null);
 
-    /// <summary>A client for the commit that contends with <see cref="HoldPartitionAsync"/>.</summary>
-    public virtual IKernelStore PartitionContender() => Store;
+    /// <summary>Start the commit that contends with <see cref="HoldPartitionAsync"/>.</summary>
+    public virtual Task<Committed> StartPartitionContenderAsync(CommitBatch batch) => Store.CommitAsync(batch).AsTask();
 
     /// <summary>Wait for the attempt to finish or the held lock to block it. Return true with an engine-observed wait.</summary>
     public virtual async Task<bool> ObservePartitionContentionAsync(Task attempt)

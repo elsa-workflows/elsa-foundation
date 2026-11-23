@@ -295,12 +295,15 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
             await command.ExecuteNonQueryAsync();
         };
 
-        public override IKernelStore PartitionContender()
+        public override Task<Committed> StartPartitionContenderAsync(CommitBatch batch)
         {
-            if (file is null) return store;
-            // SQLite has no independent lock-wait view. The contender must report busy while the holder stays open.
+            if (file is null) return base.StartPartitionContenderAsync(batch);
+
+            // SQLite can block synchronously and has no independent lock-wait view. Bound the busy timeout
+            // and keep the holder open until the contender reports the actual transient failure.
             var connection = new SqliteConnectionStringBuilder(admin) { DefaultTimeout = 1 }.ToString();
-            return provider.Store(provider.Factory(connection), provider.FenceInBatch, store.Unfenced);
+            var contender = provider.Store(provider.Factory(connection), provider.FenceInBatch, store.Unfenced);
+            return Task.Run(async () => await contender.CommitAsync(batch));
         }
 
         public override async Task<bool> ObservePartitionContentionAsync(Task attempt)

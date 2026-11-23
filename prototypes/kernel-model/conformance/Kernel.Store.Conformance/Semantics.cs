@@ -942,12 +942,7 @@ public static class Semantics
             var hold = await c.Provided.HoldPartitionAsync(0);
             if (hold is null) throw new SkipException("the provider cannot hold the partition record");
             var turn = new CommitBatch(0, lease.Epoch, lease.Position, Context.Long, false, [Make.New("0/a")], [], []);
-            // Run even synchronous provider calls alongside the observer that owns the hold.
-            var attempt = Task.Run(async () =>
-            {
-                try { return (Committed?)await c.Provided.PartitionContender().CommitAsync(turn); }
-                catch (StoreException error) when (error.Failure == Failure.Transient) { return null; }
-            });
+            var attempt = ClassifyAttemptAsync();
             var observation = ObserveAndReleaseAsync();
             await Task.WhenAll(attempt, observation);
             var (waited, completedWhileHeld) = await observation;
@@ -962,6 +957,12 @@ public static class Semantics
                 if (waited) c.Notes.Add("engine observed a lock wait");
                 c.Notes.Add(completedWhileHeld ? "transient while held" : "transient in flight at release");
                 await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a")]), "the commit tried again after the other writer let go");
+            }
+
+            async Task<Committed?> ClassifyAttemptAsync()
+            {
+                try { return await c.Provided.StartPartitionContenderAsync(turn); }
+                catch (StoreException error) when (error.Failure == Failure.Transient) { return null; }
             }
 
             async Task<(bool Waited, bool CompletedWhileHeld)> ObserveAndReleaseAsync()
