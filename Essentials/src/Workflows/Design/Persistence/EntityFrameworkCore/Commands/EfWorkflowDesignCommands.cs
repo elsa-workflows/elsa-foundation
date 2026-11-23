@@ -106,7 +106,8 @@ public sealed class EfAddWorkflowDefinitionCommand(WorkflowsDesignDbContext db, 
         ArgumentNullException.ThrowIfNull(definition); ArgumentNullException.ThrowIfNull(draft); definition.TenantId = WriteTenant(definition.TenantId); draft.TenantId = WriteTenant(draft.TenantId);
         if (!WorkflowDefinitionIdentity.Equals(definition.Id, draft.WorkflowDefinitionId)) throw new ArgumentException("The first draft must belong to the definition.", nameof(draft));
         draft.WorkflowDefinitionId = definition.Id;
-        Serializer = serializer; SaveDraftState(draft, draft.State, "workflow.definition.create.v1"); var normalizedPresentation = ActivityPresentationRecord.NormalizeCollection(presentation); EfDesignSupport.Stamp(definition, Now); EfDesignSupport.Stamp(draft, Now);
+        var operation = folderId is null ? "workflow.definition.create.v1" : "workflow.definition.create-in-folder.v1";
+        Serializer = serializer; SaveDraftState(draft, draft.State, operation); var normalizedPresentation = ActivityPresentationRecord.NormalizeCollection(presentation); EfDesignSupport.Stamp(definition, Now); EfDesignSupport.Stamp(draft, Now);
         var requestMaterial = new CreateWorkflowDefinitionRequestMaterial(
             definition.Name,
             definition.Description,
@@ -114,10 +115,9 @@ public sealed class EfAddWorkflowDefinitionCommand(WorkflowsDesignDbContext db, 
             definition.DeletedReason,
             definition.IsSourceOwned,
             draft.SourceVersionId,
-            EfDesignSupport.StateHashValue(draft.StateSource!, folderId is null ? "workflow.definition.create.v1" : "workflow.definition.create-in-folder.v1"),
+            EfDesignSupport.StateHashValue(draft.StateSource!, operation),
             EfDesignSupport.LayoutMaterial(layout),
             EfDesignSupport.PresentationMaterial(normalizedPresentation));
-        var operation = folderId is null ? "workflow.definition.create.v1" : "workflow.definition.create-in-folder.v1";
         object material = folderId is null ? requestMaterial : new { requestMaterial, folderId, actorId };
         return await Atomic.ExecuteAsync(key, operation, material, [DesignPersistenceUnitNames.Definitions, DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async token =>
         {

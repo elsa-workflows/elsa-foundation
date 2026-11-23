@@ -90,6 +90,31 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         Assert.Empty(await db.Versions.ToListAsync());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_create_state_serialization_failure_names_the_selected_operation_before_any_write(bool inFolder)
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var cause = new JsonException("State serializer failed.");
+        var command = new EfAddWorkflowDefinitionCommand(db, access, new EfDesignAtomicWriter(db, access),
+            new TestSerializer(writeFailure: cause), new TestIdentity(), new TestLockProvider());
+        var definition = new WorkflowDefinition { Id = "definition", Name = "Definition" };
+        var draft = new WorkflowDefinitionDraft { Id = "draft", WorkflowDefinitionId = "definition", State = State() };
+        var failure = await Assert.ThrowsAsync<DesignPersistenceException>(() => command.Execute(new("create-failed"), definition, draft,
+            [], [], inFolder ? "folder-00000000000000000000000000000001" : null, "actor"));
+        Assert.Equal(inFolder ? "workflow.definition.create-in-folder.v1" : "workflow.definition.create.v1", failure.Operation);
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, failure.FailureKind);
+        Assert.Same(cause, failure.InnerException);
+        Assert.Empty(await db.Definitions.ToListAsync());
+        Assert.Empty(await db.Drafts.ToListAsync());
+        Assert.Empty(await db.Operations.ToListAsync());
+    }
+
     [JsonConversion(MemberMappings = ["declared_name=Name"])]
     public sealed class PersistedScopedDefault
     {

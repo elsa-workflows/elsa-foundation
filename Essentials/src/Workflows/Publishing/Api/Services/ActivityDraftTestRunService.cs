@@ -358,8 +358,8 @@ public sealed class ActivityDraftTestRunService(
         // Only first-writer producer attribution and creation time are independent publication facts.
         var winner = JsonSerializer.SerializeToNode(stored, Elsa.Serialization.Core.JsonBaseline.Options)!.AsObject();
         var candidate = JsonSerializer.SerializeToNode(proposed, Elsa.Serialization.Core.JsonBaseline.Options)!.AsObject();
-        winner.Remove(nameof(WorkflowExecutable.Identity)); candidate.Remove(nameof(WorkflowExecutable.Identity));
-        winner.Remove(nameof(WorkflowExecutable.CreatedAt)); candidate.Remove(nameof(WorkflowExecutable.CreatedAt));
+        winner.Remove("identity"); candidate.Remove("identity");
+        winner.Remove("createdAt"); candidate.Remove("createdAt");
         if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(winner, candidate))
             throw new InvalidDataException("The saved Test Run wrapper content or provenance conflicts with preparation.");
     }

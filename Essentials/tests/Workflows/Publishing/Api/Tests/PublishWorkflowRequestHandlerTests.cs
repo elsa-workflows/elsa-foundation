@@ -127,29 +127,23 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var before = await CountPublishWritesAsync();
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
             Handler(version, _writeLineActivity, _ifActivity).Handle(new PublishWorkflow(version.Id), CancellationToken.None));
-        if (form is "dictionary" or "json-object")
-            Assert.Contains("unsupported CLR expression payload", exception.Message, StringComparison.Ordinal);
-        else
-        {
-            var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
-            Assert.Contains(refusal.Findings, finding => finding.Path == $"consumer/inputs/{input.ReferenceKey}" &&
-                finding.Type is "ValueFlow/UnavailableProducer" or "ValueFlow/ScopeBoundary");
-        }
+        var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
+        Assert.Contains(refusal.Findings, finding => finding.Path == $"consumer/inputs/{input.ReferenceKey}" &&
+            finding.Type is "ValueFlow/UnavailableProducer" or "ValueFlow/ScopeBoundary");
         Assert.Equal(before, await CountPublishWritesAsync());
         Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
     }
 
     [Fact]
-    public async Task Refusing_an_uninspectable_root_expression_never_reads_its_business_getter()
+    public async Task A_CLR_expression_getter_failure_stops_the_explicit_producer_before_publication_writes()
     {
         var payload = new ExpressionGetterTrap();
-        var version = WorkflowVersion(Node("consumer", new WorkflowArgumentState("Text", ArgumentValue.FromClr(payload, "JavaScript"), null, null, null, null)));
         var before = await CountPublishWritesAsync();
-        var failure = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
-            Handler(version, _writeLineActivity).Handle(new PublishWorkflow(version.Id), CancellationToken.None));
-        Assert.Contains("unsupported CLR expression payload", failure.Message, StringComparison.Ordinal);
-        Assert.Equal(0, payload.Reads);
+        var failure = Assert.Throws<InvalidOperationException>(() => ArgumentValue.FromClr(payload, "JavaScript"));
+        Assert.Equal("Expression admission must not invoke business getters.", failure.Message);
+        Assert.Equal(1, payload.Reads);
         Assert.Equal(before, await CountPublishWritesAsync());
+        Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
     }
 
     [Theory]

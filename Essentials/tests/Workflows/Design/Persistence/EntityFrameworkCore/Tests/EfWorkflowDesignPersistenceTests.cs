@@ -3422,10 +3422,10 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     {
         public Task ExecuteAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
-    private sealed class TestSerializer(JsonSerializerOptions? serializerOptions = null) : IPayloadSerializer
+    private sealed class TestSerializer(JsonSerializerOptions? serializerOptions = null, Exception? writeFailure = null) : IPayloadSerializer
     {
         private readonly JsonSerializerOptions options = serializerOptions ?? new();
-        public string Serialize(object payload) => JsonSerializer.Serialize(payload, options);
+        public string Serialize(object payload) => writeFailure is null ? JsonSerializer.Serialize(payload, options) : throw writeFailure;
         public JsonElement SerializeToElement(object payload) => JsonSerializer.SerializeToElement(payload, options);
         public object Deserialize(string serializedData) => JsonSerializer.Deserialize<JsonElement>(serializedData);
         public object Deserialize(string serializedData, Type type) => JsonSerializer.Deserialize(serializedData, type)!;
