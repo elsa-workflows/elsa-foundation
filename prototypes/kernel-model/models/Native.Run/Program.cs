@@ -81,6 +81,8 @@ if (args is ["pg-root-job-preview", var rootJobRestartFence and ("checked" or "i
         new(jobActor, jobNeighbor, jobFreeApproval, priorJobEpoch, priorJobPosition, jobBookmark, neighborJobBookmark), finish: rootJobPhase == "restart");
 if (args is ["pg-timed-job-worker", var jobFence and ("checked" or "in-batch")])
     return await PostgresTimedJobChecks.RunAsync(jobFence == "in-batch");
+if (args is ["pg-root-timed-job-issuance", var timedFence and ("checked" or "in-batch"), .. var timedPhase])
+    return await PostgresRootTimedJobIssuance.RunAsync(timedFence, timedPhase);
 if (args is [var runtimeCluster and ("pg-runtime-cluster" or "pg-runtime-cluster-member"), .. var clusterOptions])
 {
     var wake = clusterOptions.LastOrDefault() == "wake";
