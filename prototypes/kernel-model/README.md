@@ -733,12 +733,20 @@ $EFR x stress <engine> "<same>" stalelease=1 unfenced=1 [fence=checked|batch]   
 $EFR x stress <engine> "<same>" stalelease=1 fencecount=0 [fence=checked|batch]    # the owned fence's count ignored: must fail on every engine (F-B8)
 $EFR x stress <engine> "<same>" [commit=ef|owned]                                    # the commit writer (default: owned, COMMIT-SQL.md)
 $EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch] [commit=ef|owned]   # round trips on the TCP stream
+$EFR x reference-cost <engine> "<connection;Database=kernel_cost>" disposable=1      # K4 reference budget with the default owned writer
 $EFR x probe|block|definite|deadlock <engine> "<connection>"                         # ENGINES.md
 $EFR x fence <engine> "<connection;Database=kernel_fence>"                            # the k-row fence over eight partitions, one stale: COMMIT-SQL.md
 $EFR x setcost <engine> "<connection;Database=kernel_setcost>" proxy=1 [writes=1] [runs=5] [shape=both|scattered|contiguous] [count=4096]   # K1: ownership of a set in the integrated Worker, PARTITIONS.md "K1 costs"
 $EFR x setidle postgres "<connection;Database=kernel_idle>" seconds=120 writes=1      # K1, D3: four RuntimeNodes idle, the beat's WAL
 $EFR x stress|cost postgres "<connection>" writes=1 [history=state|minimal] [pad=4096] [fillfactor=70] [fastvacuum=1]   # WRITES.md; the container needs -c wal_keep_size=4GB
 ```
+
+The K4 reference command resets its disposable database. For network engines, give the wire meter a
+loopback host (`127.0.0.1` or `localhost`) and an explicit TCP port without alternate routing. Use an isolated disposable MySQL server because
+the fixture provisions a server-wide worker account. The command runs ten Balanced no-ops on the owning worker,
+checks that they persisted in order in one finished revision and one journal row, and enforces the tuned
+budgets of two PostgreSQL and three SQL Server wire round trips or three SQLite engine calls. It records
+the MySQL wire count. Database setup and evidence reads sit outside the measured interval.
 
 Without a fence option the EF store takes the engine's default: the fence in the batch on every engine (SQL Server since
 16 November, for the owned commit; ENGINES.md E9; `fence=checked` is the 13 November fallback and stays the default with
