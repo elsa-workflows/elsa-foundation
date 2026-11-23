@@ -1,4 +1,5 @@
 import React, { lazy, Suspense } from "react";
+import { ChartColumn } from "lucide-react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { registerCoreHomeWidgets } from "./widgets/registerCoreHomeWidgets";
 import "./styles.css";
@@ -31,7 +32,7 @@ export function register(api: ElsaStudioModuleApi) {
   }
   const requiresBackend = [{ id: "elsa.api.studio-dashboard", contractVersion: "1" }];
   api.navigation.add({ id: "dashboards", label: "Dashboards", path: "/dashboards", order: 12, placement: "operate", requiresBackend });
-  api.navigation.add({ id: "questions", label: "Questions", path: "/questions", order: 13, placement: "operate", requiresBackend });
+  api.navigation.add({ id: "questions", label: "Questions", path: "/questions", order: 13, placement: "operate", icon: ChartColumn, requiresBackend });
   for (const kind of ["dashboard", "question"] as const) {
     const collection = `/${kind}s`;
     const views = [["list", collection], ["create", `${collection}/new`], ["detail", `${collection}/:resourceId`]] as const;

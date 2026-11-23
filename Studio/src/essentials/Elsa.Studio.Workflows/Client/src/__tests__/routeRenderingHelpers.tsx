@@ -207,6 +207,7 @@ function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: Re
         path: featureArea.nav.path,
         activePathPrefix: featureArea.ownedPaths[0],
         order: featureArea.nav.order ?? featureArea.order,
+        icon: featureArea.nav.icon,
         iconColor: featureArea.nav.iconColor,
         ...copyPlacementMetadata(featureArea.nav)
       });
@@ -221,6 +222,7 @@ function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: Re
           parentId: item.parentId ?? (item.placement ? undefined : parentId),
           activePathPrefix: item.path,
           order: item.order ?? (featureArea.order ?? 500) + index + 1,
+          icon: item.icon,
           iconColor: item.iconColor ?? featureArea.nav.iconColor,
           ...copyPlacementMetadata(item)
         });

@@ -31,11 +31,6 @@ function button(container: HTMLElement, text: string) {
   }
   expect(target).toBeDefined(); flushSync(() => target!.click());
 }
-function openDisclosure(container: HTMLElement, selector: string) {
-  const trigger = container.querySelector<HTMLButtonElement>(selector + " button[aria-expanded]")!;
-  if (trigger.getAttribute("aria-expanded") === "false") flushSync(() => trigger.click());
-  expect(trigger.getAttribute("aria-expanded")).toBe("true");
-}
 function inputValue(input: HTMLInputElement, value: string) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true }))); }
 afterEach(() => { disposers.splice(0).forEach(dispose => { try { dispose(); } catch { /* An explicitly closed surface was already unmounted. */ } }); vi.restoreAllMocks(); });
 
@@ -164,8 +159,8 @@ describe("declared editing bounds and chart semantics", () => {
     let latest: QuestionDefinition = initialDefinition(dataset);
     function Editor() { const [definition, setDefinition] = useState(latest); return <QueryControls definition={definition} datasets={[dataset]} disabled={false} onChange={value => { latest = value; setDefinition(value); }} />; }
     const { container } = render(<Editor />);
-    openDisclosure(container, '.named-query-controls [data-query-path="query.filters"]');
-    const filters = [...container.querySelectorAll("fieldset")].find(fieldset => fieldset.querySelector(":scope > legend")?.textContent === "Source filters")!;
+    const filters = container.querySelector<HTMLElement>('.named-query-controls [data-query-path="query.filters"]')!;
+    expect(filters.hidden).toBe(false);
     button(filters, "Add condition group");
     expect(filters.querySelectorAll("button").length).toBeGreaterThan(0);
     expect([...filters.querySelectorAll("button")].filter(item => item.textContent === "Add condition group")).toHaveLength(1);
