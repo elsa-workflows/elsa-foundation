@@ -287,9 +287,12 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             var arguments = new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope)), path, EffectKeyOf(frame, path));
             _s.Waits[wait] = new WaitEntry(frame.Id, "job", wait)
             {
-                Job = turn.SavesWaitRecipes ? new Contract.JobSpec(wait, System.Text.Json.JsonSerializer.Serialize(arguments)) : null
+                Job = turn.SavesWaitRecipes ? new Contract.JobSpec(wait, System.Text.Json.JsonSerializer.Serialize(arguments))
+                {
+                    Deadline = node.JobTimeout is { } timeout ? checked(turn.Now + (long)timeout.TotalMilliseconds) : null
+                } : null
             };
-            turn.StartJob(wait, arguments);
+            turn.StartJob(wait, arguments, node.JobTimeout);
             return;
         }
         var pinned = frame.RecoveryInputs is { } saved ? (JsonObject)saved.DeepClone() : PinRecoveryInputs(frame, node, scope);

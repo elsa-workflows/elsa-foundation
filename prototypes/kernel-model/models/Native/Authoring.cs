@@ -57,6 +57,8 @@ public sealed class Node(string id, Type type)
     public Dictionary<string, string> Captures { get; } = new(StringComparer.Ordinal);
     /// <summary>The named child slot this node fills in its parent, where the parent has slots (If: Then, Else).</summary>
     public string? Slot { get; set; }
+    /// <summary>The time allowed for a background activity's job.</summary>
+    public TimeSpan? JobTimeout { get; init; }
     internal bool External, Background;
 }
 
@@ -70,6 +72,8 @@ public sealed class Workflow
             if (!Nodes.TryAdd(node.Id, node)) throw new InvalidOperationException($"Node id '{node.Id}' is used twice in '{id}'.");
             node.External = node.Type.IsDefined(typeof(ExternalAttribute));
             node.Background = node.Type.IsDefined(typeof(BackgroundAttribute));
+            if (node.JobTimeout is { } timeout && (!node.Background || timeout < TimeSpan.Zero))
+                throw new ArgumentException($"Node '{node.Id}' requires a nonnegative timeout on a background activity.");
             if (parent is not null) Parents[node.Id] = parent;
             foreach (var child in node.Children) Index(child, node);
         }

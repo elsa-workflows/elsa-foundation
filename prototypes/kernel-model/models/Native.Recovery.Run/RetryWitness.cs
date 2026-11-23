@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Kernel.Durable;
 using Kernel.Native;
 using Kernel.Runtime;
@@ -7,27 +8,45 @@ using Kernel.Sim.Native;
 internal static class RetryWitness
 {
     private static string[] Cuts => ["steady", "reload-before", "reload-staged", "lost-before-apply", "lost-answer", "sibling-before"];
-    private static string[] Refusals => ["legacy-v5", "replace-leaf", "replace-binding", "replace-capture", "replace-parent"];
+    private static string[] Refusals => ["legacy-v5", "replace-leaf", "replace-binding", "replace-capture", "replace-parent", "replace-job-timeout"];
     internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from d in new[] { false, true } from c in Cuts select $"recovery:successor,{m},parallel-parent={d},cut={c}";
-    internal static IEnumerable<string> RefusalNames => from m in new[] { Modes.Balanced, Modes.Durable } from d in new[] { false, true } from c in Refusals select $"recovery:{(c == "legacy-v5" ? "seeded-context" : "material-refusal")},{m},parallel-parent={d},case={c}";
+    internal static IEnumerable<string> RefusalNames => (from m in new[] { Modes.Balanced, Modes.Durable } from d in new[] { false, true } from c in Refusals
+        select $"recovery:{(c == "legacy-v5" ? "seeded-context" : "material-refusal")},{m},parallel-parent={d},case={c}")
+        .Prepend("recovery:untimed-background-material-unchanged");
     internal static void Run(bool full = false, bool refusals = false)
     {
+        if (refusals) CheckUntimedMaterial();
         foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var direct in new[] { false, true }) foreach (var cut in refusals ? Refusals : full ? Cuts : ["steady"]) Run(mode, direct, cut);
     }
+
+    private static void CheckUntimedMaterial()
+    {
+        var leafType = typeof(CallService);
+        var workflow = Wf.Workflow("legacy", Wf.Node<CallService>("leaf"));
+        var old = $$"""{"workflow":"legacy","root":"leaf","variables":{},"parents":[],"nodes":[{"Id":"leaf","Type":{{JsonSerializer.Serialize(leafType.AssemblyQualifiedName)}},"Module":"{{leafType.Module.ModuleVersionId}}","Slot":null,"External":false,"Background":true,"Children":[],"Connections":[],"Gateways":[],"Captures":[],"Inputs":[]}]}""";
+        if (NativeRecoveryMaterial.Describe(workflow).ToJsonString() != old)
+            throw new InvalidOperationException("An untimed background node changed the legacy Native recovery material bytes.");
+        Console.WriteLine("PASS recovery:untimed-background-material-unchanged");
+    }
+
     private static void Run(string mode, bool direct, string cut)
     {
         RetryLeaf.Invocations.Clear();
         var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
         var target = InstanceRef.In(0, "successor"); var owner = 0; Actor Actor() => world.Of(owner, 0);
-        Workflow Build(bool replacement = false)
+        Workflow Build(bool replacement = false, TimeSpan? jobTimeout = null)
         {
             var leaf = new Node("leaf", replacement ? typeof(ReplacementRetryLeaf) : typeof(RetryLeaf));
             leaf.Inputs.Add("Value", Binding.Var("sourceValue")); leaf.Inputs.Add("Iteration", Binding.Var("CurrentItem")); leaf.Inputs.Add("Local", Binding.Var("local"));
+            var tail = Wf.Event("tail", "tail");
+            if (jobTimeout is { } timeout)
+                tail = Wf.Sequence("deferred", tail, new Node("deferred-job", typeof(CallService)) { JobTimeout = timeout });
             return Wf.Workflow("successor", Wf.Node<RetryScope>("outer").With(Wf.ForEach("iterations", Binding.Literal(new[] { 7 }), Wf.Parallel("parallel", null,
                 direct ? leaf : Wf.Sequence("sequence", Wf.Set("before", "before", 1), leaf, Wf.Set("after", "after", 1)),
-                Wf.Sequence("sibling", Wf.Event("change", "change"), Wf.Set("mutate", "sourceValue", 99), Wf.Event("finish", "finish")), Wf.Event("tail", "tail")))), ("sourceValue", 17));
+                Wf.Sequence("sibling", Wf.Event("change", "change"), Wf.Set("mutate", "sourceValue", 99), Wf.Event("finish", "finish")), tail))), ("sourceValue", 17));
         }
-        var workflow = Build();
+        var changesJobTimeout = cut == "replace-job-timeout";
+        var workflow = Build(jobTimeout: changesJobTimeout ? TimeSpan.FromSeconds(1) : null);
         workflow.InterventionRequested = true; NativeWorkflows.Registry.Add(workflow);
         void Apply(Act a) { world.Apply(a); if (world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error); }
         void Release(SubscriptionRow subscription, string id)
@@ -77,7 +96,7 @@ internal static class RetryWitness
         }
         if (cut.StartsWith("replace-", StringComparison.Ordinal))
         {
-            var replacement = Build(cut == "replace-leaf");
+            var replacement = Build(cut == "replace-leaf", changesJobTimeout ? TimeSpan.FromSeconds(2) : null);
             if (cut == "replace-binding") replacement.Nodes["leaf"].Inputs["Value"] = Binding.Literal(22);
             if (cut == "replace-capture") replacement.Nodes["leaf"].Captures.Add("new-capture", "");
             if (cut == "replace-parent") replacement.Nodes[direct ? "parallel" : "sequence"].Children.Reverse();
