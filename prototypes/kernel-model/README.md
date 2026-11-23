@@ -174,7 +174,8 @@ models/Native.Run/run-delay-preview.sh owned checked
 ```
 
 The first Embedded process starts a public Native sequence with an eight-second Delay. It checks that the saved wait
-and its issued timer share a PostgreSQL transaction. A second process reads the original handle and absolute deadline
+and its issued timer share a PostgreSQL transaction and that the deadline equals the issuing turn time plus eight
+seconds. A second process reads the original handle and absolute deadline
 at a higher ownership epoch. A future-horizon poll sees the timer early. A ready poll excludes it, and an ordinary
 application input of the same kind leaves the frame waiting. At the deadline the worker resumes the frame once.
 The receipt prints the deadline, the worker's application time and the database's terminal checkpoint time. The

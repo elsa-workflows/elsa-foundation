@@ -45,8 +45,10 @@ if (args is ["pg-delay-preview", var timerWriter and ("owned" or "ef"), var time
 {
     if (timerArgs is ["birth"]) return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", null);
     if (timerArgs is ["restart", var timerRef, var timerEpoch, var timerDue, var timerHandle, var timerCursor] &&
-        long.TryParse(timerEpoch, out var oldTimerEpoch) && long.TryParse(timerDue, out var savedDue))
+        long.TryParse(timerEpoch, out var oldTimerEpoch) && oldTimerEpoch > 0 && long.TryParse(timerDue, out var savedDue))
         return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", new(timerRef, oldTimerEpoch, savedDue, timerHandle, timerCursor));
+    Console.Error.WriteLine("Use birth or restart <actor> <positive previous epoch> <due> <handle> <cursor>.");
+    return 2;
 }
 if (args is ["pg-root-self", var selfWriter and ("ef" or "owned"), var selfFence and ("checked" or "in-batch")])
     return await PostgresRootSelfChecks.RunAsync(selfWriter == "owned", selfFence == "in-batch");

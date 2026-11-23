@@ -33,11 +33,13 @@ internal static class PostgresDelayPreview
             WorkflowActor.WorkflowActor.ActorType);
         var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition,
             Wf.Sequence("sequence", Wf.Delay("wait", DelayMs), Wf.Set("finished-delay", "result", "continued"))));
+        var starts = new List<(InstanceRef Actor, long Now)>();
         var applications = new List<(Message Input, long Now)>();
         var ordinary = new List<Message>();
         var host = await PostgresNativeRootOwner.PreparePartitionAsync(store, "timer-" + Environment.ProcessId, 0, registry, 2, stop,
-            (_, inputs, now) =>
+            (target, inputs, now) =>
             {
+                if (inputs.Any(input => input.Start is not null)) starts.Add((target, now));
                 foreach (var input in inputs.Where(m => m.Kind == NativeKinds.Timer))
                     if (input.InboxKey.Scope == -1) applications.Add((input, now)); else ordinary.Add(input);
             });
@@ -54,7 +56,10 @@ internal static class PostgresDelayPreview
             await DriveUntil(async () => await store.ReadFirstRootAsync(scope.Tenant, reference.Id, stop) is not null);
             var image = (await store.ReadFirstRootAsync(scope.Tenant, reference.Id, stop))!;
             var wait = Json.Read<NativeState>(image.State!).Waits.Values.Single(w => w.Kind == "timer");
-            var due = wait.Due ?? throw new InvalidOperationException("Native must checkpoint the absolute deadline.");
+            Check(starts.Count == 1 && starts[0].Actor.Id == image.Actor.Id, "the issuing turn must be the one start of this root");
+            var issuedAt = starts[0].Now;
+            var due = checked(issuedAt + DelayMs);
+            Check(wait.Due == due, "the saved deadline must be the issuing turn time plus the authored Delay");
             await using var db = Open();
             var key = CreationProtocol.Origin(image.Actor.Id, image.Actor.Creation) + "#" + wait.Key;
             Check(await db.Database.SqlQuery<bool>($"""
@@ -64,7 +69,7 @@ internal static class PostgresDelayPreview
                 """).SingleAsync(stop), "the timer and its waiting checkpoint must share a PostgreSQL transaction");
             var journal = await api.TailAsync(scope, reference, cancellationToken: stop);
             Check(applications.Count == 0 && journal.Next is not null, "start must leave the timer pending");
-            Console.WriteLine($"waiting {Environment.ProcessId} {reference.Id} {epoch} {due} {wait.Key} {journal.Next!.Value.Value}");
+            Console.WriteLine($"waiting {Environment.ProcessId} {reference.Id} {epoch} {due} {issuedAt} {wait.Key} {journal.Next!.Value.Value}");
             return 0;
         }
 

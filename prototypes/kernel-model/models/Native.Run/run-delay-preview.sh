@@ -10,8 +10,8 @@ dotnet build -c Release --no-restore
 run=(dotnet bin/Release/net10.0/Kernel.Native.Run.dll pg-delay-preview "$writer" "$fence")
 waiting="$("${run[@]}" birth)"
 printf '%s\n' "$waiting"
-read -r phase pid actor epoch due handle cursor <<<"$waiting"
-[[ "$phase" == waiting && "$pid" =~ ^[1-9][0-9]*$ && -n "$cursor" ]]
+read -r phase pid actor epoch due issued handle cursor <<<"$waiting"
+[[ "$phase" == waiting && "$pid" =~ ^[1-9][0-9]*$ && "$epoch" =~ ^[1-9][0-9]*$ && -n "$cursor" ]]
 finished="$("${run[@]}" restart "$actor" "$epoch" "$due" "$handle" "$cursor")"
 printf '%s\n' "$finished"
 read -r phase next_pid next_actor _ <<<"$finished"
