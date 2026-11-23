@@ -8,6 +8,7 @@ internal static class RetentionDeleteChecks
     internal static async Task Run(Action<bool, string> check)
     {
         await PolicyAtDelivery(check);
+        await FractionalWindowAtDelivery(check);
         await DelayedAcrossReuse(check);
         await DeleteIdentityDuringClear(check, afterAttachment: false);
         await DeleteIdentityDuringClear(check, afterAttachment: true);
@@ -150,6 +151,40 @@ internal static class RetentionDeleteChecks
             fixture.Store.Instances[ended.Id].Retired &&
             fixture.Store.Journal.Values.Where(row => row.Instance == ended.Id).ToArray() is [{ Revision: -1 }],
             "RD3 the same terminal transition can be selected again after the policy window and retire once");
+    }
+
+    private static async Task FractionalWindowAtDelivery(Action<bool, string> check)
+    {
+        var fixture = new Fixture { Window = TimeSpan.FromTicks(15_000) };
+        var worker = fixture.Owner();
+        await using var active = await Activate(worker);
+        var younger = await fixture.Start(worker, "fractional-younger");
+        var older = await fixture.Start(worker, "fractional-older");
+        foreach (var actor in new[] { younger, older })
+        {
+            await fixture.Send(actor, "finish", "finish");
+            await Step(worker, fixture.Row(actor).Id);
+        }
+        var youngerRow = fixture.Row(younger);
+        var olderRow = fixture.Row(older);
+        var endedAt = fixture.Now;
+        check(fixture.Checkpoint(younger).Terminal?.At == endedAt && fixture.Checkpoint(older).Terminal?.At == endedAt,
+            "both fractional-window controls end at the same foundation clock reading");
+
+        fixture.Now = endedAt + 1;
+        var early = fixture.Retention(younger, await fixture.Selection(younger));
+        await Step(worker, youngerRow.Id);
+        check(early.Admission.Outcome == InMemoryStore.OperatorAdmission.Accepted &&
+            early.Request.Answer is CreationResult { Result: "NotEligible" } && fixture.Row(younger) == youngerRow,
+            "a direct qualified offer leaves a 1.5 ms retention window open at age 1 ms");
+
+        fixture.Now = endedAt + 2;
+        var due = fixture.Retention(older, await fixture.Selection(older));
+        await Step(worker, olderRow.Id);
+        check(due.Admission.Outcome == InMemoryStore.OperatorAdmission.Accepted &&
+            fixture.Store.Instances[olderRow.Id].Retired &&
+            fixture.Store.Journal.Values.Count(item => item.Instance == olderRow.Id && item.Revision == -1) == 1,
+            "a direct qualified offer retires the 1.5 ms retention candidate at age 2 ms");
     }
 
     private static async Task DelayedAcrossReuse(Action<bool, string> check)

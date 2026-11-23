@@ -135,6 +135,17 @@ internal static class RetentionPassChecks
         check(await reads.GetAsync(blue, stale) is null && Markers(stale, blue) == 1,
             "a once-stale retention candidate retires exactly once after it becomes eligible");
 
+        var fractional = await Start(blue, "fractional", "fractional", "finish");
+        now++;
+        check(await SweepBlue() == 0 && !Pending().Any(),
+            "the proposer leaves a 1.5 ms retention window open at age 1 ms");
+        now++;
+        check(await SweepBlue() == 1 && Pending().SingleOrDefault().Actor == fractional,
+            "the proposer offers the 1.5 ms retention candidate at age 2 ms");
+        await Pump();
+        check(await reads.GetAsync(blue, fractional) is null && Markers(fractional, blue) == 1,
+            "the owner applies the fractional-window offer exactly once");
+
         async Task<int> SweepBlue()
         {
             Contract.PageToken? from = null;
@@ -153,6 +164,7 @@ internal static class RetentionPassChecks
         {
             "keep" => null,
             "changing" => extended,
+            "fractional" => TimeSpan.FromTicks(15_000),
             _ when header.Tenant == red.Tenant && header.Status == Contract.ActorStatus.Finished => TimeSpan.FromMilliseconds(20),
             _ => TimeSpan.FromMilliseconds(10)
         };

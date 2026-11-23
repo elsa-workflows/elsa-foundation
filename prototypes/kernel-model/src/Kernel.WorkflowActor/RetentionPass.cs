@@ -29,7 +29,7 @@ internal sealed class RetentionPass(IActorReads reads, string actorType, Func<Ac
                 header.Status is not (ActorStatus.Finished or ActorStatus.Cancelled or ActorStatus.Faulted) ||
                 header.EndedAt is not { } endedAt || view.Selection is not { Length: > 0 } selection ||
                 retentionWindow(header) is not { Ticks: >= 0 } window ||
-                (decimal)page.AsOf - endedAt < (long)window.TotalMilliseconds)
+                ((decimal)page.AsOf - endedAt) * TimeSpan.TicksPerMillisecond < window.Ticks)
                 continue;
 
             var admission = await admitDelete(scope, header.Ref, selection, cancellationToken);
