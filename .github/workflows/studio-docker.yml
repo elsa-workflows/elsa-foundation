@@ -73,8 +73,7 @@ jobs:
         run: |
           STUDIO_IMAGE_VALIDATORS="$RUNNER_TEMP/studio-image-validation"
           mkdir -p "$STUDIO_IMAGE_VALIDATORS"
-          cp tools/ci/verify_image_evidence.py tools/ci/install_image_evidence_tools.sh \
-            tools/ci/studio_docker_publish.py tools/ci/studio_image_tags.py \
+          cp tools/ci/studio_docker_publish.py tools/ci/studio_image_tags.py \
             tools/ci/verify_studio_nuget_packages.py tools/ci/studio-package-identities.json \
             "$STUDIO_IMAGE_VALIDATORS/"
           echo "STUDIO_IMAGE_VALIDATORS=$STUDIO_IMAGE_VALIDATORS" >> "$GITHUB_ENV"
@@ -317,7 +316,7 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             io.elsa.build.source-run=${{ steps.ci_source.outputs.source_url || format('https://github.com/{0}/actions/runs/{1}', github.repository, steps.source.outputs.run_id) }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,ignore-error=true
 
       - name: Record staged versioned tags before verification
         if: github.event_name == 'workflow_run' || inputs.publish == true
@@ -326,26 +325,45 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: printf 'Staged at %s\n%s\n' "$DIGEST" "$TAGS" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Install pinned image evidence tools
-        if: github.event_name == 'workflow_run' || inputs.publish == true
-        run: bash "$STUDIO_IMAGE_VALIDATORS/install_image_evidence_tools.sh"
-
-      - name: Read back the Studio platform SBOMs and provenance
-        if: github.event_name == 'workflow_run' || inputs.publish == true
+      - name: Inspect possibly staged tags if the exporter fails
+        if: failure() && steps.build.outcome == 'failure' && (github.event_name == 'workflow_run' || inputs.publish == true)
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.image.outputs.tags }}
         run: |
-          echo "docker.io/elsaworkflows/elsa-studio@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
-          python3 "$STUDIO_IMAGE_VALIDATORS/verify_image_evidence.py" "docker.io/elsaworkflows/elsa-studio@$DIGEST" --application Elsa.Studio.Web \
-            --builder-run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build failed. The following registry observations are unverified and may predate this run." >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r tag; do
+            digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$tag" | jq -er '.digest') || digest=unavailable
+            printf '%s %s\n' "$tag" "$digest" >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$TAGS"
 
-      - name: Report incomplete image publication
-        if: failure() && steps.build.outputs.digest && (github.event_name == 'workflow_run' || inputs.publish == true)
-        run: echo "The staged Studio image failed verification. See the staged tags and digest above." >> "$GITHUB_STEP_SUMMARY"
+  verify-inventories:
+    name: Read back the staged Studio inventories
+    needs: build
+    if: github.event_name == 'workflow_run' || inputs.publish == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DIGEST: ${{ needs.build.outputs.digest }}
+      TAGS: ${{ needs.build.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install pinned image evidence tools
+        run: bash tools/ci/install_image_evidence_tools.sh
+      - name: Read back the Studio platform SBOMs and provenance
+        run: |
+          python3 tools/ci/verify_image_evidence.py "docker.io/elsaworkflows/elsa-studio@$DIGEST" --application Elsa.Studio.Web \
+            --builder-run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+      - name: Report incomplete image verification
+        if: failure()
+        run: printf 'Inventory verification incomplete for %s\n%s\n' "$DIGEST" "$TAGS" >> "$GITHUB_STEP_SUMMARY"
 
   attest-index:
     name: Attest the published Studio index
-    needs: build
+    needs: [build, verify-inventories]
     if: github.event_name == 'workflow_run' || inputs.publish == true
     runs-on: ubuntu-latest
     permissions:

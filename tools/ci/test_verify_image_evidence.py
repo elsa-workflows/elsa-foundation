@@ -1,6 +1,10 @@
 """Negative tests for copying an otherwise valid SBOM to another platform or image."""
 import hashlib
 import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 from verify_image_evidence import SLSA, SPDX, package_identities, verify
@@ -93,3 +97,44 @@ class ImageEvidenceTests(unittest.TestCase):
         self.blobs[ref.split("@")[1]] += b" "
         with self.assertRaisesRegex(ValueError, "Incorrect manifest digest"):
             verify(ref, self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
+
+class TagPromotionTests(unittest.TestCase):
+    def test_only_the_current_verified_index_can_move_latest(self):
+        source = "a" * 40
+        verified = "sha256:" + "b" * 64
+        other = "sha256:" + "c" * 64
+        cases = (
+            ("verified", source, verified, verified, True, True),
+            ("main advanced", "d" * 40, verified, verified, True, False),
+            ("new preview from same commit", source, other, verified, True, False),
+            ("wrong latest after copy", source, verified, other, False, True),
+        )
+        for name, main, staged, latest, success, write in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                commands = {
+                    "gh": 'echo "$MAIN"',
+                    "docker": """case "$3" in
+  create) touch "$MARKER" ;;
+  inspect)
+    case "$6" in
+      *:latest) digest=$LATEST ;;
+      *:sha-aaaaaaa) digest=$STAGED ;;
+      *) exit 1 ;;
+    esac
+    printf '{"digest":"%s"}\n' "$digest" ;;
+  *) exit 1 ;;
+esac""",
+                }
+                for binary, body in commands.items():
+                    path = root / binary
+                    path.write_text("#!/bin/sh\n" + body + "\n")
+                    path.chmod(0o755)
+                marker = root / "promoted"
+                env = dict(os.environ, PATH=directory + os.pathsep + os.environ["PATH"],
+                           SOURCE_SHA=source, DIGEST=verified, MAIN=main, STAGED=staged, LATEST=latest,
+                           IMAGE="fixture/image", MARKER=str(marker), GITHUB_REPOSITORY="fixture/repo",
+                           GITHUB_STEP_SUMMARY=str(root / "summary"))
+                result = subprocess.run(["bash", str(Path(__file__).with_name("promote_verified_image.sh"))], env=env)
+                self.assertEqual(result.returncode == 0, success)
+                self.assertEqual(marker.exists(), write)
