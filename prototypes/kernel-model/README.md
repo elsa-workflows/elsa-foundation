@@ -158,7 +158,7 @@ cross-actor sends and other authored effects remain outside this preview.
 
 The public preview writes ordinary text directly. A payload containing NUL or an isolated UTF-16 unit uses a binary
 field in the same message row. It occupies the original UTF-8 byte budget, with three bytes per isolated unit.
-The qualified checkpoint writer marks and consumes these inbox rows. To run the stored input, size and writer
+The adapter maps these inbox rows to a dedicated storage scope. The Worker sees its original issued key, and ordinary issued messages can use the same ID and application kind independently. To run the stored input, size and writer
 checks on a fresh PostgreSQL database, use `pg-root-self owned checked` with the Native runner. The other choices
 are `ef` for the writer and `in-batch` for the fence.
 

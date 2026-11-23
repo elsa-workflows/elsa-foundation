@@ -110,7 +110,6 @@ public sealed partial class EfStore
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
-            if (Seen.Concat(Trial).Any(k => k.Scope == -1)) await QualifySelfWriterAsync(db, cancellationToken);
             return await Mark(Seen, false) && await Mark(Trial, true);
 
             async Task<bool> Mark(IReadOnlyList<InboxKey> keys, bool trial)
@@ -120,7 +119,7 @@ public sealed partial class EfStore
                     var ids = group.Select(key => key.Id).ToArray();
                     var count = await db.Database.ExecuteSqlInterpolatedAsync($"""
                         UPDATE "Messages" SET "Seen" = {Epoch}, "Trial" = CASE WHEN {trial} THEN {Epoch} ELSE "Trial" END
-                        WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {group.Key}
+                        WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {(group.Key == -1 ? RootSelfScope : group.Key)}
                             AND "Id" = ANY({ids}) AND "EventMatch" IS NULL AND NOT "Done"
                         """, cancellationToken);
                     if (count != ids.Length) return false;
@@ -264,8 +263,8 @@ public sealed partial class EfStore
         var ids = turn.Done.Concat(turn.Consumed).Select(key => key.Id).ToArray();
         var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
         var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
-            (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == -1 && m.Kind == RootSelfWire) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
-        var inputs = records.Select(row => row.InboxScope == -1 ? DecodeRootSelf(row, RootSelfIssuer) : PostgresRootAdmission.DecodeDirect(row, root.Reference)).ToArray();
+            (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == RootSelfScope) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
+        var inputs = records.Select(row => row.InboxScope == RootSelfScope ? DecodeRootSelf(row, RootSelfIssuer) : PostgresRootAdmission.DecodeDirect(row, root.Reference)).ToArray();
         if (!SameInputs(inputs, turn.Done.Concat(turn.Consumed))) return null;
         return WithSends(PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
             row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal));

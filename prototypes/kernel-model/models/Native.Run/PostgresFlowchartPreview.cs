@@ -145,14 +145,14 @@ internal static class PostgresFlowchartPreview
                 SELECT COUNT(*) = 1 AND bool_and(m.xmin = i.xmin) AS "Value"
                 FROM "Messages" m JOIN "Instances" i ON i."Id" = m."Target" AND i."Partition" = m."Partition"
                 WHERE m."Target" = {image.Actor.Id} AND i."Revision" = {image.Revision}
-                  AND m."InboxScope" = -1 AND NOT m."Done" AND m."Sender" = m."Target"
+                  AND m."InboxScope" = {EfStore.RootSelfScope} AND NOT m."Done" AND m."Sender" = m."Target"
                 """).SingleAsync(stop);
         }
 
         async Task<int> PendingSelfAsync(EfStore.RootImage image)
         {
             await using var db = Open();
-            return await db.Messages.CountAsync(m => m.Target == image.Actor.Id && m.InboxScope == -1 && !m.Done, stop);
+            return await db.Messages.CountAsync(m => m.Target == image.Actor.Id && m.InboxScope == EfStore.RootSelfScope && !m.Done, stop);
         }
 
         async Task<EfStore.RootImage> DriveAsync(long revision, Func<EfStore.RootImage, bool>? reached = null)
