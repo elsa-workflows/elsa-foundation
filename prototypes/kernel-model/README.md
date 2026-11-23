@@ -70,6 +70,7 @@ Between the two owner processes, a separate diagnostic process bound to another 
 send to the workflow or read its checkpoint or journal. This probe uses no measured connection.
 
 The default receipt estimates round trips by adding EF commands and explicit transaction completions. It excludes connection setup. Setup, ownership and journal reads have their own rows.
+The relational store reads its format marker once during schema setup and once per nonempty take or retake, including a set take. The preview counts these reads in setup and ownership.
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 
@@ -100,6 +101,10 @@ multiplexing disabled. The output also reports PostgreSQL Sync and Query groups 
 | First approval including admission | 18 | 20 |
 | Duplicate approval after restart including admission | 5 | 5 |
 | Finishing approval including admission | 19 | 21 |
+
+In two before-and-after runs on PostgreSQL 17, schema setup on an empty database took 34 or 35 TCP turns before
+the format check and 37 with the marker table, seed and read. Both the first and restarted process took 13 TCP
+turns for ownership, up from 12. The five workflow operations above kept their measured counts.
 
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 

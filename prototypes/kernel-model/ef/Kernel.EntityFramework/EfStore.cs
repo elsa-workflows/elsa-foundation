@@ -113,6 +113,7 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
     internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> InsertAliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> GuardedAliases {get;}=new(StringComparer.Ordinal);
+    internal DbSet<StoreVersionEntity> StoreVersions => Set<StoreVersionEntity>();
     public DbSet<PartitionEntity> Partitions => Set<PartitionEntity>();
     public DbSet<NodeEntity> Nodes => Set<NodeEntity>();
     public DbSet<InstanceEntity> Instances => Set<InstanceEntity>();
@@ -138,6 +139,18 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 
     protected override void OnModelCreating(ModelBuilder model)
     {
+        model.Entity<StoreVersionEntity>(entity =>
+        {
+            entity.ToTable(StoreVersionEntity.Table);
+            entity.Property(row => row.Id).ValueGeneratedNever();
+            entity.HasData(new StoreVersionEntity
+            {
+                Id = StoreVersionEntity.MarkerId,
+                StoreSchema = StoreVersionEntity.StoreSchemaVersion,
+                MessageProtocol = StoreVersionEntity.MessageProtocolVersion,
+                JournalCodec = StoreVersionEntity.JournalCodecVersion
+            });
+        });
         model.Entity<PartitionEntity>(e =>
         {
             e.ToTable("Partitions");
@@ -304,6 +317,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         var count = partitions ?? (postgres ? Defaults.ServerPartitions : Defaults.SqlitePartitions);
         await using var db = create();
         await db.Database.EnsureCreatedAsync();
+        await RequireStoreVersionsAsync(db, CancellationToken.None);
         await PhysicalRetirement.InstallAsync(db, Engine, postgres);
         if (postgres && Engine is null) await db.Database.ExecuteSqlRawAsync(EventInsert.InstallPostgres);
         if (enableCommitWindow)
