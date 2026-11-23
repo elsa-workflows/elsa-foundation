@@ -18,19 +18,21 @@ def read_json(url):
         return json.load(response)
 
 
-def fetch(url, output):
+def fetch(url, output, allow_missing=False):
     for attempt in range(40):
         try:
             with urlopen(url, timeout=30) as response, output.open("wb") as target:
                 shutil.copyfileobj(response, target)
-            return
+            return True
         except HTTPError as error:
+            if error.code == 404 and allow_missing:
+                return False
             if error.code != 404 or attempt == 39:
                 raise
             time.sleep(10)
 
 
-def collect(source, output, feed):
+def collect(source, output, feed, preflight=False):
     resources = {r["@type"]: r["@id"] for r in read_json(feed)["resources"]}
     base = resources["PackageBaseAddress/3.0.0"].rstrip("/")
     public = feed == "https://api.nuget.org/v3/index.json"
@@ -52,7 +54,8 @@ def collect(source, output, feed):
         name, version = candidate["id"].lower(), candidate["version"].lower()
         check(all(re.fullmatch(r"[\w.+-]+", part) for part in (name, version)), "Invalid identity")
         path = output / filename
-        fetch(f"{base}/{name}/{version}/{name}.{version}.nupkg", path)
+        if not fetch(f"{base}/{name}/{version}/{name}.{version}.nupkg", path, allow_missing=preflight):
+            continue
         current, _ = inspect(path)
         current["payload_sha256"] = sha256(nuget_payload(path))
         if public:
@@ -62,6 +65,9 @@ def collect(source, output, feed):
         else:
             check(current == candidate, "Feedz returned different candidate bytes: " + filename)
         rows.append(dict(candidate, feed=feed, feed_sha256=current["sha256"]))
+    if preflight:
+        print(f"Verified {len(rows)} existing NuGet packages before the first push.")
+        return
     (output / "nuget-feed-receipt.json").write_text(json.dumps(rows, indent=2) + "\n")
 
 
@@ -71,5 +77,6 @@ if __name__ == "__main__":
     parser.add_argument("output", type=Path)
     parser.add_argument("feed", choices=["https://api.nuget.org/v3/index.json",
                                         "https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json"])
+    parser.add_argument("--preflight", action="store_true", help="Check all existing versions before publishing any candidate")
     args = parser.parse_args()
-    collect(args.source, args.output, args.feed)
+    collect(args.source, args.output, args.feed, args.preflight)

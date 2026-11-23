@@ -13,7 +13,7 @@ export function releaseInventory(kind: string): Plugin | false {
     apply: "build",
     writeBundle(options, bundle) {
       const outDir = resolve(options.dir!);
-      const packages = new Map<string, { name: string; version: string; workspace: boolean }>();
+      const packages = new Map<string, { name: string; version: string; workspace: boolean; directory: string }>();
       const externals = new Set<string>();
       const files: Record<string, string> = {};
       const visited = new Set<string>();
@@ -28,7 +28,7 @@ export function releaseInventory(kind: string): Plugin | false {
           if (existsSync(manifest)) {
             const { name, version } = JSON.parse(readFileSync(manifest, "utf8"));
             if (name && version) {
-              packages.set(name + "@" + version, { name, version, workspace: !source.includes("/node_modules/") });
+              packages.set(directory, { name, version, workspace: !source.includes("/node_modules/"), directory });
               return;
             }
           }

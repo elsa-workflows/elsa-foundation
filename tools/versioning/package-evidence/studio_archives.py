@@ -133,6 +133,8 @@ def main():
                 value = properties["elsa:" + key]
                 if args.signed_retry and key == "producer-attempt":
                     check(0 < int(value) <= int(os.environ[env]), "Invalid signed producer attempt")
+                elif key == "producer-attempt":
+                    check(value == os.environ[env], "Unexpected producer-attempt for unsigned candidates. Use Re-run all jobs to rebuild both package sets in the same attempt before signing.")
                 else:
                     check(value == os.environ[env], "Unexpected producer " + key)
             sidecar(path.name + ".cdx.json", raw)

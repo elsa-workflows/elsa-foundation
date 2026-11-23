@@ -1,11 +1,13 @@
 import io
 import json
+import os
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-import sys
 from unittest.mock import patch
 
 from studio_archives import inspect, main as inspect_cli, nuget_payload, sha256
@@ -56,6 +58,29 @@ class StudioEvidence(unittest.TestCase):
                 inspect(npm(path, ORDER[0], body=b"changed"))
             with self.assertRaisesRegex(ValueError, "declarations differ"):
                 inspect(npm(path, ORDER[0], peer="^18"))
+
+    def test_snapshot_is_required_after_signing(self):
+        script = Path(__file__).with_name("studio_snapshot.sh")
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder)
+            gh = target / "gh"
+            gh.write_text('#!/bin/sh\ncase "$*" in *artifacts*) echo "$SNAPSHOTS";; *jobs*) echo "$PRIOR_SIGNING_JOB";; *) exit 1;; esac\n')
+            gh.chmod(0o755)
+            for snapshots, signed, expected in [
+                ([], "", ""), ([{"id": 123, "expired": False}], "37", "123"),
+                ([], "37", None), ([{"id": 123, "expired": True}], "37", None)
+            ]:
+                output = target / "output"
+                output.write_text("")
+                env = dict(os.environ, PATH=folder + os.pathsep + os.environ["PATH"], GITHUB_OUTPUT=str(output),
+                           GITHUB_RUN_ATTEMPT="2", GITHUB_REPOSITORY="owner/repo", GITHUB_RUN_ID="42",
+                           SNAPSHOTS=json.dumps({"total_count": len(snapshots), "artifacts": snapshots}), PRIOR_SIGNING_JOB=signed)
+                result = subprocess.run(["bash", str(script)], env=env, capture_output=True)
+                if expected is None:
+                    self.assertNotEqual(result.returncode, 0)
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(output.read_text().strip(), "id=" + expected)
 
     def test_signing_rejects_another_attempt(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict("os.environ", VERSION="4.0.0", GITHUB_REPOSITORY="owner/repo",

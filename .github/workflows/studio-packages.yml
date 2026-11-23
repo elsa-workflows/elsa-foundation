@@ -152,10 +152,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          reply=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=studio-signed-release")
-          id=$(jq -er 'if .total_count == 0 then "" elif .total_count == 1 and (.artifacts[0].expired | not) then .artifacts[0].id else error("Signed snapshot unavailable") end' <<< "$reply")
-          echo "id=$id" >> "$GITHUB_OUTPUT"
+          bash ../tools/versioning/package-evidence/studio_snapshot.sh
 
   build:
     name: Build packages
@@ -287,6 +284,9 @@ jobs:
           receipt-sha256: ${{ needs.attest.outputs.nuget_receipt }}
           version: ${{ needs.attest.outputs.version }}
 
+      - name: Verify any existing NuGet versions before the first push
+        run: python3 ../tools/versioning/package-evidence/studio_nuget_feed.py packages/nuget "$RUNNER_TEMP/existing-nuget" "$feedz_feed_source" --preflight
+
       - name: Publish to feedz.io
         env:
           FEEDZ_API_KEY: ${{ secrets.FEEDZ_API_KEY }}
@@ -310,6 +310,9 @@ jobs:
           kind: nuget
           receipt-sha256: ${{ needs.attest.outputs.nuget_receipt }}
           version: ${{ needs.attest.outputs.version }}
+
+      - name: Verify any existing NuGet versions before the first push
+        run: python3 ../tools/versioning/package-evidence/studio_nuget_feed.py packages/nuget "$RUNNER_TEMP/existing-nuget" "$nuget_feed_source" --preflight
 
       - name: Publish to nuget.org
         env:
@@ -500,11 +503,11 @@ jobs:
       contents: read
       id-token: write
       attestations: write
+      actions: read
     env:
       VERSION: ${{ needs.version.outputs.version }}
-      SNAPSHOT: ${{ needs.version.outputs.signed_snapshot }}
     outputs:
-      artifact_id: ${{ steps.save.outputs.artifact-id || needs.version.outputs.signed_snapshot }}
+      artifact_id: ${{ steps.save.outputs.artifact-id || steps.recover.outputs.id }}
       npm_receipt: ${{ steps.receipts.outputs.npm }}
       nuget_receipt: ${{ steps.receipts.outputs.nuget }}
       version: ${{ needs.version.outputs.version }}
@@ -513,27 +516,33 @@ jobs:
         working-directory: .
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Check again for a snapshot saved by an interrupted signing job
+        id: recover
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/versioning/package-evidence/studio_snapshot.sh
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        if: ${{ !env.SNAPSHOT }}
+        if: ${{ !steps.recover.outputs.id }}
         with:
           artifact-ids: ${{ needs.build_npm.outputs.artifact_id }}
           merge-multiple: true
           path: release/npm
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        if: ${{ !env.SNAPSHOT }}
+        if: ${{ !steps.recover.outputs.id }}
         with:
           artifact-ids: ${{ needs.build.outputs.artifact_id }}
           merge-multiple: true
           path: release/nuget
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        if: ${{ env.SNAPSHOT }}
+        if: ${{ steps.recover.outputs.id }}
         with:
-          artifact-ids: ${{ env.SNAPSHOT }}
+          artifact-ids: ${{ steps.recover.outputs.id }}
           merge-multiple: true
           path: release
       - name: Verify the original release set before signing or resuming
         id: receipts
         env:
+          SNAPSHOT: ${{ steps.recover.outputs.id }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -550,7 +559,7 @@ jobs:
             echo "$kind=$(sha256sum "$receipt" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           done
       - name: Sign archive, inventory, NuGet payload and receipt digests
-        if: ${{ !env.SNAPSHOT }}
+        if: ${{ !steps.recover.outputs.id }}
         id: sign
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
@@ -561,12 +570,12 @@ jobs:
             release/**/*.payload.json
             release/**/*-subjects.json
       - name: Retain the signature bundle with the immutable candidates
-        if: ${{ !env.SNAPSHOT }}
+        if: ${{ !steps.recover.outputs.id }}
         env:
           BUNDLE: ${{ steps.sign.outputs.bundle-path }}
         run: cp "$BUNDLE" release/producer.sigstore.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: ${{ !env.SNAPSHOT }}
+        if: ${{ !steps.recover.outputs.id }}
         id: save
         with:
           name: studio-signed-release
@@ -664,5 +673,5 @@ jobs:
           subject-path: Studio/packages/published/nuget-feed-receipt.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: elsa-foundation-studio-nuget-feed-receipt
+          name: elsa-foundation-studio-nuget-feed-receipt-attempt-${{ github.run_attempt }}
           path: Studio/packages/published/nuget-feed-receipt.json
