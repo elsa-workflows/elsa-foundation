@@ -2482,7 +2482,8 @@ internal static class ParkKeptChecks
         await CaptureParkedCompletion(timed: false, check, recover: true, pendingAtOpen: true, endBeforeResult: true);
         await CheckRestartedJob(timed: false, check);
         await CheckRestartedJob(timed: true, check);
-        await CheckRestartedJob(timed: true, check, sweepDuringOpen: true);
+        await CheckRestartedJob(timed: true, check, sweep: SweepAt.BeforeRead);
+        await CheckRestartedJob(timed: true, check, sweep: SweepAt.BeforeCommit);
         await CheckRestartedJob(timed: false, check, crossPark: true);
         await CheckInterruptedPendingRestart(check);
         await ParkJobGenerationChecks.Run(check);
@@ -2621,20 +2622,24 @@ internal static class ParkKeptChecks
         }
     }
 
-    private static async Task CheckRestartedJob(bool timed, Action<bool, string> check, bool sweepDuringOpen = false, bool crossPark = false)
+    private enum SweepAt { None, BeforeRead, BeforeCommit }
+
+    private static async Task CheckRestartedJob(bool timed, Action<bool, string> check, SweepAt sweep = SweepAt.None, bool crossPark = false)
     {
-        var now = 1_701_400_012_000L;
+        const long initial = 1_701_400_012_000L;
+        var now = initial;
         const string key = "background";
         const string recipe = "captured arguments and effect key";
         var store = new InMemoryStore(1, () => now)
         {
-            ParkedRetentionWindow = sweepDuringOpen ? TimeSpan.FromMilliseconds(100) : null
+            ParkedRetentionWindow = sweep != SweepAt.None ? TimeSpan.FromMilliseconds(100) : null
         };
-        var actor = new ParkedJobProbe("result", timed, arguments: recipe);
+        var actor = new ParkedJobProbe("result", timed, arguments: recipe) { IncludeTimer = sweep != SweepAt.None };
         var scope = new Contract.BoundScope("job-restart");
         InboxKey? ticketToSweep = null;
         InboxKey? attemptedRestart = null;
         var survivedOpenSweep = false;
+        var overdue = 0L;
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
         {
             if (!crossPark || landed) return;
@@ -2646,10 +2651,14 @@ internal static class ParkKeptChecks
             if (ticketToSweep is not { } selected || !batch.Turns.Any(turn => turn.FoundationRecoveryJobs is not null))
                 return;
             ticketToSweep = null;
+            now = overdue;
             await store.SweepAsync();
-            survivedOpenSweep = store.Messages.GetValueOrDefault(selected) is { Done: true, KeptBy: ParkKeepReason.Arrived };
+            survivedOpenSweep = store.Messages.GetValueOrDefault(selected) is { Done: true, KeptBy: ParkKeepReason.Arrived } &&
+                store.Messages.Values.Count(item => item is { Done: true, KeptBy: ParkKeepReason.Arrived,
+                    Message.Kind: ParkedJobProbe.TimerKind }) == 1;
         });
-        Worker MakeOwner(string node) => new(node, 0, wire, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
+        Worker MakeOwner(string node) => new(node, 0, wire, new ActorAdapter(store, actor),
+            new WorkerOptions { Horizon = TimeSpan.Zero, Monotonic = () => now - initial });
         var first = MakeOwner("before-restart");
         var edge = new InMemoryIngress(store, new Requests(first.Node), first.Node, (_, kind) => kind == Contract.Kinds.Recover);
         var started = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "ready", null)), "start", Contract.Kinds.Start);
@@ -2667,6 +2676,16 @@ internal static class ParkKeptChecks
         var successor = MakeOwner("restart-open");
         await using var next = (await new DurableHost([successor]).ActivateAsync(0))!;
         await Pump(next);
+        InMemoryStore.MessageRow? timer = null;
+        if (sweep != SweepAt.None)
+        {
+            timer = store.Messages.Values.Single(item => item.Message.Kind == ParkedJobProbe.TimerKind);
+            now = timer.Message.Due!.Value;
+            await Pump(next);
+            check(timer is { Done: true, KeptBy: ParkKeepReason.Arrived } && actor.TimerDeliveries == 0,
+                "the author timer fires while parked and is retained before reaching the model");
+            timer.Message = timer.Message with { KeepUntil = now - 1 };
+        }
         var old = store.Messages.GetValueOrDefault(oldKey);
         var parked = store.Instances[row.Id];
         var firstParkMark = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor?.Park;
@@ -2677,11 +2696,11 @@ internal static class ParkKeptChecks
 
         // Restart takes the model's recipe, even if the old ticket contains different arguments.
         old!.Message = old.Message with { Payload = Json.Write(old.Message.Read<JobTicket>() with { Arguments = "stale" }) };
-        if (sweepDuringOpen)
+        if (sweep != SweepAt.None)
         {
-            // Give the retained ticket a past ordinary sweep deadline while the Park window is still open.
+            overdue = store.FoundationExpiry(parked)!.At + 1;
             old.Message = old.Message with { KeepUntil = now - 1 };
-            ticketToSweep = oldKey;
+            if (sweep == SweepAt.BeforeCommit) ticketToSweep = oldKey;
         }
         var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
         var admitted = await edge.SendAsync(scope, target, "restart-operation", Contract.Kinds.Recover,
@@ -2689,6 +2708,14 @@ internal static class ParkKeptChecks
         await successor.PollAsync();
         await successor.LoadAsync();
         await successor.FlushAsync();
+        if (sweep == SweepAt.BeforeRead)
+        {
+            // The recover command has reached the owner. The expiry timer becomes due before its next poll.
+            now = overdue;
+            await store.SweepAsync();
+            survivedOpenSweep = store.Messages.GetValueOrDefault(oldKey) is { Done: true, KeptBy: ParkKeepReason.Arrived } &&
+                store.Messages.ContainsKey(timer!.Message.InboxKey);
+        }
         successor.RunTurn(row.Id);
         await successor.FlushAsync();
         var open = store.Instances[row.Id];
@@ -2699,14 +2726,14 @@ internal static class ParkKeptChecks
             store.Messages.GetValueOrDefault(currentKey) is { Done: false, Seen: 0, ReleasedBy: null } job &&
             job.Message.Read<JobTicket>().Arguments == recipe && actor.Entries == 1;
         check(restarted, "the fenced Open writes a new job generation from the captured recipe while the older ticket stays inert");
-        if (sweepDuringOpen)
+        if (sweep != SweepAt.None)
         {
             await store.SweepAsync();
-            check(survivedOpenSweep && restarted && store.FoundationExpiry(open)?.Armed is null &&
+            check(now == overdue && survivedOpenSweep && restarted && store.FoundationExpiry(open)?.Armed is null &&
                 store.Messages.GetValueOrDefault(currentKey) is { Done: false } &&
                 store.Messages.Values.Count(item => item is { Done: false, Message.Kind: Kinds.Job }) == 1 &&
                 store.Messages.Values.Count(item => item is { Done: false, Message.Kind: Kinds.JobDeadline }) == 1,
-                "M1-2 a sweep after planning and after Open preserves the kept ticket and its single timed replacement");
+                $"M1 {(sweep == SweepAt.BeforeRead ? 1 : 2)}: a sweep {sweep} past the Park deadline and after Open preserves one timed replacement");
         }
         if (!restarted) return;
         if (timed)
@@ -2716,6 +2743,19 @@ internal static class ParkKeptChecks
                 initialTicket.Deadline == replacement.Deadline && !store.Messages.ContainsKey(InboxKey.Issued(initialTicket.Timer)) &&
                 store.Messages.Values.Count(item => item is { Done: false, Message.Kind: Kinds.JobDeadline }) == 1,
                 "a timed restart atomically recalls the old deadline and preserves its time under the replacement's identity");
+        }
+
+        if (timer is not null)
+        {
+            await successor.PollAsync();
+            await successor.LoadAsync();
+            await successor.FlushAsync();
+            successor.RunTurn(row.Id);
+            await successor.FlushAsync();
+            await store.SweepAsync();
+            check(store.Messages.GetValueOrDefault(timer.Message.InboxKey) is
+                    { Done: false, KeptBy: null, ReleasedBy: not null } && actor.TimerDeliveries == 0,
+                "the restoring page releases the original timer and the next sweep preserves its delivery");
         }
 
         await next.DisposeAsync();
@@ -2729,6 +2769,10 @@ internal static class ParkKeptChecks
         var completed = store.Instances[row.Id] is { ParkRecovery: null, ParkRestartedJobs: null } &&
             old is { Done: true, KeptBy: null, ReleasedBy: null } && actor.Entries == 2 && actor.Arguments.SequenceEqual([recipe, recipe]);
         check(completed, "the next owner clears the obsolete kept ticket and enters the replacement once after Complete");
+        if (timer is not null)
+            check(actor.TimerDeliveries == 1 && store.Messages.Values.All(message =>
+                    message.Message.Kind != ParkedJobProbe.TimerKind || message.Done),
+                "the same author timer reaches the model exactly once after recovery and takeover");
         if (crossPark)
         {
             if (!completed) return;
@@ -3400,6 +3444,10 @@ internal static class ParkKeptChecks
     private sealed class ParkedJobProbe(string value, bool timed, string? arguments = null, string key = "background") : Contract.IActorType
     {
         public string Type => "parked-job-check";
+        internal const string TimerKind = "author-timer";
+        private Contract.TimerSpec? _timer;
+        public bool IncludeTimer { get; init; }
+        public int TimerDeliveries { get; private set; }
         public TaskCompletionSource Complete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int Entries { get; private set; }
         public int Completions { get; private set; }
@@ -3424,9 +3472,16 @@ internal static class ParkKeptChecks
                             turn.Send(turn.Header.Ref, "end-before-job", new string('x', ParkRecoveryCredit.LimitBytes), turn.Now + 300);
                         for (var index = 0; index < BeforeDeadline; index++)
                             turn.Send(turn.Header.Ref, "before-job-deadline", null, turn.Now + 400);
+                        if (IncludeTimer)
+                        {
+                            var due = turn.Now + 50;
+                            var id = turn.Send(turn.Header.Ref, TimerKind, null, due);
+                            _timer = new(id, TimerKind, null, due);
+                        }
                         _deadline = timed ? turn.Now + 1000 : null;
                         turn.StartJob(key, arguments, timeout: timed ? TimeSpan.FromSeconds(1) : null);
                         break;
+                    case TimerKind: TimerDeliveries++; break;
                     case "fault": throw new InvalidOperationException("park with a running job");
                     case "end-before-job":
                         turn.End(Contract.ActorStatus.Finished);
@@ -3459,7 +3514,7 @@ internal static class ParkKeptChecks
             return value;
         }
 
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [new(key, arguments) { Deadline = _deadline }], []);
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new(_timer is { } timer ? [timer] : [], [new(key, arguments) { Deadline = _deadline }], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }

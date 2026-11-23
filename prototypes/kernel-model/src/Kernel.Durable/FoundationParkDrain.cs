@@ -107,7 +107,10 @@ public sealed partial class InMemoryStore
             return null;
         }
         if (openingRecovery)
-            return ValidateRecoveryOpen(turn, previous, epochs, now);
+        {
+            ValidateRecoveryOpen(turn, previous, epochs, now);
+            return null;
+        }
         if (next?.ParkRecovery?.Deletion is { } deletion && previous?.ParkRecovery?.Deletion != deletion)
         {
             ValidateRecoveryDeleteTakeover(turn, previous, next, deletion, epochs, now);
