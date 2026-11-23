@@ -53,6 +53,163 @@ for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conform
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
+## Inspect and retry parked work
+
+From `prototypes/kernel-model`, run:
+
+```bash
+dotnet restore sim --locked-mode
+dotnet run -c Release --no-restore --project sim -- --park-operator-demo
+```
+
+An approval actor parks when its service is unavailable. The operator lists parked actors through
+`IActorReads`, opens the actor's inbox, and sees a consumed approval and an update that arrived
+during Park on separate pages. A retry command uses the consumed approval's opaque handle.
+After the service is available, the actor resumes and the journal confirms that each input
+applied once. A second Park is discarded. The example shows the inbox rows that remain in
+each open resolution. The fixture uses the in-memory Actor Foundation. Provider projections,
+Studio integration and the remaining operator operations have their own milestone acceptance.
+
+## Migration plan outcomes from the journal
+
+From `prototypes/kernel-model`, run:
+
+```sh
+dotnet run -c Release --project sim -- --migration-plan-reads
+```
+
+This K9 example projects one plan's committed journal through `IActorReads`, using its opaque page token.
+It counts each selected exact actor reference once. An answer of `NotAtSource` can be replaced by a decisive result.
+The first decisive result survives replay. An unanswered actor is pending before close and has no answer after close.
+Close fixes the selected set. A late reply for a selected actor still updates the closed plan. A closed empty plan
+has no missing answers. A cancelled page leaves its bookmark in place for a retry. A fresh projector recovers
+the same results from the journal. A plan runner tracks selection completion separately from answers to the
+selections the projector has already seen. The view’s `AsOf` is a lower bound on confirmed catch-up. An empty
+journal read at the current bookmark advances it to the database time of that read. While applying nonempty
+pages the view keeps its previous catch-up time, initially zero.
+
+The example stores its view and bookmark in memory and uses a fixture to write the plan journal from real actor turns.
+The persisted view and its paging are separate K9 work. K11 supplies the migration plan actor, exact-ref dispatch
+and operator controls.
+
+### Persisted plan outcomes in SQLite
+
+From `prototypes/kernel-model`, build the runner and give it a new SQLite file:
+
+```sh
+dotnet restore models/Native.Run --locked-mode
+dotnet build -c Release models/Native.Run --no-restore
+dll=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+scratch=$(mktemp -d)
+dotnet "$dll" sqlite-plan-projection build "$scratch/plan.db"
+dotnet "$dll" sqlite-plan-projection inspect "$scratch/plan.db" <plan-ref> <digest>
+```
+
+Use the plan reference and SHA-256 digest printed by `build`. The inspector checks the exact actor/outcome pairs, closed flag, catch-up time and source bookmark against that receipt. A fixture actor records batches and the exact senders' outcomes in
+the public journal. A SQLite transaction persists each page and its source bookmark together. A failed insert
+rolls back both. Cancelling after either an empty or a populated source read preserves the page for retry. Two projectors can read the same source page, with one committing it. A new projector resumes
+at the stored bookmark. The stored `AsOf` is a lower bound on confirmed catch-up. A partial page keeps the
+previous time. An empty tail advances it only if the stored bookmark still matches, including the first empty
+read. The independent `inspect` process reads three stable pages with one migrated, one refused
+and one unanswered actor from the closed plan. A separately tenant-bound reader checks the populated neighboring scope.
+
+This verifies the physical SQLite view and local keyset reads. The journal producer in the fixture uses the
+in-memory Actor Foundation. Operator API tokens, other view providers and K11 migration orchestration remain open.
+
+### Dispatch a committed migration batch
+
+From `prototypes/kernel-model`:
+
+```sh
+dotnet run -c Release --project sim -- --migration-plan-dispatch
+```
+
+This K11 dispatch example reads a committed batch and sends `Migrate` outside actor turns to its exact actor refs.
+A lost admission reply leaves the batch pending. Within the FC-16 receipt window, the restarted runner sends the
+same operation IDs and receives deduplication receipts. A deleted selection stays unanswered even when the caller key
+has been reused. The journal shows one result per responding life in this run. Authorization and input-size refusals
+leave the batch pending. An acknowledgment retry inside the same window receives a duplicate receipt.
+
+The fixture uses the real in-memory operator route for `Migrate`. Its selection and acknowledgment messages
+are trusted fixture control inputs. The product adapter must authorize those controls. The product plan actor,
+operator scheduling and target-side [long-gap replay handling](../../docs/architecture/migrating-running-instances.md#plans-and-bulk-migration)
+remain separate K11 work.
+
+### Validate a waiting Native checkpoint
+
+```sh
+dotnet run -c Release --project sim -- --native-migration-validation
+```
+
+This K11 check loads real Balanced and Durable checkpoints through the in-memory Actor Foundation.
+It tries a new Sequence tail, a change to the untaken If branch and a reordered Parallel. The check
+also covers loop bodies and nodes referenced only by a stored result, scheduled child or pending trigger.
+The validator is read-only and handles structured Native checkpoints with unchanged declarations.
+Callers must verify actor status, source definition and version readability before using it.
+This validation covers the same checkpoints used by the command demonstration below. Adding defaults,
+outstanding jobs, Flowchart and StateMachine compatibility are separate work.
+
+### Apply a compatible Native migration
+
+```sh
+dotnet run -c Release --project sim -- --native-migration-apply
+```
+
+The public in-memory command suspends a waiting Native workflow, rebinds a compatible Sequence and
+delivers its result to a plan witness. The workflow resumes on the same event wait and executes the
+target tail. Balanced and Durable runs lose the answer before and after the migration commit. A cold
+owner completes the schedule with one result and one successful lifecycle entry under Full, State
+and Minimal history. An older model holds commands on unreadable running and finished checkpoints.
+A newer owner processes those commands when fresh input releases the hold. A request with a usable
+plan address and a missing definition receives one durable refusal across repeated inputs. The plan witness
+exercises real actor delivery. Declaration mapping and graph and statechart migration remain separate work.
+
+### Dispatch a real migration plan
+
+```sh
+dotnet run -c Release --project sim -- --migration-plan-actor
+```
+
+The in-memory demo pages two Native workflows from the public instance read model. The plan model
+records one undispatched page in its Full journal. An independent runner reads the committed page
+and dispatches migrations to the exact actor references. A fresh runner reconstructs the same
+batch after ownership changes. An authenticated acknowledgment clears the batch. The operator host
+provides a shared control key to plan owners and runners. Before releasing a batch, the runner
+checks that the exact plan is running, unparked and within its deadline. Its completion check waits
+for the final selection, its dispatch acknowledgment when needed, and an outcome for every selected life.
+The foundation's actual creator settings must permit durable Full history. The outcome projection reports both
+migrations, and the workflows finish under the target definition. A second plan closes on its
+scheduled deadline and records an outcome that arrives after close. RetryAll re-arms a failed deadline.
+Terminating a Park closes the outcome view and leaves outstanding selections as unanswered.
+Operator API integration,
+automatic selection scheduling and provider qualification remain separate work.
+
+### Run migration selection and completion
+
+```sh
+dotnet run -c Release --project sim -- --migration-plan-runner
+```
+
+The in-memory operator service selects through the public actor list, dispatches the committed
+batch, and requests completion once the result projection has reached the final selection
+and every selected life has answered. Each automatic plan binds one execution model.
+A provider page can span several 128-actor batches. The runner keeps the read cursor until
+it has recorded a selection for every eligible life on the page. Step results report admission.
+Close reports whether it admitted a command. A caller can retry after the creator turn becomes visible.
+The plan actor records the resulting transition in its own commit. The host grants tenant operator permission
+and invokes the runner as work becomes available.
+
+The example restarts after a lost selection admission answer, completes a plan over two actual
+Native workflows and closes an empty plan. A 129-actor page completes in two batches even
+when all selected actors refuse migration and remain at the source. Another plan keeps an unanswered deleted life
+pending until an operator closes it. Public HTTP and Studio endpoints, scheduling by the
+provider host and persisted outcome projection integration remain separate work.
+Earlier draft plans without a model binding still support their explicit batches. The automatic
+runner requires a binding when it creates a plan. The host enables those starts after every
+eligible owner can record the model binding on its first turn. An older owner with an existing
+version 2 checkpoint withholds it until a compatible owner takes over. A version 2 owner can
+terminate a version 1 pending plan within its original terminal state reserve.
+
 ## PostgreSQL Core Preview
 
 Set `KERNEL_PREVIEW_POSTGRES` to the connection string of an empty PostgreSQL 17 database dedicated to the preview.
@@ -193,6 +350,26 @@ checks the same node and epoch still have a live renewed lease. After PostgreSQL
 acquires a later epoch after the stored deadline, resumes the journal bookmark, replays Ada's input and records
 Grace's approval. This exercises one fixed partition. K5 covers Cluster placement and balancing across partitions.
 
+For a Durable Flowchart handover, set `KERNEL_PREVIEW_POSTGRES` to a fresh database. Both runtime nodes and the public reader use the scoped continuation format (schema 3, message protocol 3, journal codec 1). Run:
+
+```sh
+dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-flowchart 1024
+```
+
+The two RuntimeNodes establish an equal split. A public purchase Flowchart starts on the peer. A fixture callback
+pauses that process after its creator's commit, and the parent checks that the checkpoint and pending continuation
+share a PostgreSQL transaction ID. The parent locks that partition row, rechecks the peer epoch and pending input,
+and holds the lock until its child process has exited. The surviving RuntimeNode then takes
+the partition at a higher epoch, applies that exact continuation once, and runs both approval branches to one join.
+A changed-body approval replay preserves the original result. Two actor revisions are silent. The partition journal
+keeps consecutive positions. The check also runs with eight virtual partitions.
+
+For the grouped storage operations alone, run `pg-root-self-set owned <checked|in-batch>` with the same
+runner on a fresh database. This uses two homes with different epochs. Two checkpoints and their private
+continuations commit together. A stale sibling's fence rolls back a mixed consume, and the current set advances
+only the home that writes a journal entry. With `ef` the fixture checks that the store declines grouped
+ownership before changing any lease or inbox row.
+
 ### Flowchart restart on the public PostgreSQL preview
 
 Set `KERNEL_PREVIEW_POSTGRES` to a fresh PostgreSQL database and run from `prototypes/kernel-model`:
@@ -222,13 +399,83 @@ parallel. The risk review finishes, and a second Embedded host process takes the
 the risk operation with a finance payload leaves the checkpoint and journal unchanged. Finance then completes the
 last live branch. The journal shows one join, and the terminal checkpoint contains both decisions.
 
-Run with `automatic` on a separate fresh database to select the bypass path. Finance still has to finish. The distinct
-inactive risk branch cannot hold the join open. This is the Balanced and direct-input PostgreSQL preview. The scoped
-PostgreSQL owner still needs support for internally scheduled Native continuation messages before it can qualify
-Durable Flowchart execution.
+Run with `automatic` on a separate fresh database to select the bypass path. Finance still has to finish. The inactive risk branch cannot hold the join open.
+
+For Durable persistence, run `models/Native.Run/run-flowchart-preview.sh manual durable` (or `automatic durable`).
+The first Embedded process exits with an immediate self-send in the inbox. The fixture checks that this envelope
+and the initial checkpoint share a PostgreSQL transaction ID. The next process picks up the continuation and runs
+to the finance wait. A third process resumes the same workflow using its saved journal cursor. The manual route
+replays the risk approval with a changed body and checks the saved result. Both routes require one join, no remaining
+self inputs, and an unchanged journal on final replay. `KERNEL_PREVIEW_FENCE=checked` or `in-batch` selects the
+fence mode. This scoped path supports immediate sends back to the exact generated actor creation. Scheduled sends,
+cross-actor sends and other authored effects remain outside this preview.
+
+The Durable command creates a dedicated PostgreSQL database format (schema 3, message protocol 3,
+journal codec 1). Fresh creation seeds that marker with the schema. Existing continuation databases
+use the [coordinated job-generation upgrade](#relational-job-generation-format) and retain their private inputs.
+Opening an ordinary database checks its existing marker before installing continuation tables or enabling sends.
+An ordinary protocol-2 database still requires a separate migration to adopt protocol 3. An earlier reader
+refuses ownership after the schema advance.
+
+The public preview writes ordinary text directly. A payload containing NUL or an isolated UTF-16 unit uses a binary
+field in the same message row. It occupies the original UTF-8 byte budget, with three bytes per isolated unit.
+The adapter maps these inbox rows to a dedicated storage scope. The Worker sees its original issued key, and ordinary issued messages can use the same ID and application kind independently. To run the stored input, size and writer
+checks on a fresh PostgreSQL database, use `pg-root-self owned checked` with the Native runner. The other choices
+are `ef` for the writer and `in-batch` for the fence.
 
 On a fresh database, `dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-flowchart-preview merge-early`
 replaces the join with a merge. The waiting assertion detects the premature finish.
+
+### PostgreSQL Delay preview
+
+On a fresh dedicated PostgreSQL database set `KERNEL_PREVIEW_POSTGRES` and run:
+
+```sh
+models/Native.Run/run-delay-preview.sh owned checked
+```
+
+The Delay profile seeds schema 3, message protocol 4 and journal codec 1. An existing schema-2 Delay store
+retains its deadlines through the [coordinated job-generation upgrade](#relational-job-generation-format).
+The immediate-continuation Flowchart stays on protocol 3 and the ordinary preview uses protocol 2.
+Pass `durable` as a third script argument to run the same Delay in Durable mode. The default is Balanced.
+
+The first Embedded process starts a public Native sequence with an eight-second Delay. It checks that the saved wait
+and its issued timer share a PostgreSQL transaction and that the deadline equals the issuing turn time plus eight
+seconds. A second process reads the original handle and absolute deadline
+at a higher ownership epoch. A future-horizon poll sees the timer early. A ready poll excludes it, and an ordinary
+application input of the same kind leaves the frame waiting. At the deadline the worker resumes the frame once.
+A process restarted after the deadline observes the timer ready immediately and completes the same frame.
+The receipt prints the deadline, the worker's application time, the database's terminal checkpoint time and
+whether the early-input check ran. The
+fixture checks the public journal after another worker pass. Use `ef` for the EF writer or `in-batch` for the batch
+fence. This preview exercises a single generated root, one partition and a clean process restart.
+
+Run `models/Native.Run/run-delay-preview.sh owned checked recall` on another fresh database to let a public approval
+win a Native Parallel join before the sibling Delay fires. Its checkpoint recalls the persisted timer. A cold process
+keeps the same actor, delivers an independently admitted notice at the original deadline and finishes on a second
+approval. The journal records the cancelled frame once. This Embedded preview supports recall of already persisted
+self inputs on a generated root. Same-turn retraction, whole-workflow operator termination, Park and Cluster timer
+recovery fall outside this case.
+
+### PostgreSQL Suspend and Resume preview
+
+On a fresh dedicated PostgreSQL database, set `KERNEL_PREVIEW_POSTGRES` and run `models/Native.Run/run-root-operator-preview.sh [owned|ef] [checked|in-batch]`.
+
+The first process starts Native workflows and admits one-way Suspend and Resume through an explicitly authorized
+host. Receipts are scoped to the tenant and operation, including concurrent retries with changed targets. A second
+process applies Suspend with the current ownership fence. A stale owner leaves the exact command pending. On a
+running root the worker clears earlier ready ordinary input before the command. A suspended root withholds ordinary
+input and offers its first due command, allowing Resume to pass the waiting approvals. Independent roots can advance.
+Due controls use the database clock, and the poll applies these rules before the page limit.
+
+A third process loads the suspended Native header at a higher epoch and admits another approval while suspended.
+Resume settles its occurrence and reopens delivery in the same PostgreSQL transaction. The pending approvals then
+finish the original Native frame in order, once each. A command queued behind an input that finishes the root settles
+without changing the terminal checkpoint. The preview host grants no operator permissions by default.
+
+This opt-in profile retains message protocol 5 and can apply commands admitted by the previous build. Restart all
+owners on the new build to enable dispatch. A protocol-5 admission-only owner still withholds ordinary delivery on
+a suspended Native root, but cannot apply its pending commands. Earlier profiles refuse a protocol-5 store at startup.
 
 ## Built-in Cluster redistribution on PostgreSQL
 
@@ -524,3 +771,33 @@ counted and sent round trips do not.
 
 All monotonic clocks tick at the database's rate; wall clocks are skewed and jump. Bounded drift of the monotonic
 clock is not modelled. The simulation and the stress tests use their own short leases; the kernel's default is 10 s.
+
+
+### PostgreSQL continuation payloads on older prototypes
+
+A physical event slot can share a number with a private continuation. The event match keeps their identities
+distinct. On a reopened continuation or timer database, enabling the writer verifies the active private-body
+trigger. Replacing a predecessor trigger is refused if it left a split matched payload. Generic delivery refuses
+the affected row even when the current trigger is active. Restore the exact envelope from its authoritative
+event source before resuming delivery.
+
+### Relational job-generation format
+
+During the coordinated stop, call `EfStore.UpgradeJobGenerationFormatAsync` before reopening a schema-2
+database. The ordinary relational format advances from (2, 1, 1) to (3, 2, 1). The PostgreSQL immediate-continuation
+format advances from (2, 3, 1) to (3, 3, 1). The PostgreSQL Delay format advances from (2, 4, 1) to (3, 4, 1).
+Both keep their existing private inputs and refresh the private inbox view in the schema transaction.
+The three numbers identify schema, message protocol and journal codec.
+Checkpoints that predate the creation's next-job counter read as null. Existing messages read as generation zero.
+MySQL prepares the two additive columns on a separate connection while the migration holds the version marker.
+An interrupted preparation can be retried. Reopening requires a reader for the resulting three-part format.
+
+To check a real PostgreSQL predecessor, build its Native runner and this checkout's Native and EF conformance
+runners in Release. Run `bash ef/Kernel.Ef.Conformance/check-generation-profiles.sh /absolute/path/to/old/Kernel.Native.Run.dll`
+from this prototype. The script uses a disposable PostgreSQL 17 container and three fresh databases. It starts each
+workflow with the old executable and completes the same wait or pending private input after the schema upgrade.
+
+Run `job-generation-format` with the EF conformance executable to exercise the
+migration and cold field reads. The legacy writer still refuses qualified Foundation
+job turns. K4's Worker, Park, current-generation result and job-entry cases require
+the qualified relational writer.

@@ -2,7 +2,7 @@ import type { PlaybackOccurrence, PlaybackPage, PlaybackWindow } from "../api/ac
 
 export const playbackCadences = { "0.5": 2000, "1": 1000, "2": 500, "4": 250 } as const;
 export type PlaybackSpeed = keyof typeof playbackCadences;
-export interface PlaybackTarget { position?: string; activityExecutionId?: string; historyEventId?: string; inspectActivity?: boolean; includeSelfScope?: boolean; preserveInspector?: boolean; preserveSelection?: boolean; rememberChoice?: boolean }
+export interface PlaybackTarget { position?: string; activityExecutionId?: string; historyEventId?: string; inspectActivity?: boolean; includeSelfScope?: boolean; preserveInspector?: boolean; preserveSelection?: boolean; rememberChoice?: boolean; skipCanvasFocus?: boolean }
 export interface PlaybackOperation { signal: AbortSignal; isCurrent(): boolean }
 export interface PreparedPlaybackSelection { commit(): void; limitation?: string }
 export interface ActivityPlaybackState {

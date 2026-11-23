@@ -19,7 +19,7 @@
   padding: 0 12px;
 }
 
-.studio-button:hover {
+.studio-button:hover:not(:disabled) {
   border-color: var(--studio-accent);
   color: var(--studio-accent);
 }
@@ -106,4 +106,13 @@ html[data-theme-material] .studio-button[data-variant="primary"] {
   color: var(--studio-material-send-text, var(--studio-accent-text));
   border-color: color-mix(in srgb, var(--studio-accent) 60%, var(--studio-material-edge));
   box-shadow: var(--studio-material-inset-low);
+}
+
+html:root .studio-button:is([data-variant="primary"], [data-variant="danger"], .studio-button-primary):is(:disabled, [aria-disabled="true"]) {
+  background: var(--studio-surface-muted);
+  border-color: var(--studio-border);
+  color: var(--studio-text-muted);
+  opacity: 1;
+  filter: none;
+  box-shadow: none;
 }

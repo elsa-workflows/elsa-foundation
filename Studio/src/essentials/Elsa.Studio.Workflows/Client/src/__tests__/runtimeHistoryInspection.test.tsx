@@ -3,7 +3,7 @@ import { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { authSessionEndedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { ActivityBookmarkHistory, HistoryInspection } from "../workflow-editor/run-history/HistoryInspection";
+import { ActivityBookmarkHistory, ActivityHistoryJournal, HistoryInspection } from "../workflow-editor/run-history/HistoryInspection";
 import { HistoryCoverage, HistoryEventList, historyDate, historyAuthorityLabel, historyEventLabel, isKnownHistoryEvent } from "../workflow-editor/run-history/historyPresentation";
 import { RunHistoryTimeline } from "../workflow-editor/run-history/RunHistoryTimeline";
 import { defaultHistoryFilters } from "../workflow-editor/run-history/historyLocation";
@@ -146,7 +146,7 @@ it("explains final eligibility rejection without losing unknown time, raw reason
   await vi.waitFor(() => expect(container.querySelector("h3")?.textContent).toBe("Resume skipped"));
   expect(container.textContent).toContain("after the first eligibility check"); expect(container.textContent).toContain("This attempt did not start a callback");
   expect(container.textContent).toContain("OccurredNot recorded");
-  const recorded = [...container.querySelectorAll("details")].find(item => item.querySelector("summary")?.textContent === "Recorded metadata")!;
+  const recorded = [...container.querySelectorAll("details")].find(item => item.querySelector("summary")?.textContent?.startsWith("Recorded metadata"))!;
   expect(recorded.open).toBe(false); expect(recorded.textContent).toContain(code);
   expect(recorded.querySelector('[aria-label="Copy reason code"]')).toBeTruthy();
   click("Inspect bookmark"); expect(select).toHaveBeenLastCalledWith({ kind: "bookmark", id: "bookmark-1" });
@@ -288,25 +288,30 @@ it("submits search explicitly, clears query filters and keeps live/follow toggle
   }
   render(<ControlledTimeline />);
   await vi.waitFor(() => expect(api.getWorkflowHistoryPage).toHaveBeenCalledTimes(1));
-  const input = container.querySelector<HTMLInputElement>('[role="searchbox"][aria-label="Search recorded events"]')!;
+  const filterButton = container.querySelector<HTMLButtonElement>('button[aria-label="Filter events"]')!;
+  vi.spyOn(filterButton, "getBoundingClientRect").mockReturnValue(new DOMRect(16, 16, 28, 28));
+  flushSync(() => filterButton.click());
+  const filterDialog = document.body.querySelector<HTMLElement>('[role="dialog"][aria-label="Filter events"]')!;
+  expect(filterDialog).toBeTruthy();
+  const input = filterDialog.querySelector<HTMLInputElement>('[role="searchbox"][aria-label="Search recorded events"]')!;
   flushSync(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "  bookmark-42  ");
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   expect(changed).not.toHaveBeenCalled(); expect(api.getWorkflowHistoryPage).toHaveBeenCalledTimes(1);
-  click("Search");
+  flushSync(() => [...filterDialog.querySelectorAll("button")].find(button => button.textContent === "Search")!.click());
   await vi.waitFor(() => expect(changed).toHaveBeenLastCalledWith({ ...defaultHistoryFilters, search: "bookmark-42" }));
   await vi.waitFor(() => expect(api.getWorkflowHistoryPage.mock.calls.at(-1)?.[2].search).toBe("bookmark-42"));
-  click("Clear filters");
+  flushSync(() => [...filterDialog.querySelectorAll("button")].find(button => button.textContent === "Clear filters")!.click());
   await vi.waitFor(() => expect(changed).toHaveBeenLastCalledWith(defaultHistoryFilters));
-  const category = container.querySelector<HTMLSelectElement>('[aria-label="History category"]')!;
+  const category = filterDialog.querySelector<HTMLSelectElement>('[aria-label="History category"]')!;
   flushSync(() => { category.value = "BookmarkLifecycle"; category.dispatchEvent(new Event("change", { bubbles: true })); });
   await vi.waitFor(() => expect(api.getWorkflowHistoryPage.mock.calls.at(-1)?.[2].category).toBe("BookmarkLifecycle"));
   const changesBeforeToggles = changed.mock.calls.length;
-  click("Pause live updates");
-  expect([...container.querySelectorAll("button")].find(button => button.textContent === "Resume live updates")?.getAttribute("aria-pressed")).toBe("false");
-  click("Follow latest");
-  expect([...container.querySelectorAll("button")].find(button => button.textContent === "Following latest")?.getAttribute("aria-pressed")).toBe("true");
+  flushSync(() => container.querySelector<HTMLButtonElement>('button[aria-label="Pause live updates"]')!.click());
+  expect(container.querySelector<HTMLButtonElement>('button[aria-label="Resume live updates"]')?.getAttribute("aria-pressed")).toBe("false");
+  flushSync(() => container.querySelector<HTMLButtonElement>('button[aria-label="Follow latest"]')!.click());
+  expect(container.querySelector<HTMLButtonElement>('button[aria-label="Following latest"]')?.getAttribute("aria-pressed")).toBe("true");
   expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
   expect(changed).toHaveBeenCalledTimes(changesBeforeToggles);
   expect(valueApi.getActivityExecutionInspection).not.toHaveBeenCalled(); expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
@@ -483,7 +488,7 @@ it("shows one pending batch without enabling continuous Follow latest or moving 
     click("1 new recorded events · Show");
     await vi.advanceTimersByTimeAsync(20);
     await vi.waitFor(() => expect(container.querySelector("[data-history-event-id='event-4']")).toBeTruthy());
-    expect([...container.querySelectorAll("button")].find(item => item.textContent === "Follow latest")?.getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Follow latest"]')?.getAttribute("aria-pressed")).toBe("false");
     await vi.waitFor(() => expect(api.getWorkflowHistoryPage).toHaveBeenCalledTimes(3));
     scrollIntoView.mockClear();
     await vi.advanceTimersByTimeAsync(2000);
@@ -516,4 +521,139 @@ it("focuses the loaded exact bookmark when the original navigation intent is unc
   complete({ coverage: historyCoverage, bookmark: historyBookmark(), readAt: "now" });
   await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector("h3")));
   expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", inline: "nearest" });
+});
+
+it("keeps healthy timeline chrome minimal with toolbar popovers, active filter chips and Show all reveal", async () => {
+  const scheduled = historyEvent(2, { name: "ActivityScheduled", historyEventId: "scheduled-2" });
+  api.getWorkflowHistoryPage.mockResolvedValue(historyPage([historyEvent(1), scheduled]));
+  const changed = vi.fn();
+  function Controlled() {
+    const [filters, setFilters] = useState(defaultHistoryFilters);
+    return <RunHistoryTimeline context={context} workflowExecutionId="run" filters={filters}
+      selectedEventId="scheduled-2" selectedEvent={scheduled}
+      overviewContent={<div>Overview body</div>}
+      onFiltersChange={next => { changed(next); setFilters(next); }} onSelectEvent={vi.fn()} />;
+  }
+  render(<Controlled />);
+  await vi.waitFor(() => expect(container.querySelector("[data-history-event-id='event-1']")).toBeTruthy());
+
+  // Healthy coverage is tucked into the footer popover rather than an inline banner.
+  expect(container.querySelector(".wf-history-coverage")).toBeNull();
+  const coverageBtn = container.querySelector<HTMLButtonElement>('button[aria-label="Recording coverage"]')!;
+  expect(coverageBtn).toBeTruthy();
+  vi.spyOn(coverageBtn, "getBoundingClientRect").mockReturnValue(new DOMRect(16, 16, 24, 24));
+  flushSync(() => coverageBtn.click());
+  expect(document.body.querySelector('[role="dialog"][aria-label="Recording coverage"]')?.textContent).toContain("History available from run start");
+  flushSync(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(document.body.querySelector('[role="dialog"][aria-label="Recording coverage"]')).toBeNull();
+
+  // Overview opens in a toolbar popover.
+  const overviewBtn = container.querySelector<HTMLButtonElement>('button[aria-label="Run overview"]')!;
+  vi.spyOn(overviewBtn, "getBoundingClientRect").mockReturnValue(new DOMRect(16, 16, 28, 28));
+  flushSync(() => overviewBtn.click());
+  expect(document.body.querySelector('[role="dialog"][aria-label="Run overview"]')?.textContent).toContain("Overview body");
+  flushSync(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+
+  // Hidden selected observation offers a one-click Show all reveal and adds a dismissable filter chip.
+  expect(container.querySelector(".wf-playback-selected-observation")?.textContent).toContain("Hidden by filter");
+  click("Show all");
+  await vi.waitFor(() => expect(changed).toHaveBeenLastCalledWith({ ...defaultHistoryFilters, detail: "all" }));
+  expect(container.querySelector(".wf-history-active-filters")?.textContent).toContain("All events");
+  click("All events");
+  await vi.waitFor(() => expect(changed).toHaveBeenLastCalledWith(defaultHistoryFilters));
+});
+
+it("defaults the Events timeline to Lifecycle milestones and switches cleanly across Lifecycle, Highlights, and All", async () => {
+  const started = historyEvent(1, { historyEventId: "evt-start", name: "ActivityStarted" });
+  const continuation = historyEvent(2, { historyEventId: "evt-cont", name: "ActivityContinuationCompleted" });
+  const scheduled = historyEvent(3, { historyEventId: "evt-sched", name: "ActivityScheduled" });
+  const completed = historyEvent(4, { historyEventId: "evt-done", name: "ActivityCompleted" });
+  api.getWorkflowHistoryPage.mockResolvedValue(historyPage([started, continuation, scheduled, completed]));
+
+  function Controlled() {
+    const [filters, setFilters] = useState(defaultHistoryFilters);
+    return <RunHistoryTimeline context={context} workflowExecutionId="run" filters={filters}
+      onFiltersChange={setFilters} onSelectEvent={vi.fn()} />;
+  }
+
+  render(<Controlled />);
+  await vi.waitFor(() => expect(container.querySelectorAll(".wf-history-event")).toHaveLength(2));
+  expect(container.querySelector("[data-history-event-id='evt-start']")).toBeTruthy();
+  expect(container.querySelector("[data-history-event-id='evt-done']")).toBeTruthy();
+  expect(container.querySelector("[data-history-event-id='evt-cont']")).toBeNull();
+  expect(container.querySelector("[data-history-event-id='evt-sched']")).toBeNull();
+
+  const detailBar = container.querySelector<HTMLElement>("[aria-label='Event detail level']")!;
+  const detailBtn = (label: string) => [...detailBar.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent?.trim() === label)!;
+
+  flushSync(() => detailBtn("Highlights").click());
+  expect(container.querySelectorAll(".wf-history-event")).toHaveLength(3);
+  expect(container.querySelector("[data-history-event-id='evt-cont']")).toBeTruthy();
+  expect(container.querySelector("[data-history-event-id='evt-sched']")).toBeNull();
+
+  flushSync(() => detailBtn("All").click());
+  expect(container.querySelectorAll(".wf-history-event")).toHaveLength(4);
+  expect(container.querySelector("[data-history-event-id='evt-sched']")).toBeTruthy();
+
+  flushSync(() => detailBtn("Lifecycle").click());
+  expect(container.querySelectorAll(".wf-history-event")).toHaveLength(2);
+});
+
+it("keeps degraded recording coverage visible inline in the timeline", async () => {
+  api.getWorkflowHistoryPage.mockResolvedValue(historyPage([historyEvent(1)], {
+    coverage: { ...historyCoverage, state: "partial", hasGaps: true, purgedThroughSequence: 3 }
+  }));
+  render(<RunHistoryTimeline context={context} workflowExecutionId="run" filters={defaultHistoryFilters} onFiltersChange={vi.fn()} onSelectEvent={vi.fn()} />);
+  await vi.waitFor(() => expect(container.querySelector(".wf-history-coverage")).toBeTruthy());
+  expect(container.querySelector(".wf-history-coverage")?.getAttribute("data-state")).toBe("partial");
+});
+
+it("expands journal event details inline, switches between rows, handles Escape, and keeps same-journal causal links inline", async () => {
+  const first = historyEvent(1, { historyEventId: "evt-start", name: "ActivityStarted", activityExecutionId: "activity-1" });
+  const second = historyEvent(2, {
+    historyEventId: "evt-complete",
+    name: "ActivityCompleted",
+    activityExecutionId: "activity-1",
+    bookmarkId: "bookmark-1",
+    causation: { historyEventId: "evt-start" }
+  });
+  api.getWorkflowHistoryPage.mockResolvedValue(historyPage([first, second]));
+  api.getWorkflowHistoryEvent.mockImplementation(async (_ctx, _run, id) => ({
+    coverage: historyCoverage,
+    event: id === "evt-complete" ? second : first,
+    readAt: "2026-11-05T09:00:05Z"
+  }));
+  const onSelectHistory = vi.fn();
+  render(<ActivityHistoryJournal context={context} workflowExecutionId="run" activityExecutionId="activity-1" onSelectHistory={onSelectHistory} onActivity={vi.fn()} onOpenTimeline={vi.fn()} />);
+  await vi.waitFor(() => expect(container.querySelectorAll(".wf-history-event")).toHaveLength(2));
+
+  const [firstRow, secondRow] = [...container.querySelectorAll<HTMLButtonElement>(".wf-history-event")];
+  expect(firstRow.getAttribute("aria-expanded")).toBe("false");
+  expect(secondRow.getAttribute("aria-expanded")).toBe("false");
+
+  // Expand the second row inline without invoking external navigation.
+  flushSync(() => secondRow.click());
+  await vi.waitFor(() => expect(container.querySelector(".wf-history-inspection-inline")?.textContent).toContain("#2"));
+  expect(secondRow.getAttribute("aria-expanded")).toBe("true");
+  expect(onSelectHistory).not.toHaveBeenCalled();
+  expect(container.querySelector(".wf-history-inspection-inline")?.textContent).not.toContain("Back to activity inspection");
+  expect(container.querySelector(".wf-history-inspection-inline")?.textContent).not.toContain("Inspect owning execution");
+
+  // Clicking a bookmark action forwards to external history selection.
+  click("Inspect bookmark →");
+  expect(onSelectHistory).toHaveBeenCalledWith({ kind: "bookmark", id: "bookmark-1" });
+
+  // Clicking a causal link pointing to an event in the same journal expands that row inline instead of navigating away.
+  onSelectHistory.mockClear();
+  click("Inspect causal event →");
+  await vi.waitFor(() => expect(firstRow.getAttribute("aria-expanded")).toBe("true"));
+  expect(secondRow.getAttribute("aria-expanded")).toBe("false");
+  expect(onSelectHistory).not.toHaveBeenCalled();
+
+  // Pressing Escape inside the expanded detail collapses it and returns focus to the triggering row.
+  const detail = container.querySelector<HTMLElement>(".wf-history-event-inline-detail")!;
+  flushSync(() => detail.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+  expect(firstRow.getAttribute("aria-expanded")).toBe("false");
+  expect(container.querySelector(".wf-history-event-inline-detail")).toBeNull();
+  await vi.waitFor(() => expect(document.activeElement).toBe(firstRow));
 });

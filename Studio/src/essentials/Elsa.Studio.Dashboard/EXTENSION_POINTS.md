@@ -2,6 +2,10 @@
 
 `Client/src/module.tsx` registers this module through the public `ElsaStudioModuleApi`. The Home widget contribution contract remains the [Studio SDK contract](../Elsa.Studio.Hosting/Client/src/sdk/index.ts); the [module guide](README.md) describes its existing widget IDs. This module introduces no replaceable host service or global dataset registry.
 
+## Record deep-links
+
+`native/ResultView.tsx` consumes the optional public Hosting SDK slot `api.dashboardRecordLinks` (`studio.dashboard.record-links`). Dataset-owning modules (such as `Elsa.Studio.Workflows` for `elsa.workflows.runs`) may contribute pure synchronous resolvers that map already-authorized cell values to app-relative Studio paths. Target routes always reauthorize reads independently, and `Elsa.Studio.Dashboard` stays dataset-agnostic.
+
 ## Native routes
 
 `api.navigation.add` registers `dashboards` and `questions`. `api.routes.add` registers the list/create/detail `saved-dashboard:*` and `saved-question:*` routes, gated by `elsa.api.studio-dashboard/1`. Detail routes supply the resource workspace key. Native API transport, validation, results and resource writes remain current-viewer operations; no model is required.

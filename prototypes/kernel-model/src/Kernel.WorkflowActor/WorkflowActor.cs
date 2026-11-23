@@ -6,7 +6,7 @@ using Kernel.Model.Contracts;
 namespace Kernel.WorkflowActor;
 
 /// <summary>Runs workflow models through the public actor contract.</summary>
-public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType
+public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType
 {
     public const string ActorType = "workflow";
 
@@ -29,6 +29,12 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
     {
         var header = turn.Header;
         var workflow = ReadHeader(header);
+        if (workflow.Model == MigrationPlanModel.ModelKey && turn.StartSettings is { } settings &&
+            settings is not { History: History.Full, Ephemeral: false })
+        {
+            turn.End(ActorStatus.Faulted, "A migration plan needs a durable Full journal.");
+            return;
+        }
         var command = turn.Inbox.Count == 1 ? turn.Inbox[0].Kind : null;
         if (command is Kinds.Suspend or Kinds.Resume)
         {
@@ -48,6 +54,12 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
                 WriteHeader(turn, workflow, workflow with { Version = terminatingModel.StateVersion });
             }
             if (header.Status == ActorStatus.Running) turn.End(ActorStatus.Cancelled);
+            return;
+        }
+
+        if (command == Kinds.Migrate)
+        {
+            ApplyMigration(turn, workflow, turn.Inbox[0]);
             return;
         }
 
@@ -113,6 +125,27 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
     private static WorkflowHeader ReadHeader(ActorHeader header) =>
         JsonSerializer.Deserialize<WorkflowHeader>(header.TypeData) ?? throw new InvalidOperationException("The workflow header is absent.");
 
+    internal static bool IsRunningMigrationPlan(ActorView? view, ActorRef plan) =>
+        IsMigrationPlan(view, plan, requireRunning: true);
+
+    internal static bool IsMigrationPlan(ActorView? view, ActorRef plan, bool requireRunning = false) =>
+        view?.Header is { } header && header.Ref == plan && TryReadWorkflow(header) is
+        { Model: MigrationPlanModel.ModelKey, Definition: MigrationPlanModel.ModelKey, Version: > 0 and <= MigrationPlanModel.PlanVersion,
+          History: History.Full, Ephemeral: false } workflow &&
+        (!requireRunning || header.Status == ActorStatus.Running && !workflow.Suspended);
+
+    internal static bool CanSelectForMigration(ActorView view, string model, string definition) =>
+        view.Header.Status == ActorStatus.Running && TryReadWorkflow(view.Header) is
+            { Definition: var current, Model: var currentModel, Version: not null, Ephemeral: false } &&
+        current == definition && currentModel == model;
+
+    private static WorkflowHeader? TryReadWorkflow(ActorHeader header)
+    {
+        if (header.Type != ActorType) return null;
+        try { return JsonSerializer.Deserialize<WorkflowHeader>(header.TypeData); }
+        catch (JsonException) { return null; }
+    }
+
     private static object ReadState(IExecutionModel model, WorkflowHeader workflow, string? state, IReadOnlyList<Message> inbox)
     {
         if (state is null)
@@ -127,12 +160,14 @@ public sealed class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorT
             JsonSerializer.Deserialize(state, model.StateType) ?? throw new InvalidOperationException("The workflow state is absent.");
     }
 
-    private static void WriteHeader(IActorTurn turn, WorkflowHeader previous, WorkflowHeader next)
+    private static void WriteHeader(IActorTurn turn, WorkflowHeader previous, WorkflowHeader next, string? answeredPlan = null)
     {
-        if (previous == next) return;
+        if (previous == next && answeredPlan is null) return;
         var labels = new Dictionary<string, string>(StringComparer.Ordinal) { ["definition"] = next.Definition };
         if (next.Version is { } version) labels.Add("version", version.ToString(CultureInfo.InvariantCulture));
-        turn.SetHeader(JsonSerializer.Serialize(next), labels);
+        answeredPlan ??= turn.Header.Labels.GetValueOrDefault(AnsweredPlanLabel);
+        if (answeredPlan is not null) labels.Add(AnsweredPlanLabel, answeredPlan);
+        turn.SetHeader(previous == next ? turn.Header.TypeData : JsonSerializer.Serialize(next), labels);
     }
 
     private static InstanceInfo Instance(ActorHeader header, WorkflowHeader workflow) =>

@@ -768,6 +768,7 @@ jobs:
       - kernel-prototype-nightly
       - kernel-prototype-nightly-4096
       - nightly-nl9
+      - nightly-kernel-mysql
       # Only so a stale-filter failure, which reaches alert through Build & test, can be told apart and file nothing.
       - generated-maps
     # A cancelled run (superseded by a newer push) is not a failure and files nothing. The nightly schedule
@@ -801,6 +802,7 @@ jobs:
           KERNEL_NIGHTLY: ${{ needs.kernel-prototype-nightly.result }}
           KERNEL_4096: ${{ needs.kernel-prototype-nightly-4096.result }}
           KERNEL_NL9: ${{ needs.nightly-nl9.result }}
+          KERNEL_MYSQL: ${{ needs.nightly-kernel-mysql.result }}
           MAPS: ${{ needs.generated-maps.result }}
         run: |
           set -euo pipefail
@@ -811,7 +813,8 @@ jobs:
               "Weaver independent package witness:$WEAVER" "Published image pair:$PUBLISHED_IMAGES" \
               "Workflows unit tests (three shuffled orders):$SHUFFLED" "Kernel prototype nightly:$KERNEL_NIGHTLY" \
               "Kernel prototype nightly, 4,096 virtual partitions:$KERNEL_4096" \
-              "Kernel prototype nightly, NL-9 node lease deadlock runs:$KERNEL_NL9"; do
+              "Kernel prototype nightly, NL-9 node lease deadlock runs:$KERNEL_NL9" \
+              "Kernel prototype nightly, MySQL provider:$KERNEL_MYSQL"; do
             if [[ "${pair##*:}" == failure ]]; then failed+=("CI nightly, ${pair%:*}"); fi
           done
           if [ ${#failed[@]} -eq 0 ]; then
@@ -821,7 +824,7 @@ jobs:
               echo "::notice::Only Generated maps failed: stale solution filters are a refresh request, not a red main. No issue filed."
               exit 0
             fi
-            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate. Results: gate=[$GATE_RESULTS] maps=$MAPS full-tier=$FULL_TIER studio-browser=$STUDIO_BROWSER studio-ux=$STUDIO_UX studio-dotnet=$STUDIO_DOTNET backend-source=$BACKEND_SOURCE weaver=$WEAVER published-images=$PUBLISHED_IMAGES shuffled=$SHUFFLED kernel-nightly=$KERNEL_NIGHTLY kernel-4096=$KERNEL_4096 kernel-nl9=$KERNEL_NL9"
+            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate. Results: gate=[$GATE_RESULTS] maps=$MAPS full-tier=$FULL_TIER studio-browser=$STUDIO_BROWSER studio-ux=$STUDIO_UX studio-dotnet=$STUDIO_DOTNET backend-source=$BACKEND_SOURCE weaver=$WEAVER published-images=$PUBLISHED_IMAGES shuffled=$SHUFFLED kernel-nightly=$KERNEL_NIGHTLY kernel-4096=$KERNEL_4096 kernel-nl9=$KERNEL_NL9 kernel-mysql=$KERNEL_MYSQL"
             failed=("CI")
           fi
 
@@ -2192,3 +2195,76 @@ jobs:
           run mysql "$MY" case=mutual mutation=rr-subquery expect=deadlock
           run postgres "$PG" case=mutual mutation=share expect=deadlock
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
+
+  nightly-kernel-mysql:
+    name: Kernel prototype nightly, MySQL provider
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-nightly' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BIN: bin/Release/net10.0
+      # EngineRun uses this test credential to disconnect only its MySQL worker sessions.
+      MYSQL_PASSWORD: kernel
+    defaults:
+      run:
+        shell: bash
+        working-directory: prototypes/kernel-model
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ env.MYSQL_PASSWORD }}
+        ports: ['3306']
+        options: >-
+          --tmpfs /var/lib/mysql
+          --health-cmd "mysqladmin ping -h 127.0.0.1 --silent" --health-interval 2s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+      - name: Build provider runners
+        id: build
+        run: |
+          for project in ef/Kernel.Ef.Conformance ef/Kernel.Ef.Run; do
+            dotnet restore "$project" --locked-mode
+            dotnet build "$project" -c Release --no-restore
+          done
+
+      - name: MySQL store conformance
+        env:
+          MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
+        run: |
+          server="server=127.0.0.1;port=$MYSQL_PORT;uid=root;pwd=$MYSQL_PASSWORD;SslMode=Required"
+          failed=0
+          for writer in ef owned; do
+            for fence in checked-fence fence-in-batch; do
+              dotnet "ef/Kernel.Ef.Conformance/$BIN/Kernel.Ef.Conformance.dll" mysql "$server" "--$writer-commit" "--$fence" semantic || failed=1
+            done
+          done
+          exit "$failed"
+
+      - name: MySQL owned commit under connection loss
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
+        run: |
+          db="server=127.0.0.1;port=$MYSQL_PORT;database=kernel_stress;SslMode=Required"
+          failed=0
+          for fence in checked batch; do
+            log="$RUNNER_TEMP/kernel-mysql-stress-$fence.log"
+            dotnet "ef/Kernel.Ef.Run/$BIN/Kernel.Ef.Run.dll" x stress mysql "$db" commit=owned "fence=$fence" seconds=40 messages=5000 | tee "$log" || failed=1
+            if ! grep -Eq '^SUMMARY .*\| kills [1-9][0-9]* \|' "$log"; then
+              echo "::error::No worker sessions were disconnected under fence=$fence"
+              failed=1
+            fi
+          done
+          exit "$failed"

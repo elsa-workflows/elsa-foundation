@@ -40,12 +40,17 @@ type EditorContract = [
 ];`;
 
 const runRelatedContract = `
-const olderHost: Pick<ElsaStudioModuleApi, "workflowRunRelatedLinks"> = {};
+const olderHost: Pick<ElsaStudioModuleApi, "workflowRunRelatedLinks" | "dashboardRecordLinks"> = {};
 const related: StudioWorkflowRunRelatedLinkContribution = {
   id: "example", activityTypes: ["Example.Activity"], viewKind: "example.run-reference", viewVersion: 1,
   getLinks: context => [{ id: "run", label: "Open related run", path: context.returnTo }]
 };
+const recordLink: StudioDashboardRecordLinkContribution = {
+  id: "example.records", datasetIds: ["example.dataset"], columnIds: ["id"],
+  resolveLink: context => context.cell.value ? { path: \`/records/\${encodeURIComponent(context.cell.value)}\`, title: "Open record" } : null
+};
 type ProjectedData = Assert<Equal<StudioWorkflowRunRelatedLinkContext["stateView"]["data"], unknown>>;
+type RecordDataset = Assert<Equal<StudioDashboardRecordLinkContext["datasetId"], string | undefined>>;
 `;
 
 function compileConsumer({ path, hasPropertyEditors }: typeof typingSources[number]) {
@@ -55,7 +60,7 @@ function compileConsumer({ path, hasPropertyEditors }: typeof typingSources[numb
   const canonical = path === "../sdk/index.ts";
   const imports = ["StudioActivityInputDescriptor", ...(hasPropertyEditors
     ? ["StudioActivityPropertyEditorProps", "StudioActivityPropertyEditorContribution", "StudioActivityPropertyEditorContext"] : []),
-    ...(canonical ? ["ElsaStudioModuleApi", "StudioWorkflowRunRelatedLinkContribution", "StudioWorkflowRunRelatedLinkContext"] : [])];
+    ...(canonical ? ["ElsaStudioModuleApi", "StudioWorkflowRunRelatedLinkContribution", "StudioWorkflowRunRelatedLinkContext", "StudioDashboardRecordLinkContribution", "StudioDashboardRecordLinkContext"] : [])];
   const consumer = `import type { ${imports.join(", ")} } from "${moduleName}";\n${inputContract}\n${hasPropertyEditors ? editorContract : ""}\n${canonical ? runRelatedContract : ""}`;
   const options: ts.CompilerOptions = {
     strict: true,

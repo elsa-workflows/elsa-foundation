@@ -26,10 +26,19 @@ public interface IActorType
     bool ProtectsDeletion(ActorHeader header, string state, long now);
 }
 
+/// <summary>A durable lifecycle entry an actor can record while handling the corresponding command.</summary>
+public enum ActorLifecycle { Migrated }
+
+/// <summary>The persistence settings accepted by the foundation for a new actor.</summary>
+public readonly record struct ActorStartSettings(bool Ephemeral, History History);
+
 /// <summary>The state, inbox, and effects available to one invocation of the actor type.</summary>
 public interface IActorTurn
 {
     ActorHeader Header { get; }
+
+    /// <summary>The admitted settings on the creator turn.</summary>
+    ActorStartSettings? StartSettings { get; }
 
     /// <summary>The foundation's reading in Unix milliseconds, fixed for the turn.</summary>
     long Now { get; }
@@ -50,6 +59,7 @@ public interface IActorTurn
     void Subscribe(string key, string wait, bool keep = false);
     void Unsubscribe(string key, string wait);
     string Publish(string key, string? payload, TimeSpan keepFor);
+    /// <summary>Records activity detail at Full history and an ActorLifecycle entry at every history level.</summary>
     void Record(object entry);
     void End(ActorStatus status, object? output = null);
     void SetHeader(string typeData, IReadOnlyDictionary<string, string> labels);

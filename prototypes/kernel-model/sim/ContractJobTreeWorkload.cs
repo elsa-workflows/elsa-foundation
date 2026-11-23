@@ -101,8 +101,8 @@ internal static partial class ContractActorWorkload
         await Input(spoiled, "spoil", "spoil");
         await driver.Pass(8);
         Require(refused > 0, "the real store refusal hook did not see the spoiled state");
-        await Parked(throwing, "the turn threw");
-        await Parked(spoiled, "was refused");
+        await Parked(throwing, "the turn threw", "throw");
+        await Parked(spoiled, "was refused", "spoil");
         Require((await Journal(healthy)).SequenceEqual([new("baseline")]),
             "failure escaped its actor and changed the bystander");
 
@@ -111,14 +111,14 @@ internal static partial class ContractActorWorkload
         await driver.Pass(8);
         Require(work.Turns.Count == 1, "the turn poison witness needs an active first invocation");
         await Exhaust(dies, "turn");
-        await Parked(dies, "on trial when 3 owners were lost");
+        await Parked(dies, "on trial when 3 owners were lost", "die");
 
         trace.Add("Fragile loses real owners with a background attempt");
         await Input(lethal, "dierun", "dierun");
         await driver.Pass(8);
         Require(work.Attempts(lethal, "lethal").Length == 1, "the job poison witness needs an active first invocation");
         await Exhaust(lethal, "job");
-        await Parked(lethal, "on trial when 3 owners were lost", new WorkEntry("job-armed"));
+        await Parked(lethal, "on trial when 3 owners were lost", Kinds.Job, new WorkEntry("job-armed"));
         var expired = work.Attempts(lethal, "lethal");
         Require(work.Turns.Count == maxAttempts + 1 && expired.Length == maxAttempts + 1 &&
             expired.All(attempt => attempt.Token.IsCancellationRequested) &&
@@ -127,8 +127,8 @@ internal static partial class ContractActorWorkload
         foreach (var turn in work.Turns) turn.SetResult();
         foreach (var attempt in expired) attempt.Complete("late result");
         await driver.Pass(8);
-        await Parked(dies, "on trial when 3 owners were lost");
-        await Parked(lethal, "on trial when 3 owners were lost", new WorkEntry("job-armed"));
+        await Parked(dies, "on trial when 3 owners were lost", "die");
+        await Parked(lethal, "on trial when 3 owners were lost", Kinds.Job, new WorkEntry("job-armed"));
         await Input(healthy, "ping", "ping");
         await driver.Pass(6);
         Require((await View(healthy)).Header.Status == Contract.ActorStatus.Running &&
@@ -274,7 +274,7 @@ internal static partial class ContractActorWorkload
             }
         }
 
-        async Task Parked(Contract.ActorRef actor, string fault, params WorkEntry[] committed)
+        async Task Parked(Contract.ActorRef actor, string fault, string consumedKind, params WorkEntry[] committed)
         {
             var view = await View(actor);
             Require(view is { Park: not null, Header.Status: Contract.ActorStatus.Faulted } &&
@@ -282,7 +282,10 @@ internal static partial class ContractActorWorkload
                 $"Fragile failed to park with {fault}; observed {view.Header.Status}, {view.Header.Fault}");
             Require((await Journal(actor)).SequenceEqual(new WorkEntry[] { new("baseline") }.Concat(committed)),
                 "a failed turn committed partial effects or applied a job result");
-            await Empty(actor);
+            var retained = (await driver.Reads.InboxAsync(scope, actor)).Items;
+            Require(retained is [{ State: Contract.DeliveryState.Consumed, Kind: var kind }] && kind == consumedKind,
+                $"A Park must retain only the consumed {consumedKind}; found " +
+                $"{string.Join(", ", retained.Select(item => $"{item.Kind}/{item.State}"))}.");
         }
     }
 
