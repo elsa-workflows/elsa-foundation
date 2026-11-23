@@ -118,7 +118,7 @@ static class ProviderWatchdog
             child.StandardInput.Close();
             await child.WaitForExitAsync(token);
             Require(child.ExitCode is 0 or Escalated, "The child stopped while the competing transaction held the lock.");
-            return child.ExitCode == Escalated ? "process escalation" : "call ended during grace";
+            return child.ExitCode == Escalated ? "process escalation" : "call ended without escalation";
         }
         finally
         {

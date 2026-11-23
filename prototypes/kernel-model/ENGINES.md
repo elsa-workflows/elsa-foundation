@@ -51,7 +51,8 @@ MySQL setup also creates and grants privileges to its fixture account at server 
 The server reports the blocked worker commit. The fixture advances the watchdog's local clock to
 its cancellation threshold while the competing transaction still holds the lock. PostgreSQL and
 SQL Server must return an interrupted or unknown outcome within the grace period. The MySQL worker
-runs in a disposable process so the fixture also exercises escalation if the command stays blocked.
+runs in a disposable process. Its result distinguishes a call that ended without escalation from a
+process exit triggered by the watchdog while the call was still blocked.
 The fixture records the operation's outcome and subsequent store state. It does not inspect sockets.
 A later owner starts at the unchanged journal position and commits one checkpoint and journal row.
 Repeat with `commit=ef` or `fence=checked` to exercise the other paths.
