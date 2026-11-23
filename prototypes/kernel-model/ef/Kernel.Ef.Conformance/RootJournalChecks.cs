@@ -1,5 +1,4 @@
 using Kernel.EntityFramework;
-using Microsoft.EntityFrameworkCore;
 
 namespace Kernel.Ef.Conformance;
 
@@ -31,8 +30,6 @@ internal static class RootJournalChecks
         Check(inclusive.Rows.SequenceEqual(own.Rows) && after.Rows.Count == 0 && after.AsOf >= own.AsOf,
             "the physical lower bound can continue within one commit and reports a database timestamp on empty pages");
 
-        await CheckReaderOpen(create);
-
         async Task<long> Start(string reference, string journal)
         {
             var creator = (await ingress.ReadPendingCreatorAsync(tenant, reference))!;
@@ -44,34 +41,6 @@ internal static class RootJournalChecks
             Check(committed.Landed, "the first checkpoint and journal land together");
             return fence.Position + 1;
         }
-    }
-
-    private static async Task CheckReaderOpen(Func<KernelDb> create)
-    {
-        var reader = new PostgresRootAdmission(create, TimeSpan.FromMinutes(1));
-        foreach (var (change, versions) in new (Action<StoreVersionEntity>, string)[]
-        {
-            (row => row.StoreSchema = 2, "schema=2, message protocol=1, journal codec=1"),
-            (row => row.MessageProtocol = 0, "schema=1, message protocol=0, journal codec=1"),
-            (row => row.JournalCodec = 2, "schema=1, message protocol=1, journal codec=2"),
-        })
-        {
-            await using var db = create();
-            var marker = await db.StoreVersions.SingleAsync();
-            change(marker);
-            await db.SaveChangesAsync();
-            await VersionTakeChecks.Refuses(() => reader.OpenJournalCursorAsync(default), versions, "public reader startup");
-            marker.StoreSchema = StoreVersionEntity.StoreSchemaVersion;
-            marker.MessageProtocol = StoreVersionEntity.MessageProtocolVersion;
-            marker.JournalCodec = StoreVersionEntity.JournalCodecVersion;
-            await db.SaveChangesAsync();
-        }
-
-        await reader.OpenJournalCursorAsync(default);
-        Check(true, "a public reader opens its cursor with the supported format");
-        await using var missing = create();
-        await missing.StoreVersions.ExecuteDeleteAsync();
-        await VersionTakeChecks.Refuses(() => reader.OpenJournalCursorAsync(default), "version marker is missing", "public reader startup");
     }
 
     private static void Check(bool valid, string description)

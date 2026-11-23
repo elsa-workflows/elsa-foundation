@@ -110,7 +110,47 @@ internal static class PostgresRootHistoryChecks
                 suffix.Items.Count > 0 && suffix.Items.All(e => e.Revision == 3) && await Position() == originalPosition + 2,
                 $"{history} next recorded turn appends the contiguous position and resumes the saved public tail");
         }
+        await CheckReaderOpenAsync(Open, admissions, ct);
         return 0;
+    }
+
+    private static async Task CheckReaderOpenAsync(Func<KernelDb> create, PostgresRootAdmission admissions, CancellationToken token)
+    {
+        foreach (var (change, versions) in new (Action<StoreVersionEntity>, string)[]
+        {
+            (row => row.StoreSchema = 2, "schema=2, message protocol=1, journal codec=1"),
+            (row => row.MessageProtocol = 0, "schema=1, message protocol=0, journal codec=1"),
+            (row => row.JournalCodec = 2, "schema=1, message protocol=1, journal codec=2"),
+        })
+        {
+            await using var db = create();
+            var marker = await db.StoreVersions.SingleAsync(token);
+            change(marker);
+            await db.SaveChangesAsync(token);
+            await RequireReaderRefusal(versions);
+            marker.StoreSchema = StoreVersionEntity.StoreSchemaVersion;
+            marker.MessageProtocol = StoreVersionEntity.MessageProtocolVersion;
+            marker.JournalCodec = StoreVersionEntity.JournalCodecVersion;
+            await db.SaveChangesAsync(token);
+        }
+
+        await admissions.OpenJournalCursorAsync(token);
+        Check(true, "a public reader opens its cursor with the supported format");
+        await using var missing = create();
+        await missing.StoreVersions.ExecuteDeleteAsync(token);
+        await RequireReaderRefusal("version marker is missing");
+        return;
+
+        async Task RequireReaderRefusal(string details)
+        {
+            try { await admissions.OpenJournalCursorAsync(token); }
+            catch (StoreFormatException error) when (error.Message.Contains(details, StringComparison.Ordinal))
+            {
+                Check(true, $"public reader startup refuses {details}");
+                return;
+            }
+            throw new InvalidOperationException($"Public reader startup must refuse {details}.");
+        }
     }
 
     private static void Check(bool valid, string description)
