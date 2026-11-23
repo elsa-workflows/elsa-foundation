@@ -143,8 +143,19 @@ internal static class PostgresRootOperatorChecks
                     .SequenceEqual(["approved:after-command", "approved:while-suspended"]) && entries[^1].Entry == Json.Write("end") &&
                 (await admission.ReadPendingDirectAsync(blue.Tenant, root.Id, ct)).Count == 0,
                 "the resumed Native frame completes after both original approvals in order and once each");
-            Check((await Send(blue, root, ResumeId, Contract.Kinds.Resume)).Outcome == Contract.AdmissionOutcome.Duplicate,
-                "a receipt replay after completion creates no new command");
+            var occurrence = command.InboxKey.Id;
+            var separator = occurrence.LastIndexOf('/') + 1;
+            var prefix = occurrence[..separator];
+            await using (var db = Open())
+            {
+                var occurrences = db.Messages.Where(row => row.InboxScope == command.InboxKey.Scope && row.Id.StartsWith(prefix))
+                    .OrderBy(row => row.Id).Select(row => row.Id);
+                var beforeReplay = await occurrences.ToListAsync(ct);
+                var replay = await Send(blue, root, ResumeId, Contract.Kinds.Resume);
+                Check(replay is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var original } && original == root &&
+                    beforeReplay.SequenceEqual([occurrence]) && (await occurrences.ToListAsync(ct)).SequenceEqual(beforeReplay),
+                    "a receipt replay after completion creates no new command");
+            }
             await Pass(owner);
             Check((await Image(root)).Revision == finished.Revision, "replay leaves the finished checkpoint unchanged");
             Console.WriteLine($"resumed {Environment.ProcessId} {root.Id}");
