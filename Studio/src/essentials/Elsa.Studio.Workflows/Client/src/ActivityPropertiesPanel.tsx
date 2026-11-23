@@ -1011,7 +1011,7 @@ function PropertyRow({
     if (!focusRequested) return;
     const frame = requestAnimationFrame(() => {
       const editor = rowRef.current?.querySelector<HTMLElement>(
-        "input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [contenteditable='true']"
+        "input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [contenteditable='true'], [data-studio-code-editor] > .studio-code-editor-preview:not(:disabled)"
       );
       editor?.focus();
       setFocusRequested(false);

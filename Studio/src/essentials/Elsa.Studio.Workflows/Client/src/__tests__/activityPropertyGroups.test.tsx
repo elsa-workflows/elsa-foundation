@@ -2,6 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { javaScriptLanguageAdapter, StudioCodeEditor } from "@elsa-workflows/studio-code-editor";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputDescriptor,
@@ -161,6 +162,70 @@ it("focuses the input targeted by validation navigation", async () => {
 
   await nextFrame();
   expect(document.activeElement).toBe(field);
+});
+
+describe("validation navigation to compact code editors", () => {
+  const editor: StudioExpressionEditorContribution = {
+    id: "compact-code",
+    supports: context => context.syntax === "JavaScript",
+    surfaces: {
+      inline: props => <>
+        <button type="button">Unrelated editor action</button>
+        <input aria-label="Disabled editor control" disabled />
+        <StudioCodeEditor
+          document={{ uri: "elsa://validation-focus/text", language: "javascript", value: String(props.value) }}
+          profile="compact"
+          ariaLabel="Text JavaScript"
+          languageAdapter={javaScriptLanguageAdapter}
+          onExpand={props.onExpand}
+          onChange={document => props.onChange(document.value)}
+        />
+      </>,
+      expanded: props => <StudioCodeEditor
+        document={{ uri: "elsa://validation-focus/text/expanded", language: "javascript", value: String(props.value) }}
+        ariaLabel="Expanded Text JavaScript"
+        focusOnMount
+        languageAdapter={javaScriptLanguageAdapter}
+        onChange={document => props.onChange(document.value)}
+      />
+    }
+  };
+
+  function navigateTo(source: string) {
+    return renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: source } } }),
+      expressionEditors: [editor],
+      focusInputKey: "text",
+      focusInputRequest: 1
+    });
+  }
+
+  it("activates and focuses the real single-line rich editor without choosing header or adornment controls", async () => {
+    const container = navigateTo("return 1;");
+    await vi.waitFor(() => {
+      const richEditor = container.querySelector<HTMLElement>(".cm-content");
+      expect(richEditor).not.toBeNull();
+      expect(document.activeElement).toBe(richEditor);
+    });
+    expect(container.querySelector(".studio-code-editor-preview")).toBeNull();
+    expect(document.querySelector(".wf-property-editor-dialog")).toBeNull();
+  });
+
+  it("focuses the multiline preview and opens the expanded editor only on activation", async () => {
+    const container = navigateTo("const value = 1;\nreturn value;");
+    const preview = container.querySelector<HTMLButtonElement>(".studio-code-editor-preview")!;
+    await vi.waitFor(() => expect(document.activeElement).toBe(preview));
+    expect(preview.tagName).toBe("BUTTON");
+    expect(preview.type).toBe("button");
+    expect(document.querySelector(".wf-property-editor-dialog")).toBeNull();
+    // Native Enter/Space activation uses this button's click action; focus alone must not expand it.
+    flushSync(() => preview.click());
+    await vi.waitFor(() => {
+      const expanded = document.querySelector<HTMLElement>(".wf-property-editor-dialog .cm-content");
+      expect(expanded).not.toBeNull();
+      expect(document.activeElement).toBe(expanded);
+    });
+  });
 });
 
 function toggleWorkflowInputBindings(container: HTMLElement) {

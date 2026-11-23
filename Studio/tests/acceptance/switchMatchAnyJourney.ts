@@ -34,6 +34,9 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
       ] } } } }
   });
   cleanup(async () => { await api(`/design/workflows/definitions/${submitted.definition.id}`, "DELETE"); });
+  const editorUrl = new URL(page.url());
+  editorUrl.pathname = "/workflows/definitions";
+  editorUrl.searchParams.set("definition", submitted.definition.id);
   const cases = () => page.getByRole("region", { name: "Cases", exact: true });
   async function selectOwner() {
     await page.locator('.wf-sequence-step[data-id="switch"]').press("Enter");
@@ -54,7 +57,7 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     await selectOwner();
   }
   async function open() {
-    await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy`);
+    await page.goto(editorUrl.toString());
     await selectOwner();
   }
   async function condition(index: number, value: boolean) {

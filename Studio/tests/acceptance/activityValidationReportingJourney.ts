@@ -30,11 +30,14 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
   await capture(page, info, "reference");
 
   const validateSaved = async () => {
+    const moreActions = page.getByRole("button", { name: "More activity actions", exact: true });
+    await moreActions.click();
     await page.locator(".ad-authoring-advanced > summary").click();
     const validated = page.waitForResponse(item => item.request().method() === "POST" && item.url() === `${draftUrl}/validate`);
     await page.getByRole("button", { name: "Validate saved revision", exact: true }).click();
     expect((await validated).ok()).toBe(true);
     await page.locator(".ad-authoring-advanced > summary").click();
+    await moreActions.press("Escape");
     await expect(page.getByRole("button", { name: "View 1 draft error", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "View 1 draft error", exact: true }).press("Enter");
     await expect(page.locator('.ad-diagnostics-panel [aria-label="Diagnostic severity counts"]')).toHaveText("1 error");

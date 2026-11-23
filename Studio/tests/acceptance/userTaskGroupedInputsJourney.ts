@@ -33,10 +33,10 @@ export async function userTaskGroupedInputsJourney(page: Page, info: TestInfo, c
   const form = { id: formId, version: "1", name: formName, provider: "elsa.basic-forms/1",
     fields: [{ key: "Note", label: "Note", kind: "text", required: true, readOnly: false }] };
   await api("/runtime/user-task-forms", "POST", form);
-  let definitionId: string | undefined;
+  const owned: { definitionId?: string } = {};
   registerCleanup(async () => {
     try {
-      if (definitionId) await api(`/design/workflows/definitions/${definitionId}`, "DELETE");
+      if (owned.definitionId) await api(`/design/workflows/definitions/${owned.definitionId}`, "DELETE");
     } finally {
       const current = await api<{ revision: number }>(`/runtime/user-task-forms/${formId}/definition`);
       await api(`/runtime/user-task-forms/${formId}/delete`, "POST", { revision: current.revision });
@@ -67,7 +67,8 @@ export async function userTaskGroupedInputsJourney(page: Page, info: TestInfo, c
       }] } }
     } }
   });
-  definitionId = submitted.definition.id;
+  const definitionId = submitted.definition.id;
+  owned.definitionId = definitionId;
   const draftPath = `/design/workflows/drafts/${submitted.draftId}`;
   const read = () => api<Draft>(draftPath);
   const taskInputs = (draft: Draft) => draft.state.rootActivity.structure.payload.activities.find(node => node.nodeId === "review")!.inputs;
