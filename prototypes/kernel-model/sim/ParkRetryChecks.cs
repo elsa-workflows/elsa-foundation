@@ -125,15 +125,21 @@ internal static class ParkRetryChecks
 
         var key = keys[selected];
         var twin = keys[1 - selected];
-        store.Messages[twin].Seq = store.Messages[key].Seq;
+        var sequence = store.Messages[key].Seq;
+        store.Messages[twin].Seq = sequence;
         var parked = new Parked(scope, target, read.Row, read.Park!, store.SealFoundationSelection(scope.Tenant, read)!);
-        var handle = fixture.Handle(parked, key);
-        var twinHandle = fixture.Handle(parked, twin);
-        var exactHandles = handle is { Length: < 128 } && twinHandle is { Length: < 128 } && handle != twinHandle;
-        check(exactHandles, "B2-3 the two historical matches retain distinct bounded handles at an equal sequence");
-        if (!exactHandles) return;
+        Contract.IActorReads reads = new ActorList(store, 1);
+        var first = await reads.InboxAsync(scope, target.Actor);
+        var second = first.Next is { } next ? await reads.InboxAsync(scope, target.Actor, next) : null;
+        var paged = first.Items is [{ Id: "legacy-id", State: Contract.DeliveryState.Consumed, Handle.Length: < 128 }] &&
+            second is { Items: [{ Id: "legacy-id", State: Contract.DeliveryState.Consumed, Handle.Length: < 128 }], Next: null } &&
+            first.Items[0].Handle != second.Items[0].Handle;
+        check(paged, "B2-3 one-row inbox pages expose both historical matches with bounded handles at an equal sequence");
+        if (!paged) return;
+        var keyIsFirst = new ParkPageCursor(sequence, key).CompareTo(new(sequence, twin)) < 0;
+        var handle = keyIsFirst ? first.Items[0].Handle : second!.Items[0].Handle;
 
-        await fixture.Retry(parked, "legacy-exact", [handle!]);
+        await fixture.Retry(parked, "legacy-exact", [handle]);
         await fixture.Step(worker, parked);
         check(store.Messages[key].KeptBy == ParkKeepReason.Selected && store.Messages[twin].KeptBy == ParkKeepReason.Consumed,
             "a compact Retry handle resolves the exact full key even when a different match has the same sequence");

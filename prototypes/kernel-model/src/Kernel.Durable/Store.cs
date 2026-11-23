@@ -166,6 +166,9 @@ public sealed record TurnCommit(
     IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<InboxKey>? Held = null, bool Delete = false)
 {
     internal FoundationHeaderChange? FoundationHeader { get; init; }
+    // The qualified writer compares the exact envelope the owner dispatched with the locked occurrence.
+    internal Message? FoundationRootOperator { get; init; }
+    internal IReadOnlySet<InboxKey>? FoundationSelfRecalls { get; init; }
     internal HashSet<InboxKey>? FoundationHeldPromotions { get; init; }
     internal IReadOnlyList<InboxKey>? FoundationReleasedHolds { get; init; }
     internal bool OpensPark { get; init; }

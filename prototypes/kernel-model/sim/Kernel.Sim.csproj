@@ -2,9 +2,11 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>Kernel.Sim</RootNamespace>
+    <DefineConstants>$(DefineConstants);NATIVE_FRIEND</DefineConstants>
     <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Compile Include="../models/Native.Run/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
     <ProjectReference Include="../src/Kernel.Workflows/Kernel.Workflows.csproj" />
     <ProjectReference Include="../src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />

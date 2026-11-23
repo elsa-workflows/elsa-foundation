@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Text.Json;
 using Kernel.Foundation.Contracts;
 using Durable = Kernel.Durable;
@@ -98,31 +97,35 @@ internal sealed class ActorList : IActorReads
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        var context = JsonSerializer.SerializeToUtf8Bytes(new { Read = "actor-inbox", scope.Tenant, Actor = actor.Id });
-        Span<byte> cursor = stackalloc byte[sizeof(long)];
-        if (from is { } token && !_store.TryOpenReadCursor(context, token.Value, cursor))
-            throw new ArgumentException("The continuation does not match this actor inbox.", nameof(from));
-        var after = from is null ? long.MinValue : BinaryPrimitives.ReadInt64LittleEndian(cursor);
-        var snapshot = _store.ReadFoundationInbox(scope.Tenant, actor.Id, after, _pageSize + 1);
-        var page = snapshot.Rows.Take(_pageSize).Select(row => Delivery(actor, row)).ToArray();
-        PageToken? next = null;
-        if (snapshot.Rows.Count > _pageSize)
+        var context = JsonSerializer.SerializeToUtf8Bytes(new { Read = "actor-inbox-v2", scope.Tenant, Actor = actor.Id });
+        Durable.ParkPageCursor? after = null;
+        if (from is { } token)
         {
-            BinaryPrimitives.WriteInt64LittleEndian(cursor, snapshot.Rows[_pageSize - 1].Order);
-            next = new(_store.SealReadCursor(context, cursor));
+            if (!_store.TryOpenActorInboxCursor(context, token.Value, out var cursor))
+                throw new ArgumentException("The continuation does not match this actor inbox.", nameof(from));
+            after = cursor;
         }
+        var snapshot = _store.ReadFoundationInbox(scope.Tenant, actor.Id, after, _pageSize + 1);
+        var page = snapshot.Rows.Take(_pageSize).Select(Delivery).ToArray();
+        PageToken? next = snapshot.Rows.Count > _pageSize
+            ? new(_store.SealActorInboxCursor(context, snapshot.Rows[_pageSize - 1].Cursor)) : null;
         return new(new Page<DeliveryView>(page, next, snapshot.AsOf));
     }
 
-    private DeliveryView Delivery(ActorRef actor, Durable.InMemoryStore.ActorDelivery row)
+    private DeliveryView Delivery(Durable.InMemoryStore.ActorDelivery row)
     {
         var message = row.Message;
-        var handle = _store.DeliveryHandle(actor.Id, row.Seq, message.InboxKey);
         var id = message.Start is null && Durable.Events.MatchFor(message) is { } match ? match.Event :
             (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null ? _store.MessageHandle("inbox:" + message.Id) : message.Id;
-        return new(handle, id, message.Start is null ? message.Kind : Kinds.Start,
-            row.Sender is { } sender ? new ActorRef(sender) : null, message.Due,
-            row.Held ? DeliveryState.Held : DeliveryState.Pending, row.Attempts, JsonSerializer.SerializeToUtf8Bytes(message).LongLength);
+        var state = row.KeptBy switch
+        {
+            Durable.ParkKeepReason.Arrived => DeliveryState.Arrived,
+            Durable.ParkKeepReason.Consumed or Durable.ParkKeepReason.Selected => DeliveryState.Consumed,
+            _ => row.Held ? DeliveryState.Held : DeliveryState.Pending
+        };
+        return new(row.Handle, id, message.Start is null ? message.Kind : Kinds.Start,
+            row.Sender is { } sender ? new ActorRef(sender) : null, message.Due, state, row.Attempts,
+            JsonSerializer.SerializeToUtf8Bytes(message).LongLength);
     }
 
     private ActorView View(string tenant, Durable.InMemoryStore.ActorCheckpoint checkpoint, long asOf)
@@ -133,8 +136,18 @@ internal sealed class ActorList : IActorReads
             : null;
         var header = new ActorHeader(new(checkpoint.Reference), row.Model, tenant, (ActorStatus)row.Status,
             row.Fault, parent, checkpoint.EndedAt, checkpoint.Header.TypeData, checkpoint.Header.Labels);
+        var resolution = row switch
+        {
+            { ParkDiscard.Deletion: not null } or { ParkRecovery.Deletion: not null } => "deleting",
+            { ParkDiscard.Kind: Durable.ParkClearKind.Terminate } => "terminating",
+            { ParkDiscard.Kind: Durable.ParkClearKind.Discard } => "discarding",
+            { ParkDiscard.Kind: Durable.ParkClearKind.Expiry } => "expiring",
+            { ParkDiscard.Kind: Durable.ParkClearKind.Delete } => "deleting",
+            { ParkRecovery: not null } => "recovering",
+            _ => null
+        };
         var park = checkpoint.Park is { } mark
-            ? new ParkView(mark.At, row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate ? "terminating" : null)
+            ? new ParkView(mark.At, resolution)
             : null;
         return new(header, _store.SealFoundationSelection(tenant, checkpoint), park, asOf);
     }

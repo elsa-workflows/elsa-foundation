@@ -49,7 +49,11 @@ export async function captureResultViews(page: Page, info: TestInfo, capture: Ca
     await element.evaluate(value => value.scrollIntoView({ block: "end", inline: "nearest", behavior: "instant" }));
     await expect(element).toBeInViewport(); await capture(page, info, `${name}-${suffix}`);
   };
-  await target("periods", result.locator(".named-result-provenance > p").last());
+  const details = result.locator(".named-result-details");
+  const compact = await details.count() > 0;
+  if (compact) await details.getByRole("button", { name: "Result details" }).click();
+  await target("periods", (compact ? result.locator(".named-result-details-content > p") : result.locator(".named-result-provenance > p")).last());
+  if (compact) await details.getByRole("button", { name: "Result details" }).click();
   const chart = result.locator(".named-chart-series");
   if (await chart.count()) await target("chart", chart.first());
   const values = result.getByRole("region", { name: "Exact result values", exact: true });

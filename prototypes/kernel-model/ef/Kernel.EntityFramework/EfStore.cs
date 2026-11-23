@@ -36,6 +36,7 @@ public sealed class InstanceEntity
     public InstanceStatus Status { get; set; }
     public string State { get; set; } = "";
     public string? Jobs { get; set; }
+    public long? NextJobGeneration { get; set; }
     public string? CustomHandles { get; set; }
     public long Revision { get; set; }
     public string? Parent { get; set; }
@@ -63,6 +64,7 @@ public sealed class ViewEntity
 
 public sealed class MessageEntity
 {
+    public long JobGeneration { get; set; }
     public long InboxScope { get; set; }
     public byte[] IssuedWire { get; set; } = [];
     public byte[]? EventMatch { get; set; }
@@ -111,8 +113,26 @@ public sealed class JournalEntity
     public string Entries { get; set; } = "";
 }
 
-public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
+public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
 {
+    // EF keys its model cache by context type. Fresh opt-in databases seed their marker in the
+    // same creation transaction as the schema. An existing database keeps its original marker.
+    private sealed class RootSelfDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootTimerDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootOperatorDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    internal StoreFormat RequiredFormat => this switch
+    {
+        RootOperatorDb => StoreFormat.RootOperators,
+        RootTimerDb => StoreFormat.RootTimers,
+        RootSelfDb => StoreFormat.RootSelf,
+        _ => StoreFormat.Current
+    };
+    internal bool UsesRootSelfProtocol => this is RootSelfDb or RootTimerDb;
+    internal bool UsesRootOperatorProtocol => this is RootOperatorDb;
+    internal static KernelDb ForPostgresRootOperators(DbContextOptions<KernelDb> options) => new RootOperatorDb(options);
+    internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => new RootTimerDb(options);
+    internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => new RootSelfDb(options);
+
     internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> InsertAliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> GuardedAliases {get;}=new(StringComparer.Ordinal);
@@ -142,6 +162,10 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 
     protected override void OnModelCreating(ModelBuilder model)
     {
+        if (UsesRootSelfProtocol && !Database.IsNpgsql())
+            throw new NotSupportedException("The continuation profile requires PostgreSQL.");
+        if (UsesRootOperatorProtocol && !Database.IsNpgsql())
+            throw new NotSupportedException("The operator command profile requires PostgreSQL.");
         model.Entity<StoreVersionEntity>(entity =>
         {
             entity.ToTable(StoreVersionEntity.Table);
@@ -150,7 +174,7 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
             {
                 Id = StoreVersionEntity.MarkerId,
                 StoreSchema = StoreVersionEntity.StoreSchemaVersion,
-                MessageProtocol = StoreVersionEntity.MessageProtocolVersion,
+                MessageProtocol = RequiredFormat.MessageProtocol,
                 JournalCodec = StoreVersionEntity.JournalCodecVersion
             });
         });
@@ -183,6 +207,7 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
         model.Entity<MessageEntity>(e =>
         {
             e.ToTable("Messages");
+            e.Property(m => m.JobGeneration).HasDefaultValue(0L).ValueGeneratedNever();
             var exactIssued = Database.IsSqlServer() || Database.ProviderName == "MySql.EntityFrameworkCore";
             var key = exactIssued ? e.HasKey(m => new { m.Id, m.InboxScope, m.IssuedWire }) : e.HasKey(m => new { m.Id, m.InboxScope });
             if (exactIssued)
@@ -291,6 +316,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     private class PollRow
     {
+        public bool SplitEventPayload { get; set; }
+        public long? JobGeneration { get; set; }
         public long? InboxScope { get; set; }
         public byte[]? IssuedWire { get; set; }
         public byte[]? EventMatch { get; set; }
@@ -335,6 +362,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         await db.Database.EnsureCreatedAsync();
         await RequireStoreVersionsAsync(db, CancellationToken.None);
         await PhysicalRetirement.InstallAsync(db, Engine, postgres);
+        await InstallJobGenerationGuard(db, CancellationToken.None);
         if (postgres && Engine is null) await db.Database.ExecuteSqlRawAsync(EventInsert.InstallPostgres);
         if (enableCommitWindow)
         {
@@ -384,7 +412,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         await using var db = create();
         var now = Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken) : (await db.Database.SqlQueryRaw<long>(
             $"""INSERT INTO "Nodes" ("Id", "SeenAt", {NodeAdvertisement.Columns}) VALUES ({"{0}"}, {Now}, {NodeAdvertisement.Parameters}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", {NodeAdvertisement.Update} RETURNING "SeenAt" AS "Value" """,
-            NodeAdvertisement.Arguments(node)).ToListAsync(cancellationToken))[0];
+            NodeAdvertisement.Arguments(node, messageProtocol: db.RequiredFormat.MessageProtocol)).ToListAsync(cancellationToken))[0];
         return await MembershipAsync(db, now, window, cancellationToken);
     }
 
@@ -414,8 +442,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         if (postgres && Engine is null && (batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials)
             .Concat(batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])))
-            .Any(key => key.Scope == InboxKey.FoundationOccurrenceScope) ||
-            batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey.Scope == InboxKey.FoundationOccurrenceScope))))
+            .Any(key => key.Match is null && (key.Scope is InboxKey.FoundationOccurrenceScope or RootSelfScope)) ||
+            batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey is { Match: null } key &&
+                (key.Scope == InboxKey.FoundationOccurrenceScope || root is null && key.Scope == RootSelfScope)))))
             throw new StoreException(Failure.Definite, "Qualified PostgreSQL inputs require their root checkpoint writer.");
         StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable,
             supportsJobTrialClear:SupportsJobTrialClear);
@@ -560,7 +589,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 var entity = new InstanceEntity
                 {
                     Id = row.Id, Partition = batch.Partition, Model = row.Model, Definition = row.Definition, Status = row.Status,
-                    State = StoredState.Encode(row), Jobs = row.Jobs, CustomHandles = row.CustomHandles, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended, Children = row.Children, StateVersion = row.StateVersion, Retired = row.Retired,
+                    State = StoredState.Encode(row), Jobs = row.Jobs, NextJobGeneration = row.NextJobGeneration, CustomHandles = row.CustomHandles, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended, Children = row.Children, StateVersion = row.StateVersion, Retired = row.Retired,
                 };
                 if (turn.Expected is not { } expected) db.Add(entity);
                 else
@@ -648,74 +677,108 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         await using var db = create();
         // A plain read. The left join returns database time even when no message does.
+        var sql = PollSql(db.UsesRootOperatorProtocol);
         if (_ordinaryRoots is { } root)
         {
             if (!root.Includes(partition)) throw new InvalidOperationException("The root belongs to another partition.");
             if (root.Discover)
             {
-                var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
-                return ToGeneratedPoll(page, root);
+                var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
+                return ToGeneratedPoll(page, root, db.UsesRootOperatorProtocol);
             }
-            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root);
+            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db.UsesRootOperatorProtocol);
         }
-        return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
+        return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
     }
 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
-    private string RootPollFilter => _ordinaryRoots is null ? "" :
+    private string RootPollFilter(bool operators) => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
-             AND (m."InboxScope" = 0 OR (m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND EXISTS (
+             AND m."EventMatch" IS NULL
+             {(operators ? RootOperatorPollFilter : "")}
+             AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({InboxKey.FoundationOccurrenceScope}, {RootSelfScope}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
                  WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired")))
             """;
+    // Commands are exposed only when database time makes them due. On a suspended root the
+    // first due command can pass withheld ordinary inputs. Running roots first clear their ready FIFO prefix.
+    private static readonly string RootOperatorPollFilter = $"""
+         AND (m."InboxScope" = 0 OR EXISTS (
+             SELECT 1 FROM "Instances" target
+             WHERE target."Id" = m."Target" AND target."Partition" = m."Partition"
+               AND (CASE WHEN m."Id" LIKE 'operator/%' THEN
+                   m."Due" <= t.now AND NOT EXISTS (
+                       SELECT 1 FROM "Messages" prior
+                       WHERE prior."Partition" = m."Partition" AND prior."Target" = m."Target" AND prior."Seq" < m."Seq"
+                         AND prior."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND prior."EventMatch" IS NULL
+                         AND NOT prior."Done" AND prior."Due" <= t.now
+                         AND (NOT target."Suspended" OR prior."Id" LIKE 'operator/%'))
+                   ELSE NOT target."Suspended" AND NOT EXISTS (
+                       SELECT 1 FROM "Messages" op
+                       WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
+                         AND op."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND op."Id" LIKE 'operator/%'
+                         AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now)
+                   END)))
+        """;
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
         ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
     private string PollMessages => _ordinaryRoots is { Discover: true }
         ? $"""
-           ("Messages" m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
+           ({RootInboxSource} m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
               AND b."Creation" = 1 AND m."EventMatch" IS NULL
-              AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" = {InboxKey.FoundationOccurrenceScope}))
+              AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" = {InboxKey.FoundationOccurrenceScope} OR m."InboxScope" = {RootSelfScope}))
            """
-        : "\"Messages\" m";
-    private string PollSql => Engine?.Poll ??
+        : RootInboxSource + " m";
+    private const string RootClockMilliseconds = "floor(extract(epoch from clock_timestamp()) * 1000)::bigint";
+    // Only PostgreSQL profiles with the private body column can have split historical event payloads.
+    // CASE avoids inspecting row content except for the single shared numeric event slot.
+    private string PollSplitEventPayload => postgres && _ordinaryRoots is null
+        ? $"""CASE WHEN m."InboxScope" = {RootSelfScope} AND m."EventMatch" IS NOT NULL THEN to_jsonb(m)->>'FoundationSelfContent' IS NOT NULL ELSE FALSE END"""
+        : False;
+    private string PollSql(bool operators) => Engine?.Poll ??
         $"""
-         SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"{PollBirthColumns}
-         FROM (SELECT {Now} AS now) t
-         LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter}
+         SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration", {PollSplitEventPayload} AS "SplitEventPayload"{PollBirthColumns}
+         FROM (SELECT {(operators || RootSelfIssuer is { SupportsTimers: true } ? RootClockMilliseconds : Now)} AS now) t
+         LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter(operators)}
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
 
-    private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope)
+    private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope, bool operators)
     {
         var found = page.Where(r => r.Target is not null).Select(r =>
             new WorkerRoot(r.BirthTenant!, r.BirthReference!, r.Target!, r.BirthPartition!.Value, r.BirthFingerprint!)).Distinct().ToArray();
-        return ToPolled(page, new(scope.FixedPartition, found));
+        return ToPolled(page, new(scope.FixedPartition, found), operators);
     }
 
-    private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null)
+    private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null, bool operators = false)
     {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
         {
+            if (r.SplitEventPayload) throw SplitEventPayload();
             var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };
-            // Only the scoped public owner can decode and commit these persisted envelopes.
+            if (PostgresRootAdmission.IsOperatorOccurrence(key) && (!operators || bindings is null))
+                throw new StoreException(Failure.Definite, "PostgreSQL operator inputs require the qualified operator owner.");
             if (bindings is not null)
             {
                 if (r.Target is null) throw RootShape();
                 var root = bindings.ForActor(r.Target);
-                if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition || root != bindings.ForInput(key)) throw RootShape();
+                if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition ||
+                    root != bindings.ForInput(key.Scope == RootSelfScope ? InboxKey.Issued(key.Id) : key)) throw RootShape();
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
-                    Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
+                    JobGeneration = r.JobGeneration!.Value, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
-                    : PostgresRootAdmission.DecodeDirect(entity, root.Reference);
+                    : DecodeRootInput(entity, root.Reference, RootSelfIssuer);
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
             }
-            if (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start))
+            if (key.Match is null &&
+                (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) ||
+                    PostgresRootAdmission.IsStoredOperator(r.Start) || key.Scope == RootSelfScope))
                 throw new StoreException(Failure.Definite, "PostgreSQL public inputs require a qualified foundation owner.");
-            return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo).WithInboxScope(key.Scope, key.Match),
+            return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo) { JobGeneration = r.JobGeneration!.Value }.WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
         }).ToList();
         return new Polled(messages, rows[0].Now);
@@ -769,7 +832,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private static InstanceRow Snapshot(InstanceEntity i)
     {
         return StoredState.Restore(new(i.Id,i.Model,i.Definition,i.Status,i.State,i.Revision,i.Parent,i.Fault,i.Jobs,i.History,
-            i.Suspended,i.Children,i.StateVersion,Retired:i.Retired,CustomHandles:i.CustomHandles));
+            i.Suspended,i.Children,i.StateVersion,Retired:i.Retired,CustomHandles:i.CustomHandles) { NextJobGeneration = i.NextJobGeneration });
     }
 
     private sealed class RequestedActor
@@ -989,6 +1052,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         entity.Target = m.Target.Id;
         entity.Kind = m.Kind;
         entity.Payload = m.Payload;
+        entity.JobGeneration = m.JobGeneration;
         entity.Sender = m.Sender;
         entity.Start = m.Start is null ? null : Json.Write(m.Start);
         entity.Due = m.Due ?? 0;
@@ -1005,7 +1069,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (inner is StoreException classified) return classified;
             if (Engine?.Classify(inner) is { } failure) return new StoreException(failure, inner.Message, e);
             if (inner is PostgresException pg)
-                return new StoreException(pg.SqlState is "40001" or "40P01" or "55P03" ? Failure.Transient : pg.SqlState.StartsWith("22") || pg.SqlState.StartsWith("23") ? Failure.Definite : Failure.Unknown, pg.MessageText, e);
+                return new StoreException(pg.SqlState is "40001" or "40P01" or "55P03" ? Failure.Transient : pg.SqlState == "KJG01" || pg.SqlState.StartsWith("22") || pg.SqlState.StartsWith("23") ? Failure.Definite : Failure.Unknown, pg.MessageText, e);
             if (inner is SqliteException lite)
                 return new StoreException(lite.SqliteErrorCode is 5 or 6 ? Failure.Transient : lite.SqliteErrorCode == 19 ? Failure.Definite : Failure.Unknown, lite.Message, e);     // BUSY is retry, not reset
         }

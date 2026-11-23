@@ -28,6 +28,14 @@ internal sealed partial class ActorAdapter
             null, null, metadata.Header.TypeData, metadata.Header.Labels);
     }
 
+    private static bool IsRootSuspension(Durable.Message message) => message is
+    {
+        Kind: Durable.Kinds.Suspend or Durable.Kinds.Resume,
+        InboxScope: Durable.InboxKey.FoundationOccurrenceScope, StorageId: not null, TargetCreation: 1, KeepUntil: not null,
+        Operator: { Selection: null, DeleteTarget: null, RetentionDelete: false, RecoverMode: null, RecoverHandles: null },
+        Start: null, Payload: null, ReplyTo: null, EventMatch: null, Sender: null, SenderCreation: 0, ActorAuthored: false, JobGeneration: 0
+    };
+
     private string? RootRefusal(Durable.TurnInput input)
     {
         if ((input.Row?.Model ?? input.Spec?.Model) != actor.Type) return "UnknownActorType";
@@ -37,9 +45,14 @@ internal sealed partial class ActorAdapter
             row.Jobs is not null || row.Children is not null))
             return "RootDispatchUnavailable";
 
+        if (input.Row is not null && input.Taken is [var command] && command.Durable && IsRootSuspension(command.Message) &&
+            command.Message.Target.Id == input.Actor) return null;
+
         foreach (var delivery in input.Taken)
         {
             var message = delivery.Message;
+            if (issueSelf is not null && issueSelf.Allows(message.Due) && delivery.Durable && input.Row is { } issuer &&
+                Durable.FoundationSelfSend.IsSelfInput(message, issuer.Id, issuer.Creation)) continue;
             if (!delivery.Durable || message.Target.Id != input.Actor || message.TargetCreation != 1 ||
                 message.Sender is not null || message.EventMatch is not null ||
                 message.ActorAuthored || message.Operator is not null || message.ReplyTo is not null)
@@ -57,12 +70,14 @@ internal sealed partial class ActorAdapter
         return null;
     }
 
-    private static void RequireRootOutcome(Durable.TurnOutcome outcome)
+    private void RequireRootOutcome(Durable.TurnOutcome outcome)
     {
         if (outcome.Row is not { Status: Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished } ||
-            outcome.Sent.Count != 0 || outcome.Held.Count != 0 || outcome.Cancelled.Count != 0 ||
+            outcome.Sent.Any(m => issueSelf is null || !issueSelf.Allows(m.Due) || !Durable.FoundationSelfSend.IsSelfInput(m, outcome.Row.Id, outcome.Row.Creation)) ||
+            outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
             outcome.Emitted.Count != 0 || outcome.FoundationCascade is not null || outcome.InMemory)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
+        if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
     }
 }

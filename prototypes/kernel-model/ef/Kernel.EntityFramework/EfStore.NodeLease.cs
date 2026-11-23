@@ -129,7 +129,7 @@ public sealed partial class EfStore
             // Database time read once, so LeaseUntil is exactly SeenAt plus the lease (as SQL Server's MERGE). SQLite needs
             // the WHERE before ON CONFLICT after a SELECT.
             $"""INSERT INTO "Nodes" ("Id", "SeenAt", "LeaseUntil", {NodeAdvertisement.Columns}) SELECT {"{0}"}, t.now, t.now + {"{4}"}, {NodeAdvertisement.Parameters} FROM (SELECT {Now} AS now) t WHERE true ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", "LeaseUntil" = excluded."LeaseUntil", {NodeAdvertisement.Update} RETURNING "SeenAt" AS "Value" """,
-            NodeAdvertisement.Arguments(node, (long)lease.TotalMilliseconds)).ToListAsync(cancellationToken))[0];
+            NodeAdvertisement.Arguments(node, (long)lease.TotalMilliseconds, db.RequiredFormat.MessageProtocol)).ToListAsync(cancellationToken))[0];
 
     /// <summary>
     /// The node heartbeat: the node record's write and the read of this node's partitions with their epochs, one

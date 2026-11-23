@@ -16,6 +16,9 @@ public interface IActorType
     /// <summary>Whether this implementation enforces the public operator protocol for this row.</summary>
     bool SupportsFoundationOperator(InstanceRow? row) => false;
 
+    /// <summary>Whether this actor can dispatch this operator envelope on its current creation.</summary>
+    internal bool AcceptsFoundationOperator(InstanceRow? row, Message message) => SupportsFoundationOperator(row);
+
     internal bool SupportsFoundationInlineStart(string type) => false;
 
     /// <summary>Whether this actor type can verify the operator or parent authority of a terminate.</summary>
@@ -278,6 +281,7 @@ public sealed class TurnOutcome(string instance)
     }
     public List<Delivery> Consumed = [], Held = [];
     public List<InboxKey> Cancelled = [];
+    internal IReadOnlySet<InboxKey>? FoundationSelfRecalls;
     public List<Message> Sent = [];
     public HashSet<InboxKey> Fresh = [], Volatile = [];
     public List<SubscriptionRow> Subscribed = [], Unsubscribed = [];
@@ -429,12 +433,21 @@ public sealed class DurableTurn
         return Send(id, target, kind, payload, new SendOptions(TargetCreation: targetCreation, DueAt: dueAt), actorAuthored: true);
     }
 
+    internal string SendToSelf(Func<string, string> issue, string kind, string? payload, long? dueAt)
+    {
+        Kinds.RequireApplicationSend(kind);
+        var id = FoundationSelfSend.Issue(issue, Origin, Revision, _ordinal++, dueAt);
+        _sent.Add(FoundationSelfSend.Create(Id, _input.Creation, id, kind, payload, dueAt));
+        return id;
+    }
+
     internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt)
     {
         Kinds.RequireApplicationSend(kind);
+        if (target == Actor && targetCreation == _input.Creation)
+            return SendToSelf(store.MessageHandle, kind, payload, dueAt);
         var issued = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal++:D4}");
-        var id = dueAt is not null && target == Actor && targetCreation == _input.Creation
-            ? store.FoundationTimerHandle(Origin, issued) : store.MessageHandle("send:" + issued);
+        var id = store.MessageHandle("send:" + issued);
         _sent.Add(new Message(id, target, kind, payload, Id, Due: dueAt, TargetCreation: targetCreation, SenderCreation: _input.Creation)
             { ActorAuthored = true, StorageId = Origin + "#" + id }.AsIssued());
         return id;
@@ -515,6 +528,14 @@ public sealed class DurableTurn
         if (Inbox.Any(m => m.InboxKey == key) || _cancelled.Contains(key)) return;     // given to this turn: consumed with it
         _cancelled.Add(key);        // its row goes with this commit, as a cancelled job's ticket does
         Services.Cancelling(key);
+    }
+
+    internal void RecallPersistedSelfInput(string id)
+    {
+        var key = InboxKey.Issued(Origin + "#" + id);
+        if (_sent.Any(message => message.InboxKey == key))
+            throw new NotSupportedException("The scoped root writer supports recall of an already persisted self input.");
+        Recall(key.Id);
     }
 
     internal void RecallFromActor(InMemoryStore store, string id)

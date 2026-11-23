@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Kernel.Sim;
 
+if (args is ["--park-operator-demo"]) return await ParkOperatorDemo.RunAsync();
+
 // Usage:
 //   dotnet run -c Release --project sim -- --seeds 10000 [--from 1] [--actions 300] [--flaw Name[,Name]] [--count 1024|4096]
 //   dotnet run -c Release --project sim -- --seed 42 [--actions 300] [--flaw Name]      replay one seed; prints a shrunk trace if it fails
@@ -159,6 +161,15 @@ if (args.Contains("--sequential-cascade-check"))
     await SequentialCascadeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--public-http-edge-check"))
+{
+    try { return await NativeHttpEdgeChecks.RunAsync(flaws); }
+    catch (InvalidOperationException error)
+    {
+        Console.Error.WriteLine(error.Message);
+        return 1;
+    }
+}
 if (args.Contains("--native-detached-handles-check"))
 {
     var failed = false;
@@ -289,6 +300,47 @@ if (args.Contains("--foundation-migration-dispatch-check"))
     await FoundationMigrationDispatchChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--migration-plan-dispatch"))
+{
+    try { await MigrationPlanDispatchChecks.RunAsync(); return 0; }
+    catch (InvalidOperationException error) { Console.Error.WriteLine(error.Message); return 1; }
+}
+
+if (args.Contains("--native-migration-validation"))
+{
+    var failed = false;
+    await StructuredMigrationChecks.RunAsync((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+
+if (args.Contains("--native-migration-apply"))
+{
+    var failed = false;
+    await NativeMigrationApplyChecks.RunAsync((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+
+if (args.Contains("--migration-plan-actor"))
+{
+    var failed = false;
+    await MigrationPlanActorChecks.RunAsync((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+
+if (args.Contains("--migration-plan-runner"))
+{
+    var failed = false;
+    await MigrationPlanRunnerChecks.RunAsync((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+
+if (args.Contains("--migration-plan-reads"))
+{
+    try { await MigrationPlanReadChecks.RunAsync(); return 0; }
+    catch (InvalidOperationException error) { Console.Error.WriteLine(error.Message); return 1; }
+}
+
+
 if (args.Contains("--native-direct-preview-check"))
 {
     var failed = false;

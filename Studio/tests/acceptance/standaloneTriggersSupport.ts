@@ -117,9 +117,8 @@ export class TriggerJourney {
     }
     await expect(dismiss).toHaveCount(0);
     // These child panels are never the intentional collection-loading witness.
-    const surface = this.page.getByRole("tabpanel");
     for (const label of ["Loading live trigger associations", "Loading trigger deliveries"]) {
-      await expect(surface.getByLabel(label, { exact: true })).toHaveCount(0);
+      await expect(this.page.getByLabel(label, { exact: true })).toHaveCount(0);
     }
     const mappings = this.page.getByRole("region", { name: "Workflow input mappings", exact: true });
     if (await mappings.count()) await expect.poll(() => mappings.locator('input:not([type="checkbox"]), select, textarea, p').evaluateAll(elements =>
@@ -132,11 +131,11 @@ export class TriggerJourney {
       await associations.scrollIntoViewIfNeeded();
       const row = associations.getByRole("row").nth(1);
       await expect(row.getByRole("button", { name: "Edit", exact: true })).toBeInViewport();
-      await expect(row.getByRole("button", { name: "Remove", exact: true })).toBeInViewport();
+      await expect(row.getByRole("button", { name: /^Actions for / })).toBeInViewport();
     }
     if (name === "subscription-runtime-targets" || name === "trigger-runtime-only-composition") {
-      const selector = this.page.getByLabel("Workflow and publication slot", { exact: true });
-      await selector.scrollIntoViewIfNeeded(); await expect(selector).toBeInViewport();
+      const inputsHeading = this.page.getByRole("heading", { name: "Declared inputs", exact: true });
+      await inputsHeading.scrollIntoViewIfNeeded(); await expect(inputsHeading).toBeInViewport();
     }
     if (name === "subscription-workflow-search") {
       const results = this.page.getByRole("listbox", { name: "Workflow search results", exact: true });
@@ -149,7 +148,7 @@ export class TriggerJourney {
     if (name === "trigger-no-subscribers") {
       const empty = this.page.getByRole("heading", { name: "No live associations", exact: true });
       await empty.scrollIntoViewIfNeeded(); await expect(empty).toBeInViewport();
-      await expect(this.page.getByRole("button", { name: "Add workflow", exact: true })).toBeInViewport();
+      await expect(this.page.getByRole("button", { name: "Add workflow", exact: true }).first()).toBeInViewport();
     }
     const associationCaptures = ["trigger-subscriptions", "subscription-unpublished", "target-incompatible", "target-unpublished", "trigger-design-only-composition", "http-policy-refused", "http-zero-accepted"];
     const regionName = associationCaptures.includes(name) ? "Workflow subscriptions"
@@ -320,28 +319,33 @@ export class TriggerJourney {
   }
   async create(family: "event" | "timer" | "cron" | "http", name: string, options: { mode?: "WorkflowResponse" | "AsyncFanOut"; policy?: "RequireAll" | "AcceptAvailable"; route?: string; interval?: string } = {}) {
     await this.page.goto("/workflows/triggers/new?backend=acceptance-primary");
-    await this.page.getByLabel("Trigger type", { exact: true }).selectOption(`${family}:1`);
-    await this.page.getByLabel("Trigger name", { exact: true }).fill(`${name} ${this.stamp}`);
-    if (family === "event") await this.page.getByLabel("Event name", { exact: true }).fill(`${name}.${this.stamp}`);
-    if (family === "timer") await this.page.getByLabel("Interval", { exact: true }).fill(options.interval ?? "PT5S");
-    if (family === "cron") { await this.page.getByLabel("Cron expression", { exact: true }).fill("*/10 * * * * *"); await this.page.getByLabel("Timezone", { exact: true }).fill("UTC"); }
+    const createDialog = this.page.getByRole("dialog", { name: "Create trigger", exact: true });
+    await createDialog.locator(`label[data-type-key="${family}"][data-schema-version="1"]`).click();
+    await createDialog.getByLabel("Trigger name", { exact: true }).fill(`${name} ${this.stamp}`);
+    if (family === "event") await createDialog.getByLabel("Event name", { exact: true }).fill(`${name}.${this.stamp}`);
+    if (family === "timer") await createDialog.getByLabel("Interval", { exact: true }).fill(options.interval ?? "PT5S");
+    if (family === "cron") { await createDialog.getByLabel("Cron expression", { exact: true }).fill("*/10 * * * * *"); await createDialog.getByLabel("Timezone", { exact: true }).fill("UTC"); }
     if (family === "http") {
-      await this.page.getByLabel("Route", { exact: true }).fill(options.route ?? `acceptance/${this.stamp}/${this.triggers.length}`);
-      await this.page.getByLabel("Source access", { exact: true }).selectOption("Anonymous");
-      await this.page.getByLabel("HTTP response mode", { exact: true }).selectOption(options.mode ?? "AsyncFanOut");
-      if (options.mode !== "WorkflowResponse") await this.page.getByLabel("HTTP admission policy", { exact: true }).selectOption(options.policy ?? "RequireAll");
+      await createDialog.getByLabel("Route", { exact: true }).fill(options.route ?? `acceptance/${this.stamp}/${this.triggers.length}`);
+      await createDialog.getByLabel("Source access", { exact: true }).selectOption("Anonymous");
+      await createDialog.getByLabel("HTTP response mode", { exact: true }).selectOption(options.mode ?? "AsyncFanOut");
+      if (options.mode !== "WorkflowResponse") await createDialog.getByLabel("HTTP admission policy", { exact: true }).selectOption(options.policy ?? "RequireAll");
     }
     const result = this.page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === apiRoot);
-    await this.page.getByRole("button", { name: "Create trigger", exact: true }).press("Enter");
+    await createDialog.getByRole("button", { name: "Create trigger", exact: true }).press("Enter");
     const response = await result; expect(response.status(), await response.text()).toBe(201);
     const trigger = await response.json() as TriggerView; this.triggers.push(trigger.id);
-    await this.page.goto(triggerPath(trigger.id)); await expect(this.page.getByRole("heading", { name: trigger.name, exact: true })).toBeVisible();
+    await expect(this.page.getByRole("heading", { name: trigger.name, exact: true })).toBeVisible();
     return trigger;
   }
   async open(id: string) { await this.page.goto(triggerPath(id)); await expect(this.page.getByRole("button", { name: "Edit configuration", exact: true })).toBeVisible(); }
   workflowSubscriptionRow(definitionId: string) {
     return this.page.getByRole("region", { name: "Workflow subscriptions", exact: true }).getByRole("row")
       .filter({ has: this.page.getByTitle(definitionId, { exact: true }) });
+  }
+  async subscriptionAction(row: Locator, label: string) {
+    await row.getByRole("button", { name: /^Actions for / }).click();
+    await this.page.getByRole("menuitem", { name: label, exact: true }).click();
   }
   async openInstalledConfigurationEditor(open: () => Promise<void>, expectedTopic?: string) {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -389,6 +393,8 @@ export class TriggerJourney {
     await expect(inspector.getByRole("region", { name: "Live workflow subscriptions", exact: true })).toBeVisible();
   }
   async chooseTarget(definitionId: string, viaRuntime = false, capture?: string) {
+    const dialog = this.page.getByRole("dialog", { name: "Add workflow subscription", exact: true });
+    await expect(dialog).toBeVisible();
     if (viaRuntime) {
       const matchesPage = (response: Response, after?: string) => {
         const url = new URL(response.url());
@@ -396,30 +402,32 @@ export class TriggerJourney {
           url.pathname === "/runtime/standalone-trigger-targets" && url.searchParams.get("search") === definitionId &&
           url.searchParams.get("after") === (after ?? null);
       };
-      await this.page.getByText("Browse published Runtime slots", { exact: true }).click();
-      await this.page.getByLabel("Search subscription targets", { exact: true }).fill(definitionId);
+      const publishedSlotsToggle = dialog.getByRole("button", { name: "Published slots", exact: true });
+      if (await publishedSlotsToggle.isVisible()) await publishedSlotsToggle.click();
+      await dialog.getByLabel("Search subscription targets", { exact: true }).fill(definitionId);
       // The mount's unfiltered request may still be in flight. Only this exact submitted query can satisfy the waiter.
       const targetPage = this.page.waitForResponse(response => matchesPage(response));
-      await this.page.getByRole("button", { name: "Search workflows", exact: true }).click();
+      await dialog.getByRole("button", { name: "Search workflows", exact: true }).click();
       let response = await targetPage;
-      const selector = this.page.getByLabel("Workflow and publication slot", { exact: true });
-      const desired = JSON.stringify({ definitionId, slotName: "default" });
+      const list = dialog.getByRole("listbox", { name: "Published workflow slots", exact: true });
       let pages = 0;
       while (true) {
         expect(response.ok(), `Published target discovery: ${response.status()} ${await response.text()}`).toBe(true);
         const current = await response.json() as { items: { definitionId: string; slotName: string }[]; next?: string };
-        const values = [JSON.stringify({ definitionId: "", slotName: "default" }),
-          ...current.items.map(item => JSON.stringify({ definitionId: item.definitionId, slotName: item.slotName }))];
-        await expect.poll(() => selector.locator("option").evaluateAll(options => options.map(option => (option as HTMLOptionElement).value))).toEqual(values);
         pages++;
-        if (values.includes(desired)) break;
+        const desired = list.locator(`[role="option"][data-definition-id="${definitionId}"][data-slot-name="default"]`);
+        if (current.items.some(item => item.definitionId === definitionId && item.slotName === "default")) {
+          await expect(desired).toHaveCount(1);
+          await desired.click();
+          break;
+        }
         expect(current.next, "The selected published workflow must remain reachable through the visible target pages").toBeTruthy();
         expect(pages, "Target selection stays a bounded actual UI traversal").toBeLessThan(50);
         const nextPage = this.page.waitForResponse(candidate => matchesPage(candidate, current.next));
-        await this.page.getByRole("button", { name: "Next workflow targets", exact: true }).click();
+        await dialog.getByRole("button", { name: "Next workflow targets", exact: true }).click();
         response = await nextPage;
       }
-      await selector.selectOption(desired, { timeout: 5000 });
+      await dialog.getByRole("button", { name: "Continue to inputs & access", exact: true }).click();
       this.requests.push({ kind: "actual-target-picker-pagination", definitionId, slotName: "default", pages });
       return;
     }
@@ -428,20 +436,20 @@ export class TriggerJourney {
     const name = details.definition.name.trim(); expect(name).not.toBe("");
     const searchResponse = this.page.waitForResponse(response => response.request().method() === "GET" &&
       new URL(response.url()).origin === new URL(this.base).origin && new URL(response.url()).searchParams.get("searchTerm") === name);
-    await this.page.getByRole("combobox", { name: "Workflow", exact: true }).fill(name);
+    await dialog.getByLabel("Search workflows", { exact: true }).fill(name);
     const response = await searchResponse; expect(response.ok(), await response.text()).toBe(true);
-    const results = this.page.getByRole("listbox", { name: "Workflow search results", exact: true });
+    const results = dialog.getByRole("listbox", { name: "Workflow search results", exact: true });
     let pages = 1;
     while (true) {
       await expect(results).toHaveAttribute("aria-busy", "false");
-      const option = results.getByRole("option").filter({ hasText: definitionId });
+      const option = results.locator(`[role="option"][data-definition-id="${definitionId}"]`);
       if (await option.count()) { await expect(option).toHaveCount(1); if (capture) await this.capture(capture); await option.click(); break; }
-      const next = this.page.getByRole("button", { name: "Next workflow definitions", exact: true });
+      const next = dialog.getByRole("button", { name: "Next workflow definitions", exact: true });
       await expect(next, "The selected authorized workflow is reachable through Design name search").toBeVisible();
       expect(pages++).toBeLessThan(50); await next.click();
     }
-    await expect(this.page.getByRole("combobox", { name: "Workflow", exact: true })).toHaveValue(name);
-    await expect(this.page.getByLabel(`Workflow definition ID: ${definitionId}`, { exact: true })).toBeVisible();
+    await expect(dialog.getByLabel(`Workflow definition ID: ${definitionId}`, { exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: "Continue to inputs & access", exact: true }).click();
     this.requests.push({ kind: "actual-workflow-name-selection", definitionId, name, pages, slotName: "default", ordinaryDesignAuthorization: true });
   }
   async add(id: string, definitionId: string, mappings: InputMapping[], fromWorkflow = false, capture?: string) {
@@ -449,12 +457,12 @@ export class TriggerJourney {
     if (fromWorkflow) {
       await this.page.goto(definitionPath(definitionId));
       await this.openWorkflowTriggers();
-      await this.page.getByRole("button", { name: "Add trigger", exact: true }).click();
+      await this.page.getByRole("button", { name: "Add trigger", exact: true }).first().click();
       const trigger = await this.read(id);
-      await this.page.getByRole("region", { name: "Choose standalone trigger", exact: true }).getByRole("button", { name: trigger.name, exact: true }).click();
+      await this.page.getByRole("region", { name: "Choose standalone trigger", exact: true }).getByRole("button").filter({ hasText: trigger.name }).first().click();
     } else {
       await this.open(id);
-      await this.page.getByRole("button", { name: "Add workflow", exact: true }).click();
+      await this.page.getByRole("button", { name: "Add workflow", exact: true }).first().click();
       await this.chooseTarget(definitionId);
     }
     await expect(this.page.getByRole("heading", { name: "Declared inputs", exact: true })).toBeVisible();

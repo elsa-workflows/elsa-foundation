@@ -11,6 +11,7 @@ internal sealed partial class ActorAdapter
     private sealed class ActorTurn : Contract.IActorTurn
     {
         private readonly Durable.InMemoryStore? _inMemory;
+        private readonly Durable.FoundationSelfIssuer? _issueSelf;
         private Durable.InMemoryStore Store => _inMemory ?? throw new NotSupportedException("The ordinary-root provider does not implement this authored effect.");
         private readonly Durable.TurnInput _input;
         private readonly Durable.DurableTurn _turn;
@@ -24,10 +25,12 @@ internal sealed partial class ActorAdapter
         private Contract.ActorStatus _status;
         private object? _output;
         private bool _emitted;
+        private bool _migrated;
 
-        public ActorTurn(Durable.InMemoryStore? store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient)
+        public ActorTurn(Durable.InMemoryStore? store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient, Durable.FoundationSelfIssuer? issueSelf)
         {
             _inMemory = store;
+            _issueSelf = issueSelf;
             _input = input;
             _turn = new(input, foundation: true);
             Header = header;
@@ -47,6 +50,9 @@ internal sealed partial class ActorAdapter
         }
 
         public Contract.ActorHeader Header { get; }
+        public Contract.ActorStartSettings? StartSettings => _input.Spec is { } start
+            ? new(start.Ephemeral, (Contract.History)start.History)
+            : null;
         public long Now => _input.Services.Now;
         public IReadOnlyList<Contract.Message> Inbox { get; }
         public string? State { get; set; }
@@ -75,6 +81,8 @@ internal sealed partial class ActorAdapter
                   throw new ArgumentException("The actor reference was not found.", nameof(target));
             if (kind is Contract.Kinds.Start or Contract.Kinds.Event or Contract.Kinds.ChildFinished or Contract.Kinds.JobFinished)
                 throw new ArgumentException("The foundation issues this message kind.", nameof(kind));
+            if (_issueSelf is not null && _issueSelf.Allows(dueAt) && target == Header.Ref)
+                return _turn.SendToSelf(_issueSelf.Handle, kind, payload, dueAt);
             return _turn.SendFromActor(Store, new(address.Id), address.Creation, kind, payload, dueAt);
         }
 
@@ -82,7 +90,8 @@ internal sealed partial class ActorAdapter
         {
             if (id.Length != 65 || id[0] != '~' || id.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEF") >= 0)
                 throw new ArgumentException("Recall requires an issued message id.", nameof(id));
-            _turn.RecallFromActor(Store, id);
+            if (_issueSelf is not null) _turn.RecallPersistedSelfInput(id);
+            else _turn.RecallFromActor(Store, id);
         }
 
         public Contract.ActorRef Start(Contract.StartSpec spec, Contract.Placement placement = Contract.Placement.WithParent, bool detached = false)
@@ -150,6 +159,11 @@ internal sealed partial class ActorAdapter
 
         public void Record(object entry)
         {
+            if (entry is Contract.ActorLifecycle.Migrated && Inbox is [{ Kind: Contract.Kinds.Migrate }])
+            {
+                _migrated = true;
+                return;
+            }
             if (_row.History == Durable.History.Full) _entries.Add(System.Text.Json.JsonSerializer.SerializeToElement(entry));
         }
 
@@ -202,7 +216,7 @@ internal sealed partial class ActorAdapter
             }
             if (_input.Row is null) _entries.Insert(0, "start");
             if (ended) _entries.Add("end");
-            if (Inbox is [{ Kind: Contract.Kinds.Migrate }]) _entries.Add("migrate");
+            if (_migrated && outcome.Consumed.Any(delivery => delivery.Message.Kind == Contract.Kinds.Migrate)) _entries.Add("migrate");
             var entries = _input.Pending is List<object> pending ? [.. pending, .. _entries] : _entries;
             var journal = entries.Count > 0 ? Durable.Json.Write(entries) :
                 _row.History == Durable.History.State && State != (_row.FoundationNullState ? null : _row.State) ? "[]" : null;
