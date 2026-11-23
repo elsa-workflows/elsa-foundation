@@ -137,6 +137,11 @@ Public actor execution with emitted effects and later revisions remains ahead. T
 refuses any poll containing a public creator, so use this ingress only in its dedicated database.
 The existing Native workflow restart demonstration uses the prototype adapter.
 
+The `root-direct-send` case covers ordinary sends before and after the first checkpoint. The receipt is scoped to
+one exact actor life and the public operation id. It can expire while an earlier delivery stays pending. Every allowed
+reuse gets a new physical occurrence, with the original operation, due presence, kind and payload available to a
+fresh scoped reader. The public runner and its later fenced checkpoints are separate increments.
+
 ### The store conformance suite. Run
 
 `conformance/Kernel.Store.Conformance` (merged from `6097f0174b`), 46 semantic cases, against the merged store with

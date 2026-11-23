@@ -6,7 +6,7 @@ namespace Kernel.EntityFramework;
 
 /// <summary>Store operations for externally generated root starts in the single-host PostgreSQL preview.
 /// The calling host supplies the tenant from its bound ingress scope. Schema installation is explicit.</summary>
-internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow)
+internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow)
 {
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
@@ -41,6 +41,7 @@ internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan dedu
             ON CONFLICT DO NOTHING
             """, cancellationToken);
         await EfStore.InstallFirstRootCheckpointsAsync(db, cancellationToken);
+        await InstallDirectReceiptsAsync(db, cancellationToken);
         var placementMatches = await db.Database.SqlQueryRaw<bool>("""
             SELECT i."Partitions" = count(p."Id") AND min(p."Id") = 0 AND max(p."Id") = i."Partitions" - 1 AS "Value"
             FROM "FoundationRootIssuer" i CROSS JOIN "Partitions" p GROUP BY i."Partitions"
