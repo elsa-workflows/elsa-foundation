@@ -5,8 +5,6 @@ using Kernel.Native;
 using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Storage;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
@@ -30,8 +28,7 @@ internal static class PostgresRootJobPreview
         if (restart is null)
         {
             await using var db = Open();
-            var database = db.GetService<IRelationalDatabaseCreator>();
-            if (await database.ExistsAsync(stop) && await database.HasTablesAsync(stop))
+            if (!await PostgresFixtureDatabase.IsEmptyAsync(db, stop))
             {
                 Console.Error.WriteLine("Use a fresh dedicated PostgreSQL database for the public root job preview.");
                 return 2;
