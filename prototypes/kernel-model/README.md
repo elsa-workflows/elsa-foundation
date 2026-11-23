@@ -153,6 +153,34 @@ checks that an independent ready root runs during that interval, a replay adds n
 Each tenant uses its own fixed-scope public client process. To select a writer and fence, append `owned` or `ef`
 and `in-batch` or `checked` to both commands. This preview runs one registered workflow actor type on its dedicated database.
 
+To run two processes under the built-in Cluster runtime, point `KERNEL_PREVIEW_POSTGRES` at a fresh dedicated
+PostgreSQL database and run the following after building `models/Native.Run` in Release:
+
+```bash
+dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-roots 1024
+```
+
+The first node checkpoints roots on distinct partitions in one PostgreSQL transaction. A second OS process joins
+with its own RuntimeNode. A single store snapshot shows the two nodes each own half the partitions. The second
+node holds the same epoch from the first approval's admission through its checkpoint, then stops gracefully.
+The fixture waits until the surviving node owns every partition and observes the workflow's partition at a higher
+epoch. Replaying that approval is a duplicate. A new approval completes the workflow with one new journal revision. Both hosts discover their roots from their
+assigned sets. This preview covers generated public roots, direct input and graceful handover with the PostgreSQL
+owned-SQL writer. Run `root-set` in PostgreSQL EF conformance for the stale-fence and per-partition Seen/Trial checks.
+
+For an abrupt peer exit in the same two-process Cluster fixture, use a fresh dedicated PostgreSQL database:
+
+```bash
+dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-crash 1024
+```
+
+The coordinator terminates only its spawned peer process while the workflow waits for its second approval.
+The fixture reads the peer's live lease after process exit. A temporary diagnostic trigger on the workflow's
+partition records the peer lease deadline, owner, epoch and both the successful UPDATE's statement start and its
+row-trigger time. The fixture requires that UPDATE to start after the deadline. The provider samples the lease
+earlier in the same transaction. The observer records committed ownership changes. The public journal bookmark
+spans process loss and replay.
+
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
 ```bash
@@ -180,6 +208,27 @@ journal records one completion revision.
 
 This is a runnable K7 case on the public Embedded preview. The full Flowchart corpus and Cluster qualification
 remain part of K7.
+
+### Parallel paths in the PostgreSQL Flowchart preview
+
+Use a fresh dedicated database in `KERNEL_PREVIEW_POSTGRES` for each run. From `prototypes/kernel-model`:
+
+```sh
+models/Native.Run/run-flowchart-preview.sh manual
+```
+
+The public runtime starts a Native purchase Flowchart. A decision selects manual risk review while finance waits in
+parallel. The risk review finishes, and a second Embedded host process takes the scope at a higher epoch. Replaying
+the risk operation with a finance payload leaves the checkpoint and journal unchanged. Finance then completes the
+last live branch. The journal shows one join, and the terminal checkpoint contains both decisions.
+
+Run with `automatic` on a separate fresh database to select the bypass path. Finance still has to finish. The distinct
+inactive risk branch cannot hold the join open. This is the Balanced and direct-input PostgreSQL preview. The scoped
+PostgreSQL owner still needs support for internally scheduled Native continuation messages before it can qualify
+Durable Flowchart execution.
+
+On a fresh database, `dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-flowchart-preview merge-early`
+replaces the join with a merge. The waiting assertion detects the premature finish.
 
 ## Built-in Cluster redistribution on PostgreSQL
 
