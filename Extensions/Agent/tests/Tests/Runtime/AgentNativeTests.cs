@@ -1134,7 +1134,7 @@ public sealed partial class AgentNativeTests
         var command = new WorkflowExecutionCommand("start", "run", WorkflowExecutionCommandKind.Start, now,
             JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(executable.Identity, executable.Identity.ArtifactId,
                 variables: null, inputs: null, stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.Unknown, pinnedSource: null,
-                parentWorkflowExecutionId: null, correlationId: null, tenantId: null, partition: new("default"), authority: authority)), metadata);
+                parentWorkflowExecutionId: null, correlationId: null, tenantId: null, partition: new("default"), authority: authority), Elsa.Serialization.Core.JsonBaseline.Options), metadata);
         var envelope = new WorkflowExecutionCommandEnvelope("start-envelope", "run", command, "start", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now, 1, metadata);
         await actor.EnqueueAsync(envelope);
         return (actor, envelope);

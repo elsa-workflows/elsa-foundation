@@ -184,7 +184,7 @@ internal sealed class EtlBatchProcessor
             if (invocation.Artifact.FormatVersion != EtlArtifact.CurrentFormatVersion ||
                 artifactHash != invocation.Artifact.ContentHash || artifactHash != suppliedHash ||
                 prepared.PipelineHash != artifactHash ||
-                suppliedDocument.GetRawText() != artifactDocument.GetRawText())
+                !Elsa.Serialization.Core.JsonCanonicalForm.Equals(suppliedDocument, artifactDocument))
                 return new EtlPreparationDiagnostic("etl.pipeline-artifact-mismatch");
 
             if (prepared.Inputs.Scope != scope || prepared.Inputs.RunId != invocation.RunId ||

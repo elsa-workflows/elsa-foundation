@@ -221,7 +221,7 @@ public sealed partial class BpmnUpgradeRecoveryEfTests
                     Assert.Null(page.NextContinuationToken);
                     persistedWork = Assert.Single(page.Items, work =>
                         work.CommandKind == WorkflowExecutionCommandKind.CompleteActivity && work.Payload is { } body &&
-                        body.Deserialize<RuntimeCompleteActivityCommandPayload>()?.CompletedChildActivityExecutionId == loserId);
+                        body.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)?.CompletedChildActivityExecutionId == loserId);
                 }
                 await first.Provider.GetRequiredService<IRuntimeResumptionService>().SweepAsync(new RuntimeResumptionSweepRequest());
                 var after = await states.ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);

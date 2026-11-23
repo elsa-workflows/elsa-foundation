@@ -17,6 +17,22 @@ public sealed partial class EtlBatchProcessorTests
     private const string ErrorJsonl = "{\"recordOrdinal\":3,\"code\":\"etl.lookup-key-not-found\",\"field\":\"id\"}\n";
 
     [Fact]
+    public async Task Equivalent_raw_filter_spelling_matches_the_artifact_but_a_changed_value_does_not()
+    {
+        using var scenario = await Scenario.CreateAsync(CreatePipeline());
+        using var equal = JsonDocument.Parse("\"\\u006beep\"");
+        using var different = JsonDocument.Parse("\"different\"");
+        var originalFilter = Assert.Single(scenario.Pipeline.Filters);
+        var same = scenario.Pipeline with { Filters = [originalFilter with { Value = equal.RootElement.Clone() }] };
+        var result = await Processor.ProcessAsync(scenario.Admission, same, scenario.Prepared, scenario.Batch, scenario.Bindings);
+        Assert.True(result.Succeeded, result.Diagnostic?.ToString());
+        var changed = scenario.Pipeline with { Filters = [originalFilter with { Value = different.RootElement.Clone() }] };
+        var refused = await Processor.ProcessAsync(scenario.Admission, changed, scenario.Prepared, scenario.Batch, scenario.Bindings);
+        Assert.False(refused.Succeeded);
+        Assert.Equal("etl.pipeline-artifact-mismatch", refused.Diagnostic!.Code);
+    }
+
+    [Fact]
     public async Task Processes_rows_once_and_publishes_deterministic_main_and_error_routes()
     {
         using var scenario = await Scenario.CreateAsync(CreatePipeline());

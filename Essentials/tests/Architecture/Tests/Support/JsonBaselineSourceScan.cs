@@ -13,7 +13,9 @@ internal static class JsonBaselineSourceScan
         "ActivityCompletionProjector.cs", "ActivityInputHydrator.cs", "StepVariableSession.cs", "RuntimeActivityInputMaterializer.cs",
         "RuntimeInputBindingCompiler.cs", "WorkflowExecutableInputValidator.cs", "WorkflowExecutionStartDispatch.cs", "StatefulActivity.cs",
         "BackgroundActivityCompletionCodec.cs", "RuntimeDurableValueStorageDrivers.cs", "GraphActivity.cs", "WorkflowBuilder.cs",
-        "DescriptorPayloadSerializer.cs", "ObjectConverter.cs", "RuntimeWorkflowStateSeed.cs", "ActivitySecretInputResolver.cs", "ParentResumeExecutor.cs"
+        "DescriptorPayloadSerializer.cs", "ObjectConverter.cs", "RuntimeWorkflowStateSeed.cs", "ActivitySecretInputResolver.cs", "ParentResumeExecutor.cs",
+        "VariableMapper.cs", "VariableDefaultValueFormatter.cs", "ActivityInputOption.cs", "AgentSchemaCompiler.cs", "AgentSchemaValidator.cs",
+        "AgentActivityProvider.cs", "GraphActivityProvider.cs", "GraphBodyReferenceValidator.cs", "ShellFeatureStore.cs", "JsonShellFeatureConfigurationStore.cs", "SecretSettingMask.cs"
     };
 
     internal static string Identity(string path, Finding finding) => path.Replace('\\', '/') + " | " + finding.Site + " | " + finding.Signature;
@@ -64,10 +66,17 @@ internal static class JsonBaselineSourceScan
         foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
         {
             var name = assignment.Left is MemberAccessExpressionSyntax member ? member.Name.Identifier.ValueText : assignment.Left.ToString();
-            if (IsDeviation(name, assignment.Right.ToString())) Add(name, assignment);
+            if (IsOptionsAssignment(assignment, OptionsType) && IsDeviation(name, assignment.Right.ToString())) Add(name, assignment);
         }
         foreach (var argument in root.DescendantNodes().OfType<AttributeArgumentSyntax>().Where(x => x.NameEquals is not null))
-            if (argument.Ancestors().OfType<AttributeSyntax>().First().Name.ToString().Contains("JsonSourceGenerationOptions", StringComparison.Ordinal) && IsDeviation(argument.NameEquals!.Name.Identifier.ValueText, argument.Expression.ToString())) Add(argument.NameEquals.Name.Identifier.ValueText, argument);
+            if (argument.Ancestors().OfType<AttributeSyntax>().First().Name.ToString().Contains("JsonSourceGenerationOptions", StringComparison.Ordinal))
+            {
+                var name = argument.NameEquals!.Name.Identifier.ValueText;
+                if (IsDeviation(name, argument.Expression.ToString())) Add(name, argument);
+                if (name == "UseStringEnumConverter" && argument.Expression.ToString() == "true") Add("converter:JsonStringEnumConverter", argument);
+                if (name == "Converters")
+                    foreach (var converter in argument.Expression.DescendantNodesAndSelf().OfType<TypeOfExpressionSyntax>()) Add("converter:" + converter.Type.ToString().Split('.').Last(), converter);
+            }
         var serializerAliases = root.DescendantNodes().OfType<UsingDirectiveSyntax>()
             .Where(usingDirective => usingDirective.Alias is not null && usingDirective.Name?.ToString().EndsWith(".JsonSerializer", StringComparison.Ordinal) == true)
             .Select(usingDirective => usingDirective.Alias!.Name.Identifier.ValueText).ToHashSet(StringComparer.Ordinal);
@@ -116,6 +125,34 @@ internal static class JsonBaselineSourceScan
         void Add(string setting, SyntaxNode node) => findings.Add(new(setting, node.WithoutTrivia().NormalizeWhitespace().ToFullString().Replace("\r", "", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal), node.GetLocation().GetLineSpan().StartLinePosition.Line + 1, Site(node)));
     }
 
+    private static bool IsOptionsAssignment(AssignmentExpressionSyntax assignment, Func<string, bool> optionsType)
+    {
+        if (assignment.Left is MemberAccessExpressionSyntax member)
+        {
+            var receiver = member.Expression.ToString();
+            if (member.Expression is IdentifierNameSyntax identifier)
+            {
+                var method = assignment.Ancestors().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault();
+                var parameterType = method?.ParameterList.Parameters.FirstOrDefault(parameter => parameter.Identifier.ValueText == identifier.Identifier.ValueText)?.Type?.ToString();
+                if (parameterType is not null) return optionsType(parameterType);
+                var scope = (SyntaxNode?)method ?? assignment.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+                var declaration = scope?.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault(variable => variable.Identifier.ValueText == identifier.Identifier.ValueText);
+                var receiverType = (declaration?.Parent as VariableDeclarationSyntax)?.Type.ToString();
+                if (receiverType == "var" && declaration?.Initializer?.Value is ObjectCreationExpressionSyntax created) receiverType = created.Type.ToString();
+                if (receiverType is not null && receiverType != "var") return optionsType(receiverType);
+            }
+            return receiver.EndsWith("options", StringComparison.OrdinalIgnoreCase) || receiver.EndsWith("Options.Value.SerializerOptions", StringComparison.Ordinal) ||
+                receiver.Contains(".JsonSerializerOptions", StringComparison.Ordinal) || receiver.Contains(".SerializerOptions", StringComparison.Ordinal);
+        }
+        var creation = assignment.Ancestors().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
+        if (creation is not null) return optionsType(creation.Type.ToString());
+        var implicitCreation = assignment.Ancestors().OfType<ImplicitObjectCreationExpressionSyntax>().FirstOrDefault();
+        var declaredType = implicitCreation?.Ancestors().OfType<VariableDeclarationSyntax>().FirstOrDefault()?.Type.ToString()
+            ?? implicitCreation?.Ancestors().OfType<PropertyDeclarationSyntax>().FirstOrDefault()?.Type.ToString()
+            ?? implicitCreation?.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.ReturnType.ToString();
+        return declaredType is not null && optionsType(declaredType);
+    }
+
     private static string Site(SyntaxNode node)
     {
         var types = node.Ancestors().OfType<TypeDeclarationSyntax>().Reverse().Select(type => type.Identifier.ValueText);
@@ -124,7 +161,8 @@ internal static class JsonBaselineSourceScan
         if (owner.Length == 0) owner = "<global>";
         var method = node.Ancestors().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault();
         var name = method switch { MethodDeclarationSyntax declaration => declaration.Identifier.ValueText, ConstructorDeclarationSyntax declaration => declaration.Identifier.ValueText, _ => node.Ancestors().OfType<PropertyDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText ?? node.Ancestors().OfType<VariableDeclaratorSyntax>().FirstOrDefault()?.Identifier.ValueText ?? "<initializer>" };
-        return owner + "::" + name + (method is null ? "" : "(" + string.Join(",", method.ParameterList.Parameters.Select(parameter => parameter.Type?.ToString())) + ")");
+        var locals = node.Ancestors().OfType<LocalFunctionStatementSyntax>().Reverse().Select(local => local.Identifier.ValueText);
+        return owner + "::" + name + (method is null ? "" : "(" + string.Join(",", method.ParameterList.Parameters.Select(parameter => parameter.Type?.ToString())) + ")") + string.Concat(locals.Select(local => "::" + local));
     }
 
     private static string ConverterName(ExpressionSyntax expression) => expression switch
@@ -146,6 +184,11 @@ internal static class JsonBaselineSourceScan
         "NumberHandling" => value != "JsonNumberHandling.Strict",
         "DefaultIgnoreCondition" => value != "JsonIgnoreCondition.Never",
         "Encoder" => !value.EndsWith("JavaScriptEncoder.UnsafeRelaxedJsonEscaping", StringComparison.Ordinal) && !value.EndsWith("JsonBaseline.Options.Encoder", StringComparison.Ordinal),
+        "UnmappedMemberHandling" => value != "JsonUnmappedMemberHandling.Skip",
+        "MaxDepth" => value is not ("0" or "64"),
+        "WriteIndented" or "AllowTrailingCommas" or "IncludeFields" or "IgnoreReadOnlyFields" or "IgnoreReadOnlyProperties" => value != "false",
+        "ReadCommentHandling" or "CommentHandling" => !value.EndsWith("JsonCommentHandling.Disallow", StringComparison.Ordinal),
+        "ReferenceHandler" => value != "null",
         _ => false
     };
 }

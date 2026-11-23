@@ -99,6 +99,31 @@ public sealed class FeatureAdministrationTests
     }
 
     [Fact]
+    public async Task Managed_jsonc_projects_only_jsonc_values_and_retains_strict_siblings()
+    {
+        const string strict = """{ "Credential":"private-feature-credential-sentinel", "raw":"\u0041", "n":1.00, "large":9007199254740993, "nil":null }""";
+        const string jsonc = """{ "n":1, /* owner configuration comment */ "text":"ok", }""";
+        const string unrelated = """{ "keep":true, /* unrelated owner comment */ }""";
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true, beforeStudio: builder =>
+        {
+            var path = Path.Combine(builder.Environment.ContentRootPath, "config", "studio-shells.json");
+            var text = File.ReadAllText(path)
+                .Replace("\"Configured\":{\"Credential\":\"private-feature-credential-sentinel\"}", "\"On\":" + jsonc + ",\"Configured\":" + strict, StringComparison.Ordinal)
+                .Replace("\"preserve\":\"unrelated\"", "\"preserve\":" + unrelated, StringComparison.Ordinal);
+            File.WriteAllText(path, text);
+        });
+        var store = host.App.Services.GetRequiredService<IShellFeatureConfigurationStore>();
+        var snapshot = await store.LoadAsync();
+        using var projected = JsonDocument.Parse(snapshot.Features["On"].GetRawText());
+        Assert.Equal("ok", projected.RootElement.GetProperty("text").GetString());
+        Assert.Equal(strict, snapshot.Features["Configured"].GetRawText());
+        await store.SaveAsync(snapshot.Revision, snapshot.Features.Select(pair => new FeatureConfigurationChange(pair.Key, true, pair.Value)).ToArray());
+        using var saved = JsonDocument.Parse(await File.ReadAllTextAsync(host.ShellsFile), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        Assert.Equal(unrelated, saved.RootElement.GetProperty("preserve").GetRawText());
+        Assert.Equal(strict, (await store.LoadAsync()).Features["Configured"].GetRawText());
+    }
+
+    [Fact]
     public async Task Public_store_refuses_an_unreadable_complete_file_depth_before_writing()
     {
         await using var host = await AdministrationHost.StartAsync(managedFeatures: true);

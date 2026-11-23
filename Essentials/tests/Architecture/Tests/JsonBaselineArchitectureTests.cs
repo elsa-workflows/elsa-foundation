@@ -12,6 +12,16 @@ public sealed class JsonBaselineArchitectureTests
     [InlineData("class C { object x = JsonSerializerOptions.Web; }", "defaults")]
     [InlineData("class C { object x = JsonSerializerOptions.Default; }", "defaults")]
     [InlineData("[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)] class C {}", "PropertyNameCaseInsensitive")]
+    [InlineData("[JsonSourceGenerationOptions(Converters = [typeof(LossyConverter)])] class C {}", "converter:LossyConverter")]
+    [InlineData("[JsonSourceGenerationOptions(UseStringEnumConverter = true)] class C {}", "converter:JsonStringEnumConverter")]
+    [InlineData("class C { object x = new JsonSerializerOptions { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow }; }", "UnmappedMemberHandling")]
+    [InlineData("class C { void M() { options.MaxDepth = 128; } }", "MaxDepth")]
+    [InlineData("class C { void M() { options.AllowTrailingCommas = true; } }", "AllowTrailingCommas")]
+    [InlineData("class C { void M() { options.ReadCommentHandling = JsonCommentHandling.Skip; } }", "ReadCommentHandling")]
+    [InlineData("class C { void M() { options.ReferenceHandler = ReferenceHandler.IgnoreCycles; } }", "ReferenceHandler")]
+    [InlineData("class C { void M() { options.IgnoreReadOnlyProperties = true; } }", "IgnoreReadOnlyProperties")]
+    [InlineData("class C { void M() { options.IncludeFields = true; } }", "IncludeFields")]
+    [InlineData("class C { void M() { options.WriteIndented = true; } }", "WriteIndented")]
     [InlineData("class C { void M() { options.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase; } }", "DictionaryKeyPolicy")]
     [InlineData("class C { void M() { options.Converters.Add(new LossyConverter()); } }", "converter:LossyConverter")]
     [InlineData("class C { void M() { options.Converters.Insert(0, new LossyConverter()); } }", "converter:LossyConverter")]
@@ -66,6 +76,12 @@ public sealed class JsonBaselineArchitectureTests
     {
         const string source = "class C { JsonSerializerOptions options = new(JsonBaseline.Options); void M() { options.PropertyNameCaseInsensitive = false; options.NumberHandling = JsonNumberHandling.Strict; JsonSerializer.Serialize(value, options); JsonSerializer.Serialize(value, Context.WireContext.Value); /* new JsonSerializerOptions() */ var text = \"JsonSerializer.Serialize(value)\"; } }";
         Assert.Empty(JsonBaselineSourceScan.Scan(source));
+    }
+
+    [Fact]
+    public void A_domain_depth_property_and_owner_codec_are_not_serializer_settings_or_optionless_calls()
+    {
+        Assert.Empty(JsonBaselineSourceScan.Scan("class C { void M() { model.MaxDepth = 128; var parsing = new JsonDocumentOptions { MaxDepth = 128 }; parsing.MaxDepth = 256; RuntimeCompleteActivityPayloadMemo.Deserialize(workItem); var value = codec.Deserialize(input); } }"));
     }
 
     [Fact]

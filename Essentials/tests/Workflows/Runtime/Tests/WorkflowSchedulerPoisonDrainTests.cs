@@ -204,9 +204,9 @@ public sealed class WorkflowSchedulerPoisonDrainTests
                     "activity-1",
                     "activity-1-retry",
                     new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
-                    "retry after policy")),
+                    "retry after policy"), Elsa.Serialization.Core.JsonBaseline.Options),
             WorkflowExecutionCommandKind.CancelActivityScope => JsonSerializer.SerializeToElement(
-                new CancelActivityScopeCommand("activity-1", "activity-1", "operator request")),
+                new CancelActivityScopeCommand("activity-1", "activity-1", "operator request"), Elsa.Serialization.Core.JsonBaseline.Options),
             _ => throw new ArgumentOutOfRangeException(nameof(commandKind), commandKind, null)
         };
         await queue.EnqueueAsync(NewWorkItem(1, commandKind, payload));

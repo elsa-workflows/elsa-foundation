@@ -145,7 +145,7 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests
         await using var scope = await CreatePartitionScopeAsync(harness);
         var queued = await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
             .ListAllAsync(new RuntimeSchedulerWorkQuery(executionId));
-        Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work),
+        Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work, Elsa.Serialization.Core.JsonBaseline.Options),
             JsonSerializer.SerializeToElement(Assert.Single(queued, candidate => candidate.WorkItemId == work.WorkItemId))));
     }
 
@@ -163,7 +163,7 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests
         public void Observe(RuntimeSchedulerWorkItem work)
         {
             if (work.CommandKind == WorkflowExecutionCommandKind.CompleteActivity && work.Payload is { } payload &&
-                payload.Deserialize<RuntimeCompleteActivityCommandPayload>() is { } completion && completion.ExecutableNodeId == BpmnNodeId)
+                payload.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options) is { } completion && completion.ExecutableNodeId == BpmnNodeId)
                 WorkItems.Enqueue(work);
         }
     }

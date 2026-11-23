@@ -1399,7 +1399,7 @@ public sealed class ResponseReplaySafetyProcessTests
         Assert.Equal(commandId, scheduler.Work.CommandId);
         Assert.Equal(WorkflowExecutionCommandKind.InvokeActivity, scheduler.Work.CommandKind);
         Assert.NotNull(scheduler.Work.Payload);
-        var payload = scheduler.Work.Payload!.Value.Deserialize<RuntimeInvokeActivityCommandPayload>()!;
+        var payload = scheduler.Work.Payload!.Value.Deserialize<RuntimeInvokeActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(HttpNodeId, payload.ExecutableNodeId);
         Assert.Equal(endpointActivityExecutionId, payload.ActivityExecutionId);
         Assert.Equal(artifactId, payload.PinnedExecutable.ArtifactId);

@@ -506,7 +506,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var payload = new RuntimeStartActivityCommandPayload(executable.Identity, "set-counter", invocationId,
             RuntimeStartActivityCommandPayload.ScheduledActivityReason);
         var work = new RuntimeSchedulerWorkItem("start", workflowId, "command", WorkflowExecutionCommandKind.StartActivity,
-            "envelope", "hash-upgrade-start", now, now, 1, JsonSerializer.SerializeToElement(payload),
+            "envelope", "hash-upgrade-start", now, now, 1, JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             new Dictionary<string, string>(), new Dictionary<string, string>());
         var executor = new WorkflowIntrinsicExecutor(workflows, activities, new RuntimeInputBindingResolver(),
             new InMemoryDurableValueStateStore(), new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore()),

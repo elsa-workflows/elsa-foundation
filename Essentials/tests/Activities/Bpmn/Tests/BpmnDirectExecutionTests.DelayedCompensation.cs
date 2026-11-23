@@ -111,7 +111,7 @@ public sealed partial class BpmnDirectExecutionTests
         await CaptureAsync("waiting");
         Assert.NotNull(delayed);
         Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, delayed.Intent.Kind);
-        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, delayed.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!.CommandKind);
+        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, delayed.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!.CommandKind);
         Assert.True(delayed.AvailableAt > DateTimeOffset.UtcNow.AddMinutes(50));
         Assert.Equal(WorkflowExecutionStatus.Running,
             (await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(origin.WorkerExecutionId))!.Status);
