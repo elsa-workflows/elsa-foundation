@@ -23,6 +23,8 @@ internal sealed class MigrationPlanDispatch(IIngress ingress, IMigrationDispatch
         ArgumentNullException.ThrowIfNull(scope);
         var batch = await state.ReadPendingAsync(scope, plan, cancellationToken);
         if (batch is null) return null;
+        if (batch.Actors is not { Length: > 0 } || batch.Actors.Any(actor => string.IsNullOrEmpty(actor.Id)))
+            throw new InvalidOperationException("A committed migration batch requires nonempty exact actor references.");
         var payload = JsonSerializer.Serialize(new MigrationRequest(batch.From, batch.To, plan));
         var accepted = 0;
         var duplicate = 0;

@@ -122,6 +122,25 @@ internal static class MigrationPlanDispatchChecks
             await DefinitionAsync(first) == "later" && await DefinitionAsync(second) == "target",
             "A distinct plan uses a distinct operation ID for the same actor and batch number.");
 
+        await RefuseInvalidSelectionAsync("empty-plan", []);
+        await RefuseInvalidSelectionAsync("default-ref-plan", [first, default]);
+
+        async Task RefuseInvalidSelectionAsync(string name, Contract.ActorRef[] selection)
+        {
+            var invalidPlan = await StartAsync(name, "plan");
+            await PumpAsync();
+            await SendAsync(invalidPlan, "select-invalid", "select", Json.Write(new MigrationDispatchBatch(1, "later", "target", selection)));
+            await PumpAsync();
+            var ackCount = planState.Acknowledgments.Count;
+            ingress.Calls.Clear();
+            var refused = false;
+            try { await dispatcher.DispatchAsync(scope, invalidPlan, stop); }
+            catch (InvalidOperationException) { refused = true; }
+            await PumpAsync();
+            Require(refused && ingress.Calls.Count == 0 && planState.Acknowledgments.Count == ackCount &&
+                (await planState.ReadPendingAsync(scope, invalidPlan, stop))?.Number == 1,
+                $"The {name} selection stays pending before any send or acknowledgment.");
+        }
 
         async Task<List<string>> ReadJournalAsync()
         {
