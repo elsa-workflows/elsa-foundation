@@ -1,6 +1,8 @@
+using System.Buffers.Binary;
 using System.Text;
 using Kernel.Foundation.Contracts;
 using Kernel.EntityFramework;
+using Kernel.Foundation.InMemory;
 using Bookmark = Kernel.Durable.FoundationJournalPaging.Bookmark;
 
 namespace Kernel.Native.Run;
@@ -33,6 +35,36 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
                 row.Labels), null, null, page.AsOf)).ToArray();
         PageToken? next = page.Items.Count > _pageSize
             ? new(cursor.Seal(context, Encoding.ASCII.GetBytes(items[^1].Header.Ref.Id))) : null;
+        return new(items, next, page.AsOf);
+    }
+
+    internal async ValueTask<Page<WorkflowRunView>> ListRunsAsync(BoundScope scope, string actorType, WorkflowRunQuery query,
+        PageToken? from, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var context = WorkflowRunList.Context("postgres-workflow-run-history/1", scope, actorType, query);
+        Span<byte> bookmark = stackalloc byte[sizeof(long) + 64];
+        if (from is { } token && !cursor.TryOpen(context, token.Value, bookmark))
+            throw new ArgumentException("The continuation does not match this workflow run list.", nameof(from));
+        long? afterTime = from is null ? null : BinaryPrimitives.ReadInt64BigEndian(bookmark);
+        var afterRef = from is null ? null : Encoding.ASCII.GetString(bookmark[sizeof(long)..]);
+        var lower = WorkflowRunList.UnixMilliseconds(query.From);
+        var upper = WorkflowRunList.UnixMilliseconds(query.To);
+        // Round inward to representable clock values. Truncating either endpoint changes an inclusive bound.
+        var page = await store.ReadRootWorkflowHistoryAsync(scope.Tenant, actorType, query.Definition, (int?)query.Status,
+            lower is { } min ? (long)decimal.Ceiling(min) : null, upper is { } max ? (long)decimal.Floor(max) : null,
+            afterTime, afterRef, _pageSize + 1, cancellationToken);
+        var items = page.Items.Take(_pageSize).Select(row => new WorkflowRunView(new(row.Reference), row.Definition,
+            (ActorStatus)row.Status, DateTimeOffset.FromUnixTimeMilliseconds(row.UpdatedAt))).ToArray();
+        PageToken? next = null;
+        if (page.Items.Count > _pageSize)
+        {
+            var last = page.Items[_pageSize - 1];
+            Span<byte> landing = stackalloc byte[sizeof(long) + 64];
+            BinaryPrimitives.WriteInt64BigEndian(landing, last.UpdatedAt);
+            Encoding.ASCII.GetBytes(last.Reference, landing[sizeof(long)..]);
+            next = new(cursor.Seal(context, landing));
+        }
         return new(items, next, page.AsOf);
     }
 

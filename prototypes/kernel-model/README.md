@@ -301,6 +301,24 @@ On a fresh disposable PostgreSQL database, `pg-root-list <owned|ef> <checked|in-
 `projection-bookmark`. Run `pg-root-list <owned|ef> <checked|in-batch> restart <bookmark>` against that database
 from a fresh process. The birth phase renames the checkpoint and journal tables after it captures the bookmark.
 
+The opt-in PostgreSQL workflow-history projection is installed via `EfStore.InstallRootWorkflowHistoryAsync`
+after the root admission schema. A version 1 marker, timestamp table, chronology index and checkpoint trigger
+are installed in one transaction. The trigger checks the exact bound root and qualifies the checkpoint revision.
+It stores the database clock in Unix milliseconds, reusing the stored terminal time on completion. It advances
+with ordinary journal-silent checkpoints and rolls back with the owner transaction. It adds one server-side
+projection upsert with its indexes per qualified checkpoint. The worker sends the same SQL commands as before.
+
+The chronology route uses inclusive UTC bounds at the precision of the caller's dates and orders results by
+timestamp descending and exact reference ascending. It joins the timestamp and actor-list projections. Reads
+check both format markers in the same statement. The generic actor list still shows prior roots. Such a root
+enters chronological history on its first checkpoint observed after installation. Physical workflow retirement,
+legacy timestamps and product routing remain outside this preview.
+
+On a fresh disposable PostgreSQL database, run `pg-root-workflow-history <owned|ef> <checked|in-batch> birth`
+with the Native runner. Run the same command with `restart <projection-bookmark>` and `tenant <projection-bookmark>`
+in separate processes. The birth phase renames the checkpoint and journal tables after the physical checks so
+the new processes exercise both projections directly.
+
 On a fresh PostgreSQL database, `pg-root-history <owned|ef> <checked|in-batch>` on the same runner
 exercises two ordinary turns with no journal entries. The Minimal workflow saves its first approval. The Full
 workflow consumes an unmatched input admitted while its scheduled start was pending. The owner offers the
