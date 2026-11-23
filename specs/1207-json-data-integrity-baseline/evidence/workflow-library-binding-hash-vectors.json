@@ -1,0 +1,74 @@
+[
+  {
+    "name": "baseline",
+    "material": "{\"text\":\"<René>\",\"n\":1.0,\"explicit\":null,\"items\":[1,2],\"large\":9007199254740993}",
+    "tenant": "tenant-a",
+    "subject": null,
+    "kind": "definitions",
+    "canonical": "{\"global\":false,\"kind\":\"definitions\",\"material\":{\"explicit\":null,\"items\":[1e0,2e0],\"large\":9007199254740993e0,\"n\":1e0,\"text\":\"\\u003CRen\\u00E9\\u003E\"},\"subject\":null,\"tenant\":\"tenant-a\"}",
+    "sha256": "dad62db798280060cc60a3c30e2e531d7837fbc6c7c80304dd4578bafe2682fa"
+  },
+  {
+    "name": "equivalent",
+    "material": " { \"large\":9007199254740993e0,\"items\":[1.0,2e0],\"explicit\":null,\"n\":1e0,\"text\":\"\\u003CRen\\u00E9>\" } ",
+    "tenant": "tenant-a",
+    "subject": null,
+    "kind": "definitions",
+    "canonical": "{\"global\":false,\"kind\":\"definitions\",\"material\":{\"explicit\":null,\"items\":[1e0,2e0],\"large\":9007199254740993e0,\"n\":1e0,\"text\":\"\\u003CRen\\u00E9\\u003E\"},\"subject\":null,\"tenant\":\"tenant-a\"}",
+    "sha256": "dad62db798280060cc60a3c30e2e531d7837fbc6c7c80304dd4578bafe2682fa"
+  },
+  {
+    "name": "missing-null",
+    "material": "{\"text\":\"<René>\",\"n\":1.0,\"items\":[1,2],\"large\":9007199254740993}",
+    "tenant": "tenant-a",
+    "subject": null,
+    "kind": "definitions",
+    "canonical": "{\"global\":false,\"kind\":\"definitions\",\"material\":{\"items\":[1e0,2e0],\"large\":9007199254740993e0,\"n\":1e0,\"text\":\"\\u003CRen\\u00E9\\u003E\"},\"subject\":null,\"tenant\":\"tenant-a\"}",
+    "sha256": "397f33d2a8193d535b10c6cb053d2e5842e8f94efabbc0fc6d01987dd5fd5495"
+  },
+  {
+    "name": "array-order",
+    "material": "{\"text\":\"<René>\",\"n\":1.0,\"explicit\":null,\"items\":[2,1],\"large\":9007199254740993}",
+    "tenant": "tenant-a",
+    "subject": null,
+    "kind": "definitions",
+    "canonical": "{\"global\":false,\"kind\":\"definitions\",\"material\":{\"explicit\":null,\"items\":[2e0,1e0],\"large\":9007199254740993e0,\"n\":1e0,\"text\":\"\\u003CRen\\u00E9\\u003E\"},\"subject\":null,\"tenant\":\"tenant-a\"}",
+    "sha256": "8894dc81cefe6c8a6b4a381f1c45ec7aeaf99e1a71e68078b9bb7b4342bf80a2"
+  },
+  {
+    "name": "different-number",
+    "material": "{\"text\":\"<René>\",\"n\":1.0,\"explicit\":null,\"items\":[1,2],\"large\":9007199254740992}",
+    "tenant": "tenant-a",
+    "subject": null,
+    "kind": "definitions",
+    "canonical": "{\"global\":false,\"kind\":\"definitions\",\"material\":{\"explicit\":null,\"items\":[1e0,2e0],\"large\":9007199254740992e0,\"n\":1e0,\"text\":\"\\u003CRen\\u00E9\\u003E\"},\"subject\":null,\"tenant\":\"tenant-a\"}",
+    "sha256": "8cf5bb8865780c30a8d6e019c4e717dd848b1be338df6887fbe44090d8b6fbd9"
+  },
+  {
+    "name": "tenant",
+    "material": "{\"text\":\"<René>\",\"n\":1.0,\"explicit\":null,\"items\":[1,2],\"large\":9007199254740993}",
+    "tenant": "tenant-b",
+    "subject": null,
+    "kind": "definitions",
+    "canonical": "{\"global\":false,\"kind\":\"definitions\",\"material\":{\"explicit\":null,\"items\":[1e0,2e0],\"large\":9007199254740993e0,\"n\":1e0,\"text\":\"\\u003CRen\\u00E9\\u003E\"},\"subject\":null,\"tenant\":\"tenant-b\"}",
+    "sha256": "4d50550d01208afe13d685cbb7682c2f35e4bf63b0fa732225c1ae533c4d0482"
+  },
+  {
+    "name": "subject",
+    "material": "{\"text\":\"<René>\",\"n\":1.0,\"explicit\":null,\"items\":[1,2],\"large\":9007199254740993}",
+    "tenant": "tenant-a",
+    "subject": "workflow-a",
+    "kind": "definitions",
+    "canonical": "{\"global\":false,\"kind\":\"definitions\",\"material\":{\"explicit\":null,\"items\":[1e0,2e0],\"large\":9007199254740993e0,\"n\":1e0,\"text\":\"\\u003CRen\\u00E9\\u003E\"},\"subject\":\"workflow-a\",\"tenant\":\"tenant-a\"}",
+    "sha256": "8847e774f86890c000a786027889899e06b9a4758b2bac5385fbdb5d4659eca3"
+  },
+  {
+    "name": "domain",
+    "material": "{\"text\":\"<René>\",\"n\":1.0,\"explicit\":null,\"items\":[1,2],\"large\":9007199254740993}",
+    "tenant": "tenant-a",
+    "subject": null,
+    "kind": "folders",
+    "canonical": "{\"global\":false,\"kind\":\"folders\",\"material\":{\"explicit\":null,\"items\":[1e0,2e0],\"large\":9007199254740993e0,\"n\":1e0,\"text\":\"\\u003CRen\\u00E9\\u003E\"},\"subject\":null,\"tenant\":\"tenant-a\"}",
+    "sha256": "66168b00a2957c724641fa3d03b9aa499372ce266d4ef52218f083fb6d1d92ac"
+  }
+]

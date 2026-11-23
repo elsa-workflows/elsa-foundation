@@ -18,6 +18,61 @@ namespace Elsa.Studio.Tests.Administration;
 public sealed class FeatureAdministrationTests
 {
     [Fact]
+    public async Task Declared_configuration_data_survives_catalog_apply_and_reload_with_conflicting_host_options()
+    {
+        const string raw = """{ "OrderTotal":1.00, "text":"Ren\u00e9 <>&", "explicit":null, "large":9007199254740993 }""";
+        const string changed = """{ "OrderTotal":2.00, "text":"Ren\u00e9 <>&", "explicit":null, "large":9007199254740993 }""";
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true,
+            beforeStudio: builder =>
+            {
+                var path = Path.Combine(builder.Environment.ContentRootPath, "config", "studio-shells.json");
+                var document = JsonNode.Parse(File.ReadAllText(path))!;
+                document["CShells"]!["Shells"]!["Authoring"]!["Features"]!["Configured"]!["Raw"] = "__S9_RAW_CHILD__";
+                File.WriteAllText(path, document.ToJsonString(Elsa.Serialization.Core.JsonBaseline.Options).Replace("\"__S9_RAW_CHILD__\"", raw, StringComparison.Ordinal));
+            },
+            afterStudio: builder =>
+            {
+                builder.Services.AddSingleton<IFeatureCatalogContributor, RawSettingContributor>();
+                builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+                {
+                    options.SerializerOptions.WriteIndented = true;
+                    options.SerializerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default;
+                    options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+                });
+            });
+        using var catalogResponse = await host.Client.GetAsync("/modularity/features");
+        catalogResponse.EnsureSuccessStatusCode();
+        var catalogText = await catalogResponse.Content.ReadAsStringAsync();
+        using (var catalog = JsonDocument.Parse(catalogText)) Assert.Equal(raw, Raw(catalog.RootElement).GetRawText());
+        var request = Request(JsonNode.Parse(catalogText)!.AsObject());
+        Configuration(request)["Raw"] = "__S9_RAW_CHILD__";
+        var requestText = request.ToJsonString(Elsa.Serialization.Core.JsonBaseline.Options).Replace("\"__S9_RAW_CHILD__\"", changed, StringComparison.Ordinal);
+        using var applied = await host.Client.PostAsync("/modularity/features/apply", new StringContent(requestText, System.Text.Encoding.UTF8, "application/json"));
+        applied.EnsureSuccessStatusCode();
+        using var result = JsonDocument.Parse(await applied.Content.ReadAsStringAsync());
+        Assert.Equal(changed, Raw(result.RootElement.GetProperty("catalog")).GetRawText());
+        using var stored = JsonDocument.Parse(await File.ReadAllTextAsync(host.ShellsFile));
+        Assert.Equal(changed, stored.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("Authoring").GetProperty("Features").GetProperty("Configured").GetProperty("Raw").GetRawText());
+        using var reopened = await host.Client.GetAsync("/modularity/features");
+        reopened.EnsureSuccessStatusCode();
+        using var returned = JsonDocument.Parse(await reopened.Content.ReadAsStringAsync());
+        Assert.Equal(changed, Raw(returned.RootElement).GetRawText());
+
+        static JsonElement Raw(JsonElement catalog) => catalog.GetProperty("features").EnumerateArray()
+            .Single(feature => feature.GetProperty("id").GetString() == "Configured").GetProperty("configuration").GetProperty("Raw");
+    }
+
+    private sealed class RawSettingContributor : IFeatureCatalogContributor
+    {
+        public Task ContributeAsync(FeatureCatalogContributionContext context, CancellationToken cancellationToken = default)
+        {
+            var feature = context.GetOrAdd("Configured");
+            feature.Settings = [.. feature.Settings, new FeatureSettingDescriptor("Raw", "Raw", null, null, null, null, "object", false, null, false, false, false, false, false, null, null, [])];
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
     public async Task Masked_round_trip_preserves_secret_and_unrelated_shell_and_reloads_only_selected_shell()
     {
         await using var host = await AdministrationHost.StartAsync(managedFeatures: true);

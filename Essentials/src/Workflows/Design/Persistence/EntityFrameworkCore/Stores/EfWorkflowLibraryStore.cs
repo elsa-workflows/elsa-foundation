@@ -223,8 +223,8 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
 
     private sealed record Cursor(string Binding, string Key, string Id, long Ticks = 0);
     private string Binding(string kind, object material, string? subject = null) =>
-        EfDesignSupport.LookupHash(JsonSerializer.Serialize(new { kind, tenant = access.Current.Scope?.Value,
-            global = access.Current.IsGlobal, subject, material }, Json));
+        Elsa.Serialization.Core.JsonHashInput.Hash(new { kind, tenant = access.Current.Scope?.Value,
+            global = access.Current.IsGlobal, subject, material });
     private static string Encode(Cursor cursor) => Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(cursor, Json)))
         .TrimEnd('=').Replace('+', '-').Replace('/', '_');
     private static Cursor? Decode(string? token, string binding)

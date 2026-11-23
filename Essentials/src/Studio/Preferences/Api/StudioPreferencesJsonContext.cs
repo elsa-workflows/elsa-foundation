@@ -5,15 +5,15 @@ using System.Text.Json.Serialization;
 namespace Elsa.Studio.Preferences.Api;
 
 /// <summary>
-/// The owner's source-generated serializer context handed to the module endpoint group. The
-/// operations currently perform their own serialization over the host's HTTP JSON options, so this
-/// context only mirrors that shape for the group.
+/// The owner's source-generated metadata and explicit request/response serialization profile.
+/// Raw operations use this context independently of the host's HTTP JSON options.
 /// </summary>
 [JsonSourceGenerationOptions(
     PropertyNameCaseInsensitive = false,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(StudioPreferenceDocument))]
+[JsonSerializable(typeof(PutStudioPreferenceRequest))]
 [JsonSerializable(typeof(HomeLayoutDocument))]
 [JsonSerializable(typeof(PutHomeLayoutRequest))]
 internal partial class StudioPreferencesJsonContext : JsonSerializerContext

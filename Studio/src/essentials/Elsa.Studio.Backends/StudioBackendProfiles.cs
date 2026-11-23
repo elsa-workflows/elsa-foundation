@@ -18,6 +18,15 @@ internal static partial class StudioBackendProfiles
     internal const string Namespace = "backend-profiles";
     internal const string TenantClaim = StudioBridgeAuthorization.TenantClaimType;
     private const string Path = "/_elsa/studio/backends/profiles";
+    private static readonly JsonSerializerOptions ResponseJson = CreateResponseJson();
+
+    private static JsonSerializerOptions CreateResponseJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.MakeReadOnly();
+        return options;
+    }
 
     internal static void Add(IServiceCollection services)
     {
@@ -95,7 +104,7 @@ internal static partial class StudioBackendProfiles
         if (document is null) return Results.NotFound();
         context.Response.Headers.ETag = $"\"{document.Revision}\"";
         context.Response.Headers.CacheControl = "no-store";
-        return Results.Json(document);
+        return Results.Json(document, ResponseJson);
     }
 
     private static async Task<IResult> WriteAsync(HttpContext context, IStudioPreferenceService preferences, IConfiguration configuration)
@@ -128,7 +137,7 @@ internal static partial class StudioBackendProfiles
             var document = await preferences.WriteAsync(scope, new(request.SchemaVersion, request.Value), condition, context.RequestAborted);
             context.Response.Headers.ETag = $"\"{document.Revision}\"";
             context.Response.Headers.CacheControl = "no-store";
-            return Results.Json(document);
+            return Results.Json(document, ResponseJson);
         }
         catch (JsonException) { return Results.BadRequest(); }
         catch (StudioPreferenceConflictException error) { return Results.Conflict(new { error = error.Message }); }

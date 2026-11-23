@@ -135,7 +135,7 @@ public static class StudioHomeLayoutApi
                 var response = ToDocument(storedDefault, storedDefault is null ? "builtin" : "default");
                 if (response.Revision is not null)
                     httpContext.Response.Headers.ETag = $"\"{response.Revision}\"";
-                await Results.Json(response, contentType: "application/json").ExecuteAsync(httpContext);
+                await Results.Json(response, StudioPreferencesJsonContext.WireContext.HomeLayoutDocument, contentType: "application/json").ExecuteAsync(httpContext);
                 return;
             }
 
@@ -143,7 +143,7 @@ public static class StudioHomeLayoutApi
             if (userDocument is not null)
             {
                 httpContext.Response.Headers.ETag = $"\"{userDocument.Revision}\"";
-                await Results.Json(ToDocument(userDocument, "user"), contentType: "application/json").ExecuteAsync(httpContext);
+                await Results.Json(ToDocument(userDocument, "user"), StudioPreferencesJsonContext.WireContext.HomeLayoutDocument, contentType: "application/json").ExecuteAsync(httpContext);
                 return;
             }
 
@@ -151,7 +151,7 @@ public static class StudioHomeLayoutApi
             var fallbackDocument = ToDocument(fallback, fallback is null ? "builtin" : "default");
             if (fallbackDocument.Revision is not null)
                 httpContext.Response.Headers.ETag = $"\"{fallbackDocument.Revision}\"";
-            await Results.Json(fallbackDocument, contentType: "application/json").ExecuteAsync(httpContext);
+            await Results.Json(fallbackDocument, StudioPreferencesJsonContext.WireContext.HomeLayoutDocument, contentType: "application/json").ExecuteAsync(httpContext);
         }
         catch (StudioPreferenceScopeException)
         {
@@ -172,7 +172,7 @@ public static class StudioHomeLayoutApi
         PutHomeLayoutRequest? request;
         try
         {
-            request = await httpContext.Request.ReadFromJsonAsync<PutHomeLayoutRequest>(httpContext.RequestAborted);
+            request = await httpContext.Request.ReadFromJsonAsync(StudioPreferencesJsonContext.WireContext.PutHomeLayoutRequest, httpContext.RequestAborted);
         }
         catch (System.Text.Json.JsonException)
         {
@@ -230,6 +230,7 @@ public static class StudioHomeLayoutApi
             httpContext.Response.Headers.ETag = $"\"{document.Revision}\"";
             await Results.Json(
                     ToDocument(document, adminDefault ? "default" : "user"),
+                    StudioPreferencesJsonContext.WireContext.HomeLayoutDocument,
                     contentType: "application/json")
                 .ExecuteAsync(httpContext);
         }

@@ -26,4 +26,7 @@
     <!-- Updates and deletes rows whose LastModifiedAt is the concurrency token, shared with the native provider tests. -->
     <Compile Include="..\..\..\Tests\Infrastructure\ConcurrencyTokenScenarios.cs" Link="ConcurrencyTokenScenarios.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../../../../../../../specs/1207-json-data-integrity-baseline/evidence/workflow-library-binding-hash-vectors.json" LogicalName="S9WorkflowLibraryBindingVectors.json" />
+  </ItemGroup>
 </Project>
