@@ -70,7 +70,10 @@ Between the two owner processes, a separate diagnostic process bound to another 
 send to the workflow or read its checkpoint or journal. This probe uses no measured connection.
 
 The default receipt estimates round trips by adding EF commands and explicit transaction completions. It excludes connection setup. Setup, ownership and journal reads have their own rows.
-The relational store reads its format marker once during schema setup and once per nonempty take or retake, including a set take. The preview counts these reads in setup and ownership.
+The relational store reads its format marker during schema setup, each nonempty take or retake, and each renewing heartbeat.
+The preview counts these reads in setup and ownership. A relational format advance uses a coordinated stop. Fully stop every
+predecessor process before the first advance if it was built before the marker-lock protocol. The missed-stop check serializes
+only readers that already use that lock. The migration race fixture runs such a reader against the previous stored format.
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 

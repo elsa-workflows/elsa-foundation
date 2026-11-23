@@ -40,6 +40,12 @@ switch (args)
     case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "version-services", .. var options]:
         await new EfProvider(engine, connection, options).CheckServiceVersionsAsync();
         return 0;
+    case ["sqlite", "format-migration", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckFormatMigrationAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "format-migration", .. var options]:
+        await new EfProvider(engine, connection, options).CheckFormatMigrationAsync();
+        return 0;
     case ["root-admission-writer"]:
         return await GeneratedRootChecks.WriteFromChildAsync();
     case ["postgres", var connection, "root-journal"]:
@@ -160,6 +166,15 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         await VersionServiceChecks.Run(fixture.CreateContext, fixture.Store);
     }
 
+    internal async Task CheckFormatMigrationAsync()
+    {
+        await using (var fixture = (Provided)await CreateAsync(2, new StoreSetup()))
+            await FormatMigrationChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
+        await using var race = (Provided)await CreateAsync(2, new StoreSetup());
+        await FormatMigrationRaceChecks.Run(race.CreateContext,
+            interceptor => Store(race.CreateAdmin(interceptor), FenceInBatch), (EfStore)race.Store);
+    }
+
     public async Task<ProvidedStore> CreateAsync(int partitions, StoreSetup setup)
     {
         var counter = setup.Counting ? new Counting(Pg) : null;
@@ -211,6 +226,7 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         public override IKernelStore NewClient() => outside;
         public override ICostCounter? Counter => counter;
         public override Func<int, Task>? Reopen => partitions => outside.CreateAsync(partitions);
+        internal Func<KernelDb> CreateAdmin(params IInterceptor[] interceptors) => provider.Factory(admin, interceptors);
 
         // PostgreSQL refuses a NUL in text (22021), every time. SQLite, SQL Server and MySQL store any string the
         // instance row can hold: no refused row (the case is skipped).

@@ -240,16 +240,17 @@ public static class Balancer
 {
     public static (IReadOnlyList<int> Release, IReadOnlyList<int> Take) Plan(int partitions, Cluster cluster, IReadOnlyCollection<int> owned, IReadOnlyCollection<int> activating, Flaw flaws = Flaw.None)
     {
-        bool Asked(int p) => !owned.Contains(p) && !activating.Contains(p);
+        var claimed = owned.ToHashSet();
+        claimed.UnionWith(activating);     // reactivating a partition already owned occupies one place in the share
         if ((flaws & Flaw.ContiguousOnlyBalancer) != 0)
         {
             // MUTATION: one contiguous range per node, its fair one by rank. Whatever lies outside it moves.
             var range = VirtualPartitions.FairRanges(partitions, Math.Max(1, cluster.Nodes)).ElementAtOrDefault(cluster.Rank);
-            return ([.. owned.Where(p => !range.Contains(p)).OrderDescending()], [.. cluster.Free.Where(p => range.Contains(p) && Asked(p)).Order()]);
+            return ([.. owned.Where(p => !range.Contains(p)).OrderDescending()], [.. cluster.Free.Where(p => range.Contains(p) && !claimed.Contains(p)).Order()]);
         }
         var share = (flaws & Flaw.GreedyBalancer) != 0 ? partitions : (partitions + cluster.Nodes - 1) / Math.Max(1, cluster.Nodes);
-        var release = owned.OrderDescending().Take(Math.Max(0, owned.Count + activating.Count - share)).ToList();
-        var held = owned.Count + activating.Count - release.Count;
-        return (release, [.. cluster.Free.Where(Asked).Order().Take(Math.Max(0, share - held))]);
+        var release = owned.OrderDescending().Take(Math.Max(0, claimed.Count - share)).ToList();
+        var held = claimed.Count - release.Count;
+        return (release, [.. cluster.Free.Where(p => !claimed.Contains(p)).Order().Take(Math.Max(0, share - held))]);
     }
 }
