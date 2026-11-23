@@ -40,7 +40,7 @@ internal static class NativeHttpEdgeChecks
             if (batch.Turns.Any(turn => turn.Row?.Status == InstanceStatus.Finished) && Interlocked.Exchange(ref refuseNextFinish, 0) != 0)
                 throw new StoreException(Failure.Unknown, "The fixture lost its final response commit before execution.");
         });
-        var transport = new LocalTransport(requests);
+        var transport = new LocalTransport(node, requests);
         var registry = new WorkflowRegistry()
             .Add(Wf.Workflow("approval", Wf.Sequence("main",
                 Wf.HttpEndpoint("start", "begin"),
@@ -102,10 +102,13 @@ internal static class NativeHttpEdgeChecks
 
             var slow = PostAsync("slow");
             var waiting = await WaitForAsync(Contract.ActorStatus.Running);
-            Interlocked.Add(ref timestamp, requestTime + 1);
+            var expiring = requests.All.Single();
+            Require(Now() < expiring.Deadline && requests.IsOpen(expiring) && !slow.IsCompleted,
+                "The admitted HTTP request stays open before its recorded deadline.");
+            Interlocked.Exchange(ref timestamp, expiring.Deadline + 1);
             using (var expired = await slow)
-                Require(expired.StatusCode == HttpStatusCode.GatewayTimeout,
-                    "The live HTTP request expires with 504 while the workflow waits.");
+                Require(expired.StatusCode == HttpStatusCode.GatewayTimeout && expiring.Error == "timeout",
+                    "Crossing the recorded deadline closes the live request with 504 while the workflow waits.");
             Interlocked.Add(ref timestamp, 10_000);
             var finished = await WaitForAsync(Contract.ActorStatus.Finished, waiting.Header.Ref);
             Require(finished.Header.Ref == waiting.Header.Ref, "The timed-out workflow continues to its original terminal reference.");
@@ -125,11 +128,15 @@ internal static class NativeHttpEdgeChecks
             using var disconnected = CancellationTokenSource.CreateLinkedTokenSource(token);
             var interrupted = client.PostAsync("slow", null, disconnected.Token);
             var stillRunning = await WaitForAsync(Contract.ActorStatus.Running);
+            var abandoned = requests.All.Single();
             disconnected.Cancel();
             var disconnectedCall = false;
             try { using var received = await interrupted; }
             catch (OperationCanceledException) when (disconnected.IsCancellationRequested) { disconnectedCall = true; }
             Require(disconnectedCall, "The HTTP client abandons its pending call.");
+            while (requests.IsOpen(abandoned)) await Task.Delay(10, token);
+            Require(Now() < abandoned.Deadline && abandoned.Error == "disconnected",
+                "The server closes the disconnected caller's live registration before its deadline.");
             Interlocked.Add(ref timestamp, 10_001);
             var afterDisconnect = await WaitForAsync(Contract.ActorStatus.Finished, stillRunning.Header.Ref);
             Require(afterDisconnect.Header.Ref == stillRunning.Header.Ref,
@@ -219,13 +226,15 @@ internal static class NativeHttpEdgeChecks
         Console.WriteLine(description);
     }
 
-    private sealed class LocalTransport(Requests requests) : IReplyTransport
+    private sealed class LocalTransport(string localNode, Requests requests) : IReplyTransport
     {
         private int _responses;
         internal int Responses => Volatile.Read(ref _responses);
 
         public void Send(string node, Reply reply)
         {
+            if (!string.Equals(node, localNode, StringComparison.Ordinal))
+                throw new InvalidOperationException($"The reply addressed '{node}' instead of '{localNode}'.");
             if (reply.Channel == "response" && reply.Item is JsonNode) Interlocked.Increment(ref _responses);
             requests.Receive(reply);
         }
