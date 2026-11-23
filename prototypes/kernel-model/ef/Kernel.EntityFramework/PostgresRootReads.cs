@@ -83,7 +83,8 @@ public sealed partial class EfStore
 {
     /// <summary>
     /// Opens the public point, list and journal reads for a PostgreSQL generated-root preview.
-    /// The database must already be installed. Inbox and operator reads belong to the full provider.
+    /// The ordinary preview uses the public KernelDb context on an already installed database.
+    /// The trusted host supplies each BoundScope. Inbox and operator reads belong to the full provider.
     /// </summary>
     public async ValueTask<IActorReads> OpenPreviewRootReadsAsync(int pageSize = 100, CancellationToken cancellationToken = default)
     {

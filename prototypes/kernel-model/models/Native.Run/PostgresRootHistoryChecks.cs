@@ -24,6 +24,7 @@ internal static class PostgresRootHistoryChecks
         await admissions.InstallAsync(ct);
         var journal = new PostgresRootReads(reader, await admissions.OpenJournalCursorAsync(ct), 128);
         var api = new PostgresPreviewFoundation(admissions, journal, PublicActor.ActorType);
+        var reads = await reader.OpenPreviewRootReadsAsync(pageSize: 128, cancellationToken: ct);
         var scope = FixedTenantScope.Bind("preview-history");
         var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
         await using var db = Open();
@@ -88,7 +89,24 @@ internal static class PostgresRootHistoryChecks
             }
             var check = await Drive(delayed ? 2 : 1);
             var frame = Json.Read<NativeState>(check.State!).Frames.Single().Key;
-            var startPage = await api.TailAsync(scope, actor, cancellationToken: ct);
+            var startPage = await reads.TailAsync(scope, actor, cancellationToken: ct);
+            if (!delayed)
+            {
+                await db.Database.ExecuteSqlRawAsync("""UPDATE "KernelStoreVersions" SET "JournalCodec" = "JournalCodec" + 1""", ct);
+                try
+                {
+                    await reads.TailAsync(scope, actor, cancellationToken: ct);
+                    throw new InvalidOperationException("An already-open journal reader accepted a new codec.");
+                }
+                catch (StoreFormatException error) when (error.Message.Contains("journal codec=2", StringComparison.Ordinal))
+                {
+                    Check(true, "an already-open public journal reader refuses a changed codec");
+                }
+                finally
+                {
+                    await db.Database.ExecuteSqlRawAsync("""UPDATE "KernelStoreVersions" SET "JournalCodec" = "JournalCodec" - 1""", ct);
+                }
+            }
             Check(startPage.Items.Count > 0 && startPage.Items.All(e => e.Revision == 1) && startPage.Next is not null &&
                 await Position() == originalPosition + 1, $"{history} journal contains only the start revision");
             if (!delayed)
@@ -98,12 +116,12 @@ internal static class PostgresRootHistoryChecks
             Check(silent.Revision == 2 && silent.Status == InstanceStatus.Running && silent.History == (History)history &&
                 approvals.Count == (delayed ? 0 : 1) && (delayed || approvals[0]!.GetValue<string>() == "Ada") &&
                 (await admissions.ReadPendingDirectAsync(scope.Tenant, actor.Id, ct)).Count == 0 &&
-                (await api.TailAsync(scope, actor, startPage.Next, ct)).Items.Count == 0 && await Position() == originalPosition + 1,
+                (await reads.TailAsync(scope, actor, startPage.Next, ct)).Items.Count == 0 && await Position() == originalPosition + 1,
                 $"{history} no-record turn consumes its input, advances the revision and preserves the journal position and tail");
             await Send("next", CompositeSignal.Kind, Json.Write(new CompositeSignal(frame, "approve", "Grace")));
             var next = await Drive(3);
             var physical = await reader.ReadRootJournalAsync(scope.Tenant, actor.Id, 0, 10, ct);
-            var suffix = await api.TailAsync(scope, actor, startPage.Next, ct);
+            var suffix = await reads.TailAsync(scope, actor, startPage.Next, ct);
             Check(next.Revision == 3 && next.Status == (delayed ? InstanceStatus.Running : InstanceStatus.Finished) &&
                 physical.Rows.Select(r => r.Revision).SequenceEqual([1L, 3L]) &&
                 physical.Rows.Select(r => r.Position).SequenceEqual([originalPosition + 1, originalPosition + 2]) &&

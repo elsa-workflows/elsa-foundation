@@ -291,10 +291,11 @@ only readers that already use that lock. The migration race fixture runs such a 
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 
-After installing the PostgreSQL generated-root preview, a host can open `IActorReads` with
-`EfStore.OpenPreviewRootReadsAsync`. The provider supplies point, list and journal reads directly. Callers use a
-bound tenant scope and can carry list and journal bookmarks across process restarts. Inbox inspection and operator
-selections remain full-provider work.
+A host can use `EfStore.OpenPreviewRootReadsAsync` to open `IActorReads` for an already-installed ordinary
+PostgreSQL generated-root store. Compose the store with the public `new KernelDb(options)` PostgreSQL context.
+The trusted hosting layer supplies the caller's `BoundScope`. The provider supplies point, list and journal reads
+with bookmarks that cross process restarts. Other preview profiles require their matching internal context.
+Inbox inspection and operator selections remain full-provider work.
 
 The preview's public `IActorReads.GetAsync` and `ListAsync` use a persisted, tenant-indexed projection of generated roots. PostgreSQL
 updates the list within the fenced metadata commit, including suspension changes that leave no public journal entry.
