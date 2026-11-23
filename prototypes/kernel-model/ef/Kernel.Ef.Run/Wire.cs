@@ -1,3 +1,7 @@
+using Microsoft.Data.SqlClient;
+using MySql.Data.MySqlClient;
+using Npgsql;
+
 /// <summary>
 /// A TCP proxy in front of the database that counts round trips: a round trip begins each time the client sends after
 /// the server last spoke on that connection (or for the first time). Requests the driver pipelines without waiting
@@ -47,8 +51,24 @@ sealed class Wire
     public static bool HasLocalEndpoint(string engine, string connection)
     {
         var match = Endpoint(engine, connection);
-        return match.Groups[1].Value is "127.0.0.1" or "localhost" &&
-            ushort.TryParse(match.Groups[2].Value, out var port) && port != 0;
+        var host = match.Groups[1].Value;
+        if (host is not ("127.0.0.1" or "localhost") ||
+            !ushort.TryParse(match.Groups[2].Value, out var port) || port == 0) return false;
+
+        // The driver must use the same endpoint the wire meter found, including when aliases repeat.
+        try
+        {
+            return engine switch
+            {
+                "postgres" => new NpgsqlConnectionStringBuilder(connection) is { Host: var actualHost, Port: var actualPort }
+                    && actualHost == host && actualPort == port,
+                "mysql" => new MySqlConnectionStringBuilder(connection) is { Server: var actualHost, Port: var actualPort }
+                    && actualHost == host && actualPort == port,
+                "sqlserver" => new SqlConnectionStringBuilder(connection).DataSource == $"{host},{port}",
+                _ => false,
+            };
+        }
+        catch (ArgumentException) { return false; }
     }
 
     private static System.Text.RegularExpressions.Match Endpoint(string engine, string connection) =>
