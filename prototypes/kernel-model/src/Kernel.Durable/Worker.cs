@@ -1500,6 +1500,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
             message = message with { ReplyTo = null }; // an outside copy cannot acquire an observer, even if this activation resets
         if (durable && _items.TryGetValue(message.InboxKey, out var promoted) && promoted.AwaitPoll)
         {
+            if (promoted.HeldHere && promoted.ReleasedBy is { } expected)
+            {
+                // A poll already in flight can return the row from before the page retagged it.
+                if (releasedBy != expected) return;
+                promoted.Message = message;
+            }
             _behind.Remove(message.InboxKey);
             void Observe(Slot? waiting)
             {
@@ -3306,7 +3312,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var row in page.Writes())
             {
                 var key = row.Cursor.Key;
-                if (_items.TryGetValue(key, out var cached)) Forget(cached);
+                if (_items.TryGetValue(key, out var cached))
+                {
+                    if (cached.HeldHere && row is { Reason: null, ReleasedBy: not null } && !page.TerminalInputs &&
+                        unit.Row is { Status: InstanceStatus.Running, ParkRecovery: { } drain } running && drain.Restores(row, running.Status))
+                    {
+                        // A committed model hold still belongs to this owner. Refresh its envelope
+                        // and mark from the next poll without offering it again on its own.
+                        cached.ReleasedBy = new(running.Creation, running.ParkResolutionGeneration);
+                        (cached.Marked, cached.AwaitPoll) = (false, true);
+                    }
+                    else Forget(cached);
+                }
                 else if (_polling && !Has(Flaw.PollRace)) _consumed.Add(key);
             }
             _woken = true;
