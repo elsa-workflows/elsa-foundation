@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Kernel.EntityFramework;
 using Kernel.Native.Preview;
 using Kernel.Runtime.Hosting;
@@ -91,6 +92,12 @@ internal static class PostgresRootOperatorChecks
                 "an independent resume and a second tenant's operation are admitted");
             Check((await Send(blue, a, "future", Contract.Kinds.Resume, new(DueAt: long.MaxValue, KeepFor: TimeSpan.Zero))).Outcome ==
                 Contract.AdmissionOutcome.Accepted, "a future command may outlive its receipt");
+            while (!await clock.Database.SqlQuery<bool>("""
+                SELECT EXISTS (SELECT 1 FROM "FoundationOperatorReceipts"
+                    WHERE "Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
+                """).SingleAsync(ct)) await Task.Delay(5, ct);
+            var ordinary = new PostgresRootAdmission(() => new KernelDb(options), TimeSpan.FromHours(1));
+            Check(await ordinary.SweepOperatorReceiptsAsync(ct) == 0, "an ordinary profile cannot sweep operator receipts");
             while (await admission.SweepOperatorReceiptsAsync(ct) == 0) await Task.Delay(5, ct);
             Check((await Send(blue, b, "future", Contract.Kinds.Suspend)).Outcome == Contract.AdmissionOutcome.Accepted,
                 "an expired operation can be reused on another root");
@@ -148,9 +155,11 @@ internal static class PostgresRootOperatorChecks
             var header = await exact.Select(m => m.Start).SingleAsync(ct)
                 ?? throw new InvalidOperationException("The exact stored operator header is absent.");
             var prefix = header[..(header.IndexOf(':') + 1)];
+            var incomplete = JsonNode.Parse(header[prefix.Length..])!.AsObject();
+            Check(incomplete.Remove("ExplicitZeroDue"), "the fixture removes the original zero-due flag");
             try
             {
-                foreach (var invalid in new[] { "null", "{" })
+                foreach (var invalid in new[] { "null", "{", incomplete.ToJsonString() })
                 {
                     await exact.ExecuteUpdateAsync(change => change.SetProperty(m => m.Start, prefix + invalid), ct);
                     try

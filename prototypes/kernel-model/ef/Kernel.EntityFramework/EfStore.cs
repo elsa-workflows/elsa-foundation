@@ -677,35 +677,39 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         await using var db = create();
         // A plain read. The left join returns database time even when no message does.
+        var sql = PollSql(db.UsesRootOperatorProtocol);
         if (_ordinaryRoots is { } root)
         {
             if (!root.Includes(partition)) throw new InvalidOperationException("The root belongs to another partition.");
             if (root.Discover)
             {
-                var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
+                var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
                 return ToGeneratedPoll(page, root);
             }
-            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root);
+            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root);
         }
-        return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
+        return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
     }
 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
-    private string RootPollFilter => _ordinaryRoots is null ? "" :
+    private string RootPollFilter(bool operators) => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
-             AND NOT (m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" LIKE 'operator/%')
-             AND (m."InboxScope" = 0 OR NOT EXISTS (
-                 SELECT 1 FROM "Messages" op
-                 WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
-                   AND op."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND op."Id" LIKE 'operator/%'
-                   AND NOT op."Done" AND op."Due" <= t.now))
+             {(operators ? RootOperatorPollFilter : "")}
              AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({InboxKey.FoundationOccurrenceScope}, {RootSelfScope}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
                  WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired")))
             """;
+    private static readonly string RootOperatorPollFilter = $"""
+         AND NOT (m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" LIKE 'operator/%')
+         AND (m."InboxScope" = 0 OR NOT EXISTS (
+             SELECT 1 FROM "Messages" op
+             WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
+               AND op."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND op."Id" LIKE 'operator/%'
+               AND NOT op."Done" AND op."Due" <= t.now))
+        """;
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
         ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
     private string PollMessages => _ordinaryRoots is { Discover: true }
@@ -721,11 +725,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string PollSplitEventPayload => postgres && _ordinaryRoots is null
         ? $"""CASE WHEN m."InboxScope" = {RootSelfScope} AND m."EventMatch" IS NOT NULL THEN to_jsonb(m)->>'FoundationSelfContent' IS NOT NULL ELSE FALSE END"""
         : False;
-    private string PollSql => Engine?.Poll ??
+    private string PollSql(bool operators) => Engine?.Poll ??
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration", {PollSplitEventPayload} AS "SplitEventPayload"{PollBirthColumns}
-         FROM (SELECT {(_ordinaryRoots is not null ? RootClockMilliseconds : Now)} AS now) t
-         LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter}
+         FROM (SELECT {(operators || RootSelfIssuer is { SupportsTimers: true } ? RootClockMilliseconds : Now)} AS now) t
+         LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter(operators)}
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
 

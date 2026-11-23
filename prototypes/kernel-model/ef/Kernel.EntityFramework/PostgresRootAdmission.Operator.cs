@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kernel.EntityFramework;
@@ -6,7 +7,8 @@ namespace Kernel.EntityFramework;
 internal sealed partial class PostgresRootAdmission
 {
     private const string OperatorPrefix = "!kernel-operator/1:";
-    private sealed record StoredOperator(string Reference, string Operation, long Creation, string Kind, bool ExplicitZeroDue);
+    private sealed record StoredOperator(string Reference, string Operation, long Creation, string Kind,
+        [property: JsonRequired] bool ExplicitZeroDue);
     internal static bool IsStoredOperator(string? header) => header?.StartsWith(OperatorPrefix, StringComparison.Ordinal) == true;
 
     private static Task InstallOperatorReceiptsAsync(KernelDb db, CancellationToken token) =>
@@ -113,6 +115,8 @@ internal sealed partial class PostgresRootAdmission
     internal async Task<int> SweepOperatorReceiptsAsync(CancellationToken token)
     {
         await using var db = create();
+        if (!db.UsesRootOperatorProtocol) return 0;
+        await EfStore.RequireStoreVersionsAsync(db, token);
         return await db.Database.ExecuteSqlRawAsync("""
             DELETE FROM "FoundationOperatorReceipts" WHERE "Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
             """, token);
