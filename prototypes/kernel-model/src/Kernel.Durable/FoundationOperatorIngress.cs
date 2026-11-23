@@ -1,6 +1,17 @@
+using Kernel.Runtime;
 using System.Security.Cryptography;
 
 namespace Kernel.Durable;
+
+internal static class FoundationIngressAddress
+{
+    internal static string Operation(string tenant, string id) => tenant + "_" + id;
+
+    internal static Message Occurrence(string operation, string receipt, string occurrence, InstanceRef actor, long creation,
+        string kind, string? payload, long? due, long until, string? replyTo, FoundationOperatorCommand? command) =>
+        new Message(operation, actor, kind, payload, Due: due, KeepUntil: until, ReplyTo: replyTo, TargetCreation: creation)
+            { StorageId = receipt + "/" + occurrence, Operator = command }.WithInboxScope(InboxKey.FoundationOccurrenceScope);
+}
 
 public sealed partial class InMemoryStore
 {
@@ -28,8 +39,6 @@ public sealed partial class InMemoryStore
             (source.Operator!.Selection is null || MatchesFoundationSelection(FoundationIdentity(previous.Id, previous.Creation).Tenant,
                 source.Operator.DeleteTarget, source.Operator.Selection)));
     }
-
-    private static string FoundationOperatorKey(string tenant, string id) => tenant + "_" + id;
 
     internal (OperatorAdmission Outcome, string? Reference) AdmitRetentionDelete(string tenant, string reference, string selection,
         long? due = null, string? replyTo = null)
@@ -63,7 +72,7 @@ public sealed partial class InMemoryStore
                 return (OperatorAdmission.StaleSelection, null);
 
             // The receipt is scoped to the operation, and keeps the first target after the Park's mark changes.
-            if (_foundationOperatorReceipts.TryGetValue(FoundationOperatorKey(tenant, id), out var prior) && prior.Until >= clock())
+            if (_foundationOperatorReceipts.TryGetValue(FoundationIngressAddress.Operation(tenant, id), out var prior) && prior.Until >= clock())
                 return (OperatorAdmission.Duplicate, prior.Reference);
             if (kind == Kinds.Terminate && selection is null && deleteTarget is null &&
                 BoundActor(tenant, reference)?.Row.Status != InstanceStatus.Running)

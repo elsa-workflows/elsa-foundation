@@ -20,6 +20,7 @@ public sealed record MongoStoreOptions
     internal bool JobGenerations { get; init; }
     internal bool ScopedJobRoots { get; init; }
     internal bool ScopedJobResults { get; init; }
+    internal bool ScopedJobSuspend { get; init; }
 
 }
 
@@ -56,7 +57,9 @@ public sealed partial class MongoStore : IKernelStore
             throw new ArgumentException("Scoped job roots require the job-generation representation.", nameof(options));
         if (_options.ScopedJobResults && !_options.ScopedJobRoots)
             throw new ArgumentException("Scoped job results require scoped job roots.", nameof(options));
-        _format = _options.ScopedJobResults ? JobResultFormat : _options.ScopedJobRoots ? ScopedJobRootFormat : _options.JobGenerations ? JobGenerationFormat : CurrentFormat;
+        if (_options.ScopedJobSuspend && !_options.ScopedJobResults)
+            throw new ArgumentException("Scoped suspension requires the result format.", nameof(options));
+        _format = _options.ScopedJobSuspend ? JobSuspendFormat : _options.ScopedJobResults ? JobResultFormat : _options.ScopedJobRoots ? ScopedJobRootFormat : _options.JobGenerations ? JobGenerationFormat : CurrentFormat;
         _grant = new BsonDocument
         {
             { "storeSchema", _format.StoreSchema }, { "messageProtocol", _format.MessageProtocol }, { "journalCodec", _format.JournalCodec }
@@ -718,7 +721,9 @@ public sealed partial class MongoStore : IKernelStore
         var events = await _events.DeleteManyAsync(expired, cancellationToken);
         var receipts = _options.JobGenerations ? (await _meta.DeleteManyAsync(new BsonDocument
         {
-            { "_id.rootOperation", new BsonDocument("$exists", true) }, { "$expr", new BsonDocument("$lt", new BsonArray { "$until", NowMs }) }
+            { "$or", new BsonArray { new BsonDocument("_id.rootOperation", new BsonDocument("$exists", true)),
+                new BsonDocument("_id.operatorOperation", new BsonDocument("$exists", true)) } },
+            { "$expr", new BsonDocument("$lt", new BsonArray { "$until", NowMs }) }
         }, cancellationToken)).DeletedCount : 0;
         return (int)(messages.DeletedCount + events.DeletedCount + receipts);
     }
