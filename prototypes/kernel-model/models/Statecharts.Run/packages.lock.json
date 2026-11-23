@@ -64,6 +64,7 @@
         "dependencies": {
           "Kernel.Foundation.InMemory": "[1.0.0, )",
           "Kernel.Native.Legacy": "[1.0.0, )",
+          "Kernel.Runtime.Hosting": "[1.0.0, )",
           "Kernel.Statecharts": "[1.0.0, )",
           "Kernel.WorkflowActor": "[1.0.0, )",
           "Kernel.Workflows": "[1.0.0, )"
