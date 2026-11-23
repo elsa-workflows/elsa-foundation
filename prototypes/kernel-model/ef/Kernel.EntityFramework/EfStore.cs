@@ -310,6 +310,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     private class PollRow
     {
+        public bool SplitEventPayload { get; set; }
         public long? JobGeneration { get; set; }
         public long? InboxScope { get; set; }
         public byte[]? IssuedWire { get; set; }
@@ -703,9 +704,14 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
            """
         : RootInboxSource + " m";
     private const string RootClockMilliseconds = "floor(extract(epoch from clock_timestamp()) * 1000)::bigint";
+    // Only PostgreSQL profiles with the private body column can have split historical event payloads.
+    // CASE avoids inspecting row content except for the single shared numeric event slot.
+    private string PollSplitEventPayload => postgres
+        ? $"""CASE WHEN m."InboxScope" = {RootSelfScope} AND m."EventMatch" IS NOT NULL THEN to_jsonb(m)->>'FoundationSelfContent' IS NOT NULL ELSE FALSE END"""
+        : "0";
     private string PollSql => Engine?.Poll ??
         $"""
-         SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration"{PollBirthColumns}
+         SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration", {PollSplitEventPayload} AS "SplitEventPayload"{PollBirthColumns}
          FROM (SELECT {(RootSelfIssuer is { SupportsTimers: true } ? RootClockMilliseconds : Now)} AS now) t
          LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter}
          ORDER BY m."Seq" LIMIT {"{3}"}
@@ -722,6 +728,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
         {
+            if (r.SplitEventPayload) throw SplitEventPayload();
             var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };

@@ -661,6 +661,13 @@ All monotonic clocks tick at the database's rate; wall clocks are skewed and jum
 clock is not modelled. The simulation and the stress tests use their own short leases; the kernel's default is 10 s.
 
 
+### PostgreSQL continuation payloads on older prototypes
+
+A physical event slot can share a number with a private continuation. The event match keeps their identities
+distinct. On a reopened continuation or timer database, enabling the writer verifies the active private-body
+trigger. If an older trigger split a matched event payload, opening that writer and delivering the affected
+event stop with a format error. Restore the exact envelope from its authoritative event source before resuming.
+
 ### Relational job-generation format
 
 During the coordinated stop, call `EfStore.UpgradeJobGenerationFormatAsync` before reopening a schema-2

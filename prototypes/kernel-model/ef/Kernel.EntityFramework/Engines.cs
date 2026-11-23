@@ -183,7 +183,7 @@ public sealed class SqlServerEngine : Engine
 
     public override string Poll =>
         $"""
-         SELECT TOP ({"{3}"}) t.now AS "Now", m."Id", m."IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration"
+         SELECT TOP ({"{3}"}) t.now AS "Now", m."Id", m."IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration", CAST(0 AS bit) AS "SplitEventPayload"
          FROM (SELECT {Now} AS now) t
          LEFT JOIN "Messages" m{(ReadPast ? " WITH (READPAST)" : "")} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = 0 AND m."Due" <= t.now + {"{2}"}
          ORDER BY m."Seq"
@@ -289,7 +289,7 @@ public sealed class MySqlEngine : Engine
 
     public override string Poll => Sql(
         $"""
-         SELECT t.now AS "Now", m."Id", m."IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration"
+         SELECT t.now AS "Now", m."Id", m."IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration", FALSE AS "SplitEventPayload"
          FROM (SELECT {Now} AS now) t
          LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = 0 AND m."Due" <= t.now + {"{2}"}
          ORDER BY m."Seq" LIMIT {"{3}"}

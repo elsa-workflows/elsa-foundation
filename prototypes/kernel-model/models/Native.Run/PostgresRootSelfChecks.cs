@@ -141,7 +141,7 @@ internal static class PostgresRootSelfChecks
         Check((await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 10, stop)).Messages.All(m => m.Message.EventMatch is null),
             "a scoped root poll leaves generic event matches outside its inbox");
 
-        if (!timers) return 0;
+        if (!timers) return await CheckHistoricalEventsAsync();
         var ready = (await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop)).Messages.Select(m => m.Message).ToArray();
         Check(ready.SequenceEqual([zero, sibling]) && ready[0].Due == 0 && zero.Id != FoundationSelfSend.Issue(
             scoped.RootSelfIssuer!.Handle, CreationProtocol.Origin(actor, 1), 2, 1, null),
@@ -238,7 +238,45 @@ internal static class PostgresRootSelfChecks
         Check((await cold.CommitAsync(Batch(matched) with { Position = 2 }, stop)).Landed &&
             !await PendingTimer(siblingTimer) && await PendingTimer(peerTimer) && (await cold.LoadAsync([actor], stop)).Single().Revision == recallRevision + 3,
             "the same commit with this root's timer lands and leaves the second root's timer pending");
-        return 0;
+        return await CheckHistoricalEventsAsync();
+
+        async Task<int> CheckHistoricalEventsAsync()
+        {
+            await using var db = Open();
+            const string oldTrigger = """
+                CREATE OR REPLACE FUNCTION kernel_root_self_insert_v2() RETURNS trigger LANGUAGE plpgsql AS $fn$
+                DECLARE head text := split_part(NEW."Payload", chr(10), 1);
+                BEGIN
+                    IF left(head, 1) = 'B' THEN
+                        NEW."FoundationSelfContent" := decode(substr(NEW."Payload", length(head) + 2), 'base64');
+                        NEW."Payload" := head;
+                    END IF;
+                    RETURN NEW;
+                END $fn$;
+                CREATE OR REPLACE TRIGGER kernel_root_self_insert BEFORE INSERT ON "Messages" FOR EACH ROW
+                WHEN (NEW."InboxScope" = -5) EXECUTE FUNCTION kernel_root_self_insert_v2();
+                """;
+            await db.Database.ExecuteSqlRawAsync(oldTrigger, stop);
+            await Client().EnableRootSelfSendsAsync(stop);
+            Check(await db.Database.SqlQueryRaw<bool>("""
+                SELECT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = '"Messages"'::regclass AND tgname = 'kernel_root_self_insert'
+                    AND tgfoid = to_regprocedure('kernel_root_self_insert_v3()')) AS "Value"
+                """).SingleAsync(stop), "reopening upgrades the active trigger even when the latest function is already present");
+
+            await db.Database.ExecuteSqlRawAsync(oldTrigger, stop);
+            foreach (var eventKey in new[] { "event-a", "event-b", "event-c", "event-d" })
+            {
+                var match = Events.Route(new(eventKey, "previous", eventPayload, long.MaxValue), new(eventKey, actor, "wait"));
+                Check(await bare.AddEventAsync(match, stop), "the previous store records each matched event");
+            }
+            await RequireFormatRefusal(() => Client().EnableRootSelfSendsAsync(stop));
+            await RequireFormatRefusal(() => bare.PollAsync(0, lease.Epoch, TimeSpan.Zero, 20, stop).AsTask());
+            Check(await db.Database.SqlQueryRaw<int>("""
+                SELECT count(*)::int AS "Value" FROM "Messages" WHERE "EventMatch" IS NOT NULL
+                    AND "Payload" = 'Body' AND "FoundationSelfContent" = convert_to('a', 'UTF8')
+                """).SingleAsync(stop) == 1, "reopening and generic delivery refuse the ambiguous predecessor payload and preserve its stored bytes");
+            return 0;
+        }
 
         async Task<bool> PendingTimer(Message timer)
         {
