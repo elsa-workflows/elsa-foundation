@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-01
 
-**Status**: In progress — PR #3603 delivers P1 human, frozen-native compatibility, BPMN → native RunEtl → ETL recovery and completed-occurrence navigation, and exact human claims with interruption, all verified on real hosts and in Studio ([requirement map](evidence/final/README.md)). Still open after that merge: FR-012, FR-014 and SC-005 are proved only partly or by component tests ([#3650](https://github.com/elsa-workflows/elsa-foundation/issues/3650)). T038 and the resulting-main verification in T039 also remain. The status changes to Implemented in the PR that closes #3650.
+**Status**: In progress — PR #3603 delivers P1 human, frozen-native compatibility, BPMN → native RunEtl → ETL recovery and completed-occurrence navigation, and exact human claims with interruption, all verified on real hosts and in Studio ([requirement map](evidence/final/README.md)). #3650 adds real-browser proof of FR-012's awaiting-settlement display and FR-014 pending account/backend switches; FR-012 still has a product gap (Studio does not label which end event a timeout reached) and SC-005 tenant/Studio halves stay deferred ([#4107](https://github.com/elsa-workflows/elsa-foundation/issues/4107)). T038 and the resulting-main verification in T039 also remain. The status changes to Implemented only when every row is proved or explicitly deferred.
 
 **Input**: Deliver Program #2892 through working, recoverable BPMN, native, ETL and Studio journeys. Start with direct BPMN start → wait → restart → resume → complete, then real ETL failure/recovery and BPMN-to-ETL integration. Preserve authoring and saved-state compatibility; let demonstrated journey needs drive architecture.
 

@@ -19,6 +19,14 @@ afterEach(() => {
 });
 
 describe("useWorkflowCanvas BPMN placement", () => {
+  it("uses the authored presentation of a bound BPMN activity on the workflow canvas", () => {
+    const draft = bpmnDraft();
+    draft.activityPresentation = [{ nodeId: "named-task", displayName: "Prepare shipment" }];
+    draft.state.rootActivity!.structure!.payload.activities = [{ nodeId: "named-task", activityVersionId: "writeline@1", inputs: [], outputs: [] }];
+    draft.state.rootActivity!.structure!.payload.elements = [{ elementId: "task-element", elementType: "task", childNodeId: "named-task" }];
+    const harness = renderCanvas({ draft, catalog: [bpmnCatalogItem(), writeLineCatalogItem()], isBpmnDesigner: true });
+    expect(harness.node("task-element")?.data.boundActivity).toMatchObject({ label: "Prepare shipment" });
+  });
   // A BPMN canvas renders from the process ELEMENTS, not from the slot activities. An activity that
   // lands in the slot without a bound element is invisible and gets dropped by the next canvas sync,
   // so every catalog placement in a BPMN scope must stamp an element too.
@@ -82,6 +90,36 @@ describe("useWorkflowCanvas BPMN placement", () => {
     const layout = harness.committedDraft().layout.find(record => record.nodeId !== "start");
     expect(layout).toMatchObject({ x: 512, y: 384 });
     expect(added).not.toBeNull();
+  });
+});
+
+// A captured snapshot is read-only, but React Flow still measures its nodes. A controlled node without a
+// measurement is hidden until React Flow measures it again, so a click in that frame lands on the pane and
+// clears the selection (#4040).
+describe("useWorkflowCanvas read-only canvas", () => {
+  it("keeps React Flow's measurements of a read-only node", () => {
+    const harness = renderFlowchartCanvas({ readOnly: true });
+
+    harness.changeNodes([{ id: "node-a", type: "dimensions", dimensions: { width: 220, height: 64 } }]);
+
+    expect(harness.node("node-a")?.measured).toEqual({ width: 220, height: 64 });
+    expect(harness.commitCount()).toBe(0);
+  });
+
+  it("still ignores moves and resizes of a read-only node", () => {
+    const harness = renderFlowchartCanvas({ readOnly: true });
+    const before = harness.node("node-a")!;
+
+    harness.changeNodes([
+      { id: "node-a", type: "position", position: { x: 900, y: 900 } },
+      { id: "node-a", type: "dimensions", dimensions: { width: 400, height: 300 }, resizing: true, setAttributes: true }
+    ]);
+
+    const after = harness.node("node-a")!;
+    expect(after.position).toEqual(before.position);
+    expect(after.width).toBe(before.width);
+    expect(after.measured).toEqual(before.measured);
+    expect(harness.commitCount()).toBe(0);
   });
 });
 
@@ -172,11 +210,12 @@ function renderBpmnCanvas() {
   });
 }
 
-function renderFlowchartCanvas() {
+function renderFlowchartCanvas(options: { readOnly?: boolean } = {}) {
   return renderCanvas({
     draft: flowchartDraft(),
     catalog: [flowchartCatalogItem(), writeLineCatalogItem()],
-    isBpmnDesigner: false
+    isBpmnDesigner: false,
+    ...options
   });
 }
 
@@ -188,10 +227,11 @@ function renderSingleSlotCanvas() {
   });
 }
 
-function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner }: {
+function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner, readOnly = false }: {
   draft: WorkflowDraft;
   catalog: ActivityCatalogItem[];
   isBpmnDesigner: boolean;
+  readOnly?: boolean;
 }) {
   const catalogByVersion = new Map(catalog.map(item => [item.activityVersionId, item]));
   let draft = initialDraft;
@@ -208,11 +248,14 @@ function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner }: {
     addActivity?: ReturnType<typeof useWorkflowCanvas>["addActivity"];
     commitLayout?: ReturnType<typeof useWorkflowCanvas>["commitLayout"];
     onNodesDelete?: ReturnType<typeof useWorkflowCanvas>["onNodesDelete"];
+    onNodesChange?: ReturnType<typeof useWorkflowCanvas>["onNodesChange"];
     nodes?: ReturnType<typeof useWorkflowCanvas>["nodes"];
   } = {};
 
   function Harness() {
-    const scope = resolveScope(draft.state.rootActivity, [], catalogByVersion);
+    // The editor memoizes the scope (useWorkflowScope), so the canvas projection reruns only when the draft does.
+    const current = draft;
+    const scope = React.useMemo(() => resolveScope(current.state.rootActivity, [], catalogByVersion), [current]);
     const canvas = useWorkflowCanvas({
       draft,
       scope,
@@ -222,7 +265,8 @@ function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner }: {
       catalogByVersion,
       isUnsupportedDesigner: false,
       isBpmnDesigner,
-      canAddActivitiesToCanvas: true,
+      canAddActivitiesToCanvas: !readOnly,
+      readOnly,
       selectedNodeId: null,
       editDraft: applyRecipe,
       editDraftAndSelect: recipe => applyRecipe(recipe),
@@ -234,6 +278,7 @@ function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner }: {
     api.addActivity = canvas.addActivity;
     api.commitLayout = canvas.commitLayout;
     api.onNodesDelete = canvas.onNodesDelete;
+    api.onNodesChange = canvas.onNodesChange;
     api.nodes = canvas.nodes;
     return null;
   }
@@ -262,6 +307,13 @@ function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner }: {
       flushSync(() => api.onNodesDelete!([node]));
       flushSync(() => root.render(<Harness />));
     },
+    // Mirrors React Flow's onNodesChange: measurements, selection and drags all arrive here.
+    changeNodes: (changes: Parameters<NonNullable<typeof api.onNodesChange>>[0]) => {
+      flushSync(() => api.onNodesChange!(changes));
+      flushSync(() => root.render(<Harness />));
+    },
+    node: (nodeId: string) => api.nodes!.find(candidate => candidate.id === nodeId),
+    commitCount: () => commits.length,
     // Mirrors React Flow's onNodeDragStop payload: the settled node, plus every node of a
     // multi-selection drag.
     dragStop: (

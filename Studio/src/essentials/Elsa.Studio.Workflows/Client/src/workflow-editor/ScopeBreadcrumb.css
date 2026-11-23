@@ -1,0 +1,42 @@
+.wf-canvas-shell {
+  container: workflow-canvas / inline-size;
+}
+
+.wf-breadcrumb {
+  position: relative;
+  min-height: 40px;
+  flex: 0 0 auto;
+  gap: 6px;
+  padding: 0 12px;
+}
+
+.wf-instance-breadcrumb {
+  border-top: 0;
+}
+
+.wf-scope-root-icon {
+  display: none;
+}
+
+@container workflow-canvas (max-width: 80px) {
+  .wf-breadcrumb {
+    padding-inline: 2px;
+  }
+
+  .wf-breadcrumb li:not(:first-child) {
+    display: none;
+  }
+
+  .wf-scope-root-icon {
+    display: block;
+  }
+
+  .wf-scope-root-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

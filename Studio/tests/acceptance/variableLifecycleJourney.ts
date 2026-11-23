@@ -121,6 +121,9 @@ export async function variableLifecycleJourney(page: Page, info: TestInfo, captu
     const tab = inspector().getByRole("tab", { name: "Activity", exact: true });
     await tab.click();
     await expect(tab).toHaveAttribute("aria-selected", "true");
+    // Activity inspection starts on its journal; lifecycle diagnostics remain under Data.
+    await inspector().getByRole("tablist", { name: "Activity execution views", exact: true })
+      .getByRole("tab", { name: "Data", exact: true }).click();
     const section = inspector().getByRole("region", { name: "Variable writes", exact: true });
     await expect(section).toBeVisible({ timeout: 30_000 });
     await section.scrollIntoViewIfNeeded();
@@ -149,8 +152,7 @@ export async function variableLifecycleJourney(page: Page, info: TestInfo, captu
 
   // Spec 1229: the run's lost-update count opens the instance's write history, filtered to lost updates.
   await openActivity(warning.runId, warning.step);
-  const timeline = inspector().getByRole("tab", { name: "Timeline", exact: true });
-  await timeline.click();
+  // The run badge is shared by the inspector views; Timeline is the separate history workspace.
   const badge = inspector().getByRole("button", { name: "1 lost update in this run" });
   await expect(badge).toBeVisible({ timeout: 30_000 });
   await capture(page, info, "run-lost-update-badge");

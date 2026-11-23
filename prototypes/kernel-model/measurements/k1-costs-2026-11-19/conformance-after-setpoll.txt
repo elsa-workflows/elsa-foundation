@@ -1,0 +1,72 @@
+=== dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll cost 1024 10 1024
+ 5:01  up 16 days, 15:01, 1 user, load averages: 3.54 5.46 8.57
+| orleans | 1024 | idle, a second | 1536 | 107.6 | 107.1 | 0 | - | 107.6 |
+| orleans | 1024 | 1024 tokens | 681 | 67 | 67 | 27 | 37.9 | 3194 |
+orleans: the burst applied in 124 ms
+exit 0 in 13 s
+=== dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll cost 1024 10 1024
+ 5:02  up 16 days, 15:01, 1 user, load averages: 3.12 5.27 8.45
+| orleans | 1024 | idle, a second | 1536 | 117.5 | 117 | 0 | - | 117.5 |
+| orleans | 1024 | 1024 tokens | 398 | 29 | 29 | 27 | 37.9 | 3156 |
+orleans: the burst applied in 102 ms
+exit 0 in 13 s
+=== dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll semantic
+ 5:02  up 16 days, 15:01, 1 user, load averages: 3.04 5.18 8.38
+pass   poll: a message added without a hint is handled within the poll interval  (548 ms)
+         takeover: 2 of 4 scopes held by the crashed node, settled 7447 ms after the kill
+built-in on in-memory: 17 passed, 0 required failed, 0 reference differ
+exit 0 in 36 s
+=== dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll semantic --partitions 1024
+ 5:02  up 16 days, 15:02, 1 user, load averages: 3.48 5.07 8.22
+pass   poll: a message added without a hint is handled within the poll interval  (592 ms)
+         takeover: 512 of 1024 scopes held by the crashed node, settled 7454 ms after the kill
+built-in on in-memory: 17 passed, 0 required failed, 0 reference differ
+exit 0 in 39 s
+=== dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll semantic --partitions 4096
+ 5:03  up 16 days, 15:03, 1 user, load averages: 2.87 4.73 7.94
+pass   poll: a message added without a hint is handled within the poll interval  (1063 ms)
+         takeover: 2048 of 4096 scopes held by the crashed node, settled 6194 ms after the kill
+built-in on in-memory: 17 passed, 0 required failed, 0 reference differ
+exit 0 in 46 s
+=== dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll stress 20 2000
+ 5:04  up 16 days, 15:03, 1 user, load averages: 6.67 5.38 8.01
+end state: all properties hold
+exit 0 in 24 s
+=== dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll semantic
+ 5:04  up 16 days, 15:04, 1 user, load averages: 5.30 5.17 7.86
+pass   poll: a message added without a hint is handled within the poll interval  (574 ms)
+         takeover: 4 of 4 scopes held by the crashed node, settled 7489 ms after the kill
+differ join: a node that joins gets a share of the scopes  (6429 ms)
+orleans on in-memory: 15 passed, 0 required failed, 1 reference differ
+exit 0 in 38 s
+=== dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll semantic --partitions 1024
+ 5:05  up 16 days, 15:04, 1 user, load averages: 3.77 4.79 7.59
+pass   poll: a message added without a hint is handled within the poll interval  (659 ms)
+         takeover: 1024 of 1024 scopes held by the crashed node, settled 7485 ms after the kill
+differ join: a node that joins gets a share of the scopes  (6477 ms)
+orleans on in-memory: 15 passed, 0 required failed, 1 reference differ
+exit 0 in 40 s
+=== dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll stress 20 2000
+ 5:06  up 16 days, 15:05, 1 user, load averages: 3.08 4.50 7.36
+end state: all properties hold
+exit 0 in 24 s
+=== dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic
+ 5:06  up 16 days, 15:05, 1 user, load averages: 2.78 4.30 7.20
+pass  order: outside adds one after another, from different clients, get increasing keys  (2 ms)
+pass  poll: due within the horizon  (1 ms)
+pass  sweep: deletes done commands and events whose window passed, nothing else  (707 ms)
+pass  heartbeat: the nodes heard from within the window, and the partitions nobody holds  (707 ms)
+in-memory: 96 passed, 0 required failed, 0 reference differ, 3 skipped
+exit 0 in 10 s
+=== dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll stress
+ 5:06  up 16 days, 15:06, 1 user, load averages: 2.74 4.24 7.15
+end state: all properties hold
+exit 0 in 17 s
+=== dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite --fence-in-batch semantic
+ 5:06  up 16 days, 15:06, 1 user, load averages: 2.51 4.11 7.05
+pass  order: outside adds one after another, from different clients, get increasing keys  (29 ms)
+pass  poll: due within the horizon  (18 ms)
+pass  sweep: deletes done commands and events whose window passed, nothing else  (723 ms)
+pass  heartbeat: the nodes heard from within the window, and the partitions nobody holds  (729 ms)
+entity framework, sqlite, fence in batch, owned SQL: 96 passed, 0 required failed, 0 reference differ, 3 skipped
+exit 0 in 53 s

@@ -124,13 +124,13 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
         }
         const visible = (JSON.parse(nodeKey) as string[]).map(id => graph.factsByNodeId.get(id)).filter(item => item !== undefined);
         const { activities, observations, repeated, failed } = await readVisibleActivityExecutions(context, executionId, visible.map(fact => fact.executableNodeId), ancestorId, selectedExecution ?? undefined, controller.signal);
-        if (failed && !controller.signal.aborted) throw new Error("Some visible execution evidence could not be loaded. Refresh to retry.");
+        if (failed && !controller.signal.aborted) throw new Error("Some visible run data could not be loaded. Refresh to retry.");
         if (!controller.signal.aborted) setEvidence({ ...next, loading: false, details, graph, activities, observations, repeated, observationRevision });
       } catch (error) {
         if (controller.signal.aborted) return;
         const message = error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError
-          ? "Execution evidence is unavailable on this backend."
-          : error instanceof Error ? error.message : "Execution evidence could not be loaded.";
+          ? "Run data is unavailable on this backend."
+          : error instanceof Error ? error.message : "Run data could not be loaded.";
         setEvidence({ ...next, loading: false, error: message });
       }
     };
@@ -173,7 +173,7 @@ export function useEditorRunCanvas({ context, definitionId, testRun, draftSignat
     stale,
     snapshotView,
     loading: attached && (!current || current.loading),
-    error: authorityChanged ? "This Test Run belongs to another backend session." : !authorized ? "Sign in again to inspect execution evidence." : current?.error || observation?.error || "",
+    error: authorityChanged ? "This Test Run belongs to another backend session." : !authorized ? "Sign in again to inspect run data." : current?.error || observation?.error || "",
     repeated: current?.repeated ?? false,
     status: isTerminalExecution(observation?.details?.instance.status) ? observation?.details?.instance.status
       : observation?.waits.length ? "Waiting" : observation?.details?.instance.status ?? current?.details?.instance.status,

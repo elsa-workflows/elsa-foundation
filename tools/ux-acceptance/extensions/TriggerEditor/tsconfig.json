@@ -1,0 +1,25 @@
+{
+  "extends": "../../../../Studio/tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@elsa-workflows/studio-sdk": [
+        "../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk/src/index.ts"
+      ],
+      "react": [
+        "../../../../Studio/node_modules/@types/react/index.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "wwwroot/**/*.js"
+  ]
+}

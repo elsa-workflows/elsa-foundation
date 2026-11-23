@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Kernel.Sim</RootNamespace>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../models/Native.Run/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
+    <ProjectReference Include="../src/Kernel.Workflows/Kernel.Workflows.csproj" />
+    <ProjectReference Include="../src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
+    <ProjectReference Include="../models/Native.Legacy/Kernel.Native.Legacy.csproj" />
+    <ProjectReference Include="../models/Statecharts/Kernel.Statecharts.csproj" />
+    <ProjectReference Include="../src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,299 @@
+{
+  "status": "passed",
+  "source": "11c48db71b17972771507f5f1b4da2238975a0e0",
+  "preliminary": false,
+  "version": "4.0.0-dashboard-20261113.6",
+  "scope": "independent native package contribution",
+  "providerConfigured": false,
+  "fullFeatureQualified": false,
+  "exactCommitQualified": true,
+  "independentPackageWitness": true,
+  "producerInputManifestSha256": "961b3d2b03b3bbf06cfba7280e23660aaa4ea67285467bb45eef0c65ac4c72ea",
+  "toolSha256": "1e294744dd960934234b3f0f2368f3bc531b6122e8912d0272bcfcfe7a8d22ac",
+  "nativeProfileCommonBytesUnchanged": true,
+  "cases": [
+    {
+      "id": "installed-module-bytes",
+      "status": "passed"
+    },
+    {
+      "id": "native-discovery",
+      "status": "passed"
+    },
+    {
+      "id": "native-business-record-create",
+      "status": "passed"
+    },
+    {
+      "id": "author-numerical-oracle",
+      "status": "passed"
+    },
+    {
+      "id": "viewer-numerical-oracle",
+      "status": "passed"
+    },
+    {
+      "id": "record-denied-control",
+      "status": "passed"
+    },
+    {
+      "id": "native-authorized-drill",
+      "status": "passed"
+    },
+    {
+      "id": "tenant-isolation-control",
+      "status": "passed"
+    },
+    {
+      "id": "field-denied-control",
+      "status": "passed"
+    },
+    {
+      "id": "aggregate-without-record-control",
+      "status": "passed"
+    },
+    {
+      "id": "record-without-aggregate-control",
+      "status": "passed"
+    },
+    {
+      "id": "anonymous-control",
+      "status": "passed"
+    },
+    {
+      "id": "native-question-save",
+      "status": "passed"
+    },
+    {
+      "id": "native-saved-question-refresh",
+      "status": "passed"
+    },
+    {
+      "id": "private-definition-control",
+      "status": "passed"
+    },
+    {
+      "id": "disabled-contribution-control",
+      "status": "passed"
+    },
+    {
+      "id": "persistent-question-source-unavailable",
+      "status": "passed"
+    },
+    {
+      "id": "restored-module-native-refresh",
+      "status": "passed"
+    },
+    {
+      "id": "installed-common-bytes-unchanged",
+      "status": "passed"
+    }
+  ],
+  "stages": [
+    {
+      "id": "source-archive",
+      "status": "passed"
+    },
+    {
+      "id": "producer-build",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-0",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-1",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-2",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-3",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-4",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-5",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-6",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-7",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-8",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-9",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-10",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-11",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-12",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-13",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-14",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-15",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-16",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-17",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-18",
+      "status": "passed"
+    },
+    {
+      "id": "producer-pack-19",
+      "status": "passed"
+    },
+    {
+      "id": "consumer-online-restore",
+      "status": "passed"
+    },
+    {
+      "id": "consumer-offline-restore",
+      "status": "passed"
+    },
+    {
+      "id": "consumer-publish",
+      "status": "passed"
+    }
+  ],
+  "hostProcesses": [
+    {
+      "label": "enabled",
+      "status": "stopped",
+      "exitCode": 0
+    },
+    {
+      "label": "disabled",
+      "status": "stopped",
+      "exitCode": 0
+    },
+    {
+      "label": "restored",
+      "status": "stopped",
+      "exitCode": 0
+    }
+  ],
+  "packages": {
+    "Elsa.Foundation.Identity.Core": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "dbb22e8a0dc624b1f852742a2222ff91e603e6746810363fb49d4c3b9dd12f1f"
+    },
+    "Elsa.Studio.Dashboard.Api": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "a1001c9e349b4fabb834c9b4f3774b483b0ed9f5de8d4d464de05df7cbe18647"
+    },
+    "Elsa.Primitives": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "30a3a2cfc5833781bb6f07d44baab76644fa46fc8f6135d888db3515aea70737"
+    },
+    "Elsa.Pipelines.Core": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "ec2271bf5db972e231c176976cbdd74cbb92a6e9457437e36f0d9f7147774872"
+    },
+    "Elsa.Foundation.Identity": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "140335d75a231fa0f9cde6cfdde76b55c8260e53d84073606f36e7fcb792bfdb"
+    },
+    "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "2dc85ea17f5afefb1d42e2a0e5249071b71ba4321567f382b2421e37c5a857e5"
+    },
+    "Elsa.Studio.Dashboard.Management": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "5cfa62170f368957ec8008eb6ee045cadfb406203b2b5a14c767a004f50da646"
+    },
+    "Elsa.Api.Capabilities.Core": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "d3cd1c928f485beac0c02296217bfa541ce79fab36e111f1bfbb38aa4dacc840"
+    },
+    "Elsa.Events": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "73572e20739c0fddbd22c511838fbf180f2b796a0ca5a015cad0419c3f17d9aa"
+    },
+    "Acme.Processing": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "196da2f52cd69e5a0f1e358df89c3519d33a20c0745594b6be9ebc7e81d2a5a8"
+    },
+    "Elsa.Events.Core": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "63e489226c918a3dbd98d7fb3764479b1ef5efe2c9c18dd2ddaa8ae01026cb76"
+    },
+    "Elsa.Studio.Dashboard.Core": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "a0775e37dae135e43bec7b1a4c87ba9bed21debbe6b9516cd380dbd116d40de3"
+    },
+    "Elsa.Persistence.Core": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "683cc693f3f6a029e9a710e2c235f398b0cca1603f72958a13c0a99e55a60b43"
+    },
+    "Elsa.Persistence.EntityFramework": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "cc410857c6cfee6013fcd9ff8d9108e67bbc3b4cf6589b8d6b81a49bd9b6c3e8"
+    },
+    "Elsa.Api.Capabilities": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "87c4bbfbee5f6a7cd93fba9d7fbd8b1f2b04ce89d19e95f6a3d07608807e173c"
+    },
+    "Acme.Processing.Core": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "c2d695865efa6226070cefe28ab8603ae65113cc22fb7c10768ef2d20979ef4a"
+    },
+    "Elsa.Tasks.Core": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "393c917e27a54e1ca443b7e34219d48df709644a4f9e93e586ed7c331e1e81e8"
+    },
+    "Elsa.Api.AspNetCore": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "228e9d6a0c70f945eb376467fc5a2616f38935718b3896f293f011e712b4e631"
+    },
+    "Elsa.Persistence.Schema": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "da2eaff54662b7fb8308a556aa2ade84f845164ec14a40c064034477aa8fcd4e"
+    },
+    "Elsa.Events.Strategies": {
+      "version": "4.0.0-dashboard-20261113.6",
+      "sha256": "d3b458e44271b5b6ea605ce9a9b41870a3f4e9000a15674207e6c526da393541"
+    }
+  },
+  "consumer": {
+    "packageOnly": true,
+    "offlineRestore": true,
+    "frontendInvocations": 0,
+    "lockSha256": "eba127468e766e6be1c25f0f762752ac79ce333c79287dbda147e5f6348cfa22"
+  }
+}

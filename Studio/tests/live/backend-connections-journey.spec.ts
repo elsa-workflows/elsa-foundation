@@ -30,13 +30,13 @@ test.describe("backend connections against composed hosts",()=>{
     await expect(page.getByRole("heading",{name:"Unreachable qualification backend",exact:true})).toBeVisible();
     await page.getByRole("button",{name:"Edit",exact:true}).click();
     await page.getByLabel("Name",{exact:true}).fill("Renamed qualification backend");
-    await page.getByRole("button",{name:"Save changes"}).click();
+    await page.getByRole("button",{name:"Save"}).click();
     await page.getByRole("button",{name:"Connect",exact:true}).click();
     await expect(page.getByRole("button",{name:/Select backend\. Current: Authoring/})).toBeVisible();
     await expect(page).toHaveURL(/backend=authoring/);
     await expect(page.getByRole("status").filter({hasText:/fetch|reach|network|failed/i})).toBeVisible();
     page.once("dialog",dialog=>dialog.accept());
-    await page.getByRole("button",{name:"Remove backend",exact:true}).click();
+    await page.getByRole("button",{name:"Delete profile",exact:true}).click();
     await expect(page.getByRole("heading",{name:"Backends",exact:true,level:2})).toBeVisible();
     await expect(page.getByRole("button",{name:"Renamed qualification backend",exact:true})).toHaveCount(0);
   });
@@ -62,7 +62,7 @@ test.describe("backend connections against composed hosts",()=>{
     await page.locator(".feature-management-feature-button").filter({has:page.locator("code").filter({hasText:/^DiagnosticsStructuredLogs$/})}).click();
     await page.getByRole("button",{name:"Edit settings",exact:true}).click();
     await page.getByRole("dialog").getByLabel("Buffer capacity",{exact:false}).fill(String(capacity));
-    await page.getByRole("button",{name:"Save draft",exact:true}).click();
+    await page.getByRole("button",{name:"Save",exact:true}).click();
     await page.getByRole("button",{name:/Select backend/}).click();
     await page.locator(".backend-switcher-popover").getByRole("button",{name:/Runtime.*Connect/}).click();
     await expect(page).toHaveURL(/backend=authoring/);

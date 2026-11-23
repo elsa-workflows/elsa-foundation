@@ -3,6 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Bell, X } from "lucide-react";
 import type { StudioNotificationController, StudioNotificationEntry } from "../../../sdk";
 import { notificationController } from "../../notifications";
+import type { ToastDurationPreference } from "../../toastDurationPreference";
 import { focusIfConnected, NotificationLevelIcon, notificationLevelLabel, runNotificationAction } from "./notificationShared";
 
 export interface NotificationCenterProps {
@@ -11,6 +12,8 @@ export interface NotificationCenterProps {
   controller?: StudioNotificationController;
   /** Clock for relative times; injectable so tests are deterministic. */
   now?: () => number;
+  toastDurationPreference?: ToastDurationPreference;
+  onToastDurationPreferenceChange?(preference: ToastDurationPreference): void;
 }
 
 const relativeUnits: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [
@@ -34,7 +37,7 @@ function formatRelativeTime(timestamp: number, now: number): string {
  * Rendered as a fragment so the bell is a direct child of the top bar actions and inherits their styling.
  * Toasts are suppressed while the sheet is open, since they would cover it and repeat what it lists.
  */
-export function NotificationCenter({ navigate, controller = notificationController, now = Date.now }: NotificationCenterProps) {
+export function NotificationCenter({ navigate, controller = notificationController, now = Date.now, toastDurationPreference = "default", onToastDurationPreferenceChange }: NotificationCenterProps) {
   const entries = useSyncExternalStore(controller.subscribe, controller.getEntries, controller.getEntries);
   const [open, setOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -83,10 +86,52 @@ export function NotificationCenter({ navigate, controller = notificationControll
               <button type="button" className="studio-notification-header-button" disabled={entries.length === 0} onClick={dismissAll}>Dismiss all</button>
             </div>
           </div>
+          <ToastDurationSetting preference={toastDurationPreference} onChange={onToastDurationPreferenceChange} />
           <NotificationList entries={entries} controller={controller} navigate={navigate} now={now} headingRef={headingRef} onClose={() => changeOpen(false)} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function ToastDurationSetting({ preference, onChange }: {
+  preference: ToastDurationPreference;
+  onChange?: (preference: ToastDurationPreference) => void;
+}) {
+  const mode = typeof preference === "number" ? "custom" : preference;
+  return (
+    <div className="studio-notification-preferences">
+      <div className="studio-notification-preference-fields" data-custom={typeof preference === "number" ? "true" : undefined}>
+        <label className="studio-notification-preference-field">
+          <span>Toast dismissal</span>
+          <select value={mode} onChange={event => {
+            if (event.currentTarget.value === "custom") onChange?.(typeof preference === "number" ? preference : 8);
+            else onChange?.(event.currentTarget.value as ToastDurationPreference);
+          }}>
+            <option value="default">Use notification defaults</option>
+            <option value="custom">After a custom time</option>
+            <option value="manual">Keep until dismissed</option>
+          </select>
+        </label>
+        {typeof preference === "number" ? (
+          <label className="studio-notification-preference-field studio-notification-preference-seconds">
+            <span>Seconds</span>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              step={1}
+              value={preference}
+              onChange={event => {
+                const seconds = Number(event.currentTarget.value);
+                if (Number.isInteger(seconds) && seconds >= 1 && seconds <= 60) onChange?.(seconds);
+              }}
+            />
+          </label>
+        ) : null}
+      </div>
+      <p className="studio-notification-preference-hint">Defaults: 8 seconds for info and success, 12 for warnings. Errors and progress stay until dismissed.</p>
+    </div>
   );
 }
 

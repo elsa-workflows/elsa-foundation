@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Gate 2, fourth review: executable evidence for R4-B1 (FR-1) and R4-B2 (RT-1). Project references only,
+       so the harness rebuilds from the prototype source at any revision. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Kernel.Review4</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Kernel.Native brings Kernel.Workflows, Kernel.Durable, Kernel.Runtime and Kernel.Graph. -->
+    <ProjectReference Include="../../models/Native.Legacy/Kernel.Native.Legacy.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+    <Using Include="Kernel.Native" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,38 @@
+== 1024
+ 4:30  up 16 days, 14:30, 1 user, load averages: 15.55 12.41 20.08
+PHASE settled 130 ms
+PHASE steady 6044 ms
+PHASE handled 3 6115 ms
+PHASE before kill 6115 ms
+PHASE killed 6117 ms
+PHASE killed and probed 6117 ms
+PHASE taken over 13562 ms
+PHASE applied 13563 ms
+built-in on in-memory: 1 passed, 0 required failed, 0 reference differ
+real 13.83
+== 2048
+ 4:30  up 16 days, 14:30, 1 user, load averages: 15.87 12.63 20.03
+PHASE settled 330 ms
+PHASE steady 6061 ms
+PHASE handled 3 6129 ms
+PHASE before kill 6130 ms
+PHASE killed 6131 ms
+PHASE killed and probed 6131 ms
+PHASE taken over 13605 ms
+PHASE applied 13606 ms
+built-in on in-memory: 1 passed, 0 required failed, 0 reference differ
+real 13.97
+== 4096
+ 4:31  up 16 days, 14:30, 1 user, load averages: 16.18 12.90 19.99
+PHASE settled 535 ms
+PHASE steady 6084 ms
+PHASE handled 3 6129 ms
+PHASE before kill 6130 ms
+PHASE killed 6131 ms
+PHASE killed and probed 6131 ms
+PHASE taken over 13576 ms
+PHASE applied 13577 ms
+built-in on in-memory: 1 passed, 0 required failed, 0 reference differ
+real 14.31
+
+[exited with code 0]

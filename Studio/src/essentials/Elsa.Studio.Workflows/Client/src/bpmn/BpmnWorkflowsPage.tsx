@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { StudioButton, StudioPageHeader } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, StudioRefreshControl, StudioResultState, StudioButton, StudioCollectionEmptyState, StudioPageHeader, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import { evaluateBackendRequirements, qualifyStudioBackendPath, type StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { createBpmnRuntimeClient, type BpmnPage, type BpmnExecution, type BpmnPublication } from "../api/bpmnRuntime";
 import { WorkflowListIdentifiers } from "../workflow-editor/WorkflowListIdentifiers";
@@ -32,7 +32,7 @@ export function BpmnWorkflowsPage({ session, view, navigate }: Props) {
       <a href={qualifyStudioBackendPath("/workflows/bpmn/runs")} aria-current={view !== "processes" ? "page" : undefined} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); open("/workflows/bpmn/runs"); } }}>Runs</a>
     </nav>
     {session.disposed ? <p role="alert">This backend connection ended. Reconnect to load current BPMN state.</p>
-      : !available ? <p role="alert">BPMN navigation is unavailable on the selected backend.</p>
+      : !available ? <StudioResultState title="BPMN unavailable" description="Choose a backend with BPMN support to open processes and runs." />
         : view === "run" ? executionId ? <BpmnRunDetails key={`${client.sessionKey}:${client.scope}:${executionId}`} client={client} session={session} executionId={executionId} /> : <p role="alert">This BPMN run address is invalid.</p>
           : <BpmnCatalog key={`${client.sessionKey}:${client.scope}:${view}:${artifactId ?? ""}`} client={client} session={session} view={view} artifactId={artifactId} open={open} />}
   </section>;
@@ -49,27 +49,30 @@ function BpmnCatalog({ client, session, view, artifactId, open }: { client: Clie
     enabled: view === "processes" && runtimeAvailable, retry: false, refetchOnWindowFocus: false });
   const paging = useRef(false);
   const items = [...new Map(query.data?.pages.flatMap(page => page.items).map(item => ["sourceReferenceId" in item ? item.sourceReferenceId : item.executionId, item]) ?? []).values()];
+  const loadMore = () => {
+    if (paging.current) return; paging.current = true;
+    void query.fetchNextPage().catch(() => undefined).finally(() => { paging.current = false; });
+  };
   return <div className="wf-bpmn-catalog">
-    <div className="wf-bpmn-actions"><StudioButton type="button" disabled={query.isFetching} onClick={() => { void queryClient.resetQueries({ queryKey, exact: true }); }}>Refresh</StudioButton>
+    <div className="wf-bpmn-actions"><StudioRefreshControl refresh={{ id: "bpmn-" + view, label: "Refresh BPMN " + view, refreshing: query.isFetching, onRefresh: () => queryClient.resetQueries({ queryKey, exact: true }) }} />
       {artifactId ? <StudioButton type="button" variant="default" onClick={() => open("/workflows/bpmn/runs")}>Show all runs</StudioButton> : null}</div>
     {view === "processes" && admission.data?.admitNewExecutions === false ? <p role="status">New starts are disabled. Existing runs can still be inspected and resumed.</p> : null}
     {view === "processes" && admission.isError ? <p role="alert">Execution availability could not be loaded: {admission.error.message}</p> : null}
     {query.isError ? <p role="alert">{query.error.message}</p> : query.isPending ? <p role="status">Loading {view}…</p> : <>
-      {!items.length ? <p role="status">No visible {view} on the loaded pages.{query.hasNextPage ? " Load more to continue." : ""}</p> : <div className="wf-bpmn-table-scroll"><table>
+      {!items.length ? <StudioCollectionEmptyState title={`No BPMN ${view} yet`}
+        description={`No visible ${view} on the loaded pages.${query.hasNextPage ? " Load more to continue." : ""}`}
+        actions={query.hasNextPage ? <StudioButton type="button" disabled={query.isFetching} onClick={loadMore}>{query.isFetchingNextPage ? "Loading…" : "Load more"}</StudioButton> : undefined} /> : <div className="wf-bpmn-table-scroll"><table>
         <caption className="wf-toolbar-sr-only">Loaded BPMN {view}</caption>
         <thead><tr>{view === "processes" ? <><th scope="col">Process</th><th scope="col">Published version</th><th scope="col">Actions</th></>
           : <><th scope="col">Run started</th><th scope="col">State</th><th scope="col">Updated</th><th scope="col">Actions</th></>}</tr></thead>
         <tbody>{items.map(item => "sourceReferenceId" in item ? <ProcessRow key={item.sourceReferenceId} client={client} session={session} publication={item}
           canStart={runtimeAvailable && admission.data?.admitNewExecutions === true && !admission.isFetching} open={open} />
-          : <tr key={item.executionId}><td><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time>
+          : <tr key={item.executionId} {...studioRowInteraction<HTMLTableRowElement>(() => open(runPath(item.executionId)))}><td><StudioTimestamp value={item.createdAt} fallback="—" />
             <WorkflowListIdentifiers name={`BPMN run ${new Date(item.createdAt).toLocaleString()}`} kind="BPMN run" identifiers={[{ label: "BPMN run", value: item.executionId }, { label: "Executable", value: item.executable.artifactId }]} /></td>
-            <td>{bpmnRunState(item)}</td><td><time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleString()}</time></td>
+            <td>{bpmnRunState(item)}</td><td><StudioTimestamp value={item.updatedAt} fallback="—" /></td>
             <td><StudioButton type="button" onClick={() => open(runPath(item.executionId))}>Open run</StudioButton></td></tr>)}</tbody>
       </table></div>}
-      {query.hasNextPage ? <StudioButton type="button" disabled={query.isFetching} onClick={() => {
-        if (paging.current) return; paging.current = true;
-        void query.fetchNextPage().catch(() => undefined).finally(() => { paging.current = false; });
-      }}>{query.isFetchingNextPage ? "Loading…" : "Load more"}</StudioButton> : null}
+      {query.hasNextPage && items.length ? <StudioButton type="button" disabled={query.isFetching} onClick={loadMore}>{query.isFetchingNextPage ? "Loading…" : "Load more"}</StudioButton> : null}
     </>}
   </div>;
 }

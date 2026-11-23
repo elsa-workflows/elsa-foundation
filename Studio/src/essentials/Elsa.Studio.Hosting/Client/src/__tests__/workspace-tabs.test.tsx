@@ -112,11 +112,38 @@ afterEach(async () => {
 describe("workspace tabs", () => {
   it("reuses the active tab for ordinary navigation", async () => {
     await mount("/list");
-    await act(async () => controller.navigate("/list?page=2"));
+    await vi.waitFor(() => expect(container.querySelector(".list")).not.toBeNull());
+    const tabId = controller.state.activeId;
+
+    controller.navigate("/list?page=2");
+    await vi.waitFor(() => expect(controller.activeTab.location).toBe("/list?page=2"));
     expect(controller.state.tabs).toHaveLength(1);
-    expect(controller.activeTab.location).toBe("/list?page=2");
+    expect(controller.state.activeId).toBe(tabId);
     expect(currentLocation()).toBe("/list?page=2");
-    expect(readHistoryTabId(window.history.state)).toBe(controller.state.activeId);
+    expect(readHistoryTabId(window.history.state)).toBe(tabId);
+  });
+
+  it("keeps a dirty editor mounted during browser Back and completes the original traversal once", async () => {
+    await mount("/list");
+    await act(() => controller.navigate("/editor"));
+    const tabId = controller.state.activeId;
+    let decide!: (allowed: boolean) => void;
+    const review = vi.fn(() => new Promise<boolean>(resolve => { decide = resolve; }));
+    const guard = (event: Event) => (event as CustomEvent<StudioNavigationRequest>).detail.confirmWith?.(review);
+    window.addEventListener(studioNavigationRequestedEvent, guard);
+    try {
+      await act(() => window.history.back());
+      expect(currentLocation()).toBe("/editor");
+      expect(visiblePanel().querySelector(".editor")).not.toBeNull();
+      await act(() => decide(false));
+      expect(controller.path).toBe("/editor");
+      await act(() => window.history.back());
+      await act(() => decide(true));
+      expect(controller.path).toBe("/list");
+      expect(currentLocation()).toBe("/list");
+      expect(controller.state.activeId).toBe(tabId);
+      expect(review).toHaveBeenCalledTimes(2);
+    } finally { window.removeEventListener(studioNavigationRequestedEvent, guard); }
   });
 
   it("keeps a background editor's unsaved edits while tearing down its effects", async () => {
@@ -148,6 +175,11 @@ describe("workspace tabs", () => {
     const editorTab = controller.state.activeId;
     const whenActive = editorProbe.whenActive!;
     await act(async () => controller.open("/list"));
+    // Capture the new tab's identity from a rendered controller, not the fixed scheduler delay.
+    await vi.waitFor(() => {
+      expect(controller.activeTab.location).toBe("/list");
+      expect(controller.state.activeId).not.toBe(editorTab);
+    });
     const listTab = controller.state.activeId;
 
     // A request the editor started completes in the background and opens what it created.

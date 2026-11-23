@@ -1,9 +1,11 @@
+import { NativeBlockAuthorityProvider } from "../graph-authoring/nativeBlockAuthority";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StudioActivityDefinitionImplementationEditorProps } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDefinitionImplementationEditorProps, StudioDialogApi } from "@elsa-workflows/studio-sdk";
 import { ActivityGraphImplementationEditor } from "../ActivityGraphImplementationEditor";
+import { setDialogs } from "../workflow-editor/dialogs";
 import { forEachActivity, forEachNode, leafNode, sequenceActivity, sequenceNode, writeLine } from "./fixtures";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
 
@@ -12,7 +14,9 @@ vi.mock("../api/activityDesign", () => ({
     data: { activities: catalogItems },
     isPending: false,
     isError: false
-  })
+  }),
+  // Reusable activity authoring is unavailable in these editor-only tests.
+  useActivityAuthoringCapabilities: () => ({ data: undefined, isPending: false, isError: true })
 }));
 vi.mock("../api/expressions", () => ({
   listExpressionDescriptors: async () => [],
@@ -22,7 +26,6 @@ vi.mock("../api/expressions", () => ({
 
 const branchKind = "tests.sequence-branch";
 const singleSequenceKind = "tests.single-sequence-body";
-const originalConfirm = window.confirm;
 let catalogItems: ActivityCatalogItem[] = [sequenceActivity, forEachActivity, writeLine, branchCatalogItem()];
 const mounted: Array<{ root: Root; container: HTMLDivElement }> = [];
 
@@ -31,11 +34,54 @@ afterEach(() => {
     flushSync(() => item.root.unmount());
     item.container.remove();
   }
-  window.confirm = originalConfirm;
+  setDialogs({ confirm: async () => true, prompt: async () => null, alert: async () => undefined });
   catalogItems = [sequenceActivity, forEachActivity, writeLine, branchCatalogItem()];
 });
 
 describe("Activity Graph Sequence host", () => {
+  it("extracts an actual Shift selection as one edit and restores the set, scope and authored name through Undo/Redo", async () => {
+    catalogItems = [sequenceActivity, writeLine];
+    const validate = vi.fn(async () => ({ state: "validated", messages: [] as string[] }));
+    const rendered = renderControlledDesigner(implementationValue(sequenceNode("root", [leafNode("one"), leafNode("two"), leafNode("three")])), validate);
+    click(step(rendered.container, "one"));
+    flushSync(() => step(rendered.container, "three").dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true })));
+    expect(rendered.container.querySelectorAll(".wf-sequence-step[aria-pressed=true]")).toHaveLength(3);
+    click(button(rendered.container, "Extract block…"));
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    const input = dialog.querySelector<HTMLInputElement>("input")!;
+    flushSync(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Prepare shipment"); input.dispatchEvent(new Event("input", { bubbles: true })); });
+    click(button(dialog, "Preview change")); await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {});
+    expect(validate).toHaveBeenCalledTimes(1);
+    expect(stepIds(rendered.container)).toEqual(["one", "two", "three"]);
+    click(button(dialog, "Apply change")); await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {});
+    expect(validate).toHaveBeenCalledTimes(2);
+    const block = stepIds(rendered.container)[0]!;
+    expect(stepIds(rendered.container)).toHaveLength(1);
+    expect(rendered.value().activityPresentation).toContainEqual({ nodeId: block, displayName: "Prepare shipment" });
+    expect(step(rendered.container, block).getAttribute("aria-pressed")).toBe("true");
+    click(button(rendered.container, "Open Prepare shipment (3 steps)"));
+    await vi.waitFor(() => expect(stepIds(rendered.container)).toEqual(["one", "two", "three"]));
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toContain("Prepare shipment");
+    click(button(rendered.container, "Undo Activity Graph edit", "aria-label"));
+    await vi.waitFor(() => expect(stepIds(rendered.container)).toEqual(["one", "two", "three"]));
+    await vi.waitFor(() => expect(rendered.container.querySelectorAll(".wf-sequence-step[aria-pressed=true]")).toHaveLength(3));
+    expect(rendered.value().activityPresentation ?? []).toHaveLength(0);
+    click(button(rendered.container, "Redo Activity Graph edit", "aria-label"));
+    await vi.waitFor(() => expect(stepIds(rendered.container)).toEqual(["one", "two", "three"]));
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toContain("Prepare shipment");
+  });
+
+  it("extends and toggles real list selections with keyboard and Cmd gestures", () => {
+    catalogItems = [sequenceActivity, writeLine];
+    const rendered = renderControlledDesigner(implementationValue(sequenceNode("root", [leafNode("one"), leafNode("two"), leafNode("three")])));
+    click(step(rendered.container, "one"));
+    flushSync(() => step(rendered.container, "one").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, shiftKey: true })));
+    expect(rendered.container.querySelectorAll(".wf-sequence-step[aria-pressed=true]")).toHaveLength(3);
+    flushSync(() => step(rendered.container, "two").dispatchEvent(new MouseEvent("click", { bubbles: true, metaKey: true })));
+    expect(rendered.container.querySelectorAll(".wf-sequence-step[aria-pressed=true]")).toHaveLength(2);
+    expect(step(rendered.container, "two").getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("keeps authored list order authoritative and makes reorder undoable", () => {
     const first = leafNode("first");
     first.activityVersionId = "activity-write-line-v1";
@@ -169,6 +215,7 @@ describe("Activity Graph Sequence host", () => {
     click(cloneStep);
     confirmOnce();
     click(button(rendered.container, "Delete Branch (copy)", "aria-label"));
+    await vi.waitFor(() => expect(sequenceActivities(rendered.value()).map(activity => activity.nodeId)).toEqual(["branch-source", "tail"]));
     expect(sequenceActivities(rendered.value()).map(activity => activity.nodeId)).toEqual(["branch-source", "tail"]);
     expect(rendered.value().layout.map(record => record.nodeId)).not.toContain(clonedNested.nodeId);
 
@@ -184,6 +231,7 @@ describe("Activity Graph Sequence host", () => {
 
     click(button(rendered.container, "Delete Write Line", "aria-label"));
 
+    await vi.waitFor(() => expect(sequenceActivities(rendered.value())).toEqual([]));
     expect(sequenceActivities(rendered.value())).toEqual([]);
     const canvas = rendered.container.querySelector<HTMLElement>(".wf-sequence-designer");
     expect(canvas).not.toBeNull();
@@ -292,7 +340,7 @@ function renderDesigner(overrides: Partial<StudioActivityDefinitionImplementatio
   return rendered;
 }
 
-function renderControlledDesigner(initialValue: StudioActivityDefinitionImplementationEditorProps["value"]) {
+function renderControlledDesigner(initialValue: StudioActivityDefinitionImplementationEditorProps["value"], validate?: () => Promise<{ state: string; messages: string[] }>) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -304,7 +352,8 @@ function renderControlledDesigner(initialValue: StudioActivityDefinitionImplemen
       currentValue = next;
       setValue(next);
     }, []);
-    return <ActivityGraphImplementationEditor {...props} value={value} onChange={onChange} />;
+    const editor = <ActivityGraphImplementationEditor {...props} value={value} onChange={onChange} />;
+    return validate ? <NativeBlockAuthorityProvider value={{ sourceKey: JSON.stringify(value), canEdit: true, canApply: () => true, validate }}>{editor}</NativeBlockAuthorityProvider> : editor;
   }
   flushSync(() => root.render(<Controlled />));
   const rendered = { root, container, value: () => currentValue };
@@ -353,8 +402,13 @@ function step(container: HTMLElement, nodeId: string) {
 }
 
 function button(container: HTMLElement, label: string, attribute?: string) {
-  const element = [...container.querySelectorAll<HTMLButtonElement>("button")]
+  let element = [...container.querySelectorAll<HTMLButtonElement>("button")]
     .find(candidate => attribute ? candidate.getAttribute(attribute) === label : candidate.textContent?.trim() === label);
+  if (!element && !attribute) {
+    const trigger = container.querySelector<HTMLButtonElement>(".wf-block-menu-trigger");
+    if (trigger && trigger.getAttribute("aria-expanded") !== "true") flushSync(() => trigger.click());
+    element = [...document.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent?.trim() === label);
+  }
   if (!element) throw new Error(`Button not found: ${label}`);
   return element;
 }
@@ -364,9 +418,6 @@ function click(element: Element) {
 }
 
 function confirmOnce() {
-  const original = window.confirm;
-  window.confirm = () => {
-    window.confirm = original;
-    return true;
-  };
+  const confirm: StudioDialogApi["confirm"] = async () => true;
+  setDialogs({ confirm, prompt: async () => null, alert: async () => undefined });
 }

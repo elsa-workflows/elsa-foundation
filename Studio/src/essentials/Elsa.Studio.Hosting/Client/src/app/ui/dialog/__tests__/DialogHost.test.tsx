@@ -14,13 +14,18 @@ afterEach(() => {
 
 function mount() {
   const host = document.createElement("div");
-  document.body.appendChild(host);
+  const opener = document.createElement("button");
+  opener.textContent = "Open dialog";
+  document.body.append(opener, host);
+  opener.focus();
   const root = createRoot(host);
   flushSync(() => root.render(<DialogHost />));
   cleanup = () => {
     flushSync(() => root.unmount());
     host.remove();
+    opener.remove();
   };
+  return opener;
 }
 
 async function flushPromises() {
@@ -54,8 +59,8 @@ function setInputValue(value: string) {
 }
 
 describe("DialogHost", () => {
-  it("resolves confirm to true when the confirm action is chosen", async () => {
-    mount();
+  it("resolves confirm to true when the confirm action is chosen and restores its opener", async () => {
+    const opener = mount();
     const result = dialogs.confirm({ message: "Delete it?", confirmLabel: "Delete", tone: "danger" });
 
     await waitFor(() => dialog()?.textContent?.includes("Delete it?") === true, "Dialog did not open.");
@@ -63,26 +68,63 @@ describe("DialogHost", () => {
 
     expect(await result).toBe(true);
     await waitFor(() => dialog() === null, "Dialog did not close.");
+    await waitFor(() => document.activeElement === opener, "Focus did not return to the opener.");
   });
 
-  it("resolves confirm to false when cancelled", async () => {
-    mount();
+  it("resolves confirm to false when cancelled and restores its opener", async () => {
+    const opener = mount();
     const result = dialogs.confirm({ message: "Delete it?" });
 
     await waitFor(() => dialog() !== null, "Dialog did not open.");
     clickButton("Cancel");
 
     expect(await result).toBe(false);
+    await waitFor(() => dialog() === null, "Dialog did not close.");
+    await waitFor(() => document.activeElement === opener, "Focus did not return to the opener.");
   });
 
-  it("resolves confirm to false when dismissed with Escape", async () => {
-    mount();
+  it("resolves confirm to false when dismissed with Escape and restores its opener", async () => {
+    const opener = mount();
     const result = dialogs.confirm({ message: "Delete it?" });
 
     await waitFor(() => dialog() !== null, "Dialog did not open.");
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 
     expect(await result).toBe(false);
+    await waitFor(() => dialog() === null, "Dialog did not close.");
+    await waitFor(() => document.activeElement === opener, "Focus did not return to the opener.");
+  });
+
+  it("keeps focus in a queued prompt and restores the original opener after the queue closes", async () => {
+    const opener = mount();
+    const first = dialogs.confirm({ message: "First confirmation" });
+    const second = dialogs.prompt({ title: "Queued prompt", message: "Enter a value" });
+    await waitFor(() => dialog()?.textContent?.includes("First confirmation") === true, "First dialog did not open.");
+    clickButton("Confirm");
+    expect(await first).toBe(true);
+    await waitFor(() => dialog()?.querySelector("input") != null, "Queued prompt did not open.");
+    await waitFor(() => dialog()?.contains(document.activeElement) === true, "Focus left the active queued dialog.");
+    clickButton("Cancel");
+    expect(await second).toBeNull();
+    await waitFor(() => dialog() === null, "Dialog queue did not close.");
+    await waitFor(() => document.activeElement === opener, "Focus did not return to the original opener.");
+  });
+
+  it("preserves focus explicitly moved by the caller after confirmation", async () => {
+    mount();
+    const nextField = document.createElement("input");
+    document.body.appendChild(nextField);
+    const dispose = cleanup!;
+    cleanup = () => { dispose(); nextField.remove(); };
+    const result = dialogs.confirm({ message: "Continue to the next field?" });
+    await waitFor(() => dialog() !== null, "Dialog did not open.");
+    clickButton("Confirm");
+    expect(await result).toBe(true);
+    nextField.focus();
+    await waitFor(() => dialog() === null, "Dialog did not close.");
+    await flushPromises();
+    await flushPromises();
+    expect(document.activeElement).toBe(nextField);
   });
 
   it("settles pending dialogs as cancelled when the host unmounts", async () => {

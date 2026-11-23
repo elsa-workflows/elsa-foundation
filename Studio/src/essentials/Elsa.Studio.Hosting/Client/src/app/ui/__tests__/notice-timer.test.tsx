@@ -109,4 +109,22 @@ describe("useNoticeTimer", () => {
     advance(100);
     expect(onElapse).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps a reset countdown paused while hovered", () => {
+    vi.useFakeTimers();
+    const onElapse = vi.fn();
+    const { probe, rerender } = mount(<Probe durationMs={1_000} resetKey="a" onElapse={onElapse} />);
+
+    advance(500);
+    flushSync(() => probe.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+    rerender(<Probe durationMs={2_000} resetKey="b" onElapse={onElapse} />);
+    advance(5_000);
+    expect(onElapse).not.toHaveBeenCalled();
+
+    flushSync(() => probe.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body })));
+    advance(1_999);
+    expect(onElapse).not.toHaveBeenCalled();
+    advance(1);
+    expect(onElapse).toHaveBeenCalledTimes(1);
+  });
 });

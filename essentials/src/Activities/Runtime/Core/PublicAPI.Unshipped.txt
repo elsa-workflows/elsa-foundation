@@ -1,0 +1,863 @@
+#nullable enable
+
+Elsa.Activities.Runtime.Contracts.ActivityActivationLease
+Elsa.Activities.Runtime.Contracts.ActivityActivationLease.Activity.get -> Elsa.Activities.Runtime.Core.Contracts.IActivity!
+Elsa.Activities.Runtime.Contracts.ActivityActivationLease.ActivityActivationLease(Elsa.Activities.Runtime.Core.Contracts.IActivity! activity, System.IAsyncDisposable? ownedScope = null) -> void
+Elsa.Activities.Runtime.Contracts.ActivityActivationLease.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest
+Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.<Clone>$() -> Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest!
+Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.ActivityActivationStrategyRequest(Elsa.Activities.Runtime.Core.Models.ActivityContract! Contract, Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor! Descriptor) -> void
+Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.Contract.get -> Elsa.Activities.Runtime.Core.Models.ActivityContract!
+Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.Contract.init -> void
+Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.Deconstruct(out Elsa.Activities.Runtime.Core.Models.ActivityContract! Contract, out Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor! Descriptor) -> void
+Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.Descriptor.get -> Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor!
+Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.Descriptor.init -> void
+Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.Equals(Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest? other) -> bool
+Elsa.Activities.Runtime.Contracts.IActivityActivationStrategy
+Elsa.Activities.Runtime.Contracts.IActivityActivationStrategy.ActivateAsync(Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Runtime.Contracts.ActivityActivationLease!>
+Elsa.Activities.Runtime.Contracts.IActivityActivationStrategy.ConsumerKey.get -> string!
+Elsa.Activities.Runtime.Contracts.IActivityActivationStrategy.RequiresInputHydration.get -> bool
+Elsa.Activities.Runtime.Contracts.IActivityActivationStrategy.SupportedSchemaVersions.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Activities.Runtime.Core.Abstractions.StructuralActivity
+Elsa.Activities.Runtime.Core.Abstractions.StructuralActivity.StructuralActivity() -> void
+Elsa.Activities.Runtime.Core.ActivityInputUIHints
+Elsa.Activities.Runtime.Core.Attributes.AccessesUndeclaredVariablesAttribute
+Elsa.Activities.Runtime.Core.Attributes.AccessesUndeclaredVariablesAttribute.AccessesUndeclaredVariablesAttribute() -> void
+Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute
+Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.AccessesWorkflowStateAttribute() -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityAttribute
+Elsa.Activities.Runtime.Core.Attributes.ActivityAttribute.ActivityAttribute() -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityAttribute.Icon.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityAttribute.Icon.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityAttribute.IsDiscoverable.get -> bool
+Elsa.Activities.Runtime.Core.Attributes.ActivityAttribute.IsDiscoverable.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.ActivityChildSlotAttribute(string! name, string! property, string! displayName, string! cardinality) -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.Cardinality.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.ChildProperty.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.ChildProperty.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.CollectionProperty.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.CollectionProperty.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.ConditionProperty.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.ConditionProperty.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.DisplayName.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.ItemIdProperty.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.ItemIdProperty.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.LabelProperty.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.LabelProperty.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.Name.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.Property.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.SlotNameTemplate.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotAttribute.SlotNameTemplate.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotCardinalities
+Elsa.Activities.Runtime.Core.Attributes.ActivityConnectionAttribute
+Elsa.Activities.Runtime.Core.Attributes.ActivityConnectionAttribute.ActivityConnectionAttribute() -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityConnectionAttribute.ConnectionType.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.ActivityConnectionAttribute.ConnectionType.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.ActivityInputAttribute() -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.Category.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.Category.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.DefaultSyntax.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.DefaultSyntax.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.DefaultValue.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.DefaultValue.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.Description.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.Description.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.DisplayName.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.DisplayName.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.IsCredential.get -> bool
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.IsCredential.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.IsSensitive.get -> bool
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.IsSensitive.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.Key.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.Key.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.Options.get -> string![]?
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.Options.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.OptionsProvider.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.OptionsProvider.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.OptionsProviderDependencies.get -> string![]?
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.OptionsProviderDependencies.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.Order.get -> float
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.Order.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.Tier.get -> Elsa.Activities.Runtime.Core.Attributes.InputTier
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.Tier.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.UIHint.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute.UIHint.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputOptionAttribute
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputOptionAttribute.ActivityInputOptionAttribute(string! label, object! value) -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputOptionAttribute.Label.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.ActivityInputOptionAttribute.Value.get -> object!
+Elsa.Activities.Runtime.Core.Attributes.ActivityLostUpdateModeAttribute
+Elsa.Activities.Runtime.Core.Attributes.ActivityLostUpdateModeAttribute.ActivityLostUpdateModeAttribute(Elsa.Primitives.Models.LostUpdateMode mode) -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityLostUpdateModeAttribute.Mode.get -> Elsa.Primitives.Models.LostUpdateMode
+Elsa.Activities.Runtime.Core.Attributes.ActivityOutcomeAttribute
+Elsa.Activities.Runtime.Core.Attributes.ActivityOutcomeAttribute.ActivityOutcomeAttribute(string! key) -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityOutcomeAttribute.Key.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.ActivityPaletteAttribute
+Elsa.Activities.Runtime.Core.Attributes.ActivityPaletteAttribute.ActivityPaletteAttribute() -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityPaletteAttribute.AncestorActivityTypes.get -> string![]!
+Elsa.Activities.Runtime.Core.Attributes.ActivityPaletteAttribute.AncestorActivityTypes.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityPaletteAttribute.ContainerModes.get -> string![]!
+Elsa.Activities.Runtime.Core.Attributes.ActivityPaletteAttribute.ContainerModes.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityPaletteAttribute.Description.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityPaletteAttribute.Description.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityPaletteAttribute.ResourceKinds.get -> string![]!
+Elsa.Activities.Runtime.Core.Attributes.ActivityPaletteAttribute.ResourceKinds.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityPaletteAttribute.SlotIds.get -> string![]!
+Elsa.Activities.Runtime.Core.Attributes.ActivityPaletteAttribute.SlotIds.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityScriptOutcomesAttribute
+Elsa.Activities.Runtime.Core.Attributes.ActivityScriptOutcomesAttribute.ActivityScriptOutcomesAttribute(string! scriptInputKey) -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityScriptOutcomesAttribute.ScriptInputKey.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.ActivitySideEffectProfileAttribute
+Elsa.Activities.Runtime.Core.Attributes.ActivitySideEffectProfileAttribute.ActivitySideEffectProfileAttribute(Elsa.Activities.Runtime.Core.Models.SideEffectProfile profile) -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivitySideEffectProfileAttribute.Profile.get -> Elsa.Activities.Runtime.Core.Models.SideEffectProfile
+Elsa.Activities.Runtime.Core.Attributes.ActivityStructureAttribute
+Elsa.Activities.Runtime.Core.Attributes.ActivityStructureAttribute.ActivityStructureAttribute(string! kind, string! schemaVersion) -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityStructureAttribute.Kind.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.ActivityStructureAttribute.Mode.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.ActivityStructureAttribute.Mode.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityStructureAttribute.SchemaVersion.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.ActivityStructureAttribute.SupportsScopedVariables.get -> bool
+Elsa.Activities.Runtime.Core.Attributes.ActivityStructureAttribute.SupportsScopedVariables.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityTypeMetadata
+Elsa.Activities.Runtime.Core.Attributes.ActivityValueOutcomesAttribute
+Elsa.Activities.Runtime.Core.Attributes.ActivityValueOutcomesAttribute.ActivityValueOutcomesAttribute(string! inputKey) -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityValueOutcomesAttribute.InputKey.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.ActivityValueOutcomesAttribute.SelectsOnEveryCompletion.get -> bool
+Elsa.Activities.Runtime.Core.Attributes.ActivityValueOutcomesAttribute.SelectsOnEveryCompletion.init -> void
+Elsa.Activities.Runtime.Core.Attributes.ActivityValueOutcomesAttribute.UnmatchedOutcome.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.ActivityValueOutcomesAttribute.UnmatchedOutcome.init -> void
+Elsa.Activities.Runtime.Core.Attributes.BackgroundExecutionSafeAttribute
+Elsa.Activities.Runtime.Core.Attributes.BackgroundExecutionSafeAttribute.BackgroundExecutionSafeAttribute() -> void
+Elsa.Activities.Runtime.Core.Attributes.InputTier
+Elsa.Activities.Runtime.Core.Attributes.InputTier.Essential = 1 -> Elsa.Activities.Runtime.Core.Attributes.InputTier
+Elsa.Activities.Runtime.Core.Attributes.InputTier.Optional = 2 -> Elsa.Activities.Runtime.Core.Attributes.InputTier
+Elsa.Activities.Runtime.Core.Attributes.InputTier.Setting = 3 -> Elsa.Activities.Runtime.Core.Attributes.InputTier
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.Description.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.Description.init -> void
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.DisplayName.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.DisplayName.init -> void
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.HasSourceRepresentation.get -> bool
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.HasSourceRepresentation.init -> void
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.IsRequired.get -> bool
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.IsRequired.init -> void
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.Key.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.Key.init -> void
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.OutputAttribute() -> void
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.Path.get -> string?
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.Path.init -> void
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.SourceRepresentation.get -> Elsa.Primitives.Models.ValueRepresentation
+Elsa.Activities.Runtime.Core.Attributes.OutputAttribute.SourceRepresentation.init -> void
+Elsa.Activities.Runtime.Core.Attributes.RefusesSecretBindingAttribute
+Elsa.Activities.Runtime.Core.Attributes.RefusesSecretBindingAttribute.InputKey.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.RefusesSecretBindingAttribute.Reason.get -> Elsa.Activities.Runtime.Core.Attributes.SecretBindingRefusalReason
+Elsa.Activities.Runtime.Core.Attributes.RefusesSecretBindingAttribute.RefusesSecretBindingAttribute(string! inputKey, Elsa.Activities.Runtime.Core.Attributes.SecretBindingRefusalReason reason) -> void
+Elsa.Activities.Runtime.Core.Attributes.ReplacesActivityTypeAttribute
+Elsa.Activities.Runtime.Core.Attributes.ReplacesActivityTypeAttribute.ReplacesActivityTypeAttribute(string! typeName) -> void
+Elsa.Activities.Runtime.Core.Attributes.ReplacesActivityTypeAttribute.TypeName.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.RequiredAttribute
+Elsa.Activities.Runtime.Core.Attributes.RequiredAttribute.RequiredAttribute() -> void
+Elsa.Activities.Runtime.Core.Attributes.ResumeTargetAttribute
+Elsa.Activities.Runtime.Core.Attributes.ResumeTargetAttribute.ResumeTargetAttribute(string! resumeTargetId) -> void
+Elsa.Activities.Runtime.Core.Attributes.ResumeTargetAttribute.ResumeTargetId.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.SecretBindingRefusalReason
+Elsa.Activities.Runtime.Core.Attributes.SecretBindingRefusalReason.EchoedToOutput = 2 -> Elsa.Activities.Runtime.Core.Attributes.SecretBindingRefusalReason
+Elsa.Activities.Runtime.Core.Attributes.SecretBindingRefusalReason.FixedAtPublish = 1 -> Elsa.Activities.Runtime.Core.Attributes.SecretBindingRefusalReason
+Elsa.Activities.Runtime.Core.Attributes.SecretBindingRefusalReason.PersistedByActivity = 0 -> Elsa.Activities.Runtime.Core.Attributes.SecretBindingRefusalReason
+Elsa.Activities.Runtime.Core.Attributes.SelectsOutcomeOnEveryCompletionAttribute
+Elsa.Activities.Runtime.Core.Attributes.SelectsOutcomeOnEveryCompletionAttribute.SelectsOutcomeOnEveryCompletionAttribute() -> void
+Elsa.Activities.Runtime.Core.Attributes.TriggerActivityAttribute
+Elsa.Activities.Runtime.Core.Attributes.TriggerActivityAttribute.TriggerActivityAttribute() -> void
+Elsa.Activities.Runtime.Core.Attributes.VersionAttribute
+Elsa.Activities.Runtime.Core.Attributes.VersionAttribute.Version.get -> string!
+Elsa.Activities.Runtime.Core.Attributes.VersionAttribute.VersionAttribute(string! version) -> void
+Elsa.Activities.Runtime.Core.Contracts.IActivity
+Elsa.Activities.Runtime.Core.Contracts.IActivity.ExecuteAsync(Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext! context) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Runtime.Core.Models.ActivityTransition!>
+Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext
+Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext.Activity.get -> Elsa.Activities.Runtime.Core.Contracts.IActivity!
+Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext.CancellationToken.get -> System.Threading.CancellationToken
+Elsa.Activities.Runtime.Core.Contracts.IActivityResult<TResult>
+Elsa.Activities.Runtime.Core.Contracts.IActivitySideEffectProfileReader
+Elsa.Activities.Runtime.Core.Contracts.IActivitySideEffectProfileReader.ReadAsync(string! activityVersionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Runtime.Core.Models.SideEffectProfile?>
+Elsa.Activities.Runtime.Core.Contracts.IRuntimeActivityConsumerCapability
+Elsa.Activities.Runtime.Core.Contracts.IRuntimeActivityConsumerCapability.ConsumerKey.get -> string!
+Elsa.Activities.Runtime.Core.Contracts.IRuntimeActivityConsumerCapability.SupportedSchemaVersions.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Activities.Runtime.Core.Contracts.IStatefulActivity
+Elsa.Activities.Runtime.Core.Contracts.IStatefulActivity.ResumeAsync(Elsa.Activities.Runtime.Core.Models.ActivityResumeRequest! request) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Runtime.Core.Models.ActivityTransition!>
+Elsa.Activities.Runtime.Core.Contracts.IStatefulActivity<TResult, TState, TTrigger>
+Elsa.Activities.Runtime.Core.Contracts.IStatefulActivity<TResult, TState, TTrigger>.ExecuteAsync(Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext! context) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!>
+Elsa.Activities.Runtime.Core.Contracts.IStatefulActivity<TResult, TState, TTrigger>.ResumeAsync(Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>! context) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!>
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession.HasReadProtectedValue.get -> bool
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession.IsReadOnly(Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget! target) -> bool
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession.PinnedReads.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget!>!
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession.ReadJson(Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget! target) -> System.Text.Json.Nodes.JsonNode?
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession.ReadsComputedNames.get -> bool
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession.TryResolve(string! name, out Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget! target) -> bool
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession.VisibleNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession.WriteJson(Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget! target, System.Text.Json.Nodes.JsonNode? value) -> void
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSessionConsumer
+Elsa.Activities.Runtime.Core.Contracts.IStepVariables
+Elsa.Activities.Runtime.Core.Contracts.IStepVariables.Get<T>(Elsa.Activities.Runtime.Core.Models.ReadOnlyVariableReference<T>! reference) -> T
+Elsa.Activities.Runtime.Core.Contracts.IStepVariables.Get<T>(Elsa.Activities.Runtime.Core.Models.VariableReference<T>! reference) -> T
+Elsa.Activities.Runtime.Core.Contracts.IStepVariables.Get<T>(string! name) -> T
+Elsa.Activities.Runtime.Core.Contracts.IStepVariables.Set<T>(Elsa.Activities.Runtime.Core.Models.ReadOnlyVariableReference<T>! reference, T value) -> void
+Elsa.Activities.Runtime.Core.Contracts.IStepVariables.Set<T>(Elsa.Activities.Runtime.Core.Models.VariableReference<T>! reference, T value) -> void
+Elsa.Activities.Runtime.Core.Contracts.IStepVariables.Set<T>(string! name, T value) -> void
+Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowState
+Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowState.CorrelationId.get -> string?
+Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowState.CorrelationId.set -> void
+Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowState.HasReadProtectedValue.get -> bool
+Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowState.InstanceName.get -> string?
+Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowState.InstanceName.set -> void
+Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowState.SetOutput(string! name, System.Text.Json.JsonElement value) -> void
+Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowState.TryGetOutput(string! name, out System.Text.Json.JsonElement value) -> bool
+Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowStateConsumer
+Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget
+Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.<Clone>$() -> Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget!
+Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.Deconstruct(out string! ScopeId, out string! VariableKey, out string! Name) -> void
+Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.Equals(Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget? other) -> bool
+Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.Name.get -> string!
+Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.Name.init -> void
+Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.ScopeId.get -> string!
+Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.ScopeId.init -> void
+Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.StepVariableTarget(string! ScopeId, string! VariableKey, string! Name) -> void
+Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.VariableKey.get -> string!
+Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.VariableKey.init -> void
+Elsa.Activities.Runtime.Core.Exceptions.ActivityResolutionException
+Elsa.Activities.Runtime.Core.Exceptions.ActivityResolutionException.ActivityResolutionException(string! message, string! consumerKey, string! schemaVersion, System.Exception? innerException = null) -> void
+Elsa.Activities.Runtime.Core.Exceptions.ActivityResolutionException.ConsumerKey.get -> string!
+Elsa.Activities.Runtime.Core.Exceptions.ActivityResolutionException.SchemaVersion.get -> string!
+Elsa.Activities.Runtime.Core.Exceptions.UnknownActivityConsumerException
+Elsa.Activities.Runtime.Core.Exceptions.UnknownActivityConsumerException.UnknownActivityConsumerException(string! consumerKey, string! schemaVersion) -> void
+Elsa.Activities.Runtime.Core.Exceptions.UnknownActivityTypeException
+Elsa.Activities.Runtime.Core.Exceptions.UnknownActivityTypeException.TypeAlias.get -> string!
+Elsa.Activities.Runtime.Core.Exceptions.UnknownActivityTypeException.UnknownActivityTypeException(string! typeAlias) -> void
+Elsa.Activities.Runtime.Core.Exceptions.UnsupportedActivityDescriptorSchemaException
+Elsa.Activities.Runtime.Core.Exceptions.UnsupportedActivityDescriptorSchemaException.SupportedSchemaVersions.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Activities.Runtime.Core.Exceptions.UnsupportedActivityDescriptorSchemaException.UnsupportedActivityDescriptorSchemaException(string! consumerKey, string! schemaVersion, System.Collections.Generic.IReadOnlyCollection<string!>! supportedSchemaVersions) -> void
+Elsa.Activities.Runtime.Core.Models.Activity
+Elsa.Activities.Runtime.Core.Models.Activity.Activity() -> void
+Elsa.Activities.Runtime.Core.Models.Activity<TResult>
+Elsa.Activities.Runtime.Core.Models.Activity<TResult>.Activity() -> void
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure!
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.ActivityActivationFailure(Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind kind, Elsa.Activities.Runtime.Core.Models.RuntimeActivationCapabilityKind capabilityKind, string! capabilityKey, string? schemaVersion, string? artifactId = null, string? executableNodeId = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.ActivityActivationFailure(Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind kind, string! consumerKey, string! schemaVersion, string? artifactId = null, string? executableNodeId = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.ArtifactId.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.CapabilityKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.CapabilityKind.get -> Elsa.Activities.Runtime.Core.Models.RuntimeActivationCapabilityKind
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.ConsumerKey.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.Equals(Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure? other) -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.ExecutableNodeId.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.Kind.get -> Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.Metadata.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.SchemaVersion.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.StorageDriverKey.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind.InvalidDescriptor = 2 -> Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind.MissingConsumer = 0 -> Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind.MissingSecretResolver = 4 -> Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind.MissingStorageDriver = 3 -> Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind
+Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind.UnsupportedSchema = 1 -> Elsa.Activities.Runtime.Core.Models.ActivityActivationFailureKind
+Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement
+Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement!
+Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement.ActivityActivationRequirement(string! descriptorKind, string! capability) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement.Capability.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement.DescriptorKind.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement.Equals(Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement? other) -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityBookmarkRequest
+Elsa.Activities.Runtime.Core.Models.ActivityBookmarkRequest.ActivityBookmarkRequest(string! bookmarkId, string! resumeTargetId, string! stimulusType, string! stimulusHash, System.Text.Json.JsonElement? payload = null, System.DateTimeOffset? expiresAt = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityBookmarkRequest.BookmarkId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityBookmarkRequest.ExpiresAt.get -> System.DateTimeOffset?
+Elsa.Activities.Runtime.Core.Models.ActivityBookmarkRequest.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Activities.Runtime.Core.Models.ActivityBookmarkRequest.Payload.get -> System.Text.Json.JsonElement?
+Elsa.Activities.Runtime.Core.Models.ActivityBookmarkRequest.ResumeTargetId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityBookmarkRequest.StimulusHash.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityBookmarkRequest.StimulusType.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildCompletedContext
+Elsa.Activities.Runtime.Core.Models.ActivityChildCompletedContext.ActivityChildCompletedContext(Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext! parentContext, string! completedChildActivityExecutionId, string! completedChildExecutableNodeId, System.Collections.Generic.IReadOnlyCollection<string!>! outcomeNames, string? completedChildIterationId = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityChildCompletedContext.ActivityChildCompletedContext(Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext! parentContext, string! completedChildActivityExecutionId, string! completedChildExecutableNodeId, System.Collections.Generic.IReadOnlyCollection<string!>! outcomeNames, string? completedChildIterationId, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! childSchedulingMetadata) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityChildCompletedContext.ChildSchedulingMetadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Activities.Runtime.Core.Models.ActivityChildCompletedContext.CompletedChildActivityExecutionId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildCompletedContext.CompletedChildExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildCompletedContext.CompletedChildIterationId.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityChildCompletedContext.OutcomeNames.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Activities.Runtime.Core.Models.ActivityChildCompletedContext.ParentContext.get -> Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext!
+Elsa.Activities.Runtime.Core.Models.ActivityChildFaultedContext
+Elsa.Activities.Runtime.Core.Models.ActivityChildFaultedContext.ActivityChildFaultedContext(Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext! parentContext, string! faultedChildActivityExecutionId, string! faultedChildExecutableNodeId, string? incidentId = null, string? faultedChildIterationId = null, string? faultCode = null, string? faultCategory = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityChildFaultedContext.ActivityChildFaultedContext(Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext! parentContext, string! faultedChildActivityExecutionId, string! faultedChildExecutableNodeId, string? incidentId, string? faultedChildIterationId, string? faultCode, string? faultCategory, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! childSchedulingMetadata) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityChildFaultedContext.ChildSchedulingMetadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Activities.Runtime.Core.Models.ActivityChildFaultedContext.FaultCategory.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityChildFaultedContext.FaultCode.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityChildFaultedContext.FaultedChildActivityExecutionId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildFaultedContext.FaultedChildExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildFaultedContext.FaultedChildIterationId.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityChildFaultedContext.IncidentId.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityChildFaultedContext.ParentContext.get -> Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext!
+Elsa.Activities.Runtime.Core.Models.ActivityChildNotifiedContext
+Elsa.Activities.Runtime.Core.Models.ActivityChildNotifiedContext.ActivityChildNotifiedContext(string! notifyingChildActivityExecutionId, string! notifyingChildExecutableNodeId, string! code, string? notifyingChildIterationId = null, System.Text.Json.JsonElement? payload = null, string? viaChildActivityExecutionId = null, string? viaChildExecutableNodeId = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityChildNotifiedContext.Code.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildNotifiedContext.NotifyingChildActivityExecutionId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildNotifiedContext.NotifyingChildExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildNotifiedContext.NotifyingChildIterationId.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityChildNotifiedContext.Payload.get -> System.Text.Json.JsonElement?
+Elsa.Activities.Runtime.Core.Models.ActivityChildNotifiedContext.ViaChildActivityExecutionId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildNotifiedContext.ViaChildExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildOutcomeContext
+Elsa.Activities.Runtime.Core.Models.ActivityChildOutcomeContext.ActivityChildOutcomeContext(Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext! parentContext, string! faultedChildActivityExecutionId, string! faultedChildExecutableNodeId, string? faultedChildIterationId, Elsa.Activities.Runtime.Core.Models.ActivityFault! fault, string! incidentId, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Runtime.Core.Models.ActivityChildNotifiedContext!>! notifications) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityChildOutcomeContext.ActivityChildOutcomeContext(Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext! parentContext, string! faultedChildActivityExecutionId, string! faultedChildExecutableNodeId, string? faultedChildIterationId, Elsa.Activities.Runtime.Core.Models.ActivityFault! fault, string! incidentId, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Runtime.Core.Models.ActivityChildNotifiedContext!>! notifications, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! childSchedulingMetadata) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityChildOutcomeContext.ChildSchedulingMetadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Activities.Runtime.Core.Models.ActivityChildOutcomeContext.Fault.get -> Elsa.Activities.Runtime.Core.Models.ActivityFault!
+Elsa.Activities.Runtime.Core.Models.ActivityChildOutcomeContext.FaultedChildActivityExecutionId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildOutcomeContext.FaultedChildExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildOutcomeContext.FaultedChildIterationId.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityChildOutcomeContext.IncidentId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityChildOutcomeContext.Notifications.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Runtime.Core.Models.ActivityChildNotifiedContext!>!
+Elsa.Activities.Runtime.Core.Models.ActivityChildOutcomeContext.ParentContext.get -> Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext!
+Elsa.Activities.Runtime.Core.Models.ActivityContract
+Elsa.Activities.Runtime.Core.Models.ActivityContract.AccessesUndeclaredVariables.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityContract.AccessesWorkflowState.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityContract.Activation.get -> Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement!
+Elsa.Activities.Runtime.Core.Models.ActivityContract.ActivityContract(string! activityTypeKey, string! contractVersion, string! descriptorKind, System.Text.Json.JsonElement descriptorPayload, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.ActivityInputContract!>! inputs, Elsa.Activities.Runtime.Core.Models.ActivityResultContract! result, System.Collections.Generic.IEnumerable<string!>! outcomes, Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement! activation, Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityContract.ActivityContract(string! activityTypeKey, string! contractVersion, string! descriptorKind, System.Text.Json.JsonElement descriptorPayload, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.ActivityInputContract!>! inputs, Elsa.Activities.Runtime.Core.Models.ActivityResultContract! result, System.Collections.Generic.IEnumerable<string!>! outcomes, Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement! activation, Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile, bool supportsBackgroundExecution) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityContract.ActivityContract(string! activityTypeKey, string! contractVersion, string! descriptorKind, System.Text.Json.JsonElement descriptorPayload, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.ActivityInputContract!>! inputs, Elsa.Activities.Runtime.Core.Models.ActivityResultContract! result, System.Collections.Generic.IEnumerable<string!>! outcomes, Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement! activation, Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile, bool supportsBackgroundExecution, bool accessesUndeclaredVariables) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityContract.ActivityContract(string! activityTypeKey, string! contractVersion, string! descriptorKind, System.Text.Json.JsonElement descriptorPayload, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.ActivityInputContract!>! inputs, Elsa.Activities.Runtime.Core.Models.ActivityResultContract! result, System.Collections.Generic.IEnumerable<string!>! outcomes, Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement! activation, Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile, bool supportsBackgroundExecution, bool accessesUndeclaredVariables, bool accessesWorkflowState) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityContract.ActivityTypeKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityContract.ContractVersion.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityContract.DescriptorKind.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityContract.DescriptorPayload.get -> System.Text.Json.JsonElement
+Elsa.Activities.Runtime.Core.Models.ActivityContract.HasVariableReferenceInputs.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityContract.Inputs.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Activities.Runtime.Core.Models.ActivityInputContract!>!
+Elsa.Activities.Runtime.Core.Models.ActivityContract.Outcomes.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Activities.Runtime.Core.Models.ActivityContract.Result.get -> Elsa.Activities.Runtime.Core.Models.ActivityResultContract!
+Elsa.Activities.Runtime.Core.Models.ActivityContract.SchemaFingerprint.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityContract.SideEffectProfile.get -> Elsa.Activities.Runtime.Core.Models.SideEffectProfile
+Elsa.Activities.Runtime.Core.Models.ActivityContract.SupportsBackgroundExecution.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext.ActivityDescendantFaultedContext(Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext! parentContext, string! faultedDescendantActivityExecutionId, string! faultedDescendantExecutableNodeId, string! viaChildActivityExecutionId, string! viaChildExecutableNodeId, string? incidentId = null, string? faultedDescendantIterationId = null, string? faultCode = null, string? faultCategory = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext.ActivityDescendantFaultedContext(Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext! parentContext, string! faultedDescendantActivityExecutionId, string! faultedDescendantExecutableNodeId, string! viaChildActivityExecutionId, string! viaChildExecutableNodeId, string? incidentId, string? faultedDescendantIterationId, string? faultCode, string? faultCategory, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! viaChildSchedulingMetadata) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext.FaultCategory.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext.FaultCode.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext.FaultedDescendantActivityExecutionId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext.FaultedDescendantExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext.FaultedDescendantIterationId.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext.IncidentId.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext.ParentContext.get -> Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext!
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext.ViaChildActivityExecutionId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext.ViaChildExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityDescendantFaultedContext.ViaChildSchedulingMetadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.ActivityExecutionContext(string! workflowExecutionId, string! invocationId, string! attemptId, string! executableNodeId, System.Threading.CancellationToken cancellationToken) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.ActivityExecutionContext(string! workflowExecutionId, string! invocationId, string! attemptId, string! executableNodeId, System.Threading.CancellationToken cancellationToken, System.Text.Json.JsonElement? triggerPayload = null, string? triggerNodeId = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.ActivityExecutionContext(string! workflowExecutionId, string! invocationId, string! attemptId, string! executableNodeId, System.Threading.CancellationToken cancellationToken, System.Text.Json.JsonElement? triggerPayload, string? triggerNodeId, string? operationKey, string? targetOperationKey, string? logicalInvocationId = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.AttemptId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.CancellationToken.get -> System.Threading.CancellationToken
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.Equals(Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext? other) -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.ExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.HasProtectedInputs.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.InvocationId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.LogicalInvocationId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.OperationKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.TargetOperationKey.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.Variables.get -> Elsa.Activities.Runtime.Core.Contracts.IStepVariables!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.WithOperationKeys(string? operationKey, string? targetOperationKey, string? logicalInvocationId = null) -> Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.WithProtectedInputs(bool hasProtectedInputs) -> Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.WithVariables(Elsa.Activities.Runtime.Core.Contracts.IStepVariables! variables) -> Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.WithWarnings(Elsa.Expressions.Core.Contracts.IExecutionWarningSink! warnings) -> Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.WithWorkflowState(Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowState! workflowState) -> Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.WorkflowExecutionId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.WorkflowState.get -> Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowState!
+Elsa.Activities.Runtime.Core.Models.ActivityFault
+Elsa.Activities.Runtime.Core.Models.ActivityFault.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.ActivityFault!
+Elsa.Activities.Runtime.Core.Models.ActivityFault.ActivityFault(string! code, string! message, bool isRetryable = false, string? category = null, string? faultType = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityFault.Category.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityFault.ClassificationMetadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Activities.Runtime.Core.Models.ActivityFault.Code.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityFault.Equals(Elsa.Activities.Runtime.Core.Models.ActivityFault? other) -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityFault.FaultType.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityFault.IsRetryable.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityFault.Message.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.ActivityInputContract(string! key, string! name, Elsa.Primitives.Models.ValueTypeDescriptor! type, bool isRequired, bool isNullable, bool hasDefault, System.Text.Json.JsonElement? defaultValue, Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy! policy, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? editorMetadata = null, bool isCredential = false, string? connectionType = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.ConnectionType.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.DefaultValue.get -> System.Text.Json.JsonElement?
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.EditorMetadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.HasDefault.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.IsCredential.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.IsNullable.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.IsRequired.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.IsStructureInput.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.IsStructureInput.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.Key.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.Name.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.Policy.get -> Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy!
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.Type.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.VariableReference.get -> Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference?
+Elsa.Activities.Runtime.Core.Models.ActivityInputContract.VariableReference.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference
+Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference!
+Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.Access.get -> Elsa.Activities.Runtime.Core.Models.ActivityVariableAccess
+Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.Access.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.ActivityInputVariableReference(Elsa.Activities.Runtime.Core.Models.ActivityVariableAccess Access, Elsa.Primitives.Models.ValueTypeDescriptor! ValueType) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.Deconstruct(out Elsa.Activities.Runtime.Core.Models.ActivityVariableAccess Access, out Elsa.Primitives.Models.ValueTypeDescriptor! ValueType) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.Equals(Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference? other) -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.ValueType.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.ValueType.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityInterventionDecidedContext
+Elsa.Activities.Runtime.Core.Models.ActivityInterventionDecidedContext.ActivityInterventionDecidedContext(string! incidentId, string! decision, string! faultedActivityExecutionId, string! faultedExecutableNodeId, string! viaChildActivityExecutionId, string! viaChildExecutableNodeId) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityInterventionDecidedContext.Decision.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityInterventionDecidedContext.FaultedActivityExecutionId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityInterventionDecidedContext.FaultedExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityInterventionDecidedContext.IncidentId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityInterventionDecidedContext.ViaChildActivityExecutionId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityInterventionDecidedContext.ViaChildExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResultContract
+Elsa.Activities.Runtime.Core.Models.ActivityResultContract.ActivityResultContract(Elsa.Primitives.Models.ValueTypeDescriptor! type, bool isRequired, Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy! policy, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.ActivityResultProjectionContract!>! projections, Elsa.Primitives.Models.ValueRepresentation? sourceRepresentation = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityResultContract.EffectiveSourceRepresentation.get -> Elsa.Primitives.Models.ValueRepresentation
+Elsa.Activities.Runtime.Core.Models.ActivityResultContract.IsRequired.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityResultContract.Policy.get -> Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy!
+Elsa.Activities.Runtime.Core.Models.ActivityResultContract.Projections.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Activities.Runtime.Core.Models.ActivityResultProjectionContract!>!
+Elsa.Activities.Runtime.Core.Models.ActivityResultContract.SourceRepresentation.get -> Elsa.Primitives.Models.ValueRepresentation?
+Elsa.Activities.Runtime.Core.Models.ActivityResultContract.Type.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Activities.Runtime.Core.Models.ActivityResultProjectionContract
+Elsa.Activities.Runtime.Core.Models.ActivityResultProjectionContract.ActivityResultProjectionContract(string! key, string! path, Elsa.Primitives.Models.ValueTypeDescriptor! type, bool isRequired, Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy! policy, Elsa.Primitives.Models.ValueRepresentation? sourceRepresentation = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityResultProjectionContract.EffectiveSourceRepresentation.get -> Elsa.Primitives.Models.ValueRepresentation
+Elsa.Activities.Runtime.Core.Models.ActivityResultProjectionContract.IsRequired.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityResultProjectionContract.Key.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResultProjectionContract.Path.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResultProjectionContract.Policy.get -> Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy!
+Elsa.Activities.Runtime.Core.Models.ActivityResultProjectionContract.SourceRepresentation.get -> Elsa.Primitives.Models.ValueRepresentation?
+Elsa.Activities.Runtime.Core.Models.ActivityResultProjectionContract.Type.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.ActivityResumeContext(Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext! attempt, TState state, TTrigger trigger, string! registrationId, string! deliveryId) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.AttemptId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.CancellationToken.get -> System.Threading.CancellationToken
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.DeliveryId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.ExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.InvocationId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.LogicalInvocationId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.OperationKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.RegistrationId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.State.get -> TState
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.TargetOperationKey.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.Trigger.get -> TTrigger
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.Variables.get -> Elsa.Activities.Runtime.Core.Contracts.IStepVariables!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.WorkflowExecutionId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>.WorkflowState.get -> Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowState!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeRequest
+Elsa.Activities.Runtime.Core.Models.ActivityResumeRequest.ActivityResumeRequest(Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext! attempt, Elsa.Primitives.Models.ValueTypeDescriptor! stateType, System.Text.Json.JsonElement statePayload, Elsa.Primitives.Models.ValueTypeDescriptor! triggerType, System.Text.Json.JsonElement triggerPayload, string! registrationId, string! deliveryId) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityResumeRequest.Attempt.get -> Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeRequest.DeliveryId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeRequest.RegistrationId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeRequest.StatePayload.get -> System.Text.Json.JsonElement
+Elsa.Activities.Runtime.Core.Models.ActivityResumeRequest.StateType.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Activities.Runtime.Core.Models.ActivityResumeRequest.TriggerPayload.get -> System.Text.Json.JsonElement
+Elsa.Activities.Runtime.Core.Models.ActivityResumeRequest.TriggerType.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.AttemptId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.CancellationToken.get -> System.Threading.CancellationToken
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.ExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.HasTrigger.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.InvocationId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.IsDirectInvocation.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.IsTriggerDelivery.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.LogicalInvocationId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.OperationKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.TargetOperationKey.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.TryGetTrigger(out TTrigger trigger) -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.Variables.get -> Elsa.Activities.Runtime.Core.Contracts.IStepVariables!
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.WorkflowExecutionId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>.WorkflowState.get -> Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowState!
+Elsa.Activities.Runtime.Core.Models.ActivityTransition
+Elsa.Activities.Runtime.Core.Models.ActivityTransition.ActivityTransition() -> void
+Elsa.Activities.Runtime.Core.Models.ActivityTransition.ActivityTransition(Elsa.Activities.Runtime.Core.Models.ActivityTransition! original) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>
+Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.ActivityTransition() -> void
+Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.ActivityTransition(Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>! original) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>
+Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.ActivityTransition() -> void
+Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.ActivityTransition(Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>! original) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind
+Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind.Cancel = 3 -> Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind
+Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind.Complete = 0 -> Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind
+Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind.Fault = 2 -> Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind
+Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind.Suspend = 1 -> Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerDeduplicationMode
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerDeduplicationMode.IdempotencyKey = 1 -> Elsa.Activities.Runtime.Core.Models.ActivityTriggerDeduplicationMode
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerDeduplicationMode.Once = 0 -> Elsa.Activities.Runtime.Core.Models.ActivityTriggerDeduplicationMode
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation!
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation.ActivityTriggerExpectation(string! key, string! stimulusType, Elsa.Primitives.Models.ValueTypeDescriptor! payloadType) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation.Equals(Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation? other) -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation.Key.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation.PayloadType.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation.StimulusType.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>!
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.ActivityTriggerRegistration(string! resumeTargetKey, string! stimulusType, string! stimulusHash, Elsa.Activities.Runtime.Core.Models.ActivityTriggerDeduplicationMode deduplicationMode = Elsa.Activities.Runtime.Core.Models.ActivityTriggerDeduplicationMode.Once, int payloadSchemaVersion = 1, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.DeduplicationMode.get -> Elsa.Activities.Runtime.Core.Models.ActivityTriggerDeduplicationMode
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.Equals(Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>? other) -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.PayloadType.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.ResumeTargetKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.StimulusHash.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.StimulusType.get -> string!
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.TriggerType.get -> System.Type!
+Elsa.Activities.Runtime.Core.Models.ActivityUnit
+Elsa.Activities.Runtime.Core.Models.ActivityUnit.ActivityUnit() -> void
+Elsa.Activities.Runtime.Core.Models.ActivityUnit.Equals(Elsa.Activities.Runtime.Core.Models.ActivityUnit other) -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle
+Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle.Audit = 2 -> Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle
+Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle.Custom = 3 -> Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle
+Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle.Instance = 0 -> Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle
+Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle.Result = 1 -> Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy!
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.ActivityValuePolicy(bool IsPersistable, bool IsSensitive, bool RequiresEncryption, string? RedactionMode = null, Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle Lifecycle = Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle.Instance, Elsa.Activities.Runtime.Core.Models.ActivityValueStorage Storage = Elsa.Activities.Runtime.Core.Models.ActivityValueStorage.Inline, string? StorageProfile = null, string? RetentionPolicy = null) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.Deconstruct(out bool IsPersistable, out bool IsSensitive, out bool RequiresEncryption, out string? RedactionMode, out Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle Lifecycle, out Elsa.Activities.Runtime.Core.Models.ActivityValueStorage Storage, out string? StorageProfile, out string? RetentionPolicy) -> void
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.Equals(Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy? other) -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.HidesValue() -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.IsPersistable.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.IsPersistable.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.IsSensitive.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.IsSensitive.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.Lifecycle.get -> Elsa.Activities.Runtime.Core.Models.ActivityValueLifecycle
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.Lifecycle.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.RedactionMode.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.RedactionMode.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.RequiresEncryption.get -> bool
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.RequiresEncryption.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.RetentionPolicy.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.RetentionPolicy.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.Storage.get -> Elsa.Activities.Runtime.Core.Models.ActivityValueStorage
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.Storage.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.StorageProfile.get -> string?
+Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.StorageProfile.init -> void
+Elsa.Activities.Runtime.Core.Models.ActivityValueStorage
+Elsa.Activities.Runtime.Core.Models.ActivityValueStorage.Custom = 2 -> Elsa.Activities.Runtime.Core.Models.ActivityValueStorage
+Elsa.Activities.Runtime.Core.Models.ActivityValueStorage.External = 1 -> Elsa.Activities.Runtime.Core.Models.ActivityValueStorage
+Elsa.Activities.Runtime.Core.Models.ActivityValueStorage.Inline = 0 -> Elsa.Activities.Runtime.Core.Models.ActivityValueStorage
+Elsa.Activities.Runtime.Core.Models.ActivityVariableAccess
+Elsa.Activities.Runtime.Core.Models.ActivityVariableAccess.Read = 0 -> Elsa.Activities.Runtime.Core.Models.ActivityVariableAccess
+Elsa.Activities.Runtime.Core.Models.ActivityVariableAccess.ReadWrite = 1 -> Elsa.Activities.Runtime.Core.Models.ActivityVariableAccess
+Elsa.Activities.Runtime.Core.Models.ConnectionReference
+Elsa.Activities.Runtime.Core.Models.ConnectionReference.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.ConnectionReference!
+Elsa.Activities.Runtime.Core.Models.ConnectionReference.ConnectionReference() -> void
+Elsa.Activities.Runtime.Core.Models.ConnectionReference.ConnectionReference(string! name, string? type = null) -> void
+Elsa.Activities.Runtime.Core.Models.ConnectionReference.Equals(Elsa.Activities.Runtime.Core.Models.ConnectionReference? other) -> bool
+Elsa.Activities.Runtime.Core.Models.ConnectionReference.Name.get -> string!
+Elsa.Activities.Runtime.Core.Models.ConnectionReference.Name.init -> void
+Elsa.Activities.Runtime.Core.Models.ConnectionReference.Type.get -> string?
+Elsa.Activities.Runtime.Core.Models.ConnectionReference.Type.init -> void
+Elsa.Activities.Runtime.Core.Models.IActivityCancellationTransition
+Elsa.Activities.Runtime.Core.Models.IActivityCancellationTransition.Reason.get -> string!
+Elsa.Activities.Runtime.Core.Models.IActivityCompletionTransition
+Elsa.Activities.Runtime.Core.Models.IActivityCompletionTransition.Result.get -> object?
+Elsa.Activities.Runtime.Core.Models.IActivityCompletionTransition.ResultType.get -> System.Type!
+Elsa.Activities.Runtime.Core.Models.IActivityCompletionTransition.Selection.get -> Elsa.Activities.Runtime.Core.Models.OutcomeSelection!
+Elsa.Activities.Runtime.Core.Models.IActivityCompletionTransition<TResult>
+Elsa.Activities.Runtime.Core.Models.IActivityCompletionTransition<TResult>.Result.get -> TResult
+Elsa.Activities.Runtime.Core.Models.IActivityFaultTransition
+Elsa.Activities.Runtime.Core.Models.IActivityFaultTransition.Fault.get -> Elsa.Activities.Runtime.Core.Models.ActivityFault!
+Elsa.Activities.Runtime.Core.Models.IActivitySuspensionTransition
+Elsa.Activities.Runtime.Core.Models.IActivitySuspensionTransition.State.get -> object!
+Elsa.Activities.Runtime.Core.Models.IActivitySuspensionTransition.StateType.get -> System.Type!
+Elsa.Activities.Runtime.Core.Models.IActivitySuspensionTransition.Triggers.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation!>!
+Elsa.Activities.Runtime.Core.Models.IActivitySuspensionTransition<TState>
+Elsa.Activities.Runtime.Core.Models.IActivitySuspensionTransition<TState>.State.get -> TState
+Elsa.Activities.Runtime.Core.Models.IActivityTriggerRegistration
+Elsa.Activities.Runtime.Core.Models.IActivityTriggerRegistration.DeduplicationMode.get -> Elsa.Activities.Runtime.Core.Models.ActivityTriggerDeduplicationMode
+Elsa.Activities.Runtime.Core.Models.IActivityTriggerRegistration.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Activities.Runtime.Core.Models.IActivityTriggerRegistration.PayloadType.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Activities.Runtime.Core.Models.IActivityTriggerRegistration.ResumeTargetKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.IActivityTriggerRegistration.StimulusHash.get -> string!
+Elsa.Activities.Runtime.Core.Models.IActivityTriggerRegistration.StimulusType.get -> string!
+Elsa.Activities.Runtime.Core.Models.IActivityTriggerRegistration.TriggerType.get -> System.Type!
+Elsa.Activities.Runtime.Core.Models.IOperatorActivitySchedulingCapabilityProvider
+Elsa.Activities.Runtime.Core.Models.IOperatorActivitySchedulingCapabilityProvider.TryDescribe(Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext! context, out Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability? capability) -> bool
+Elsa.Activities.Runtime.Core.Models.IStatefulActivitySuspensionTransition
+Elsa.Activities.Runtime.Core.Models.IStatefulActivitySuspensionTransition.Registrations.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.IActivityTriggerRegistration!>!
+Elsa.Activities.Runtime.Core.Models.IStatefulActivitySuspensionTransition.StatePayload.get -> System.Text.Json.JsonElement
+Elsa.Activities.Runtime.Core.Models.IStatefulActivitySuspensionTransition.StateValueType.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
+Elsa.Activities.Runtime.Core.Models.IStatefulActivitySuspensionTransition.TriggerType.get -> System.Type!
+Elsa.Activities.Runtime.Core.Models.IStatefulActivitySuspensionTransition<TState>
+Elsa.Activities.Runtime.Core.Models.IVariableReference
+Elsa.Activities.Runtime.Core.Models.IVariableReference.IsWritable.get -> bool
+Elsa.Activities.Runtime.Core.Models.IVariableReference.Name.get -> string!
+Elsa.Activities.Runtime.Core.Models.IVariableReference.ScopeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.IVariableReference.ValueType.get -> System.Type!
+Elsa.Activities.Runtime.Core.Models.IVariableReference.VariableKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability!
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability.Configuration.get -> System.Text.Json.JsonElement
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability.Equals(Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability? other) -> bool
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability.OperatorActivitySchedulingCapability(string! policyKey, int schemaVersion, System.Text.Json.JsonElement configuration) -> void
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability.PolicyKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability.SchemaVersion.get -> int
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext!
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.ChildExecutableNodeIds.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.ChildExecutableNodeIds.init -> void
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.ChildSlotName.get -> string!
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.ChildSlotName.init -> void
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.Deconstruct(out string! ParentActivityType, out string! ParentExecutableNodeId, out string! ChildSlotName, out System.Collections.Generic.IReadOnlyCollection<string!>! ChildExecutableNodeIds) -> void
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.Equals(Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext? other) -> bool
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.OperatorActivitySchedulingCapabilityCompilationContext(string! ParentActivityType, string! ParentExecutableNodeId, string! ChildSlotName, System.Collections.Generic.IReadOnlyCollection<string!>! ChildExecutableNodeIds) -> void
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.ParentActivityType.get -> string!
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.ParentActivityType.init -> void
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.ParentExecutableNodeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.ParentExecutableNodeId.init -> void
+Elsa.Activities.Runtime.Core.Models.OutcomeSelection
+Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Equals(Elsa.Activities.Runtime.Core.Models.OutcomeSelection? other) -> bool
+Elsa.Activities.Runtime.Core.Models.OutcomeSelection.IsEmpty.get -> bool
+Elsa.Activities.Runtime.Core.Models.OutcomeSelection.IsUnspecified.get -> bool
+Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Names.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Activities.Runtime.Core.Models.OutcomeSelection.OutcomeSelection(Elsa.Activities.Runtime.Core.Models.OutcomeSelectionState state, System.Collections.Generic.IReadOnlyList<string!>? names) -> void
+Elsa.Activities.Runtime.Core.Models.OutcomeSelection.ResolveNames() -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Activities.Runtime.Core.Models.OutcomeSelection.State.get -> Elsa.Activities.Runtime.Core.Models.OutcomeSelectionState
+Elsa.Activities.Runtime.Core.Models.OutcomeSelectionState
+Elsa.Activities.Runtime.Core.Models.OutcomeSelectionState.Empty = 2 -> Elsa.Activities.Runtime.Core.Models.OutcomeSelectionState
+Elsa.Activities.Runtime.Core.Models.OutcomeSelectionState.Named = 1 -> Elsa.Activities.Runtime.Core.Models.OutcomeSelectionState
+Elsa.Activities.Runtime.Core.Models.OutcomeSelectionState.Unspecified = 0 -> Elsa.Activities.Runtime.Core.Models.OutcomeSelectionState
+Elsa.Activities.Runtime.Core.Models.ReadOnlyVariableReference<T>
+Elsa.Activities.Runtime.Core.Models.ReadOnlyVariableReference<T>.IsWritable.get -> bool
+Elsa.Activities.Runtime.Core.Models.ReadOnlyVariableReference<T>.Name.get -> string!
+Elsa.Activities.Runtime.Core.Models.ReadOnlyVariableReference<T>.ReadOnlyVariableReference(string! name, string! scopeId, string! variableKey) -> void
+Elsa.Activities.Runtime.Core.Models.ReadOnlyVariableReference<T>.ScopeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.ReadOnlyVariableReference<T>.ValueType.get -> System.Type!
+Elsa.Activities.Runtime.Core.Models.ReadOnlyVariableReference<T>.VariableKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.RuntimeActivationCapabilityKind
+Elsa.Activities.Runtime.Core.Models.RuntimeActivationCapabilityKind.ActivityConsumer = 0 -> Elsa.Activities.Runtime.Core.Models.RuntimeActivationCapabilityKind
+Elsa.Activities.Runtime.Core.Models.RuntimeActivationCapabilityKind.DurableValueStorageDriver = 1 -> Elsa.Activities.Runtime.Core.Models.RuntimeActivationCapabilityKind
+Elsa.Activities.Runtime.Core.Models.RuntimeActivationCapabilityKind.SecretResolver = 2 -> Elsa.Activities.Runtime.Core.Models.RuntimeActivationCapabilityKind
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability!
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability.ConsumerKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability.Equals(Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability? other) -> bool
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability.RuntimeActivityConsumerCapability(string! consumerKey, System.Collections.Generic.IEnumerable<string!>! supportedSchemaVersions) -> void
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability.SupportedSchemaVersions.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor!
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor.ConsumerKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor.Equals(Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor? other) -> bool
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor.Payload.get -> System.Text.Json.JsonElement
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor.RuntimeActivityDescriptor(string! consumerKey, string! schemaVersion, System.Text.Json.JsonElement payload) -> void
+Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor.SchemaVersion.get -> string!
+Elsa.Activities.Runtime.Core.Models.RuntimeRequirement
+Elsa.Activities.Runtime.Core.Models.RuntimeRequirement.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.RuntimeRequirement!
+Elsa.Activities.Runtime.Core.Models.RuntimeRequirement.ConsumerKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.RuntimeRequirement.Equals(Elsa.Activities.Runtime.Core.Models.RuntimeRequirement? other) -> bool
+Elsa.Activities.Runtime.Core.Models.RuntimeRequirement.RuntimeRequirement(string! consumerKey, string! schemaVersion) -> void
+Elsa.Activities.Runtime.Core.Models.RuntimeRequirement.SchemaVersion.get -> string!
+Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement
+Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement!
+Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement.DriverKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement.Equals(Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement? other) -> bool
+Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement.RuntimeStorageDriverRequirement(string! driverKey) -> void
+Elsa.Activities.Runtime.Core.Models.SideEffectProfile
+Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External = 0 -> Elsa.Activities.Runtime.Core.Models.SideEffectProfile
+Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe = 1 -> Elsa.Activities.Runtime.Core.Models.SideEffectProfile
+Elsa.Activities.Runtime.Core.Models.StatefulActivity<TResult, TState, TTrigger>
+Elsa.Activities.Runtime.Core.Models.StatefulActivity<TResult, TState, TTrigger>.StatefulActivity() -> void
+Elsa.Activities.Runtime.Core.Models.StatefulTriggerActivity<TResult, TState, TTrigger>
+Elsa.Activities.Runtime.Core.Models.StatefulTriggerActivity<TResult, TState, TTrigger>.StatefulTriggerActivity() -> void
+Elsa.Activities.Runtime.Core.Models.VariableReference<T>
+Elsa.Activities.Runtime.Core.Models.VariableReference<T>.IsWritable.get -> bool
+Elsa.Activities.Runtime.Core.Models.VariableReference<T>.Name.get -> string!
+Elsa.Activities.Runtime.Core.Models.VariableReference<T>.ScopeId.get -> string!
+Elsa.Activities.Runtime.Core.Models.VariableReference<T>.ValueType.get -> System.Type!
+Elsa.Activities.Runtime.Core.Models.VariableReference<T>.VariableKey.get -> string!
+Elsa.Activities.Runtime.Core.Models.VariableReference<T>.VariableReference(string! name, string! scopeId, string! variableKey) -> void
+Elsa.Activities.Runtime.Core.Models.VariableReferenceTypes
+Elsa.Activities.Runtime.Core.Models.WellKnownRuntimeActivityConsumers
+Elsa.Activities.Runtime.Core.Serialization.ActivityValueJsonProfile
+abstract Elsa.Activities.Runtime.Core.Models.Activity<TResult>.ExecuteAsync(Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext! context) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>!>
+abstract Elsa.Activities.Runtime.Core.Models.ActivityTransition.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.ActivityTransition!
+abstract Elsa.Activities.Runtime.Core.Models.ActivityTransition.Kind.get -> Elsa.Activities.Runtime.Core.Models.ActivityTransitionKind
+abstract Elsa.Activities.Runtime.Core.Models.StatefulActivity<TResult, TState, TTrigger>.ExecuteAsync(Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext! context) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!>
+abstract Elsa.Activities.Runtime.Core.Models.StatefulActivity<TResult, TState, TTrigger>.ResumeAsync(Elsa.Activities.Runtime.Core.Models.ActivityResumeContext<TState, TTrigger>! context) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!>
+abstract Elsa.Activities.Runtime.Core.Models.StatefulTriggerActivity<TResult, TState, TTrigger>.ExecuteAsync(Elsa.Activities.Runtime.Core.Models.ActivityStartContext<TTrigger>! context) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!>
+const Elsa.Activities.Runtime.Core.ActivityInputUIHints.CheckList = "checklist" -> string!
+const Elsa.Activities.Runtime.Core.ActivityInputUIHints.Dropdown = "dropdown" -> string!
+const Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotCardinalities.Many = "many" -> string!
+const Elsa.Activities.Runtime.Core.Attributes.ActivityChildSlotCardinalities.Single = "single" -> string!
+const Elsa.Activities.Runtime.Core.Models.ActivityFault.CategoryMetadataKey = "fault.category" -> string!
+const Elsa.Activities.Runtime.Core.Models.ActivityFault.FaultTypeMetadataKey = "fault.type" -> string!
+const Elsa.Activities.Runtime.Core.Models.OutcomeSelection.DefaultOutcome = "Done" -> string!
+const Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor.InitialSchemaVersion = "1" -> string!
+const Elsa.Activities.Runtime.Core.Models.VariableReferenceTypes.Alias = "Elsa.VariableReference" -> string!
+const Elsa.Activities.Runtime.Core.Models.WellKnownRuntimeActivityConsumers.ClrActivity = "elsa.clr-activity" -> string!
+const Elsa.Activities.Runtime.Core.Models.WellKnownRuntimeActivityConsumers.GraphActivity = "elsa.graph-activity" -> string!
+const Elsa.Activities.Runtime.Core.Models.WellKnownRuntimeActivityConsumers.Intrinsic = "intrinsic" -> string!
+const Elsa.Activities.Runtime.Core.Serialization.ActivityValueJsonProfile.Revision = "elsa.activity-value-json/1" -> string!
+override Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.GetHashCode() -> int
+override Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ActivityFault.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityFault.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ActivityFault.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.EqualityContract.get -> System.Type!
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.PrintMembers(System.Text.StringBuilder! builder) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.EqualityContract.get -> System.Type!
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.PrintMembers(System.Text.StringBuilder! builder) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ActivityUnit.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ConnectionReference.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.ConnectionReference.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.ConnectionReference.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.OutcomeSelection.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.OutcomeSelection.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.ReadOnlyVariableReference<T>.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.RuntimeRequirement.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.RuntimeRequirement.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.RuntimeRequirement.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement.Equals(object? obj) -> bool
+override Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement.GetHashCode() -> int
+override Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement.ToString() -> string!
+override Elsa.Activities.Runtime.Core.Models.VariableReference<T>.ToString() -> string!
+override abstract Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!
+override abstract Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.<Clone>$() -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>!
+override sealed Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.Equals(Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>? other) -> bool
+override sealed Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.Equals(Elsa.Activities.Runtime.Core.Models.ActivityTransition? other) -> bool
+override sealed Elsa.Activities.Runtime.Core.Models.StatefulTriggerActivity<TResult, TState, TTrigger>.ExecuteAsync(Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext! context) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!>
+static Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.operator !=(Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest? left, Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest? right) -> bool
+static Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest.operator ==(Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest? left, Elsa.Activities.Runtime.Contracts.ActivityActivationStrategyRequest? right) -> bool
+static Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.IsAccessedBy(System.Type! type) -> bool
+static Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.IsDeclaredBy(System.Type! type) -> bool
+static Elsa.Activities.Runtime.Core.Attributes.ActivityTypeMetadata.GetDeclaredActivityType(System.Type! type) -> string?
+static Elsa.Activities.Runtime.Core.Attributes.ActivityTypeMetadata.IsTrigger(System.Type! type) -> bool
+static Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.operator !=(Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget? left, Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget? right) -> bool
+static Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget.operator ==(Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget? left, Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.operator !=(Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure? left, Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure.operator ==(Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure? left, Elsa.Activities.Runtime.Core.Models.ActivityActivationFailure? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement.operator !=(Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement? left, Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement.operator ==(Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement? left, Elsa.Activities.Runtime.Core.Models.ActivityActivationRequirement? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.operator !=(Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext? left, Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.operator ==(Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext? left, Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityFault.operator !=(Elsa.Activities.Runtime.Core.Models.ActivityFault? left, Elsa.Activities.Runtime.Core.Models.ActivityFault? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityFault.operator ==(Elsa.Activities.Runtime.Core.Models.ActivityFault? left, Elsa.Activities.Runtime.Core.Models.ActivityFault? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.operator !=(Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference? left, Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference.operator ==(Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference? left, Elsa.Activities.Runtime.Core.Models.ActivityInputVariableReference? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition.Cancel<TResult>(string! reason) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition.Complete<TResult>(TResult result) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition.Complete<TResult>(TResult result, Elsa.Activities.Runtime.Core.Models.OutcomeSelection! selection) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition.Complete<TResult>(TResult result, System.Collections.Generic.IReadOnlyCollection<string!>! outcomes) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition.Complete<TResult>(TResult result, string! outcome) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition.Fault<TResult>(Elsa.Activities.Runtime.Core.Models.ActivityFault! fault) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition.Suspend<TResult, TState>(TState state, System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation!>! triggers) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition.operator !=(Elsa.Activities.Runtime.Core.Models.ActivityTransition? left, Elsa.Activities.Runtime.Core.Models.ActivityTransition? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition.operator ==(Elsa.Activities.Runtime.Core.Models.ActivityTransition? left, Elsa.Activities.Runtime.Core.Models.ActivityTransition? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.Cancel(string! reason) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.Complete(TResult result) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.Complete(TResult result, Elsa.Activities.Runtime.Core.Models.OutcomeSelection! selection) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.Complete(TResult result, System.Collections.Generic.IReadOnlyCollection<string!>! outcomes) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.Complete(TResult result, string! outcome) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.Fault(Elsa.Activities.Runtime.Core.Models.ActivityFault! fault) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.Suspend<TTrigger>(TState state, System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>!>! registrations, int stateSchemaVersion = 1) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.operator !=(Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>? left, Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.operator ==(Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>? left, Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.operator !=(Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>? left, Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.operator ==(Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>? left, Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation.operator !=(Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation? left, Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation.operator ==(Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation? left, Elsa.Activities.Runtime.Core.Models.ActivityTriggerExpectation? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.operator !=(Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>? left, Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.operator ==(Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>? left, Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityUnit.Value.get -> Elsa.Activities.Runtime.Core.Models.ActivityUnit
+static Elsa.Activities.Runtime.Core.Models.ActivityUnit.operator !=(Elsa.Activities.Runtime.Core.Models.ActivityUnit left, Elsa.Activities.Runtime.Core.Models.ActivityUnit right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityUnit.operator ==(Elsa.Activities.Runtime.Core.Models.ActivityUnit left, Elsa.Activities.Runtime.Core.Models.ActivityUnit right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.Default.get -> Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy!
+static Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.operator !=(Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy? left, Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.operator ==(Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy? left, Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ConnectionReference.operator !=(Elsa.Activities.Runtime.Core.Models.ConnectionReference? left, Elsa.Activities.Runtime.Core.Models.ConnectionReference? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.ConnectionReference.operator ==(Elsa.Activities.Runtime.Core.Models.ConnectionReference? left, Elsa.Activities.Runtime.Core.Models.ConnectionReference? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability.operator !=(Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability? left, Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability.operator ==(Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability? left, Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapability? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.operator !=(Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext? left, Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext.operator ==(Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext? left, Elsa.Activities.Runtime.Core.Models.OperatorActivitySchedulingCapabilityCompilationContext? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Empty.get -> Elsa.Activities.Runtime.Core.Models.OutcomeSelection!
+static Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named(System.Collections.Generic.IEnumerable<string!>! names) -> Elsa.Activities.Runtime.Core.Models.OutcomeSelection!
+static Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named(params string![]! names) -> Elsa.Activities.Runtime.Core.Models.OutcomeSelection!
+static Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named(string! name) -> Elsa.Activities.Runtime.Core.Models.OutcomeSelection!
+static Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Unspecified.get -> Elsa.Activities.Runtime.Core.Models.OutcomeSelection!
+static Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability.operator !=(Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability? left, Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability.operator ==(Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability? left, Elsa.Activities.Runtime.Core.Models.RuntimeActivityConsumerCapability? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor.operator !=(Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor? left, Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor.operator ==(Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor? left, Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.RuntimeRequirement.operator !=(Elsa.Activities.Runtime.Core.Models.RuntimeRequirement? left, Elsa.Activities.Runtime.Core.Models.RuntimeRequirement? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.RuntimeRequirement.operator ==(Elsa.Activities.Runtime.Core.Models.RuntimeRequirement? left, Elsa.Activities.Runtime.Core.Models.RuntimeRequirement? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement.operator !=(Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement? left, Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement.operator ==(Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement? left, Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement? right) -> bool
+static Elsa.Activities.Runtime.Core.Models.StatefulActivity<TResult, TState, TTrigger>.Cancel(string! reason) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!
+static Elsa.Activities.Runtime.Core.Models.StatefulActivity<TResult, TState, TTrigger>.Complete(TResult result, string! outcome = "Done") -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!
+static Elsa.Activities.Runtime.Core.Models.StatefulActivity<TResult, TState, TTrigger>.Fault(Elsa.Activities.Runtime.Core.Models.ActivityFault! fault) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!
+static Elsa.Activities.Runtime.Core.Models.StatefulActivity<TResult, TState, TTrigger>.Suspend(TState state, System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>!>! registrations, int stateSchemaVersion = 1) -> Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>!
+static Elsa.Activities.Runtime.Core.Models.VariableReferenceTypes.AccessesUndeclaredVariables(System.Type! activityType) -> bool
+static Elsa.Activities.Runtime.Core.Models.VariableReferenceTypes.DeclaresAccessesUndeclaredVariables(System.Type! activityType) -> bool
+static Elsa.Activities.Runtime.Core.Models.VariableReferenceTypes.ReadOnlyDefinitionFullName.get -> string!
+static Elsa.Activities.Runtime.Core.Models.VariableReferenceTypes.TryGet(System.Type! type, out Elsa.Activities.Runtime.Core.Models.ActivityVariableAccess access, out System.Type! valueType) -> bool
+static Elsa.Activities.Runtime.Core.Models.VariableReferenceTypes.WritableDefinitionFullName.get -> string!
+static Elsa.Activities.Runtime.Core.Serialization.ActivityValueJsonProfile.CreateOptions() -> System.Text.Json.JsonSerializerOptions!
+virtual Elsa.Activities.Runtime.Core.Models.ActivityTransition.EqualityContract.get -> System.Type!
+virtual Elsa.Activities.Runtime.Core.Models.ActivityTransition.Equals(Elsa.Activities.Runtime.Core.Models.ActivityTransition? other) -> bool
+virtual Elsa.Activities.Runtime.Core.Models.ActivityTransition.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.Equals(Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>? other) -> bool
+virtual Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.Equals(Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>? other) -> bool
+~override Elsa.Activities.Runtime.Core.Models.ActivityUnit.Equals(object obj) -> bool
+~override Elsa.Activities.Runtime.Core.Models.ActivityUnit.ToString() -> string
+
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession.ObservePendingRead(Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget! target) -> void
+
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.ExpiresAt.get -> System.DateTimeOffset?
+Elsa.Activities.Runtime.Core.Models.ActivityTriggerRegistration<TTrigger>.ExpiresAt.init -> void
+Elsa.Activities.Runtime.Core.Models.IActivityTriggerRegistration.ExpiresAt.get -> System.DateTimeOffset?

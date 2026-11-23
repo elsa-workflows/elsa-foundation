@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { WorkflowTagsRoute } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTagsPage";
+import { WorkflowViewsRoute } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowViewsPage";
 import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
 import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
@@ -227,6 +228,12 @@ function Library() {
       window.dispatchEvent(new PopStateEvent("popstate"));
     }} /></main>;
   }
+  if (path === "/workflows/views") return <main className="wf-page wf-page--definitions" style={{ height: "100vh", padding: 24 }}>
+    <WorkflowViewsRoute context={context} view="list" navigate={next => {
+      window.history.pushState({}, "", `${next}${window.location.search}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }} />
+  </main>;
   if (parameters.get("organization-surface") === "properties") return <main className="wf-canvas-shell wf-tokens" style={{ height: "100vh" }}><WorkflowOrganizationButton context={context} definitionId="welcome" name="Welcome new customer" onSaved={() => undefined} /><div className="wf-properties-view"><section className="wf-properties-section"><h3>Information</h3><p>Welcome new customer</p></section></div></main>;
   return <main className="wf-page wf-page--definitions"><WorkflowDefinitions context={context} ai={ai} session={session} onOpen={() => undefined} /></main>;
 }

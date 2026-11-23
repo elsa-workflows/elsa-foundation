@@ -359,8 +359,12 @@ describe("incident operator actions", () => {
     flushSync(() => [...container.querySelectorAll<HTMLButtonElement>(".wf-incident-operator-actions button")]
       .find(button => button.textContent!.includes("Accept"))!.click());
     await settle();
-    expect(container.querySelector("[role=dialog] h3")!.textContent).toBe('Accept the recorded completion of "Increment"?');
-    flushSync(() => container.querySelector<HTMLButtonElement>("button[type=submit]")!.click());
+    // The shared Studio dialog is portalled and names itself through aria-labelledby.
+    const dialog = document.querySelector<HTMLElement>('.wf-operator-dialog[role="dialog"]')!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(document.getElementById(dialog.getAttribute("aria-labelledby")!)?.textContent).toBe('Accept the recorded completion of "Increment"?');
+    flushSync(() => dialog.querySelector<HTMLButtonElement>("button[type=submit]")!.click());
     await settle();
     expect(fake.submits).toEqual([{
       target: { executionIds: ["wf-42"] },

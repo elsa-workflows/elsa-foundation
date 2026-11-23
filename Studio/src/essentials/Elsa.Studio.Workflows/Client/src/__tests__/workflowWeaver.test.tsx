@@ -266,6 +266,7 @@ describe("native reviewed workflow effect", () => {
     if (action === "publish") await persistence.flushPendingSave();
     else await persistence.saveDraft(doc.state.draft!, "Saved");
     await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
     expect(updateDraft).toHaveBeenCalledTimes(1);
     expect(updateDraft).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ layout: [{ nodeId: "write", x: 150, y: 250 }] }));
     expect(persistence.reviewHeld).toBe(false);

@@ -289,7 +289,7 @@ describe("Weaver session recovery", () => {
     await settle(() => expect(view.container.querySelector('[data-kind="owned-elsewhere"]')?.textContent).toContain("Try again in about 12 seconds."));
     expect(localStorage.getItem(weaverSessionScope(readyApi("ada"))!.storageKey)).toBe(sessionId);
     expect(server.client.getSession).toHaveBeenCalledTimes(1);
-    click(buttonIn(view.container.querySelector('[data-kind="owned-elsewhere"]'), "Try again"));
+    click(buttonIn(view.container.querySelector('[data-kind="owned-elsewhere"]'), "Retry"));
     await settle(() => expect(view.container.textContent).toContain("Earlier question"));
     expect(server.client.getSession).toHaveBeenCalledTimes(2);
     expect(view.subscribe).not.toHaveBeenCalled();
@@ -418,14 +418,14 @@ describe("Weaver recovery with session autonomy", () => {
     server.client.resolveClientInvocation.mockRejectedValueOnce(new WeaverApiError(409, "Not uncertain.", "weaver.invocation.not_uncertain", null));
     server.client.getSession.mockRejectedValueOnce(new WeaverApiError(409, "Another Studio host owns this session.", "weaver.session.owned_elsewhere", null, 5));
     click(buttonIn(resolveGroup(view.container), "It was not applied"));
-    await settle(() => expect(buttonIn(view.container.querySelector('[data-kind="owned-elsewhere"]'), "Try again")?.disabled).toBe(false));
+    await settle(() => expect(buttonIn(view.container.querySelector('[data-kind="owned-elsewhere"]'), "Retry")?.disabled).toBe(false));
     expect(buttonIn(messageItem(view.container, "m1"), "Withdraw")?.disabled).toBe(false);
     expect(buttonsIn(resolveGroup(view.container)).length).toBe(3);
 
     server.client.updateAutonomy.mockImplementationOnce(() => new Promise(() => {}));
     chooseMode(view.container, "Autopilot");
     expect(autonomyState(view.container)).toBe("pending");
-    expect(buttonIn(view.container.querySelector('[data-kind="owned-elsewhere"]'), "Try again")?.disabled).toBe(true);
+    expect(buttonIn(view.container.querySelector('[data-kind="owned-elsewhere"]'), "Retry")?.disabled).toBe(true);
     expect(buttonIn(messageItem(view.container, "m1"), "Withdraw")?.disabled).toBe(true);
     expect([...resolveGroup(view.container)!.querySelectorAll<HTMLButtonElement>("button")].every(button => button.disabled)).toBe(true);
     view.unmount();
@@ -815,7 +815,7 @@ function autonomyState(container: HTMLElement) {
 
 function chooseMode(container: HTMLElement, label: string) {
   click(modeButton(container));
-  click([...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(item => item.querySelector("strong")?.textContent === label));
+  click([...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(item => item.querySelector("strong")?.textContent === label));
 }
 
 function policyLabel(container: HTMLElement, messageId: string) {

@@ -14,6 +14,7 @@ import { parseValidationErrorPath } from "./validationDiagnostics";
 
 export interface ValidationActivityLabels {
   labelFor(nodeId: string): string;
+  inputLabelFor(nodeId: string | undefined, key: string): string;
   humanizeMessage(message: string, fallbackNodeId?: string | null): HumanizedUserMessage;
 }
 
@@ -81,6 +82,7 @@ export function createValidationActivityLabels(source: ValidationActivityLabelSo
 
   return {
     labelFor,
+    inputLabelFor: inputNameFor,
     humanizeMessage(message, fallbackNodeId) {
       return humanizeUserFacingMessage(message, labelFor, inputNameFor, fallbackNodeId);
     }

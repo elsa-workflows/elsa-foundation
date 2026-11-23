@@ -226,10 +226,10 @@ export function WorkspaceTabStrip({ baseId, tabs, activeId, notice, onDismissNot
         })}
       </div>
       <span id={`${baseId}-tab-help`} hidden>Delete closes the tab. Shift+F10 opens tab actions.</span>
+      <button type="button" className="studio-workspace-tab-action studio-workspace-tab-new" aria-label="New tab" title={`New tab (${workspaceShortcuts.newTab}). Alt-click a link to open it in a tab.`} onClick={onNewTab}>
+        <Plus size={15} aria-hidden="true" />
+      </button>
       <div className="studio-workspace-tab-actions">
-        <button type="button" className="studio-workspace-tab-action" aria-label="New tab" title={`New tab (${workspaceShortcuts.newTab}). Alt-click a link to open it in a tab.`} onClick={onNewTab}>
-          <Plus size={15} aria-hidden="true" />
-        </button>
         <button
           ref={allTabsRef}
           type="button"

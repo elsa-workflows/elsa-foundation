@@ -10,7 +10,7 @@ import { AuthContext } from "../../src/essentials/Elsa.Studio.Hosting/Client/src
 import { AppearancePage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/AppearancePage";
 import { SettingsShell } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/SettingsShell";
 import { WorkflowInstancesPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/pages";
-import { StructuredLogsPage, register as registerLogs } from "../../../Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module";
+import { StructuredLogsPage, StructuredLogsPanel, register as registerLogs } from "../../../extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module";
 import { WorkflowDefinitionBrowseFixture } from "./workflowDefinitionBrowseFixture";
 import { ActivityDuplicateEditorFixture } from "./activityDuplicateEditorFixture";
 import { WorkflowTemplatesFixture } from "./workflowTemplatesFixture";
@@ -20,12 +20,13 @@ import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/setting
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/workspaceAppearance.css";
 import "./workspaceAppearanceFixture.css";
 
+// Theme/layout fixture: Workflows and Runs stay direct `main` links so the selected-nav accent is always rendered; this is not the product grouping (see Studio/docs/module-ui.md#navigation).
 const navigation = getStudioNavigation([
   { id: "home", label: "Home", path: "/dashboard", placement: "main", order: 10 },
   { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main", order: 20 },
   { id: "runs", label: "Runs", path: "/workflows/instances", placement: "main", order: 30 },
-  { id: "templates", label: "Templates", path: "/workflows/templates", placement: "more" },
-  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", placement: "more" }
+  { id: "templates", label: "Templates", path: "/workflows/templates", placement: "build" },
+  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", placement: "build" }
 ], { includeThemeBuilder: false });
 
 registerLogs({
@@ -53,7 +54,7 @@ function Runs() {
     })), hasNext: false, nextCursor: null, count: 8, totalCount: 8 };
     throw new Error(`Unexpected minimal run read: ${path}`);
   } } } as unknown as StudioEndpointContext), []);
-  return <WorkflowInstancesPage context={context} navigate={() => undefined} />;
+  return <WorkflowInstancesPage context={context} navigate={path => { document.documentElement.dataset.rowDestination = path; }} />;
 }
 
 function Fixture() {
@@ -61,7 +62,7 @@ function Fixture() {
   const path = view === "appearance" ? "/settings/appearance" : view === "runs" || view === "inspection" ? "/workflows/instances" : view === "templates" ? "/workflows/templates" : view === "logs" ? "/diagnostics/structured-logs" : "/workflows/definitions";
   return <ThemeProvider><ShellFrame navigation={navigation} panels={[]} path={path} title={view === "appearance" ? "Appearance" : view === "runs" || view === "inspection" ? "Runs" : "Workflows"}
     backendBaseUrl="https://backend.example/" themeAction={<ThemeSwitcher />} accountAction={<AuthContext.Provider value={{ session: { status: "authenticated", displayName: "Administrator", roles: [], permissions: [] }, capabilities: null, login: async () => undefined, logout: async () => undefined, refresh: async () => ({ status: "authenticated", roles: [], permissions: [] }) }}><UserMenu /></AuthContext.Provider>} onNavigate={next => setView(next.startsWith("/settings") ? "appearance" : next.includes("instances") ? "runs" : next.includes("templates") ? "templates" : next.includes("diagnostics") ? "logs" : "list")}>
-    {view === "appearance" ? <SettingsShell activeId="appearance" groups={[{ id: "studio", label: "Studio", sections: [{ id: "appearance", label: "Appearance", path: "/settings/appearance" }] }]} onNavigate={() => undefined}><AppearancePage onNavigate={() => undefined} /></SettingsShell> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : view === "library" ? <WorkflowLibraryFixture /> : view === "runs" ? <Runs /> : view === "templates" ? <WorkflowTemplatesFixture /> : view === "logs" ? <StructuredLogsPage /> : <ActivityDuplicateEditorFixture />}
+    {view === "appearance" ? <SettingsShell activeId="appearance" groups={[{ id: "studio", label: "Studio", sections: [{ id: "appearance", label: "Appearance", path: "/settings/appearance" }] }]} onNavigate={() => undefined}><AppearancePage onNavigate={() => undefined} /></SettingsShell> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : view === "library" ? <WorkflowLibraryFixture /> : view === "runs" ? <Runs /> : view === "templates" ? <WorkflowTemplatesFixture /> : view === "logs" ? <StructuredLogsPage /> : view === "logs-panel" ? <StructuredLogsPanel /> : <ActivityDuplicateEditorFixture />}
   </ShellFrame></ThemeProvider>;
 }
 

@@ -1,6 +1,7 @@
-import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { getNotifications, useNotificationGuard } from "./workflow-editor/notifications";
 import React, { useEffect, useMemo, useState } from "react";
-import { Info, DatabaseZap, Save, ShieldCheck } from "lucide-react";
+import { DatabaseZap, Info, Save, ShieldCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { useRuntimeDiagnosticsSettings, useSaveRuntimeDiagnosticsSettings } from "./api/runtime";
 import type {
@@ -40,6 +41,7 @@ interface RuntimeDiagnosticsDraft {
 }
 
 export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEndpointContext }) {
+  const captureNotificationGuard = useNotificationGuard(context);
   const settingsQuery = useRuntimeDiagnosticsSettings(context);
   const saveMutation = useSaveRuntimeDiagnosticsSettings(context);
   const settings = settingsQuery.data ?? null;
@@ -47,7 +49,6 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
   const saving = saveMutation.isPending;
   const canManage = settings?.permissions.canManage ?? false;
   const [draft, setDraft] = useState<RuntimeDiagnosticsDraft>(() => createDraft(settings));
-  const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(createDraft(settings));
@@ -62,11 +63,9 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
 
   const allowedLevels = useMemo(() => levels.filter(level => isLevelSelectable(level, settings)), [settings]);
   const updateDefaultLevel = (defaultLevel: RuntimeDiagnosticsEvidenceLevel) => {
-    setStatus(null);
     setDraft(current => ({ ...current, defaultLevel }));
   };
   const updateSubjectLevel = (subject: RuntimeDiagnosticsSubject, value: string) => {
-    setStatus(null);
     setDraft(current => {
       const subjectOverrides = { ...current.subjectOverrides };
       if (value === "inherit") delete subjectOverrides[subject];
@@ -76,29 +75,28 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
   };
 
   const save = () => {
-    setStatus(null);
+    const canNotify = captureNotificationGuard();
     saveMutation.mutate(
       {
         scope: settings?.requested.scope ?? "host-default",
         defaultLevel: draft.defaultLevel,
         subjectOverrides: draft.subjectOverrides
       },
-      { onSuccess: saved => setStatus(`Saved. New capture events now use ${formatLevel(saved.effective.defaultLevel)}.`) }
+      { onSuccess: saved => canNotify() && getNotifications().notify({ level: "success", title: `Saved. New capture events now use ${formatLevel(saved.effective.defaultLevel)}.` }) }
     );
   };
 
   return (
     <section className="studio-page wf-page runtime-diagnostics-page">
-      <StudioPageHeader headingLevel={2} title={<><DatabaseZap size={18} /> Runtime evidence settings</>} description={<>Choose what evidence new runtime capture events retain. Evidence already captured is unchanged.</>} actions={<><div className="studio-page-actions">
+      <StudioPageHeader headingLevel={2} title="Runtime diagnostics" description={<>Choose what run data to retain for new events. Previously captured run data is unchanged.</>} actions={<><div className="studio-page-actions">
           <StudioButton variant="primary" type="button" onClick={save} disabled={loading || saving || !canManage || !hasUnsavedChanges}>
             <Save size={15} />
-            {saving ? "Saving..." : "Save changes"}
+            {saving ? "Saving..." : "Save"}
           </StudioButton>
         </div></>} />
 
       <div className="runtime-diagnostics-body">
         {errorMessage && <div className="runtime-diagnostics-banner error">{errorMessage}</div>}
-        {status && !errorMessage && <div className="runtime-diagnostics-banner success">{status}</div>}
 
         <section className="runtime-diagnostics-section">
           <div className="runtime-diagnostics-section-head">
@@ -130,19 +128,17 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
         <section className="runtime-diagnostics-section runtime-diagnostics-section-grow">
           <div className="runtime-diagnostics-section-title">
             <h3 className="wf-section-label"><DatabaseZap size={14} /> Subject overrides</h3>
-            <p>Request a different level for a specific kind of evidence. The runtime-applied level is shown after Host Policy.</p>
+            <p>Request a different level for a specific kind of run data. The runtime-applied level is shown after Host Policy.</p>
           </div>
           <div className="runtime-diagnostics-subjects">
             {subjects.map(subject => {
               const requested = draft.subjectOverrides[subject.id] ?? "inherit";
               const effective = settings ? effectiveSubjectLevel(settings, subject.id) : null;
               return (
-                <label className="runtime-diagnostics-subject" key={subject.id}>
-                  <span>
+                <StudioField className="runtime-diagnostics-subject" key={subject.id} label={<><span>
                     <strong>{subject.label}</strong>
                     <em>{subject.detail}</em>
-                  </span>
-                  <span className="runtime-diagnostics-subject-controls">
+                  </span></>}><span className="runtime-diagnostics-subject-controls">
                     {effective && <span className="runtime-diagnostics-applied">Runtime applies: {formatLevel(effective)}</span>}
                     <select
                       value={requested}
@@ -152,8 +148,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
                       <option value="inherit">{subject.inheritLabel ?? "Inherit default"}</option>
                       {allowedLevels.map(level => <option value={level} key={level}>{formatLevel(level)}</option>)}
                     </select>
-                  </span>
-                </label>
+                  </span></StudioField>
               );
             })}
           </div>
@@ -223,7 +218,7 @@ function LevelSelect({
 }) {
   return (
     <fieldset className="runtime-diagnostics-levels" disabled={disabled}>
-      <legend>Requested default</legend>
+      <legend>Run data detail</legend>
       <div className="runtime-diagnostics-level-options">
         {allowedLevels.map(level => (
           <label
@@ -251,7 +246,7 @@ function LevelSelect({
 function levelDescription(level: RuntimeDiagnosticsEvidenceLevel): string {
   switch (level) {
     case "Off":
-      return "Do not store runtime value evidence.";
+      return "Do not store captured run data.";
     case "Metadata":
       return "Store capture metadata without value shape.";
     case "DiagnosticSnapshot":

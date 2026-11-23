@@ -58,6 +58,7 @@ describe("WorkflowExecutionTimeline", () => {
         activityType: activity.activityType,
         activityTypeVersion: activity.activityTypeVersion,
         structureKind: null,
+        structureDiagnostics: [],
         available: true,
         inputBindings: [],
         outputCaptures: [],

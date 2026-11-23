@@ -121,6 +121,11 @@ profile/options metadata can reveal binding intent for protected values.
 
 ## Examples
 
+A reusable activity can expose a Double named Sum. Bind Write Line.Text directly to Sum and
+keep the default Auto mode. Publication pins `NumericToString` for this input. A Sum of
+`19.25` reaches Write Line as the string `"19.25"` on any worker culture. A second consumer
+can read Sum as a Double. For localized or fixed-precision output, format the value explicitly.
+
 JSON formatted content to dynamic `Any`:
 
 ```csharp

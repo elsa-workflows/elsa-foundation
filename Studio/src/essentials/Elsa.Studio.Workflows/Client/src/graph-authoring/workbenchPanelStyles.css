@@ -71,7 +71,7 @@
   color: var(--wf-accent);
 }
 
-.wf-panel-tab-icon {
+.wf-panel-tab-list .studio-tab-icon {
   display: inline-flex;
   flex: 0 0 auto;
 }

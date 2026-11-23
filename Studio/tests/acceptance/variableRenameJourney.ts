@@ -5,7 +5,8 @@ const cleanupRequestTimeout = 15_000;
 
 /**
  * Spec 1222 FR-021/FR-022 on the real hosts: renaming a workflow variable updates the script read that names it and
- * lists the computed read it cannot update, with a way to go to it. No fixture responses.
+ * lists the computed read it cannot update, with a way to go to it. An undeclared read also exercises the real
+ * Workflow Editor validation footer and its input navigation. This disposable invalid draft is never executed.
  */
 export async function variableRenameJourney(page: Page, info: TestInfo, capture: Capture, registerCleanup: (cleanup: () => Promise<void>) => void) {
   const base = process.env.ELSA_WORKBENCH_URL!;
@@ -24,8 +25,9 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
   }
   const sequence = await version("Elsa.Activities.Sequence.Activities.Sequence");
   const line = await version("Elsa.Activities.Primitives.Activities.WriteLine");
-  // One literal read the rename can follow, and one computed read it can only flag.
-  const script = "'Total: ' + variables.order.total + ' / ' + variables['ord' + 'er'].total";
+  // One literal read the rename can follow, one computed read it can only flag, and an unrelated missing declaration
+  // that keeps VF-READ-002 present before and after the rename without changing either rename count.
+  const script = "'Total: ' + variables.order.total + ' / ' + variables['ord' + 'er'].total + ' / ' + variables.missingForValidation.total";
   const submitted = await api<{ definition: { id: string } }>("/design/workflows/definitions/submit", "POST", {
     name: `Variable rename ${info.project.name} ${Date.now()}`,
     state: {
@@ -41,8 +43,17 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
     await api(`/design/workflows/definitions/${submitted.definition.id}`, "DELETE", undefined, cleanupRequestTimeout);
   });
 
-  await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy`);
+  const designerUrl = new URL(page.url());
+  designerUrl.searchParams.set("definition", submitted.definition.id);
+  await page.goto(designerUrl.toString());
   await expect(page.locator('.wf-sequence-step[data-id="message"]')).toBeVisible();
+  await page.locator('.wf-sequence-step[data-id="message"]').click();
+  if (info.project.name.startsWith("narrow")) {
+    await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
+  }
+  const inspectorSections = page.getByRole("tablist", { name: "Activity inspector sections", exact: true });
+  await inspectorSections.getByRole("tab", { name: "Outputs", exact: true }).click();
+  await expect(inspectorSections.getByRole("tab", { name: "Outputs", exact: true })).toHaveAttribute("aria-selected", "true");
   // At narrow widths the inspector covers the editor view tabs; the activities panel starts collapsed.
   if (info.project.name.startsWith("narrow")) {
     const collapse = page.getByRole("button", { name: "Collapse inspector panel", exact: true });
@@ -64,11 +75,68 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
 
   await notice.getByRole("button", { name: "Write Line · Text, go to input", exact: true }).click();
   await expect(views.getByRole("tab", { name: "Designer", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(inspectorSections.getByRole("tab", { name: "Inputs", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("button", { name: "Copy Node ID", exact: true })).toBeVisible();
-  const text = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Text$/ }) });
+  const text = page.getByRole("group", { name: "Text property", exact: true });
+  await expect(text).toBeVisible();
   await expect(text).toContainText("variables.purchase.total");
   await expect(text).toContainText("variables['ord' + 'er']");
+  await expect(text).toContainText("variables.missingForValidation.total");
+  // This host activates CodeMirror lazily; retain evidence after the rendered editor has taken focus.
+  const renderedEditor = text.locator('[data-studio-code-editor-surface="codemirror"] .cm-content');
+  await expect(renderedEditor).toBeVisible();
+  await expect(renderedEditor).toContainText("variables.purchase.total");
+  await expect(renderedEditor).toBeFocused();
   // Go to moves focus into the flagged input's editor.
-  await expect(text.locator(":focus")).toHaveCount(1);
+  await expect(text.locator("[data-studio-code-editor] :focus")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - innerHeight),
+    { message: "Focused inspection must not create blank document overflow" }).toBeLessThanOrEqual(1);
   await capture(page, info, "flagged-reference");
+
+  // Keep validation navigation after rename's focus proof: a retained validation request must never supply rename focus.
+  // Move to Outputs and focus the footer controls so this second action must itself reopen/focus Inputs.
+  await inspectorSections.getByRole("tab", { name: "Outputs", exact: true }).click();
+  if (info.project.name.startsWith("narrow")) {
+    await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
+  }
+  const validation = page.locator(".wf-validation");
+  const validationToggle = validation.locator(".wf-validation-toggle");
+  const validationDetails = validation.locator("#wf-validation-details");
+  await expect(validationToggle).toContainText("1 error · 1 warning");
+  await expect(validationToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(validationDetails).toBeHidden();
+  await validationToggle.focus();
+  await expect(validationToggle).toBeFocused();
+  await capture(page, info, "validation-collapsed");
+
+  await validationToggle.press("Enter");
+  await expect(validationToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(validationDetails).toBeVisible();
+  const findings = validation.getByRole("list", { name: "Validation findings", exact: true }).getByRole("listitem");
+  await expect(findings).toHaveCount(2);
+  const missingRead = findings.filter({ hasText: "VF-READ-002" });
+  await expect(missingRead).toHaveCount(1);
+  await expect(missingRead.locator('.wf-validation-severity[data-severity="error"]')).toHaveText("Error");
+  await expect(missingRead.locator(".wf-validation-location")).toHaveText("Write Line → Inputs → Text");
+  await expect(missingRead).toContainText("reads variable 'missingForValidation'");
+  await expect(findings.filter({ hasText: "VF-READ-004" })).toContainText("It could read: 'purchase'.");
+  const goToValidationInput = missingRead.getByRole("button", { name: "Go to input", exact: true });
+  await goToValidationInput.scrollIntoViewIfNeeded();
+  await capture(page, info, "validation-expanded");
+
+  await goToValidationInput.focus();
+  await goToValidationInput.press("Enter");
+  await expect(views.getByRole("tab", { name: "Designer", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(inspectorSections.getByRole("tab", { name: "Inputs", exact: true })).toHaveAttribute("aria-selected", "true");
+  const validationInput = page.getByRole("group", { name: "Text property", exact: true });
+  await expect(validationInput).toBeVisible();
+  const validationEditor = validationInput.locator('[data-studio-code-editor-surface="codemirror"] .cm-content');
+  await expect(validationEditor).toBeVisible();
+  await expect(validationEditor).toContainText(script.replace("variables.order.total", "variables.purchase.total"));
+  await expect(validationEditor).toBeFocused();
+  await expect(validationInput.locator("[data-studio-code-editor] :focus")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - innerHeight),
+    { message: "Validation focus must retain the bounded document height" }).toBeLessThanOrEqual(1);
+  await capture(page, info, "validation-input-focused");
+
 }

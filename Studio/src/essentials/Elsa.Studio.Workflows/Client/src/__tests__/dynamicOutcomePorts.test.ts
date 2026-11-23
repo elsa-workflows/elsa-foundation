@@ -85,3 +85,8 @@ describe("outcome sets resolved at design time (spec 1208)", () => {
     expect(ports.map(port => [port.name, !!port.missing])).toEqual([["Done", false], ["Approved", false], ["Rejected", true]]);
   });
 });
+
+it("Complete has no authorable continuation even when historical catalog or pinned outcomes advertise Done", () => {
+  const complete = { ...writeLine, activityTypeKey: "Elsa.Activities.Graph.Runtime.Activities.Complete", ports: [{ name: "Done" }] };
+  expect(getActivitySourcePorts({ ...node([]), executableOutcomes: ["Done"] }, complete)).toEqual([]);
+});

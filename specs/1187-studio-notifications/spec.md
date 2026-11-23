@@ -104,11 +104,14 @@ export interface StudioNotificationApi {
 All components live in `Elsa.Studio.Hosting/Client/src/app/ui/feedback/`.
 
 - `<ToastHost />` is mounted once inside the main shell frame in `App.tsx`, where host navigation is
-  available for links. Toasts appear top-right
-  below the header as an overlay that never reflows content, about 360 px wide and full width on
-  narrow viewports. At most three are visible, newest on top; the rest queue (they are already in
+  available for links. Toasts appear bottom-right above the live bottom dock as an overlay that
+  never reflows content, about 360 px wide with viewport gutters on narrow viewports. This keeps
+  transient confirmations clear of page-header primary actions. The stack is bounded below the
+  live shell header and to half the viewport height, scrolling when needed to keep its actions reachable. At most three are visible, newest on top; the rest queue (they are already in
   the Center). Each toast shows a level icon (spinner for `progress`), title, optional message,
-  link, action and dismiss button.
+  link, action and dismiss button. When the dock is maximized or space above it is too short,
+  the stack overlays dock content within the viewport rather than moving offscreen. Its layer remains
+  above the maximized dock and below modal backdrops, so feedback cannot cover a dialog or intercept its controls.
 - Timer, hover and focus pause logic is extracted from `StudioActionNotice` into a shared hook used
   by both `StudioActionNotice` and the toast.
 - One host live region announces toasts: `assertive` for `error`, `polite` otherwise.

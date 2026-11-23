@@ -5,6 +5,15 @@ const nodes = (...ids: string[]): LayoutNode[] => ids.map(id => ({ id }));
 const edge = (source: string, target: string): LayoutEdge => ({ source, target });
 
 describe("computeAutoLayout", () => {
+  it("keeps BPMN sequence flows compact without overlapping mixed-width nodes", () => {
+    const positions = computeAutoLayout(
+      [{ id: "start", measured: { width: 72 } }, { id: "task", width: 300 }, { id: "end", measured: { width: 72 } }],
+      [edge("start", "task"), edge("task", "end")],
+      "bpmn"
+    );
+    expect(positions.get("task")).toEqual({ x: 152, y: 0 });
+    expect(positions.get("end")).toEqual({ x: 532, y: 0 });
+  });
   it("lays out a sequence left to right", () => {
     const positions = computeAutoLayout(nodes("a", "b", "c"), [], "sequence");
     expect(positions.get("a")).toEqual({ x: 0, y: 0 });

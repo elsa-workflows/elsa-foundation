@@ -46,7 +46,7 @@ export async function scriptVariableWritesJourney(page: Page, info: TestInfo, ca
     return submitted;
   }
   const evidence: Array<{ state: string; analysis: Analysis }> = [];
-  const scriptRow = () => page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Script$/ }) });
+  const scriptRow = () => page.getByRole("group", { name: "Script property", exact: true });
   const summary = () => page.locator(".wf-variable-writes");
   function nextAnalysis(source?: string) {
     return page.waitForResponse(response => {
@@ -66,11 +66,15 @@ export async function scriptVariableWritesJourney(page: Page, info: TestInfo, ca
   }
   async function open(id: string, state: string) {
     const response = nextAnalysis();
-    await page.goto(`/workflows/definitions?definition=${id}&backend=legacy`);
+    const designerUrl = new URL(page.url());
+    designerUrl.searchParams.set("definition", id);
+    await page.goto(designerUrl.toString());
     const node = page.locator('.wf-sequence-step[data-id="script"]');
     await expect(node).toBeAttached();
     // The same keyboard selection works when the inspector covers most of the narrow canvas.
     await node.press("Enter");
+    const expandInspector = page.getByRole("button", { name: "Expand inspector panel", exact: true });
+    if (await expandInspector.isVisible()) await expandInspector.click();
     await expect(scriptRow()).toBeVisible();
     return analyzed(response, state);
   }

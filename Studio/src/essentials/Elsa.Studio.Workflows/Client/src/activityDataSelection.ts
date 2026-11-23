@@ -1,5 +1,5 @@
 import { readActivityInputOptionsProvider, type StudioActivityInputDescriptor, type StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
-import type { ActivityDataContextResult, ActivityDataSourceFacts, ActivityDataTarget } from "./api/activityDataSelection";
+import type { ActivityDataContextResult, ActivityDataSourceFacts, ActivityDataSourceQuery, ActivityDataTarget } from "./api/activityDataSelection";
 import { acceptsOnlySecretReference } from "./activityProperties";
 import { formatArgumentType } from "./workflowReferenceAuthoring";
 import { readArgumentType } from "./workflowProperties";
@@ -55,6 +55,10 @@ export interface ActivityDataInputFinding {
  * the chooser ask about the current document, describe its activities and go to one.
  */
 export interface ActivityDataSelectionHost {
+  /** Ephemeral owner/backend authorization context; never serialized into a draft or request. */
+  ownerContext?: object;
+  /** Native workflow owner only; reusable-graph integration retains its separate delivery owner. */
+  expressionInsertion?: boolean;
   /** Changes with every authored edit, so facts for an older document are never shown as current. */
   documentRevision: string;
   /** The acknowledged saved revision a request is checked against; a stale answer is asked again once it moves. */
@@ -62,7 +66,7 @@ export interface ActivityDataSelectionHost {
   /** True while the owner's own save is in flight: a stale answer then means "wait", not "changed elsewhere". */
   saving: boolean;
   /** One page of the sources for the current document, starting at `skip`. */
-  requestSources(target: ActivityDataTarget, signal: AbortSignal, skip: number): Promise<ActivityDataContextResult>;
+  requestSources(target: ActivityDataTarget, signal: AbortSignal, skip: number, query?: ActivityDataSourceQuery): Promise<ActivityDataContextResult>;
   /** Null when the activity is not in the current document. */
   describeActivity(nodeId: string): ActivityDataProducerDescription | null;
   revealActivity?(nodeId: string): void;
@@ -142,13 +146,18 @@ export async function collectSourcePages(
     const result = await requestPage(page * sourcePageSize);
     if (signal.aborted) throw new DOMException("The request was aborted.", "AbortError");
     if (result.state !== "supported" && result.state !== "empty") return result;
-    // Every page must answer the document the first page answered; a later page for an edited document would mix
-    // two documents' facts, so the read reports itself stale and is asked again for the current one.
-    if (combined && result.documentRevision !== combined.documentRevision) {
-      return { ...result, state: "stale", code: "activity-data.revision-changed", target: null, sources: [], hasMoreSources: false };
+    // Pages share document/base/snapshot and capability facts. Context revisions include the query (including skip),
+    // so they may differ legitimately and are never represented as one authority for a combined page set.
+    if (combined && (result.documentRevision !== combined.documentRevision || result.baseRevision !== combined.baseRevision ||
+      result.snapshotHash !== combined.snapshotHash || result.resourceId !== combined.resourceId ||
+      result.resourceKind !== combined.resourceKind || result.target?.target?.nodeId !== combined.target?.target?.nodeId ||
+      result.target?.target?.inputKey !== combined.target?.target?.inputKey || result.contractRevision !== combined.contractRevision ||
+      (result.memberReadsEnabled === true) !== (combined.memberReadsEnabled === true) ||
+      (result.expressionParametersEnabled === true) !== (combined.expressionParametersEnabled === true) || result.expressionType !== combined.expressionType)) {
+      return { ...result, state: "stale", code: "activity-data.revision-changed", memberReadsEnabled: false, expressionParametersEnabled: false, target: null, sources: [], hasMoreSources: false };
     }
     combined = combined
-      ? { ...result, target: combined.target ?? result.target, sources: [...combined.sources, ...result.sources] }
+      ? { ...result, contextRevision: null, target: combined.target ?? result.target, sources: [...combined.sources, ...result.sources] }
       : result;
     if (!result.hasMoreSources) break;
   }
@@ -257,6 +266,7 @@ export function describeUnavailableSource(reasonCode: string | null, projectionK
 
 /** Explains a server finding about a stored activity output; null for findings unrelated to its source. */
 export function describeReferenceFinding(finding: ActivityDataInputFinding): string | null {
+  if (finding.type.startsWith("ValueConversion/")) return finding.message;
   switch (finding.type) {
     // The server reports a producer that is not certain to run first as UnavailableProducer, conditional or not.
     case "ValueFlow/UnavailableProducer":
@@ -267,6 +277,8 @@ export function describeReferenceFinding(finding: ActivityDataInputFinding): str
       return "The source activity is reached again through a loop. Replace it or clear it.";
     case "ValueFlow/ScopeBoundary":
       return "The source activity is inside a container this input can't read from. Replace it or clear it.";
+    case "ActivityData/UnknownInput":
+      return "This source input is not declared. Declare it, replace this reference or clear it.";
     case "ActivityData/UnknownProjection":
     case "ActivityData/UnknownProducerContract":
       return "The source activity no longer has this output. Replace it or clear it.";

@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
@@ -14,9 +15,18 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
   async function post(path: string, data: unknown) {
     const response = await request.post(`${base}${path}`, { data }); expect(response.ok(), await response.text()).toBe(true); return response.json();
   }
-  await page.goto("/user-tasks?backend=legacy");
+  // #4198: names arrive with the tasks, so showing who holds the work never reads the manager-only assignment-target directory.
+  const directoryReads: string[] = [];
+  const watchDirectory = (sent: { url(): string }) => { if (new URL(sent.url()).pathname.endsWith("/runtime/user-task-targets")) directoryReads.push(sent.url()); };
+  page.on("request", watchDirectory);
+  const operate = page.locator(".sidebar").getByRole("navigation", { name: "Operate", exact: true });
+  const operateToggle = operate.getByRole("button", { name: "Operate", exact: true });
+  if (await operateToggle.getAttribute("aria-expanded") === "false") await operateToggle.click();
+  await operate.getByRole("link", { name: "User tasks", exact: true }).click();
+  await expect(page).toHaveURL(/\/user-tasks(?:\?|$)/);
+  expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
   await expect(page.getByRole("heading", { name: "No tasks here", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "User Tasks management", exact: true }).getByRole("complementary")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "User tasks management", exact: true }).getByRole("complementary")).toHaveCount(0);
   await capture(page, info, "tasks-empty");
   const who = await get("/runtime/user-task-identity");
   const suffix = `${info.project.name}-${Date.now()}`;
@@ -42,10 +52,21 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
       id = tasks.items.find((item: { workflowExecutionId: string; id: string }) => item.workflowExecutionId === run.workflowExecutionId)?.id ?? "";
       return id;
     }, { timeout: 30_000 }).not.toBe("");
+    const named = await get(`/runtime/user-tasks/${id}`);
+    expect(named.assigneeId).toBe(who.userId); expect(typeof named.assigneeName).toBe("string"); expect(named.assigneeName).not.toBe("");
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     const row = page.getByRole("link", { name: title, exact: true });
-    await expect(row).toBeVisible(); await capture(page, info, "tasks-list");
+    await expect(row).toBeVisible();
+    // #4068: the assignee reads as a person, and no column is clipped or hidden off the side at 360 px.
+    const taskRow = page.getByRole("row").filter({ has: row });
+    await expect(taskRow.getByRole("cell").last()).toHaveText("You");
+    const fitsWidth = (region: string) => page.getByRole("region", { name: region, exact: true }).evaluate(element => element.scrollWidth <= element.clientWidth);
+    expect(await fitsWidth("Task inbox")).toBe(true);
+    await capture(page, info, "tasks-list");
     await page.getByRole("searchbox", { name: "Search tasks", exact: true }).fill("Review purchase");
+    // #4068: the search shell draws the only focus ring; the inner input adds none.
+    await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCSS("outline-style", "none");
+    await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCSS("box-shadow", "none");
     await expect(row).toBeVisible();
     await row.press("Enter");
     await expect(page).toHaveURL(new RegExp(`/user-tasks/${id}(?:\\?|$)`));
@@ -64,7 +85,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     expect(await retainedNote!.evaluate(element => element.isConnected)).toBe(true);
     await expect(note).toHaveValue("Reviewed purchase request");
     await capture(page, info, "task-tab-return");
-    await detail.getByRole("button", { name: "Back to task list", exact: true }).click();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).click();
     await page.getByRole("dialog", { name: "Discard task response?", exact: true }).getByRole("button", { name: "Keep editing", exact: true }).click();
     await expect(note).toHaveValue("Reviewed purchase request");
     await detail.getByRole("heading").scrollIntoViewIfNeeded(); await capture(page, info, "task-detail");
@@ -76,39 +97,69 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     expect(completed.history.filter((entry: { operation: string }) => entry.operation === "accepted")).toHaveLength(1);
     expect(completed.history.filter((entry: { operation: string }) => entry.operation === "completed")).toHaveLength(1);
     expect(completed.decision.response.data).toEqual({ Note: "Reviewed purchase request" });
+    expect(completed.history.find((entry: { operation: string }) => entry.operation === "completed").actorName).toBe(named.assigneeName);
     await detail.getByRole("button", { name: "Refresh task", exact: true }).click();
     await expect(detail.getByText("Completed", { exact: true })).toBeVisible();
     await detail.getByText("History", { exact: true }).click();
+    // #4068: history names the person, never the raw user ID.
+    await expect(detail.locator("details li").last()).toContainText("completed · Approve · You");
+    await expect(detail.locator("details")).not.toContainText(who.userId);
     await detail.locator("details li").last().scrollIntoViewIfNeeded(); await capture(page, info, "task-history");
+    page.off("request", watchDirectory);
+    expect(directoryReads).toEqual([]);
+    // #4068: a completed response reads as a record, with no required marker, resize handle or empty action row.
+    const record = detail.getByRole("textbox", { name: "Note", exact: true });
+    await expect(record).toBeDisabled(); await expect(record).toHaveCSS("resize", "none");
+    expect(await record.evaluate(element => { const frame = element.closest(".studio-form-control"); const style = frame ? getComputedStyle(frame) : null; return { border: style?.borderTopWidth, opacity: style?.opacity }; })).toEqual({ border: "0px", opacity: "1" });
+    await expect(detail.locator(".user-task-actions")).toHaveCount(0);
     await detail.getByRole("heading").scrollIntoViewIfNeeded(); await capture(page, info, "completed");
-    await expect(detail.getByRole("button", { name: "Back to task list", exact: true })).toBeEnabled();
-    await detail.getByRole("button", { name: "Back to task list", exact: true }).click();
+    await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true })).toBeEnabled();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).click();
     await expect(page.getByRole("region", { name: title, exact: true })).toHaveCount(0);
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveValue("Review purchase");
     await expect(row).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "No matching tasks", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Clear search", exact: true })).toHaveCount(1);
     expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
     await capture(page, info, "tasks-return");
     await page.goto(`/user-tasks/absent-${suffix}?backend=legacy`);
     await expect(page.getByRole("heading", { name: "Task not found", exact: true })).toBeVisible();
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCount(0);
+    // The missing task preserves the collection return path in the active shell.
+    await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true })).toHaveCount(1);
     await capture(page, info, "task-not-found");
-    await page.getByRole("button", { name: "Back to task list", exact: true }).click();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).last().click();
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toBeVisible();
     await page.goto("/user-tasks/forms");
     await expect(page.getByRole("table", { name: "Reusable task forms", exact: true }).getByText(form.id, { exact: true })).toBeVisible();
     const nextVersion = page.getByRole("button", { name: "Create next version", exact: true }).first();
     expect((await nextVersion.boundingBox())!.width).toBeGreaterThan(120);
     expect((await nextVersion.boundingBox())!.height).toBeLessThan(48);
+    // #4068: every column fits at 360 px, each action sits beside its form's name, and only a form's latest version offers a next one.
+    expect(await fitsWidth("Reusable form versions")).toBe(true);
+    const formRows = await page.getByRole("table", { name: "Reusable task forms", exact: true }).locator("tbody tr").evaluateAll(rows => rows.map(row => ({
+      id: row.querySelector("td[data-label='Identifier']")?.textContent ?? "",
+      version: Number(row.querySelector("td[data-label='Version']")?.textContent ?? "0"),
+      offersNext: [...row.querySelectorAll("button")].some(button => button.textContent === "Create next version")
+    })));
+    const superseded = formRows.filter(item => item.version < Math.max(...formRows.filter(other => other.id === item.id).map(other => other.version)));
+    expect(superseded.filter(item => item.offersNext)).toEqual([]);
+    const actionRow = page.getByRole("row").filter({ has: nextVersion }).first();
+    await nextVersion.scrollIntoViewIfNeeded();
+    const [nameBox, actionBox] = [await actionRow.getByRole("button").first().boundingBox(), await nextVersion.boundingBox()];
+    expect(nameBox!.x).toBeGreaterThanOrEqual(0); expect(actionBox!.x + actionBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
     await capture(page, info, "task-forms");
     await nextVersion.scrollIntoViewIfNeeded(); await capture(page, info, "task-form-versions");
-    await page.getByRole("button", { name: "Create form version", exact: true }).first().press("Enter");
+    await page.getByRole("button", { name: "New form", exact: true }).first().press("Enter");
+    await confirmNewResource(page, "form", "New form");
     await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
     await page.getByRole("button", { name: "Add field", exact: true }).click();
+    // #4068: the automatically assigned version is shown as a value, not as an editable-looking box.
+    await expect(page.getByRole("textbox", { name: /^Version/ })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Form ID", exact: true }).scrollIntoViewIfNeeded(); await capture(page, info, "task-form-editor");
     await page.getByRole("button", { name: "Cancel", exact: true }).scrollIntoViewIfNeeded(); await capture(page, info, "task-form-actions");
     await page.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
-    await expect(page.getByRole("button", { name: "Create form version", exact: true }).first()).toBeFocused();
+    await expect(page.getByRole("button", { name: "New form", exact: true }).first()).toBeFocused();
   } finally {
     // This definition belongs to this test's disposable host; keep the reference
     // collection empty for the next project without affecting any developer store.

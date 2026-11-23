@@ -2,8 +2,10 @@ import React, { useId, useLayoutEffect, useRef, useState, useSyncExternalStore }
 import { X } from "lucide-react";
 import { notificationToastDurationMs, type StudioNotificationController, type StudioNotificationEntry } from "../../../sdk";
 import { notificationController } from "../../notifications";
+import type { ToastDurationPreference } from "../../toastDurationPreference";
 import { focusIfConnected, NotificationLevelIcon, notificationLevelLabel, runNotificationAction } from "./notificationShared";
 import { useNoticeTimer } from "./useNoticeTimer";
+import { notifyToastLayoutChange } from "../focusedContentVisibility";
 
 const maxVisibleToasts = 3;
 const zeroWidthSpace = "\u200B";
@@ -12,6 +14,7 @@ export interface ToastHostProps {
   navigate(path: string): void;
   /** Defaults to the host singleton; tests and the browser fixture pass their own. */
   controller?: StudioNotificationController;
+  durationPreference?: ToastDurationPreference;
 }
 
 interface Announcements {
@@ -44,13 +47,23 @@ function findAnnouncement(entries: readonly StudioNotificationEntry[], visible: 
  * Host-owned toast stack: the newest toasting entries, newest on top, plus the visually hidden
  * live regions that announce them. Entries stay in the Notification Center after their toast closes.
  */
-export function ToastHost({ navigate, controller = notificationController }: ToastHostProps) {
+export function ToastHost({ navigate, controller = notificationController, durationPreference = "default" }: ToastHostProps) {
   const entries = useSyncExternalStore(controller.subscribe, controller.getEntries, controller.getEntries);
   const suppressed = useSyncExternalStore(controller.subscribe, controller.getToastsSuppressed, controller.getToastsSuppressed);
   const visible = entries.filter(entry => entry.toasting).slice(0, maxVisibleToasts);
   const [announcements, setAnnouncements] = useState<Announcements>(() => ({ polite: "", assertive: "", seen: entries, suppressed }));
   const hostRef = useRef<HTMLDivElement>(null);
   const focusedRemovalIndex = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    const owner = host?.ownerDocument ?? document;
+    const changed = () => notifyToastLayoutChange(owner);
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(changed) : null;
+    if (host) observer?.observe(host);
+    changed();
+    return () => { observer?.disconnect(); changed(); };
+  }, [visible.length]);
 
   // Announce the newest entry that is new or changed in place, not every render. Derived while
   // rendering so the live region updates in the same commit as the toast. Opening or closing the
@@ -67,14 +80,16 @@ export function ToastHost({ navigate, controller = notificationController }: Toa
     setAnnouncements(next);
   }
 
-  // A toast that closed while focused hands focus to the toast now in its place, else to the bell.
+  // A toast that closed while focused hands focus to the toast now in its place, else to the visible shell control.
   useLayoutEffect(() => {
     const index = focusedRemovalIndex.current;
     if (index === null) return;
     focusedRemovalIndex.current = null;
     const remaining = hostRef.current?.querySelectorAll<HTMLElement>(".studio-toast") ?? [];
     if (focusIfConnected(remaining[Math.min(index, remaining.length - 1)])) return;
-    focusIfConnected(document.querySelector<HTMLElement>(".studio-notification-bell"));
+    const fallback = document.querySelector<HTMLElement>('.bottom-panel.maximized [aria-label="Restore bottom panel"]')
+      ?? document.querySelector<HTMLElement>(".studio-notification-bell");
+    focusIfConnected(fallback);
   });
 
   return (
@@ -88,6 +103,7 @@ export function ToastHost({ navigate, controller = notificationController }: Toa
               index={index}
               controller={controller}
               navigate={navigate}
+              durationPreference={durationPreference}
               onRemovedWhileFocused={removedIndex => { focusedRemovalIndex.current = removedIndex; }}
             />
           ))}
@@ -99,11 +115,12 @@ export function ToastHost({ navigate, controller = notificationController }: Toa
   );
 }
 
-function Toast({ entry, index, controller, navigate, onRemovedWhileFocused }: {
+function Toast({ entry, index, controller, navigate, durationPreference, onRemovedWhileFocused }: {
   entry: StudioNotificationEntry;
   index: number;
   controller: StudioNotificationController;
   navigate(path: string): void;
+  durationPreference: ToastDurationPreference;
   onRemovedWhileFocused(index: number): void;
 }) {
   const { id, level, updatedAt, link, action } = entry;
@@ -111,10 +128,14 @@ function Toast({ entry, index, controller, navigate, onRemovedWhileFocused }: {
   const toastRef = useRef<HTMLDivElement>(null);
   const latest = useRef({ index, onRemovedWhileFocused });
   latest.current = { index, onRemovedWhileFocused };
+  const defaultDurationMs = notificationToastDurationMs(level);
+  const durationMs = defaultDurationMs === null || durationPreference === "manual"
+    ? null
+    : typeof durationPreference === "number" ? durationPreference * 1000 : defaultDurationMs;
   const timerHandlers = useNoticeTimer({
-    durationMs: notificationToastDurationMs(level),
+    durationMs,
     onElapse: () => controller.hideToast(id),
-    resetKey: `${level}:${updatedAt}`
+    resetKey: `${level}:${updatedAt}:${durationMs}`
   });
 
   // Runs while the toast is still in the document, so it can tell whether it held focus.
@@ -163,6 +184,11 @@ function Toast({ entry, index, controller, navigate, onRemovedWhileFocused }: {
       >
         <X size={16} aria-hidden="true" />
       </button>
+      {durationMs !== null ? (
+        <span className="studio-toast-progress-track" aria-hidden="true">
+          <span key={`${updatedAt}:${durationMs}`} className="studio-toast-progress" style={{ animationDuration: `${durationMs}ms` }} />
+        </span>
+      ) : null}
     </div>
   );
 }

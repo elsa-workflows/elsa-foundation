@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   allThemeModes,
   builtInThemeDefinitions,
+  cloneThemeDefinition,
   getSupportedThemeModes,
   getTheme,
   getThemeColorScheme,
@@ -75,6 +76,7 @@ describe("signature themes", () => {
     expect(foundationThemeIds[0]).toBe("linen");
     expect(normalizeThemeStore().defaultThemeId).toBe("linen");
     expect(getTheme("meridian")).toBeDefined();
+    expect(getTheme("space")?.sidebarBackdrop).toBe("starfield");
   });
 
   it.each(foundationThemeIds)("%s defines all four modes, its typography and shape, and validates", id => {
@@ -110,7 +112,7 @@ describe("signature themes", () => {
   });
 
   it("gives each signature theme its layout", () => {
-    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "classic", "classic", "classic", "classic", "classic", "floating", "workbench", "editorial", "classic", "classic", "classic"]);
+    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "classic", "classic", "classic", "classic", "classic", "floating", "workbench", "editorial", "classic", "classic", "classic", "classic"]);
   });
 
   it.each(foundationThemeIds)("%s high contrast is black-grounded with a bright accent", id => {
@@ -145,15 +147,19 @@ describe("theme modes", () => {
 
   it("carries optional modes, typography and shape into a custom duplicate", () => {
     const copy = createCustomThemeFrom(getTheme("atelier")!, "atelier-copy", "Atelier Copy");
+    const spaceCopy = createCustomThemeFrom(getTheme("space")!, "space-copy", "Space Copy");
 
     expect(copy.modes.highContrast).toEqual(getTheme("atelier")!.modes.highContrast);
     expect(copy.typography?.display).toContain("Instrument Serif");
     expect(copy.shape?.radius).toBe("9px");
     expect(getSupportedThemeModes(copy)).toEqual(["light", "dark", "dim", "high-contrast"]);
+    expect(spaceCopy.sidebarBackdrop).toBe("starfield");
+    expect(cloneThemeDefinition(spaceCopy).sidebarBackdrop).toBe("starfield");
+    expect(normalizeThemeStore({ themes: [spaceCopy], defaultThemeId: spaceCopy.id, assets: [] }).themes.find(theme => theme.id === spaceCopy.id)?.sidebarBackdrop).toBe("starfield");
   });
 });
 
-describe("Theme Builder edits", () => {
+describe("Theme builder edits", () => {
   const custom = twoModeTheme;
 
   it("adds an optional mode seeded from the dark palette and offers it", () => {
@@ -204,7 +210,8 @@ describe("theme validation of appearance", () => {
     ["typography.sans", (theme: ReturnType<typeof base>) => { theme.typography = { sans: "x; background: red" }; }],
     ["typography.display", (theme: ReturnType<typeof base>) => { theme.typography = { display: "url(https://evil.test/font.woff2)" }; }],
     ["shape.radius", (theme: ReturnType<typeof base>) => { theme.shape = { radius: "calc(100vw)" }; }],
-    ["layout", (theme: ReturnType<typeof base>) => { (theme as { layout?: string }).layout = "sidebar-on-the-right"; }]
+    ["layout", (theme: ReturnType<typeof base>) => { (theme as { layout?: string }).layout = "sidebar-on-the-right"; }],
+    ["sidebarBackdrop", (theme: ReturnType<typeof base>) => { (theme as { sidebarBackdrop?: string }).sidebarBackdrop = "url(https://evil.test/space.png)"; }]
   ])("rejects unsafe %s", (path, mutate) => {
     const theme = base();
     mutate(theme);

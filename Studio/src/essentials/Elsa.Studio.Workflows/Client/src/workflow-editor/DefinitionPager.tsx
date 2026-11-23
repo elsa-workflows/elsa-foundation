@@ -20,16 +20,13 @@ export function DefinitionPager({ page, pageSize, totalCount, itemCount, hasNext
   const lastItem = isEmptyPage ? 0 : hasKnownTotal ? Math.min(page * pageSize, totalCount) : firstItem + itemCount - 1;
 
   return (
-    <StudioCollectionFooter aria-label="Workflow definition pagination">
-      <span className="wf-pagination-summary" aria-live="polite">
+    <StudioCollectionFooter
+      aria-label="Workflow definition pagination"
+      summary={<span className="wf-pagination-summary" aria-live="polite">
         {usesCursorPaging ? `Showing ${itemCount}${hasKnownTotal ? ` of ${totalCount} matching workflows` : " workflows"}` : `Showing ${firstItem}-${lastItem}${hasKnownTotal ? ` of ${totalCount}` : ""}`}
-      </span>
-      <label className="wf-page-size">
-        Rows
-        <select value={pageSize} onChange={event => onPageSizeChange(Number(event.target.value))}>
-          {definitionPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
-        </select>
-      </label>
+      </span>}
+      pageSize={{ label: "Rows", value: pageSize, sizes: definitionPageSizes, onChange: onPageSizeChange }}
+    >
       <div className="wf-page-controls">
         <StudioButton onClick={() => onPageChange(page - 1)} disabled={page <= 1} aria-label="Previous page" title="Previous page">
           <ChevronLeft size={14} /> Previous

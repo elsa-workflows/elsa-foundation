@@ -5,6 +5,31 @@ import { buildDraftFromJson, serializeDraftToJson } from "../workflowSerializati
 import type { ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft } from "../workflowTypes";
 
 describe("activity input wire adapter", () => {
+  it.each([{ value: null, wire: null }, { value: false, wire: "false" }, { value: 0, wire: "0" }, { value: "", wire: "" }])("preserves explicit $value through load, an unrelated edit, save and reopen", ({ value, wire }) => {
+    const loaded = stateOf({
+      ...writeLine("review", {}),
+      inputs: [
+        { referenceKey: "GroupId", value: { expressionType: "Literal", value } },
+        { referenceKey: "FormVersion", value: { expressionType: "Literal", value: "1" } }
+      ]
+    });
+    const expanded = expandStateFromWire(loaded);
+    expect((expanded.rootActivity!.GroupId as { expression: { value: unknown } }).expression.value).toEqual(value);
+    const edited = { ...expanded, rootActivity: { ...expanded.rootActivity!, FormVersion: wrapped("2", "Literal") } };
+    const saved = canonicalizeStateForWire(edited);
+    expect(saved.rootActivity!.inputs).toEqual([
+      { referenceKey: "GroupId", value: { expressionType: "Literal", value: wire } },
+      { referenceKey: "FormVersion", value: { expressionType: "Literal", value: "2" } }
+    ]);
+    expect(canonicalizeStateForWire(expandStateFromWire(JSON.parse(JSON.stringify(saved))))).toEqual(saved);
+  });
+
+  it("keeps the existing empty editor fallback when a wire argument has no value", () => {
+    const loaded = stateOf({ ...writeLine("review", {}), inputs: [{ referenceKey: "GroupId", value: { expressionType: "Literal" } }] });
+    expect(canonicalizeStateForWire(expandStateFromWire(loaded)).rootActivity!.inputs)
+      .toEqual([{ referenceKey: "GroupId", value: { expressionType: "Literal", value: "" } }]);
+  });
+
   it("folds a top-level wrapped input into the canonical inputs array", () => {
     const state = stateOf(writeLine("write-one", { text: wrapped("Hello World!", "Literal") }));
 
@@ -166,23 +191,40 @@ describe("activity input wire adapter", () => {
 
   it.each([
     // A member read this client cannot author yet: its path segments are literal names, dots included.
-    ["ActivityResultMember", { producerNodeId: "get-customer", projectionKey: "$result", producerScopeId: "main", isOptional: false, memberPath: ["billing.address", ""] }],
+    ["ActivityResultMember", { producerNodeId: "get-customer", projectionKey: "$result", isOptional: false, memberPath: ["billing.address", ""] }],
+    ["VariableMember", { referenceKey: "customer", declaringScopeId: "scope:root", memberPath: ["a/b", 'quoted"key'] }],
+    ["WorkflowRequestMember", { memberKey: "request", memberPath: ["CustomerId"] }],
+    ["InputMember", { referenceKey: "input-key", memberPath: ["", "literal.dot"] }],
     ["WorkflowRequest", { memberKey: "order", path: null }],
     // A source kind a later server adds, and a definition under a known language that is not a portable one.
     ["FutureSource", { kind: "next", nested: { items: [1, "two", null] } }],
     ["JavaScript", { language: "JavaScript", source: "args.x", dialect: 2 }],
     ["FutureSource", ["a", { b: 1 }]]
-  ])("preserves an unknown %s definition as authored instead of turning it into JSON text", (expressionType, definition) => {
+  ])("keeps a structured %s definition through save, Code Apply and reopen", (expressionType, definition) => {
     const seeded = stateOf({
       ...writeLine("consumer", {}),
       inputs: [{ referenceKey: "text", value: { value: definition, expressionType }, futureField: "kept" }]
     });
+    const authored: WorkflowDraft = {
+      id: "draft-1", definitionId: "definition-1", state: expandStateFromWire(seeded), layout: [], validationErrors: []
+    };
+    const expected = [{ referenceKey: "text", value: { value: definition, expressionType }, futureField: "kept" }];
 
-    const resaved = canonicalizeStateForWire(expandStateFromWire(seeded));
+    // Save the editor's structured value, then pass that wire state through the real Code-view serializer/parser.
+    const saved = canonicalizeStateForWire(authored.state);
+    expect(saved.rootActivity?.inputs).toEqual(expected);
+    const applied = buildDraftFromJson(serializeDraftToJson({ ...authored, state: saved }), authored);
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) throw new Error("Code Apply failed.");
+    const expectedEditorValue = { expression: { type: expressionType, value: definition }, argumentExtras: { futureField: "kept" } };
+    expect(applied.draft.state.rootActivity?.text).toMatchObject(expectedEditorValue);
+    const appliedWire = canonicalizeStateForWire(applied.draft.state);
+    expect(appliedWire.rootActivity?.inputs).toEqual(expected);
 
-    expect(resaved.rootActivity?.inputs).toEqual([
-      { referenceKey: "text", value: { value: definition, expressionType }, futureField: "kept" }
-    ]);
+    // Reopen a serialized copy of the applied state; every literal segment and unknown field stays structured.
+    const reopened = expandStateFromWire(JSON.parse(JSON.stringify(appliedWire)));
+    expect(reopened.rootActivity?.text).toMatchObject(expectedEditorValue);
+    expect(canonicalizeStateForWire(reopened).rootActivity?.inputs).toEqual(expected);
   });
 
   it("keeps Object and Secret values in the JSON-text form they are saved in", () => {
@@ -506,10 +548,10 @@ describe("argument collection wire adapter", () => {
     expect("storageDriverType" in (wire.outputs![0] as object)).toBe(false);
   });
 
-  it("backfills a referenceKey and drops the Elsa-3 input-default leftovers", () => {
+  it("backfills a referenceKey, preserves workflow input defaults, and drops unsupported legacy fields", () => {
     const state: WorkflowDefinitionState = {
       inputs: [{ name: "OrderId", type: { alias: "String", collectionKind: "Single" }, displayName: "OrderId", defaultValue: "x", defaultSyntax: "Literal", isReadOnly: true }] as unknown[],
-      outputs: [{ name: "Result", type: { alias: "Boolean", collectionKind: "Single" }, displayName: "Result" }] as unknown[]
+      outputs: [{ name: "Result", type: { alias: "Boolean", collectionKind: "Single" }, displayName: "Result", defaultValue: false, defaultSyntax: "Literal" }] as unknown[]
     };
 
     const wire = canonicalizeStateForWire(state);
@@ -519,9 +561,48 @@ describe("argument collection wire adapter", () => {
     expect(typeof input.referenceKey).toBe("string");
     expect((input.referenceKey as string).length).toBeGreaterThan(0);
     expect(typeof output.referenceKey).toBe("string");
-    expect("defaultValue" in input).toBe(false);
-    expect("defaultSyntax" in input).toBe(false);
+    expect(input.defaultValue).toBe("x");
+    expect(input.defaultSyntax).toBe("Literal");
+    expect("defaultValue" in output).toBe(false);
+    expect("defaultSyntax" in output).toBe(false);
     expect("isReadOnly" in input).toBe(false);
+  });
+
+  it("preserves false, zero, empty-string and null input defaults in canonical and expanded states", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [
+        { referenceKey: "count", name: "Count", type: { alias: "Int32", collectionKind: "Single" }, defaultValue: 0, defaultSyntax: "Literal" },
+        { referenceKey: "enabled", name: "Enabled", type: { alias: "Boolean", collectionKind: "Single" }, defaultValue: false, defaultSyntax: "Literal" },
+        { referenceKey: "name", name: "Name", type: { alias: "String", collectionKind: "Single" }, defaultValue: "", defaultSyntax: "Literal" },
+        { referenceKey: "value", name: "Value", type: { alias: "String", collectionKind: "Single" }, defaultValue: null, defaultSyntax: "Literal" }
+      ] as unknown[]
+    };
+
+    const wire = canonicalizeStateForWire(state);
+    const inputs = wire.inputs as Record<string, unknown>[];
+
+    expect(inputs.map(input => input.defaultValue)).toEqual([0, false, "", null]);
+    expect(inputs.map(input => input.defaultSyntax)).toEqual(["Literal", "Literal", "Literal", "Literal"]);
+    expect((expandStateFromWire(wire).inputs as Record<string, unknown>[]).map(input => input.defaultValue)).toEqual([0, false, "", null]);
+  });
+
+  it("keeps legacy null-without-syntax defaults absent when reopening and saving", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [
+        { name: "Legacy", type: { alias: "String", collectionKind: "Single" }, defaultValue: null, defaultSyntax: null },
+        { name: "LegacyCasing", type: { alias: "String", collectionKind: "Single" }, DefaultValue: null },
+        { name: "ExplicitNull", type: { alias: "String", collectionKind: "Single" }, defaultValue: null, defaultSyntax: "Literal" }
+      ]
+    };
+
+    for (const normalized of [canonicalizeStateForWire(state), expandStateFromWire(state)]) {
+      const inputs = normalized.inputs as Record<string, unknown>[];
+      expect(inputs[0]).not.toHaveProperty("defaultValue");
+      expect(inputs[0]).not.toHaveProperty("defaultSyntax");
+      expect(inputs[1]).not.toHaveProperty("defaultValue");
+      expect(inputs[1]).not.toHaveProperty("defaultSyntax");
+      expect(inputs[2]).toMatchObject({ defaultValue: null, defaultSyntax: "Literal" });
+    }
   });
 
   it("sends required output nullability for new, reopened and legacy definitions without changing explicit values", () => {

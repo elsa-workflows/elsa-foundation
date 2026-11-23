@@ -1,6 +1,6 @@
 # Unified execution
 
-Status: active, owner-authorized 18 October 2026. Steward: Sipke; delivery lead: the active Claude session since the [9 November 2026 handover](https://github.com/elsa-workflows/elsa-foundation/pull/3987#issuecomment-6731129032).
+Status: closed 14 November 2026, superseded by the [clean-slate kernel](clean-slate-kernel.md) (#4229); owner-authorized 18 October 2026. Steward: Sipke; delivery lead: the active Claude session since the [9 November 2026 handover](https://github.com/elsa-workflows/elsa-foundation/pull/3987#issuecomment-6731129032).
 
 [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892) is the authoritative queue and progress record. The [program board](https://github.com/orgs/elsa-workflows/projects/62) mirrors the native hierarchy and separates delivery status from verification; issue comments and acceptance remain authoritative. The [approved continuation](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6249319967) and [BPMN authority amendment](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6249325156) supersede the earlier research-only gate within this program's scope. They do not reactivate unrelated parked work.
 

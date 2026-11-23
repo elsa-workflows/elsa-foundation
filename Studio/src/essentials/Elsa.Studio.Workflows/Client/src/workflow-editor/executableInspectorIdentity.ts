@@ -24,12 +24,13 @@ export function formatExecutableInspectorPageTitle(
   return artifactVersion ? `${name} · ${artifactVersion}` : name;
 }
 
-export function describeExecutableReferenceSelection(selection: string, sourceReferenceId: string) {
-  const normalized = selection.trim().toLowerCase();
-  if (normalized === "requested") return `Showing requested reference ${sourceReferenceId}`;
-  if (normalized === "newest-live") return `Showing newest live reference ${sourceReferenceId}`;
-  if (normalized === "newest") return `Showing newest reference ${sourceReferenceId} (no live references remain)`;
-  return `Showing reference ${sourceReferenceId}`;
+export function describeExecutableReferenceSelection(selection: string | null | undefined, sourceReferenceId: string | null | undefined) {
+  const normalized = selection?.trim().toLowerCase() ?? "";
+  const referenceId = sourceReferenceId?.trim() || "unknown reference";
+  if (normalized === "requested") return `Showing requested reference ${referenceId}`;
+  if (normalized === "newest-live") return `Showing newest live reference ${referenceId}`;
+  if (normalized === "newest") return `Showing newest reference ${referenceId} (no live references remain)`;
+  return `Showing reference ${referenceId}`;
 }
 
 export interface ExecutableInspectorIdentity {

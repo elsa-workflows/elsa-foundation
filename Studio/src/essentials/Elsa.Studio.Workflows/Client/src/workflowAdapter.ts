@@ -7,7 +7,7 @@ import {
   normalizeFlowchartStartNode,
   readFlowchartStartNodeId
 } from "./flowchartStartNode";
-import { bpmnStructureKind } from "./bpmn/bpmnTypes";
+import { bpmnStructureKind } from "./bpmn/bpmnStructure";
 import { compensationScopeChildSlots, compensationScopeStructureKind, replaceCompensationScopeActivities } from "./compensationScope";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
 import { getActivityDisplay } from "./activityDisplay";
@@ -16,6 +16,8 @@ import { getHttpEndpointResponseMode, type HttpEndpointResponseMode } from "./ht
 import { persistedNodeWidth, readSavedNodeWidth } from "./graph-authoring/nodeWidth";
 import type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
 import type { CollectionSlot } from "./collectionSlots";
+import { parseStructureDesignFacetPayload, type StructureDesignFacet, type StructureDesignSlotDescriptor } from "./structureDesign";
+import { readExecutableChildSlots } from "./executableStructure";
 
 export { getActivityDisplay } from "./activityDisplay";
 export type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
@@ -33,21 +35,28 @@ export {
   readFlowchartStartNodeId,
   setFlowchartStartNode
 } from "./flowchartStartNode";
-export { bpmnStructureKind } from "./bpmn/bpmnTypes";
+export { bpmnStructureKind } from "./bpmn/bpmnStructure";
 
-export interface WorkflowNodeData extends Record<string, unknown> {
+export interface ActivityCardPreview {
   label: string;
-  activityVersionId: string;
+  /** The label came from explicit saved presentation rather than a catalog/type fallback. */
+  hasAuthoredLabel?: boolean;
   activityTypeKey?: string;
-  category?: string;
-  executionType?: string;
   // Per-instance preview of the activity's primary authored input (e.g. Write Line's text), shown as
   // the node subtitle in place of the static `category · kind`. Undefined when nothing is authored yet.
   summary?: string;
+  description?: string;
+}
+
+export interface WorkflowNodeData extends ActivityCardPreview, Record<string, unknown> {
+  activityVersionId: string;
+  category?: string;
+  executionType?: string;
   activityDefinitionVersion?: string;
   icon?: WorkflowNodeIcon;
   iconTone?: ActivityIconTone;
   childSlots: ChildSlot[];
+  childPreviews?: Record<string, ActivityCardPreview>;
   collectionSlots?: CollectionSlot[];
   acceptsInbound: boolean;
   sourcePorts: WorkflowPortDescriptor[];
@@ -58,7 +67,6 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   incomingExecutionPulse?: string;
   /** Runtime activity identity for canvases whose visible node id is a different domain element id. */
   runtimeNodeId?: string;
-  description?: string;
   /** Catalog identity used at render time so reusable activities resolve without an eager icon table. */
   activityDefinitionId?: string;
   /** Raw catalog `icon` / `iconName`; the canvas resolves them so `activityIcons` stays off the entry. */
@@ -130,31 +138,7 @@ export interface ChildSlot {
   itemIdProperty?: string;
 }
 
-export interface StructureDesignFacet {
-  kind: string;
-  schemaVersion: string;
-  payload: StructureDesignFacetPayload;
-}
-
-export interface StructureDesignFacetPayload {
-  mode: ChildSlot["mode"];
-  supportsScopedVariables: boolean;
-  slots: StructureDesignSlotDescriptor[];
-  initialPayload: Record<string, unknown>;
-}
-
-export interface StructureDesignSlotDescriptor {
-  name: string;
-  property: string;
-  displayName: string;
-  cardinality: ChildSlot["cardinality"];
-  collectionProperty?: string;
-  childProperty?: string;
-  labelProperty?: string;
-  slotNameTemplate?: string;
-  itemIdProperty?: string;
-  conditionProperty?: string;
-}
+export type { StructureDesignFacet, StructureDesignFacetPayload, StructureDesignSlotDescriptor } from "./structureDesign";
 
 export type ActivityCatalogLookup = ActivityCatalogItem | ActivityCatalogItem[] | Map<string, ActivityCatalogItem> | null | undefined;
 
@@ -476,6 +460,9 @@ function findChildInAnySlot(owner: ActivityNode, nodeId: string, catalog?: Activ
 }
 
 export function getChildSlots(activity: ActivityNode, catalog?: ActivityCatalogLookup): ChildSlot[] {
+  const executableSlots = readExecutableChildSlots(activity);
+  if (executableSlots !== undefined) return executableSlots;
+
   const structure = activity.structure;
   if (!structure || !structure.payload || typeof structure.payload !== "object") return [];
 
@@ -512,15 +499,22 @@ export function getChildSlots(activity: ActivityNode, catalog?: ActivityCatalogL
 }
 
 export function readStructureDesignFacet(activity: ActivityCatalogItem | null | undefined): StructureDesignFacet | null {
+  return readStructureDesignFacetResult(activity).facet;
+}
+
+export function readStructureDesignFacetResult(activity: ActivityCatalogItem | null | undefined): { facet: StructureDesignFacet | null; errors: string[] } {
+  let errors: string[] = [];
   if (activity?.containerStructure && activity.authoringTemplate?.structure) {
-    const payload = readStructureDesignFacetPayload(activity.containerStructure);
-    if (payload) {
-      return {
+    const parsed = parseStructureDesignFacetPayload(activity.containerStructure);
+    if (parsed.payload) return {
+      facet: {
         kind: activity.authoringTemplate.structure.kind,
         schemaVersion: activity.authoringTemplate.structure.schemaVersion,
-        payload
-      };
-    }
+        payload: parsed.payload
+      },
+      errors: []
+    };
+    errors = parsed.errors;
   }
 
   for (const facet of activity?.designFacets ?? []) {
@@ -529,51 +523,16 @@ export function readStructureDesignFacet(activity: ActivityCatalogItem | null | 
     const schemaVersion = typeof facet.schemaVersion === "string" ? facet.schemaVersion : "";
     if (!kind || !schemaVersion || !isRecord(facet.payload)) continue;
 
-    const payload = readStructureDesignFacetPayload(facet.payload);
-    if (payload) return { kind, schemaVersion, payload };
+    const parsed = parseStructureDesignFacetPayload(facet.payload);
+    if (parsed.payload) return { facet: { kind, schemaVersion, payload: parsed.payload }, errors: [] };
+    if (kind.endsWith(".structure") || "mode" in facet.payload || "slots" in facet.payload) errors = parsed.errors;
   }
 
-  return null;
+  return { facet: null, errors };
 }
 
-function readStructureDesignFacetPayload(payload: Record<string, unknown>): StructureDesignFacetPayload | null {
-  const mode = payload.mode;
-  if (mode !== "sequence" && mode !== "flowchart" && mode !== "bpmn" && mode !== "compensation" && mode !== "generic") return null;
-  if (typeof payload.supportsScopedVariables !== "boolean") return null;
-  if (!Array.isArray(payload.slots) || !isRecord(payload.initialPayload)) return null;
-
-  const slots = payload.slots.map(readStructureDesignSlotDescriptor).filter(slot => slot !== null);
-  return {
-    mode,
-    supportsScopedVariables: payload.supportsScopedVariables,
-    slots,
-    initialPayload: payload.initialPayload
-  };
-}
-
-function readStructureDesignSlotDescriptor(value: unknown): StructureDesignSlotDescriptor | null {
-  if (!isRecord(value)) return null;
-  const name = typeof value.name === "string" ? value.name : "";
-  const property = typeof value.property === "string" ? value.property : "";
-  const displayName = typeof value.displayName === "string" ? value.displayName : "";
-  const cardinality = value.cardinality;
-  if (!name || !property || !displayName || (cardinality !== "single" && cardinality !== "many")) return null;
-
-  return {
-    name,
-    property,
-    displayName,
-    cardinality,
-    collectionProperty: readOptionalString(value.collectionProperty),
-    childProperty: readOptionalString(value.childProperty),
-    labelProperty: readOptionalString(value.labelProperty),
-    itemIdProperty: readOptionalString(value.itemIdProperty),
-    conditionProperty: readOptionalString(value.conditionProperty),
-    slotNameTemplate: readOptionalString(value.slotNameTemplate)
-  };
-}
-
-function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
+/** Declared physical slots, without a designer's additional navigation projections. */
+export function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
   const fixedLabels = new Set(facet.payload.slots.filter(slot => !slot.collectionProperty).map(slot => slot.displayName));
   return facet.payload.slots.flatMap(descriptor => {
     if (descriptor.collectionProperty && descriptor.childProperty) {
@@ -679,7 +638,7 @@ export function buildCanvas(
     const catalogItem = catalogByVersion.get(activity.activityVersionId);
     const record = layoutByNodeId.get(activity.nodeId);
     const position = record ?? defaultPosition(scope.slot.mode, index);
-    return createWorkflowNode(
+    const node = createWorkflowNode(
       activity,
       catalogItem,
       { x: position.x, y: position.y },
@@ -687,6 +646,12 @@ export function buildCanvas(
       formatSummary,
       presentationByNodeId.get(activity.nodeId)
     );
+    if (scope.slot.mode === "sequence" && node.data.childSlots.length) {
+      node.data.childPreviews = Object.fromEntries(node.data.childSlots.flatMap(slot => slot.activities.map(child =>
+        [child.nodeId, activityCardPreview(child, catalogByVersion.get(child.activityVersionId), presentationByNodeId.get(child.nodeId), formatSummary)]
+      )));
+    }
+    return node;
   });
 
   return scope.slot.mode === "flowchart"
@@ -777,9 +742,9 @@ export function updateScopeActivities(root: ActivityNode, frames: ScopeFrame[], 
 
 // Replaces the resolved owner node itself with `owner`. frames=[] replaces the root. Intermediate hops
 // locate the child in whichever slot contains it; the leaf hop swaps that child for `owner`.
-export function updateScopeOwner(root: ActivityNode, frames: ScopeFrame[], owner: ActivityNode, catalog?: ActivityCatalogLookup): ActivityNode {
+export function updateScopeOwner(root: ActivityNode, frames: ScopeFrame[], owner: ActivityNode, catalog?: ActivityCatalogLookup, options?: { preserveAncestorStart?: boolean }): ActivityNode {
   if (frames.length === 0) return owner;
-  return updateScopeAtFrames(root, frames, catalog, () => owner);
+  return updateScopeAtFrames(root, frames, catalog, () => owner, true, !options?.preserveAncestorStart);
 }
 
 // Shared recursive walk for the update helpers: descends through the frames (finding each frame's
@@ -790,25 +755,26 @@ function updateScopeAtFrames(
   frames: ScopeFrame[],
   catalog: ActivityCatalogLookup,
   apply: (owner: ActivityNode) => ActivityNode,
-  atRoot = true
+  atRoot = true,
+  normalizeAncestorStart = true
 ): ActivityNode {
   if (frames.length === 0) return apply(root);
 
   const [frame, ...rest] = frames;
   if (frame.kind === "root") {
     if (!atRoot || frame.ownerNodeId !== root.nodeId || !getChildSlots(root, catalog).some(slot => slot.id === frame.slotId)) return root;
-    return updateScopeAtFrames(root, rest, catalog, apply, false);
+    return updateScopeAtFrames(root, rest, catalog, apply, false, normalizeAncestorStart);
   }
   const located = locateChildSlot(root, frame.ownerNodeId, catalog);
   if (!located) return root;
 
-  const updatedChild = updateScopeAtFrames(located.child, rest, catalog, apply, false);
+  const updatedChild = updateScopeAtFrames(located.child, rest, catalog, apply, false, normalizeAncestorStart);
   if (updatedChild === located.child) return root;
 
   const updatedActivities = located.slot.activities.map(activity =>
     activity.nodeId === frame.ownerNodeId ? updatedChild : activity);
 
-  return replaceSlotActivities(root, located.slot, updatedActivities);
+  return replaceSlotActivities(root, located.slot, updatedActivities, normalizeAncestorStart);
 }
 
 export function updateActivity(root: ActivityNode, nodeId: string, update: (activity: ActivityNode) => ActivityNode, catalog?: ActivityCatalogLookup): ActivityNode {
@@ -853,8 +819,10 @@ export function hasSwitchCaseOutgoingConnections(root: ActivityNode, activity: A
   return getChildSlots(root, catalog).some(slot => slot.activities.some(child => hasSwitchCaseOutgoingConnections(child, activity, index, catalog)));
 }
 
-export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, activities: ActivityNode[]): ActivityNode {
+export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, activities: ActivityNode[], normalizeStart = true): ActivityNode {
   if (!activity.structure) return activity;
+  // Pure scoped refactorings preserve unrelated ancestor routing, including legacy implicit starts.
+  const finish = normalizeStart ? normalizeFlowchartStartNode : (value: ActivityNode) => value;
   if (activity.structure.kind === compensationScopeStructureKind && !slot.collectionProperty)
     return replaceCompensationScopeActivities(activity, activities);
   const nextValue = slot.cardinality === "single" ? activities[0] ?? null : activities;
@@ -875,7 +843,7 @@ export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, a
       [slot.childProperty]: nextValue
     };
 
-    return normalizeFlowchartStartNode({
+    return finish({
       ...activity,
       structure: {
         ...activity.structure,
@@ -887,7 +855,7 @@ export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, a
     });
   }
 
-  return normalizeFlowchartStartNode({
+  return finish({
     ...activity,
     structure: {
       ...activity.structure,
@@ -972,7 +940,7 @@ export function normalizeActivityStructures(root: ActivityNode | null | undefine
   if (!root) return null;
 
   const catalogItem = resolveCatalogItem(root, catalog);
-  const normalizedStructure = root.structure ?? (catalogItem ? createStructureForActivity(catalogItem) : null);
+  const normalizedStructure = root.structure ?? (catalogItem ? createStructureForActivity(catalogItem) : null) ?? root.structure;
   let next: ActivityNode = normalizedStructure === root.structure ? root : { ...root, structure: normalizedStructure };
 
   const slots = getChildSlots(next, catalog);
@@ -984,6 +952,18 @@ export function normalizeActivityStructures(root: ActivityNode | null | undefine
   }
 
   return normalizeFlowchartStartNode(next);
+}
+
+function activityCardPreview(
+  activity: ActivityNode, catalogItem?: ActivityCatalogItem, presentation?: ActivityPresentationRecord, formatSummary?: WorkflowNodeSummaryFormatter
+): ActivityCardPreview {
+  return {
+    label: resolveActivityLabel(presentation, catalogItem, catalogItem?.activityTypeKey ?? activity.activityVersionId),
+    hasAuthoredLabel: !!presentation?.displayName?.trim(),
+    activityTypeKey: catalogItem?.activityTypeKey,
+    summary: catalogItem && formatSummary ? formatSummary(activity, catalogItem) : undefined,
+    description: presentation?.description ?? undefined
+  };
 }
 
 function createWorkflowNode(
@@ -1003,17 +983,10 @@ function createWorkflowNode(
     deletable: options.deletable,
     draggable: options.draggable,
     data: {
-      label: resolveActivityLabel(
-        presentation,
-        catalogItem,
-        catalogItem?.activityTypeKey ?? activity.activityVersionId
-      ),
+      ...activityCardPreview(activity, catalogItem, presentation, formatSummary),
       activityVersionId: activity.activityVersionId,
-      activityTypeKey: catalogItem?.activityTypeKey,
       category: catalogItem?.category,
       executionType: catalogItem?.executionType,
-      summary: catalogItem && formatSummary ? formatSummary(activity, catalogItem) : undefined,
-      description: presentation?.description ?? undefined,
       activityDefinitionVersion: catalogItem?.activityDefinitionVersion,
       activityDefinitionId: catalogItem?.activityDefinitionId,
       catalogIcon: catalogItem?.icon,
@@ -1172,7 +1145,11 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
     .filter(edge => edge !== null);
 }
 
+/** Complete terminates the nearest reusable graph boundary, regardless of legacy catalog Done metadata. */
+export const graphBoundaryCompleteTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
+
 export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: ActivityCatalogItem): WorkflowPortDescriptor[] {
+  if (catalogItem?.activityTypeKey === graphBoundaryCompleteTypeKey) return [];
   // Executable inspection supplies its immutable contract; never recompute it from today's catalog defaults.
   const pinned = readStringList(activity.executableOutcomes);
   if (Array.isArray(activity.executableOutcomes)) return pinned.map(name => ({ name, displayName: name }));
@@ -1317,10 +1294,6 @@ function uniquePorts(ports: WorkflowPortDescriptor[]) {
 
 function readStringList(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
-}
-
-function readOptionalString(value: unknown) {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function clonePayload(payload: Record<string, unknown>): Record<string, unknown> {

@@ -1,0 +1,45 @@
+{
+  "sourceSha": "dba2b11ffa0dae682e0ec086cbffcda04d67a3c9",
+  "sourceDirty": false,
+  "mode": "native-edges",
+  "status": "passed",
+  "stage": "complete",
+  "liveQualified": false,
+  "nativeEdgesQualified": true,
+  "requestedModel": "gpt-5.6-sol",
+  "executed": 1,
+  "hostLifetimes": [
+    {
+      "phase": "authoring",
+      "backendPid": 86093,
+      "studioPid": 86425,
+      "backendExit": 0,
+      "studioExit": 0
+    }
+  ],
+  "startedAt": "2026-11-13T19:27:11Z",
+  "finishedAt": "2026-11-13T19:29:10Z",
+  "proof": {
+    "actualModuleDisabledAndRestored": true,
+    "explicitRepairSavedNewRevision": true,
+    "sameQuestion": true,
+    "oldHistoryWithheld": true,
+    "newHistoryAvailable": true,
+    "noEligibleDenominator": true,
+    "noEligibleValues": true,
+    "staleReason": "definition changed",
+    "priorResultGeneratedAtRetained": true,
+    "emptyBaselineCoverage": "unknown",
+    "boundedCostError": "QUERY_LIMIT",
+    "boundedCostRetrySucceeded": true,
+    "failureKind": "owned browser transport offline",
+    "failedValuesWithheld": true,
+    "transportRetrySucceeded": true,
+    "sdkSendsBefore": 0,
+    "sdkSendsAfter": 0
+  },
+  "independentVisualAcceptance": {
+    "status": "passed",
+    "originalPngsInspected": 28
+  }
+}

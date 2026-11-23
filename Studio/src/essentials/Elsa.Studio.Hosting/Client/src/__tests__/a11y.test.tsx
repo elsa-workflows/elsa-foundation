@@ -90,6 +90,31 @@ describe("StudioTabs keyboard navigation", () => {
     expect(container.querySelectorAll<HTMLElement>("[role='tabpanel']")[1].hidden).toBe(true);
   });
 
+  it("keeps tab ids unique when multiple tabs control the same panel", () => {
+    const sharedPanelTabs: StudioTabItem[] = [
+      { id: "inputs", label: "Inputs", panelIndex: 1 },
+      { id: "outputs", label: "Outputs", panelIndex: 1 },
+      { id: "outcomes", label: "Outcomes", panelIndex: 1 }
+    ];
+    render(<StudioTabs baseId="activity" tabs={sharedPanelTabs} activeTab="inputs" onSelect={() => {}} ariaLabel="Sections" />);
+
+    const [inputs, outputs, outcomes] = tabs();
+    expect(new Set([inputs.id, outputs.id, outcomes.id]).size).toBe(3);
+    expect(new Set([inputs.getAttribute("aria-controls"), outputs.getAttribute("aria-controls"), outcomes.getAttribute("aria-controls")]).size).toBe(1);
+  });
+
+  it("marks optional tab icons decorative and omits unavailable panel links", () => {
+    const iconTabs: StudioTabItem[] = [
+      { id: "designer", label: "Designer", icon: <svg aria-label="Decorative icon" />, panelIndex: null }
+    ];
+    render(<StudioTabs tabs={iconTabs} activeTab="designer" onSelect={() => {}} ariaLabel="Editor views" />);
+
+    const [designer] = tabs();
+    expect(designer.hasAttribute("aria-controls")).toBe(false);
+    expect(designer.querySelector(".studio-tab-icon")?.getAttribute("aria-hidden")).toBe("true");
+    expect(designer.textContent).toBe("Designer");
+  });
+
   it("gives tabs whose ids differ only in punctuation distinct element ids", () => {
     // Element ids are keyed on position, not the (sanitized) tab id, so path-like ids that would
     // collapse under a lossy `[^a-zA-Z0-9_-] -> '-'` sanitization stay unique and correctly wired.
@@ -143,6 +168,23 @@ describe("StudioTabs keyboard navigation", () => {
 
     fireKey(list, "ArrowRight");
     expect(document.activeElement).toBe(tabs()[1]);
+  });
+
+  it("skips disabled tabs during keyboard navigation and blocks their activation", () => {
+    const selected: string[] = [];
+    const disabledItems: StudioTabItem[] = [
+      { id: "one", label: "One" },
+      { id: "two", label: "Two", disabled: true },
+      { id: "three", label: "Three" }
+    ];
+    render(<StudioTabs tabs={disabledItems} activeTab="one" onSelect={id => selected.push(id)} ariaLabel="Sections" />);
+    const list = container.querySelector('[role="tablist"]')!;
+
+    fireKey(list, "ArrowRight");
+    expect(selected).toEqual(["three"]);
+    expect(document.activeElement).toBe(tabs()[2]);
+    tabs()[1].click();
+    expect(selected).toEqual(["three"]);
   });
 });
 
@@ -221,16 +263,33 @@ describe("StudioDataGrid semantics", () => {
   });
 });
 
+it("only renders the shared refresh Slot when the current view contributes it", () => {
+  render(<StudioPageHeader title="Editor" actions={<button type="button">Save</button>} />);
+  expect(container.querySelector('[data-studio-slot="studio.page-header.refresh"]')).toBeNull();
+  render(<StudioPageHeader title="Orders" actions={<button type="button">Create order</button>} actionsLabel="Order actions" refresh={{ id: "orders", label: "Refresh orders", onRefresh() {} }} />);
+  const actions = container.querySelector('[role="group"][aria-label="Order actions"]');
+  expect(actions?.querySelector('button[aria-label="Refresh orders"]')).not.toBeNull();
+  expect(actions?.textContent).toContain("Create order");
+  expect(actions?.querySelector('button[aria-haspopup="menu"]')).toBeNull();
+});
+
 it("keeps result feedback below an embedded page title in the heading outline", () => {
   render(<><StudioPageHeader title="Embedded collection" headingLevel={2} /><StudioResultState title="Nothing here" headingLevel={3} /></>);
   expect(Array.from(container.querySelectorAll("h1,h2,h3")).map(heading => [heading.tagName, heading.textContent]))
     .toEqual([["H2", "Embedded collection"], ["H3", "Nothing here"]]);
 });
 
+it("keeps a string page title in the heading's accessible name and native tooltip", () => {
+  render(<StudioPageHeader title="Run · Order fulfillment" headingLevel={2} />);
+  const heading = container.querySelector("h2");
+  expect(heading?.textContent).toBe("Run · Order fulfillment");
+  expect(heading?.getAttribute("title")).toBe("Run · Order fulfillment");
+});
+
 describe("sidebar search filtering", () => {
   const navigation = [
     { id: "home", label: "Home", path: "/dashboard", placement: "main" as const },
-    { id: "extension-builder", label: "Extension Builder", path: "/extension-builder" },
+    { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", placement: "build" as const },
     { id: "modules", label: "Modules", path: "/modules", placement: "admin" as const },
     { id: "package-feeds", label: "Package feeds", path: "/package-feeds", placement: "admin" as const }
   ];
@@ -253,7 +312,7 @@ describe("sidebar search filtering", () => {
   }
 
   function searchInput() {
-    return container.querySelector<HTMLInputElement>('input[aria-label="Search modules"]')!;
+    return container.querySelector<HTMLInputElement>('input[aria-label="Search Studio"]')!;
   }
 
   function navLinkLabels() {
@@ -329,17 +388,18 @@ describe("sidebar search filtering", () => {
   it("shows an empty-result state when nothing matches", () => {
     renderShell();
     type("zzzznomatch");
-    expect(container.querySelector(".sidebar-search-empty")?.textContent).toContain("No modules match");
+    expect(container.querySelector(".sidebar-search-empty")?.textContent).toContain("No destinations match");
     expect(container.querySelectorAll(".nav-section").length).toBe(0);
   });
 
-  it("keeps More tools items reachable from search while the group is collapsed", () => {
+  it("keeps Build destinations reachable from search while the group is collapsed", () => {
     renderShell();
-    expect(navLinkLabels().some(label => label?.includes("Extension Builder"))).toBe(false);
+    flushSync(() => container.querySelector<HTMLButtonElement>('nav[aria-label="Build"] button')!.click());
+    expect(container.querySelector<HTMLElement>('nav[aria-label="Build"] .nav-group-panel')?.hidden).toBe(true);
 
     type("ext");
     expect(navLinkLabels().some(label => label?.includes("Extension Builder"))).toBe(true);
-    expect(container.querySelector("[aria-controls='studio-nav-more-tools']")?.getAttribute("aria-expanded")).toBe("true");
+    expect(container.querySelector('nav[aria-label="Build"] button')?.getAttribute("aria-expanded")).toBe("true");
   });
 
   it("clears the query when Escape is pressed", () => {

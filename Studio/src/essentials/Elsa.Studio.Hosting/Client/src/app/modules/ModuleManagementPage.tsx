@@ -1,8 +1,8 @@
-import { StudioPageHeader, StudioButton } from "../ui";
-import React, { useMemo, useRef, useState } from "react";
+import { StudioIconButton, StudioPageHeader, StudioButton } from "../ui";
+import React, { useMemo, useRef, useState, useId } from "react";
 import { Boxes, CloudUpload, RefreshCcw, Trash2 } from "lucide-react";
 import { defaultStudioHostId, type ElsaStudioModuleApi } from "../../sdk";
-import { EmptyState, SkeletonRows, StatusChip, StudioAlert, StudioDataGrid, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
+import { EmptyState, SkeletonRows, StatusChip, StudioAlert, StudioDataGrid, StudioTabs, StudioTabPanel, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   deleteDropFolderPackage,
   formatFileSize,
@@ -57,6 +57,7 @@ const inspectorTabs = [
 const followUpRefreshDelaysMs = [500, 1500, 3000, 6000];
 
 export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
+  const hostTabsBaseId = useId();
   const { hosts, byHost } = useModuleManagementRegistries(api);
   const [activeHostId, setActiveHostId] = useState<HostId>(defaultStudioHostId);
   // Per-host view state (selection, source view, inspector tab). Registry data itself now lives in the
@@ -151,10 +152,14 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
           </StudioToolbarGroup>
         </StudioToolbar></>} />
 
-      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
+      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} baseId={hostTabsBaseId} ariaLabel="Hosts" />
+      {hostTabs.map((item, index) => item.id !== activeHostId ? (
+        <StudioTabPanel key={item.id} baseId={hostTabsBaseId} index={index} hidden>{null}</StudioTabPanel>
+      ) : null)}
+      <StudioTabPanel baseId={hostTabsBaseId} index={hostTabs.findIndex(item => item.id === activeHostId)} className="modules-tab-panel">
 
       {activeError ? <StudioAlert tone="danger">{activeError}</StudioAlert> : null}
-      {activeStatus ? <StudioAlert tone="success">{activeStatus}</StudioAlert> : null}
+      {activeStatus ? <StudioAlert tone="info">{activeStatus}</StudioAlert> : null}
 
       <div className="modules-summary-strip">
         <SummaryItem label="Rows" value={rows.length} />
@@ -230,6 +235,7 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
           />
         </div>
       )}
+      </StudioTabPanel>
     </section>
   );
 }
@@ -289,7 +295,7 @@ function SourceNavigator({
         <strong>{builtInCount + nuplaneCount}</strong>
       </div>
 
-      <button
+      <StudioButton
         type="button"
         className={activeSourceView === "built-in" ? "modules-source-button active" : "modules-source-button"}
         aria-pressed={activeSourceView === "built-in"}
@@ -300,9 +306,9 @@ function SourceNavigator({
           <small>Host deployment</small>
         </span>
         <em>{builtInCount}</em>
-      </button>
+      </StudioButton>
 
-      <button
+      <StudioButton
         type="button"
         className={allNuplaneActive ? "modules-source-button active" : "modules-source-button"}
         aria-pressed={allNuplaneActive}
@@ -313,13 +319,13 @@ function SourceNavigator({
           <small>Runtime packages</small>
         </span>
         <em>{nuplaneCount}</em>
-      </button>
+      </StudioButton>
 
       {nuplaneCount > 0 ? (
         <div className="modules-source-group" aria-label="Nuplane package sources">
           <span>Nuplane sources</span>
           {packageSourceOptions.map(source => (
-            <button
+            <StudioButton
               key={source}
               type="button"
               className={activeSourceView === "nuplane" && activePackageSource === source ? "active" : ""}
@@ -328,7 +334,7 @@ function SourceNavigator({
             >
               <span>{source}</span>
               <em>{packageSourceCounts.get(source) ?? 0}</em>
-            </button>
+            </StudioButton>
           ))}
         </div>
       ) : null}
@@ -399,10 +405,10 @@ function InlinePackageUploads({
           <strong>Drop .nupkg files here</strong>
           <small>Upload packages to this host's Nuplane drop folder.</small>
         </span>
-        <button type="button" className="studio-button" disabled={uploadDisabled} onClick={() => uploadInputRef.current?.click()}>
+        <StudioButton type="button" disabled={uploadDisabled} onClick={() => uploadInputRef.current?.click()}>
           <CloudUpload size={15} />
-          Upload Packages
-        </button>
+          Upload packages
+        </StudioButton>
         <input
           ref={uploadInputRef}
           type="file"
@@ -431,9 +437,9 @@ function InlinePackageUploads({
                   <strong>{file.fileName}</strong>
                   <code>{packageIdentity ? `${packageIdentity.id} ${packageIdentity.version} · ` : ""}{formatFileSize(file.size)} · {new Date(file.lastWriteTimeUtc).toLocaleString()}</code>
                 </span>
-                <button type="button" className="studio-icon-button" disabled={busy} title={`Delete ${file.fileName} from ${host.label} drop folder`} onClick={() => onDeleteDropFolderPackage(file.fileName)}>
+                <StudioIconButton type="button" variant="danger" disabled={busy} aria-label={`Delete ${file.fileName} from ${host.label} drop folder`} onClick={() => onDeleteDropFolderPackage(file.fileName)}>
                   <Trash2 size={14} />
-                </button>
+                </StudioIconButton>
               </div>
             );
           })}
@@ -456,6 +462,7 @@ function ModuleInspector({
   activeTab: InspectorTab;
   onSelectTab(tab: InspectorTab): void;
 }) {
+  const inspectorTabsBaseId = useId();
   if (!registry) {
     return (
       <aside className="modules-inspector">
@@ -475,13 +482,18 @@ function ModuleInspector({
         <StatusChip tone={statusTone(selectedRow?.status ?? "available")}>{selectedRow?.status ?? "available"}</StatusChip>
       </div>
 
-      <StudioTabs tabs={inspectorTabs} activeTab={activeTab} onSelect={tab => onSelectTab(tab as InspectorTab)} ariaLabel="Inspector" />
+      <StudioTabs tabs={inspectorTabs} activeTab={activeTab} onSelect={tab => onSelectTab(tab as InspectorTab)} baseId={inspectorTabsBaseId} ariaLabel="Inspector" />
+      {inspectorTabs.map((item, index) => item.id !== activeTab ? (
+        <StudioTabPanel key={item.id} baseId={inspectorTabsBaseId} index={index} hidden>{null}</StudioTabPanel>
+      ) : null)}
+      <StudioTabPanel baseId={inspectorTabsBaseId} index={inspectorTabs.findIndex(item => item.id === activeTab)}>
 
       {activeTab === "overview" ? <OverviewTab host={host} registry={registry} selectedRow={selectedRow} /> : null}
       {activeTab === "contributions" ? <ContributionsTab selectedRow={selectedRow} /> : null}
       {activeTab === "package" ? <PackageTab registry={registry} selectedRow={selectedRow} /> : null}
       {activeTab === "manifest" ? <ManifestTab registry={registry} selectedRow={selectedRow} /> : null}
       {activeTab === "diagnostics" ? <DiagnosticsTab registry={registry} selectedRow={selectedRow} /> : null}
+      </StudioTabPanel>
     </aside>
   );
 }

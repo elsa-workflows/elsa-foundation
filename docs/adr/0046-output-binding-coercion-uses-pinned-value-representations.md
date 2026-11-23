@@ -1,6 +1,6 @@
 # Output Binding Coercion Uses Pinned Value Representations
 
-Status: proposed (output-capture slice accepted — see Decision status)
+Status: proposed (see the scoped decisions below)
 
 Amendment proposed (analysis A-1): one core value model, an adapter with a written contract at every boundary, and the agreed adapter rules. If
 accepted, it settles the representation taxonomy that this ADR leaves proposed. See *Amendment* below.
@@ -23,6 +23,12 @@ or profile-registration decisions, which stay proposed pending the specs 060/061
 [ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md)
 extends the accepted slice with declaration-relative, producer-visible container-frame targets; it
 does not broaden the proposed coercion taxonomy.
+
+**Automatic numeric text on a binding** ([spec 1227](../../specs/1227-double-string-binding/spec.md)).
+Publication may pin the built-in `NumericToString` operation under `Auto` for a scalar,
+unschematized `TypedValue` Double consumed as a plain String. Runtime formats finite values
+as invariant round-trip text and preserves envelope presence and policy. Each binding chooses its
+own operation. `None` continues to require identical contracts. This decision covers this pair only.
 
 Elsa output bindings will support general-purpose, target-aware coercion without treating every CLR object as workflow data. Activity result projections declare a `ValueRepresentation` such as `TypedValue`, `StructuredValue`, `TextValue`, `FormattedContent`, `BinaryContent`, `DurableReference`, or `TransientResource`; publication validates and pins the allowed conversion profile, while runtime applies that profile using runtime facts. `Any` remains a canonical durable JSON projection, not a general-purpose CLR object container.
 
@@ -263,7 +269,7 @@ are likewise defined in this ADR and built separately when a use case asks for t
 | Value | Today | Rule |
 |---|---|---|
 | Integer within ±2^53 | exact | Keep |
-| Integer beyond ±2^53, or a `Decimal` with more digits than a double holds | digits lost on the way in, also for values the script never touches: the whole input is converted into JavaScript values up front, and Jint holds every number as a double | Values the script does not change keep their stored value: only what the script changes is written (V9). A number the script reads is a JavaScript number, a double (V6, stated), and a lost digit that reaches a write is refused by default with a diagnostic (V9), unless the host installed a precision policy that allows it; no workflow accepts a loss on its own. Elsa never turns numbers into strings by itself. A designer who needs exact digits holds them as a string, the usual JSON convention for integers beyond 2^53; exact money arithmetic goes to a .NET function (D-5) or an activity |
+| Integer beyond ±2^53, or a `Decimal` with more digits than a double holds | digits lost on the way in, also for values the script never touches: the whole input is converted into JavaScript values up front, and Jint holds every number as a double | Values the script does not change keep their stored value: only what the script changes is written (V9). A number the script reads is a JavaScript number, a double (V6, stated), and a lost digit that reaches a write is refused by default with a diagnostic (V9), unless the host installed a precision policy that allows it; no workflow accepts a loss on its own. The JavaScript value bridge never stringifies a number to avoid this refusal; the separately publication-pinned Double-to-String binding conversion remains allowed. A designer who needs exact digits holds them as a string, the usual JSON convention for integers beyond 2^53; exact money arithmetic goes to a .NET function (D-5) or an activity |
 | `0.1 + 0.2` | `0.30000000000000004` | Stated: script arithmetic is double arithmetic |
 | `2.0`, `1e21` | come back as `2`, `1e+21` | Stated: the notation may change, the number does not |
 | Dates | ISO 8601 strings | Stay strings; a JavaScript `Date` (once D-1 enables it) leaves as UTC (`…Z`) |

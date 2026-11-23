@@ -71,7 +71,7 @@ function mapState(
   // The normalizer is deliberately shape-loose (it repairs legacy/wire records), so its unknown[]
   // result is asserted back to the declared variables type rather than validated per-field.
   if (Array.isArray(state.variables)) next.variables = mapArgumentRecords(state.variables, normalizeStoredArgument) as VariableDefinition[];
-  if (Array.isArray(state.inputs)) next.inputs = mapArgumentRecords(state.inputs, record => normalizeArgumentDefinition(record, true));
+  if (Array.isArray(state.inputs)) next.inputs = mapArgumentRecords(state.inputs, record => normalizeArgumentDefinition(record, true, true));
   if (Array.isArray(state.outputs)) next.outputs = mapArgumentRecords(state.outputs, record => normalizeArgumentDefinition(record, false));
   return next;
 }
@@ -83,7 +83,11 @@ function mapActivityTree(node: ActivityNode, transform: (node: ActivityNode) => 
 
   let changed = false;
   const nextPayload: Record<string, unknown> = { ...structure.payload };
+  const completeBpmnSource = structure.kind === "elsa.bpmn.structure" && structure.schemaVersion === "2.0.0";
   for (const [key, value] of Object.entries(structure.payload)) {
+    // The complete document owns one native forest. Compact scope headers and opaque metadata
+    // can resemble activity nodes, but are not additional independently authored trees.
+    if (completeBpmnSource && key !== "activities") continue;
     if (isActivityNode(value)) {
       nextPayload[key] = mapActivityTree(value, transform);
       changed = true;
@@ -133,20 +137,26 @@ function normalizeStoredArgument(record: Record<string, unknown>): Record<string
   return normalizeArgumentRecord(record, true);
 }
 
-function normalizeArgumentDefinition(record: Record<string, unknown>, keepStorage: boolean): Record<string, unknown> {
+function normalizeArgumentDefinition(record: Record<string, unknown>, keepStorage: boolean, keepInputDefaults = false): Record<string, unknown> {
   const next = normalizeArgumentRecord(record, keepStorage);
   const isNullable = record.isNullable ?? record.IsNullable;
   delete next.IsNullable;
   next.isNullable = typeof isNullable === "boolean" ? isNullable : false;
+  if (keepInputDefaults) {
+    const defaultValue = ownValue(record, ["defaultValue", "DefaultValue"]);
+    const defaultSyntax = ownValue(record, ["defaultSyntax", "DefaultSyntax"]);
+    if (defaultValue.value === null && (defaultSyntax.value == null || defaultSyntax.value === "")) return next;
+    if (defaultValue.found && defaultValue.value !== undefined) next.defaultValue = defaultValue.value;
+    if (defaultSyntax.found && defaultSyntax.value !== undefined) next.defaultSyntax = defaultSyntax.value;
+  }
   return next;
 }
 
 // Emits the canonical argument shape: a stable `referenceKey`, `type: { alias, collectionKind }` (via
 // the shared {@link readArgumentType}), plus a bare-alias `storageDriverType` for variables/inputs.
-// Legacy `typeInformation`/`isArray`/casing variants and assembly metadata are dropped, as are the
-// Elsa-3 input-default leftovers (`defaultValue`/`defaultSyntax`/`isReadOnly`) — the backend Input/Output
-// records have no home for them. Every other field (name, displayName, default, …) is preserved
-// untouched. Idempotent, so it is safe to run on either wire or in-memory records.
+// Legacy `typeInformation`/`isArray`/casing variants and assembly metadata are dropped, as are unsupported
+// Elsa-3 fields. Workflow input defaults are re-added in canonical casing by normalizeArgumentDefinition;
+// outputs and variables continue to discard those fields. Idempotent on wire and in-memory records.
 const droppedArgumentKeys = [
   "type", "Type", "typeInformation", "TypeInformation", "isArray", "IsArray",
   "storageDriverType", "StorageDriverType",
@@ -172,6 +182,13 @@ function omitKeys(record: Record<string, unknown>, keys: string[]): Record<strin
     if (!dropped.has(key)) out[key] = value;
   }
   return out;
+}
+
+function ownValue(record: Record<string, unknown>, keys: string[]): { found: boolean; value?: unknown } {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(record, key)) return { found: true, value: record[key] };
+  }
+  return { found: false };
 }
 
 // Reads a storage driver as a bare alias: a string passes through; a legacy TypeInformation object is
@@ -285,7 +302,7 @@ function expandActivityNode(node: ActivityNode): ActivityNode {
       typeName: "",
       expression: {
         type: typeof argumentValue.expressionType === "string" ? argumentValue.expressionType : "Literal",
-        value: argumentValue.value ?? ""
+        value: argumentValue.value === undefined ? "" : argumentValue.value
       },
       ...(argument.conversion != null ? { conversion: argument.conversion } : {}),
       ...(Object.keys(argumentExtras).length > 0 ? { argumentExtras } : {})

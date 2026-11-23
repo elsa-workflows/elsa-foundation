@@ -1,0 +1,4 @@
+obligations,sql_statements,driver_submissions,write_transactions,observed_exchanges,incremental_wal_bytes
+1,1,1,1,1,352
+16,1,1,1,1,3504
+1000,1,1,1,1,328312

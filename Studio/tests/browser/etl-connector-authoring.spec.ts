@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import axe, { type AxeResults, type RunOptions } from "axe-core";
-import { createDefaultEtlConnectorPipeline } from "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/connectorAuthoringHelpers";
+import { createDefaultEtlConnectorPipeline } from "../../../extensions/Etl/studio/Elsa.Studio.Etl/Client/src/connectorAuthoringHelpers";
 
 // Browser-level product components against a deterministic API fixture. Actual Workbench HTTP acceptance is T019.
 async function arrangeApi(page: Page, options: { jsonlSource?: boolean; csvErrors?: boolean; continuous?: boolean; sqlMain?: boolean; sqlSource?: boolean;
@@ -103,8 +103,8 @@ for (const width of [320, 768, 1024, 1440]) {
     await page.getByLabel("Rejected records destination kind", { exact: true }).selectOption("jsonl");
     await page.getByLabel("Rejected records binding", { exact: true }).selectOption("error-file");
     await expect(page.getByRole("button", { name: "Validate saved revision", exact: true })).toBeDisabled();
-    await page.getByRole("button", { name: "Save draft", exact: true }).click();
-    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".studio-toast").getByText("Saved orders at revision 2.", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Validate saved revision", exact: true }).click();
     const publishButton = page.getByRole("button", { name: "Publish immutable version", exact: true });
     const primaryColors = await page.getByRole("button", { name: "New definition", exact: true }).evaluate(element => {
@@ -160,8 +160,8 @@ for (const width of [320, 1024]) {
     await binding.selectOption("csv-only");
     await expect(page.getByText("Records JSON Pointer", { exact: true })).toHaveCount(0);
     await page.getByLabel("JSON Lines field 2 pointer", { exact: true }).fill("/customer/name");
-    await page.getByRole("button", { name: "Save draft", exact: true }).click();
-    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".studio-toast").getByText("Saved orders at revision 2.", { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.getByRole("heading", { name: "Source connector", exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `/tmp/1190-studio-jsonl-source-${width}.png` });
@@ -194,8 +194,8 @@ for (const width of [320, 1024]) {
     await expect(binding.locator("option", { hasText: "error-file" })).toHaveCount(1);
     await binding.selectOption("error-file");
     await expect(page.getByText("Choose a host-approved rejected file output binding.", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Save draft", exact: true }).click();
-    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".studio-toast").getByText("Saved orders at revision 2.", { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.getByLabel("Rejected records destination kind", { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `/tmp/1191-studio-csv-route-${width}.png` });
@@ -228,8 +228,8 @@ for (const width of [320, 1024]) {
     await page.getByLabel("Accepted records binding", { exact: true }).selectOption("warehouse");
     await page.getByLabel("Accepted records table", { exact: true }).fill("dbo.people");
     await page.getByRole("checkbox", { name: "name", exact: true }).check();
-    await page.getByRole("button", { name: "Save draft", exact: true }).click();
-    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".studio-toast").getByText("Saved orders at revision 2.", { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.getByLabel("Accepted records table", { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `/tmp/1197-studio-sql-route-${width}.png` });
@@ -262,8 +262,8 @@ for (const width of [320, 1024]) {
     await page.getByLabel("Accepted records binding", { exact: true }).selectOption("events");
     await page.getByLabel("Accepted records exchange", { exact: true }).fill("etl.people");
     await page.getByLabel("Accepted records routing key", { exact: true }).fill("people.loaded");
-    await page.getByRole("button", { name: "Save draft", exact: true }).click();
-    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".studio-toast").getByText("Saved orders at revision 2.", { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.getByLabel("Accepted records routing key", { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `/tmp/1200-studio-rabbitmq-route-${width}.png` });
@@ -294,8 +294,8 @@ for (const width of [320, 1024]) {
     await page.getByLabel("Run continuously", { exact: true }).check();
     await expect(page.getByText("Continuous connector pipeline", { exact: true })).toBeVisible();
     await page.getByLabel("Poll interval (seconds)", { exact: true }).fill("30");
-    await page.getByRole("button", { name: "Save draft", exact: true }).click();
-    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".studio-toast").getByText("Saved orders at revision 2.", { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.getByLabel("Poll interval (seconds)", { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `/tmp/1192-studio-continuous-${width}.png` });
@@ -330,8 +330,8 @@ for (const width of [320, 1024]) {
     await page.getByLabel("Source table", { exact: true }).fill("dbo.people");
     await page.getByRole("group", { name: "Source key" }).getByRole("checkbox", { name: "id", exact: true }).check();
     await page.getByLabel("Watermark column", { exact: true }).selectOption("id");
-    await page.getByRole("button", { name: "Save draft", exact: true }).click();
-    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".studio-toast").getByText("Saved orders at revision 2.", { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.getByLabel("Source table", { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `/tmp/1198-studio-sql-source-${width}.png` });
@@ -365,8 +365,8 @@ for (const width of [320, 1024]) {
     await page.getByLabel("Source RabbitMQ binding", { exact: true }).selectOption("events-in");
     await page.getByLabel("Source queue", { exact: true }).fill("people");
     await page.getByLabel("Messages per run", { exact: true }).fill("250");
-    await page.getByRole("button", { name: "Save draft", exact: true }).click();
-    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".studio-toast").getByText("Saved orders at revision 2.", { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.getByLabel("Source queue", { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `/tmp/1201-studio-rabbitmq-source-${width}.png` });

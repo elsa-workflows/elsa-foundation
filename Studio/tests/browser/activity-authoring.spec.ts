@@ -9,14 +9,23 @@ for (const style of ["quiet", "focus", "open"]) for (const theme of ["light", "d
     }, style);
     await page.goto(`/?mode=activity-authoring&theme=${theme}`);
     const title = page.getByRole("heading", { name: "Prepare order quote", exact: true });
-    const saved = page.locator(".ad-save-chip");
+    const saved = page.locator(".wf-editor-save-status");
     await expect(title).toBeVisible();
     await expect(page.getByRole("complementary", { name: "Inspector panel", exact: true })).toBeVisible();
     await expect(saved).toHaveText("Saved");
-    const titleBox = (await title.boundingBox())!;
-    const statusBox = (await saved.boundingBox())!;
-    expect(statusBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
-    const back = page.getByRole("button", { name: "Back to Activity Definition", exact: true });
+    const statusPlacement = await page.evaluate(() => {
+      const status = document.querySelector(".wf-editor-save-status")!;
+      const metadata = document.querySelector(".wf-editor-metadata")!;
+      const actions = document.querySelector(".wf-editor-actions")!;
+      const statusBox = status.getBoundingClientRect();
+      const actionsBox = actions.getBoundingClientRect();
+      return { insideMetadata: metadata.contains(status), gap: actionsBox.left - statusBox.right };
+    });
+    expect(statusPlacement.insideMetadata).toBe(true);
+    expect(statusPlacement.gap).toBeGreaterThanOrEqual(0);
+    expect(statusPlacement.gap).toBeLessThanOrEqual(24);
+    const back = page.getByRole("link", { name: "Activity Definition", exact: true });
+    await expect(back).toHaveAttribute("href", "/workflows/activity-definitions");
     await back.focus();
     await expect(back).toBeFocused();
     await title.click();
@@ -30,12 +39,13 @@ for (const style of ["quiet", "focus", "open"]) for (const theme of ["light", "d
     const longTitle = page.getByRole("heading", { name: longName, exact: true });
     await expect(longTitle).toBeVisible();
     await expect(page.getByRole("complementary", { name: "Inspector panel", exact: true })).toBeVisible();
-    expect(await longTitle.evaluate(element => element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight)).toBe(true);
+    await expect(longTitle).toHaveAttribute("title", longName);
+    expect(await longTitle.evaluate(element => getComputedStyle(element).textOverflow)).toBe("ellipsis");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const toolbar = (await page.locator(".ad-draft-editor-toolbar").boundingBox())!;
     const tabs = (await page.getByRole("tablist", { name: "Activity Definition authoring views" }).boundingBox())!;
     expect(toolbar.y + toolbar.height).toBeLessThanOrEqual(tabs.y + 1);
-    for (const name of ["Review & publish", "Test Run", "Save now"]) {
+    for (const name of ["Review & publish", "Test Run", "Save"]) {
       const action = page.getByRole("button", { name, exact: true });
       await expect(action).toBeVisible();
       const box = (await action.boundingBox())!;
@@ -43,6 +53,67 @@ for (const style of ["quiet", "focus", "open"]) for (const theme of ["light", "d
       expect(box.x + box.width).toBeLessThanOrEqual(391);
     }
     await page.screenshot({ path: testInfo.outputPath("draft-header-narrow.png") });
+  });
+}
+
+test("Activity Definition authoring tabs keep focus as they move between the canvas and page", async ({ page }) => {
+  await page.goto("/?mode=activity-authoring&theme=dark");
+  const views = page.getByRole("tablist", { name: "Activity Definition authoring views" });
+  const designer = views.getByRole("tab", { name: "Designer", exact: true });
+  const inputs = views.getByRole("tab", { name: /^Inputs/ });
+
+  await inputs.click();
+  await expect(inputs).toBeFocused();
+  await designer.click();
+  await expect(designer).toBeFocused();
+});
+
+for (const theme of ["light", "dark"]) {
+  test(`selected Activity Definition tab text meets contrast in ${theme} mode`, async ({ page }) => {
+    await page.goto(`/?mode=activity-authoring&theme=${theme}`);
+    const selectedTab = page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: /^Inputs/ });
+    await selectedTab.click();
+
+    const contrast = await selectedTab.evaluate(element => {
+      const context = document.createElement("canvas").getContext("2d");
+      if (!context) return { ratio: 0, foreground: "canvas unavailable", background: "" };
+      const parseColor = (color: string) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        const [red, green, blue, alpha] = context.getImageData(0, 0, 1, 1).data;
+        return alpha ? [red, green, blue] : null;
+      };
+      const foreground = parseColor(getComputedStyle(element).color);
+      let backgroundElement: Element | null = element;
+      let background: number[] | null = null;
+      let backgroundColor = "";
+      while (backgroundElement && !background) {
+        const style = getComputedStyle(backgroundElement);
+        if (style.backgroundColor !== "rgba(0, 0, 0, 0)" && style.backgroundColor !== "transparent") {
+          backgroundColor = style.backgroundColor;
+          background = parseColor(style.backgroundColor);
+        }
+        backgroundElement = backgroundElement.parentElement;
+      }
+      if (!foreground || !background) return { ratio: 0, foreground: getComputedStyle(element).color, background: backgroundColor };
+      const luminance = (channels: number[]) => {
+        const [red, green, blue] = channels.map(channel => {
+          const value = channel / 255;
+          return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+      };
+      const foregroundLuminance = luminance(foreground);
+      const backgroundLuminance = luminance(background);
+      return {
+        ratio: (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05),
+        foreground: getComputedStyle(element).color,
+        background: backgroundColor
+      };
+    });
+
+    expect(contrast.ratio, JSON.stringify(contrast)).toBeGreaterThanOrEqual(4.5);
   });
 }
 
@@ -62,7 +133,7 @@ for (const theme of ["light", "dark"]) {
     await variables.getByRole("textbox", { name: "Variable name", exact: true }).fill("LineCount");
     await variables.getByRole("textbox", { name: "Variable default value", exact: true }).fill("0");
     await expect(page.locator(".ad-revision-gate")).toHaveCount(0);
-    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
     const fieldset = variables.locator("fieldset.wf-container-variables");
     expect(await fieldset.evaluate(element => getComputedStyle(element).borderWidth)).toBe("0px");
     await page.screenshot({ path: testInfo.outputPath("activity-variables.png") });
@@ -74,7 +145,7 @@ for (const theme of ["light", "dark"]) {
     await expect(inspector.getByRole("textbox", { name: "Variable default value", exact: true })).toHaveValue("0");
     expect(await inspector.locator("fieldset.wf-container-variables").evaluate(element => getComputedStyle(element).borderWidth)).toBe("0px");
     await inspector.getByRole("button", { name: "Add variable", exact: true }).click();
-    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
     await page.reload();
     await views.getByRole("tab", { name: "Variables", exact: true }).click();
     await expect(variables.getByRole("textbox", { name: "Variable name", exact: true })).toHaveCount(2);
@@ -97,7 +168,7 @@ test("edits a reusable activity interface without losing unapplied defaults or s
   await page.goto("/?mode=activity-authoring&theme=dark");
   await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await expect(page.getByText("Advanced interface details", { exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Stable reference key" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Stable reference key" })).toHaveValue("subtotal");
   await page.getByRole("button", { name: "Add input", exact: true }).click();
   await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Discount");
   await page.getByRole("textbox", { name: "Input name", exact: true }).press("Enter");
@@ -115,7 +186,7 @@ test("edits a reusable activity interface without losing unapplied defaults or s
   await expect(member.getByRole("button", { name: "Apply default", exact: true })).toBeDisabled();
   await member.getByRole("textbox", { name: "Value", exact: true }).fill("2.5");
   await member.getByRole("button", { name: "Apply default", exact: true }).click();
-  await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
   await page.reload();
   await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await page.getByRole("button", { name: "Discount Number", exact: true }).click();
@@ -179,7 +250,7 @@ for (const theme of ["light", "dark", "material"]) for (const width of [390, 144
     await page.screenshot({ path: `/tmp/argument-button-${theme}-${width}.png` });
     await add.click();
     await expect(panel.getByRole("textbox", { name: "Variable name", exact: true })).toHaveCount(1);
-    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
     // The shared editor also runs inside disabled fieldsets in read-only views.
     await panel.locator("fieldset.wf-container-variables").evaluate(element => { (element as HTMLFieldSetElement).disabled = true; });
     await expect(add).toBeDisabled();
@@ -205,5 +276,93 @@ for (const theme of ["light", "dark"]) {
     await add.click();
     await expect(variables.getByRole("textbox", { name: "Variable name", exact: true })).toHaveCount(1);
     await page.screenshot({ path: `/tmp/workflow-argument-button-${theme}.png` });
+  });
+}
+
+
+for (const theme of ["light", "dark"]) for (const width of [1440, 360]) {
+  test(`activity tabs keep their spacing (${theme}, ${width})`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?mode=activity-authoring&theme=${theme}`);
+    const tabs = page.getByRole("tablist", { name: "Activity Definition authoring views" });
+    await expect(tabs.getByRole("tab", { name: "Designer", exact: true })).toBeVisible();
+    const geometry = () => tabs.evaluate(element => {
+      const style = getComputedStyle(element);
+      return {
+        gap: style.gap,
+        tabs: Array.from(element.querySelectorAll<HTMLElement>("[role='tab']"), tab => {
+          const tabBox = tab.getBoundingClientRect();
+          const tabStyle = getComputedStyle(tab);
+          return {
+            width: Math.round(tabBox.width),
+            height: Math.round(tabBox.height),
+            padding: tabStyle.padding,
+            borderBottomWidth: tabStyle.borderBottomWidth
+          };
+        })
+      };
+    });
+    const original = await geometry();
+    for (const id of ["inputs", "outputs", "outcomes", "variables", "designer"]) {
+      await tabs.locator(`[data-tab-id="${id}"]`).click();
+      expect(await geometry()).toEqual(original);
+    }
+    await page.screenshot({ path: info.outputPath("consistent-tabs.png") });
+  });
+}
+
+for (const theme of ["light", "dark"]) for (const width of [1440, 360]) {
+  test(`Activity Definition and workflow views share compact tabs (${theme}, ${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?mode=activity-authoring&theme=${theme}`);
+    const activityTabs = page.getByRole("tablist", { name: "Activity Definition authoring views" });
+    const activityGeometry = await activityTabs.evaluate(element => {
+      const style = getComputedStyle(element);
+      const selected = element.querySelector<HTMLElement>('[aria-selected="true"]')!;
+      const selectedStyle = getComputedStyle(selected);
+      return {
+        list: { gap: style.gap, flexWrap: style.flexWrap, overflowX: style.overflowX },
+        tab: { height: selected.getBoundingClientRect().height, gap: selectedStyle.gap, padding: selectedStyle.padding, whiteSpace: selectedStyle.whiteSpace, borderBottomWidth: selectedStyle.borderBottomWidth }
+      };
+    });
+    await expect(activityTabs.locator(".studio-tab-icon[aria-hidden='true']")).toHaveCount(5);
+    await expect(activityTabs).toHaveClass(/studio-tabs--compact/);
+    if (width < 600) {
+      expect(await activityTabs.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+      await activityTabs.getByRole("tab", { name: "Variables", exact: true }).click();
+      await expect(activityTabs.getByRole("tab", { name: "Variables", exact: true })).toBeFocused();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+
+    await page.goto(`/?mode=activity-duplicate-editor&theme=${theme}`);
+    const workflowTabs = page.getByRole("tablist", { name: "Editor view tabs" });
+    const workflowGeometry = await workflowTabs.evaluate(element => {
+      const style = getComputedStyle(element);
+      const selected = element.querySelector<HTMLElement>('[aria-selected="true"]')!;
+      const selectedStyle = getComputedStyle(selected);
+      return {
+        list: { gap: style.gap, flexWrap: style.flexWrap, overflowX: style.overflowX },
+        tab: { height: selected.getBoundingClientRect().height, gap: selectedStyle.gap, padding: selectedStyle.padding, whiteSpace: selectedStyle.whiteSpace, borderBottomWidth: selectedStyle.borderBottomWidth }
+      };
+    });
+    expect(workflowGeometry).toEqual(activityGeometry);
+    await expect(workflowTabs.locator(".studio-tab-icon[aria-hidden='true']")).toHaveCount(7);
+    await expect(workflowTabs).toHaveClass(/studio-tabs--compact/);
+    expect(await workflowTabs.locator("[role='tab'][aria-controls]").count()).toBe(0);
+
+    const designer = workflowTabs.getByRole("tab", { name: "Designer", exact: true });
+    await designer.focus();
+    await designer.press("ArrowRight");
+    const code = workflowTabs.getByRole("tab", { name: "Code", exact: true });
+    await expect(code).toBeFocused();
+    await expect(code).toHaveAttribute("aria-selected", "true");
+
+    if (width < 600) {
+      expect(await workflowTabs.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+      const versions = workflowTabs.getByRole("tab", { name: "Versions", exact: true });
+      await versions.click();
+      await expect(versions).toBeInViewport();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
   });
 }

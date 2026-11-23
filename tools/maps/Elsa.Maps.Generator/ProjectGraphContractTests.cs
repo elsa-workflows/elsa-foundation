@@ -12,16 +12,25 @@ public static class ProjectGraphContractTests
         ("Essentials/src/Workflows/Elsa.Workflows.csproj", true),
         ("Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj", true),
         ("Essentials/tests/A/B/X.csproj", true),
-        ("Extensions/A/src/X.csproj", true),
         ("Extensions/A/src/Sub/X.csproj", true),
         ("Extensions/A/tests/Sub/X.csproj", true),
-        ("Extensions/A/studio/X.csproj", false),
-        // git's pathspec "Extensions/*/src/*.csproj" matches this one, since its '*' also matches '/'.
         ("Extensions/A/studio/src/X.csproj", false),
-        ("Extensions/A/X.csproj", false),
+        ("Extensions/A/templates/src/X.csproj", false),
+        ("essentials/src/Workflows/Elsa.Workflows.csproj", true),
+        ("apps/Elsa.Workbench/Elsa.Workbench.csproj", true),
+        ("essentials/tests/A/B/X.csproj", true),
+        ("extensions/A/src/X.csproj", true),
+        ("extensions/A/src/Sub/X.csproj", true),
+        ("extensions/A/tests/Sub/X.csproj", true),
+        ("extensions/A/studio/X.csproj", false),
+        // git's pathspec "extensions/*/src/*.csproj" matches this one, since its '*' also matches '/'.
+        ("extensions/A/studio/src/X.csproj", false),
+        ("extensions/A/templates/src/X.csproj", false),
+        ("extensions/A/templates/tests/X.csproj", false),
+        ("extensions/A/X.csproj", false),
         ("Studio/src/X.csproj", false),
         ("tools/x/X.csproj", false),
-        ("Essentials/src/Workflows/README.md", false)
+        ("essentials/src/Workflows/README.md", false)
     ];
 
     public static void Run()
