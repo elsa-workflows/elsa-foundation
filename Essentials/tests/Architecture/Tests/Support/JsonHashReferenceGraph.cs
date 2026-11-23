@@ -6,10 +6,12 @@ namespace Elsa.Architecture.Tests;
 /// <summary>Resolved compiled references for a reviewed hash recipe; syntax spelling never grants an exception.</summary>
 internal sealed class JsonHashReferenceGraph
 {
+    private static readonly Lazy<Type?> NonCryptographicAlgorithm = new(() =>
+        System.Type.GetType("System.IO.Hashing.NonCryptographicHashAlgorithm, System.IO.Hashing", throwOnError: false));
     internal sealed record Reference(string Owner, string Target, string Operation, int Occurrence, int Offset,
-        string Role, IReadOnlyList<string> GenericArguments);
+        string Role, IReadOnlyList<string> GenericArguments, string DeclaringTypeContext);
 
-    internal sealed record Definition(string Identity, string Assembly, string Type, string Name, string Kind);
+    internal sealed record Definition(string Identity, string Assembly, string Type, string Name, string Kind, bool HasDelegateParameter = false);
 
     internal IReadOnlyList<Reference> References { get; }
     internal IReadOnlyDictionary<string, Definition> Definitions { get; }
@@ -53,7 +55,17 @@ internal sealed class JsonHashReferenceGraph
                     // An injected delegate is assigned by the constructor/setter's caller. Retain all
                     // observed callers so a new producer cannot borrow an existing helper's receipt.
                     if (Definitions.TryGetValue(identity, out var field) && field.Kind == "delegate-field" && callers.TryGetValue(writer, out var producers))
-                        foreach (var producer in producers) pending.Push(producer);
+                    {
+                        var producerQueue = new Stack<string>(producers);
+                        var seenProducers = new HashSet<string>(StringComparer.Ordinal);
+                        while (producerQueue.TryPop(out var producer))
+                        {
+                            if (!seenProducers.Add(producer)) continue;
+                            pending.Push(producer);
+                            if (Definitions.TryGetValue(producer, out var definition) && definition.HasDelegateParameter && callers.TryGetValue(producer, out var upstream))
+                                foreach (var parent in upstream) producerQueue.Push(parent);
+                        }
+                    }
                 }
             if (outgoing.TryGetValue(identity, out var references))
                 foreach (var reference in references) pending.Push(reference.Target);
@@ -96,7 +108,8 @@ internal sealed class JsonHashReferenceGraph
                          .Concat(type.TypeInitializer is { } initializer ? [initializer] : []).Distinct())
             {
                 var identity = MethodIdentity(method);
-                Add(new(identity, type.Assembly.GetName().Name!, TypeName(type), method.Name, "method"));
+                Add(new(identity, type.Assembly.GetName().Name!, TypeName(type), method.Name, "method",
+                    method.GetParameters().Any(parameter => CarriesDelegate(parameter.ParameterType))));
                 methods[identity] = method;
                 runtimeMethods[(method.Module, method.MetadataToken)] = identity;
             }
@@ -121,7 +134,7 @@ internal sealed class JsonHashReferenceGraph
                     var operation = instruction.OpCode.Name!;
                     var target = member switch
                     {
-                        MethodBase called => runtimeMethods.GetValueOrDefault((called.Module, called.MetadataToken)) ?? MethodIdentity(called),
+                        MethodBase called => runtimeMethods.GetValueOrDefault((called.Module, called.MetadataToken)) ?? DefinitionIdentity(called),
                         FieldInfo field => runtimeFields.GetValueOrDefault((field.Module, field.MetadataToken)) ?? FieldIdentity(field),
                         Type referenced => TypeIdentity(referenced),
                         _ => throw new InvalidOperationException($"Unsupported metadata member {member.MemberType}.")
@@ -131,7 +144,8 @@ internal sealed class JsonHashReferenceGraph
                     occurrences[key] = occurrence;
                     var arguments = member is MethodInfo { IsGenericMethod: true } generic
                         ? generic.GetGenericArguments().Select(TypeName).ToArray() : [];
-                    references.Add(new(owner, target, operation, occurrence, instruction.Offset, Role(member), arguments));
+                    references.Add(new(owner, target, operation, occurrence, instruction.Offset, Role(member), arguments,
+                        TypeName(member as Type ?? member.DeclaringType!)));
                 }
                 catch (Exception error) when (error is ArgumentException or BadImageFormatException or InvalidOperationException or TypeLoadException or FileNotFoundException)
                 {
@@ -152,14 +166,14 @@ internal sealed class JsonHashReferenceGraph
                 {
                     var from = map.InterfaceMethods[index];
                     var to = map.TargetMethods[index];
-                    if (runtimeMethods.TryGetValue((from.Module, from.MetadataToken), out var source) && runtimeMethods.TryGetValue((to.Module, to.MetadataToken), out var target))
-                        Edge(source, target);
+                    if (runtimeMethods.TryGetValue((to.Module, to.MetadataToken), out var target))
+                        Edge(runtimeMethods.GetValueOrDefault((from.Module, from.MetadataToken)) ?? DefinitionIdentity(from), target);
                 }
             }
             foreach (var method in type.GetMethods(flags).Where(method => method.IsVirtual))
             {
                 var root = method.GetBaseDefinition();
-                if (runtimeMethods.TryGetValue((root.Module, root.MetadataToken), out var source)) Edge(source, MethodIdentity(method));
+                Edge(runtimeMethods.GetValueOrDefault((root.Module, root.MetadataToken)) ?? DefinitionIdentity(root), MethodIdentity(method));
             }
         }
         return new(references, definitions, errors,
@@ -179,7 +193,7 @@ internal sealed class JsonHashReferenceGraph
     private static string Role(MemberInfo member)
     {
         var type = member as Type ?? member.DeclaringType;
-        if (type?.FullName == "Elsa.Serialization.Core.JsonHashInput" && type.Assembly.GetName().Name == "Elsa.Serialization.Core")
+        if (type == typeof(Elsa.Serialization.Core.JsonHashInput))
             return "json-hash-input";
         if (type is not null && IsDigestType(type)) return member is Type ? "digest-type" : "digest-primitive";
         return "ordinary";
@@ -188,15 +202,35 @@ internal sealed class JsonHashReferenceGraph
     private static bool IsDigestType(Type type)
     {
         if (typeof(System.Security.Cryptography.HashAlgorithm).IsAssignableFrom(type) || type == typeof(System.Security.Cryptography.IncrementalHash)) return true;
-        for (var current = type; current is not null; current = current.BaseType)
-            if (current.FullName == "System.IO.Hashing.NonCryptographicHashAlgorithm" && current.Assembly.GetName().Name == "System.IO.Hashing") return true;
-        return false;
+        return NonCryptographicAlgorithm.Value?.IsAssignableFrom(type) == true;
+    }
+
+    private static bool CarriesDelegate(Type type)
+    {
+        if (type.IsByRef || type.IsArray) return CarriesDelegate(type.GetElementType()!);
+        return type == typeof(object) || type.IsGenericParameter || typeof(Delegate).IsAssignableFrom(type) ||
+            type.IsGenericType && type.GetGenericArguments().Any(CarriesDelegate);
     }
 
     internal static string MethodIdentity(MethodBase method) =>
         $"{method.DeclaringType!.Assembly.GetName().Name}|{TypeName(method.DeclaringType)}::{method.Name}" +
         (method.IsGenericMethod ? "<" + string.Join(',', method.GetGenericArguments().Select(TypeName)) + ">" : "") +
-        "(" + string.Join(',', method.GetParameters().Select(parameter => TypeName(parameter.ParameterType))) + ")";
+        "(" + string.Join(',', method.GetParameters().Select(parameter => TypeName(parameter.ParameterType))) + ")->" +
+        (method is MethodInfo info ? TypeName(info.ReturnType) : "System.Void");
+
+    private static string DefinitionIdentity(MethodBase method)
+    {
+        if (method.DeclaringType is { IsConstructedGenericType: true } owner)
+        {
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+            var declaration = owner.GetGenericTypeDefinition();
+            method = declaration.GetMethods(flags).Cast<MethodBase>().Concat(declaration.GetConstructors(flags))
+                .Concat(declaration.TypeInitializer is { } initializer ? [initializer] : [])
+                .First(candidate => candidate.Module == method.Module && candidate.MetadataToken == method.MetadataToken);
+        }
+        if (method is MethodInfo { IsGenericMethod: true } generic) method = generic.GetGenericMethodDefinition();
+        return MethodIdentity(method);
+    }
 
     private static string FieldIdentity(FieldInfo field) => $"{field.DeclaringType!.Assembly.GetName().Name}|{TypeName(field.DeclaringType)}::{field.Name}:{TypeName(field.FieldType)}";
     private static string TypeIdentity(Type type) => $"{type.Assembly.GetName().Name}|{TypeName(type)}";

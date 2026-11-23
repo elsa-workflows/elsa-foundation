@@ -24,6 +24,26 @@ public sealed class JsonHashReferenceGraphTests
             public InjectedRecipe(Func<byte[], byte[]> algorithm) { this.algorithm = algorithm; }
             public byte[] Run(byte[] value) => algorithm(value);
         }
+        public class ExternalDigest : ICryptoTransform
+        {
+            public int InputBlockSize => 1; public int OutputBlockSize => 1;
+            public bool CanTransformMultipleBlocks => true; public bool CanReuseTransform => true;
+            public int TransformBlock(byte[] input, int offset, int count, byte[] output, int outputOffset) => 0;
+            public byte[] TransformFinalBlock(byte[] input, int offset, int count) => SHA256.HashData(input);
+            public void Dispose() { }
+        }
+        public class ExternalStream : System.IO.MemoryStream { public override void Write(byte[] value, int offset, int count) { _ = SHA256.HashData(value); } }
+        public class Number
+        {
+            public static implicit operator int(Number value) => 1;
+            public static implicit operator long(Number value) => 2;
+        }
+        public class GenericRecipe<T> { public static string Run(T value) => JsonHashInput.Hash(value); }
+        public class ExternalGenericDigest<T> : System.Collections.Generic.IEqualityComparer<T>
+        {
+            public bool Equals(T left, T right) => true;
+            public int GetHashCode(T value) => SHA256.HashData(new byte[] { 1 })[0];
+        }
         public static class Recipes
         {
             private static readonly Func<byte[], byte[]> Algorithm = SHA256.HashData;
@@ -36,6 +56,13 @@ public sealed class JsonHashReferenceGraphTests
             public static byte[] Dispatch(IDigest algorithm, byte[] value) => algorithm.Compute(value);
             public static byte[] VirtualDispatch(DigestBase algorithm, byte[] value) => algorithm.Compute(value);
             public static InjectedRecipe Factory() => new(SHA256.HashData);
+            public static InjectedRecipe TwoStageFactory() => Build(SHA256.HashData);
+            private static InjectedRecipe Build(Func<byte[], byte[]> algorithm) => new(algorithm);
+            public static InjectedRecipe UnrelatedCallerOfFactory() => TwoStageFactory();
+            public static byte[] ExternalInterface(ICryptoTransform algorithm, byte[] value) => algorithm.TransformFinalBlock(value, 0, value.Length);
+            public static void ExternalVirtual(System.IO.Stream algorithm, byte[] value) => algorithm.Write(value, 0, value.Length);
+            public static int ExternalGeneric(System.Collections.Generic.IEqualityComparer<string> algorithm) => algorithm.GetHashCode("value");
+            public static string ClosedDeclaringTypes(System.Text.Json.JsonElement json, string text) => GenericRecipe<System.Text.Json.JsonElement>.Run(json) + GenericRecipe<string>.Run(text);
             public static string Gateway(System.Text.Json.JsonElement value) => JsonHashInput.Hash(value);
             public static string GenericGateway(string value) => JsonHashInput.Hash<string>(value);
             public static byte[] Mixed(System.Text.Json.JsonElement canonical, string rawJson)
@@ -90,6 +117,9 @@ public sealed class JsonHashReferenceGraphTests
     [InlineData("Property")]
     [InlineData("Dispatch")]
     [InlineData("VirtualDispatch")]
+    [InlineData("ExternalInterface")]
+    [InlineData("ExternalVirtual")]
+    [InlineData("ExternalGeneric")]
     [InlineData("JsonViaWrapper")]
     public void Closure_reaches_real_hashes_through_fields_accessors_interfaces_virtual_calls_and_wrappers(string method)
     {
@@ -118,6 +148,8 @@ public sealed class JsonHashReferenceGraphTests
         var entry = Assert.Single(graph.Definitions.Values.Where(item => item.Type == "HashFixture.InjectedRecipe" && item.Name == "Run"));
         var closure = graph.ReachableDefinitions(entry.Identity);
         Assert.Contains(graph.References, item => closure.Contains(item.Owner) && item.Role == "digest-primitive" && item.Operation == "ldftn");
+        Assert.Contains(closure, item => item.Contains("::TwoStageFactory()", StringComparison.Ordinal));
+        Assert.DoesNotContain(closure, item => item.Contains("::UnrelatedCallerOfFactory()", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -136,6 +168,53 @@ public sealed class JsonHashReferenceGraphTests
         Assert.Contains("System.Text.Json.JsonElement", direct.Target, StringComparison.Ordinal);
         Assert.Equal(["System.String"], generic.GenericArguments);
         Assert.NotEqual(direct.Target, generic.Target);
+    }
+
+    [Fact]
+    public void Constructed_declaring_types_are_retained_separately_from_shared_method_definitions()
+    {
+        var calls = Fixture.Value.References.Where(reference => Owner(reference, "ClosedDeclaringTypes") && reference.Target.Contains("GenericRecipe", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(2, calls.Length);
+        Assert.Equal(calls[0].Target, calls[1].Target);
+        Assert.NotEqual(calls[0].DeclaringTypeContext, calls[1].DeclaringTypeContext);
+        Assert.Contains(calls, call => call.DeclaringTypeContext.Contains("System.Text.Json.JsonElement", StringComparison.Ordinal));
+        Assert.Contains(calls, call => call.DeclaringTypeContext.Contains("System.String", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Valid_conversion_operators_with_the_same_parameters_keep_distinct_return_contracts()
+    {
+        var graph = Fixture.Value;
+        Assert.Empty(graph.Errors);
+        var operators = graph.Definitions.Values.Where(item => item.Type == "HashFixture.Number" && item.Name == "op_Implicit").ToArray();
+        Assert.Equal(2, operators.Length);
+        Assert.NotEqual(operators[0].Identity, operators[1].Identity);
+    }
+
+    [Fact]
+    public void An_exact_name_impostor_does_not_acquire_gateway_authority()
+    {
+        const string source = """
+            namespace Elsa.Serialization.Core { public static class JsonHashInput { public static string Hash(object value) => "impostor"; } }
+            public static class Caller { public static string Run(object value) => Elsa.Serialization.Core.JsonHashInput.Hash(value); }
+            """;
+        var graph = JsonHashReferenceGraph.Scan([Assembly.Load(FixtureCompiler.Compile("Elsa.Serialization.Core", source))]);
+        Assert.Empty(graph.Errors);
+        Assert.Contains(graph.References, reference => reference.Target.Contains("JsonHashInput::Hash", StringComparison.Ordinal));
+        Assert.DoesNotContain(graph.References, reference => reference.Role == "json-hash-input");
+    }
+
+    [Fact]
+    public void An_exact_name_impostor_does_not_become_the_noncryptographic_primitive()
+    {
+        const string source = """
+            namespace System.IO.Hashing { public class NonCryptographicHashAlgorithm { public static byte[] Hash(byte[] value) => value; } }
+            public static class Caller { public static byte[] Run(byte[] value) => System.IO.Hashing.NonCryptographicHashAlgorithm.Hash(value); }
+            """;
+        var graph = JsonHashReferenceGraph.Scan([Assembly.Load(FixtureCompiler.Compile("System.IO.Hashing", source))]);
+        Assert.Empty(graph.Errors);
+        Assert.Contains(graph.References, reference => reference.Target.Contains("NonCryptographicHashAlgorithm::Hash", StringComparison.Ordinal));
+        Assert.DoesNotContain(graph.References, reference => reference.Role == "digest-primitive");
     }
 
     [Fact]
