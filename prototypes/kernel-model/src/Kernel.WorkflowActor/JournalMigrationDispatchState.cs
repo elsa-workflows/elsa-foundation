@@ -19,6 +19,7 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
         await _gate.WaitAsync(cancellationToken);
         try
         {
+            if (_closed || !await IsRunning(cancellationToken)) return null;
             while (!_closed)
             {
                 var page = await reads.TailAsync(scope, plan, _bookmark, cancellationToken);
@@ -30,7 +31,8 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
                     Apply(record);
                 _bookmark = page.Next;
             }
-            return _pending is { } batch ? batch with { Actors = batch.Actors.ToArray() } : null;
+            return _pending is { } batch && await IsRunning(cancellationToken)
+                ? batch with { Actors = batch.Actors.ToArray() } : null;
         }
         finally { _gate.Release(); }
     }
@@ -58,6 +60,9 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
         if (scope.Tenant != bound.Tenant || target != plan)
             throw new ArgumentException("This reader belongs to one tenant and exact plan.");
     }
+
+    private async ValueTask<bool> IsRunning(CancellationToken cancellationToken) =>
+        WorkflowActor.IsRunningMigrationPlan(await reads.GetAsync(bound, plan, cancellationToken), plan);
 
     private void Apply(MigrationPlanJournal? entry)
     {

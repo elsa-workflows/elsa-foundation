@@ -3,6 +3,7 @@ using Kernel.Foundation.InMemory;
 using Kernel.Native;
 using Kernel.WorkflowActor;
 using Contract = Kernel.Foundation.Contracts;
+using Models = Kernel.Model.Contracts;
 using PublicRuntime = Kernel.WorkflowActor.WorkflowRuntime;
 using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
 
@@ -19,17 +20,23 @@ internal static class MigrationPlanActorChecks
         var key = RandomNumberGenerator.GetBytes(32);
         var authority = new MigrationPlanAuthority(key);
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("real-plan"), "real-plan",
-            (_, kind) => kind == Contract.Kinds.Migrate);
+            (_, kind) => kind is Contract.Kinds.Migrate or Contract.Kinds.Terminate);
         Contract.IActorReads reads = new ActorList(store, 1);
         var runtime = new PublicRuntime(ingress, reads);
-        var registry = new WorkflowRegistry().Add(Definition("source", "old")).Add(Definition("target", "new"));
+        var tooWide = new string('é', 600);
+        var registry = new WorkflowRegistry().Add(Definition("source", "old")).Add(Definition("target", "new"))
+            .Add(Definition(tooWide, "too wide"));
         var plans = new MigrationPlanModel(authority, (from, to) => registry.TryGet(from, out _) && registry.TryGet(to, out _));
-        var actorType = new PublicWorkflow([new NativeExecutionModel(registry), plans]);
+        var actorType = new PublicWorkflow([new NativeExecutionModel(registry), plans, new ReadOnlyJournalModel()]);
         var deadline = now + 600_000;
         var invalid = false;
         try { _ = plans.Start(new("missing", "target", deadline)); }
         catch (ArgumentException) { invalid = true; }
         check(invalid, "an unavailable source definition is refused before plan admission");
+        var wide = false;
+        try { _ = plans.Start(new("source", tooWide, deadline)); }
+        catch (ArgumentException) { wide = true; }
+        check(wide, "plan creation enforces the apply path's UTF-8 definition budget");
 
         var plan = await StartPlan("main-plan", deadline);
         await StartWorkflow("first-workflow");
@@ -40,6 +47,12 @@ internal static class MigrationPlanActorChecks
             new Dictionary<string, string> { ["definition"] = "source" });
         var firstPage = await runtime.ListAsync(scope, query);
         var first = firstPage.Items.Single().Header.Ref;
+        var fixture = (await runtime.StartAsync(scope, "other-journal",
+            new(ReadOnlyJournalModel.ModelKey, "other", Json.Write(first)))).Actor!.Value;
+        await Pump(owner);
+        check((await reads.TailAsync(scope, fixture)).Items.Count > 0 &&
+            await NewReader(fixture).ReadPendingAsync(scope, fixture, default) is null,
+            "a different actor cannot supply a runnable batch even when it has a readable Full journal");
         var cursor = firstPage.Next ?? throw new InvalidOperationException("The source selection should have another page.");
         var firstControl = new MigrationPlanControl(1, [first], After: cursor);
         var checkpoint = NewReader(plan);
@@ -109,6 +122,26 @@ internal static class MigrationPlanActorChecks
         await Pump(successor);
         check(FinishedUnderTarget(first) && FinishedUnderTarget(second), "both migrated Native waits resume under the target definition");
 
+        var cancelled = await StartPlan("cancelled-plan", deadline);
+        var secondSelection = await StartWorkflow("cancelled-selection");
+        await Pump(successor);
+        var cancelledReader = NewReader(cancelled);
+        await cancelledReader.SendAsync(MigrationPlanControl.Select, "cancelled-batch",
+            new(1, [secondSelection], AllSelected: true));
+        await Pump(successor);
+        check(await cancelledReader.ReadPendingAsync(scope, cancelled, default) is { Number: 1 },
+            "the cancellation case begins with a cached committed batch");
+        await ingress.SendAsync(scope, new Contract.Target.Ref(cancelled), "terminate-plan", Contract.Kinds.Terminate);
+        await Pump(successor);
+        var cancelledOutcomes = new MigrationPlanOutcomes(reads, scope, cancelled);
+        await Refresh(cancelledOutcomes);
+        check((await reads.GetAsync(scope, cancelled))?.Header.Status == Contract.ActorStatus.Cancelled &&
+            await new MigrationPlanDispatch(ingress, cancelledReader).DispatchAsync(scope, cancelled) is null &&
+            await NewReader(cancelled).ReadPendingAsync(scope, cancelled, default) is null &&
+            cancelledOutcomes.Read() is { Closed: true } closed && closed.NoAnswer.SequenceEqual([secondSelection]) &&
+            (await reads.GetAsync(scope, secondSelection))?.Header.Labels.GetValueOrDefault("definition") == "source",
+            "cancellation stops both cached and freshly rebuilt dispatch and closes the outcome view");
+
         var expiry = now + 200;
         var expiring = await StartPlan("expiring-plan", expiry);
         var waiting = await StartWorkflow("late-workflow");
@@ -144,6 +177,26 @@ internal static class MigrationPlanActorChecks
         bool FinishedUnderTarget(Contract.ActorRef reference) =>
             store.ReadFoundationActor(scope.Tenant, reference.Id).Actor is { Row: { Status: InstanceStatus.Finished } row } &&
             Json.Read<NativeState>(row.State).Variables["output"]?.GetValue<string>() == "new";
+    }
+
+    private sealed class ReadOnlyJournalModel : Models.IExecutionModel
+    {
+        internal const string ModelKey = "test-journal";
+        public string Key => ModelKey;
+        public Type StateType => typeof(Contract.ActorRef);
+        public int StateVersion => 1;
+        public object CreateState(Models.WorkflowStart start) => Json.Read<Contract.ActorRef>(start.Input!);
+        public object UpgradeState(string state, int fromVersion) => throw new NotSupportedException();
+        public Contract.RestorePlan RestoreWaits(Models.InstanceInfo instance, object state) => new([], [], []);
+        public long TerminalGrowth(Models.InstanceInfo instance, object state) => 0;
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public ValueTask TurnAsync(Models.ITurn turn, CancellationToken cancellationToken)
+        {
+            turn.Record(new MigrationPlanJournal.Created("source", "target"));
+            turn.Record(new MigrationPlanJournal.Selected([(Contract.ActorRef)turn.State], Number: 1));
+            return ValueTask.CompletedTask;
+        }
     }
 
     private static Workflow Definition(string name, string output) => Wf.Workflow(name,

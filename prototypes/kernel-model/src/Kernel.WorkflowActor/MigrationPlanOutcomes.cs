@@ -29,6 +29,7 @@ internal abstract record MigrationPlanJournal(string Kind)
     {
         using var document = JsonDocument.Parse(json);
         var record = document.RootElement;
+        if (record.ValueKind == JsonValueKind.String && record.GetString() == "end") return new Closed();
         if (record.ValueKind != JsonValueKind.Object || !record.TryGetProperty(nameof(Kind), out var kind) ||
             kind.ValueKind != JsonValueKind.String) return null;
         return kind.GetString() switch

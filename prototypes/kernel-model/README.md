@@ -129,7 +129,9 @@ The in-memory demo pages two Native workflows from the public instance read mode
 records one undispatched page in its Full journal. An independent runner reads the committed page
 and dispatches migrations to the exact actor references. A fresh runner reconstructs the same
 batch after ownership changes. An authenticated acknowledgment clears the batch. The operator host
-provides a shared control key to plan owners and runners. The outcome projection reports both
+provides a shared control key to plan owners and runners. Before releasing a batch, the runner
+checks that the exact journal belongs to a running plan. Cancellation stops later dispatch reads.
+Previously admitted work may still answer. The outcome projection reports both
 migrations, and the workflows finish under the target definition. A second plan closes on its
 scheduled deadline and records an outcome that arrives after close. Operator API integration,
 automatic selection scheduling and provider qualification remain separate work.

@@ -119,6 +119,18 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     private static WorkflowHeader ReadHeader(ActorHeader header) =>
         JsonSerializer.Deserialize<WorkflowHeader>(header.TypeData) ?? throw new InvalidOperationException("The workflow header is absent.");
 
+    internal static bool IsRunningMigrationPlan(ActorView? view, ActorRef plan)
+    {
+        if (view?.Header is not { Type: ActorType, Status: ActorStatus.Running } header || header.Ref != plan) return false;
+        try
+        {
+            return JsonSerializer.Deserialize<WorkflowHeader>(header.TypeData) is
+                { Model: MigrationPlanModel.ModelKey, Definition: MigrationPlanModel.ModelKey, Version: MigrationPlanModel.PlanVersion,
+                  History: History.Full, Ephemeral: false, Suspended: false };
+        }
+        catch (JsonException) { return false; }
+    }
+
     private static object ReadState(IExecutionModel model, WorkflowHeader workflow, string? state, IReadOnlyList<Message> inbox)
     {
         if (state is null)
