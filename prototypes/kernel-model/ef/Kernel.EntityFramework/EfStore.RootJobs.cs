@@ -13,6 +13,8 @@ public sealed partial class EfStore
     internal Func<string, string>? RootJobHandle { get; private set; }
     internal bool RootJobsEnabled => RootJobHandle is not null;
     internal bool RootTimedJobIssuanceEnabled { get; private set; }
+    internal bool RootTimedJobSettlementEnabled { get; private set; }
+    private bool RootTimedJobs => RootTimedJobIssuanceEnabled || RootTimedJobSettlementEnabled;
 
     internal async Task EnableRootJobsAsync(CancellationToken token)
     {
@@ -26,6 +28,7 @@ public sealed partial class EfStore
             if (_ordinaryRoots is not null)
                 throw new InvalidOperationException("The PostgreSQL owner is already bound.");
             RootTimedJobIssuanceEnabled = db.UsesRootTimedJobIssuance;
+            RootTimedJobSettlementEnabled = db.UsesRootTimedJobSettlement;
             RootJobHandle ??= seed => FoundationSelfSend.Handle(key, seed);
         }
     }

@@ -634,6 +634,22 @@ Changing the persisted deadline by one millisecond makes the original ticket pai
 The cold owner's store poll excludes both rows after the deadline. Production settlement, result delivery and
 recovery still need qualification.
 
+#### Timed Native job settlement qualification
+
+Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database for each run. Use
+`pg-root-timed-job-settlement checked complete` with the Native runner. The other fence is `in-batch`, and
+`timeout` runs the deadline-first case. This fixed-root fixture uses schema 3, message protocol 9 and journal
+codec 1. The protocol-7 issuance reader refuses it.
+
+The first owner commits a real Native job and deadline. A fresh owner then settles the pair under its own
+fence. In the completion case the callback publishes before the deadline and the owner settles after it.
+In the timeout case the new owner takes after the deadline and the old callback returns late. A stale fence
+and a current fence offered an early timeout leave the pair pending.
+
+Settlement replaces both rows with one recorded result and advances the checkpoint without changing the
+saved Native wait. A third owner applies that stored result through Native and records one terminal outcome.
+The fixture counts durable outcomes. The completion case deliberately executes the callback again after takeover.
+
 ### PostgreSQL Suspend and Resume preview
 
 On a fresh dedicated PostgreSQL database, set `KERNEL_PREVIEW_POSTGRES` and run `models/Native.Run/run-root-operator-preview.sh [owned|ef] [checked|in-batch]`.

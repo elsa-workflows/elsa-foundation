@@ -2377,7 +2377,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var generation = _generation;
         var job = ticket.Message.Read<JobTicket>();
         if (loadedSlot.Row is { FoundationDispatchHeader: not null } bound &&
-            RootJobTicket.Read(ticket.Message, bound.Id, bound.Model) is null)
+            RootJobTicket.Read(ticket.Message, bound.Id, bound.Model, timed: _type.RunsRootTimedJobs) is null)
             throw new StoreException(Failure.Definite, "The job ticket does not belong to its generated root.");
         if (!HasPhysicalTrial(ticket))
         {
@@ -3181,8 +3181,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationRootOperator = unit.Row?.FoundationDispatchHeader is not null && unit.Consumed is [var qualified] &&
                 qualified.Message.Operator is not null ? qualified.Message : null,
             FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
-                unit.Consumed is [{ IsWorkerJobCompletion: true, JobDeadline: null, Original: { } original } completed]
-                    ? new((original with { }).AsKernelTicket(), (completed.Message with { }).AsKernelTicket()) : null,
+                unit.Consumed is [{ IsWorkerJobCompletion: true, Original: { } original } completed] &&
+                (completed.JobDeadline is null || _type.RunsRootTimedJobs)
+                    ? new((original with { }).AsKernelTicket(), (completed.Message with { }).AsKernelTicket(),
+                        completed.JobDeadline is null ? null : completed.CompletedAt) : null,
             FoundationSelfRecalls = unit.FoundationSelfRecalls,
             FoundationValues = unit.FoundationValues,
             FoundationHeldPromotions = promotions,

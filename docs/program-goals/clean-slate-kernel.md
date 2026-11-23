@@ -529,8 +529,10 @@ covers an untimed generated-root job across an Embedded process restart with bot
 The [timed issuance fixture](../../prototypes/kernel-model/README.md#timed-native-job-issuance-qualification)
 checks that starting a Native timed job atomically records the exact ticket and deadline and both reload
 at a higher epoch. The cold owner's store poll excludes both rows after the first process exits before acknowledgement.
-Public generated-root deadline settlement, Worker inline promotion and the remaining provider runs still
-need K4 qualification. The [current-owner trial schedule](../../prototypes/kernel-model/sim/ContractJobTrialChecks.cs)
+The [timed settlement fixture](../../prototypes/kernel-model/README.md#timed-native-job-settlement-qualification)
+checks both completion and deadline across ownership changes and applies one recorded result through Native.
+Public production activation, Worker inline promotion and the remaining provider runs still need K4 qualification.
+The [current-owner trial schedule](../../prototypes/kernel-model/sim/ContractJobTrialChecks.cs)
 also needs physical evidence. A timed job settles as a timeout while its callback is still unwinding, and
 trial isolation keeps a competing command pending until the callback exits. MongoDB-specific checks are deferred.
 

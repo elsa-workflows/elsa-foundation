@@ -49,7 +49,8 @@ internal sealed partial class ActorAdapter
             command.Message.Target.Id == input.Actor) return null;
 
         if (rootJobHandle is not null && input.Row is { } bound && input.Taken is [var job] &&
-            Durable.RootJobTicket.IsCompletion(job, bound)) return null;
+            (Durable.RootJobTicket.IsCompletion(job, bound) ||
+                rootTimedJobSettlement && job.Durable && Durable.RootJobTicket.IsRecordedResult(job.Message, bound))) return null;
 
         foreach (var delivery in input.Taken)
         {
@@ -76,7 +77,7 @@ internal sealed partial class ActorAdapter
     private void RequireRootOutcome(Durable.TurnOutcome outcome)
     {
         if (outcome.Row is not { Status: Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished } ||
-            !(rootTimedJobIssuance && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, outcome.Row.Id, outcome.Row.Model)) &&
+            !((rootTimedJobIssuance || rootTimedJobSettlement) && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, outcome.Row.Id, outcome.Row.Model)) &&
                 outcome.Sent.Any(m => !SupportedSend(m, outcome.Row)) ||
             outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
@@ -87,5 +88,22 @@ internal sealed partial class ActorAdapter
         bool SupportedSend(Durable.Message message, Durable.InstanceRow row) =>
             rootJobHandle is not null && message.HasIssuedTicket && Durable.RootJobTicket.Read(message, row.Id, row.Model) is not null ||
             issueSelf is { } issuer && issuer.Allows(message.Due) && Durable.FoundationSelfSend.IsSelfInput(message, row.Id, row.Creation);
+    }
+
+    private Durable.TurnOutcome? SettleRootTimedJob(Durable.TurnInput input)
+    {
+        if (!rootTimedJobSettlement || input.Row is not { Status: Durable.InstanceStatus.Running, Creation: 1 } row ||
+            input.Taken is not [var item] || !item.Durable) return null;
+        if (Durable.RootJobTicket.IsCompletion(item, row, timed: true))
+        {
+            var original = item.Original!;
+            return SettleJob(input, row, item.Message.Read<Durable.JobFinished>(), original.JobGeneration,
+                original.Read<Durable.JobTicket>().Timer, cancel: false, root: true);
+        }
+        if (item.Message is { Kind: Durable.Kinds.JobDeadline, Due: { } due } deadline &&
+            deadline.Read<Durable.JobDeadline>() is { Key: var key } && Durable.JobRegistry.Generation(row, key) is { } generation &&
+            deadline.WithoutTicketAuthority() == Durable.RootJobTicket.Deadline(row.Id, key, generation, due))
+            return SettleJob(input, row, new Durable.JobFinished(key, null, "timeout"), generation, null, cancel: true, root: true);
+        return null;
     }
 }
