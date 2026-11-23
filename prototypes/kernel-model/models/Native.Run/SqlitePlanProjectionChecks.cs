@@ -13,6 +13,7 @@ internal static class SqlitePlanProjectionChecks
 {
     private static Contract.BoundScope Scope => FixedTenantScope.Bind("migration");
     private const string OtherPlan = "second-plan-read-fixture";
+    private const string OpaqueReferencePlan = "opaque-reference-plan";
 
     internal static async Task<int> BuildAsync(string file)
     {
@@ -123,10 +124,14 @@ internal static class SqlitePlanProjectionChecks
         // The view can be backed by any foundation. Exercise coincident plan refs across tenants in the physical reader.
         await AddNeighborAsync("other", plan.Id, extra);
         await AddNeighborAsync(Scope.Tenant, OtherPlan, extra);
+        await AddNeighborAsync(Scope.Tenant, OpaqueReferencePlan, new("short"));
+        await AddNeighborAsync(Scope.Tenant, OpaqueReferencePlan, new("résumé-店"));
         var issuedBookmark = reopened.LastNext ?? throw new InvalidOperationException("The source did not issue a bookmark.");
-        var digest = Digest(plan, true, now, issuedBookmark,
-            [new(migrated, MigrationPlanOutcome.Migrated), new(refusedActor, MigrationPlanOutcome.Refused), new(unanswered, null)]);
+        SqlitePlanProjection.Outcome[] expected =
+            [new(migrated, MigrationPlanOutcome.Migrated), new(refusedActor, MigrationPlanOutcome.Refused), new(unanswered, null)];
+        var digest = Digest(plan, true, now, issuedBookmark, expected);
         await VerifyAsync(file, plan, digest, stop);
+        await VerifyOperatorAsync(file, plan, expected.ToDictionary(row => row.Actor, row => row.Result), now, stop);
         Console.WriteLine($"projected {Environment.ProcessId} {plan.Id} {digest}");
         return 0;
 
@@ -194,7 +199,7 @@ internal static class SqlitePlanProjectionChecks
             await connection.OpenAsync(stop);
             using var command = connection.CreateCommand();
             command.CommandText = """
-                INSERT INTO plan_cursors VALUES ($tenant, $plan, NULL, 0, $asOf);
+                INSERT INTO plan_cursors VALUES ($tenant, $plan, NULL, 0, $asOf) ON CONFLICT (tenant, plan) DO NOTHING;
                 INSERT INTO plan_outcomes VALUES ($tenant, $plan, $actor, NULL);
                 """;
             command.Parameters.AddWithValue("$tenant", tenant);
@@ -256,10 +261,20 @@ internal static class SqlitePlanProjectionChecks
         Check(otherPlanPage is { After: null, Rows: [{ Result: null }], Closed: false } &&
             !results.ContainsKey(otherPlanPage.Rows[0].Actor),
             "The same physical database must isolate different tenants and plans.");
+        await VerifyNeighborProcessAsync(file, plan, otherPlanPage.Rows[0].Actor, stop);
+        var bookmark = await projection.BookmarkAsync(stop) ?? throw new InvalidOperationException("The stored bookmark is missing.");
+        Check(Digest(plan, first.Closed, first.AsOf, bookmark, first.Rows.Concat(second.Rows).Concat(last.Rows)) == expectedDigest,
+            "The persisted actors, outcomes, closed state, catch-up time and bookmark must match the producer receipt.");
+    }
+
+    private static async Task VerifyNeighborProcessAsync(string file, Contract.ActorRef plan, Contract.ActorRef actor,
+        CancellationToken stop, Contract.PageToken? token = null)
+    {
         var start = new ProcessStartInfo("dotnet") { UseShellExecute = false };
         foreach (var value in new[] { typeof(SqlitePlanProjectionChecks).Assembly.Location, "sqlite-plan-projection",
-                     "inspect-neighbor", file, plan.Id, otherPlanPage.Rows[0].Actor.Id })
+                     "inspect-neighbor", file, plan.Id, actor.Id })
             start.ArgumentList.Add(value);
+        if (token is { } foreign) start.ArgumentList.Add(foreign.Value);
         using var child = Process.Start(start) ?? throw new InvalidOperationException("Could not start the other tenant reader.");
         try
         {
@@ -270,19 +285,87 @@ internal static class SqlitePlanProjectionChecks
         {
             if (!child.HasExited) { child.Kill(); await child.WaitForExitAsync(); }
         }
-        var bookmark = await projection.BookmarkAsync(stop) ?? throw new InvalidOperationException("The stored bookmark is missing.");
-        Check(Digest(plan, first.Closed, first.AsOf, bookmark, first.Rows.Concat(second.Rows).Concat(last.Rows)) == expectedDigest,
-            "The persisted actors, outcomes, closed state, catch-up time and bookmark must match the producer receipt.");
     }
 
-    internal static async Task<int> InspectNeighborAsync(string file, string plan, string actor)
+    internal static async Task<int> InspectNeighborAsync(string file, string plan, string actor, string? foreignToken)
     {
         using var timer = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var foreign = new SqlitePlanProjection(file, FixedTenantScope.Bind("other"), new(plan));
-        var page = await foreign.ReadPageAsync(null, 2, timer.Token);
+        var scope = FixedTenantScope.Bind("other");
+        var reference = new Contract.ActorRef(plan);
+        var page = await new SqlitePlanProjection(file, scope, reference).ReadPageAsync(null, 2, timer.Token);
         Check(page is { After: null, Rows: [{ Result: null }], Closed: false } && page.Rows[0].Actor.Id == actor,
             "The other tenant must see its exact fixture row.");
+        if (foreignToken is not null)
+        {
+            IMigrationPlanReads reads = await SqliteMigrationPlanReads.OpenAsync(file, timer.Token);
+            var projected = await reads.ListAsync(scope, reference, 1, cancellationToken: timer.Token);
+            Check(!projected.Closed && projected.Results is { Items: [{ Outcome: null }], Next: null } &&
+                projected.Results.Items[0].Actor.Id == actor && projected.Results.AsOf == page.AsOf,
+                "The operator read must return the other tenant's own projection.");
+            await RefusesAsync(reads, scope, reference, 1, new(foreignToken), "another tenant", timer.Token);
+        }
         return 0;
+    }
+
+    internal static async Task<int> ListAsync(string file, string planRef, int size, string? pageToken)
+    {
+        using var timer = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var stop = timer.Token;
+        IMigrationPlanReads reads = await SqliteMigrationPlanReads.OpenAsync(file, stop);
+        var page = await reads.ListAsync(Scope, new(planRef), size, pageToken is null ? null : new Contract.PageToken(pageToken), stop);
+        Console.WriteLine(Json.Write(new
+        {
+            page.Closed,
+            page.Results.AsOf,
+            Items = page.Results.Items.Select(row => new
+            {
+                Actor = row.Actor.Id,
+                Outcome = row.Outcome?.ToString() ?? (page.Closed ? "NoAnswer" : "Pending")
+            }),
+            Next = page.Results.Next?.Value
+        }));
+        return 0;
+    }
+
+    private static async Task VerifyOperatorAsync(string file, Contract.ActorRef plan,
+        IReadOnlyDictionary<Contract.ActorRef, MigrationPlanOutcome?> expected, long asOf, CancellationToken stop)
+    {
+        IMigrationPlanReads original = await SqliteMigrationPlanReads.OpenAsync(file, stop);
+        var first = await original.ListAsync(Scope, plan, 1, cancellationToken: stop);
+        var firstToken = first.Results.Next ?? throw new InvalidOperationException("The first operator page must supply a continuation.");
+        await new SqlitePlanProjection(file, Scope, plan).InitializeAsync(stop);
+        IMigrationPlanReads reopened = await SqliteMigrationPlanReads.OpenAsync(file, stop);
+        var second = await reopened.ListAsync(Scope, plan, 1, firstToken, stop);
+        var secondToken = second.Results.Next ?? throw new InvalidOperationException("The second operator page must supply a continuation.");
+        var third = await reopened.ListAsync(Scope, plan, 1, secondToken, stop);
+        var all = first.Results.Items.Concat(second.Results.Items).Concat(third.Results.Items).ToDictionary(row => row.Actor, row => row.Outcome);
+        Check(first.Closed && second.Closed && third.Closed && third.Results.Next is null && all.Count == expected.Count &&
+            first.Results.AsOf == asOf && second.Results.AsOf == asOf && third.Results.AsOf == asOf &&
+            expected.All(row => all.TryGetValue(row.Key, out var outcome) && outcome == row.Value),
+            "A reopened read API must traverse the same closed plan at the persisted catch-up time.");
+        var neighbor = await reopened.ListAsync(Scope, new(OtherPlan), 1, cancellationToken: stop);
+        Check(!neighbor.Closed && neighbor.Results.Items is [{ Outcome: null }] && neighbor.Results.Next is null,
+            "The neighboring plan must return its own selected actor.");
+        await VerifyNeighborProcessAsync(file, plan, neighbor.Results.Items[0].Actor, stop, firstToken);
+        await RefusesAsync(reopened, Scope, new(OtherPlan), 1, firstToken, "another plan", stop);
+        await RefusesAsync(reopened, Scope, plan, 2, firstToken, "another page size", stop);
+        await RefusesAsync(reopened, Scope, plan, 1, new("invalid-page-token"), "an invalid token", stop);
+
+        var opaque = new Contract.ActorRef(OpaqueReferencePlan);
+        var unicodeRef = await reopened.ListAsync(Scope, opaque, 1, cancellationToken: stop);
+        var shortRef = await reopened.ListAsync(Scope, opaque, 1, unicodeRef.Results.Next, stop);
+        Check(unicodeRef.Results.Items is [{ Actor.Id: "résumé-店" }] && unicodeRef.Results.Next is not null &&
+            shortRef.Results.Items is [{ Actor.Id: "short" }] && shortRef.Results.Next is null,
+            "Operator pages must carry short and Unicode references without interpreting their shape.");
+
+    }
+
+    private static async Task RefusesAsync(IMigrationPlanReads reads, Contract.BoundScope scope, Contract.ActorRef plan,
+        int size, Contract.PageToken from, string context, CancellationToken stop)
+    {
+        try { await reads.ListAsync(scope, plan, size, from, stop); }
+        catch (ArgumentException error) when (error.ParamName == "from") { return; }
+        throw new InvalidOperationException($"The operator read must reject a continuation for {context}.");
     }
 
     private static void Check(bool ok, string message)

@@ -8,7 +8,7 @@ namespace Kernel.Native.Run;
 internal sealed class SqlitePlanProjection(string file, BoundScope scope, ActorRef plan)
 {
     internal sealed record Outcome(ActorRef Actor, MigrationPlanOutcome? Result);
-    internal sealed record OutcomePage(bool Closed, long AsOf, IReadOnlyList<Outcome> Rows, ActorRef? After);
+    internal sealed record OutcomePage(bool Closed, long AsOf, IReadOnlyList<Outcome> Rows, ActorRef? After, long? CursorId = null);
 
     private SqliteConnection Open(SqliteOpenMode mode = SqliteOpenMode.ReadWrite) =>
         new(new SqliteConnectionStringBuilder { DataSource = file, Mode = mode }.ConnectionString);
@@ -17,7 +17,9 @@ internal sealed class SqlitePlanProjection(string file, BoundScope scope, ActorR
     {
         await using var db = Open(SqliteOpenMode.ReadWriteCreate);
         await db.OpenAsync(stop);
+        using var transaction = db.BeginTransaction(deferred: false);
         using var command = db.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             CREATE TABLE IF NOT EXISTS plan_cursors (
                 tenant TEXT NOT NULL, plan TEXT NOT NULL, bookmark TEXT, closed INTEGER NOT NULL, as_of INTEGER NOT NULL,
@@ -29,6 +31,8 @@ internal sealed class SqlitePlanProjection(string file, BoundScope scope, ActorR
             ) WITHOUT ROWID;
             """;
         await command.ExecuteNonQueryAsync(stop);
+        await SqliteMigrationPlanReads.EnsureKeyAsync(db, transaction, stop);
+        await transaction.CommitAsync(stop);
     }
 
     internal async Task<PageToken?> BookmarkAsync(CancellationToken stop)
@@ -122,13 +126,27 @@ internal sealed class SqlitePlanProjection(string file, BoundScope scope, ActorR
         return true;
     }
 
-    internal async Task<OutcomePage> ReadPageAsync(ActorRef? after, int size, CancellationToken stop)
+    internal Task<OutcomePage> ReadPageAsync(ActorRef? after, int size, CancellationToken stop) =>
+        ReadPageAsync(after, null, false, size, stop);
+
+    internal Task<OutcomePage> ReadOperatorPageAsync(long? cursorId, int size, CancellationToken stop) =>
+        ReadPageAsync(null, cursorId, true, size, stop);
+
+    private async Task<OutcomePage> ReadPageAsync(ActorRef? after, long? cursorId, bool includeCursor, int size, CancellationToken stop)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(size, 500);
         await using var db = Open(SqliteOpenMode.ReadOnly);
         await db.OpenAsync(stop);
         using var snapshot = db.BeginTransaction(deferred: true);
+        if (cursorId is { } prior)
+        {
+            using var boundary = Command(db, snapshot, "SELECT actor FROM plan_result_cursors WHERE tenant = $tenant AND plan = $plan AND id = $id");
+            boundary.Parameters.AddWithValue("$id", prior);
+            if (await boundary.ExecuteScalarAsync(stop) is not string actor)
+                throw new ArgumentException("The continuation no longer names a result of this plan.", "from");
+            after = new(actor);
+        }
         bool closed;
         long asOf;
         using (var metadata = Command(db, snapshot, "SELECT closed, as_of FROM plan_cursors WHERE tenant = $tenant AND plan = $plan"))
@@ -144,17 +162,26 @@ internal sealed class SqlitePlanProjection(string file, BoundScope scope, ActorR
             """);
         query.Parameters.AddWithValue("$after", after?.Id ?? string.Empty);
         query.Parameters.AddWithValue("$limit", size + 1);
-        await using var reader = await query.ExecuteReaderAsync(stop);
         var rows = new List<Outcome>();
-        while (await reader.ReadAsync(stop))
-            rows.Add(new(new(reader.GetString(0)), reader.IsDBNull(1) ? null : (MigrationPlanOutcome)reader.GetInt32(1)));
+        await using (var reader = await query.ExecuteReaderAsync(stop))
+            while (await reader.ReadAsync(stop))
+                rows.Add(new(new(reader.GetString(0)), reader.IsDBNull(1) ? null : (MigrationPlanOutcome)reader.GetInt32(1)));
         ActorRef? next = null;
         if (rows.Count > size)
         {
             rows.RemoveAt(size);
             next = rows[^1].Actor;
         }
-        return new(closed, asOf, rows, next);
+        long? nextId = null;
+        if (includeCursor && next is { } last)
+        {
+            using var boundary = Command(db, snapshot, "SELECT id FROM plan_result_cursors WHERE tenant = $tenant AND plan = $plan AND actor = $actor");
+            boundary.Parameters.AddWithValue("$actor", last.Id);
+            if (await boundary.ExecuteScalarAsync(stop) is not long id)
+                throw new InvalidOperationException("The scoped result is missing its continuation row.");
+            nextId = id;
+        }
+        return new(closed, asOf, rows, next, nextId);
     }
 
     private SqliteCommand Command(SqliteConnection db, SqliteTransaction? transaction, string sql)
