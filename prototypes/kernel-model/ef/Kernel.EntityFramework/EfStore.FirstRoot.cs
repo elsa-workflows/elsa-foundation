@@ -12,6 +12,7 @@ public sealed partial class EfStore
     {
         { UsesRootValueProtocol: true } => StoredState.Family + "5:public-root-values:",
         { UsesRootTimedJobSettlement: true } => StoredState.Family + "6:public-root-timed-jobs:",
+        { UsesRootReplyProtocol: true } => StoredState.Family + "7:public-root-replies:",
         _ => PublicRootState
     };
 
@@ -175,7 +176,7 @@ public sealed partial class EfStore
     {
         await using var db = create();
         var family = RootStateFamily(db);
-        if (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement)
+        if (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol)
             await RequireStoreVersionsAsync(db, cancellationToken);
         var physical = await db.Database.SqlQuery<PhysicalRoot>($"""
             SELECT i."Id", b."Creation", i."State", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",

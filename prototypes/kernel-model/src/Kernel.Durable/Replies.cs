@@ -158,7 +158,10 @@ public sealed class Requests
     public void Receive(Reply reply) => TryReceive(reply);
 
     /// <summary>Whether this delivery completed its addressed open registration.</summary>
-    public bool TryReceive(Reply reply)
+    public bool TryReceive(Reply reply) => TryReceive(reply, null);
+
+    // The receiving edge can supply its authoritative arrival observation for a deadline-bound route.
+    internal bool TryReceive(Reply reply, long? receivedAt)
     {
         lock (_gate)
         {
@@ -168,6 +171,13 @@ public sealed class Requests
                 Interlocked.Increment(ref _rejectedTenantReplies);
                 return false;
             }
+            if (receivedAt >= request.Deadline && (_flaws & Flaw.NoDeadline) == 0)
+            {
+                request.End("timeout");
+                _open.Remove(request.Registration);
+                return false;
+            }
+
             var wasOpen = !request.Done;
             var again = (_flaws & Flaw.ReplyTwice) != 0;
             request.Receive(reply, again);

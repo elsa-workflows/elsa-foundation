@@ -59,7 +59,10 @@ internal sealed partial class ActorAdapter
                 Durable.FoundationSelfSend.IsSelfInput(message, issuer.Id, issuer.Creation)) continue;
             if (!delivery.Durable || message.Target.Id != input.Actor || message.TargetCreation != 1 ||
                 message.Sender is not null || message.EventMatch is not null ||
-                message.ActorAuthored || message.Operator is not null || message.ReplyTo is not null)
+                message.ActorAuthored || message.Operator is not null)
+                return "RootDispatchUnavailable";
+            if (message.ReplyTo is not null && (!rootHeldReplies || message.Start is not null ||
+                input.Row?.FoundationDispatchHeader is not { } qualified || delivery.ReplyTenant != qualified.Tenant))
                 return "RootDispatchUnavailable";
             if (message.Start is not null)
             {
@@ -81,7 +84,8 @@ internal sealed partial class ActorAdapter
                 outcome.Sent.Any(m => !SupportedSend(m, outcome.Row)) ||
             outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
-            outcome.Emitted.Count != 0 || outcome.FoundationCascade is not null || outcome.InMemory)
+            outcome.Emitted.Count != 0 && (!rootHeldReplies || !outcome.Consumed.Exists(delivery => delivery.ReplyRoute is not null)) ||
+            outcome.FoundationCascade is not null || outcome.InMemory)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
 

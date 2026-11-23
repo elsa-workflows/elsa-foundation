@@ -123,10 +123,12 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     private sealed class RootJobDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootTimedJobIssuanceDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootValueDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootReplyDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootTimedJobSettlementDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     internal StoreFormat RequiredFormat => this switch
     {
         RootTimedJobSettlementDb => StoreFormat.RootTimedJobSettlement,
+        RootReplyDb => StoreFormat.RootReplies,
         RootValueDb => StoreFormat.RootValues,
         RootTimedJobIssuanceDb => StoreFormat.RootTimedJobIssuance,
         RootJobDb => StoreFormat.RootJobs,
@@ -139,6 +141,8 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     internal bool UsesRootJobProtocol => this is RootJobDb or RootTimedJobIssuanceDb or RootTimedJobSettlementDb;
     internal bool UsesRootTimedJobIssuance => this is RootTimedJobIssuanceDb;
     internal bool UsesRootTimedJobSettlement => this is RootTimedJobSettlementDb;
+    internal bool UsesRootReplyProtocol => this is RootReplyDb;
+    internal static KernelDb ForPostgresRootReplies(DbContextOptions<KernelDb> options) => new RootReplyDb(options);
     internal bool UsesRootValueProtocol => this is RootValueDb;
     internal static KernelDb ForPostgresRootValues(DbContextOptions<KernelDb> options) => new RootValueDb(options);
     internal static KernelDb ForPostgresRootJobs(DbContextOptions<KernelDb> options) => new RootJobDb(options);
@@ -182,6 +186,8 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
             throw new NotSupportedException("The continuation profile requires PostgreSQL.");
         if (UsesRootJobProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The generated-root job profile requires PostgreSQL.");
+        if (UsesRootReplyProtocol && !Database.IsNpgsql())
+            throw new NotSupportedException("The generated-root held reply profile requires PostgreSQL.");
         if (UsesRootValueProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The generated-root value qualification requires PostgreSQL.");
         if (UsesRootOperatorProtocol && !Database.IsNpgsql())
@@ -706,9 +712,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (root.Discover)
             {
                 var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
-                return ToGeneratedPoll(page, root, db.UsesRootOperatorProtocol);
+                return ToGeneratedPoll(page, root, db.UsesRootOperatorProtocol, db.UsesRootReplyProtocol);
             }
-            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db.UsesRootOperatorProtocol);
+            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db.UsesRootOperatorProtocol, db.UsesRootReplyProtocol);
         }
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
     }
@@ -769,14 +775,14 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
 
-    private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope, bool operators)
+    private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope, bool operators, bool replies)
     {
         var found = page.Where(r => r.Target is not null).Select(r =>
             new WorkerRoot(r.BirthTenant!, r.BirthReference!, r.Target!, r.BirthPartition!.Value, r.BirthFingerprint!)).Distinct().ToArray();
-        return ToPolled(page, new(scope.FixedPartition, found), operators);
+        return ToPolled(page, new(scope.FixedPartition, found), operators, replies);
     }
 
-    private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null, bool operators = false)
+    private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null, bool operators = false, bool replies = false)
     {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
         {
@@ -794,9 +800,12 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     JobGeneration = r.JobGeneration!.Value, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
-                    : DecodeRootInput(entity, root.Reference, RootSelfIssuer, RootJobsEnabled, RootTimedJobSettlementEnabled);
+                    : DecodeRootInput(entity, root.Reference, RootSelfIssuer, RootJobsEnabled, RootTimedJobSettlementEnabled, replies);
                 if (root != bindings.ForInput(message.InboxKey)) throw RootShape();
-                return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
+                return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value)
+                {
+                    ReplyTenant = replies && message.Start is null && message.ReplyTo is not null ? root.Tenant : null
+                };
             }
             if (key.Match is null &&
                 (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) ||

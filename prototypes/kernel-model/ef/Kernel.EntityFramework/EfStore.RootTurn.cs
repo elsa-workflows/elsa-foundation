@@ -86,7 +86,7 @@ public sealed partial class EfStore
             """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count).AsNoTracking().ToListAsync(cancellationToken);
         if (!db.UsesRootOperatorProtocol && rows.Any(row => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))))
             return false;
-        var messages = rows.Select(row => DecodeRootInput(row, reference, issue)).ToArray();
+        var messages = rows.Select(row => DecodeRootInput(row, reference, issue, replies: db.UsesRootReplyProtocol)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(m => m.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
 
@@ -98,21 +98,21 @@ public sealed partial class EfStore
         var ids = expected.Where(k => k.Scope == InboxKey.FoundationOccurrenceScope).Select(k => k.Id).ToArray();
         if (ids.Length == 0) return true;
         var settled = await db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE "Messages" SET "Done" = true, "Payload" = NULL, "Start" = NULL
+            UPDATE "Messages" SET "Done" = true, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL
             WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({ids}) AND "EventMatch" IS NULL
                 AND NOT "Done" AND "Target" = {actor.Id} AND "Partition" = {home} AND "KeepUntil" IS NOT NULL
             """, cancellationToken);
         return settled == ids.Length;
     }
 
-    private static Message DecodeRootInput(MessageEntity row, string reference, FoundationSelfIssuer? issue, bool jobs = false, bool timed = false) =>
+    private static Message DecodeRootInput(MessageEntity row, string reference, FoundationSelfIssuer? issue, bool jobs = false, bool timed = false, bool replies = false) =>
         row.InboxScope switch
         {
             RootJobScope => jobs ? DecodeRootJob(row) : throw RootShape(),
             RootTimedJobScope => timed ? DecodeRootTimedRow(row) : throw RootShape(),
             RootSelfScope => DecodeRootSelf(row, issue),
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
-                ? PostgresRootAdmission.DecodeOperator(row, reference) : PostgresRootAdmission.DecodeDirect(row, reference)
+                ? PostgresRootAdmission.DecodeOperator(row, reference) : PostgresRootAdmission.DecodeDirect(row, reference, replies)
         };
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,
