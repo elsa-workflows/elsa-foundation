@@ -7,7 +7,7 @@ namespace Kernel.Native.Run;
 internal sealed class PostgresPreviewFoundation(
     PostgresRootAdmission admission,
     EfStore store,
-    PostgresRootJournalReader journal,
+    PostgresRootReads reads,
     string actorType,
     Func<Contract.BoundScope, string, bool>? authorizeOperator = null) : Contract.IIngress, Contract.IActorReads
 {
@@ -75,7 +75,7 @@ internal sealed class PostgresPreviewFoundation(
 
     public ValueTask<Contract.Page<Contract.JournalEntry>> TailAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
-        journal.TailAsync(scope, actor, from, cancellationToken);
+        reads.TailAsync(scope, actor, from, cancellationToken);
 
     public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default) =>
@@ -87,7 +87,7 @@ internal sealed class PostgresPreviewFoundation(
 
     public ValueTask<Contract.Page<Contract.ActorView>> ListAsync(Contract.BoundScope scope, Contract.ActorQuery query,
         Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("Actor lists are outside this preview.");
+        reads.ListAsync(scope, query, from, cancellationToken);
 
     public ValueTask<Contract.Page<Contract.DeliveryView>> InboxAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>

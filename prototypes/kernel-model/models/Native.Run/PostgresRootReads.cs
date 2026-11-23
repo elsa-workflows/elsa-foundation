@@ -1,13 +1,40 @@
+using System.Text;
 using Kernel.Foundation.Contracts;
 using Kernel.EntityFramework;
 using Bookmark = Kernel.Durable.FoundationJournalPaging.Bookmark;
 
 namespace Kernel.Native.Run;
 
-internal sealed class PostgresRootJournalReader(EfStore store, FoundationReadCursor cursor, int pageSize)
+internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor cursor, int pageSize)
 {
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
+
+    internal async ValueTask<Page<ActorView>> ListAsync(BoundScope scope, ActorQuery query, PageToken? from,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+        var labels = query.Labels?.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray() ?? [];
+        var context = Encoding.UTF8.GetBytes(DurableKeyJson.Write(new
+        {
+            Read = "postgres-actor-list/1", scope.Tenant, query.Type, query.Status, Labels = labels, query.EndedBefore, query.Parked
+        }));
+        Span<byte> bookmark = stackalloc byte[64];
+        if (from is { } token && !cursor.TryOpen(context, token.Value, bookmark))
+            throw new ArgumentException("The continuation does not match this actor list.", nameof(from));
+        var after = from is null ? "" : Encoding.ASCII.GetString(bookmark);
+        int? status = query.Status is { } filter ? (int)filter : null;
+        var page = await store.ReadRootActorListAsync(scope.Tenant, after, query.Type, status, labels, query.EndedBefore,
+            query.Parked, _pageSize + 1, cancellationToken);
+        var items = page.Items.Take(_pageSize).Select(row => new ActorView(
+            new(new(row.Reference), row.Type, scope.Tenant, (ActorStatus)row.Status, null, null, row.EndedAt, row.TypeData,
+                row.Labels), null, null, page.AsOf)).ToArray();
+        PageToken? next = page.Items.Count > _pageSize
+            ? new(cursor.Seal(context, Encoding.ASCII.GetBytes(items[^1].Header.Ref.Id))) : null;
+        return new(items, next, page.AsOf);
+    }
 
     internal async ValueTask<Page<JournalEntry>> TailAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
         CancellationToken cancellationToken = default)

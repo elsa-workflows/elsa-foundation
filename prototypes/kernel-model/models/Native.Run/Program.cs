@@ -85,6 +85,11 @@ if (args is ["pg-runtime-cluster"]) return await PostgresRuntimeCluster.RunAsync
 if (args is ["pg-runtime-cluster", "wake"]) return await PostgresRuntimeCluster.RunAsync(wake: true);
 if (args is ["pg-runtime-cluster-member"]) return await PostgresRuntimeCluster.MemberAsync();
 if (args is ["pg-runtime-cluster-member", "wake"]) return await PostgresRuntimeCluster.MemberAsync(wake: true);
+if (args is ["pg-root-list", var listWriter and ("owned" or "ef"), var listFence and ("checked" or "in-batch"), .. var listArgs])
+{
+    if (listArgs is ["birth"]) return await PostgresRootListChecks.RunAsync(listWriter == "owned", listFence == "in-batch", null);
+    if (listArgs is ["restart", var token]) return await PostgresRootListChecks.RunAsync(listWriter == "owned", listFence == "in-batch", new(token));
+}
 if (args is ["pg-root-history", var historyWriter and ("owned" or "ef"), var historyFence and ("checked" or "in-batch")])
     return await PostgresRootHistoryChecks.RunAsync(historyWriter == "owned", historyFence == "in-batch");
 if (args is ["pg-statechart-preview", "birth"]) return await PostgresStatechartPreview.RunAsync(null);
