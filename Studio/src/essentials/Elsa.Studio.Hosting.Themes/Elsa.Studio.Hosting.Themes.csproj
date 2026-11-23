@@ -15,4 +15,7 @@
     <ProjectReference Include="../Elsa.Studio.Api/Elsa.Studio.Api.csproj" />
     <ProjectReference Include="../Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

@@ -27,4 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../../Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

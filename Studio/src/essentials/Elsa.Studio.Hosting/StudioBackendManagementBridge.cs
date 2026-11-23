@@ -17,6 +17,16 @@ namespace Elsa.Studio.Hosting;
 /// </summary>
 internal static class StudioBackendManagementBridge
 {
+    private static readonly System.Text.Json.JsonSerializerOptions WireJson = CreateWireJson();
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.MakeReadOnly();
+        return options;
+    }
+
     public static IEndpointRouteBuilder MapStudioBackendManagementBridge(this IEndpointRouteBuilder endpoints)
     {
         // Host-control permission gating (#249, ADR 0037). Status + registry read the backend module/feature registry,
@@ -39,7 +49,7 @@ internal static class StudioBackendManagementBridge
         CancellationToken cancellationToken)
     {
         var status = await client.GetManagementStatusAsync(cancellationToken);
-        return Results.Ok(status);
+        return Results.Json(status, options: WireJson);
     }
 
     // The Studio-owned backend host-registry read (#246, ADR 0037). The browser calls this with only its normal
@@ -51,7 +61,7 @@ internal static class StudioBackendManagementBridge
         CancellationToken cancellationToken)
     {
         var envelope = await client.GetRegistryAsync(cancellationToken);
-        return Results.Ok(envelope);
+        return Results.Json(envelope, options: WireJson);
     }
 
     /// <summary>

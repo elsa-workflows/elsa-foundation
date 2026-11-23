@@ -29,6 +29,18 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncLifetime
     private const string ValidBearer = "a-valid-backend-bearer";
 
     private WebApplication? _app;
+    private bool _conflictingJson;
+
+    [Fact]
+    public async Task Registry_preserves_backend_json_bytes_under_conflicting_host_options()
+    {
+        _conflictingJson = true;
+        const string raw = """{ "host":{"id":"backend"}, "modules":[], "OrderTotal":1.00, "text":"Ren\u00e9 <>&", "explicit":null, "large":9007199254740993 }""";
+        using var client = await StartConfiguredHostAsync(RespondingWith(_ => JsonOk(raw)));
+        var envelope = await GetRegistryAsync(client);
+        Assert.Equal(raw, envelope.GetProperty("registry").GetRawText());
+        Assert.EndsWith("Z", envelope.GetProperty("checkedAt").GetString());
+    }
 
     // ---- Status read ----
 
@@ -277,6 +289,13 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncLifetime
         // Route both the typed management client and the named auth client through the recording backend stub so the
         // test asserts real HTTP behaviour (status codes, headers, outbound-call counts) at the wire.
         builder.Services.RouteAllBackendClientsThrough(backend);
+        if (_conflictingJson)
+            builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+            {
+                options.SerializerOptions.WriteIndented = true;
+                options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+                options.SerializerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default;
+            });
 
         var app = builder.Build();
         app.UseElsaStudio();

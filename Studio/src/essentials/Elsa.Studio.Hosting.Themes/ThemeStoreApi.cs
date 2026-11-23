@@ -9,6 +9,16 @@ namespace Elsa.Studio.Hosting.Themes;
 
 internal static class ThemeStoreApi
 {
+    private static readonly System.Text.Json.JsonSerializerOptions WireJson = CreateWireJson();
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.MakeReadOnly();
+        return options;
+    }
+
     private const long MaxAssetSize = 2 * 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options) { WriteIndented = true };
     private static readonly Regex ThemeIdPattern = new("^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -54,7 +64,7 @@ internal static class ThemeStoreApi
         var group = endpoints.MapGroup("/_elsa/theme-store").WithElsaJsonResponseHeaders()
             .RequireAuthorization(authorizationPolicy);
 
-        group.MapGet("/capabilities/core", () => Results.Ok(new ThemeFeatureCapabilityResponse(true)));
+        group.MapGet("/capabilities/core", () => Results.Json(new ThemeFeatureCapabilityResponse(true), options: WireJson));
         group.MapGet("", GetThemeStoreAsync);
         group.MapGet("/assets/{id}/content", GetAssetContentAsync);
 
@@ -69,7 +79,7 @@ internal static class ThemeStoreApi
         var group = endpoints.MapGroup("/_elsa/theme-store").WithElsaJsonResponseHeaders()
             .RequireAuthorization(authorizationPolicy);
 
-        group.MapGet("/capabilities/picker", () => Results.Ok(new ThemeFeatureCapabilityResponse(true)));
+        group.MapGet("/capabilities/picker", () => Results.Json(new ThemeFeatureCapabilityResponse(true), options: WireJson));
 
         return endpoints;
     }
@@ -82,7 +92,7 @@ internal static class ThemeStoreApi
         var group = endpoints.MapGroup("/_elsa/theme-store").WithElsaJsonResponseHeaders()
             .RequireAuthorization(authorizationPolicy);
 
-        group.MapGet("/capabilities/management", () => Results.Ok(new ThemeFeatureCapabilityResponse(true)));
+        group.MapGet("/capabilities/management", () => Results.Json(new ThemeFeatureCapabilityResponse(true), options: WireJson));
         group.MapPut("/themes/{id}", SaveThemeAsync);
         group.MapPut("/themes/{id}/visibility", SetThemeVisibilityAsync);
         group.MapPost("/themes/{id}/duplicate", DuplicateThemeAsync);
@@ -106,7 +116,7 @@ internal static class ThemeStoreApi
     {
         var snapshot = await ReadStoreAsync(environment, themeService, request, cancellationToken);
         var store = snapshot.View;
-        return Results.Ok(ToResponse(store));
+        return Results.Json(ToResponse(store), options: WireJson);
     }
 
     private static async Task<IResult> SaveThemeAsync(
@@ -119,13 +129,13 @@ internal static class ThemeStoreApi
         CancellationToken cancellationToken)
     {
         if (theme is null)
-            return Results.BadRequest(new ThemeStoreErrorResponse("Theme payload is required."));
+            return Results.Json(new ThemeStoreErrorResponse("Theme payload is required."), options: WireJson, statusCode: 400);
 
         if (!StringComparer.OrdinalIgnoreCase.Equals(id, theme.Id))
-            return Results.BadRequest(new ThemeStoreErrorResponse("Theme ID in the route must match the payload."));
+            return Results.Json(new ThemeStoreErrorResponse("Theme ID in the route must match the payload."), options: WireJson, statusCode: 400);
 
         if (ValidateCustomTheme(theme) is { } validationError)
-            return Results.BadRequest(new ThemeStoreErrorResponse(validationError));
+            return Results.Json(new ThemeStoreErrorResponse(validationError), options: WireJson, statusCode: 400);
 
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
         var snapshot = await ReadStoreAsync(environment, themeService, request, cancellationToken);
@@ -134,7 +144,7 @@ internal static class ThemeStoreApi
         themes.Add(theme with { Source = "custom" });
         var managed = snapshot.Managed with { Themes = themes.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray() };
         await WriteStoreAsync(environment, managed, cancellationToken);
-        return Results.Ok(ToResponse((await ReadStoreAsync(environment, themeService, request, cancellationToken)).View));
+        return Results.Json(ToResponse((await ReadStoreAsync(environment, themeService, request, cancellationToken)).View), options: WireJson);
     }
 
     /// <summary>
@@ -153,9 +163,9 @@ internal static class ThemeStoreApi
         CancellationToken cancellationToken)
     {
         if (request is null)
-            return Results.BadRequest(new ThemeStoreErrorResponse("Visibility payload is required."));
+            return Results.Json(new ThemeStoreErrorResponse("Visibility payload is required."), options: WireJson, statusCode: 400);
         if (!BuiltInThemeIds.Contains(id))
-            return Results.BadRequest(new ThemeStoreErrorResponse("Only built-in themes use the visibility endpoint. Save custom themes with their enabled flag instead."));
+            return Results.Json(new ThemeStoreErrorResponse("Only built-in themes use the visibility endpoint. Save custom themes with their enabled flag instead."), options: WireJson, statusCode: 400);
 
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
         var snapshot = await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken);
@@ -169,18 +179,18 @@ internal static class ThemeStoreApi
         else
         {
             if (StringComparer.OrdinalIgnoreCase.Equals(store.DefaultThemeId, id))
-                return Results.BadRequest(new ThemeStoreErrorResponse("The default theme cannot be disabled. Pick another default theme first."));
+                return Results.Json(new ThemeStoreErrorResponse("The default theme cannot be disabled. Pick another default theme first."), options: WireJson, statusCode: 400);
 
             disabled.Add(id);
             var enabledBuiltInCount = BuiltInThemeIds.Count(builtIn => IsSourceAllowed(store, builtIn, true) && !disabled.Contains(builtIn));
             var enabledCustomCount = store.Themes.Count(theme => theme.Source == "custom" && theme is { Enabled: true, Published: true } && IsSourceAllowed(store, theme.Id, false));
             if (IsSourceAllowed(store, id, true) && enabledBuiltInCount + enabledCustomCount == 0)
-                return Results.BadRequest(new ThemeStoreErrorResponse("At least one selectable theme must remain enabled."));
+                return Results.Json(new ThemeStoreErrorResponse("At least one selectable theme must remain enabled."), options: WireJson, statusCode: 400);
         }
 
         var managed = snapshot.Managed with { DisabledBuiltInThemeIds = disabled.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray() };
         await WriteStoreAsync(environment, managed, cancellationToken);
-        return Results.Ok(ToResponse((await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken)).View));
+        return Results.Json(ToResponse((await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken)).View), options: WireJson);
     }
 
     private static async Task<IResult> DuplicateThemeAsync(
@@ -197,7 +207,7 @@ internal static class ThemeStoreApi
         var store = snapshot.View;
         var source = store.Themes.FirstOrDefault(theme => StringComparer.OrdinalIgnoreCase.Equals(theme.Id, id));
         if (source is null)
-            return Results.NotFound(new ThemeStoreErrorResponse($"Theme '{id}' was not found."));
+            return Results.Json(new ThemeStoreErrorResponse($"Theme '{id}' was not found."), options: WireJson, statusCode: 404);
 
         var duplicateName = request?.Name;
         var duplicateId = UniqueThemeId(Slugify(duplicateName ?? $"{source.Name} Copy"), store.Themes);
@@ -210,11 +220,11 @@ internal static class ThemeStoreApi
             Published = false
         };
         if (ValidateCustomTheme(duplicate) is { } validationError)
-            return Results.BadRequest(new ThemeStoreErrorResponse(validationError));
+            return Results.Json(new ThemeStoreErrorResponse(validationError), options: WireJson, statusCode: 400);
 
         var managed = snapshot.Managed with { Themes = (snapshot.Managed.Themes ?? []).Concat([duplicate]).OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray() };
         await WriteStoreAsync(environment, managed, cancellationToken);
-        return Results.Ok(duplicate);
+        return Results.Json(duplicate, options: WireJson);
     }
 
     private static async Task<IResult> DeleteThemeAsync(
@@ -230,17 +240,17 @@ internal static class ThemeStoreApi
         var store = snapshot.View;
         var theme = store.Themes.FirstOrDefault(x => StringComparer.OrdinalIgnoreCase.Equals(x.Id, id));
         if (theme is null)
-            return Results.NotFound(new ThemeStoreErrorResponse($"Theme '{id}' was not found."));
+            return Results.Json(new ThemeStoreErrorResponse($"Theme '{id}' was not found."), options: WireJson, statusCode: 404);
         if (theme.Source != "custom")
-            return Results.BadRequest(new ThemeStoreErrorResponse("Built-in themes cannot be deleted."));
+            return Results.Json(new ThemeStoreErrorResponse("Built-in themes cannot be deleted."), options: WireJson, statusCode: 400);
 
         if ((store.DirectoryThemeIds ?? []).Contains(id, StringComparer.OrdinalIgnoreCase))
-            return Results.Conflict(new ThemeStoreErrorResponse("This theme is supplied by the configured directory. Remove it from that source before deleting managed state."));
+            return Results.Json(new ThemeStoreErrorResponse("This theme is supplied by the configured directory. Remove it from that source before deleting managed state."), options: WireJson, statusCode: 409);
         var themes = (snapshot.Managed.Themes ?? []).Where(x => !StringComparer.OrdinalIgnoreCase.Equals(x.Id, id)).ToArray();
         var defaultThemeId = StringComparer.OrdinalIgnoreCase.Equals(snapshot.Managed.DefaultThemeId, id) ? "" : snapshot.Managed.DefaultThemeId;
         var managed = snapshot.Managed with { Themes = themes, DefaultThemeId = defaultThemeId };
         await WriteStoreAsync(environment, managed, cancellationToken);
-        return Results.Ok(ToResponse((await ReadStoreAsync(environment, themeService, request, cancellationToken)).View));
+        return Results.Json(ToResponse((await ReadStoreAsync(environment, themeService, request, cancellationToken)).View), options: WireJson);
     }
 
     private static async Task<IResult> SetDefaultThemeAsync(
@@ -253,25 +263,25 @@ internal static class ThemeStoreApi
     {
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
         if (request is null || string.IsNullOrWhiteSpace(request.ThemeId))
-            return Results.BadRequest(new ThemeStoreErrorResponse("Theme ID is required."));
+            return Results.Json(new ThemeStoreErrorResponse("Theme ID is required."), options: WireJson, statusCode: 400);
         if (!BuiltInThemeIds.Contains(request.ThemeId) && !ThemeIdPattern.IsMatch(request.ThemeId))
-            return Results.BadRequest(new ThemeStoreErrorResponse("Theme ID must be kebab-case and between 3 and 64 characters."));
+            return Results.Json(new ThemeStoreErrorResponse("Theme ID must be kebab-case and between 3 and 64 characters."), options: WireJson, statusCode: 400);
 
         var snapshot = await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken);
         var store = snapshot.View;
         var theme = store.Themes.FirstOrDefault(x => StringComparer.OrdinalIgnoreCase.Equals(x.Id, request.ThemeId));
         if (theme is null && !BuiltInThemeIds.Contains(request.ThemeId))
-            return Results.NotFound(new ThemeStoreErrorResponse($"Theme '{request.ThemeId}' was not found."));
+            return Results.Json(new ThemeStoreErrorResponse($"Theme '{request.ThemeId}' was not found."), options: WireJson, statusCode: 404);
         if (!IsSourceAllowed(store, request.ThemeId, theme is null))
-            return Results.BadRequest(new ThemeStoreErrorResponse("Default theme must be available under the configured theme source mode."));
+            return Results.Json(new ThemeStoreErrorResponse("Default theme must be available under the configured theme source mode."), options: WireJson, statusCode: 400);
         if (theme is not null && (!theme.Enabled || !theme.Published))
-            return Results.BadRequest(new ThemeStoreErrorResponse("Default theme must be published and enabled."));
+            return Results.Json(new ThemeStoreErrorResponse("Default theme must be published and enabled."), options: WireJson, statusCode: 400);
         if (theme is null && (store.DisabledBuiltInThemeIds ?? []).Contains(request.ThemeId, StringComparer.OrdinalIgnoreCase))
-            return Results.BadRequest(new ThemeStoreErrorResponse("Default theme must be enabled. Re-enable the built-in theme first."));
+            return Results.Json(new ThemeStoreErrorResponse("Default theme must be enabled. Re-enable the built-in theme first."), options: WireJson, statusCode: 400);
 
         var managed = snapshot.Managed with { DefaultThemeId = request.ThemeId };
         await WriteStoreAsync(environment, managed, cancellationToken);
-        return Results.Ok(ToResponse((await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken)).View));
+        return Results.Json(ToResponse((await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken)).View), options: WireJson);
     }
 
     private static async Task<IResult> UploadAssetAsync(
@@ -281,16 +291,16 @@ internal static class ThemeStoreApi
         CancellationToken cancellationToken)
     {
         if (!request.HasFormContentType)
-            return Results.BadRequest(new ThemeStoreErrorResponse("Expected multipart form data."));
+            return Results.Json(new ThemeStoreErrorResponse("Expected multipart form data."), options: WireJson, statusCode: 400);
 
         var form = await request.ReadFormAsync(cancellationToken);
         var file = form.Files.GetFile("asset") ?? form.Files.FirstOrDefault();
         if (file is null || file.Length == 0)
-            return Results.BadRequest(new ThemeStoreErrorResponse("Choose a non-empty texture asset."));
+            return Results.Json(new ThemeStoreErrorResponse("Choose a non-empty texture asset."), options: WireJson, statusCode: 400);
         if (file.Length > MaxAssetSize)
-            return Results.BadRequest(new ThemeStoreErrorResponse("Texture assets must be 2 MB or smaller."));
+            return Results.Json(new ThemeStoreErrorResponse("Texture assets must be 2 MB or smaller."), options: WireJson, statusCode: 400);
         if (!AllowedAssetContentTypes.Contains(file.ContentType))
-            return Results.BadRequest(new ThemeStoreErrorResponse("Texture assets must be PNG, WebP, or JPEG."));
+            return Results.Json(new ThemeStoreErrorResponse("Texture assets must be PNG, WebP, or JPEG."), options: WireJson, statusCode: 400);
 
         var extension = file.ContentType.Equals("image/webp", StringComparison.OrdinalIgnoreCase)
             ? ".webp"
@@ -309,13 +319,13 @@ internal static class ThemeStoreApi
             {
                 await file.CopyToAsync(output, cancellationToken);
                 if (output.Length is 0 or > MaxAssetSize)
-                    return Results.BadRequest(new ThemeStoreErrorResponse("Texture assets must be non-empty and 2 MB or smaller."));
+                    return Results.Json(new ThemeStoreErrorResponse("Texture assets must be non-empty and 2 MB or smaller."), options: WireJson, statusCode: 400);
             }
             await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporary, path);
             var asset = new ThemeStoreAsset(id, Path.GetFileName(file.FileName), file.ContentType, new FileInfo(path).Length, AssetUrl(request, id));
-            return Results.Ok(asset);
+            return Results.Json(asset, options: WireJson);
         }
         finally { File.Delete(temporary); }
     }
@@ -324,10 +334,10 @@ internal static class ThemeStoreApi
         [FromServices] ThemeDirectorySource themeService,
         [FromServices] StudioConfigurationMutationGate mutationGate, CancellationToken cancellationToken)
     {
-        if (!AssetIdPattern.IsMatch(id)) return Results.BadRequest(new ThemeStoreErrorResponse("A valid material-asset ID is required."));
+        if (!AssetIdPattern.IsMatch(id)) return Results.Json(new ThemeStoreErrorResponse("A valid material-asset ID is required."), options: WireJson, statusCode: 400);
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
         var path = Path.Combine(GetAssetFolder(environment), id);
-        if (themeService.IsSourceFile(path)) return Results.NotFound(new ThemeStoreErrorResponse($"Asset '{id}' was not found."));
+        if (themeService.IsSourceFile(path)) return Results.Json(new ThemeStoreErrorResponse($"Asset '{id}' was not found."), options: WireJson, statusCode: 404);
         try
         {
             // Own the opened file across result execution, so a concurrent unlink cannot replace the bytes being served.
@@ -336,7 +346,7 @@ internal static class ThemeStoreApi
         }
         catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException)
         {
-            return Results.NotFound(new ThemeStoreErrorResponse($"Asset '{id}' was not found."));
+            return Results.Json(new ThemeStoreErrorResponse($"Asset '{id}' was not found."), options: WireJson, statusCode: 404);
         }
     }
 
@@ -348,14 +358,14 @@ internal static class ThemeStoreApi
         [FromServices] StudioConfigurationMutationGate mutationGate,
         CancellationToken cancellationToken)
     {
-        if (!AssetIdPattern.IsMatch(id)) return Results.BadRequest(new ThemeStoreErrorResponse("A valid material-asset ID is required."));
+        if (!AssetIdPattern.IsMatch(id)) return Results.Json(new ThemeStoreErrorResponse("A valid material-asset ID is required."), options: WireJson, statusCode: 400);
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
         var path = Path.Combine(GetAssetFolder(environment), id);
-        if (themeService.IsSourceFile(path)) return Results.NotFound(new ThemeStoreErrorResponse($"Asset '{id}' was not found."));
+        if (themeService.IsSourceFile(path)) return Results.Json(new ThemeStoreErrorResponse($"Asset '{id}' was not found."), options: WireJson, statusCode: 404);
         if (File.Exists(path))
             File.Delete(path);
 
-        return Results.Ok(ToResponse((await ReadStoreAsync(environment, themeService, request, cancellationToken)).View));
+        return Results.Json(ToResponse((await ReadStoreAsync(environment, themeService, request, cancellationToken)).View), options: WireJson);
     }
 
     private static async Task<IResult> ImportThemePackAsync(
@@ -367,17 +377,17 @@ internal static class ThemeStoreApi
         CancellationToken cancellationToken)
     {
         if (pack is null)
-            return Results.BadRequest(new ThemeStoreErrorResponse("Theme pack payload is required."));
+            return Results.Json(new ThemeStoreErrorResponse("Theme pack payload is required."), options: WireJson, statusCode: 400);
         if (pack.Version < 1)
-            return Results.BadRequest(new ThemeStoreErrorResponse("Theme pack version is required."));
+            return Results.Json(new ThemeStoreErrorResponse("Theme pack version is required."), options: WireJson, statusCode: 400);
 
         var themes = pack.Themes ?? [];
         foreach (var theme in themes)
         {
             if (theme is null)
-                return Results.BadRequest(new ThemeStoreErrorResponse("Theme pack contains an empty theme."));
+                return Results.Json(new ThemeStoreErrorResponse("Theme pack contains an empty theme."), options: WireJson, statusCode: 400);
             if (ValidateCustomTheme(theme with { Source = "custom" }) is { } validationError)
-                return Results.BadRequest(new ThemeStoreErrorResponse(validationError));
+                return Results.Json(new ThemeStoreErrorResponse(validationError), options: WireJson, statusCode: 400);
         }
 
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
@@ -390,7 +400,7 @@ internal static class ThemeStoreApi
             Themes = (snapshot.Managed.Themes ?? []).Where(theme => !importedIds.Contains(theme.Id)).Concat(imported).OrderBy(theme => theme.Name, StringComparer.OrdinalIgnoreCase).ToArray()
         };
         await WriteStoreAsync(environment, managed, cancellationToken);
-        return Results.Ok(ToResponse((await ReadStoreAsync(environment, themeService, request, cancellationToken)).View));
+        return Results.Json(ToResponse((await ReadStoreAsync(environment, themeService, request, cancellationToken)).View), options: WireJson);
     }
 
     private static async Task<IResult> ExportThemePackAsync(
@@ -405,7 +415,7 @@ internal static class ThemeStoreApi
         var themes = string.IsNullOrWhiteSpace(themeId)
             ? store.Themes
             : store.Themes.Where(theme => StringComparer.OrdinalIgnoreCase.Equals(theme.Id, themeId)).ToArray();
-        return Results.Ok(new ThemePack(1, themes, store.Assets));
+        return Results.Json(new ThemePack(1, themes, store.Assets), options: WireJson);
     }
 
     private static async Task<ThemeReadSnapshot> ReadStoreAsync(

@@ -20,4 +20,7 @@
     <ProjectReference Include="../../../../Essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

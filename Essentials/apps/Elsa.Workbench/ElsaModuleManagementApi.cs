@@ -18,6 +18,16 @@ namespace Elsa.Workbench;
 
 internal static class ElsaModuleManagementApi
 {
+    private static readonly System.Text.Json.JsonSerializerOptions WireJson = CreateWireJson();
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.MakeReadOnly();
+        return options;
+    }
+
     private const string ManagementFileName = "appsettings.json";
     private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options) { WriteIndented = true };
 
@@ -71,7 +81,7 @@ internal static class ElsaModuleManagementApi
         var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
         var dropFolder = ResolveDropFolder(environment, config);
 
-        return Results.Ok(new ModuleManagementRegistryResponse(
+        return Results.Json(new ModuleManagementRegistryResponse(
             new("server", "Server", "Elsa.Workbench", environment.ContentRootPath),
             DateTimeOffset.UtcNow,
             modules,
@@ -84,7 +94,7 @@ internal static class ElsaModuleManagementApi
                 CanReconcile: true,
                 CanPrunePackages: true,
                 FeedChangesRequireRestart: true),
-            []));
+            []), options: WireJson);
     }
 
     private static async Task<IResult> UploadPackageAsync(
@@ -95,16 +105,16 @@ internal static class ElsaModuleManagementApi
         CancellationToken cancellationToken)
     {
         if (!request.HasFormContentType)
-            return Results.BadRequest(new ModuleManagementErrorResponse("Expected multipart form data."));
+            return Results.Json(new ModuleManagementErrorResponse("Expected multipart form data."), options: WireJson, statusCode: 400);
 
         var form = await request.ReadFormAsync(cancellationToken);
         var file = form.Files.GetFile("package") ?? form.Files.FirstOrDefault();
         if (file is null || file.Length == 0)
-            return Results.BadRequest(new ModuleManagementErrorResponse("Choose a non-empty .nupkg file."));
+            return Results.Json(new ModuleManagementErrorResponse("Choose a non-empty .nupkg file."), options: WireJson, statusCode: 400);
 
         var fileName = Path.GetFileName(file.FileName);
         if (!StringComparer.OrdinalIgnoreCase.Equals(Path.GetExtension(fileName), ".nupkg"))
-            return Results.BadRequest(new ModuleManagementErrorResponse("Only .nupkg files can be uploaded."));
+            return Results.Json(new ModuleManagementErrorResponse("Only .nupkg files can be uploaded."), options: WireJson, statusCode: 400);
 
         var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
         var dropFolder = ResolveDropFolder(environment, config);
@@ -118,13 +128,13 @@ internal static class ElsaModuleManagementApi
         File.Move(tempPath, destination, overwrite: true);
         var reconcile = await nuplaneAdmin.TriggerReconcileAsync(cancellationToken);
 
-        return Results.Ok(new ModuleManagementUploadResponse(
+        return Results.Json(new ModuleManagementUploadResponse(
             fileName,
             destination,
             file.Length,
             ModuleManagementReconcileResponse.FromOutcome(reconcile, logger),
             RequiresReload: true,
-            RequiresRestart: false));
+            RequiresRestart: false), options: WireJson);
     }
 
     private static async Task<IResult> DeleteDropFolderPackageAsync(
@@ -137,13 +147,13 @@ internal static class ElsaModuleManagementApi
     {
         var safeFileName = Path.GetFileName(fileName);
         if (string.IsNullOrWhiteSpace(safeFileName) || !StringComparer.OrdinalIgnoreCase.Equals(Path.GetExtension(safeFileName), ".nupkg"))
-            return Results.BadRequest(new ModuleManagementErrorResponse("A .nupkg file name is required."));
+            return Results.Json(new ModuleManagementErrorResponse("A .nupkg file name is required."), options: WireJson, statusCode: 400);
 
         var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
         var dropFolder = ResolveDropFolder(environment, config);
         var path = EnsureChildPath(dropFolder, safeFileName);
         if (!File.Exists(path))
-            return Results.NotFound(new ModuleManagementErrorResponse($"Package '{safeFileName}' was not found in the drop folder."));
+            return Results.Json(new ModuleManagementErrorResponse($"Package '{safeFileName}' was not found in the drop folder."), options: WireJson, statusCode: 404);
 
         File.Delete(path);
         QueueReconciliation(
@@ -152,12 +162,12 @@ internal static class ElsaModuleManagementApi
             loggerFactory.CreateLogger("Elsa.Workbench.ModuleManagementDelete"),
             "package deletion");
 
-        return Results.Ok(new ModuleManagementDeleteResponse(
+        return Results.Json(new ModuleManagementDeleteResponse(
             safeFileName,
             path,
             ModuleManagementReconcileResponse.Deferred("Package was deleted from the drop folder. Nuplane reconciliation is running in the background."),
             RequiresReload: true,
-            RequiresRestart: false));
+            RequiresRestart: false), options: WireJson);
     }
 
     private static void QueueReconciliation(
@@ -197,12 +207,12 @@ internal static class ElsaModuleManagementApi
     private static async Task<IResult> TriggerReconcileAsync(INuplaneAdminOperations nuplaneAdmin, ILogger logger, CancellationToken cancellationToken)
     {
         var outcome = await nuplaneAdmin.TriggerReconcileAsync(cancellationToken);
-        return Results.Ok(new ModuleManagementOperationResponse(
+        return Results.Json(new ModuleManagementOperationResponse(
             "reconcile",
             ModuleManagementReconcileResponse.FromOutcome(outcome, logger),
             RequiresReload: true,
             RequiresRestart: false,
-            "Reconciliation completed for the Server host."));
+            "Reconciliation completed for the Server host."), options: WireJson);
     }
 
     private static async Task<IResult> PrunePackagesAsync(
@@ -217,7 +227,7 @@ internal static class ElsaModuleManagementApi
         var policy = ReadRetentionPolicy(config, cleanupOptions.Value).ToCleanupPolicyOptions();
         var decisions = PrunePackageInstallDirectories(packages.Packages, policy, request.DryRun, cancellationToken);
 
-        return Results.Ok(new ModuleManagementPruneResponse(request.DryRun, decisions));
+        return Results.Json(new ModuleManagementPruneResponse(request.DryRun, decisions), options: WireJson);
     }
 
     private static async Task<IResult> AddFeedAsync(
@@ -226,16 +236,16 @@ internal static class ElsaModuleManagementApi
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(feed.Name))
-            return Results.BadRequest(new ModuleManagementErrorResponse("Feed name is required."));
+            return Results.Json(new ModuleManagementErrorResponse("Feed name is required."), options: WireJson, statusCode: 400);
 
         var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
         var feeds = ReadFeedsArray(config);
         if (feeds.Any(node => string.Equals((string?)node?["Name"], feed.Name, StringComparison.OrdinalIgnoreCase)))
-            return Results.Conflict(new ModuleManagementErrorResponse($"Feed '{feed.Name}' already exists."));
+            return Results.Json(new ModuleManagementErrorResponse($"Feed '{feed.Name}' already exists."), options: WireJson, statusCode: 409);
 
         feeds.Add(ToJson(feed));
         await WriteManagementConfigurationAsync(environment, config, cancellationToken);
-        return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed added. Restart the host to activate feed registration changes."));
+        return Results.Json(new ModuleManagementConfigurationWriteResponse(true, "Feed added. Restart the host to activate feed registration changes."), options: WireJson);
     }
 
     private static async Task<IResult> UpdateFeedAsync(
@@ -248,11 +258,11 @@ internal static class ElsaModuleManagementApi
         var feeds = ReadFeedsArray(config);
         var index = FindFeedIndex(feeds, name);
         if (index < 0)
-            return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
+            return Results.Json(new ModuleManagementErrorResponse($"Feed '{name}' was not found."), options: WireJson, statusCode: 404);
 
         feeds[index] = ToJson(feed with { Name = name });
         await WriteManagementConfigurationAsync(environment, config, cancellationToken);
-        return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate feed registration changes."));
+        return Results.Json(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate feed registration changes."), options: WireJson);
     }
 
     private static async Task<IResult> DeleteFeedAsync(
@@ -264,11 +274,11 @@ internal static class ElsaModuleManagementApi
         var feeds = ReadFeedsArray(config);
         var index = FindFeedIndex(feeds, name);
         if (index < 0)
-            return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
+            return Results.Json(new ModuleManagementErrorResponse($"Feed '{name}' was not found."), options: WireJson, statusCode: 404);
 
         feeds.RemoveAt(index);
         await WriteManagementConfigurationAsync(environment, config, cancellationToken);
-        return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate feed registration changes."));
+        return Results.Json(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate feed registration changes."), options: WireJson);
     }
 
     private static async Task<IResult> UpdateRetentionPolicyAsync(
@@ -280,7 +290,7 @@ internal static class ElsaModuleManagementApi
         var nuplane = GetOrCreateObject(config.Document, "Nuplane");
         nuplane["CleanupPolicy"] = JsonSerializer.SerializeToNode(policy, JsonOptions);
         await WriteManagementConfigurationAsync(environment, config, cancellationToken);
-        return Results.Ok(new ModuleManagementConfigurationWriteResponse(false, "Retention policy updated. It will be used by the next prune operation and after host restart by Nuplane cleanup."));
+        return Results.Json(new ModuleManagementConfigurationWriteResponse(false, "Retention policy updated. It will be used by the next prune operation and after host restart by Nuplane cleanup."), options: WireJson);
     }
 
     private static IReadOnlyList<ModuleManagementPruneDecision> PrunePackageInstallDirectories(

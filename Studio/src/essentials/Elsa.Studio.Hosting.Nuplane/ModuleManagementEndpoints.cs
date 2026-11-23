@@ -11,6 +11,16 @@ namespace Elsa.Studio.Hosting.Nuplane;
 
 internal static class ModuleManagementEndpoints
 {
+    private static readonly System.Text.Json.JsonSerializerOptions WireJson = CreateWireJson();
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.MakeReadOnly();
+        return options;
+    }
+
     internal const string FeedPrefix = "Nuplane:Setup:Feeds";
     private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
@@ -41,18 +51,18 @@ internal static class ModuleManagementEndpoints
             foreach (var package in snapshot.Packages)
                 packages.Add(await PackageRegistryReader.ReadAsync(package, reader, diagnostics, context.RequestAborted));
             var policy = management.ReadRetention();
-            return Results.Ok(new ModuleManagementRegistryResponse(
+            return Results.Json(new ModuleManagementRegistryResponse(
                 new("studio", "Studio", environment.ApplicationName, environment.ContentRootPath), DateTimeOffset.UtcNow,
                 modules.Modules.Select(module => ModuleManagementModule.FromStudioModule(module, environment.ApplicationName)).ToArray(),
                 packages, DropFolderPackages(settings.DropFolder), ReadFeeds(configuration),
                 new(policy.KeepNewestInactiveVersionsPerPackage, policy.Status),
                 new(true, management.CanWrite(FeedPrefix), true, true, true,
-                    management.CanWrite(ManagementConfigurationStore.RetentionPrefix)), diagnostics));
+                    management.CanWrite(ManagementConfigurationStore.RetentionPrefix)), diagnostics), options: WireJson);
         }
         catch (PackageStoreAdmissionException error)
         {
             context.Response.Headers.RetryAfter = "1";
-            return Results.Json(new { Error = "The package registry is temporarily unavailable.", Reason = error.Reason.ToString() }, statusCode: 503);
+            return Results.Json(new { Error = "The package registry is temporarily unavailable.", Reason = error.Reason.ToString() }, statusCode: 503, options: WireJson);
         }
     }
 
@@ -85,8 +95,8 @@ internal static class ModuleManagementEndpoints
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
         QueueReconciliation(scopes, lifetime, logs, "package upload");
-        return Results.Ok(new ModuleManagementUploadResponse(file.FileName, destination, file.Length,
-            ModuleManagementReconcileResponse.Deferred("Package uploaded; Nuplane reconciliation is scheduled. Discovery and activation depend on the configured sources and loading policy."), true, false));
+        return Results.Json(new ModuleManagementUploadResponse(file.FileName, destination, file.Length,
+            ModuleManagementReconcileResponse.Deferred("Package uploaded; Nuplane reconciliation is scheduled. Discovery and activation depend on the configured sources and loading policy."), true, false), options: WireJson);
     }
 
     private static Task<IResult> DeleteAsync(string fileName, StudioNuplaneSettings settings, IServiceScopeFactory scopes,
@@ -94,18 +104,18 @@ internal static class ModuleManagementEndpoints
     {
         if (FileNameError(fileName) is { } invalid) return Task.FromResult(Error(invalid));
         var path = Path.Combine(settings.DropFolder, fileName);
-        if (!File.Exists(path)) return Task.FromResult<IResult>(Results.NotFound(new ModuleManagementErrorResponse("Package was not found in the installed drop folder.")));
+        if (!File.Exists(path)) return Task.FromResult<IResult>(Results.Json(new ModuleManagementErrorResponse("Package was not found in the installed drop folder."), options: WireJson, statusCode: 404));
         File.Delete(path);
         QueueReconciliation(scopes, lifetime, logs, "package deletion");
-        return Task.FromResult<IResult>(Results.Ok(new ModuleManagementDeleteResponse(fileName, path,
-            ModuleManagementReconcileResponse.Deferred("Package deleted from the drop folder; Nuplane reconciliation is scheduled."), true, false)));
+        return Task.FromResult<IResult>(Results.Json(new ModuleManagementDeleteResponse(fileName, path,
+            ModuleManagementReconcileResponse.Deferred("Package deleted from the drop folder; Nuplane reconciliation is scheduled."), true, false), options: WireJson));
     }
 
     private static async Task<IResult> ReconcileAsync(INuplaneAdminOperations admin, CancellationToken cancellationToken)
     {
         var outcome = await admin.TriggerReconcileAsync(cancellationToken);
-        return Results.Ok(new ModuleManagementOperationResponse("reconcile", ModuleManagementReconcileResponse.FromOutcome(outcome), true, false,
-            "Nuplane reconciliation returned the reported outcome."));
+        return Results.Json(new ModuleManagementOperationResponse("reconcile", ModuleManagementReconcileResponse.FromOutcome(outcome), true, false,
+            "Nuplane reconciliation returned the reported outcome."), options: WireJson);
     }
 
     private static void QueueReconciliation(IServiceScopeFactory scopes, IHostApplicationLifetime lifetime, ILoggerFactory logs, string operation)
@@ -133,9 +143,9 @@ internal static class ModuleManagementEndpoints
         if (FeedError(feed) is { } invalid) return Task.FromResult(Error(invalid));
         return MutateFeedsAsync(store, token, feeds =>
         {
-            if (IndexOf(feeds, feed.Name) >= 0) return Results.Conflict(new ModuleManagementErrorResponse($"Feed '{feed.Name}' already exists."));
+            if (IndexOf(feeds, feed.Name) >= 0) return Results.Json(new ModuleManagementErrorResponse($"Feed '{feed.Name}' already exists."), options: WireJson, statusCode: 409);
             feeds.Add(FeedJson(feed, feed.Name));
-            return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed added. Restart the host to activate registration changes."));
+            return Results.Json(new ModuleManagementConfigurationWriteResponse(true, "Feed added. Restart the host to activate registration changes."), options: WireJson);
         });
     }
 
@@ -145,9 +155,9 @@ internal static class ModuleManagementEndpoints
         return MutateFeedsAsync(store, token, feeds =>
         {
             var index = IndexOf(feeds, name);
-            if (index < 0) return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
+            if (index < 0) return Results.Json(new ModuleManagementErrorResponse($"Feed '{name}' was not found."), options: WireJson, statusCode: 404);
             feeds[index] = FeedJson(feed, name, feeds[index] as JsonObject);
-            return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate registration changes."));
+            return Results.Json(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate registration changes."), options: WireJson);
         });
     }
 
@@ -155,9 +165,9 @@ internal static class ModuleManagementEndpoints
         MutateFeedsAsync(store, token, feeds =>
         {
             var index = IndexOf(feeds, name);
-            if (index < 0) return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
+            if (index < 0) return Results.Json(new ModuleManagementErrorResponse($"Feed '{name}' was not found."), options: WireJson, statusCode: 404);
             feeds.RemoveAt(index);
-            return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate registration changes."));
+            return Results.Json(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate registration changes."), options: WireJson);
         });
 
     private static async Task<IResult> MutateFeedsAsync(ManagementConfigurationStore store, CancellationToken token, Func<JsonArray, IResult> mutate)
@@ -175,8 +185,8 @@ internal static class ModuleManagementEndpoints
             }, token);
             return result;
         }
-        catch (ConfigurationReadOnlyException error) { return Results.Conflict(new { Error = error.Message, Code = "configuration-read-only" }); }
-        catch (StudioHostingException error) { return Results.Json(new { Error = error.Message }, statusCode: StatusCodes.Status503ServiceUnavailable); }
+        catch (ConfigurationReadOnlyException error) { return Results.Json(new { Error = error.Message, Code = "configuration-read-only" }, options: WireJson, statusCode: 409); }
+        catch (StudioHostingException error) { return Results.Json(new { Error = error.Message }, statusCode: StatusCodes.Status503ServiceUnavailable, options: WireJson); }
     }
 
     // The registry view never reads a feed's Credentials value: it stays in the host's configuration (#3735).
@@ -235,5 +245,5 @@ internal static class ModuleManagementEndpoints
             .Select(file => new ModuleManagementDropFolderPackage(file.Name, file.FullName, file.Length, file.LastWriteTimeUtc))
             .OrderBy(file => file.FileName, StringComparer.OrdinalIgnoreCase).ToArray();
 
-    private static IResult Error(string message) => Results.BadRequest(new ModuleManagementErrorResponse(message));
+    private static IResult Error(string message) => Results.Json(new ModuleManagementErrorResponse(message), options: WireJson, statusCode: 400);
 }
