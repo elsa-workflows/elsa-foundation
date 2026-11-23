@@ -420,6 +420,7 @@ internal static class EventIdentityChecks
         var probe = new Probe(Enumerable.Range(0, count).Select(index => ("Order-7", $"wait-{index:D3}")).ToArray(), restoreKeep: true);
         var lost = false;
         var failSteps = loseAfter is null;
+        using var measurements = new EventTicketMeasurements("publish");
         CommitBatch? lostCommit = null;
         var initialSequence = 0L;
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
@@ -464,6 +465,8 @@ internal static class EventIdentityChecks
         if (loseAfter is null)
         {
             await Pump(active);
+            check(measurements.Failures == 2,
+                "two failed authored steps emit two publish measurements and terminal settlement adds none");
             var parked = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
             if (endPublisher)
             {

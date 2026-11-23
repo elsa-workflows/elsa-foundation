@@ -1256,6 +1256,7 @@ internal static class ParkKeptChecks
         var store = new InMemoryStore(1, () => now);
         var probe = new KeepingRecoveryProbe();
         var scope = new Contract.BoundScope("catch-up-attempt");
+        using var measurements = new EventTicketMeasurements("meet");
         var faults = 0;
         CommitBatch? delayed = null;
         var injectRecoveryFailures = false;
@@ -1305,7 +1306,7 @@ internal static class ParkKeptChecks
         var (key, _) = store.Messages.Single(pair => pair.Value.Message.ParkCatchUp is not null);
         injectRecoveryFailures = true;
         await CatchUpOnly(worker);
-        var unchanged = worker.Owns && faults == 1 && store.Messages.GetValueOrDefault(key) is
+        var unchanged = worker.Owns && faults == 1 && measurements.Failures == 1 && store.Messages.GetValueOrDefault(key) is
             { Done: false, Attempts: 1, Message.ParkCatchUp.Page: 0 } &&
             store.Messages.Values.All(row => row.Message.Kind != Kinds.Event);
         check(unchanged, "a refused isolated step counts one fenced attempt and advances no delivery or cursor");
@@ -1326,7 +1327,7 @@ internal static class ParkKeptChecks
                 "the successor completes all kept-event pages once after a prior failed step");
             return;
         }
-        check(worker.Owns && faults == 2 && store.Messages.GetValueOrDefault(key) is
+        check(worker.Owns && faults == 2 && measurements.Failures == 2 && store.Messages.GetValueOrDefault(key) is
             { Done: false, Attempts: 2, Message.ParkCatchUp.Page: 0 } &&
             store.Instances[id].ParkRecovery?.Control == originalControl &&
             store.Messages.Values.All(row => row.Message.Kind != Kinds.Event),
@@ -1367,7 +1368,8 @@ internal static class ParkKeptChecks
             !store.Messages.ContainsKey(originalControl) && store.Subscriptions.Count == 0 && probe.Received.Count == 0,
             "the exhausted meet re-parks an open recovery and atomically removes its subscriptions");
         await store.SweepAsync();
-        check(store.FoundationEvents.Count == 0, "the exhausted meet releases coverage of its expired publication");
+        check(store.FoundationEvents.Count == 0 && measurements.Failures == 2,
+            "the exhausted meet releases expired coverage without counting terminal settlement as another failed step");
 
         if (resolveMeetByDiscard is { } discard)
         {
