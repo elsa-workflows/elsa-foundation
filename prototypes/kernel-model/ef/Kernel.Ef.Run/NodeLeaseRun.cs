@@ -1,6 +1,10 @@
+using System.Collections.Concurrent;
+using System.Data;
+using System.Data.Common;
 using System.Diagnostics;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage;
 
 /// <summary>
@@ -19,7 +23,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 /// (EfStore.MembershipInHeartbeat) reads the node count and the free list inside the heartbeat's transaction.
 /// NL-C1 adds MySQL rr-subquery (both take mutations) and PostgreSQL share (FOR SHARE on the other owners' records).
 /// The exit code is the verdict. expect=deadlock fails unless the run deadlocked; expect=none (the default as built) fails
-/// if it did, or if any answer failed or hung. A negative (any mutation=) must deadlock: its default is expect=deadlock,
+/// if it did, or if any answer failed or hung. Ordered mutual takes must exchange both complete ranges at the next epochs. A negative (any mutation=) must deadlock: its default is expect=deadlock,
 /// and a negative that does not deadlock fails whatever its expect=. A mutual run, and any run where reads take locks
 /// (SQL Server without RCSI), fails too when the forced wait did not occur (its sessions were not waiting before the
 /// release); the heartbeat cases elsewhere are recorded unforced. On PostgreSQL the victim's error decides, since its
@@ -32,7 +36,8 @@ static class NodeLeaseRun
     public static async Task<int> RunAsync(Target target)
     {
         await target.ResetAsync(8);
-        var (admin, store) = (target.Admins(), target.Store(target.Workers()));
+        var starts = new TransactionLevels();
+        var (admin, store) = (target.Admins(), target.Store(target.Workers(starts)));
         var (kind, mutation) = (target.Get("case", "heartbeat"), target.Get("mutation", ""));
         var (negative, expect) = (mutation != "", target.Get("expect", mutation != "" ? "deadlock" : "none"));
         var take = mutation switch
@@ -93,20 +98,50 @@ static class NodeLeaseRun
         var outcomes = sent.Select(s => (s.What, Answer: s.Outcome.IsCompleted ? s.Outcome.Result : "HUNG")).ToList();
         var counted = await target.DeadlocksAsync(admin) - deadlocks;
         await using var db = admin();
-        var owners = await db.Partitions.AsNoTracking().Where(p => p.Id >= 1 && p.Id <= 5).OrderBy(p => p.Id).Select(p => $"{p.Id}:{p.Owner ?? "-"}@{p.Epoch}").ToListAsync();
+        var owners = await db.Partitions.AsNoTracking().Where(p => p.Id >= 1 && p.Id <= 5).OrderBy(p => p.Id)
+            .Select(p => new { p.Id, p.Owner, p.Epoch, p.Position }).ToListAsync();
+        // A mutual probe has exactly two eligible outgoing owners and one taker per partition.
+        // A refusal can look deadlock-free while leaving the old owners and epochs in place.
+        var verifyExchange = kind == "mutual" && !negative;
+        var exchanged = !verifyExchange ||
+            outcomes.Select(outcome => outcome.Answer).SequenceEqual(["took 3 4", "took 1 2"]) &&
+            held["a"].Taken.All(fence => ChangedOwner(fence, "b")) &&
+            held["b"].Taken.All(fence => ChangedOwner(fence, "a"));
+        var takeLevels = starts.Levels.ToArray();
+        var readCommitted = !verifyExchange || takeLevels.Length >= 4 && takeLevels.All(level => level == IsolationLevel.ReadCommitted);
         Console.WriteLine($"sessions waiting before the release: {(waited ? "yes" : "NO (the interleaving was not forced)")}; {clock.ElapsedMilliseconds} ms");
         foreach (var (what, answer) in outcomes) Console.WriteLine($"  {what}: {answer}");
-        Console.WriteLine($"engine deadlocks counted: {counted}; owners of 1 to 5: {string.Join(" ", owners)}");
+        Console.WriteLine($"engine deadlocks counted: {counted}; owners of 1 to 5: {string.Join(" ", owners.Select(p => $"{p.Id}:{p.Owner ?? "-"}@{p.Epoch}"))}");
+        if (verifyExchange)
+        {
+            Console.WriteLine($"both ranges changed owner at the next epochs: {(exchanged ? "yes" : "NO")}");
+            Console.WriteLine($"take transaction levels: {string.Join(", ", takeLevels)}; {(readCommitted ? "as expected" : "NOT AS EXPECTED")}");
+        }
         var victim = outcomes.Any(o => o.Answer.Contains(target.DeadlockCode, StringComparison.Ordinal));
         var deadlocked = target.Engine == "postgres" ? victim : counted > 0 || victim;
         var clean = done && !deadlocked && outcomes.All(o => !o.Answer.StartsWith("failed", StringComparison.Ordinal) && o.Answer != "HUNG");
         var (expectDeadlock, lockingReads) = (expect == "deadlock", target.Engine == "sqlserver" && target.Get("rcsi", "1") == "0");
         var forced = kind == "mutual" || lockingReads;      // where the hold makes the sessions wait
-        var met = done && (waited || !forced) && (expectDeadlock ? deadlocked : clean) && (!negative || deadlocked);
+        var met = done && (waited || !forced) && (expectDeadlock ? deadlocked : clean) && (!negative || deadlocked) && exchanged && readCommitted;
         Console.WriteLine($"nodelease{(negative ? " negative" : "")}: {(deadlocked ? "DEADLOCKED, broken by the engine" : clean ? "no deadlock; every outcome landed or was refused" : "other")}; " +
             $"expected {(expectDeadlock ? "a deadlock" : "none")}{(forced ? ", forced" : "")}: {(met ? "as expected" : "NOT AS EXPECTED")}" +
             $"{(forced && !waited ? "; the forced wait did not occur" : "")}{(negative && !deadlocked ? "; a negative must deadlock" : "")}");
         return met ? 0 : 1;
+
+        bool ChangedOwner(PartitionFence before, string owner) => owners.Any(row => row.Id == before.Partition &&
+            row.Owner == owner && row.Epoch == before.Epoch + 1 && row.Position == before.Position);
+    }
+
+    private sealed class TransactionLevels : DbTransactionInterceptor
+    {
+        internal ConcurrentQueue<IsolationLevel> Levels { get; } = new();
+
+        public override ValueTask<DbTransaction> TransactionStartedAsync(DbConnection connection, TransactionEndEventData eventData,
+            DbTransaction result, CancellationToken cancellationToken = default)
+        {
+            Levels.Enqueue(result.IsolationLevel);
+            return new(result);
+        }
     }
 
     private static string Ids(OwnedLease lease) => lease.Taken.Count == 0 ? "nothing" : string.Join(" ", lease.Taken.Select(f => f.Partition));

@@ -122,3 +122,9 @@ it as `failed: Transient mssql 1205`.
 Safety held in every run:
 - every partition ends with exactly one owner;
 - each deadlock victim's transaction rolled back whole: a losing take's rows keep their old owner and epoch.
+
+
+An ordered mutual run verifies the returned partition sets and reads the resulting owner rows from a
+separate connection. Both ranges must change owner, each epoch must advance once and the journal positions
+must stay fixed. The runner also records the isolation levels reported by the providers for the take
+transactions. The ordered mutual cases require `ReadCommitted` even under a repeatable-read server default.
