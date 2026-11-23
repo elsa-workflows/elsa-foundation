@@ -135,7 +135,8 @@ takes the same partition and finishes that approval before the observer looks up
 joins eligible inbox rows to their admitted births, respects its row limit, and returns tenant and reference with
 the creator. Direct inputs admitted before a scheduled birth become eligible after its first checkpoint. The fixture
 checks that an independent ready root runs during that interval, a replay adds no turn, and the other partition keeps its pending work.
-This preview runs one registered workflow actor type on its dedicated database.
+Each tenant uses its own fixed-scope public client process. To select a writer and fence, append `owned` or `ef`
+and `in-batch` or `checked` to both commands. This preview runs one registered workflow actor type on its dedicated database.
 
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
