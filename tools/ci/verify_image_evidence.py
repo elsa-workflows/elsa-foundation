@@ -11,6 +11,9 @@ from packageurl import PackageURL
 
 SPDX = "https://spdx.dev/Document"
 SLSA = "https://slsa.dev/provenance/v1"
+MANIFEST = "application/vnd.oci.image.manifest.v1+json"
+CONFIG = "application/vnd.oci.image.config.v1+json"
+STATEMENT = "application/vnd.in-toto+json"
 BUILDKIT = "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md"
 
 
@@ -40,7 +43,7 @@ def package_identities(packages):
                     continue
             elif kind not in {"deb", "rpm", "apk"}:
                 continue
-            yield kind, name
+            yield kind, name, identity.qualifiers.get("arch")
 
 
 def verify(reference, fetch, output, builder_run, application, validate_spdx):
@@ -48,11 +51,14 @@ def verify(reference, fetch, output, builder_run, application, validate_spdx):
     require(repository and re.fullmatch(r"sha256:[0-9a-f]{64}", index_digest),
             "Supply an image reference pinned by its SHA-256 index digest")
 
-    def read(kind, digest):
+    def read(kind, digest, descriptor=None, media_type=None):
         require(re.fullmatch(r"sha256:[0-9a-f]{64}", digest), "Invalid OCI descriptor digest")
         data = fetch(kind, repository + "@" + digest)
         require("sha256:" + hashlib.sha256(data).hexdigest() == digest,
                 f"Incorrect {kind} digest for {digest}")
+        if descriptor is not None:
+            require(descriptor.get("mediaType") == media_type and type(descriptor.get("size")) is int
+                    and descriptor["size"] == len(data), f"Invalid {kind} descriptor for {digest}")
         return json.loads(data)
 
     index = read("manifest", index_digest)
@@ -62,42 +68,50 @@ def verify(reference, fetch, output, builder_run, application, validate_spdx):
     attestations = {}
     for descriptor in index["manifests"]:
         annotations = descriptor.get("annotations", {})
+        target = descriptor["platform"]
         if annotations.get("vnd.docker.reference.type") == "attestation-manifest":
-            platform = descriptor.get("platform", {})
-            require(platform.get("os") == "unknown" and platform.get("architecture") == "unknown",
+            require(target.get("os") == "unknown" and target.get("architecture") == "unknown",
                     "An attestation must not be selectable as a runnable platform")
             child = annotations["vnd.docker.reference.digest"]
-            attestations.setdefault(child, []).append(descriptor["digest"])
+            attestations.setdefault(child, []).append(descriptor)
         else:
-            target = descriptor["platform"]
             platform = target["os"] + "/" + target["architecture"]
             require(platform not in platforms, f"Duplicate runnable platform {platform}")
-            platforms[platform] = descriptor["digest"]
+            platforms[platform] = descriptor
     require(set(platforms) == {"linux/arm64", "linux/amd64"}, "Expected linux/arm64 and linux/amd64")
-    require(len(set(platforms.values())) == len(platforms), "Platforms reference the same child")
-    require(set(attestations) == set(platforms.values()), "Missing or unrelated platform attestation")
+    children = {descriptor["digest"] for descriptor in platforms.values()}
+    require(len(children) == len(platforms), "Platforms reference the same child")
+    require(set(attestations) == children, "Missing or unrelated platform attestation")
 
     documents = {}
-    for platform, child in sorted(platforms.items()):
-        image = read("manifest", child)
-        require(image.get("schemaVersion") == 2 and image.get("mediaType") == "application/vnd.oci.image.manifest.v1+json"
+    for platform, descriptor in sorted(platforms.items()):
+        child = descriptor["digest"]
+        image = read("manifest", child, descriptor, MANIFEST)
+        require(image.get("schemaVersion") == 2 and image.get("mediaType") == MANIFEST
                 and isinstance(image.get("layers"), list) and image["layers"], f"Invalid runnable manifest for {platform}")
-        config = read("blob", image["config"]["digest"])
+        config = read("blob", image["config"]["digest"], image["config"], CONFIG)
         require(f"{config['os']}/{config['architecture']}" == platform,
                 f"Image config disagrees with index platform {platform}")
+        baseline = "v1" if platform == "linux/amd64" else "v8"
+        for target in (descriptor["platform"], config):
+            require(target.get("variant", baseline) in ("", baseline)
+                    and not target.get("os.features") and not target.get("os.version"),
+                    f"Expected the baseline {platform} platform")
         predicates = {}
-        for digest in attestations[child]:
-            manifest = read("manifest", digest)
+        for attestation in attestations[child]:
+            digest = attestation["digest"]
+            manifest = read("manifest", digest, attestation, MANIFEST)
+            require(manifest.get("schemaVersion") == 2 and manifest.get("mediaType") == MANIFEST,
+                    f"Invalid attestation manifest for {platform}")
             if "subject" in manifest:
-                require(manifest["subject"]["digest"] == child, f"Incorrect manifest subject for {platform}")
+                require(all(manifest["subject"].get(key) == descriptor[key] for key in ("mediaType", "size", "digest")),
+                        f"Incorrect manifest subject for {platform}")
             for layer in manifest["layers"]:
                 kind = layer.get("annotations", {}).get("in-toto.io/predicate-type")
                 if kind not in (SPDX, SLSA):
                     continue
                 require(kind not in predicates, f"Duplicate {kind} for {platform}")
-                require(layer.get("mediaType") == "application/vnd.in-toto+json",
-                        f"Incorrect statement media type for {platform}")
-                statement = read("blob", layer["digest"])
+                statement = read("blob", layer["digest"], layer, STATEMENT)
                 require(statement.get("_type") in {"https://in-toto.io/Statement/v0.1",
                                                   "https://in-toto.io/Statement/v1"},
                         f"Invalid in-toto statement for {platform}")
@@ -113,14 +127,24 @@ def verify(reference, fetch, output, builder_run, application, validate_spdx):
         require(sbom.get("spdxVersion") == "SPDX-2.3" and sbom.get("packages"),
                 f"Missing SPDX package inventory for {platform}")
         identities = set(package_identities(sbom["packages"]))
-        require(any(kind in {"deb", "apk", "rpm"} for kind, _ in identities),
-                f"Missing operating-system inventory for {platform}")
-        require(("nuget", application.casefold()) in identities,
+        native = {"amd64", "x86_64"} if platform == "linux/amd64" else {"arm64", "aarch64"}
+        os_arches = {arch for kind, _, arch in identities if kind in {"deb", "apk", "rpm"}}
+        require(os_arches & native and os_arches <= native | {"all", "noarch"},
+                f"Missing or incompatible native operating-system inventory for {platform}")
+        require(any(kind == "nuget" and name == application.casefold() for kind, name, _ in identities),
                 f"Missing {application} inventory for {platform}")
         definition = predicates[SLSA].get("buildDefinition", {})
-        require(definition.get("buildType") == BUILDKIT and isinstance(definition.get("externalParameters"), dict),
-                f"Incomplete SLSA build definition for {platform}")
-        builder = predicates[SLSA].get("runDetails", {}).get("builder", {}).get("id", "")
+        parameters = definition.get("externalParameters", {})
+        dependencies = definition.get("resolvedDependencies", [])
+        details = predicates[SLSA].get("runDetails", {})
+        require(definition.get("buildType") == BUILDKIT
+                and isinstance(parameters.get("configSource", {}).get("path"), str)
+                and parameters["configSource"]["path"].strip()
+                and parameters.get("request", {}).get("frontend") in {"dockerfile.v0", "gateway.v0"}
+                and dependencies and all(d.get("uri") and d.get("digest") for d in dependencies)
+                and isinstance(details.get("metadata", {}).get("invocationId"), str)
+                and details["metadata"]["invocationId"].strip(), f"Incomplete SLSA build definition for {platform}")
+        builder = details.get("builder", {}).get("id", "")
         require(re.fullmatch(re.escape(builder_run.rstrip("/")) + r"/attempts/[1-9][0-9]*", builder),
                 f"Unexpected SLSA builder for {platform}: {builder}")
         documents[platform.replace("/", "-") + ".spdx.json"] = sbom

@@ -96,7 +96,7 @@ python3 tools/ci/verify_image_evidence.py "$image@$INDEX_DIGEST" --application E
 Use `Elsa.Workbench` for Workbench and `Elsa.Studio.Web` for Studio.
 The command reads the index, both runnable child descriptors, their attestation manifests
 and in-toto statements by digest. It checks the subject bindings, SLSA builder metadata
-and presence of operating-system and Elsa components, then saves
+including the invocation and resolved build inputs, supported CPU variants, and native operating-system and Elsa components, then saves
 `linux-amd64.spdx.json` and `linux-arm64.spdx.json`. Use the file for your deployment platform.
 
 Publishers stage versioned tags first. The run summary identifies the staged digest.

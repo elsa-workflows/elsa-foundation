@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import unittest
 
-from verify_image_evidence import BUILDKIT, SLSA, SPDX, package_identities, verify
+from verify_image_evidence import BUILDKIT, CONFIG, MANIFEST, SLSA, SPDX, package_identities, verify
 
 
 class ImageEvidenceTests(unittest.TestCase):
@@ -16,6 +16,7 @@ class ImageEvidenceTests(unittest.TestCase):
         self.children = {}
         for arch in ["amd64", "arm64"]:
             config = self.store({"os": "linux", "architecture": arch})
+            config["mediaType"] = CONFIG
             self.children[arch] = self.store({"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json",
                                               "config": config, "layers": [{"digest": "sha256:" + "9" * 64}]})["digest"]
 
@@ -23,23 +24,31 @@ class ImageEvidenceTests(unittest.TestCase):
         data = json.dumps(document).encode()
         digest = "sha256:" + hashlib.sha256(data).hexdigest()
         self.blobs[digest] = data
-        return {"digest": digest}
+        return {"digest": digest, "size": len(data)}
 
-    def index(self, missing=False, swap=False, swap_platforms=False, attestation_arch="unknown", build_type=BUILDKIT):
+    def index(self, missing=False, swap=False, swap_platforms=False, attestation_arch="unknown", build_type=BUILDKIT, descriptor_override=None, wrong_arch=False, empty_parameters=False):
         descriptors = []
         for arch, child in self.children.items():
             platform_arch = ({"amd64": "arm64", "arm64": "amd64"}[arch] if swap_platforms else arch)
-            descriptors.append({"platform": {"os": "linux", "architecture": platform_arch}, "digest": child})
+            descriptor = {"platform": {"os": "linux", "architecture": platform_arch}, "mediaType": MANIFEST,
+                          "digest": child, "size": len(self.blobs[child])}
+            if descriptor_override and arch == "amd64":
+                descriptor.update(descriptor_override)
+            descriptors.append(descriptor)
             layers = []
             for kind in [SPDX, SLSA]:
                 if missing and kind == SPDX and arch == "arm64":
                     continue
-                predicate = {"buildDefinition": {"buildType": build_type, "externalParameters": {}}, "runDetails": {"builder": {"id": "fixture/attempts/1"}}}
+                parameters = {} if empty_parameters else {"configSource": {"path": "Dockerfile"},
+                                                          "request": {"frontend": "dockerfile.v0"}}
+                predicate = {"buildDefinition": {"buildType": build_type, "externalParameters": parameters,
+                                                 "resolvedDependencies": [{"uri": "pkg:docker/base", "digest": {"sha256": "a" * 64}}]},
+                             "runDetails": {"builder": {"id": "fixture/attempts/1"}, "metadata": {"invocationId": "build-1"}}}
                 if kind == SPDX:
                     packages = [
                         {"name": name, "versionInfo": "1", "externalRefs": [
                             {"referenceType": "purl", "referenceLocator": purl}]}
-                        for name, purl in [("os", "pkg:deb/os@1"), ("Elsa.Test", "pkg:nuget/Elsa.Test@1")]]
+                        for name, purl in [("os", "pkg:deb/os@1?arch=" + ("amd64" if wrong_arch else arch)), ("Elsa.Test", "pkg:nuget/Elsa.Test@1")]]
                     predicate = {"spdxVersion": "SPDX-2.3", "packages": packages}
                 subject = self.children["amd64"] if swap and kind == SPDX else child
                 layer = self.store({"_type": "https://in-toto.io/Statement/v1", "subject": [{"digest": {"sha256": subject[7:]}}],
@@ -47,7 +56,10 @@ class ImageEvidenceTests(unittest.TestCase):
                 layer["mediaType"] = "application/vnd.in-toto+json"
                 layer["annotations"] = {"in-toto.io/predicate-type": kind}
                 layers.append(layer)
-            attestation = self.store({"subject": {"digest": child}, "layers": layers})
+            attestation = self.store({"schemaVersion": 2, "mediaType": MANIFEST,
+                                      "subject": {key: descriptor[key] for key in ("mediaType", "digest", "size")},
+                                      "layers": layers})
+            attestation["mediaType"] = MANIFEST
             attestation["platform"] = {"os": "unknown", "architecture": attestation_arch}
             attestation["annotations"] = {"vnd.docker.reference.digest": child,
                                           "vnd.docker.reference.type": "attestation-manifest"}
@@ -75,6 +87,20 @@ class ImageEvidenceTests(unittest.TestCase):
     def test_swapped_platform_labels(self):
         with self.assertRaisesRegex(ValueError, "Image config disagrees"):
             verify(self.index(swap_platforms=True), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
+
+    def test_child_descriptor_matches_what_a_client_fetches(self):
+        for override in ({"size": 1}, {"mediaType": "application/octet-stream"},
+                         {"platform": {"os": "linux", "architecture": "amd64", "variant": "v3"}}):
+            with self.subTest(override=override), self.assertRaisesRegex(ValueError, "descriptor|baseline"):
+                verify(self.index(descriptor_override=override), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
+
+    def test_sibling_inventory_with_correct_subject(self):
+        with self.assertRaisesRegex(ValueError, "native operating-system inventory for linux/arm64"):
+            verify(self.index(wrong_arch=True), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
+
+    def test_empty_build_request(self):
+        with self.assertRaisesRegex(ValueError, "SLSA build definition"):
+            verify(self.index(empty_parameters=True), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
 
     def test_attestation_platform_cannot_be_runnable(self):
         with self.assertRaisesRegex(ValueError, "selectable"):
