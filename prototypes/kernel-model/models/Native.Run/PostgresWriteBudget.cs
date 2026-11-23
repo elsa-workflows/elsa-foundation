@@ -126,10 +126,51 @@ internal static class PostgresWriteBudget
             WriteLine.Out = previousOutput;
         }
 
+        await VerifySubscriptionGuard(((Worker)owner).Fences.Single());
+
         var meetsBudget = max <= RoundTripBudget;
         var sql = writer == CommitSql.Owned ? "owned SQL" : "EF";
         Console.WriteLine($"PostgreSQL {sql} ({(inBatch ? "in-batch" : "checked")} fence), {Samples} Balanced public starts: maximum {max} wire round trips, budget {RoundTripBudget} ({(meetsBudget ? "met" : "missed")}).");
         return requireBudget && !meetsBudget ? 1 : 0;
+
+        async Task VerifySubscriptionGuard(PartitionFence fence)
+        {
+            var ready = await verifyRuntime.StartAsync(scope, "budget-guard", NativeExecutionModel.Start(definition.Id, Modes.Balanced),
+                cancellationToken: stop);
+            if (ready is not { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } actor } ||
+                await observeAdmission.ReadPendingCreatorAsync(scope.Tenant, actor.Id, stop) is not { Start: { } spec } creator)
+                throw new InvalidOperationException("The subscription control requires an admitted creator.");
+            var header = new FoundationHeaderChange(spec.Definition, new Dictionary<string, string>());
+            var row = new InstanceRow(creator.Target.Id, spec.Model, spec.Definition, InstanceStatus.Finished, "null", 1, null,
+                History: spec.History, Creation: 1, StartIntent: CreationProtocol.Fingerprint(spec, creator.Kind, creator.Payload))
+            {
+                FoundationDispatchHeader = new(scope.Tenant, actor.Id, header)
+            };
+            var turn = new TurnCommit(row.Id, row, null, [creator.InboxKey], [], [], [], [], """["end"]""", Unsubscribe: true)
+            {
+                FoundationHeader = header
+            };
+            var batch = new CommitBatch(fence.Partition, fence.Epoch, fence.Position, TimeSpan.FromSeconds(10), false, [turn], [], []);
+            await using var database = Probe();
+            var wait = new SubscriptionEntity { Instance = row.Id, Key = "block-first-finish", Wait = "wait", Partition = fence.Partition };
+            database.Subscriptions.Add(wait);
+            await database.SaveChangesAsync(stop);
+            Check(!(await store.CommitAsync(batch, stop)).Landed &&
+                await observeAdmission.ReadPendingCreatorAsync(scope.Tenant, actor.Id, stop) == creator &&
+                await observer.ReadFirstRootAsync(scope.Tenant, actor.Id, stop) is null &&
+                await database.Subscriptions.AnyAsync(subscription => subscription.Instance == row.Id, stop) &&
+                !await database.Journal.AnyAsync(entry => entry.Instance == row.Id, stop) &&
+                await database.Partitions.Where(partition => partition.Id == fence.Partition)
+                    .Select(partition => partition.Position).SingleAsync(stop) == fence.Position,
+                "A live subscription must refuse first completion without consuming its creator, wait or journal position.");
+            database.Subscriptions.Remove(wait);
+            await database.SaveChangesAsync(stop);
+            Check((await store.CommitAsync(batch, stop)).Landed &&
+                await observer.ReadFirstRootAsync(scope.Tenant, actor.Id, stop) is { Status: InstanceStatus.Finished, TerminalRevision: 1 },
+                "The same pending creator must finish after the blocking wait is removed.");
+            await VerifyAtRest(row.Id);
+            Console.WriteLine("Subscription guard: the live wait refused terminal birth, and the same creator finished after removal.");
+        }
 
         async Task VerifyAtRest(string id)
         {
