@@ -103,7 +103,8 @@ Publishers stage versioned tags first. The run summary identifies the staged dig
 For a main-source publication, the publisher advances `latest` after inventory and signature
 verification and checks its registry digest. If main has advanced, use the verified versioned
 digest. A failed or interrupted run may have published versioned tags without completing verification.
-Retry the failed verification job to check the original staged digest. The publisher also
+Retry the failed verification job to check the original staged digest. For a stable Studio version the publisher promotes its eligible major and minor aliases
+after signing, checking newer version tags again before each promotion job. The publisher also
 checks the source tag before updating `latest`, since a newer run can build the same
 commit. If the exporter fails before returning its digest, treat any observed registry tags
 as unverified. Verify the signature and both inventories before using a versioned digest.

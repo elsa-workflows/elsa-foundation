@@ -43,6 +43,12 @@ def derive_tags(ref: str, version: str, sha: str, publish: bool, preview_tag: st
     return tags
 
 
+def stage_tags(tags: list[str]) -> list[str]:
+    """Only exact product versions and commit tags may precede digest verification."""
+    return [tag for tag in tags if tag.rsplit(":", 1)[1] != "latest"
+            and not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", tag.rsplit(":", 1)[1])]
+
+
 def self_test() -> None:
     sha = "0123456789abcdef0123456789abcdef01234567"
     expected_image = "elsaworkflows/elsa-studio:"

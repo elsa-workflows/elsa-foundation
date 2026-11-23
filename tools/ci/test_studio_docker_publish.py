@@ -93,6 +93,16 @@ class StudioDockerPublishTests(unittest.TestCase):
         self.assertFalse(publish.source_sha_is_current("main", SHA))
         self.assertFalse(publish.source_sha_is_current(SHA, ""))
 
+    def test_stable_aliases_wait_for_verification_and_keep_newer_releases(self):
+        from studio_image_tags import derive_tags, stage_tags
+        tags = derive_tags("refs/tags/v4.2.0", "4.2.0", SHA, True, "")
+        self.assertEqual(stage_tags(tags), [f"{publish.IMAGE}:4.2.0", f"{publish.IMAGE}:sha-{SHA[:7]}"])
+        self.assertEqual(publish.eligible_stable_aliases("4.2.0", {"4.2.0"}), ["4.2", "4"])
+        self.assertEqual(publish.eligible_stable_aliases("4.2.0", {"4.2.0", "4.3.0"}), ["4.2"])
+        self.assertEqual(publish.eligible_stable_aliases("4.2.0", {"4.2.0", "4.2.1"}), [])
+        with self.assertRaises(ValueError):
+            publish.eligible_stable_aliases("4.2.0", {"4.1.0"})
+
     def test_preview_floor_reads_all_pages_and_ignores_non_preview_tags(self) -> None:
         first = FakeResponse({
             "results": [

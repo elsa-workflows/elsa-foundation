@@ -46,6 +46,17 @@ def package_identities(packages):
             yield kind, name, identity.qualifiers.get("arch")
 
 
+def resolved_build_input(dependency):
+    if not isinstance(dependency, dict):
+        return False
+    uri, hashes = dependency.get("uri"), dependency.get("digest")
+    return (isinstance(uri, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*:[^\s]+", uri)
+            and isinstance(hashes, dict) and bool(hashes)
+            and all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]+", value)
+                    and len(value) % 2 == 0 and (key != "sha256" or len(value) == 64)
+                    for key, value in hashes.items()))
+
+
 def verify(reference, fetch, output, builder_run, application, validate_spdx):
     repository, _, index_digest = reference.rpartition("@")
     require(repository and re.fullmatch(r"sha256:[0-9a-f]{64}", index_digest),
@@ -92,6 +103,12 @@ def verify(reference, fetch, output, builder_run, application, validate_spdx):
         config = read("blob", image["config"]["digest"], image["config"], CONFIG)
         require(f"{config['os']}/{config['architecture']}" == platform,
                 f"Image config disagrees with index platform {platform}")
+        rootfs = config.get("rootfs", {})
+        diff_ids = rootfs.get("diff_ids", [])
+        require(rootfs.get("type") == "layers" and isinstance(diff_ids, list)
+                and len(diff_ids) == len(image["layers"])
+                and all(isinstance(value, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", value) for value in diff_ids),
+                f"Image root filesystem disagrees with its layers for {platform}")
         baseline = "v1" if platform == "linux/amd64" else "v8"
         for target in (descriptor["platform"], config):
             require(target.get("variant", baseline) in ("", baseline)
@@ -141,7 +158,7 @@ def verify(reference, fetch, output, builder_run, application, validate_spdx):
                 and isinstance(parameters.get("configSource", {}).get("path"), str)
                 and parameters["configSource"]["path"].strip()
                 and parameters.get("request", {}).get("frontend") in {"dockerfile.v0", "gateway.v0"}
-                and dependencies and all(d.get("uri") and d.get("digest") for d in dependencies)
+                and isinstance(dependencies, list) and dependencies and all(resolved_build_input(d) for d in dependencies)
                 and isinstance(details.get("metadata", {}).get("invocationId"), str)
                 and details["metadata"]["invocationId"].strip(), f"Incomplete SLSA build definition for {platform}")
         builder = details.get("builder", {}).get("id", "")

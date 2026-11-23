@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import unittest
 
-from verify_image_evidence import BUILDKIT, CONFIG, MANIFEST, SLSA, SPDX, package_identities, verify
+from verify_image_evidence import BUILDKIT, CONFIG, MANIFEST, resolved_build_input, SLSA, SPDX, package_identities, verify
 
 
 class ImageEvidenceTests(unittest.TestCase):
@@ -15,7 +15,8 @@ class ImageEvidenceTests(unittest.TestCase):
         self.blobs = {}
         self.children = {}
         for arch in ["amd64", "arm64"]:
-            config = self.store({"os": "linux", "architecture": arch})
+            config = self.store({"os": "linux", "architecture": arch,
+                                 "rootfs": {"type": "layers", "diff_ids": ["sha256:" + "a" * 64]}})
             config["mediaType"] = CONFIG
             self.children[arch] = self.store({"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json",
                                               "config": config, "layers": [{"digest": "sha256:" + "9" * 64}]})["digest"]
@@ -110,6 +111,20 @@ class ImageEvidenceTests(unittest.TestCase):
         for kind in (True, "https://example.invalid/other"):
             with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "SLSA build definition"):
                 verify(self.index(build_type=kind), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
+
+    def test_malformed_resolved_input(self):
+        for record in ({"uri": True, "digest": True}, {"uri": "", "digest": {}},
+                       {"uri": "pkg:docker/test", "digest": {"sha256": "abc"}}):
+            with self.subTest(record=record):
+                self.assertFalse(resolved_build_input(record))
+
+    def test_config_must_describe_all_layers(self):
+        original = json.loads(self.blobs[self.children["arm64"]])
+        invalid = self.store({"os": "linux", "architecture": "arm64", "rootfs": {"type": "layers", "diff_ids": []}})
+        original["config"] = dict(invalid, mediaType=CONFIG)
+        self.children["arm64"] = self.store(original)["digest"]
+        with self.assertRaisesRegex(ValueError, "root filesystem"):
+            verify(self.index(), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
 
     def test_other_producer(self):
         with self.assertRaisesRegex(ValueError, "Unexpected SLSA builder"):
