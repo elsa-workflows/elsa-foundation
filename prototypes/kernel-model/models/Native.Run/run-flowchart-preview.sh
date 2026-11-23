@@ -18,7 +18,10 @@ if ! waiting="$(dotnet "$dll" pg-flowchart-preview birth "$route")"; then
 fi
 printf '%s\n' "$waiting"
 read -r phase first_pid actor bookmark epoch <<< "$waiting"
-test "$phase" = waiting && test -n "$first_pid" && test -n "$actor" && test -n "$bookmark" && test -n "$epoch"
+if [[ "$phase" != waiting || ! "$first_pid" =~ ^[1-9][0-9]*$ || -z "$actor" || -z "$bookmark" || ! "$epoch" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'The birth process did not produce a waiting receipt.\n' >&2
+  exit 1
+fi
 
 if ! finished="$(dotnet "$dll" pg-flowchart-preview restart "$route" "$actor" "$bookmark" "$epoch")"; then
   printf '%s\n' "$finished"
@@ -26,4 +29,7 @@ if ! finished="$(dotnet "$dll" pg-flowchart-preview restart "$route" "$actor" "$
 fi
 printf '%s\n' "$finished"
 read -r phase second_pid completed _ <<< "$finished"
-test "$phase" = finished && test -n "$second_pid" && test "$first_pid" != "$second_pid" && test "$actor" = "$completed"
+if [[ "$phase" != finished || ! "$second_pid" =~ ^[1-9][0-9]*$ || "$first_pid" == "$second_pid" || "$actor" != "$completed" ]]; then
+  printf 'The restart did not finish the same actor in another process.\n' >&2
+  exit 1
+fi
