@@ -36,7 +36,12 @@ function* walk(roots, predicate) {
 
 const projects = [
   ...walk(moduleSourceRoots, name => name.endsWith(".csproj")),
-  ...walk([join(studioRoot, "tests")], name => name.endsWith(".csproj"))
+  ...walk([join(studioRoot, "tests")], name => name.endsWith(".csproj")),
+  // The independent Studio consumer and its editor module are solution-owned acceptance projects.
+  ...walk([
+    join(repoRoot, "tools/ux-acceptance/StudioConsumer"),
+    join(repoRoot, "tools/ux-acceptance/extensions/TriggerEditor")
+  ], name => name.endsWith(".csproj"))
 ].map(rel).sort();
 const packages = [
   ...walk(moduleSourceRoots, name => name === "package.json"),
@@ -133,7 +138,7 @@ const fail = (assertion, detail) => failures.push({ assertion, detail });
 // ── 4. every module stylesheet is covered by the actual lint globs ─────────────────────────
 {
   const script = JSON.parse(readStudio("package.json")).scripts["lint:css"];
-  const globs = [...script.matchAll(/"([^"]+)"/g)].map(match => resolve(studioRoot, match[1]));
+  const globs = [...script.matchAll(/"([^"]+)"/g)].map(match => resolve(studioRoot, match[1]).split("\\").join("/"));
   const result = await stylelint.lint({ files: globs, configFile: join(studioRoot, ".stylelintrc.json") });
   const linted = new Set(result.results.map(result => rel(result.source)));
   const onDisk = [...walk(moduleSourceRoots, name => name.endsWith(".css"))]

@@ -8,8 +8,77 @@ namespace Kernel.Sim;
 /// </summary>
 internal static class WorkerSetChecks
 {
+    private static async Task GainInFlight(Action<bool, string> check, bool lost)
+    {
+        const long now = 100_000;
+        var store = new InMemoryStore(5, () => now);
+        var wire = new DelayedCommit(store);
+        var worker = Worker.ForNode("a", wire, new WorkflowInstance([new Counter()]), new() { Monotonic = () => now });
+        await worker.GainAsync(0);
+        var epoch = worker.EpochOf(0);
+        wire.DelayTake = true;
+        var answer = worker.GainSetAsync([0, 2, 3], default);
+        await wire.Taken.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var claimed = worker.ClaimedPartitions().Order().SequenceEqual([0, 2, 3]);
+        if (lost) wire.TakeReply.SetException(new IOException("the take answer was lost"));
+        else
+        {
+            await worker.LoseAsync([3]);
+            wire.TakeReply.SetResult();
+        }
+        await answer;
+        if (lost)
+        {
+            var original = worker.ClaimedPartitions().SequenceEqual([0]) && store.Partitions[2].Owner == "a";
+            await worker.GainSetAsync([2, 3], default);
+            check(claimed && original && worker.EpochOf(0) == epoch && worker.EpochOf(2) == store.Partitions[2].Epoch
+                && worker.EpochOf(2) > 1 && worker.EpochOf(3) == store.Partitions[3].Epoch && worker.EpochOf(3) > 1, "a lost gain answer retains the old fence; a later take installs only known epochs");
+        }
+        else check(claimed && worker.EpochOf(0) == epoch && worker.ClaimedPartitions().Order().SequenceEqual([0, 2])
+            && worker.EpochOf(2) == store.Partitions[2].Epoch && store.Partitions[3].Owner is null,
+            "the heartbeat claims the entire in-flight gain; a concurrent give-up returns only its own partition");
+    }
+
+    private static async Task LateGain(Action<bool, string> check)
+    {
+        long now = 100_000;
+        var store = new InMemoryStore(3, () => now);
+        var wire = new DelayedCommit(store) { DelayTake = true };
+        var worker = Worker.ForNode("a", wire, new WorkflowInstance([new Counter()]), new() { Monotonic = () => now });
+        var gain = worker.GainSetAsync([0, 2], default);
+        await wire.Taken.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var timely = worker.Live;
+        now += (long)Defaults.Lease.TotalMilliseconds;
+        var overdue = !worker.Live;
+        wire.TakeReply.SetResult();
+        await gain;
+        check(timely && overdue && !worker.Owns && worker.Pending.Keys.Order().SequenceEqual([0, 2]),
+            "a cold grouped take closes the pass gate at its deadline and leaves its late answer pending");
+    }
+
+    private static async Task GainWithPending(Action<bool, string> check)
+    {
+        long now = 100_000;
+        var store = new InMemoryStore(3, () => now);
+        var worker = Worker.ForNode("a", store, new WorkflowInstance([new Counter()]), new() { Monotonic = () => now });
+        await worker.GainAsync(0);
+        var epoch = worker.EpochOf(0);
+        await store.AddAsync(new Message("trial", InstanceRef.In(0, "w"), "work"));
+        store.Messages["trial"].Trial = epoch;
+        now += (long)Defaults.Lease.TotalMilliseconds;
+        await worker.GainSetAsync([0, 1, 2], default);
+        check(worker.Fences.Count == 3 && worker.Pending.Count == 0 && worker.EpochOf(0) == epoch + 1
+            && store.Messages["trial"].Attempts == 1,
+            "a mixed gain counts the old trial through its epoch-bound retake and takes both fresh partitions");
+    }
+
     internal static async Task Run(Action<bool, string> check)
     {
+        await GainInFlight(check, lost: false);
+        await GainInFlight(check, lost: true);
+        await GainWithPending(check);
+        await LateGain(check);
+        await SetGainTimingChecks.Run(check);
         const long time = 100;
         var store = new InMemoryStore(2, () => time);
         var commits = 0;

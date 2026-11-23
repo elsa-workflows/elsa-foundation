@@ -23,10 +23,9 @@ public sealed class Projector(IKernelStore store, int partition, int take = 100,
     public int Rounds { get; private set; }
 
     /// <summary>
-    /// A round, as a nudge after commits runs it (<see cref="NodeProjection"/>): nothing if one is under way, and no
-    /// failure ever escapes. <see cref="RoundResult.More"/> when it moved the projection and left it behind the position it
-    /// read; <see cref="RoundResult.Failed"/> when it threw or lost its conditional write, and a later round must read the
-    /// position again.
+    /// A round as a nudge after commits runs it (<see cref="NodeProjection"/>). <see cref="RoundResult.More"/> means
+    /// the projection moved and has more to read. <see cref="RoundResult.Failed"/> retries a lost or failed write.
+    /// An incompatible store format is reported to the caller.
     /// </summary>
     public async Task<RoundResult> RoundAsync(CancellationToken cancellationToken = default)
     {
@@ -40,7 +39,7 @@ public sealed class Projector(IKernelStore store, int partition, int take = 100,
             var page = await OneAsync(cancellationToken);
             return page.Lost ? RoundResult.Failed : page.At > page.From && page.At < page.Written ? RoundResult.More : RoundResult.Done;
         }
-        catch (Exception) { return RoundResult.Failed; }      // a read or a write in doubt
+        catch (Exception error) when (error is not StoreFormatException) { return RoundResult.Failed; }
         finally { Done(); }
     }
 
@@ -164,12 +163,14 @@ public enum RoundResult { Done, More, Failed }
 /// throws or loses its write. Nothing sweeps every partition on a timer. A partition that moved to another node is
 /// projected there; the cursor write is conditional, so rounds of two nodes race safely.
 /// </summary>
-public sealed class NodeProjection(IKernelStore store, int take = 100, Flaw flaws = Flaw.None)
+public sealed class NodeProjection(IKernelStore store, int take = 100, Flaw flaws = Flaw.None,
+    Action<StoreFormatException>? reportFormatFailure = null)
 {
     private readonly Dictionary<int, Projector> _projectors = [];
     private readonly SortedSet<int> _dirty = [];
     private Task _drain = Task.CompletedTask;
     private bool _draining;
+    private StoreFormatException? _formatFailure;
     private readonly Dictionary<int, int> _failures = [];      // rounds in a row that threw or lost their write, per partition
 
     /// <summary>Rounds run so far, over every partition. For tests.</summary>
@@ -181,10 +182,14 @@ public sealed class NodeProjection(IKernelStore store, int take = 100, Flaw flaw
     /// <summary>Done when no nudged partition waits for a round. For tests.</summary>
     public Task Idle { get { lock (_dirty) return _drain; } }
 
+    /// <summary>The durable format this projector refused. Start a new projector after the coordinated change.</summary>
+    public StoreFormatException? FormatFailure { get { lock (_dirty) return _formatFailure; } }
+
     public void Nudge(IEnumerable<int> partitions)
     {
         lock (_dirty)
         {
+            if (_formatFailure is not null) return;
             _dirty.UnionWith(partitions);
             if (_draining || _dirty.Count == 0) return;
             _draining = true;
@@ -207,7 +212,22 @@ public sealed class NodeProjection(IKernelStore store, int take = 100, Flaw flaw
             {
                 Projector projector;
                 lock (_dirty) projector = _projectors.TryGetValue(partition, out var known) ? known : _projectors[partition] = new(store, partition, take, flaws);
-                var result = await projector.RoundAsync();
+                RoundResult result;
+                try
+                {
+                    result = await projector.RoundAsync();
+                }
+                catch (StoreFormatException error)
+                {
+                    lock (_dirty)
+                    {
+                        _formatFailure = error;
+                        _dirty.Clear();
+                        _draining = false;
+                    }
+                    reportFormatFailure?.Invoke(error);
+                    return;
+                }
                 var failures = 0;
                 lock (_dirty)
                 {

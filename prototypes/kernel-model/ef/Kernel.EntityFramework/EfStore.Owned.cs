@@ -173,6 +173,8 @@ public sealed partial class EfStore
             if (command.HasFence) now = result.Now;
             seqs.AddRange(result.Seqs);
         }
+        if (batch.ClearJobTrials.Count != 0 && !await ClearJobTrialsAsync(db, batch, cancellationToken))
+            return new Committed(false, 0, []);
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
@@ -367,7 +369,7 @@ public sealed partial class EfStore
     {
         StoreBatchRules.RequireDistinct(owned);
         if (owned.Count == 0) return new([], 0);
-        if (_ordinaryRoots is not null)
+        if (_ordinaryRoots?.FixedPartition is not null)
         {
             var fence = owned.Single();
             return await PollAsync(fence.Partition, fence.Epoch, horizon, limit, cancellationToken);
@@ -377,6 +379,7 @@ public sealed partial class EfStore
         var set = Q($"""m."Partition" IN ({List(owned.Select(f => f.Partition).Order())}) AND m."Seen" < {EpochOf(owned, "m.\"Partition\"")}""");
         var sql = string.Format(System.Globalization.CultureInfo.InvariantCulture, PollSql.Replace(single, set, StringComparison.Ordinal), 0, 0, (long)horizon.TotalMilliseconds, limit);
         await using var db = create();
+        if (_ordinaryRoots is { } root) return ToGeneratedPoll(await db.Database.SqlQueryRaw<GeneratedPollRow>(sql).ToListAsync(cancellationToken), root);
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql).ToListAsync(cancellationToken));
     }
 }
