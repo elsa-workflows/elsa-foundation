@@ -41,12 +41,8 @@ public sealed partial class InMemoryStore
     }
 
     internal (OperatorAdmission Outcome, string? Reference) AdmitRetentionDelete(string tenant, string reference, string selection,
-        long? due = null, string? replyTo = null)
-    {
-        var identity = Json.Write(new { tenant, reference, selection });
-        var id = "~retention-" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(identity)));
-        return AdmitFoundationOperator(tenant, reference, null, id, Kinds.Delete, null, due, null, selection, replyTo, retentionDelete: true);
-    }
+        long? due = null, string? replyTo = null) =>
+        AdmitFoundationOperator(tenant, reference, null, "", Kinds.Delete, null, due, null, selection, replyTo, retentionDelete: true);
 
     internal (OperatorAdmission Outcome, string? Reference) AdmitFoundationOperator(string tenant, string? reference, string? callerKey,
         string id, string kind, string? payload, long? due, TimeSpan? keepFor, string? selection, string? replyTo, ParkRecoveryMode? recoverMode = null,
@@ -67,9 +63,18 @@ public sealed partial class InMemoryStore
                 if (selection is null || !NamesFoundationPark(tenant, reference, selection))
                     return (OperatorAdmission.StaleSelection, null);
             }
-            else if (deleteTarget is null && (kind == Kinds.Delete || selection is not null) &&
-                !MatchesFoundationSelection(tenant, reference, selection, requireTerminal: kind == Kinds.Delete))
-                return (OperatorAdmission.StaleSelection, null);
+            else if (deleteTarget is null && (kind == Kinds.Delete || selection is not null))
+            {
+                Span<byte> mark = stackalloc byte[SelectionBytes];
+                if (!TryMatchFoundationSelection(tenant, reference, selection, mark, requireTerminal: kind == Kinds.Delete))
+                    return (OperatorAdmission.StaleSelection, null);
+                if (retentionDelete)
+                {
+                    // A fresh read seals the same terminal mark with a different nonce.
+                    var identity = Json.Write(new { tenant, reference, Mark = Convert.ToHexString(mark) });
+                    id = "~retention-" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(identity)));
+                }
+            }
 
             // The receipt is scoped to the operation, and keeps the first target after the Park's mark changes.
             if (_foundationOperatorReceipts.TryGetValue(FoundationIngressAddress.Operation(tenant, id), out var prior) && prior.Until >= clock())
