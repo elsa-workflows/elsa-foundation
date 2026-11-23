@@ -15,26 +15,29 @@ public sealed class JsonHostEntrypointTests
     {
         var directory = Directory.CreateTempSubdirectory("elsa-json-host-options-").FullName;
         var receipt = Path.Combine(directory, "receipt.json");
-        var hook = Output("Essentials/tests/Architecture/Fixtures/JsonHostOptionsProbe", "JsonHostOptionsProbe");
-        var assembly = name == "JsonHostOptionsProbe" ? hook : Output("Essentials/apps/" + name, name);
-        await File.WriteAllTextAsync(Path.Combine(directory, "shells.json"), """{"CShells":{"Shells":{"default":{"Name":"default","Features":{}}}}}""");
-        var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
-        {
-            WorkingDirectory = directory, RedirectStandardOutput = true, RedirectStandardError = true,
-            UseShellExecute = false, CreateNoWindow = true
-        };
-        foreach (var argument in new[] { assembly, "--contentRoot", directory, "--urls", "http://127.0.0.1:0", "--Elsa:Readiness:WarmDefaultShell=false", "--Elsa:Boot:EagerShellActivation:Enabled=false" })
-            start.ArgumentList.Add(argument);
-        start.Environment["DOTNET_STARTUP_HOOKS"] = hook;
-        start.Environment["ELSA_JSON_HOST_OPTIONS_RECEIPT"] = receipt;
-        start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
-        start.Environment["DOTNET_ENVIRONMENT"] = "Development";
-        start.Environment["Nuplane__Setup__StateFilePath"] = Path.Combine(directory, "nuplane-state.json");
-        using var process = Process.Start(start)!;
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
+        Process? process = null;
+        Task<string>? stdout = null, stderr = null;
+        Exception? failure = null;
         try
         {
+            var hook = Output("Essentials/tests/Architecture/Fixtures/JsonHostOptionsProbe", "JsonHostOptionsProbe");
+            var assembly = name == "JsonHostOptionsProbe" ? hook : Output("Essentials/apps/" + name, name);
+            await File.WriteAllTextAsync(Path.Combine(directory, "shells.json"), """{"CShells":{"Shells":{"default":{"Name":"default","Features":{}}}}}""");
+            var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
+            {
+                WorkingDirectory = directory, RedirectStandardOutput = true, RedirectStandardError = true,
+                UseShellExecute = false, CreateNoWindow = true
+            };
+            foreach (var argument in new[] { assembly, "--contentRoot", directory, "--urls", "http://127.0.0.1:0", "--Elsa:Readiness:WarmDefaultShell=false", "--Elsa:Boot:EagerShellActivation:Enabled=false" })
+                start.ArgumentList.Add(argument);
+            start.Environment["DOTNET_STARTUP_HOOKS"] = hook;
+            start.Environment["ELSA_JSON_HOST_OPTIONS_RECEIPT"] = receipt;
+            start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+            start.Environment["DOTNET_ENVIRONMENT"] = "Development";
+            start.Environment["Nuplane__Setup__StateFilePath"] = Path.Combine(directory, "nuplane-state.json");
+            process = Process.Start(start)!;
+            stdout = process.StandardOutput.ReadToEndAsync();
+            stderr = process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(2));
             var log = await stdout + await stderr;
             Assert.True(process.ExitCode == 0, log);
@@ -52,17 +55,33 @@ public sealed class JsonHostEntrypointTests
                 Assert.Contains("DateTimeOffset admitted an offset-less date", errors);
                 Assert.Contains("Raw JSON passthrough", errors);
             }
-            if (Environment.GetEnvironmentVariable("ELSA_JSON_HOST_EVIDENCE") is { Length: > 0 } evidence)
-            {
-                Directory.CreateDirectory(evidence);
-                await File.WriteAllTextAsync(Path.Combine(evidence, name + ".json"), text);
-                await File.WriteAllTextAsync(Path.Combine(evidence, name + ".log"), log);
-            }
         }
+        catch (Exception error) { failure = error; throw; }
         finally
         {
-            if (!process.HasExited) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); }
-            Directory.Delete(directory, recursive: true);
+            try
+            {
+                if (process is { HasExited: false }) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); }
+                if (Environment.GetEnvironmentVariable("ELSA_JSON_HOST_EVIDENCE") is { Length: > 0 } evidence)
+                {
+                    Directory.CreateDirectory(evidence);
+                    var retained = Directory.CreateTempSubdirectory(evidence, name + "-").FullName;
+                    await File.WriteAllTextAsync(Path.Combine(retained, "host.log"),
+                        (stdout is null ? string.Empty : await stdout) + (stderr is null ? string.Empty : await stderr));
+                    if (File.Exists(receipt)) File.Copy(receipt, Path.Combine(retained, "receipt.json"));
+                    else await File.WriteAllTextAsync(Path.Combine(retained, "missing-receipt.txt"), "HostBuilt did not produce a receipt.");
+                    if (failure is not null) await File.WriteAllTextAsync(Path.Combine(retained, "failure.txt"), failure.ToString());
+                }
+            }
+            catch (Exception retentionError) when (failure is not null)
+            {
+                Console.Error.WriteLine("Host probe cleanup/evidence error in addition to the test failure: " + retentionError);
+            }
+            finally
+            {
+                process?.Dispose();
+                Directory.Delete(directory, recursive: true);
+            }
         }
     }
 
