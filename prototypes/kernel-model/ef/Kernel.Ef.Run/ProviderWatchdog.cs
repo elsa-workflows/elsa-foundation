@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
+using Microsoft.Data.SqlClient;
+using Npgsql;
 
 static class ProviderWatchdog
 {
@@ -62,7 +64,7 @@ static class ProviderWatchdog
                 Require(!blocked.IsCompleted && watchdog.Check() == 0, "The physical commit waits before the watchdog deadline.");
                 monotonic = (long)(LeaseTime.TotalMilliseconds * 2);
                 Require(watchdog.Check() == 1, "The watchdog requests cancellation of the blocked commit.");
-                result = await AwaitAbortAsync(blocked, LeaseTime / 3, token);
+                result = await AwaitInterruptedAsync(blocked, LeaseTime / 3, token);
                 monotonic += (long)(LeaseTime.TotalMilliseconds / 3);
                 Require(watchdog.Check() == 0 && watchdog.Closed == 1 && ended.Count == 0,
                     "The commit ended before watchdog process escalation.");
@@ -151,7 +153,7 @@ static class ProviderWatchdog
         Require(watchdog.Check() == 1, "The watchdog requests cancellation of the child commit.");
         try
         {
-            await AwaitAbortAsync(commit, LeaseTime / 3, token);
+            await AwaitInterruptedAsync(commit, LeaseTime / 3, token);
             return 0;
         }
         catch (TimeoutException)
@@ -161,7 +163,7 @@ static class ProviderWatchdog
             // The call can return between the grace timeout and the watchdog check.
             if (commit.IsCompleted)
             {
-                await AwaitAbortAsync(commit, TimeSpan.Zero, token);
+                await AwaitInterruptedAsync(commit, TimeSpan.Zero, token);
                 return 0;
             }
             throw;
@@ -171,16 +173,29 @@ static class ProviderWatchdog
     private static CommitBatch Flush(Lease held) => new(0, held.Epoch, held.Position, LeaseTime, false,
         [new(Actor, new(Actor, "m", "d", InstanceStatus.Running, "{}", 1, null), null, [], [], [], [], [], "[]")], [], []);
 
-    private static async Task<string> AwaitAbortAsync(Task<Committed> commit, TimeSpan patience, CancellationToken token)
+    private static async Task<string> AwaitInterruptedAsync(Task<Committed> commit, TimeSpan patience, CancellationToken token)
     {
         try
         {
-            var outcome = await commit.WaitAsync(patience, token);
-            Require(!outcome.Landed, "The interrupted commit was refused.");
-            return "refused";
+            await commit.WaitAsync(patience, token);
+            throw new InvalidOperationException("A current-fence commit returned without reporting an interruption.");
         }
         catch (OperationCanceledException) when (!token.IsCancellationRequested) { return "cancelled"; }
-        catch (StoreException error) when (error.Failure == Failure.Unknown) { return "unknown"; }
+        catch (StoreException error) when (error.Failure == Failure.Unknown)
+        {
+            var cause = error.InnerException;
+            while (cause is not null)
+            {
+                Console.WriteLine(cause switch
+                {
+                    PostgresException postgres => $"Interruption diagnostic: PostgreSQL {postgres.SqlState}",
+                    SqlException sql => $"Interruption diagnostic: SQL Server {sql.Number}",
+                    _ => $"Interruption diagnostic: {cause.GetType().Name}"
+                });
+                cause = cause.InnerException;
+            }
+            return "unknown";
+        }
     }
 
     private static void Require(bool condition, string expectation)

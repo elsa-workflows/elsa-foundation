@@ -40,18 +40,19 @@ dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sq
 
 ### Watchdog cancellation under a database lock
 
-Run from `prototypes/kernel-model` with a dedicated test database. The fixture resets that database.
+Run from `prototypes/kernel-model` against a disposable database server.
 
 ```bash
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x watchdog <postgres|sqlserver|mysql> "<connection>" commit=owned fence=batch disposable=1
 ```
 
-Use a disposable database server. The fixture drops and recreates its database, and the
+The fixture drops and recreates its database, and the
 MySQL setup also creates and grants privileges to its fixture account at server scope.
 The server reports the blocked worker commit. The fixture advances the watchdog's local clock to
 its cancellation threshold while the competing transaction still holds the lock. PostgreSQL and
-SQL Server exercise command cancellation. The MySQL worker runs in a disposable process so the
-fixture can also exercise process escalation if the command stays blocked past the grace period.
+SQL Server must return an interrupted or unknown outcome within the grace period. The MySQL worker
+runs in a disposable process so the fixture also exercises escalation if the command stays blocked.
+The fixture records the operation's outcome and subsequent store state. It does not inspect sockets.
 A later owner starts at the unchanged journal position and commits one checkpoint and journal row.
 Repeat with `commit=ef` or `fence=checked` to exercise the other paths.
 
