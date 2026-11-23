@@ -7,5 +7,6 @@
     <ProjectReference Include="../Kernel.Foundation.Contracts/Kernel.Foundation.Contracts.csproj" />
     <InternalsVisibleTo Include="Kernel.Native.Run" />
     <InternalsVisibleTo Include="Kernel.Sim" />
+    <InternalsVisibleTo Include="Kernel.Statecharts.Run" />
   </ItemGroup>
 </Project>
