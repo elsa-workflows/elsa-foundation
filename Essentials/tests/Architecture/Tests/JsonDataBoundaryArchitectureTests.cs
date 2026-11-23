@@ -258,6 +258,59 @@ public sealed class JsonDataBoundaryArchitectureTests
         Assert.Single(snapshot.OpaqueConverters);
     }
 
+    [Fact]
+    public void A_generic_scalar_converter_does_not_require_metadata_for_its_hidden_argument()
+    {
+        var options = JsonBaseline.CreateCopy();
+        var resolver = new DefaultJsonTypeInfoResolver();
+        options.TypeInfoResolver = new RefusingHiddenResolver(resolver);
+        options.MakeReadOnly();
+        var snapshot = InspectFixture(options, [typeof(ScalarBox<HiddenDocument>)]);
+        Assert.Empty(snapshot.Errors);
+        Assert.DoesNotContain("shape|fixture|" + JsonBoundaryContractGraph.Name(typeof(HiddenDocument)), snapshot.Pins.Keys);
+        Assert.Single(snapshot.OpaqueConverters);
+    }
+
+    [Fact]
+    public void A_member_scalar_converter_is_an_exact_opaque_contract_and_hides_the_default_collection_graph()
+    {
+        var options = JsonBaseline.CreateCopy();
+        var resolver = new DefaultJsonTypeInfoResolver();
+        resolver.Modifiers.Add(info =>
+        {
+            if (info.Type == typeof(MemberScalarDocument)) info.Properties.Single(property => property.Name == "scalar").CustomConverter = new UntypedScalarConverter();
+        });
+        options.TypeInfoResolver = resolver;
+        options.MakeReadOnly();
+        var snapshot = InspectFixture(options, [typeof(MemberScalarDocument)]);
+        Assert.Empty(snapshot.Errors);
+        Assert.Empty(snapshot.LooseMembers);
+        Assert.DoesNotContain("shape|fixture|System.Object", snapshot.Pins.Keys);
+        var contract = Assert.Single(snapshot.OpaqueConverters);
+        Assert.Contains("MemberScalarDocument.scalar|", contract, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_custom_enum_member_writer_observes_the_actual_owner_encoder_and_writer_settings()
+    {
+        var options = JsonBaseline.CreateCopy();
+        var resolver = new DefaultJsonTypeInfoResolver();
+        resolver.Modifiers.Add(info =>
+        {
+            if (info.Type == typeof(EnumDocument)) info.Properties.Single(property => property.Name == "state").CustomConverter = new UnicodeEnumConverter();
+        });
+        options.TypeInfoResolver = resolver;
+        options.MakeReadOnly();
+        var snapshot = InspectFixture(options, [typeof(EnumDocument)]);
+        Assert.Empty(snapshot.Errors);
+        var key = "shape|fixture|" + JsonBoundaryContractGraph.Name(typeof(EnumDocument));
+        using var shape = JsonDocument.Parse(snapshot.Shapes[key]);
+        var member = shape.RootElement.GetProperty("Properties").EnumerateArray().Single(property => property.GetProperty("Name").GetString() == "state");
+        var actual = JsonSerializer.SerializeToElement(new EnumDocument { State = WireState.FirstChoice }, options).GetProperty("state").GetRawText();
+        Assert.Equal("\"René <+>\"", actual);
+        Assert.All(member.GetProperty("EnumWire").EnumerateArray(), token => Assert.Equal(actual, token.GetString()));
+    }
+
     private static JsonSerializerOptions WithAddedMember(Type target)
     {
         var options = JsonBaseline.CreateCopy();
@@ -318,6 +371,36 @@ public sealed class JsonDataBoundaryArchitectureTests
     {
         public override ScalarRows Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => new();
         public override void Write(Utf8JsonWriter writer, ScalarRows value, JsonSerializerOptions options) => writer.WriteStringValue("owned-scalar");
+    }
+    public sealed class HiddenDocument { public object? InProcess { get; init; } }
+    [JsonConverter(typeof(ScalarBoxConverterFactory))]
+    public sealed class ScalarBox<T>;
+    public sealed class ScalarBoxConverterFactory : JsonConverterFactory
+    {
+        public override bool CanConvert(Type typeToConvert) => typeToConvert.IsGenericType && typeToConvert.GetGenericTypeDefinition() == typeof(ScalarBox<>);
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) =>
+            (JsonConverter)Activator.CreateInstance(typeof(ScalarBoxConverter<>).MakeGenericType(typeToConvert.GetGenericArguments()))!;
+    }
+    public sealed class ScalarBoxConverter<T> : JsonConverter<ScalarBox<T>>
+    {
+        public override ScalarBox<T> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => new();
+        public override void Write(Utf8JsonWriter writer, ScalarBox<T> value, JsonSerializerOptions options) => writer.WriteStringValue("owned-scalar");
+    }
+    private sealed class RefusingHiddenResolver(IJsonTypeInfoResolver inner) : IJsonTypeInfoResolver
+    {
+        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options) => type == typeof(HiddenDocument)
+            ? throw new NotSupportedException("The hidden CLR argument has no wire metadata.") : inner.GetTypeInfo(type, options);
+    }
+    public sealed class MemberScalarDocument { public System.Collections.ArrayList? Scalar { get; init; } }
+    public sealed class UntypedScalarConverter : JsonConverter<System.Collections.ArrayList>
+    {
+        public override System.Collections.ArrayList Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => new();
+        public override void Write(Utf8JsonWriter writer, System.Collections.ArrayList value, JsonSerializerOptions options) => writer.WriteStringValue("owned-scalar");
+    }
+    public sealed class UnicodeEnumConverter : JsonConverter<WireState>
+    {
+        public override WireState Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => WireState.FirstChoice;
+        public override void Write(Utf8JsonWriter writer, WireState value, JsonSerializerOptions options) => writer.WriteStringValue("René <+>");
     }
     [JsonPolymorphic, JsonDerivedType(typeof(FirstAlternative), "first")]
     public abstract class OwnedUnion;

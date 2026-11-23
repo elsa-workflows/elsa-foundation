@@ -83,13 +83,16 @@ internal static class JsonBoundaryContractGraph
                 opaque.Add(owner + "|" + Name(type) + "|" + Name(info.Converter.GetType()));
             foreach (var property in info.Properties.Where(property => property.Get is not null || property.Set is not null))
             {
+                if (property.CustomConverter is { } memberConverter && !IsLeaf(property.PropertyType))
+                {
+                    opaque.Add(owner + "|" + Name(type) + "." + property.Name + "|" + Name(property.PropertyType) + "|" + Name(memberConverter.GetType()));
+                    continue;
+                }
                 if (property.CustomConverter is null && (property.PropertyType == typeof(object) ||
                     options.GetTypeInfo(property.PropertyType).Kind != JsonTypeInfoKind.None && ContainsObject(property.PropertyType)))
                     loose.Add(owner + "|" + Name(type) + "." + property.Name);
                 Visit(property.PropertyType, options, owner);
             }
-            if (type.IsArray) Visit(type.GetElementType()!, options, owner);
-            if (type.IsGenericType) foreach (var argument in type.GetGenericArguments()) Visit(argument, options, owner);
             foreach (var element in CollectionContracts(type, info.Kind)) Visit(element, options, owner);
             if (info.PolymorphismOptions is { } polymorphism)
                 foreach (var derived in polymorphism.DerivedTypes) Visit(derived.DerivedType, options, owner);
@@ -103,7 +106,6 @@ internal static class JsonBoundaryContractGraph
 
     private static bool ContainsObject(Type type, HashSet<Type> seen) => seen.Add(type) && (type == typeof(object) ||
         (type.IsArray && ContainsObject(type.GetElementType()!, seen)) ||
-        (type.IsGenericType && type.GetGenericArguments().Any(argument => ContainsObject(argument, seen))) ||
         CollectionContracts(type, JsonTypeInfoKind.Dictionary).Concat(CollectionContracts(type, JsonTypeInfoKind.Enumerable))
             .Any(element => ContainsObject(element, seen)));
 
@@ -141,14 +143,22 @@ internal static class JsonBoundaryContractGraph
         return Enum.GetNames(type).Select(name =>
         {
             using var stream = new MemoryStream();
-            using (var writer = new Utf8JsonWriter(stream)) write.Invoke(converter, [writer, Enum.Parse(type, name), options]);
+            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
+            {
+                Encoder = options.Encoder, Indented = options.WriteIndented, MaxDepth = options.MaxDepth,
+                IndentCharacter = options.IndentCharacter, IndentSize = options.IndentSize, NewLine = options.NewLine
+            })) write.Invoke(converter, [writer, Enum.Parse(type, name), options]);
             return Encoding.UTF8.GetString(stream.ToArray());
         }).ToArray();
     }
 
-    private static bool IsLeaf(Type type) => IsJsonData(type) || type == typeof(string) || type.IsPrimitive || type.IsEnum ||
-        type == typeof(decimal) || type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(DateOnly) || type == typeof(TimeOnly) ||
-        type == typeof(TimeSpan) || type == typeof(Guid) || type == typeof(Uri) || type == typeof(byte[]);
+    private static bool IsLeaf(Type declared)
+    {
+        var type = Nullable.GetUnderlyingType(declared) ?? declared;
+        return IsJsonData(type) || type == typeof(string) || type.IsPrimitive || type.IsEnum ||
+            type == typeof(decimal) || type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(DateOnly) || type == typeof(TimeOnly) ||
+            type == typeof(TimeSpan) || type == typeof(Guid) || type == typeof(Uri) || type == typeof(byte[]);
+    }
 
     internal static string Name(Type type) => type.IsArray ? Name(type.GetElementType()!) + "[]" :
         type.IsGenericType ? type.GetGenericTypeDefinition().FullName! + "[" + string.Join(',', type.GetGenericArguments().Select(Name)) + "]" : type.FullName ?? type.Name;
