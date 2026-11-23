@@ -1,11 +1,13 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Kernel.Foundation.Contracts;
 using Kernel.Model.Contracts;
 
 namespace Kernel.WorkflowActor;
 
-internal sealed record MigrationPlanStart(string From, string To, long Deadline, string? Model = null);
+internal sealed record MigrationPlanStart(string From, string To, long Deadline,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Model = null);
 
 /// <summary>A bounded durable plan hosted as a separate model of the workflow actor.</summary>
 internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<string?, string, string, bool> canPlan)

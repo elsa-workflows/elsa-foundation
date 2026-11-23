@@ -190,7 +190,8 @@ provider host and persisted outcome projection integration remain separate work.
 Earlier draft plans without a model binding still support their explicit batches. The automatic
 runner requires a binding when it creates a plan. The host enables those starts after every
 eligible owner can record the model binding on its first turn. An older owner with an existing
-version 2 checkpoint withholds it until a compatible owner takes over.
+version 2 checkpoint withholds it until a compatible owner takes over. A version 2 owner can
+terminate a version 1 pending plan within its original terminal state reserve.
 
 ## PostgreSQL Core Preview
 

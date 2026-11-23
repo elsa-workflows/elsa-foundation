@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using Kernel.Foundation.InMemory;
 using Kernel.Native;
 using Kernel.WorkflowActor;
@@ -172,6 +173,7 @@ internal static class MigrationPlanRunnerChecks
             positions.All(actor => wideResult.Results.GetValueOrDefault(actor) == MigrationPlanOutcome.Refused) &&
             counts.SequenceEqual([MigrationPlanModel.BatchLimit, 1]),
             "a 129-actor provider page dispatches as 128 plus one even when all refused actors remain at source");
+        await CheckLegacyTerminalGrowth(check);
 
         MigrationPlanOperator NewOperator(Contract.IActorReads? sourceReads = null) =>
             new(observed, sourceReads ?? reads, model, new MigrationPlanAuthority(key),
@@ -186,6 +188,67 @@ internal static class MigrationPlanRunnerChecks
         bool FinishedUnderTarget(Contract.ActorRef actor) =>
             store.ReadFoundationActor(scope.Tenant, actor.Id).Actor is { Row: { Status: InstanceStatus.Finished } row } &&
             Json.Read<NativeState>(row.State).Variables["output"]?.GetValue<string>() == "new";
+    }
+
+    private static async Task CheckLegacyTerminalGrowth(Action<bool, string> check)
+    {
+        const long initial = 1_701_900_000_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("legacy-plan");
+        Contract.IIngress ingress = new InMemoryIngress(store, new Requests("legacy-plan"), "legacy-plan",
+            (_, kind) => kind == Contract.Kinds.Terminate);
+        Contract.IActorReads reads = new ActorList(store, 8);
+        var runtime = new PublicRuntime(ingress, reads);
+        var key = MigrationPlanModel.ModelKey;
+        var deadline = initial + 600_000;
+        var request = new V1Request("source", "target", deadline);
+        var actor = (await runtime.StartAsync(scope, "legacy-pending", new(key, key, Json.Write(request)))).Actor!.Value;
+        await using (var predecessor = await Open("legacy", new PublicWorkflow([new V1PlanFixture()])))
+            await Pump(predecessor);
+
+        var before = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.State;
+        var header = (await reads.GetAsync(scope, actor))!.Header;
+        var latest = new PublicWorkflow([new MigrationPlanModel(new(RandomNumberGenerator.GetBytes(32)), (_, _, _) => true)]);
+        var reserved = latest.TerminalGrowth(header, before);
+        now += 20_000;
+        await using var successor = await Open("latest", latest);
+        await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "terminate", Contract.Kinds.Terminate);
+        await Pump(successor);
+        var after = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.State;
+        var ended = (await reads.GetAsync(scope, actor))!.Header;
+        check(header.Labels.GetValueOrDefault("version") == "1" && ended.Labels.GetValueOrDefault("version") == "2" &&
+            ended.Status == Contract.ActorStatus.Cancelled && Json.Read<V1PendingPlan>(before).Pending == 1 &&
+            !after.Contains("\"Model\"", StringComparison.Ordinal) &&
+            Encoding.UTF8.GetByteCount(after) - Encoding.UTF8.GetByteCount(before) == reserved && reserved == 2,
+            "terminating a persisted version-1 pending checkpoint stays within its two-byte reservation");
+
+        async Task<IScopeActivation> Open(string node, PublicWorkflow type) => (await new DurableHost(
+            [new Worker(node, 0, store, new ActorAdapter(store, type), new WorkerOptions { Monotonic = () => now - initial })])
+            .ActivateAsync(0))!;
+    }
+
+    private sealed record V1Request(string From, string To, long Deadline);
+    private sealed record V1PendingPlan(V1Request Request, long Number = 1, string? DeadlineTimer = null, long? Pending = 1,
+        Contract.PageToken? Cursor = null, bool AllSelected = true, bool Closed = false, long Migrated = 0, long Refused = 0, long NotAtSource = 0);
+
+    private sealed class V1PlanFixture : Models.IExecutionModel
+    {
+        public string Key => MigrationPlanModel.ModelKey;
+        public Type StateType => typeof(V1PendingPlan);
+        public int StateVersion => 1;
+        public object CreateState(Models.WorkflowStart start) => new V1PendingPlan(Json.Read<V1Request>(start.Input!));
+        public object UpgradeState(string state, int fromVersion) => throw new NotSupportedException();
+        public Contract.RestorePlan RestoreWaits(Models.InstanceInfo instance, object state) => new([], [], []);
+        public long TerminalGrowth(Models.InstanceInfo instance, object state) => 2;
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public ValueTask TurnAsync(Models.ITurn turn, CancellationToken cancellationToken)
+        {
+            var plan = (V1PendingPlan)turn.State;
+            turn.State = plan with { DeadlineTimer = turn.Send(turn.Instance.Ref, MigrationPlanControl.Deadline, dueAt: plan.Request.Deadline) };
+            return ValueTask.CompletedTask;
+        }
     }
 
     private static Workflow Definition(string name, string output, string eventName = "approval") => Wf.Workflow(name,
