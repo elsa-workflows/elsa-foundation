@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Kernel.EntityFramework;
+using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -29,7 +30,7 @@ internal static class PostgresFlowchartPreview
             await admission.InstallAsync(stop);
         }
 
-        var scope = new Contract.BoundScope("purchase");
+        var scope = FixedTenantScope.Bind("purchase");
         var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 8),
             WorkflowActor.WorkflowActor.ActorType);
         var registry = new WorkflowRegistry().Add(Build(mergeEarly));
