@@ -226,6 +226,28 @@ eligible owner can record the model binding on its first turn. An older owner wi
 version 2 checkpoint withholds it until a compatible owner takes over. A version 2 owner can
 terminate a version 1 pending plan within its original terminal state reserve.
 
+## Timed jobs on the PostgreSQL Worker
+
+From `prototypes/kernel-model`, set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database:
+
+```sh
+dotnet restore models/Native.Run --locked-mode
+dotnet build -c Release models/Native.Run --no-restore
+dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-timed-job-worker checked
+```
+
+Use `in-batch` on another fresh database for the other owned SQL fence mode. The Worker commits the issued
+job ticket, its absolute deadline, the waiting checkpoint and journal in the same PostgreSQL transaction.
+A callback publishes before the deadline. The worker resumes only once the database clock reaches the deadline,
+applies the job result and recalls the timer. The same actor starts another job. A new owner retries its
+pending ticket before the deadline. After expiration, a third owner counts one abandoned trial, validates the
+old fence is refused and delivers the deadline without entering the callback. The physical inbox is empty and
+the journal shows one outcome per job even after the displaced callbacks return.
+
+This covers the legacy relational actor protocol. In that path a Worker completion consumes the original issued
+ticket and commits the actor's result directly in its checkpoint and journal. The public generated-root path
+still needs a qualified writer for tracked job generations and private ticket, deadline and result envelopes.
+
 ## PostgreSQL Core Preview
 
 Set `KERNEL_PREVIEW_POSTGRES` to the connection string of an empty PostgreSQL 17 database dedicated to the preview.

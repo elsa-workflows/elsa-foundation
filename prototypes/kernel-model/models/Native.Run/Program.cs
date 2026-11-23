@@ -72,6 +72,8 @@ if (args is ["pg-multi-root", var writer and ("owned" or "ef"), var fence and ("
     if (phaseArgs is ["birth"]) return await PostgresMultiRootChecks.RunAsync([], writer == "owned", fence == "in-batch");
     if (phaseArgs is ["restart", var a, var b, var outside]) return await PostgresMultiRootChecks.RunAsync([a, b, outside], writer == "owned", fence == "in-batch");
 }
+if (args is ["pg-timed-job-worker", var jobFence and ("checked" or "in-batch")])
+    return await PostgresTimedJobChecks.RunAsync(jobFence == "in-batch");
 if (args is ["pg-runtime-cluster"]) return await PostgresRuntimeCluster.RunAsync();
 if (args is ["pg-runtime-cluster", "wake"]) return await PostgresRuntimeCluster.RunAsync(wake: true);
 if (args is ["pg-runtime-cluster-member"]) return await PostgresRuntimeCluster.MemberAsync();
