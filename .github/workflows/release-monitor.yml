@@ -26,10 +26,8 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - name: Install the producer reader dependency
-        run: |
-          python3 -m pip install --no-deps --only-binary=:all: --require-hashes --target "$RUNNER_TEMP/reader-deps" -r tools/ci/image_evidence_requirements.txt
-          echo "PYTHONPATH=$RUNNER_TEMP/reader-deps" >> "$GITHUB_ENV"
+      - name: Install the producer reader and pinned SPDX validator
+        run: bash tools/ci/install_image_evidence_tools.sh
       - name: Exercise release monitor and producer contracts
         run: python3 -m unittest discover -s tools/release-monitor -v
 

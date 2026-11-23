@@ -27,17 +27,16 @@ class MonitorTests(unittest.TestCase):
             release("contributor-preview-2026-10-07.2", True),
             release("contributor-preview-2026-10-07.10", True)]),
             {"v4.0.0", "contributor-preview-2026-10-07.10"})
-        with self.assertRaises(ValueError):
-            monitor.release_tags([])
+        self.assertEqual(monitor.release_tags([]), set())
 
     def test_release_members(self):
         rows = monitor.subjects(self.tag, self.catalog[self.tag])
         self.assertEqual(len(rows), 4)
         self.assertEqual(len({record["digest"] for record, _, _ in rows}), 4)
         with self.assertRaisesRegex(ValueError, "ambiguous"):
-            monitor.subjects(self.tag, {"images": [self.entry, self.entry]})
+            monitor.subjects(self.tag, {"images": [self.entry, self.entry], "packages": []})
         with self.assertRaisesRegex(ValueError, "Invalid image"):
-            monitor.subjects(self.tag, {"images": [{**self.entry, "children": {}}]})
+            monitor.subjects(self.tag, {"images": [{**self.entry, "children": {}}], "packages": []})
 
     def image_transport(self, entry, kind=monitor.SPDX):
         descriptors = []
@@ -70,28 +69,65 @@ class MonitorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Unexpected image publisher"):
                 monitor.image_inventories(entry, self.path)
 
-    def test_modern_image_requires_signature_and_real_producer_reader(self):
-        for product in ["elsa-workbench", "elsa-studio"]:
-            entry = {**self.entry, "product": product, "index": "sha256:" + "b" * 64,
-                     "producerRun": 34, "publisherCommit": "c" * 40}
+    def test_modern_image_writes_both_validated_files_from_producer_cli(self):
+        monitor.sys.path.insert(0, str(monitor.ROOT / "tools/ci"))
+        import verify_image_evidence as producer
+        from test_verify_image_evidence import ImageEvidenceTests
+
+        for product, app in [("elsa-workbench", "Elsa.Workbench"), ("elsa-studio", "Elsa.Studio.Web")]:
+            fixture = ImageEvidenceTests()
+            fixture.setUp()
+            builder = f"https://github.com/{monitor.REPO}/actions/runs/34/attempts/1"
+            store = fixture.store
+
+            def store_statement(document):
+                if document.get("predicateType") == producer.SLSA:
+                    document["predicate"]["runDetails"]["builder"]["id"] = builder
+                if document.get("predicateType") == producer.SPDX:
+                    bom = document["predicate"]
+                    bom.update(SPDXID="SPDXRef-DOCUMENT", name="fixture", dataLicense="CC0-1.0",
+                               creationInfo={"created": "2026-01-01T00:00:00Z", "creators": ["Tool: test"]},
+                               documentNamespace="https://spdx.org/spdxdocs/foundation-monitor-test")
+                    for i, package in enumerate(bom["packages"]):
+                        package.update(SPDXID="SPDXRef-" + str(i), downloadLocation="NOASSERTION")
+                        ref = package["externalRefs"][0]
+                        ref["referenceCategory"] = "PACKAGE-MANAGER"
+                        if package["name"] == "Elsa.Test":
+                            package["name"] = app
+                            ref["referenceLocator"] = "pkg:nuget/" + app + "@1"
+                return store(document)
+
+            fixture.store = store_statement
+            digest = fixture.index().split("@")[1]
+            entry = {"product": product, "index": digest, "producerRun": 34, "publisherCommit": "c" * 40,
+                     "children": {"linux/" + arch: child for arch, child in fixture.children.items()}}
             calls = []
+
             def command(*args, **kwargs):
                 calls.append(args)
                 if args[:2] == ("gh", "api"):
                     workflow = "studio-docker" if product == "elsa-studio" else "docker"
                     return json.dumps({"head_sha": entry["publisherCommit"], "head_branch": "main",
                                        "path": f".github/workflows/{workflow}.yml", "conclusion": "success"})
+                if args[0] == "oras":
+                    return fixture.fetch("manifest", args[-1])
                 if args[0] == monitor.sys.executable:
-                    # Invoke the actual reader against a bad subject; it must reject the unavailable schema.
-                    self.assertTrue(Path(args[1]).is_file(), "Integrate Foundation image evidence PR #5545")
-                    failure = subprocess.run(args, capture_output=True, env={k: v for k, v in monitor.os.environ.items() if k != "ELSA_IMAGE_SPDX_SCHEMA"})
-                    self.assertIn(b"spdx-schema", failure.stderr.lower())
-            with patch.object(monitor, "checked_oci", self.image_transport(entry)), patch.object(monitor, "run", command):
-                paths = monitor.image_inventories(entry, self.path)
-            self.assertEqual(set(paths), set(entry["children"].values()))
+                    self.assertEqual(Path(args[1]).resolve(), Path(producer.__file__).resolve())
+                    def read(cmd):
+                        return fixture.fetch(cmd[1], cmd[-1])
+                    with patch.object(producer.sys, "argv", [str(arg) for arg in args[1:]]), patch.object(
+                            producer.subprocess, "check_output", side_effect=read):
+                        producer.main()
+
+            with patch.object(monitor, "run", command):
+                output = self.path / product
+                paths = monitor.image_inventories(entry, output)
             expected = "attestation" if product == "elsa-studio" else "verify"
             self.assertTrue(any(call[1] == expected and entry["publisherCommit"] in call for call in calls))
-            self.assertTrue(str(calls[-1][1]).endswith("tools/ci/verify_image_evidence.py"))
+            for arch, child in fixture.children.items():
+                sbom = json.loads(paths[child].read_text())
+                self.assertIn(app, [package["name"] for package in sbom["packages"]])
+                self.assertIn(arch, sbom["packages"][0]["externalRefs"][0]["referenceLocator"])
 
     def test_package_bytes_checked_before_verifying_attestations(self):
         import verify
@@ -204,6 +240,20 @@ class MonitorTests(unittest.TestCase):
                 monitor.scan_subject({"digest": records[0]["digest"]}, path, {}, scanned)
 
     def test_legacy_gap_stays_visible_after_next_checkpoint(self):
-        tags = [self.tag, "contributor-preview-2026-11-01.1", "contributor-preview-2026-11-14.2"]
-        selected = monitor.release_tags([{"tag_name": tag, "draft": False, "prerelease": True} for tag in tags])
-        self.assertEqual(selected, {self.tag, tags[-1]})
+        # The old GitHub release may itself be deleted when the old core is retired.
+        newer = [[{"tag_name": "contributor-preview-2026-11-14.2", "draft": False, "prerelease": True}]]
+        with patch.object(monitor, "run", side_effect=[json.dumps(newer), b"", json.dumps(self.status())]), patch.object(
+                monitor, "image_inventories", return_value=None):
+            path = self.path / "report.json"
+            self.assertEqual(monitor.monitor(path), 1)
+        state = json.loads(path.read_bytes())
+        self.assertEqual([(r["release"], r["state"]) for r in state["results"]], [(self.tag, "unavailable")] * 4)
+        self.assertIn("contributor-preview-2026-11-14.2", state["errors"][0])
+
+    def test_feed_contract_and_transport_failures_are_contained(self):
+        from http.client import IncompleteRead
+        import verify
+        entry = {"id": "Elsa.Test", "version": "1", "feed": verify.FEED, "sha256": "sha256:" + "f" * 64}
+        for error in (StopIteration(), IncompleteRead(b"", 5)):
+            with patch.object(verify, "download", side_effect=error), self.assertRaises(monitor.FAILURES):
+                monitor.package_inventory(entry, self.path)

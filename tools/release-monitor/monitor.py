@@ -1,5 +1,6 @@
 """Rescan the immutable artifacts in Foundation's designated OSS releases."""
 import hashlib
+from http.client import HTTPException
 import json
 import os
 from pathlib import Path
@@ -26,7 +27,7 @@ CHECKPOINT = re.compile(r"contributor-preview-(\d{4}-\d{2}-\d{2})\.([1-9]\d*)")
 STABLE = re.compile(r"v?\d+\.\d+\.\d+")
 
 
-FAILURES = (ValueError, OSError, KeyError, TypeError, AttributeError, zipfile.BadZipFile, ET.ParseError, subprocess.SubprocessError)
+FAILURES = (ValueError, OSError, KeyError, TypeError, AttributeError, zipfile.BadZipFile, ET.ParseError, subprocess.SubprocessError, HTTPException, StopIteration)
 
 
 class MissingInventory(ValueError):
@@ -59,9 +60,6 @@ def release_tags(releases):
             date, ordinal = CHECKPOINT.fullmatch(tag).groups()
             return datetime.strptime(date, "%Y-%m-%d"), int(ordinal)
         stable.add(max(previews, key=order))
-        if "contributor-preview-2026-10-07.1" in previews:
-            stable.add("contributor-preview-2026-10-07.1")
-    require(stable, "No published compatibility checkpoint or stable release discovered")
     return stable
 
 
@@ -133,7 +131,10 @@ def package_inventory(entry, directory):
     require(all(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]*", field) for field in (name, version)), "Invalid NuGet identity")
     require(entry["feed"] in (verify.FEED, "https://api.nuget.org/v3/index.json"), "Unexpected official feed")
     package = directory / "subject.nupkg"
-    verify.download(entry["feed"], name, version, package)
+    try:
+        verify.download(entry["feed"], name, version, package)
+    except StopIteration as error:
+        raise ValueError("NuGet service index lacks the package content endpoint") from error
     require("sha256:" + verify.sha256(package) == entry["sha256"] and (name, version) == verify.identity(package)[:2],
             "Downloaded package differs from release subject")
     try:
@@ -169,6 +170,7 @@ def scan(inventory, revision):
 
 
 def subjects(tag, release):
+    require(set(release) == {"images", "packages"}, "Release must declare its image and package members")
     records = []
     for kind, entries in release.items():
         require(kind in ("packages", "images"), f"Unknown release artifact family {kind}")
@@ -216,18 +218,26 @@ def monitor(report_file):
     try:
         pages = json.loads(run("gh", "api", "--paginate", "--slurp", f"repos/{REPO}/releases?per_page=100"))
         selected = release_tags([item for page in pages for item in page])
+        if not selected:
+            report["errors"].append("No published compatibility checkpoint or stable release discovered")
+        selected.add("contributor-preview-2026-10-07.1")
+        valid_tags = []
         for tag in sorted(selected):
             if tag not in catalog:
                 report["errors"].append(f"No reviewed immutable subject list for {tag}")
                 continue
-            work.extend(subjects(tag, catalog[tag]))
+            try:
+                work.extend(subjects(tag, catalog[tag]))
+                valid_tags.append(tag)
+            except FAILURES as error:
+                report["errors"].append(f"Invalid release manifest for {tag}: {error}")
         reports.extend(row for row, _, _ in work)
         save()
         run("grype", "db", "update", timeout=600)
         revision = database(json.loads(run("grype", "db", "status", "-o", "json")))
         report["database"] = revision
         save()
-        for tag in sorted(selected & catalog.keys()):
+        for tag in valid_tags:
             entries = catalog[tag]
             for kind in ("images", "packages"):
                 for entry in entries[kind]:
