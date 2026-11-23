@@ -9,7 +9,6 @@ public sealed partial class EfStore
     // rolls back the whole clear, including any matching tickets and the fence write.
     private async Task<bool> ClearSqliteJobTrialsAsync(KernelDb db, CommitBatch batch, CancellationToken cancellationToken)
     {
-        if (batch.ClearJobTrials.Any(key => key.Scope <= 0 || key.Match is not null)) return false;
         var keys = JsonSerializer.Serialize(batch.ClearJobTrials.Select(key =>
         {
             var physical = MailKey(key);

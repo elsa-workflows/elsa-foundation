@@ -58,6 +58,16 @@ internal static class JobTrialClearChecks
             var retained = (await c.All(0)).Single(row => row.Message.InboxKey == first.InboxKey);
             Context.Equal(lease.Epoch, retained.Trial, "a failed group rolled back its valid member");
         }
+        var outsideTicketScope = new InboxKey("outside-ticket-domain", (long)int.MaxValue + 2);
+        try
+        {
+            await Clear(c, lease, first.InboxKey, outsideTicketScope);
+            throw new ConformanceException("an out-of-domain ticket key must be refused before storage access");
+        }
+        catch (StoreException error) when (error.Failure == Failure.Definite &&
+                                           error.Message == "A job trial clear requires logical ticket keys.") { }
+        var stillPending = (await c.All(0)).Single(row => row.Message.InboxKey == first.InboxKey);
+        Context.Equal(lease.Epoch, stillPending.Trial, "invalid key validation leaves the valid trial intact");
         await c.Lands(() => Clear(c, lease, first.InboxKey, other.InboxKey));
         var rows = (await c.All(0)).ToDictionary(row => row.Message.InboxKey);
         Context.Equal(0L, rows[first.InboxKey].Trial, "first selected trial");
