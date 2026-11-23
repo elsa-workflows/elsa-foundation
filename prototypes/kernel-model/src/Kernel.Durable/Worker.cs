@@ -2377,7 +2377,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var generation = _generation;
         var job = ticket.Message.Read<JobTicket>();
         if (loadedSlot.Row is { FoundationDispatchHeader: not null } bound &&
-            RootJobTicket.Read(ticket.Message, bound.Id, bound.Model, timed: _type.RunsRootTimedJobs) is null)
+            RootJobTicket.Read(ticket.Message, bound.Id, bound.Model, timed: _type.RootTimedJobPublicationClock is not null) is null)
             throw new StoreException(Failure.Definite, "The job ticket does not belong to its generated root.");
         if (!HasPhysicalTrial(ticket))
         {
@@ -2462,11 +2462,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var outcome = new JobFinished(job.Key, result, error);
             var completed = entered ? original with { Kind = Kinds.JobFinished,
                 Payload = unbounded ? Json.Write(outcome) : JobResultEncoding.Payload(outcome) } : null;
+            long? publicationTime = null;
+            if (completed is not null && job.Deadline is not null && _type.RootTimedJobPublicationClock is { } readClock)
+            {
+                try { publicationTime = await readClock(token).ConfigureAwait(false); }
+                catch (Exception) { return; } // Without an authoritative sample, leave the ticket for the deadline.
+                if (!MayReturn() || token.IsCancellationRequested) return;
+            }
             // Timestamp and enqueue together so simultaneous callbacks retain their observation order. The owner
-            // may receive this after a command matures. Its later clock cannot replace the original readiness time.
+            // may receive this after a command matures. Preserve an authoritative sample taken for this publication.
             lock (publications)
             {
-                var at = Now;
+                var at = publicationTime ?? Now;
                 if (ticket.WithdrawingJob || ticket.JobDeadlineClosed || job.Deadline is { } deadline && at >= deadline) return;
                 publications.Enqueue(new(ticket, slot, token, completed, at, Interlocked.Increment(ref _observed)));
             }
@@ -3182,7 +3189,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 qualified.Message.Operator is not null ? qualified.Message : null,
             FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
                 unit.Consumed is [{ IsWorkerJobCompletion: true, Original: { } original } completed] &&
-                (completed.JobDeadline is null || _type.RunsRootTimedJobs)
+                (completed.JobDeadline is null || _type.RootTimedJobPublicationClock is not null)
                     ? new((original with { }).AsKernelTicket(), (completed.Message with { }).AsKernelTicket(),
                         completed.JobDeadline is null ? null : completed.CompletedAt) : null,
             FoundationSelfRecalls = unit.FoundationSelfRecalls,

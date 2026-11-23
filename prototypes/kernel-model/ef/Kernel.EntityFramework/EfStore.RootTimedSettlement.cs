@@ -5,6 +5,17 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
+    internal const string TimedJobPublicationClockQuery = "root-timed-job-publication-clock";
+
+    internal async ValueTask<long> ReadRootTimedJobPublicationTimeAsync(CancellationToken token)
+    {
+        await using var db = create();
+        if (!RootTimedJobSettlementEnabled || !db.UsesRootTimedJobSettlement) throw RootShape();
+        return await db.Database.SqlQueryRaw<long>($"""
+            SELECT {RootClockMilliseconds} AS "Value" /* {TimedJobPublicationClockQuery} */
+            """).SingleAsync(token);
+    }
+
     private static string? DeadlineActor(InboxKey key)
     {
         if (key.Scope != -1 || key.Match is not null || !key.Id.StartsWith('c')) return null;

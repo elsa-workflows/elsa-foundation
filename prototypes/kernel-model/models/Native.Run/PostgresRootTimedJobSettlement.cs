@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
+using System.Data.Common;
 using Kernel.EntityFramework;
 using Kernel.Native;
 using Kernel.Native.Preview;
 using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
@@ -18,18 +20,22 @@ internal static class PostgresRootTimedJobSettlement
     private const string Second = "settle";
     private const string Third = "apply";
 
-    internal static async Task<int> RunAsync(bool inBatch, bool timeoutWins)
+    internal static async Task<int> RunAsync(bool inBatch, bool timeoutWins, bool delayedClock)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Supply a dedicated PostgreSQL fixture database.");
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         var stop = budget.Token;
-        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        var sampled = new PublicationSamples();
+        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).AddInterceptors(sampled).Options;
         KernelDb Open() => KernelDb.ForPostgresRootTimedJobSettlement(options);
         await using var db = Open();
         Check(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "Settlement requires a fresh fixture database.");
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromMinutes(5));
-        var firstStore = Store();
+        var delays = new ObservationDelay();
+        var delayedOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection)
+            .AddInterceptors(sampled, new DelayedPoll(delays), new DelayedCommit(delays)).Options;
+        var firstStore = delayedClock ? Store(() => KernelDb.ForPostgresRootTimedJobSettlement(delayedOptions)) : Store();
         await firstStore.CreateAsync(1);
         await admission.InstallAsync(stop);
         var issuingFormat = new EfStore(() => KernelDb.ForPostgresRootTimedJobIssuance(options), postgres: true);
@@ -82,11 +88,18 @@ internal static class PostgresRootTimedJobSettlement
             "The locked timeout writer must refuse the current fence while its original deadline is in the future.");
 
         if (timeoutWins) await AtDeadline();
-        await Expire(First);
-        var secondStore = Store();
-        await using var second = await Take(secondStore, Second);
+        if (delayedClock)
+        {
+            Check(first.Owns && first.Fences.Single() == old && first.Now < deadline && delays.Polls > 0 && delays.Commits > 0,
+                "After delayed PostgreSQL responses, the still-current Worker must estimate a time before the now-due deadline.");
+        }
+        else await Expire(First);
+        var secondStore = delayedClock ? firstStore : Store();
+        await using var replacement = delayedClock ? null : await Take(secondStore, Second);
+        var second = replacement ?? first;
         var settling = second.Fences.Single();
-        Check(settling.Epoch > old.Epoch && settling.Position == old.Position, "A fresh owner must take the same waiting position.");
+        if (!delayedClock)
+            Check(settling.Epoch > old.Epoch && settling.Position == old.Position, "A fresh owner must take the same waiting position.");
         if (!timeoutWins)
         {
             await Drive(second, () => Task.FromResult(ControlledJob.Attempts.Count == 2));
@@ -95,15 +108,22 @@ internal static class PostgresRootTimedJobSettlement
                 "The cold callback must run on the exact recovered ticket under a current physical trial.");
             var currentCallback = second.JobCompletion(before.Id, issued.Key, before.Creation)
                 ?? throw new InvalidOperationException("The cold attempt did not enter its callback.");
+            var samplesBefore = sampled.Count;
             ControlledJob.Attempts.Last().Exit.SetResult("completed");
             await currentCallback.WaitAsync(stop);
-            Check(await Now() < deadline, "The successor must publish its result before the deadline.");
+            Check(await Now() < deadline && sampled.Count == samplesBefore + 1,
+                "The successor must sample PostgreSQL once and publish its result before the deadline.");
             await AtDeadline();
         }
-        Check(!(await CommitTimeout(firstStore, old)).Landed && (await Rows(before.Id)).Length == 2,
-            "A due timeout offered by the displaced owner must leave both inputs intact.");
-        ControlledJob.Attempts.First().Exit.SetResult("late-old-owner");
+        if (!delayedClock)
+            Check(!(await CommitTimeout(firstStore, old)).Landed && (await Rows(before.Id)).Length == 2,
+                "A due timeout offered by the displaced owner must leave both inputs intact.");
+        var lateSamplesBefore = sampled.Count;
+        ControlledJob.Attempts.First().Exit.SetResult("late-return");
         await oldCallback.WaitAsync(stop);
+        if (delayedClock)
+            Check(sampled.Count == lateSamplesBefore + 1 && first.Fences.Single() == old && first.Now < deadline,
+                "The late callback must sample PostgreSQL once while the original Worker still holds the fence and estimates an earlier time.");
         await Drive(second, async () => (await secondStore.ReadFirstRootAsync(Tenant, actor.Id, stop))?.Revision == 2);
         var settlement = (await secondStore.ReadFirstRootAsync(Tenant, actor.Id, stop))!;
         await RefuseLegacyCheckpointReads();
@@ -126,13 +146,13 @@ internal static class PostgresRootTimedJobSettlement
             (await Rows(before.Id)).Single().Id == resultRow.Id,
             "The recorded result shares the settlement commit and a duplicate settlement leaves it in place.");
 
-        await Expire(Second);
+        await Expire(delayedClock ? First : Second);
         var thirdStore = Store();
         await using var third = await Take(thirdStore, Third);
         Check(third.Fences.Single().Epoch > settling.Epoch, "Result application must start with a cold take.");
         await Drive(third, async () => (await thirdStore.ReadFirstRootAsync(Tenant, actor.Id, stop))?.Status == InstanceStatus.Finished);
         await first.RunAsync(stop);
-        await second.RunAsync(stop);
+        if (replacement is not null) await replacement.RunAsync(stop);
         await third.RunAsync(stop);
         var end = (await thirdStore.ReadFirstRootAsync(Tenant, actor.Id, stop))!;
         await RefuseLegacyCheckpointReads();
@@ -145,7 +165,9 @@ internal static class PostgresRootTimedJobSettlement
                 entry.StartsWith(timeoutWins ? "f:" : "c:", StringComparison.Ordinal)) == 1 &&
             ControlledJob.Attempts.Count == (timeoutWins ? 1 : 2) && ControlledJob.Attempts.All(entry => entry.Actor == actor.Id),
             "The fresh Native model must apply the same actor's stored result once, with one end and an empty inbox.");
-        Console.WriteLine($"ok Native timed job {(inBatch ? "in-batch" : "checked")} {expected}, epochs {old.Epoch}->{settling.Epoch}->{third.Fences.Single().Epoch}, revisions 1->2->3");
+        var outcome = delayedClock ? "late-clock timeout" : expected;
+        Console.WriteLine($"ok Native timed job {(inBatch ? "in-batch" : "checked")} {outcome}, epochs {old.Epoch}->{settling.Epoch}->{third.Fences.Single().Epoch}, " +
+            $"revisions 1->2->3, {sampled.Count} PostgreSQL publication clock queries");
         return 0;
 
         async Task RefuseLegacyCheckpointReads()
@@ -167,7 +189,7 @@ internal static class PostgresRootTimedJobSettlement
             }
         }
 
-        EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
+        EfStore Store(Func<KernelDb>? factory = null) => new(factory ?? Open, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
         async Task<Worker> Take(EfStore store, string name)
         {
             await store.EnableRootJobsAsync(stop);
@@ -178,7 +200,7 @@ internal static class PostgresRootTimedJobSettlement
                     PassTurnBudget = 1,
                     OnPreparedCheckpoint = (turn, _, _) =>
                     {
-                        if (name == Second && turn.Sent.Any(message => message.FoundationJobResult)) winningTurn = turn;
+                        if (turn.Sent.Any(message => message.FoundationJobResult)) winningTurn = turn;
                     }
                 });
             Check(await new DurableHost([worker]).ActivateAsync(roots.Partition, stop) == worker, "The fixture must take ownership.");
@@ -210,6 +232,51 @@ internal static class PostgresRootTimedJobSettlement
     private static void Check(bool condition, string failure)
     {
         if (!condition) throw new InvalidOperationException(failure);
+    }
+
+    private sealed class PublicationSamples : DbCommandInterceptor
+    {
+        private int count;
+        internal int Count => Volatile.Read(ref count);
+
+        public override ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command, CommandExecutedEventData eventData,
+            DbDataReader result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains(EfStore.TimedJobPublicationClockQuery, StringComparison.Ordinal))
+                Interlocked.Increment(ref count);
+            return new(result);
+        }
+    }
+
+    private sealed class ObservationDelay
+    {
+        internal static readonly TimeSpan Duration = TimeSpan.FromMilliseconds(600);
+        internal int Polls;
+        internal int Commits;
+    }
+
+    private sealed class DelayedPoll(ObservationDelay delay) : DbCommandInterceptor
+    {
+        public override async ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command, CommandExecutedEventData eventData,
+            DbDataReader result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("t.now AS \"Now\", m.\"Id\"", StringComparison.Ordinal))
+            {
+                delay.Polls++;
+                await Task.Delay(ObservationDelay.Duration, cancellationToken);
+            }
+            return result;
+        }
+    }
+
+    private sealed class DelayedCommit(ObservationDelay delay) : DbTransactionInterceptor
+    {
+        public override Task TransactionCommittedAsync(DbTransaction transaction, TransactionEndEventData eventData,
+            CancellationToken cancellationToken = default)
+        {
+            delay.Commits++;
+            return Task.Delay(ObservationDelay.Duration, cancellationToken);
+        }
     }
 
     [Background]

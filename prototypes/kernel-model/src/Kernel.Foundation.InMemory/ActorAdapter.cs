@@ -17,7 +17,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     private readonly Durable.FoundationSelfIssuer? issueSelf;
     private readonly Func<string, string>? rootJobHandle;
     private readonly bool rootTimedJobIssuance;
-    private readonly bool rootTimedJobSettlement;
+    private readonly Func<CancellationToken, ValueTask<long>>? rootTimedJobClock;
+    private bool rootTimedJobSettlement => rootTimedJobClock is not null;
     private Durable.InMemoryStore store => inMemory ?? throw new NotSupportedException("This provider does not implement this foundation operation.");
 
     internal ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
@@ -30,9 +31,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     }
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Durable.FoundationSelfIssuer? issueSelf = null,
-        Func<string, string>? rootJobHandle = null, bool rootTimedJobIssuance = false, bool rootTimedJobSettlement = false) =>
-        (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance, this.rootTimedJobSettlement) =
-            (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootTimedJobSettlement);
+        Func<string, string>? rootJobHandle = null, bool rootTimedJobIssuance = false,
+        Func<CancellationToken, ValueTask<long>>? rootTimedJobClock = null) =>
+        (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance, this.rootTimedJobClock) =
+            (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootTimedJobClock);
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, RootValueReader rootValueReader)
         : this(roots, actor) => this.rootValueReader = rootValueReader;
@@ -47,7 +49,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     bool Durable.IActorType.SupportsFoundationInlineStart(string type) => roots is null && type == actor.Type;
 
     bool Durable.IActorType.SupportsTrialWithdrawal => roots is null;
-    bool Durable.IActorType.RunsRootTimedJobs => rootTimedJobSettlement;
+    Func<CancellationToken, ValueTask<long>>? Durable.IActorType.RootTimedJobPublicationClock => rootTimedJobClock;
 
     bool Durable.IActorType.AuthorizesTrialWithdrawal(Durable.InstanceRow? row, Durable.Message message, Durable.Message? creator)
     {
