@@ -262,6 +262,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     private sealed class GeneratedPollRow : PollRow
     {
+        public int? BirthPartition { get; set; }
         public string? BirthTenant { get; set; }
         public string? BirthReference { get; set; }
         public string? BirthFingerprint { get; set; }
@@ -617,13 +618,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         // A plain read. The left join returns database time even when no message does.
         if (_ordinaryRoots is { } root)
         {
-            if (partition != root.Partition) throw new InvalidOperationException("The root belongs to another partition.");
+            if (!root.Includes(partition)) throw new InvalidOperationException("The root belongs to another partition.");
             if (root.Discover)
             {
                 var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
-                var found = page.Where(r => r.Target is not null).Select(r =>
-                    new WorkerRoot(r.BirthTenant!, r.BirthReference!, r.Target!, partition, r.BirthFingerprint!)).Distinct().ToArray();
-                return ToPolled(page, new(partition, found));
+                return ToGeneratedPoll(page, root);
             }
             return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root);
         }
@@ -641,7 +640,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                  WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired"))
             """;
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
-        ? """, b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
+        ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
     private string PollMessages => _ordinaryRoots is { Discover: true }
         ? $"""
            ({RootInboxSource} m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
@@ -657,6 +656,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
 
+    private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope)
+    {
+        var found = page.Where(r => r.Target is not null).Select(r =>
+            new WorkerRoot(r.BirthTenant!, r.BirthReference!, r.Target!, r.BirthPartition!.Value, r.BirthFingerprint!)).Distinct().ToArray();
+        return ToPolled(page, new(scope.FixedPartition, found));
+    }
+
     private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null)
     {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
@@ -669,7 +675,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             {
                 if (r.Target is null) throw RootShape();
                 var root = bindings.ForActor(r.Target);
-                if (new InstanceRef(r.Target).Partition != bindings.Partition || root != bindings.ForInput(key.Scope == RootSelfScope ? InboxKey.Issued(key.Id) : key)) throw RootShape();
+                var logical = key.Scope == RootSelfScope ? InboxKey.Issued(key.Id) : key;
+                if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition || root != bindings.ForInput(logical)) throw RootShape();
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
