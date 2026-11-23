@@ -148,7 +148,7 @@ internal sealed class JsonHashReferenceGraph
                     references.Add(new(owner, target, operation, occurrence, instruction.Offset, Role(member), arguments,
                         TypeName(member as Type ?? member.DeclaringType!)));
                 }
-                catch (Exception error) when (error is ArgumentException or BadImageFormatException or InvalidOperationException or TypeLoadException or FileNotFoundException)
+                catch (Exception error) when (error is ArgumentException or BadImageFormatException or InvalidOperationException or TypeLoadException or FileNotFoundException or FileLoadException or MissingMemberException)
                 {
                     errors.Add($"Unresolved compiled reference: {owner} IL_{instruction.Offset:x4}: {error.GetType().Name}: {error.Message}");
                 }
