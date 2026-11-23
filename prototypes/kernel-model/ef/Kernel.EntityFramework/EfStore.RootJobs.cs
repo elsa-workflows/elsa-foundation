@@ -67,7 +67,7 @@ public sealed partial class EfStore
         (new Message(StoredJobId(message.InboxKey), message.Target, message.Kind, message.Payload, message.Sender, Due: message.Due)
             { JobGeneration = message.JobGeneration }).WithInboxScope(RootTimedJobScope).AsKernelTicket();
 
-    // This qualification profile commits the pair but keeps it out of Worker dispatch until settlement is supported.
+    // The qualification profile keeps both rows outside store polling. The first process exits before local handover.
     internal async Task<(Message Ticket, Message Deadline, long Now)> ReadRootTimedJobIssuanceAsync(WorkerRoot root, CancellationToken token)
     {
         if (!RootTimedJobIssuanceEnabled || _ordinaryRoots?.ForActor(root.Actor) != root) throw RootShape();

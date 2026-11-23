@@ -21,6 +21,7 @@ internal static class PostgresRootTimedJobIssuance
     private const string FixtureVariable = "KERNEL_TIMED_JOB_ISSUANCE_FIXTURE";
     private const string Tenant = "timed-jobs";
     private const string Definition = "timed-job-issuance";
+    private const string BackgroundNode = "background";
     private const string FirstOwner = "issuance";
     private static readonly TimeSpan JobTimeout = TimeSpan.FromSeconds(10);
 
@@ -53,7 +54,7 @@ internal static class PostgresRootTimedJobIssuance
             var actor = receipt is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } reference }
                 ? reference : throw new InvalidOperationException("The public Native workflow was not admitted.");
             await store.EnableRootJobsAsync(stop);
-            var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition, new Node("background", typeof(MustNotExecute)) { JobTimeout = JobTimeout }));
+            var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition, new Node(BackgroundNode, typeof(MustNotExecute)) { JobTimeout = JobTimeout }));
             var owner = await PostgresNativeRootOwner.PrepareAsync(store, FirstOwner, Tenant, actor.Id, registry, stop,
                 (_, _, now) => cut.Receipt = FormattableString.Invariant($"issued {Environment.ProcessId} {actor.Id} {now}"));
             await using var activation = await owner.TryActivateAsync(stop) ?? throw new InvalidOperationException("The first owner could not take the partition.");
@@ -94,9 +95,9 @@ internal static class PostgresRootTimedJobIssuance
             image.Id == root.Actor && binding.Reference == actorId,
             "The cold checkpoint must load the exact bound workflow actor and public reference.");
         using var dispatch = JsonDocument.Parse(image.FoundationDispatchHeader!.Header.TypeData);
+        var workflow = dispatch.RootElement.GetProperty("Definition").GetString();
         var nativeModel = dispatch.RootElement.GetProperty("Model").GetString();
-        Check(dispatch.RootElement.GetProperty("Definition").GetString() == Definition &&
-            nativeModel == NativeExecutionModel.ModelKey,
+        Check(workflow == Definition && nativeModel == NativeExecutionModel.ModelKey,
             "The persisted dispatch header must name the exact Native model and definition.");
         Check(ticket.Model == image.Model, "The kernel ticket must name the persisted workflow actor type.");
         Check(wrapped.RootElement.GetProperty("Model").GetString() == nativeModel,
@@ -104,6 +105,12 @@ internal static class PostgresRootTimedJobIssuance
         Check(waitAddress == ticket.Key, "The Native wait dictionary must address the exact issued job key.");
         Check(wait.Key == ticket.Key, "The Native wait must carry the exact issued job key.");
         var arguments = wrapped.RootElement.GetProperty("Arguments").GetString();
+        var job = arguments is null ? null : JsonSerializer.Deserialize<BackgroundArgs>(arguments);
+        Check(job?.Workflow == workflow, "The Native job arguments must name the checkpoint's workflow definition.");
+        Check(job?.Frame == wait.Frame, "The Native job arguments must name the frame that owns the saved wait.");
+        Check(checkpoint.Frames.TryGetValue(wait.Frame, out var frame) && frame.Id == wait.Frame &&
+            frame.Node == BackgroundNode && job?.Node == frame.Node,
+            "The Native job arguments must name the background node of the saved frame.");
         var deadline = at + (long)JobTimeout.TotalMilliseconds;
         Check(image is { Creation: 1, Revision: 1, Status: InstanceStatus.Running, NextJobGeneration: 1 } &&
             wait.Kind == "job" && wait.Job is { } saved && saved.Key == ticket.Key && saved.Arguments == arguments && saved.Deadline == deadline &&
@@ -126,7 +133,7 @@ internal static class PostgresRootTimedJobIssuance
             pair = await store.ReadRootTimedJobIssuanceAsync(root, stop);
         } while (pair.Now < deadline);
         var due = await store.PollAsync(root.Partition, taken!.Epoch, TimeSpan.Zero, 10, stop);
-        Check(due.Messages.Count == 0 && pair.Deadline.Due == deadline, "The issuance-only profile must never dispatch either row.");
+        Check(due.Messages.Count == 0 && pair.Deadline.Due == deadline, "A cold store poll must exclude both issued rows at the deadline.");
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Messages" SET "Due" = "Due" + 1 WHERE "Target" = {root.Actor} AND "Partition" = {root.Partition}
                 AND "InboxScope" = {EfStore.RootTimedJobScope} AND "Kind" = {Kinds.JobDeadline}
