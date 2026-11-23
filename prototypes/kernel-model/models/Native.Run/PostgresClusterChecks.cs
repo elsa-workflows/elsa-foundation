@@ -68,7 +68,13 @@ internal static class PostgresClusterChecks
         using var child = Process.Start(info) ?? throw new InvalidOperationException("Could not start second RuntimeNode.");
         try
         {
-            await Until(async () => await Count(Primary) == partitions / 2 && await Count(Peer) == partitions / 2);
+            await Until(async () =>
+            {
+                await using var db = Open();
+                var split = await db.Partitions.Where(p => p.Owner == Primary || p.Owner == Peer).GroupBy(p => p.Owner)
+                    .Select(g => new { Node = g.Key!, Count = g.Count() }).ToDictionaryAsync(g => g.Node, g => g.Count, stop);
+                return split.GetValueOrDefault(Primary) == partitions / 2 && split.GetValueOrDefault(Peer) == partitions / 2;
+            });
             Root? selected = null;
             while (selected is null)
             {
