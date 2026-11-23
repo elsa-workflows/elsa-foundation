@@ -617,12 +617,18 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     }
 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
-    private string RootPollFilter => _ordinaryRoot is null ? "" : """ AND m."Target" = {4}""";
+    private string RootPollFilter => _ordinaryRoot is null ? "" : $"""
+         AND m."Target" = {"{4}"} AND (m."InboxScope" = 0 OR
+             (m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND EXISTS (
+                 SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
+                     AND b."Creation" = 1 AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
+                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired")))
+         """;
     private string PollSql => Engine?.Poll ??
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
          FROM (SELECT {Now} AS now) t
-         LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"}{RootPollFilter}
+         LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter}
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
 
