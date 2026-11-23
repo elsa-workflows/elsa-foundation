@@ -158,10 +158,13 @@ records one undispatched page in its Full journal. An independent runner reads t
 and dispatches migrations to the exact actor references. A fresh runner reconstructs the same
 batch after ownership changes. An authenticated acknowledgment clears the batch. The operator host
 provides a shared control key to plan owners and runners. Before releasing a batch, the runner
-checks that the exact journal belongs to a running plan. Cancellation stops later dispatch reads.
-Previously admitted work may still answer. The outcome projection reports both
+checks that the exact plan is running, unparked and within its deadline. Its completion check waits
+for the final selection, its dispatch acknowledgment when needed, and an outcome for every selected life.
+The foundation's actual creator settings must permit durable Full history. The outcome projection reports both
 migrations, and the workflows finish under the target definition. A second plan closes on its
-scheduled deadline and records an outcome that arrives after close. Operator API integration,
+scheduled deadline and records an outcome that arrives after close. RetryAll re-arms a failed deadline.
+Terminating a Park closes the outcome view and leaves outstanding selections as unanswered.
+Operator API integration,
 automatic selection scheduling and provider qualification remain separate work.
 
 ## PostgreSQL Core Preview

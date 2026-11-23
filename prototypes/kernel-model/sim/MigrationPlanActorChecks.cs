@@ -40,10 +40,18 @@ internal static class MigrationPlanActorChecks
         check(wide, "plan creation enforces the apply path's UTF-8 definition budget");
 
         var plan = await StartPlan("main-plan", deadline);
+        var declaredFull = PublicWorkflow.Start(plans.Start(new("source", "target", deadline)));
+        var actualMinimal = await StartRawPlan("minimal-history", declaredFull with { History = Contract.History.Minimal });
+        var actualEphemeral = await StartRawPlan("ephemeral-plan", declaredFull with { Ephemeral = true });
         await StartWorkflow("first-workflow");
         await StartWorkflow("second-workflow");
         await using var owner = await Open("first-plan-owner");
         await Pump(owner);
+        check((await reads.GetAsync(scope, actualMinimal))?.Header.Status == Contract.ActorStatus.Faulted &&
+            (await reads.GetAsync(scope, actualEphemeral))?.Header.Status is null or Contract.ActorStatus.Faulted &&
+            (await reads.TailAsync(scope, actualMinimal)).Items.All(entry => MigrationPlanJournal.Read(entry.Entry) is not MigrationPlanJournal.Created) &&
+            (await reads.TailAsync(scope, actualEphemeral)).Items.All(entry => MigrationPlanJournal.Read(entry.Entry) is not MigrationPlanJournal.Created),
+            "the creator turn rejects contradictory foundation history and ephemeral settings");
         var query = new Contract.ActorQuery(PublicWorkflow.ActorType, Contract.ActorStatus.Running,
             new Dictionary<string, string> { ["definition"] = "source" });
         var firstPage = await runtime.ListAsync(scope, query);
@@ -216,9 +224,12 @@ internal static class MigrationPlanActorChecks
         check(lateOutcomes.Read() is { Closed: true } answered && answered.NoAnswer.Count() == 0 &&
             answered.Results.GetValueOrDefault(waiting) == MigrationPlanOutcome.Migrated,
             "a late Native result updates the same closed plan from the exact selected life");
+        await CheckParkAsync(check);
 
         async Task<Contract.ActorRef> StartPlan(string id, long expires) =>
             (await runtime.StartAsync(scope, id, plans.Start(new("source", "target", expires)))).Actor!.Value;
+        async Task<Contract.ActorRef> StartRawPlan(string id, Contract.StartSpec spec) =>
+            (await ingress.SendAsync(scope, new Contract.Target.Start(spec), id, Contract.Kinds.Start)).Actor!.Value;
         async Task<Contract.ActorRef> StartWorkflow(string id) =>
             (await runtime.StartAsync(scope, id, NativeExecutionModel.Start("source"))).Actor!.Value;
         async Task<IScopeActivation> Open(string node) => (await new DurableHost(
@@ -229,6 +240,135 @@ internal static class MigrationPlanActorChecks
         bool FinishedUnderTarget(Contract.ActorRef reference) =>
             store.ReadFoundationActor(scope.Tenant, reference.Id).Actor is { Row: { Status: InstanceStatus.Finished } row } &&
             Json.Read<NativeState>(row.State).Variables["output"]?.GetValue<string>() == "new";
+    }
+
+    private static async Task CheckParkAsync(Action<bool, string> check)
+    {
+        const long initial = 1_701_900_000_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("plan-park");
+        var authority = new MigrationPlanAuthority(RandomNumberGenerator.GetBytes(32));
+        Contract.IIngress ingress = new InMemoryIngress(store, new Requests("plan-park"), "plan-park",
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate or Contract.Kinds.Migrate);
+        Contract.IActorReads reads = new ActorList(store, 8);
+        var runtime = new PublicRuntime(ingress, reads);
+        var registry = new WorkflowRegistry().Add(Definition("source", "old")).Add(Definition("target", "new"));
+        var plans = new MigrationPlanModel(authority, (from, to) => registry.TryGet(from, out _) && registry.TryGet(to, out _));
+        var wrapper = new ParkPlanActor(new PublicWorkflow([new NativeExecutionModel(registry), plans]));
+        var worker = new Worker("plan-park", 0, store, new ActorAdapter(store, wrapper), new WorkerOptions { Monotonic = () => now - initial });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+
+        var timerPlan = await StartPlan("retry-deadline", initial + 200);
+        await Pump(owner);
+        wrapper.FailDeadline = true;
+        now += 200;
+        await Pump(owner);
+        var parkedTimer = await reads.GetAsync(scope, timerPlan);
+        var timerId = store.FoundationTarget(scope.Tenant, timerPlan.Id)!.Id;
+        check(parkedTimer is { Park: not null, Header.Status: Contract.ActorStatus.Faulted } &&
+            store.Messages.Values.Any(row => row.Message.Target.Id == timerId &&
+                row.Message.Kind == MigrationPlanControl.Deadline && row.KeptBy == ParkKeepReason.Consumed),
+            "a failed deadline is retained by the actual Park path");
+        await Resolve(timerPlan, "retry", Contract.Kinds.Recover, Contract.RecoverMode.RetryAll);
+        await Pump(owner);
+        var timerHistory = new MigrationPlanOutcomes(reads, scope, timerPlan);
+        await Refresh(timerHistory);
+        check((await reads.GetAsync(scope, timerPlan))?.Header.Status == Contract.ActorStatus.Finished &&
+            timerHistory.Read().Closed && wrapper.DeadlineTurns == 2,
+            "RetryAll restores the original deadline and the real plan closes on that delivery");
+
+        var plan = await StartPlan("terminate-open-recovery", initial + 60_000);
+        var selected = (await runtime.StartAsync(scope, "native", NativeExecutionModel.Start("source"))).Actor!.Value;
+        await Pump(owner);
+        var dispatch = new JournalMigrationDispatchState(ingress, reads, authority, scope, plan);
+        await dispatch.SendAsync(MigrationPlanControl.Select, "parked-selection", new(1, [selected], AllSelected: true));
+        await Pump(owner);
+        check(await dispatch.ReadPendingAsync(scope, plan, default) is { Number: 1 },
+            "dispatch has a cached committed batch before the plan parks");
+        await ingress.SendAsync(scope, new Contract.Target.Ref(plan), "park", "fixture-park");
+        await Pump(owner);
+        for (var i = 0; i < 2; i++)
+            await ingress.SendAsync(scope, new Contract.Target.Ref(plan), $"kept-{i}", "arrival",
+                new string('x', ParkRecoveryCredit.LimitBytes + 1));
+        await Pump(owner);
+        await Resolve(plan, "resume-open", Contract.Kinds.Recover, Contract.RecoverMode.Resume);
+        await Step(plan);
+        check(await reads.GetAsync(scope, plan) is { Park: not null, Header.Status: Contract.ActorStatus.Running } &&
+            await dispatch.ReadPendingAsync(scope, plan, default) is null,
+            "an open recovery with a Running header keeps the cached batch unavailable");
+        await Resolve(plan, "terminate-recovery", Contract.Kinds.Terminate);
+        var physicalPlan = store.FoundationTarget(scope.Tenant, plan.Id)!.Id;
+        for (var pass = 0; pass < 5 && store.Instances[physicalPlan].ParkDiscard is null; pass++) await Step(plan);
+        check(await reads.GetAsync(scope, plan) is { Park.OpenResolution: "terminating" } &&
+            await dispatch.ReadPendingAsync(scope, plan, default) is null,
+            "a parked termination keeps dispatch closed throughout the drain");
+        await Pump(owner);
+        var outcomes = new MigrationPlanOutcomes(reads, scope, plan);
+        await Refresh(outcomes);
+        check((await reads.GetAsync(scope, plan))?.Header.Status == Contract.ActorStatus.Cancelled &&
+            outcomes.Read() is { Closed: true } closed && closed.NoAnswer.SequenceEqual([selected]),
+            "the completed parked termination closes the projection and lists the unanswered life");
+        await ingress.SendAsync(scope, new Contract.Target.Ref(selected), "late-migrate", Contract.Kinds.Migrate,
+            Json.Write(new MigrationRequest("source", "target", plan)));
+        await Pump(owner);
+        await Refresh(outcomes);
+        check(outcomes.Read() is { Closed: true } cleared && cleared.NoAnswer.SequenceEqual([selected]) &&
+            (await reads.GetAsync(scope, selected))?.Header.Labels.GetValueOrDefault("definition") == "target",
+            "Park termination keeps the unanswered classification when an already-admitted migration later applies");
+
+        async Task<Contract.ActorRef> StartPlan(string operation, long deadline) =>
+            (await runtime.StartAsync(scope, operation, plans.Start(new("source", "target", deadline)))).Actor!.Value;
+
+        async Task Resolve(Contract.ActorRef planRef, string operation, string kind, Contract.RecoverMode mode = Contract.RecoverMode.Resume)
+        {
+            var selection = (await reads.GetAsync(scope, planRef))?.Selection ??
+                throw new InvalidOperationException("The parked plan has no selection.");
+            var reply = await ingress.SendAsync(scope, new Contract.Target.Ref(planRef), operation, kind,
+                Json.Write(new Contract.OperatorCommand(selection, mode)));
+            if (reply.Outcome != Contract.AdmissionOutcome.Accepted)
+                throw new InvalidOperationException($"The plan operator request {operation} was refused.");
+        }
+
+        async Task Step(Contract.ActorRef planRef)
+        {
+            var actor = store.FoundationTarget(scope.Tenant, planRef.Id)!.Id;
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(actor);
+            await worker.FlushAsync();
+        }
+    }
+
+    private sealed class ParkPlanActor(PublicWorkflow actor) : Contract.IActorType
+    {
+        public string Type => actor.Type;
+        internal bool FailDeadline { get; set; }
+        internal int DeadlineTurns { get; private set; }
+
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            if (turn.Inbox.Any(message => message.Kind == "fixture-park"))
+                throw new InvalidOperationException("The plan Park fixture interrupted its turn.");
+            if (turn.Inbox.Any(message => message.Kind == MigrationPlanControl.Deadline))
+            {
+                DeadlineTurns++;
+                if (FailDeadline)
+                {
+                    FailDeadline = false;
+                    throw new InvalidOperationException("The plan Park fixture interrupted its deadline.");
+                }
+            }
+            return actor.TurnAsync(turn, cancellationToken);
+        }
+
+        public bool Withholds(Contract.ActorHeader header) => actor.Withholds(header);
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => actor.RestoreWaits(header, state);
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => actor.TerminalGrowth(header, state);
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => actor.ProtectsDeletion(header, state, now);
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
+            actor.ExecuteJobAsync(job, cancellationToken);
     }
 
     private sealed class ReadOnlyJournalModel : Models.IExecutionModel

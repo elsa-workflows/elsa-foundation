@@ -29,6 +29,12 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     {
         var header = turn.Header;
         var workflow = ReadHeader(header);
+        if (workflow.Model == MigrationPlanModel.ModelKey && turn.StartSettings is { } settings &&
+            settings is not { History: History.Full, Ephemeral: false })
+        {
+            turn.End(ActorStatus.Faulted, "A migration plan needs a durable Full journal.");
+            return;
+        }
         var command = turn.Inbox.Count == 1 ? turn.Inbox[0].Kind : null;
         if (command is Kinds.Suspend or Kinds.Resume)
         {

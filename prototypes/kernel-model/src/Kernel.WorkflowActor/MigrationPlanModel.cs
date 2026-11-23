@@ -138,12 +138,8 @@ internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<
     public bool HandlesMetadata(Message message) => message.Kind == MigrationPlanResult.Kind;
     public ValueTask MetadataAsync(ITurn turn, ActorStatus status, long? endedAt, CancellationToken cancellationToken)
     {
-        if (status is ActorStatus.Finished or ActorStatus.Cancelled && turn.State is PlanState state)
-        {
-            state.Closed = true;
-            state.Pending = null;
+        if (status is ActorStatus.Finished or ActorStatus.Cancelled && turn.State is PlanState { Closed: true } state)
             foreach (var message in turn.Inbox) RecordAnswer(turn, state, message);
-        }
         return ValueTask.CompletedTask;
     }
 
