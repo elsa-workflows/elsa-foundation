@@ -27,7 +27,8 @@ public sealed partial class MongoStore
         Func<IClientSessionHandle, CancellationToken, Task>? migrateData = null, CancellationToken cancellationToken = default)
     {
         if (expected != CurrentFormat && !(_options.ScopedJobRoots && expected == JobGenerationFormat) &&
-            !(_options.ScopedJobResults && expected == ScopedJobRootFormat))
+            !(_options.ScopedJobResults && expected == ScopedJobRootFormat) &&
+            !(_options.ScopedJobSuspend && expected == JobResultFormat))
             throw new StoreFormatException($"This migrator reads source {CurrentFormat}. Requested source {expected}.");
         if (next == expected || next.StoreSchema < expected.StoreSchema || next.MessageProtocol < expected.MessageProtocol ||
             next.JournalCodec < expected.JournalCodec)
