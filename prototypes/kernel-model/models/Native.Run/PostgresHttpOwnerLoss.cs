@@ -67,7 +67,7 @@ internal static class PostgresHttpOwnerLoss
         app.MapPost("/approval", (Delegate)ApproveAsync);
         await app.StartAsync(stop);
         using var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
-        var response = client.PostAsync("/approval", null, stop);
+        var response = ObserveResponseAsync();
         Message pending;
         while (true)
         {
@@ -79,10 +79,11 @@ internal static class PostgresHttpOwnerLoss
             Require(!response.IsCompleted, "The HTTP connection must be open while waiting for durable admission.");
             await Task.Delay(15, stop);
         }
-        Require(pending.ReplyTo is { } route && ReplyTo.Parse(route).Node == Receiver,
+        var replyRoute = ReplyTo.Parse(pending.ReplyTo ?? throw new InvalidOperationException("Expected a durable reply route."));
+        Require(replyRoute.Node == Receiver,
             "The enrolled input must address the original HTTP receiver.");
 
-        await original.SendAsync("approve", stop);
+        await original.SendAsync($"approve {pending.InboxKey.Id}", stop);
         await original.ExpectAsync(after ? "landed" : "prepared", stop);
         Require(!response.IsCompleted, "The caller must still be waiting when the original owner pauses.");
         var boundary = await ImageAsync();
@@ -110,11 +111,18 @@ internal static class PostgresHttpOwnerLoss
             "A different process must take the next epoch after the original lease expires.");
         if (!timely)
         {
-            using var expired = await response.WaitAsync(stop);
-            Require(expired.StatusCode == HttpStatusCode.GatewayTimeout, "The original HTTP request must reach its 504 deadline.");
+            var (expired, completedAt) = await response.WaitAsync(stop);
+            using (expired)
+            {
+                // The clock sample is bounded to 25 ms. Allow network and timer scheduling latency after expiry.
+                var offset = completedAt - replyRoute.Deadline;
+                Require(expired.StatusCode == HttpStatusCode.GatewayTimeout && offset is >= -25 and <= 750 && completedAt < lease.Until,
+                    $"Expected HTTP 504 near the recorded deadline and before takeover; deadline offset {offset} ms.");
+                Console.WriteLine($"Observed HTTP 504 at deadline offset {offset} ms, {lease.Until - completedAt} ms before lease expiry.");
+            }
         }
 
-        await standby.SendAsync("approve", stop);
+        await standby.SendAsync($"approve {pending.InboxKey.Id}", stop);
         var emitted = 0;
         var accepted = 0;
         while (true)
@@ -136,9 +144,11 @@ internal static class PostgresHttpOwnerLoss
         }
         if (timely)
         {
-            using var answered = await response.WaitAsync(stop);
-            Require(answered.StatusCode == HttpStatusCode.Accepted && await answered.Content.ReadAsStringAsync(stop) == "approved" &&
-                emitted > 0 && accepted == 1, "The successor must deliver exactly one response to the original HTTP connection.");
+            var (answered, completedAt) = await response.WaitAsync(stop);
+            using (answered)
+                Require(answered.StatusCode == HttpStatusCode.Accepted && completedAt < replyRoute.Deadline &&
+                    await answered.Content.ReadAsStringAsync(stop) == "approved" && emitted > 0 && accepted == 1,
+                    "The successor must deliver exactly one response to the original HTTP connection before its deadline.");
         }
         else
             Require(emitted == 0 && accepted == 0, "The successor must send no output to an expired or already-settled request.");
@@ -157,9 +167,18 @@ internal static class PostgresHttpOwnerLoss
         Console.WriteLine($"ok PostgreSQL HTTP owner loss {fence} {loss}: processes {original.Id}->{standby.Id}, epochs {firstEpoch}->{secondEpoch}, HTTP {(timely ? 202 : 504)}, one approval revision.");
         return 0;
 
+        async Task<(HttpResponseMessage Response, long CompletedAt)> ObserveResponseAsync()
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/approval");
+            var observed = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, stop);
+            return (observed, DatabaseNow());
+        }
+
+        long DatabaseNow() => databaseTime + (long)Stopwatch.GetElapsedTime(observedAt).TotalMilliseconds;
+
         Task<IResult> ApproveAsync(HttpContext context)
         {
-            var due = databaseTime + (long)Stopwatch.GetElapsedTime(observedAt).TotalMilliseconds + wait;
+            var due = DatabaseNow() + wait;
             var payload = Json.Write(new CompositeSignal(frame, "approve", "Ada"));
             return PostgresHttpPreview.ServeAsync(context, wait,
                 token => api.RequestAsync(scope, new Contract.Target.Ref(actor), "approve", CompositeSignal.Kind,
@@ -180,16 +199,17 @@ internal static class PostgresHttpOwnerLoss
     {
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var stop = limit.Token;
-        var store = CreateStore(OpenDatabase(), fence);
+        var open = OpenDatabase();
+        var store = CreateStore(open, fence);
         var registry = new WorkflowRegistry().Add(PostgresHeldDirectChecks.Build());
         var turns = 0;
         var terminalPrepared = false;
+        string? approvalId = null;
         var (host, worker) = await PostgresHeldDirectChecks.PrepareAsync(store, OwnerNode(Environment.ProcessId), registry,
             new WorkerOptions
             {
                 Lease = Lease,
-                Transport = new ProcessLink(() => store.ReadFirstRootAsync(Tenant, actor.Id, stop).GetAwaiter().GetResult()
-                    is { Revision: 2, Status: InstanceStatus.Finished }),
+                Transport = new ProcessLink(() => ApprovalSettledAsync().GetAwaiter().GetResult()),
                 OnTurn = (_, _, _) => turns++,
                 OnPreparedCheckpoint = (turn, _, _) =>
                 {
@@ -217,17 +237,28 @@ internal static class PostgresHttpOwnerLoss
             Console.WriteLine($"owned {worker.Fences.Single().Epoch}");
             while (await Console.In.ReadLineAsync(stop) is { } command && command != "stop")
             {
-                var revision = command switch
+                int revision;
+                if (command == "birth") revision = 1;
+                else if (command.StartsWith("approve ", StringComparison.Ordinal))
                 {
-                    "birth" => 1,
-                    "approve" => 2,
-                    _ => throw new InvalidOperationException("Unexpected owner fixture command.")
-                };
+                    approvalId = command["approve ".Length..];
+                    revision = 2;
+                }
+                else throw new InvalidOperationException("Unexpected owner fixture command.");
                 await DriveAsync(revision);
                 Console.WriteLine($"checkpoint {revision} {turns}");
             }
         }
         return 0;
+
+        async Task<bool> ApprovalSettledAsync()
+        {
+            await using var db = open();
+            return approvalId is not null &&
+                await store.ReadFirstRootAsync(Tenant, actor.Id, stop) is { Revision: 2, Status: InstanceStatus.Finished } &&
+                await db.Messages.AsNoTracking().SingleOrDefaultAsync(row => row.Id == approvalId, stop)
+                    is { Done: true, ReplyTo: null };
+        }
 
         async Task DriveAsync(int revision)
         {
@@ -308,8 +339,10 @@ internal static class PostgresHttpOwnerLoss
 
         internal async Task ExpectExitAsync(CancellationToken stop)
         {
+            var trailingOutput = process.StandardOutput.ReadToEndAsync(stop);
             await process.WaitForExitAsync(stop);
             Require(process.ExitCode == 0, "The successor must exit cleanly.");
+            Require((await trailingOutput).Length == 0, "The successor must send no more output on shutdown.");
         }
 
         public async ValueTask DisposeAsync()

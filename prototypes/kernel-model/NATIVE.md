@@ -328,12 +328,15 @@ A Kestrel receiver keeps the original connection open while a separate owner pro
 Native approval staged. A standby process is refused while the first lease is live. The driver ends
 the original process, and PostgreSQL records ownership moving to the next epoch after the lease
 expires. The survivor consumes the exact stored approval, commits one revision and sends the response
-to the receiver through a private process pipe. The caller receives `202 approved`.
+to the receiver through a private process pipe. The transport reads the finished checkpoint and the
+settled approval row before emitting the carrier. The caller receives `202 approved`.
 
 Use `before-late` to let the caller reach 504 first. The survivor still commits the approval. Use
 `after` to end the original owner after PostgreSQL commits and before it sends a response. The
-caller receives 504, and the standby takes ownership without executing the approval again. Use
-`checked` for the other fence mode.
+caller receives 504, and the standby takes ownership without executing the approval again. Both 504
+cases record when the client received its response against the stored deadline and lease expiry. The
+fixture watches the standby through shutdown for any trailing carrier. Use `checked` for the other
+fence mode.
 
 These cases run against the fixture-private exact-reference profile. The pipe carries live output
 between local processes. Cluster transport, HTTP-triggered starts and event requests remain separate
