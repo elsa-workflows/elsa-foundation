@@ -86,7 +86,8 @@ internal sealed partial class ActorAdapter
         {
             if (id.Length != 65 || id[0] != '~' || id.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEF") >= 0)
                 throw new ArgumentException("Recall requires an issued message id.", nameof(id));
-            _turn.RecallFromActor(Store, id);
+            if (_issueSelf is not null) _turn.RecallPersistedSelfInput(id);
+            else _turn.RecallFromActor(Store, id);
         }
 
         public Contract.ActorRef Start(Contract.StartSpec spec, Contract.Placement placement = Contract.Placement.WithParent, bool detached = false)

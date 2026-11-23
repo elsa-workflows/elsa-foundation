@@ -51,17 +51,18 @@ internal static class PostgresRootSelfChecks
         var payload = new string('"', FoundationMetadataLimits.MessageContentBytes - Encoding.UTF8.GetByteCount(suffix)) + suffix;
         var logical = FoundationSelfSend.Issue(scoped.RootSelfIssuer!.Handle, CreationProtocol.Origin(actor, 1), 2, 0, null);
         var sent = FoundationSelfSend.Create(actor, 1, logical, "ordinary\0step", payload);
-        Message Timer(int ordinal, long due)
+        Message Timer(string owner, int ordinal, long due)
         {
-            var handle = FoundationSelfSend.Issue(scoped.RootSelfIssuer!.Handle, CreationProtocol.Origin(actor, 1), 2, ordinal, due);
-            return FoundationSelfSend.Create(actor, 1, handle, "wake", null, due);
+            var handle = FoundationSelfSend.Issue(scoped.RootSelfIssuer!.Handle, CreationProtocol.Origin(owner, 1), 2, ordinal, due);
+            return FoundationSelfSend.Create(owner, 1, handle, "wake", null, due);
         }
-        var zero = Timer(1, 0);
-        var future = Timer(2, long.MaxValue);
+        var zero = Timer(actor, 1, 0);
+        var future = Timer(actor, 2, long.MaxValue);
         const long deadline = 4_102_444_800_000; // 2100-01-01 UTC
-        var boundary = Timer(3, deadline);
+        var boundary = Timer(actor, 3, deadline);
+        var siblingTimer = Timer(actor, 4, long.MaxValue - 1);
         CommitBatch Batch(params TurnCommit[] turns) => new(0, lease.Epoch, 1, window, false, turns, [], []);
-        var emit = new TurnCommit(actor, row with { Revision = 2 }, 1, [], [direct.InboxKey], [sent, zero, future, boundary], [], [], null);
+        var emit = new TurnCommit(actor, row with { Revision = 2 }, 1, [], [direct.InboxKey], [sent, zero, future, boundary, siblingTimer], [], [], null);
         if (!timers)
         {
             try { await scoped.CommitAsync(Batch(emit), stop); throw new InvalidOperationException("A protocol-3 writer accepted a timer."); }
@@ -153,7 +154,84 @@ internal static class PostgresRootSelfChecks
         var at = await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop);
         Check(at.Now == deadline && at.Messages.Single().Message == boundary && (await cold.CommitAsync(Batch(Advance(boundary)), stop)).Landed,
             "at the exact deadline, poll and settlement accept the original timer");
+        clock.At = null;
+        row = (await cold.LoadAsync([actor], stop)).Single();
+        var recallRevision = row.Revision;
+        // An ordinary issued key with the same spelling stays in its separate physical scope.
+        var other = new Message(future.InboxKey.Id, creator.Target, "ordinary", "retain").AsIssued();
+        Check((await bare.CommitAsync(Batch(empty with { Sent = [other] }), stop)).Landed, "ordinary scoped neighbour stored");
+        await ingress.AdmitDirectAsync(tenant, reference, "recall", "change", cancellationToken: stop);
+        var stimulus = (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single();
+        var withdraw = new TurnCommit(actor, row with { Revision = recallRevision + 1 }, recallRevision, [], [stimulus.InboxKey], [], [], [], null)
+            { FoundationSelfRecalls = new HashSet<InboxKey> { future.InboxKey } };
+        var refused = false;
+        try { await bare.CommitAsync(Batch(empty with { FoundationSelfRecalls = withdraw.FoundationSelfRecalls }), stop); }
+        catch (StoreException error) when (error.Failure == Failure.Definite) { refused = true; }
+        Check(refused, "the ordinary provider path refuses a scoped recall");
+        Check(!(await cold.CommitAsync(Batch(withdraw) with { Epoch = lease.Epoch + 1 }, stop)).Landed,
+            "a mismatched epoch cannot recall the timer");
+        await bare.SubscribeAsync(new("recall-check", actor, "guard"), stop);
+        Check(!(await cold.CommitAsync(Batch(withdraw with { Row = withdraw.Row! with { Status = InstanceStatus.Finished }, Journal = """["end"]""", Unsubscribe = true }), stop)).Landed,
+            "the terminal precondition rejects the checkpoint after preparing its recall");
+        await using (var db = Open())
+            Check((await cold.LoadAsync([actor], stop)).Single().Revision == recallRevision &&
+                (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single() == stimulus &&
+                await db.Messages.CountAsync(m => m.Id == future.InboxKey.Id && !m.Done, stop) == 2,
+                "rollback keeps the private timer, ordinary neighbour, original stimulus and checkpoint");
+        Check((await cold.CommitAsync(Batch(withdraw), stop)).Landed, "running checkpoint recalls the exact timer");
+        await using (var db = Open())
+            Check((await db.Messages.SingleAsync(m => m.Id == future.InboxKey.Id, stop)).InboxScope == -1 &&
+                (await cold.LoadAsync([actor], stop)).Single().Revision == recallRevision + 1,
+                "the ordinary neighbour survives the committed recall");
+        Check(await PendingTimer(siblingTimer), "the other private timer on the same root survives recall");
+        await ingress.AdmitDirectAsync(tenant, reference, "recall-again", "change", cancellationToken: stop);
+        var again = (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single();
+        row = (await cold.LoadAsync([actor], stop)).Single();
+        Check((await cold.CommitAsync(Batch(withdraw with { Row = row with { Revision = recallRevision + 2 }, Expected = recallRevision + 1, Done = [again.InboxKey] }), stop)).Landed,
+            "recalling the absent private timer again is idempotent");
+        Check(await PendingTimer(siblingTimer), "the same private sibling survives an absent recall replay");
+
+        var peerRef = (await ingress.AdmitAsync(tenant, "peer", new("native", "wait"), cancellationToken: stop)).Reference;
+        var peerCreator = (await ingress.ReadPendingCreatorAsync(tenant, peerRef, stop))!;
+        var peer = peerCreator.Target.Id;
+        Check((await bare.CommitFirstRootAsync(tenant, peerRef, peerCreator, lease.For(0) with { Position = 1 }, window,
+            null, 1, "state", new Dictionary<string, string>(), """["start"]""", stop)).Landed, "second root created on the same partition");
+        var peerClient = Client();
+        await peerClient.EnableRootSelfSendsAsync(stop);
+        await peerClient.BindWorkerRootsAsync([(tenant, peerRef)], stop);
+        await ingress.AdmitDirectAsync(tenant, peerRef, "issue", "step", cancellationToken: stop);
+        var peerInput = (await ingress.ReadPendingDirectAsync(tenant, peerRef, stop)).Single();
+        var peerRow = (await peerClient.LoadAsync([peer], stop)).Single();
+        var peerTimer = Timer(peer, 0, long.MaxValue);
+        var issue = new TurnCommit(peer, peerRow with { Revision = 2 }, 1, [], [peerInput.InboxKey], [peerTimer], [], [], null);
+        Check((await peerClient.CommitAsync(Batch(issue) with { Position = 2 }, stop)).Landed && await PendingTimer(peerTimer),
+            "second root issues its own pending private timer");
+
+        await ingress.AdmitDirectAsync(tenant, reference, "another-change", "step", cancellationToken: stop);
+        var input = (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single();
+        row = (await cold.LoadAsync([actor], stop)).Single();
+        var mismatched = withdraw with { Row = row with { Revision = recallRevision + 3 }, Expected = recallRevision + 2, Done = [input.InboxKey],
+            FoundationSelfRecalls = new HashSet<InboxKey> { peerTimer.InboxKey } };
+        refused = false;
+        try { await cold.CommitAsync(Batch(mismatched) with { Position = 2 }, stop); }
+        catch (NotSupportedException) { refused = true; }
+        Check(refused && await PendingTimer(peerTimer) && await PendingTimer(siblingTimer) &&
+            (await cold.LoadAsync([actor], stop)).Single().Revision == recallRevision + 2 &&
+            (await peerClient.LoadAsync([peer], stop)).Single().Revision == 2 &&
+            (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single() == input,
+            "a scoped recall for the other root is refused and preserves both timers, checkpoints and the input");
+        var matched = mismatched with { FoundationSelfRecalls = new HashSet<InboxKey> { siblingTimer.InboxKey } };
+        Check((await cold.CommitAsync(Batch(matched) with { Position = 2 }, stop)).Landed &&
+            !await PendingTimer(siblingTimer) && await PendingTimer(peerTimer) && (await cold.LoadAsync([actor], stop)).Single().Revision == recallRevision + 3,
+            "the same commit with this root's timer lands and leaves the second root's timer pending");
         return 0;
+
+        async Task<bool> PendingTimer(Message timer)
+        {
+            await using var db = Open();
+            return await db.Messages.AnyAsync(m => m.Id == timer.InboxKey.Id && m.Target == timer.Target.Id &&
+                m.InboxScope == EfStore.RootSelfScope && m.Due == timer.Due && !m.Done, stop);
+        }
     }
 
     private sealed class DeadlineClock : DbCommandInterceptor

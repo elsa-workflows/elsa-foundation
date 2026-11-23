@@ -8,9 +8,10 @@ fence=${2:-checked}
 dotnet restore --locked-mode
 dotnet build -c Release --no-restore
 case "${3:-balanced}" in
-  balanced) preview=pg-delay-preview ;;
+  balanced|fire) preview=pg-delay-preview ;;
   durable) preview=pg-durable-delay-preview ;;
-  *) echo "Use balanced or durable for the persistence mode." >&2; exit 2 ;;
+  recall) preview=pg-delay-recall-preview ;;
+  *) echo "Use balanced, durable, or recall for the Delay preview." >&2; exit 2 ;;
 esac
 run=(dotnet bin/Release/net10.0/Kernel.Native.Run.dll "$preview" "$writer" "$fence")
 waiting="$("${run[@]}" birth)"

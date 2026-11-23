@@ -63,9 +63,10 @@ internal sealed partial class ActorAdapter
     {
         if (outcome.Row is not { Status: Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished } ||
             outcome.Sent.Any(m => issueSelf is null || !issueSelf.Allows(m.Due) || !Durable.FoundationSelfSend.IsSelfInput(m, outcome.Row.Id, outcome.Row.Creation)) ||
-            outcome.Held.Count != 0 || outcome.Cancelled.Count != 0 ||
+            outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
             outcome.Emitted.Count != 0 || outcome.FoundationCascade is not null || outcome.InMemory)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
+        if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
     }
 }
