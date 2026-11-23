@@ -197,7 +197,7 @@ public sealed partial class BpmnDirectExecutionTests
         {
             if (Environment.GetEnvironmentVariable("ELSA_BPMN_DELAYED_COMPENSATION_EVIDENCE") is not { Length: > 0 } root) return;
             Directory.CreateDirectory(root);
-            var repository = new DirectoryInfo(AppContext.BaseDirectory);
+            DirectoryInfo? repository = new(AppContext.BaseDirectory);
             while (repository is not null && !File.Exists(Path.Combine(repository.FullName, "Elsa.Server.slnx"))) repository = repository.Parent;
             Assert.NotNull(repository);
             var sourceSha = await GitAsync("rev-parse", "HEAD");
