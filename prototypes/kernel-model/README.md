@@ -102,9 +102,9 @@ multiplexing disabled. The output also reports PostgreSQL Sync and Query groups 
 | Duplicate approval after restart including admission | 5 | 5 |
 | Finishing approval including admission | 19 | 21 |
 
-A separate before-and-after run measured the relational format check on PostgreSQL 17. Creating a fresh database
-took 37 TCP turns with the marker table, seed and read, up from 34. Both the first and restarted process took
-13 TCP turns for ownership, up from 12. The five workflow operations above kept their measured counts.
+In two before-and-after runs on PostgreSQL 17, schema setup on an empty database took 34 or 35 TCP turns before
+the format check and 37 with the marker table, seed and read. Both the first and restarted process took 13 TCP
+turns for ownership, up from 12. The five workflow operations above kept their measured counts.
 
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
