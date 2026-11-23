@@ -3081,7 +3081,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             try
             {
                 StoreBatchRules.Validate(batch, ownedSets: _store.OwnedSetsAvailable, supportsJobTrialClear: _store.SupportsJobTrialClear,
-                    supportsFoundationParkResolution: true, supportsDueBacklog: _backlog is not null, supportsFoundationSelfRecalls: true);
+                    supportsFoundationParkResolution: true, supportsFoundationValues: true, supportsDueBacklog: _backlog is not null, supportsFoundationSelfRecalls: true);
                 StoreBatchRules.RequirePhysicalCapability(batch,_store.PhysicalRetirementAvailable);
                 if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: _store.PhysicalRetirementAvailable);
                 if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
@@ -3244,6 +3244,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 unit.Consumed is [{ IsWorkerJobCompletion: true, JobDeadline: null, Original: { } original } completed]
                     ? new((original with { }).AsKernelTicket(), (completed.Message with { }).AsKernelTicket()) : null,
             FoundationSelfRecalls = unit.FoundationSelfRecalls,
+            FoundationValues = unit.FoundationValues,
             FoundationHeldPromotions = promotions,
             FoundationReleasedHolds = releases,
             OpensPark = unit.OpensPark,

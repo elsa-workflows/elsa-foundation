@@ -8,12 +8,14 @@ namespace Kernel.Foundation.InMemory;
 
 internal sealed partial class ActorAdapter
 {
-    private sealed class ActorTurn : Contract.IActorTurn
+    private sealed class ActorTurn : Contract.IActorTurn, IRootValueTurn
     {
         private readonly Durable.InMemoryStore? _inMemory;
         private readonly Durable.FoundationSelfIssuer? _issueSelf;
         private readonly Func<string, string>? _rootJobHandle;
         private readonly bool _rootTimedJobIssuance;
+        private readonly RootValueReader? _readRootValue;
+        private List<Durable.FoundationValue>? _values;
         private Durable.InMemoryStore Store => _inMemory ?? throw new NotSupportedException("The ordinary-root provider does not implement this authored effect.");
         private readonly Durable.TurnInput _input;
         private readonly Durable.DurableTurn _turn;
@@ -30,12 +32,13 @@ internal sealed partial class ActorAdapter
         private bool _migrated;
 
         public ActorTurn(Durable.InMemoryStore? store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient,
-            Durable.FoundationSelfIssuer? issueSelf, Func<string, string>? rootJobHandle, bool rootTimedJobIssuance)
+            Durable.FoundationSelfIssuer? issueSelf, Func<string, string>? rootJobHandle, bool rootTimedJobIssuance, RootValueReader? readRootValue)
         {
             _inMemory = store;
             _issueSelf = issueSelf;
             _rootJobHandle = rootJobHandle;
             _rootTimedJobIssuance = rootTimedJobIssuance;
+            _readRootValue = readRootValue;
             _input = input;
             Now = input.Services.Now;
             _turn = new(input, foundation: true);
@@ -63,6 +66,22 @@ internal sealed partial class ActorAdapter
         public IReadOnlyList<Contract.Message> Inbox { get; }
         public string? State { get; set; }
         public object? Ambient { get; }
+
+        Durable.FoundationValueReference IRootValueTurn.StoreValue(ReadOnlySpan<byte> payload)
+        {
+            if (_readRootValue is null || _row.FoundationDispatchHeader is null)
+                throw new NotSupportedException("Values require a persisted root in the qualification profile.");
+            var value = new Durable.FoundationValue(payload);
+            (_values ??= []).Add(value);
+            return value.Reference;
+        }
+
+        ValueTask<byte[]?> IRootValueTurn.ReadValueAsync(Durable.FoundationValueReference reference, CancellationToken cancellationToken)
+        {
+            if (_readRootValue is null || _row.FoundationDispatchHeader is not { } header)
+                throw new NotSupportedException("Values require a persisted root in the qualification profile.");
+            return _readRootValue(header, new(_row.Id, _row.Creation), reference, cancellationToken);
+        }
 
         public void Emit(string channel, object? item)
         {
@@ -202,6 +221,7 @@ internal sealed partial class ActorAdapter
             var wasRunning = _row.Status == Durable.InstanceStatus.Running;
             var ended = wasRunning && _status != Contract.ActorStatus.Running;
             var outcome = _turn.Outcome((Durable.InstanceStatus)_status);
+            outcome.FoundationValues = _values;
             var cascades = outcome.Consumed.Any(delivery => delivery.Message.Kind == Contract.Kinds.Terminate) ||
                 ended && _status == Contract.ActorStatus.Cancelled;
 

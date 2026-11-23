@@ -8,6 +8,8 @@ public sealed partial class EfStore
 {
     // The generic load treats this as an unknown state family and leaves its bytes intact.
     private const string PublicRootState = StoredState.Family + "4:public-root:";
+    private static string RootStateFamily(KernelDb db) => db.UsesRootValueProtocol
+        ? StoredState.Family + "5:public-root-values:" : PublicRootState;
 
     internal sealed record RootImage(CreationAddress Actor, string Model, string Definition, string TypeData,
         IReadOnlyDictionary<string, string> Labels, string? State, int StateVersion, long Revision)
@@ -38,6 +40,7 @@ public sealed partial class EfStore
             // comparison. A missing bind or changed envelope returns false and rolls back all effects.
             var fingerprint = CreationProtocol.Fingerprint(Creator.Start, Creator.Kind, Creator.Payload);
             var finished = Status == InstanceStatus.Finished;
+            var family = RootStateFamily(db);
             var candidates = await db.Messages.FromSqlInterpolated($"""
                 WITH consumed AS (
                     DELETE FROM "Messages" m USING "FoundationRootBirths" b
@@ -49,7 +52,7 @@ public sealed partial class EfStore
                     RETURNING m.*
                 ), bound AS (
                     UPDATE "Instances" i SET "FoundationReference" = b."Reference", "FoundationTenant" = b."Tenant",
-                        "FoundationHeader" = {Header}, "State" = {PublicRootState} || i."State",
+                        "FoundationHeader" = {Header}, "State" = {family} || i."State",
                         "FoundationTerminalRevision" = CASE WHEN {finished} THEN {JournalRevision} ELSE NULL END,
                         "FoundationTerminalAt" = CASE WHEN {finished} THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint ELSE NULL END
                     FROM "FoundationRootBirths" b JOIN consumed m ON b."Creator" = m."Id" AND b."Actor" = m."Target"
@@ -167,6 +170,8 @@ public sealed partial class EfStore
     internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        var family = RootStateFamily(db);
+        if (db.UsesRootValueProtocol) await RequireStoreVersionsAsync(db, cancellationToken);
         var physical = await db.Database.SqlQuery<PhysicalRoot>($"""
             SELECT i."Id", b."Creation", i."State", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
                 i."History", i."Status", i."Suspended", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
@@ -177,11 +182,11 @@ public sealed partial class EfStore
             WHERE i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference} AND i."Partition" = b."Partition" AND NOT i."Retired"
             """).SingleOrDefaultAsync(cancellationToken);
         if (physical is null) return null;
-        if (!physical.State.StartsWith(PublicRootState, StringComparison.Ordinal))
+        if (!physical.State.StartsWith(family, StringComparison.Ordinal))
             throw new StoreException(Failure.Definite, "Unsupported qualified actor checkpoint.");
         var header = DurableKeyJson.Read<RootHeader>(physical.Header);
         var logical = StoredState.Restore(new(physical.Id, header.Model, header.Definition, InstanceStatus.Running,
-            physical.State[PublicRootState.Length..], physical.Revision, null, Creation: physical.Creation));
+            physical.State[family.Length..], physical.Revision, null, Creation: physical.Creation));
         var state = logical.FoundationNullState ? null : header.EscapedState ? DurableKeyJson.Read<string>(logical.State) : logical.State;
         return new(new(physical.Id, physical.Creation), header.Model, header.Definition, header.TypeData,
             header.Labels.ToDictionary(StringComparer.Ordinal), state, physical.StateVersion, physical.Revision)
