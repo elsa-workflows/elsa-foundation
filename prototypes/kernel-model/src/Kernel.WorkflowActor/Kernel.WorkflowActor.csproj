@@ -4,6 +4,7 @@
     <KernelContractOnly>true</KernelContractOnly>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Kernel.Sim" />
     <ProjectReference Include="../Kernel.Foundation.Contracts/Kernel.Foundation.Contracts.csproj" />
     <ProjectReference Include="../Kernel.Model.Contracts/Kernel.Model.Contracts.csproj" />
   </ItemGroup>
