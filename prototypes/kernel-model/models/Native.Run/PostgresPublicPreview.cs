@@ -17,10 +17,11 @@ internal static class PostgresPublicPreview
         var birth = phase is "birth" or "hold-owner";
         var tenantProbe = phase == "tenant-probe";
         var formatProbe = phase == "format-probe";
+        var installProbe = phase == "install-probe";
         if ((phase, suppliedReference, suppliedBookmark, priorEpoch, priorPid, originalUntil) is not
             (("birth" or "hold-owner", null, null, 0, 0, 0) or
              ("tenant-probe" or "format-probe", not null, null, 0, 0, 0) or
-             ("restart" or "terminal", not null, not null, 0, 0, 0) or
+             ("restart" or "terminal" or "install-probe", not null, not null, 0, 0, 0) or
              ("standby", not null, not null, > 0, > 0, > 0)))
             throw new ArgumentException("Invalid PostgreSQL Core Preview phase arguments.");
 
@@ -55,7 +56,12 @@ internal static class PostgresPublicPreview
         if (birth)
         {
             await store.CreateAsync();
-            await admission.InstallAsync(stop);
+            await store.InstallPreviewRootSchemaAsync(stop);
+        }
+        if (installProbe)
+        {
+            await CheckSchemaInstallAsync(data, probe, scope, new(suppliedReference!), new(suppliedBookmark!), stop);
+            return 0;
         }
         var ingress = await store.OpenPreviewRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1), stop);
         var reads = await store.OpenPreviewRootReadsAsync(1, stop);
@@ -336,6 +342,38 @@ internal static class PostgresPublicPreview
                 Console.WriteLine($"wire {operation}: {wire.Trips - startTrips} TCP direction turns, {wire.ProtocolRequests - startGroups} PostgreSQL Sync/Query groups, {wire.Connections - startConnections} new TCP connections");
             Console.WriteLine($"{operation}: {counter.Commands} commands, {counter.Transactions.Ended} transaction completions, EF round-trip estimate {counter.Commands + counter.Transactions.Ended}");
         }
+    }
+
+    private static async Task CheckSchemaInstallAsync(DbContextOptions<KernelDb> options, EfStore store,
+        Contract.BoundScope scope, Contract.ActorRef actor, Contract.PageToken bookmark, CancellationToken token)
+    {
+        // Model an older preview missing the actor list. Its issuer, checkpoint and journal remain intact.
+        await using var db = new KernelDb(options);
+        var before = await store.ReadFirstRootAsync(scope.Tenant, actor.Id, token);
+        Check(before is { Revision: 2, Status: InstanceStatus.Running }, "the predecessor left a committed wait");
+        await db.Database.ExecuteSqlRawAsync("""
+            DROP TRIGGER kernel_project_root_actor_list ON "Instances";
+            DROP TABLE "FoundationActorList"
+            """, token);
+
+        var concurrentInstaller = new EfStore(() => new(options), postgres: true);
+        await Task.WhenAll(store.InstallPreviewRootSchemaAsync(token), concurrentInstaller.InstallPreviewRootSchemaAsync(token));
+        Console.WriteLine("ok two explicit schema installers finished");
+        var ingress = await store.OpenPreviewRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1), token);
+        var reads = await store.OpenPreviewRootReadsAsync(1, token);
+        Check(await reads.ListAsync(scope, new(Type: PublicActor.ActorType), cancellationToken: token)
+                is { Items: [var listed], Next: null } && listed.Header.Ref == actor &&
+            await reads.GetAsync(scope, actor, token) is { Header.Status: Contract.ActorStatus.Running },
+            "repeated installation backfills the predecessor checkpoint once");
+        Check(await reads.TailAsync(scope, actor, bookmark, token) is { Items.Count: 0, AsOf: > 0 },
+            "the previous bookmark still names the current end of journal");
+        var replay = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "approval-1", CompositeSignal.Kind,
+            cancellationToken: token);
+        Check(replay is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var original } && original == actor,
+            "the previous direct receipt still resolves to the original root");
+        var after = await store.ReadFirstRootAsync(scope.Tenant, actor.Id, token);
+        Check(after is not null && after.Revision == before!.Revision && after.State == before.State,
+            "reinstallation and replay preserve the actor checkpoint");
     }
 
     private static async Task CheckIngressFormatAsync(DbContextOptions<KernelDb> options, Contract.IIngress ingress,

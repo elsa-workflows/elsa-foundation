@@ -292,6 +292,13 @@ only readers that already use that lock. The migration race fixture runs such a 
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 
+Initialize the PostgreSQL store with `EfStore.CreateAsync`, then call
+`EfStore.InstallPreviewRootSchemaAsync` with the ordinary `KernelDb` context. Run installation during setup
+or while existing owners and callers are stopped. It preserves issued references, deduplication receipts
+and cursor keys. On an older preview that lacks the actor-list projection, it creates and backfills the projection.
+After `pg-core-preview birth` exits, `pg-core-preview install-probe <reference> <bookmark>` in the same
+disposable database checks backfill by concurrent installer calls and verifies bookmark and receipt continuity.
+
 The Embedded preview composes `IIngress` through `EfStore.OpenPreviewRootIngressAsync`.
 A trusted host supplies a bound scope, the actor type and the receipt retention window. The provider accepts
 durable starts for that type and ordinary direct input to exact roots. Opening the adapter checks the
