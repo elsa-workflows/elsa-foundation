@@ -103,3 +103,12 @@ public static class VariableAccessDesignFacet
             facet.Payload.TryGetProperty(DeclaredMember, out var declared) &&
             declared.ValueKind == JsonValueKind.True) == true;
 }
+
+/// <summary>The independent workflow-state capability of an activity's authoring descriptor.</summary>
+public static class WorkflowStateDesignFacet
+{
+    public const string Kind = "elsa.workflow-state";
+    public const string SchemaVersion = "1";
+    public static bool AccessesWorkflowState(IEnumerable<ActivityDesignFacet>? facets) =>
+        facets?.Any(facet => facet.Kind == Kind) == true;
+}

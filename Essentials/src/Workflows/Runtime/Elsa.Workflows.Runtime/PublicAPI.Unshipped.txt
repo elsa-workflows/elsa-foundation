@@ -1945,3 +1945,5 @@ Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector
 Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector.ExecutionWarningCollector(bool protect = false) -> void
 Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector.Report(Elsa.Expressions.Core.Models.ExecutionWarning! warning) -> void
 Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector.Warnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>!
+
+Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector.ProtectWorkflowStateReads(System.Func<bool>! reads) -> void

@@ -1,3 +1,4 @@
+import { workflowStateEffectLabels } from "../workflowInstanceInspection";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Activity as ActivityIcon, ChevronRight, Info, Undo2 } from "lucide-react";
 import { StudioButton } from "@elsa-workflows/studio-ui";
@@ -282,6 +283,16 @@ export function WorkflowActivityExecutionDetails({
       <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
         {currentInspectionState.status === "ready" && currentInspectionState.inspection ? (
           <VariableWriteDiagnosticsSection inspection={currentInspectionState.inspection} labelOf={nodeLabelOf} />
+        ) : null}
+        {currentInspectionState.status === "ready" && workflowStateEffectLabels(currentInspectionState.inspection?.workflowStateEffects).length > 0 ? (
+          <section className="wf-instance-section" aria-label="Committed workflow changes">
+            <h4>Committed workflow changes</h4>
+            <p>{workflowStateEffectLabels(currentInspectionState.inspection?.workflowStateEffects).join(", ")}</p>
+            <small>Later failed or cancelled work adds no committed changes.</small>
+            <ul>{currentInspectionState.inspection?.workflowStateEffectReceipts?.map((receipt, index) => (
+              <li key={index}>{receipt.transition === "Suspension" ? "Suspension" : "Completion"} accepted <time dateTime={receipt.acceptedAt}>{new Date(receipt.acceptedAt).toLocaleString()}</time>: {workflowStateEffectLabels(receipt.kinds).join(", ")}{receipt.attemptId ? <small> · Attempt {receipt.attemptId}</small> : null}</li>
+            ))}</ul>
+          </section>
         ) : null}
         {currentInspectionState.status === "ready" ? <ExecutionWarningsSection warnings={currentInspectionState.inspection?.warnings} /> : null}
         <WorkflowActivityInputEvidence

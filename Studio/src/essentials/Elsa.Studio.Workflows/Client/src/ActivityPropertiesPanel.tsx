@@ -86,7 +86,7 @@ import {
 } from "./activityDataSelection";
 import { ActivityDataSelectionProvider, ChooseDataButton, focusBeside, useActivityDataSelectionAvailable } from "./ActivityDataChooser";
 import { ActivityOutputIcon } from "./activityOutputIcon";
-import { isVariableReferenceInput, VariableReferenceInputRow, VariableWritesSummary } from "./variableReferenceInput";
+import { isVariableReferenceInput, VariableReferenceInputRow, VariableWritesSummary, WorkflowStateEffectsSummary } from "./variableReferenceInput";
 
 const inlineTextEditorIds = new Set([
   "studio.property.singleline",
@@ -232,6 +232,7 @@ export function ActivityPropertiesPanel({
     return (
       <>
         <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} scopeReady={scopeStatus === "ready"} workflowState={workflowState} scriptWrites={scriptWrites} />
+      <WorkflowStateEffectsSummary descriptor={descriptor} scriptWrites={scriptWrites} />
         <p className="wf-muted">{emptyLabel}</p>
       </>
     );
@@ -309,6 +310,7 @@ export function ActivityPropertiesPanel({
         onRetry={onRetryDescriptors}
       />
       <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} scopeReady={scopeStatus === "ready"} workflowState={workflowState} scriptWrites={scriptWrites} />
+      <WorkflowStateEffectsSummary descriptor={descriptor} scriptWrites={scriptWrites} />
       {renderGroups(directGroups)}
       {optionalGroups.length > 0 ? (
         <AdvancedSection

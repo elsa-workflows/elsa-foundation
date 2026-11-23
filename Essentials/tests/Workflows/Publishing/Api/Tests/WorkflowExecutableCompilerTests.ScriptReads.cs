@@ -176,18 +176,19 @@ public sealed partial class WorkflowExecutableCompilerTests
 
     private ValueTask<WorkflowExecutable> CompileReadsAsync(
         Elsa.Workflows.Design.Core.Models.ActivityNode root,
-        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> variables) =>
+        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> variables,
+        ScriptVariableReadResolver? readResolver = null) =>
         TestCompiler.Create(
                 new FakeVersionStore(WorkflowVersion(root, variables: variables)),
                 new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity]),
                 _activityStructureService,
                 TestWellKnownTypeRegistry.Create(),
-                scriptVariableReadResolver: ReadResolver)
+                scriptVariableReadResolver: readResolver ?? ReadResolver)
             .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
 
     /// <summary>
-    /// A stand-in for the JavaScript analyzer, which this project does not reference: <c>variables.X</c> is a literal
-    /// read and <c>variables[</c> a computed one. The parser itself is tested with the JavaScript feature.
+    /// A stand-in keeping the variable-only compiler fixtures independent of the real parser:
+    /// <c>variables.X</c> is a literal read and <c>variables[</c> a computed one.
     /// </summary>
     private sealed class FakeReadAnalyzer : IScriptVariableReadAnalyzer
     {

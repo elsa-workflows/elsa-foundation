@@ -21,3 +21,12 @@ export function mapWorkflowInstanceDetails(payload: WorkflowInstanceDetails): Wo
     inspectionGranularity
   };
 }
+
+const stateEffectLabels: Readonly<Record<string, string>> = {
+  outputs: "workflow outputs", correlationId: "correlation", instanceName: "instance name"
+};
+
+/** The API supplies accepted kinds only; unknown hosts/kinds cannot become labels or values. */
+export function workflowStateEffectLabels(kinds?: readonly string[] | null): string[] {
+  return [...new Set(kinds ?? [])].flatMap(kind => Object.hasOwn(stateEffectLabels, kind) ? [stateEffectLabels[kind]] : []);
+}

@@ -57,6 +57,9 @@ internal sealed class JintJavaScriptScriptEvaluator(
             ? IsolatedJintEngine.SetVariables(engine, values, NoPinnedValues, session, options)
             : null;
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
+        var stateWriteLosses = new List<JavaScriptPrecisionLoss>();
+        if (request.WorkflowState is { } workflowState)
+            ScriptWorkflowState.Install(engine, values, workflowState, precisionPolicy, stateWriteLosses);
 
         // Parsed before the count starts, on the caller's thread: a parse (on a cache miss) is not the script's work.
         EvaluationLimits.Start(engine);
@@ -75,13 +78,18 @@ internal sealed class JintJavaScriptScriptEvaluator(
         else
             result = new JavaScriptScriptEvaluationResult(Write(completions, values, returned, out losses));
 
+        request.WorkflowState?.ThrowIfRefused();
+
         var warnings = new List<Elsa.Expressions.Core.Models.ExecutionWarning>(functions.Warnings);
         if (variables is not null)
             losses = [.. losses, .. JavaScriptValueWrites.WriteVariables(variables, request.Variables!, precisionPolicy, warnings)];
+        losses = [.. losses, .. stateWriteLosses];
+
+        request.WorkflowState?.ThrowIfRefused();
 
         // A value the script read through its session may be protected: its warnings then keep their protected form,
         // which names no member of it (spec 1229 FR-006). A protected input is handled by the step's own collector.
-        var sink = request.Variables?.HasReadProtectedValue == true && request.Warnings is { } warningSink
+        var sink = (request.Variables?.HasReadProtectedValue == true || request.WorkflowState?.HasReadProtectedValue == true) && request.Warnings is { } warningSink
             ? new ProtectingWarningSink(warningSink)
             : request.Warnings;
         foreach (var warning in warnings)
@@ -113,6 +121,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
             using var scriptWork = EvaluationLimits.CountScriptWork(engine);
             if (current() is not { } variables || !variables.TryGet(name, out var held))
                 return session.Read(name);
+            if (variables.WasAssigned(name)) session.ObservePendingRead(name);
             if (held.IsUndefined())
                 return Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Missing;
             // What the value bridge would write now, so the function gets what the session will hold. Unchanged: the

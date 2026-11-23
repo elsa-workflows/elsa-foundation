@@ -1,3 +1,4 @@
+using Elsa.Expressions.Core.Models;
 using Acornima;
 using Acornima.Ast;
 using Elsa.Expressions.Core.Contracts;
@@ -55,7 +56,7 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         // setVariable exists only in a script body, so only there is it a root (an input expression's own local of that
         // name is an ordinary local).
         if (DeclaresRoot(parsed, scriptBody))
-            return new ScriptVariableReadAnalysis([], hasComputedRead: true) { HasComputedWrite = true };
+            return new ScriptVariableReadAnalysis([], hasComputedRead: true) { HasComputedWrite = true, WorkflowState = AnalyzeState(parsed) };
 
         var walker = new Walker(_readingFunctions, scriptBody);
         walker.Visit(parsed);
@@ -63,9 +64,158 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         {
             Writes = walker.Writes,
             Escapes = walker.Escapes.Distinct(StringComparer.Ordinal).ToArray(),
+            WorkflowState = AnalyzeState(parsed),
             HasComputedWrite = walker.HasComputedWrite
         };
     }
+
+    private static ScriptWorkflowStateEffects AnalyzeState(Node parsed)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        var access = false;
+        var opaque = false;
+        var correlation = false;
+        var instanceName = false;
+        var invalid = false;
+        string[] roots = ["workflowState", "eval", "Function", "globalThis", "Object", "Reflect"];
+        int DeclaredBindings(Node scope, Node? owner)
+        {
+            var mask = 0;
+            for (var i = 0; i < roots.Length; i++)
+                if (DeclaresTrackedRootInScope(scope, owner, roots[i])) mask |= 1 << i;
+            return mask;
+        }
+        void Visit(Node node, Node? parent, int shadowed)
+        {
+            // Case declarations share one lexical environment, entered after evaluating the discriminant.
+            if (node is SwitchStatement selection)
+            {
+                Visit(selection.Discriminant, node, shadowed);
+                var caseShadowed = shadowed | DeclaredBindings(node, parent);
+                foreach (var item in selection.Cases) Visit(item, node, caseShadowed);
+                return;
+            }
+            shadowed |= DeclaredBindings(node, parent);
+            bool IsShadowed(string name) => (shadowed & (1 << Array.IndexOf(roots, name))) != 0;
+            if (!IsShadowed("workflowState") && node is Identifier { Name: "workflowState" } identifier && IsReference(identifier, parent))
+            {
+                access = true;
+                if (parent is not MemberExpression { Object: Identifier { Name: "workflowState" }, Computed: false })
+                    opaque = true;
+            }
+            if (node is Identifier { Name: "eval" or "Function" or "globalThis" } global && !IsShadowed(global.Name) && IsReference(global, parent) || node is ThisExpression)
+            { access = true; opaque = true; }
+            if (node is MemberExpression dynamicMember &&
+                dynamicMember.Object is not Identifier { Name: "variables" or "args" } &&
+                dynamicMember.Object is not CallExpression { Callee: Identifier { Name: "getVariable" } } &&
+                (IsOpaqueStateMember(dynamicMember.Property, dynamicMember.Computed) || dynamicMember.Object is Identifier { Name: "Reflect" } && !IsShadowed("Reflect")))
+            { access = true; opaque = true; }
+            if (node is Identifier { Name: "Object" or "Reflect" } intrinsic && !IsShadowed(intrinsic.Name) && IsReference(intrinsic, parent) &&
+                !(parent is MemberExpression accessMember && ReferenceEquals(accessMember.Object, intrinsic) ||
+                  parent is CallExpression invocation && ReferenceEquals(invocation.Callee, intrinsic) || parent is NewExpression))
+            { access = true; opaque = true; }
+            if (!IsShadowed("workflowState") && node is MemberExpression { Object: Identifier { Name: "workflowState" } } member)
+            {
+                if (member.Computed || member.Property is not Identifier method || parent is not CallExpression call || !ReferenceEquals(call.Callee, member))
+                    opaque = true;
+                else
+                {
+                    if (!IsShadowed("workflowState") && !call.Arguments.Any(argument => argument is SpreadElement))
+                    {
+                        var expected = method.Name switch
+                        {
+                            "setOutput" => 2,
+                            "getOutput" or "setCorrelationId" or "setInstanceName" or "requireExactIdentity" => 1,
+                            "getCorrelationId" or "getInstanceName" => 0,
+                            _ => -1
+                        };
+                        if (expected >= 0 && call.Arguments.Count != expected) invalid = true;
+                        else if (method.Name is "getOutput" or "setOutput" or "setCorrelationId" or "setInstanceName" or "requireExactIdentity" &&
+                                 call.Arguments[0] is UnaryExpression { Operator: Operator.Void }) invalid = true;
+                        else if (method.Name == "setOutput" && call.Arguments[1] is UnaryExpression { Operator: Operator.Void }) invalid = true;
+                        else if (method.Name is "getOutput" or "setOutput" && call.Arguments[0] is Literal nameLiteral &&
+                                 (nameLiteral.Value is not string literalName || string.IsNullOrWhiteSpace(literalName))) invalid = true;
+                        else if (method.Name is "setCorrelationId" or "setInstanceName" or "requireExactIdentity" &&
+                                 call.Arguments[0] is Literal { Value: not null and not string }) invalid = true;
+                    }
+                    switch (method.Name)
+                    {
+                        case "setOutput":
+                            if (call.Arguments.Count == 2 && call.Arguments[0] is Literal { Value: string name } && !string.IsNullOrWhiteSpace(name)) names.Add(name);
+                            else opaque = true;
+                            break;
+                        case "setCorrelationId": correlation = true; break;
+                        case "setInstanceName": instanceName = true; break;
+                        case "getOutput" or "getCorrelationId" or "getInstanceName" or "requireExactIdentity": break;
+                        default: opaque = true; break;
+                    }
+                }
+            }
+            foreach (var child in node.ChildNodes) Visit(child, node, shadowed);
+        }
+        Visit(parsed, null, 0);
+        return new ScriptWorkflowStateEffects { AccessesState = access, OutputNames = names.Order(StringComparer.Ordinal).ToArray(),
+            WritesCorrelationId = correlation, WritesInstanceName = instanceName, Conservative = opaque, HasInvalidLiteralCall = invalid };
+    }
+
+    // Track lexical ownership of the capability root and conservative globals; local lookalikes are ordinary data.
+    private static bool IsReference(Identifier identifier, Node? parent) => parent switch
+    {
+        MemberExpression member when !member.Computed && ReferenceEquals(member.Property, identifier) => false,
+        Property property when !property.Computed && !property.Shorthand && ReferenceEquals(property.Key, identifier) => false,
+        MethodDefinition method when !method.Computed && ReferenceEquals(method.Key, identifier) => false,
+        PropertyDefinition property when !property.Computed && ReferenceEquals(property.Key, identifier) => false,
+        VariableDeclarator declaration when ReferenceEquals(declaration.Id, identifier) => false,
+        LabeledStatement label when ReferenceEquals(label.Label, identifier) => false,
+        BreakStatement or ContinueStatement => false,
+        _ => true
+    };
+
+    private static bool DeclaresTrackedRootInScope(Node scope, Node? parent, string name)
+    {
+        bool Binds(Node? binding) => binding switch
+        {
+            Identifier identifier => identifier.Name == name,
+            AssignmentPattern pattern => Binds(pattern.Left),
+            RestElement rest => Binds(rest.Argument),
+            ArrayPattern pattern => pattern.Elements.Any(Binds),
+            ObjectPattern pattern => pattern.Properties.Any(property => Binds(property is Property pair ? pair.Value : property)),
+            _ => false
+        };
+        bool Declaration(VariableDeclaration declaration) => declaration.Declarations.Any(item => Binds(item.Id));
+        bool Lexical(IEnumerable<Node> statements) => statements.Any(statement => statement switch
+        {
+            VariableDeclaration { Kind: not VariableDeclarationKind.Var } declaration => Declaration(declaration),
+            FunctionDeclaration function => Binds(function.Id),
+            ClassDeclaration type => Binds(type.Id),
+            _ => false
+        });
+        bool Hoisted(Node root) => root.ChildNodes.Any(child => child is not IFunction and not StaticBlock &&
+            (child is VariableDeclaration { Kind: VariableDeclarationKind.Var } declaration && Declaration(declaration) || Hoisted(child)));
+        return scope switch
+        {
+            Script script => Lexical(script.Body) || Hoisted(script),
+            IFunction function => Binds(function.Id) || function.Params.Any(Binds),
+            // Body vars are unavailable to default-parameter expressions.
+            StaticBlock block => Lexical(block.Body) || Hoisted(block),
+            BlockStatement block => Lexical(block.Body) || parent is IFunction && Hoisted(block),
+            SwitchStatement selection => Lexical(selection.Cases.SelectMany(item => item.Consequent)),
+            CatchClause caught => Binds(caught.Param),
+            ForStatement { Init: VariableDeclaration declaration } => Declaration(declaration),
+            ForInStatement { Left: VariableDeclaration declaration } => Declaration(declaration),
+            ForOfStatement { Left: VariableDeclaration declaration } => Declaration(declaration),
+            ClassExpression type => Binds(type.Id),
+            _ => false
+        };
+    }
+
+    private static bool IsOpaqueStateMember(Node key, bool computed) => key switch
+    {
+        Identifier name when !computed => name.Name is "constructor" or "getOwnPropertyDescriptor" or "getOwnPropertyDescriptors",
+        Literal { Value: string name } => name is "constructor" or "getOwnPropertyDescriptor" or "getOwnPropertyDescriptors",
+        Literal => false,
+        _ => computed
+    };
 
     private static bool DeclaresRoot(Node node, bool scriptBody)
     {

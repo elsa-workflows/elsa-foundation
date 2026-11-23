@@ -192,3 +192,10 @@ the typed unavailable signal; disposal failure follows the ordinary fault path w
 ### Collection child-slot input metadata *(Core — `Elsa.Activities.Runtime.Core`)*
 
 `ActivityChildSlotAttribute.ItemIdProperty` optionally names a stable collection-item identity and `ConditionProperty` names its structure-owned argument. CLR reconciliation carries both into optional `ActivityChildSlotDesignDescriptor` members. Studio uses stable identities for case rows, expression documents and child navigation while retaining the current index for immutable mutations. Omitted metadata preserves legacy slot behavior. Structure inputs activate through [`IRuntimeStructureInputConsumer`](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iruntimestructureinputconsumer-core--elsaworkflowsruntimecore), rather than CLR input properties.
+
+### Workflow state in inline step bodies (spec 1234)
+
+- **Kind:** author capability, `IStepWorkflowState` in Activities.Runtime.Core; native types declare `[AccessesWorkflowState]`.
+- **Usage:** `ActivityExecutionContext.WorkflowState` stages JSON output and string/null identity assignments for one inline leaf invoke/resume. Typed start/resume contexts carry the same evaluation capability. Script consumers pass the narrow Expressions.JavaScript.Core adapter.
+- **Lifetime:** fresh per evaluation, sealed before disposal, accepted only with the existing successful completion/suspension checkpoint. Placement and caught refusals are enforced at runtime. No setter persists; no bookmark key is rebound.
+- **Protection:** reads contribute to the existing result/diagnostic protection. Destination policy/storage remain minima; unavailable encoders refuse the whole evaluation.

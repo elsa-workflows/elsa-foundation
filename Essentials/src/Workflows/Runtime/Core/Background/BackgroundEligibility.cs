@@ -81,7 +81,7 @@ public sealed record BackgroundEligibilitySubject(string NodeId)
     /// <c>[AccessesUndeclaredVariables]</c> or is an engine script activity, or an input is a variable reference. C9 reads
     /// it even when <see cref="TypeCheckedAtRunTime"/> defers the CLR-type checks, since the contract carries it.
     /// </summary>
-    public bool TouchesVariables => Contract is { } contract && (contract.AccessesUndeclaredVariables || contract.HasVariableReferenceInputs);
+    public bool TouchesVariables => Contract is { } contract && (contract.AccessesUndeclaredVariables || contract.HasVariableReferenceInputs || contract.AccessesWorkflowState);
 
     /// <summary>Whether the body staged a workflow dispatch or published stimuli. Null before the body ran.</summary>
     public bool? StagedCoordinatorEffects { get; init; }
@@ -191,6 +191,8 @@ public static class BackgroundEligibility
         ArgumentNullException.ThrowIfNull(activityType);
         if (typeof(IRuntimeScopedVariableReader).IsAssignableFrom(activityType))
             return "the activity reads variables by name";
+        if (AccessesWorkflowStateAttribute.IsAccessedBy(activityType))
+            return "the activity accesses workflow outputs or identity ([AccessesWorkflowState], or an engine script activity)";
         if (VariableReferenceTypes.AccessesUndeclaredVariables(activityType))
             return "the activity type may read and write any visible variable by name ([AccessesUndeclaredVariables], or an engine script activity)";
         // Only [ActivityInput] properties, as the scanner and the contract count them, named by their contract key.
@@ -208,6 +210,8 @@ public static class BackgroundEligibility
     // The C9 signal the pinned contract shows, named for the refusal, or null (spec 1231 FR-031).
     private static string? ContractVariableSignal(ActivityContract contract)
     {
+        if (contract.AccessesWorkflowState)
+            return "the activity accesses workflow outputs or identity";
         if (contract.AccessesUndeclaredVariables)
             return "the activity type may read and write any visible variable by name ([AccessesUndeclaredVariables], or an engine script activity)";
         var reference = contract.Inputs.Values

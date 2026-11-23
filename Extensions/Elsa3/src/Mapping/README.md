@@ -305,7 +305,7 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | The same in a RunJavaScript body of a reusable workflow; a member mutation through a variable alias, local helper or loop; passing workflow state or nested callbacks to opaque code; dynamic code or engine-global exposure; executing a generator that can yield a workflow-owned value | `VF-IMP-005` | Return the value from the script and capture the result. A step cannot write a reusable workflow's variables yet (#4805). Opaque execution and generator ownership exposure are refused conservatively when their read-only behavior cannot be established; a refusal does not claim they definitely mutate the value. Pure local helper reads/returns and mutations of independent local copies remain convertible |
 | `setVariable('x', v)` for a variable the workflow does not declare (Elsa 3 created it on its first write) | `ELS3-SETTER-UNDECLARED-VARIABLE` | Declare the variable in the Elsa 3 workflow |
 | `setVariable` or a setter for a loop's current value, a whole assignment `variables.x = v` or `getVariable('x')++` in a RunJavaScript body | `VF-IMP-005` | Use `setVariable('x', v)`; copy a loop's current value into another variable and set that |
-| `setCorrelationId`, `setWorkflowInstanceName` | `VF-IMP-005` | Use a Correlate or Set Name activity |
+| `setCorrelationId`, `setWorkflowInstanceName` outside supported inline bodies | `VF-IMP-005` | Move the call into a supported Run JavaScript body or use an intrinsic activity |
 | `get{Output}From{Activity}()`, `getOutputFrom`, a computed input or output name | `VF-IMP-005` / `VF-IMP-006` | Capture the output into a variable and read the variable; use literal input and output names |
 | A literal variable read that an enclosing container's or loop's declaration of the same name would capture in Elsa 4, or an outer loop's value read inside a nested loop of the same kind | `VF-IMP-010` | Rename one of the two, or copy the outer value into another variable first |
 | A computed variable read in a workflow where an Elsa 3 variable holds a loop's current value (Elsa 4 never writes it) | `VF-IMP-010` | Read the loop's current value by its literal name |
@@ -394,3 +394,17 @@ earlier revision keep running.
 - the converter revision (`IElsa3ConverterRevision`), with `TryAdd`.
 
 The replaceable contracts are listed in its [extension-point catalog](EXTENSION_POINTS.md).
+
+### Workflow state in supported script bodies (spec 1234)
+
+Direct `setOutput(name, value)`, `setCorrelationId(value)` and `setWorkflowInstanceName(value)` calls lower to the native
+`workflowState` body capability. Same-body correlation/name getters read pending assignments. Arguments retain source
+order and run once; setters still return undefined. Output assignments use Any JSON and preserve destination storage
+and protection minima. Effects share the step's checkpoint with variables/results; failed evaluations save none.
+
+Literal empty/whitespace identities refuse import with `ELS3-STATE-IDENTITY-NORMALIZATION`. Computed identities use the
+once-evaluated generic `requireExactIdentity` guard and runtime `VF-STATE-005`; native identity setters retain their normal
+whitespace-to-null contract. Use explicit null or a nonblank string. Input-expression writes, helper aliases, root
+collisions, spread/wrong arity, `setInput` and `setResult` remain refused. Closed reusable graph writes remain outside this
+capability ([#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023),
+[#4805](https://github.com/elsa-workflows/elsa-foundation/issues/4805)); this does not deliver reusable caller-output mapping.

@@ -6,6 +6,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// Declared durable runtime value state for variables, workflow inputs, and workflow outputs.
 /// Activity results use their own atomic completion envelope and are not copied into this model.
 /// </summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(DurableValueStateJsonConverter))]
 public sealed record DurableValueState
 {
     public DurableValueState(

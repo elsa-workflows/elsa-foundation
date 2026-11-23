@@ -175,6 +175,7 @@ public sealed class ActivityStartContext<TTrigger>
         TargetOperationKey = attempt.TargetOperationKey;
         LogicalInvocationId = attempt.LogicalInvocationId;
         _variables = attempt.VariablesOrNull;
+        _workflowState = attempt.WorkflowStateOrNull;
         IsDirectInvocation = attempt.TriggerNodeId is null;
         IsTriggerDelivery = StringComparer.Ordinal.Equals(attempt.TriggerNodeId, attempt.ExecutableNodeId);
         HasTrigger = hasTrigger;
@@ -188,6 +189,10 @@ public sealed class ActivityStartContext<TTrigger>
     public IStepVariables Variables => _variables ?? throw ActivityExecutionContext.NoVariableSession();
 
     private readonly IStepVariables? _variables;
+
+    /// <inheritdoc cref="ActivityExecutionContext.WorkflowState"/>
+    public IStepWorkflowState WorkflowState => _workflowState ?? throw ActivityExecutionContext.NoWorkflowStateSession();
+    private readonly IStepWorkflowState? _workflowState;
     public string AttemptId { get; }
     public string ExecutableNodeId { get; }
     public CancellationToken CancellationToken { get; }
@@ -317,6 +322,7 @@ public sealed class ActivityResumeContext<TState, TTrigger>
         TargetOperationKey = attempt.TargetOperationKey;
         LogicalInvocationId = attempt.LogicalInvocationId;
         _variables = attempt.VariablesOrNull;
+        _workflowState = attempt.WorkflowStateOrNull;
         State = alreadyMaterialized ? state : PersistableActivityValue.SnapshotAndMaterialize(state, "private state");
         Trigger = alreadyMaterialized ? trigger : PersistableActivityValue.SnapshotAndMaterialize(trigger, "trigger");
         RegistrationId = registrationId;
@@ -345,6 +351,10 @@ public sealed class ActivityResumeContext<TState, TTrigger>
     public IStepVariables Variables => _variables ?? throw ActivityExecutionContext.NoVariableSession();
 
     private readonly IStepVariables? _variables;
+
+    /// <inheritdoc cref="ActivityExecutionContext.WorkflowState"/>
+    public IStepWorkflowState WorkflowState => _workflowState ?? throw ActivityExecutionContext.NoWorkflowStateSession();
+    private readonly IStepWorkflowState? _workflowState;
 
     public TState State { get; }
     public TTrigger Trigger { get; }

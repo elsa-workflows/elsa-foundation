@@ -25,7 +25,8 @@ internal static class StepVariableWriteMetadata
         RuntimeActivityContract? contract,
         IReadOnlyCollection<VariableDefinition> workflowVariables,
         ScriptVariableReadPlan? scriptBody = null,
-        bool explicitlyMarked = false)
+        bool explicitlyMarked = false,
+        bool explicitlyAccessesState = false)
     {
         ArgumentNullException.ThrowIfNull(metadata);
         var targets = new List<MayWriteTarget>();
@@ -56,6 +57,16 @@ internal static class StepVariableWriteMetadata
         // [AccessesUndeclaredVariables] itself may write any visible variable from its C# code too (FR-028).
         if (explicitlyMarked || (scriptBody is not null ? scriptBody.HasComputedWrite : contract?.AccessesUndeclaredVariables == true))
             metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable] = "true";
+        if (contract?.AccessesWorkflowState == true)
+        {
+            var effects = scriptBody?.WorkflowState;
+            // A native declaration also covers C# behavior outside its optional analyzed script.
+            if (explicitlyAccessesState)
+                effects = (effects ?? new ScriptWorkflowStateEffects()) with { AccessesState = true, Conservative = true };
+            metadata["accessesWorkflowState"] = (effects?.AccessesState ?? true) ? "true" : "false";
+            metadata["workflowStateEffects"] = JsonSerializer.Serialize(effects ?? new Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects
+                { AccessesState = true, Conservative = true }, SerializerOptions);
+        }
         return metadata;
     }
 

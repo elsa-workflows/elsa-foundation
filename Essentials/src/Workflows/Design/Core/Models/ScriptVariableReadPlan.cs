@@ -10,6 +10,9 @@ public sealed record ScriptVariableReadPlan(
     IReadOnlyList<string> Unresolved,
     IReadOnlyList<ResolvedScriptVariableRead>? Candidates)
 {
+    /// <summary>Independent workflow-state capability/effect facts from the same parsed body.</summary>
+    public ScriptWorkflowStateEffects WorkflowState { get; init; } = ScriptWorkflowStateEffects.None;
+
     public static ScriptVariableReadPlan Empty { get; } = new([], [], null);
 
     /// <summary>The writes to literally named variables the source shows (spec 1228 FR-006a).</summary>
