@@ -305,10 +305,10 @@ Use `checked` for the other owned fence mode. Use a fresh database for each run.
 Use `disconnect` to close the actual HTTP connection before the handover and see the admitted
 approval complete. Use `slow-body` to send the valid JSON across the route deadline, or `blocked` to hold
 the target row until the edge has returned 504. Both cases verify no input was added, then run a normal
-successful approval. The edge starts its budget before reading the body, uses PostgreSQL time for the
-stored deadline and incoming replies, and returns 504 while a canceled database call finishes unwinding.
-Use `clock-delay` to hold the first PostgreSQL clock observation across most of the request budget.
-The timely approval still receives 202. Each run also verifies that public timeout replies include the
+successful approval. The edge anchors its reply deadlines to a PostgreSQL observation before listening.
+The HTTP budget begins at handler entry. Incoming replies are checked against current PostgreSQL time.
+The edge can return 504 while a canceled database call finishes unwinding. Use `clock-delay` to delay the
+handler before it admits the request and check that the original stored deadline still yields 202. Each run also verifies that public timeout replies include the
 committed Running or Finished status when the caller waits for that provider result.
 
 This preview uses fixture-private protocol 10 and two Workers with orderly handover in one process.

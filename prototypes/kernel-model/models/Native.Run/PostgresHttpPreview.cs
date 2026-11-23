@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Net.Http.Json;
@@ -28,7 +29,7 @@ internal static class PostgresHttpPreview
         var late = schedule == "late";
         var disconnect = schedule == "disconnect";
         var clockDelay = schedule == "clock-delay";
-        var delayedClock = 0;
+        long observedDeadline = 0;
         var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var clientStop = CancellationTokenSource.CreateLinkedTokenSource(stop);
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
@@ -61,6 +62,8 @@ internal static class PostgresHttpPreview
         var first = await PostgresHeldDirectChecks.TakeAsync(store, "first-http-owner", registry, transport, stop);
         var firstEpoch = first.Fences.Single().Epoch;
 
+        var databaseTime = await admission.ReadReplyTimeAsync(stop);
+        var clockObservedAt = Stopwatch.GetTimestamp();
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
         builder.Configuration.Sources.Clear();
@@ -112,6 +115,9 @@ internal static class PostgresHttpPreview
 
             Require(pending.ReplyTo is { } route && ReplyTo.Parse(route).Node == Receiver && !request.IsCompleted && transport.Count == 0,
                 "The original reply route must be persisted on the input while the HTTP connection waits.");
+            if (clockDelay)
+                Require(Volatile.Read(ref observedDeadline) is > 0 and var observed && ReplyTo.Parse(pending.ReplyTo!).Deadline <= observed,
+                    "Waiting before the request's database admission must leave the original persisted deadline in place.");
 
             if (disconnect)
             {
@@ -245,6 +251,7 @@ internal static class PostgresHttpPreview
             if (!int.TryParse(context.Request.Query["wait"], out var wait) || wait is < 1 or > 15_000)
                 return Results.BadRequest();
 
+            var routeDeadline = databaseTime + (long)Stopwatch.GetElapsedTime(clockObservedAt).TotalMilliseconds + wait;
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stop);
             budget.CancelAfter(wait);
             var token = budget.Token;
@@ -279,13 +286,14 @@ internal static class PostgresHttpPreview
 
             async Task<Contract.Reply> ReadAndDispatchAsync()
             {
-                var now = await admission.ReadReplyTimeAsync(token);
-                token.ThrowIfCancellationRequested();
-                // Use the whole interval with the database's entry sample. The independent HTTP timer
-                // measures the actual connected lifetime from handler entry, including query latency.
-                if (clockDelay && reference == actor && Interlocked.CompareExchange(ref delayedClock, 1, 0) == 0)
+                if (clockDelay && reference == actor && Volatile.Read(ref observedDeadline) == 0)
+                {
+                    // Observe database time independently of the route before delaying its application work.
+                    var witness = await admission.ReadReplyTimeAsync(token);
+                    Volatile.Write(ref observedDeadline, witness + wait);
                     await Task.Delay(2_400, token);
-                var routeDeadline = now + wait;
+                }
+
                 JsonNode? body;
                 try { body = await JsonNode.ParseAsync(context.Request.Body, cancellationToken: token); }
                 catch (JsonException) { return new(null, null, Error: "body"); }
