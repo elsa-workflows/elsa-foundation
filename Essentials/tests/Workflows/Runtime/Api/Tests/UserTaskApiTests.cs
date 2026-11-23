@@ -26,6 +26,31 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 public sealed class UserTaskApiTests
 {
     [Fact]
+    public async Task Task_read_and_list_keep_raw_data_inside_the_public_view_without_exposing_the_authoritative_recipient()
+    {
+        const string raw = """{ "OrderID":9007199254740993, "amount":1.00, "nil":null, "text":"\u0061 <+>" }""";
+        using var document = JsonDocument.Parse(raw);
+        await using var host = await Host.Start();
+        host.SignIn("alice");
+        await host.Rewrite(task => task with
+        {
+            Prefill = document.RootElement.Clone(),
+            Decision = new("request", "alice", new("task", "completion", "Approve", document.RootElement.Clone()), DateTimeOffset.UnixEpoch)
+        });
+        var task = await host.Client.GetFromJsonAsync<JsonElement>("/runtime/user-tasks/task");
+        var page = await host.Client.GetFromJsonAsync<JsonElement>("/runtime/user-tasks?view=queue&limit=1");
+        foreach (var view in new[] { task, Assert.Single(page.GetProperty("items").EnumerateArray()) })
+        {
+            Assert.Equal(raw, view.GetProperty("prefill").GetRawText());
+            Assert.Equal(raw, view.GetProperty("decision").GetProperty("response").GetProperty("data").GetRawText());
+            Assert.False(view.TryGetProperty("recipient", out _));
+            Assert.False(view.TryGetProperty("authoritativeRecipient", out _));
+            Assert.False(view.TryGetProperty("operationKey", out _));
+            Assert.False(view.TryGetProperty("tenantId", out _));
+        }
+    }
+
+    [Fact]
     public async Task Trusted_canonical_identity_and_current_membership_control_claims_not_body_or_token_roles()
     {
         await using var host = await Host.Start();
