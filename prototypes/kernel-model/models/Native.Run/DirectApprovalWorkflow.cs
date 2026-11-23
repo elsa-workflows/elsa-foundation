@@ -22,7 +22,12 @@ internal sealed class DirectApprovalWorkflow : CompositeActivity, ISignalledComp
             ("needs-approval", Gateway.Decision), ("joined", Gateway.ParallelJoin)),
         ("amount", 750), ("automaticPath", false), ("joinCount", 0));
 
+    // Sim compiles this same activity as a friend of Native. Its overrides retain internal accessibility there.
+#if NATIVE_FRIEND
+    protected internal override void Execute(CompositeContext context)
+#else
     protected override void Execute(CompositeContext context)
+#endif
     {
         context.SetState(Array.Empty<string>());
         context.Record(WaitEntry + context.FrameId);
@@ -47,6 +52,10 @@ internal sealed class DirectApprovalWorkflow : CompositeActivity, ISignalledComp
             context.SetState(approvals);
     }
 
+#if NATIVE_FRIEND
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
+#else
     protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
+#endif
         throw new InvalidOperationException("The direct approval activity has no children.");
 }
