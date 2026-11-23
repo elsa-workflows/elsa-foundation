@@ -145,8 +145,27 @@ owner completes the schedule with one result and one successful lifecycle entry 
 and Minimal history. An older model holds commands on unreadable running and finished checkpoints.
 A newer owner processes those commands when fresh input releases the hold. A request with a usable
 plan address and a missing definition receives one durable refusal across repeated inputs. The plan witness
-exercises real actor delivery. The product plan actor, declaration mapping and graph and statechart
-migration remain separate work.
+exercises real actor delivery. Declaration mapping and graph and statechart migration remain separate work.
+
+### Dispatch a real migration plan
+
+```sh
+dotnet run -c Release --project sim -- --migration-plan-actor
+```
+
+The in-memory demo pages two Native workflows from the public instance read model. The plan model
+records one undispatched page in its Full journal. An independent runner reads the committed page
+and dispatches migrations to the exact actor references. A fresh runner reconstructs the same
+batch after ownership changes. An authenticated acknowledgment clears the batch. The operator host
+provides a shared control key to plan owners and runners. Before releasing a batch, the runner
+checks that the exact plan is running, unparked and within its deadline. Its completion check waits
+for the final selection, its dispatch acknowledgment when needed, and an outcome for every selected life.
+The foundation's actual creator settings must permit durable Full history. The outcome projection reports both
+migrations, and the workflows finish under the target definition. A second plan closes on its
+scheduled deadline and records an outcome that arrives after close. RetryAll re-arms a failed deadline.
+Terminating a Park closes the outcome view and leaves outstanding selections as unanswered.
+Operator API integration,
+automatic selection scheduling and provider qualification remain separate work.
 
 ## PostgreSQL Core Preview
 

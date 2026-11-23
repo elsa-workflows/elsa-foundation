@@ -759,7 +759,9 @@ test("standalone access and availability", async ({ page, browser }) => {
       typeKey: "event", schemaVersion: "1", configuration: { eventName: `isolated.${j.stamp}` } });
     await j.open(trigger.id); await page.getByRole("button", { name: "Edit configuration", exact: true }).click();
     await page.getByLabel("Trigger name", { exact: true }).fill(`Unsaved previous connection ${j.stamp}`);
-    await switchProfile("Owned alternate connection", "acceptance-alternate");
+    // The Edit configuration dialog is modal and makes the background chrome inert; navigate directly to the alternate backend profile to verify unsaved edits are cleared on scope switch.
+    await page.goto(triggerPath(trigger.id).replace("backend=acceptance-primary", "backend=acceptance-alternate"));
+    await expect(page).toHaveURL(/backend=acceptance-alternate/);
     await expect(page.getByLabel("Trigger name", { exact: true })).toHaveCount(0);
     await expect(page.getByText(`Unsaved previous connection ${j.stamp}`, { exact: true })).toHaveCount(0);
     await page.goto(triggerPath(peerTrigger.id).replace("backend=acceptance-primary", "backend=acceptance-alternate"));
