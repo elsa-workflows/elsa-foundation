@@ -78,13 +78,16 @@ Use the immutable **index** digest from the Foundation publisher run or release 
 Workbench, Foundation Host and consolidated Studio builds that enable SBOM generation
 carry SPDX documents for each Linux platform in Docker Hub. The historical pair below
 predates this feature. With Python 3 and [ORAS 1.4](https://github.com/oras-project/oras/releases/tag/v1.4.0),
-run the following from the repository root, substituting the published digest:
+run the following from the repository root with the published digest and the expected
+producer URL (`https://github.com/elsa-workflows/elsa-foundation/actions/runs/<id>`):
 
 ```bash
 image=docker.io/elsaworkflows/elsa-foundation-host
-python3 tools/ci/verify_image_evidence.py "$image@$INDEX_DIGEST" --output host-sboms
+python3 tools/ci/verify_image_evidence.py "$image@$INDEX_DIGEST" --application Elsa.Foundation.Host \
+  --builder-run "$PRODUCER_RUN_URL" --output host-sboms
 ```
 
+Use `Elsa.Workbench` for Workbench and `Elsa.Studio.Web` for Studio.
 The command reads the index, both runnable child descriptors, their attestation manifests
 and in-toto statements by digest. It checks the subject bindings, SLSA builder metadata
 and presence of operating-system and Elsa components, then saves
@@ -104,9 +107,16 @@ cosign verify --experimental-oci11 --new-bundle-format \
 ```
 
 The signature covers the attestation manifest whose layers contain the checked predicates.
-The consolidated Studio publisher uses its own workflow identity. Its BuildKit readback
-checks content and digest relationships. Independent signer verification for Studio requires
-a signing receipt from that publisher.
+For **consolidated Studio**, the releasing workflow signs the whole index using GitHub
+artifact attestations. Verify it before using the platform inventories. Use the commit
+running the trusted publisher as `PRODUCER_SHA`. A manual release may select an older
+Studio source revision; the image's revision label records that separately.
+
+```bash
+gh attestation verify "oci://docker.io/elsaworkflows/elsa-studio@$INDEX_DIGEST" \
+  --repo elsa-workflows/elsa-foundation --source-ref refs/heads/main --source-digest "$PRODUCER_SHA" \
+  --signer-workflow elsa-workflows/elsa-foundation/.github/workflows/studio-docker.yml
+```
 
 ## Recorded image provenance and hosted result
 

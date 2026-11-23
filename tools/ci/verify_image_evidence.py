@@ -16,7 +16,7 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def verify(reference, fetch, output):
+def verify(reference, fetch, output, builder_run, application):
     repository, _, index_digest = reference.rpartition("@")
     require(repository and re.fullmatch(r"sha256:[0-9a-f]{64}", index_digest),
             "Supply an image reference pinned by its SHA-256 index digest")
@@ -47,6 +47,10 @@ def verify(reference, fetch, output):
 
     documents = {}
     for platform, child in sorted(platforms.items()):
+        image = read("manifest", child)
+        config = read("blob", image["config"]["digest"])
+        require(f"{config['os']}/{config['architecture']}" == platform,
+                f"Image config disagrees with index platform {platform}")
         predicates = {}
         for digest in attestations[child]:
             manifest = read("manifest", digest)
@@ -57,7 +61,12 @@ def verify(reference, fetch, output):
                 if kind not in (SPDX, SLSA):
                     continue
                 require(kind not in predicates, f"Duplicate {kind} for {platform}")
+                require(layer.get("mediaType") == "application/vnd.in-toto+json",
+                        f"Incorrect statement media type for {platform}")
                 statement = read("blob", layer["digest"])
+                require(statement.get("_type") in {"https://in-toto.io/Statement/v0.1",
+                                                  "https://in-toto.io/Statement/v1"},
+                        f"Invalid in-toto statement for {platform}")
                 subjects = statement.get("subject", [])
                 require(statement.get("predicateType") == kind and subjects and
                         all(s.get("digest", {}).get("sha256") == child[7:] for s in subjects),
@@ -72,10 +81,11 @@ def verify(reference, fetch, output):
                  for ref in package.get("externalRefs", []) if ref.get("referenceType") == "purl"]
         require(any(purl.startswith(("pkg:deb/", "pkg:apk/", "pkg:rpm/")) for purl in purls),
                 f"Missing operating-system inventory for {platform}")
-        require(any(purl.lower().startswith("pkg:nuget/elsa.") for purl in purls),
-                f"Missing Elsa assembly inventory for {platform}")
-        require(predicates[SLSA].get("runDetails", {}).get("builder", {}).get("id"),
-                f"Missing SLSA builder for {platform}")
+        require(any(purl.casefold().startswith(f"pkg:nuget/{application}@".casefold()) for purl in purls),
+                f"Missing {application} inventory for {platform}")
+        builder = predicates[SLSA].get("runDetails", {}).get("builder", {}).get("id", "")
+        require(re.fullmatch(re.escape(builder_run.rstrip("/")) + r"/attempts/[1-9][0-9]*", builder),
+                f"Unexpected SLSA builder for {platform}: {builder}")
         documents[platform.replace("/", "-") + ".spdx.json"] = sbom
     if output:
         output.mkdir(parents=True, exist_ok=True)
@@ -86,6 +96,8 @@ def verify(reference, fetch, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("reference")
+    parser.add_argument("--application", required=True, help="Expected Elsa application package ID")
+    parser.add_argument("--builder-run", required=True, help="Expected GitHub Actions producer run URL")
     parser.add_argument("--oci-layout", action="store_true", help="Read a local OCI layout with ORAS")
     parser.add_argument("--output", type=Path, help="Save validated SPDX documents in this directory")
     args = parser.parse_args()
@@ -99,7 +111,7 @@ def main():
         return subprocess.check_output([*command, "--", reference])
 
     try:
-        verify(args.reference, fetch, args.output)
+        verify(args.reference, fetch, args.output, args.builder_run, args.application)
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         sys.exit(str(error))
 

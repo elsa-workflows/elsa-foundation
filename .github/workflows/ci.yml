@@ -180,6 +180,7 @@ jobs:
         run: |
           python3 tools/ci/studio_image_tags.py --self-test
           python3 tools/ci/test_studio_docker_publish.py
+          python3 -m unittest discover -s tools/ci -p test_verify_image_evidence.py
 
       - name: Check the package publish gate
         run: python3 -m unittest discover -s tools/ci -p 'test_await_ci_result.py'

@@ -45,6 +45,8 @@ jobs:
       # image pushes share it; build-only qualification cannot displace a publisher.
       group: studio-docker-${{ (github.event_name == 'workflow_run' || inputs.publish == true) && 'publisher' || format('validation-{0}', github.run_id) }}
       cancel-in-progress: false
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment:
@@ -315,7 +317,8 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           echo "docker.io/elsaworkflows/elsa-studio@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
-          python3 "$STUDIO_IMAGE_VALIDATORS/verify_image_evidence.py" "docker.io/elsaworkflows/elsa-studio@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+          python3 "$STUDIO_IMAGE_VALIDATORS/verify_image_evidence.py" "docker.io/elsaworkflows/elsa-studio@$DIGEST" --application Elsa.Studio.Web \
+            --builder-run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Promote the verified main digest to latest
         if: (github.event_name == 'workflow_run' || inputs.publish == true) && (github.event_name == 'workflow_run' || steps.source.outputs.head_branch == 'main')
@@ -337,3 +340,28 @@ jobs:
           [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           docker buildx imagetools create --tag elsaworkflows/elsa-studio:latest "elsaworkflows/elsa-studio@$IMAGE_DIGEST"
           echo "Published Studio latest from $SOURCE_SHA ($IMAGE_DIGEST)." >> "$GITHUB_STEP_SUMMARY"
+
+  attest-index:
+    name: Attest the published Studio index
+    needs: build
+    if: github.event_name == 'workflow_run' || inputs.publish == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Sign the verified index digest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: docker.io/elsaworkflows/elsa-studio
+          subject-digest: ${{ needs.build.outputs.digest }}
+          create-storage-record: false
+      - name: Verify the public index attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          gh attestation verify "oci://docker.io/elsaworkflows/elsa-studio@$DIGEST" \
+            --repo "$GITHUB_REPOSITORY" --source-ref refs/heads/main --source-digest "$GITHUB_SHA" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/studio-docker.yml"

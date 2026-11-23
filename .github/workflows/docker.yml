@@ -257,8 +257,8 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-  verify-image-evidence:
-    needs: [build-and-push, build-and-push-foundation-host]
+  verify-elsa-workbench:
+    needs: build-and-push
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -268,19 +268,35 @@ jobs:
           persist-credentials: false
       - name: Install pinned OCI reader
         run: bash tools/ci/install_image_evidence_oras.sh
-      - name: Verify signed builder outputs and per-platform inventories
+      - name: Verify signed builder output and per-platform inventories
         env:
-          WORKBENCH_SIGNED: ${{ needs.build-and-push.outputs.signed }}
-          HOST_SIGNED: ${{ needs.build-and-push-foundation-host.outputs.signed }}
-          WORKBENCH_DIGEST: ${{ needs.build-and-push.outputs.digest }}
-          HOST_DIGEST: ${{ needs.build-and-push-foundation-host.outputs.digest }}
+          SIGNED: ${{ needs.build-and-push.outputs.signed }}
+          DIGEST: ${{ needs.build-and-push.outputs.digest }}
         run: |
           set -euo pipefail
-          test "$WORKBENCH_SIGNED" = true
-          test "$HOST_SIGNED" = true
-          for image in elsa-workbench elsa-foundation-host; do
-            digest="$HOST_DIGEST"
-            if [[ "$image" == elsa-workbench ]]; then digest="$WORKBENCH_DIGEST"; fi
-            echo "docker.io/elsaworkflows/$image@$digest" >> "$GITHUB_STEP_SUMMARY"
-            python3 tools/ci/verify_image_evidence.py "docker.io/elsaworkflows/$image@$digest" >> "$GITHUB_STEP_SUMMARY"
-          done
+          test "$SIGNED" = true
+          echo "docker.io/elsaworkflows/elsa-workbench@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+          python3 tools/ci/verify_image_evidence.py "docker.io/elsaworkflows/elsa-workbench@$DIGEST" --application Elsa.Workbench \
+            --builder-run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+
+  verify-elsa-foundation-host:
+    needs: build-and-push-foundation-host
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install pinned OCI reader
+        run: bash tools/ci/install_image_evidence_oras.sh
+      - name: Verify signed builder output and per-platform inventories
+        env:
+          SIGNED: ${{ needs.build-and-push-foundation-host.outputs.signed }}
+          DIGEST: ${{ needs.build-and-push-foundation-host.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test "$SIGNED" = true
+          echo "docker.io/elsaworkflows/elsa-foundation-host@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+          python3 tools/ci/verify_image_evidence.py "docker.io/elsaworkflows/elsa-foundation-host@$DIGEST" --application Elsa.Foundation.Host \
+            --builder-run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
