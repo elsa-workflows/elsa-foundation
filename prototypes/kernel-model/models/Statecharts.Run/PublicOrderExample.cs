@@ -4,8 +4,6 @@ using Kernel.Foundation.InMemory;
 using Kernel.Native;
 using Kernel.Runtime;
 using Kernel.Runtime.Hosting;
-using Kernel.Statecharts;
-using Kernel.Statecharts.Native;
 using Contract = Kernel.Foundation.Contracts;
 using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
 using PublicRuntime = Kernel.WorkflowActor.WorkflowRuntime;
@@ -32,13 +30,13 @@ internal static class PublicOrderExample
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("orders-ingress"), "orders-ingress");
         Contract.IActorReads reads = new ActorList(store, 16);
         var runtime = new PublicRuntime(ingress, reads);
-        var registry = new WorkflowRegistry().Add(Definition(omitStockRelease));
+        var registry = new WorkflowRegistry().Add(OrderStatechart.Build(omitStockRelease));
         using var work = new StringWriter();
         var previousOutput = WriteLine.Out;
         WriteLine.Out = work;
         try
         {
-            var birth = await runtime.StartAsync(scope, "order-start", NativeExecutionModel.Start("order", mode), cancellationToken: token);
+            var birth = await runtime.StartAsync(scope, "order-start", NativeExecutionModel.Start(OrderStatechart.Definition, mode), cancellationToken: token);
             Require(birth is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "The order must be admitted.");
             var actor = birth.Actor!.Value;
             string frame;
@@ -159,28 +157,6 @@ internal static class PublicOrderExample
                 bookmark = next;
             }
         }
-    }
-
-    private static Workflow Definition(bool omitStockRelease)
-    {
-        var chart = new StructuralDefinition(
-            [new("Order", NodeKind.Root, Initial: "AwaitingPayment"),
-             new("AwaitingPayment", NodeKind.Atomic, "Order", Entry: "prepare"),
-             new("Fulfilled", NodeKind.Final, "Order", Entry: "fulfill"),
-             new("ReleasingShipment", NodeKind.Atomic, "Order", Entry: "reverse-shipment"),
-             new("ReleasingStock", NodeKind.Atomic, "Order", Entry: omitStockRelease ? null : "release-stock"),
-             new("Reversed", NodeKind.Final, "Order")],
-            [new("approved", 0, "AwaitingPayment", "Fulfilled", VisitMode.Reenter, "approved"),
-             new("declined", 1, "AwaitingPayment", "ReleasingShipment", VisitMode.Reenter, "declined"),
-             new("shipment-released", 2, "ReleasingShipment", "ReleasingStock", VisitMode.Reenter, "shipment-released"),
-             new("stock-released", 3, "ReleasingStock", "Reversed", VisitMode.Reenter, "stock-released")]);
-        var machine = Wf.Node<StateMachine>("order-machine", ("StructuralDefinition", Binding.Literal(chart)))
-            .With(Wf.Sequence("prepare", Wf.WriteLine("reserve-stock", Binding.Literal("reserve stock")),
-                    Wf.WriteLine("book-shipment", Binding.Literal("book shipment"))),
-                Wf.WriteLine("fulfill", Binding.Literal("fulfill order")),
-                Wf.WriteLine("reverse-shipment", Binding.Literal("release shipment")),
-                Wf.WriteLine("release-stock", Binding.Literal("release stock")));
-        return Wf.Workflow("order", machine);
     }
 
     private static void Require(bool ok, string message)

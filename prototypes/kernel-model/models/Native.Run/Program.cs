@@ -78,6 +78,11 @@ if (args is ["pg-runtime-cluster-member"]) return await PostgresRuntimeCluster.M
 if (args is ["pg-runtime-cluster-member", "wake"]) return await PostgresRuntimeCluster.MemberAsync(wake: true);
 if (args is ["pg-root-history", var historyWriter and ("owned" or "ef"), var historyFence and ("checked" or "in-batch")])
     return await PostgresRootHistoryChecks.RunAsync(historyWriter == "owned", historyFence == "in-batch");
+if (args is ["pg-statechart-preview", "birth"]) return await PostgresStatechartPreview.RunAsync(null);
+if (args is ["pg-statechart-preview", "restart", var orderRef, var orderBookmark, var orderEpoch, var orderRevision, var orderHash, var orderOccurrence] &&
+    long.TryParse(orderEpoch, out var previousOrderEpoch) && previousOrderEpoch > 0 &&
+    long.TryParse(orderRevision, out var savedOrderRevision) && savedOrderRevision > 0)
+    return await PostgresStatechartPreview.RunAsync(new(orderRef, orderBookmark, previousOrderEpoch, savedOrderRevision, orderHash, orderOccurrence));
 if (args is ["pg-core-preview", var birthPhase and ("birth" or "hold-owner")]) return await PostgresPublicPreview.RunAsync(birthPhase);
 if (args is ["pg-core-preview", "standby", var standbyRoot, var standbyBookmark, var priorEpoch, var priorPid, var initialLease] &&
     long.TryParse(priorEpoch, out var epoch) && epoch > 0 && int.TryParse(priorPid, out var peerPid) && peerPid > 0 &&

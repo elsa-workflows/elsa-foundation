@@ -25,7 +25,11 @@ dotnet run -c Release --project models/Statecharts.Run -- --public-order
 
 The Embedded example starts a Native order workflow through `WorkflowRuntime`. It reserves stock, books a shipment and waits for payment. A replacement owner loads the same workflow. Approved orders fulfill. Declined orders enter explicit shipment and stock release states and wait for each acknowledgement. Local activity output shows the work, and the public journal shows one ordered state path after replaying the payment operation. The declined case retries that operation with a shipment acknowledgement and verifies that it appends no journal entry. Sending the acknowledgement with a fresh operation ID then enters the stock release state, visible from the same saved bookmark. Both paths run in Balanced and Durable.
 
-Append `--omit-stock-release` to remove the ordinary stock release activity. The assertion fails before the order can close. Provider-backed and Cluster qualification have separate K7 acceptance cases.
+Append `--omit-stock-release` to remove the ordinary stock release activity. The assertion fails before the order can close.
+
+The [PostgreSQL Embedded example](../../README.md#order-statemachine-restart-on-the-public-postgresql-preview)
+uses this chart to verify one restart with a pending shipment acknowledgement. Cluster qualification has
+separate K7 acceptance cases.
 
 ## Phase concurrency witness
 
