@@ -70,11 +70,12 @@ public sealed partial class MongoStore
             var bounded = new FindOptions { MaxTime = lease / 3 };
             try
             {
+                await RequireVersionsAsync(session, deadline.Token, bounded);
                 var owners = (await _partitions.Find(session, new BsonDocument { { "_id", ids }, { "owner", new BsonDocument("$nin", new BsonArray { BsonNull.Value, node }) } }, bounded)
                     .Project(new BsonDocument("owner", 1)).ToListAsync(deadline.Token)).Select(d => d["owner"].AsString).Distinct(StringComparer.Ordinal).ToList();
                 if (owners.Count > 0)
                 {
-                    // Read the primary's current leases. The transaction snapshot was opened by the partition read;
+                    // Read the primary's current leases. The transaction snapshot was opened by the version read;
                     // comparing a lease from that older snapshot to a later clock could evict a continuously live owner.
                     // The partition update still conflicts with a change of owner after the snapshot.
                     var live = (await _nodes.WithReadConcern(ReadConcern.Local).Find(new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(owners)) }, { "$expr", new BsonDocument("$gte", new BsonArray { "$leaseUntil", NowMs }) } }, bounded)
@@ -127,7 +128,20 @@ public sealed partial class MongoStore
         var set = new BsonDocument { { "epoch", new BsonDocument("$add", new BsonArray { "$epoch", 1L }) }, { "now", NowMs } };
         var doc = await RetriedAsync(async session =>
         {
-            await _nodes.UpdateOneAsync(session, new BsonDocument("_id", node), NodeRenewal(lease), new UpdateOptions { IsUpsert = true }, cancellationToken);
+            using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                var budget = lease / 3;
+                deadline.CancelAfter(budget);
+                try
+                {
+                    await RequireVersionsAsync(session, deadline.Token, new FindOptions { MaxTime = budget });
+                    await _nodes.UpdateOneAsync(session, new BsonDocument("_id", node), NodeRenewal(lease), new UpdateOptions { IsUpsert = true }, deadline.Token);
+                }
+                catch (Exception e) when (Deadline(e, deadline, cancellationToken))
+                {
+                    throw new StoreException(Failure.Transient, "The retake's format check and node renewal outlasted a third of the lease.", e);
+                }
+            }
             var taken = await _partitions.FindOneAndUpdateAsync(session, new BsonDocument { { "_id", partition }, { "owner", node }, { "epoch", epoch } },
                 Builders<BsonDocument>.Update.Pipeline(new BsonDocument[] { new("$set", set) }), new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken);
             if (taken is not null && countDeaths)

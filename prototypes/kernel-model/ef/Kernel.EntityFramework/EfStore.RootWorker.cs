@@ -6,7 +6,7 @@ public sealed partial class EfStore
 {
     private WorkerRoots? _ordinaryRoots;
 
-    // An Embedded owner is bound once to an explicit set of generated roots sharing one partition.
+    // An Embedded owner serves generated roots in one partition, optionally restricted to an explicit set.
     internal sealed record WorkerRoot(string Tenant, string Reference, string Actor, int Partition, string Fingerprint)
     {
         internal bool Owns(InboxKey key) => key.Match is null && (key.Scope == 0
@@ -14,22 +14,61 @@ public sealed partial class EfStore
             : key.Scope == InboxKey.FoundationOccurrenceScope && key.Id.StartsWith(Reference + "/", StringComparison.Ordinal));
     }
 
-    internal sealed class WorkerRoots(IReadOnlyList<WorkerRoot> roots)
+    internal sealed class WorkerRoots(int partition, IReadOnlyList<WorkerRoot> roots, bool discover = false)
     {
-        internal int Partition { get; } = roots[0].Partition;
+        internal int Partition { get; } = partition;
+        internal bool Discover { get; } = discover;
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
         private readonly Dictionary<string, WorkerRoot> _actors = roots.ToDictionary(r => r.Actor, StringComparer.Ordinal);
         private readonly Dictionary<string, WorkerRoot> _references = roots.ToDictionary(r => r.Reference, StringComparer.Ordinal);
         internal WorkerRoot ForActor(string actor) => _actors.TryGetValue(actor, out var root) ? root : throw RootShape();
         internal WorkerRoot ForInput(InboxKey key)
         {
-            int separator;
-            WorkerRoot? root = null;
-            if (key.Scope == 0 && key.Id.StartsWith("root:", StringComparison.Ordinal)) _actors.TryGetValue(key.Id[5..], out root);
-            else if (key.Scope == InboxKey.FoundationOccurrenceScope && (separator = key.Id.IndexOf('/')) > 0)
-                _references.TryGetValue(key.Id[..separator], out root);
-            return root is not null && root.Owns(key) ? root : throw RootShape();
+            var (name, creator) = InputBinding(key);
+            var index = creator ? _actors : _references;
+            return index.TryGetValue(name, out var root) && root.Owns(key) ? root : throw RootShape();
         }
+    }
+
+    private static (string Name, bool Creator) InputBinding(InboxKey key)
+    {
+        if (key.Match is null && key.Scope == 0 && key.Id.StartsWith("root:", StringComparison.Ordinal)) return (key.Id[5..], true);
+        var split = key.Id.IndexOf('/');
+        if (key.Match is null && key.Scope == InboxKey.FoundationOccurrenceScope && split > 0) return (key.Id[..split], false);
+        throw RootShape();
+    }
+
+    internal async Task<(WorkerRoots Scope, int Count)> BindWorkerPartitionAsync(int partition, CancellationToken token)
+    {
+        if (!postgres || Engine is not null || partition < 0 || await PartitionCountAsync(token) is not { } count || partition >= count)
+            throw new InvalidOperationException("A generated-root owner requires an existing PostgreSQL partition.");
+        return (InstallWorkerScope(new(partition, [], discover: true)), count);
+    }
+
+    private WorkerRoots InstallWorkerScope(WorkerRoots scope) =>
+        Interlocked.CompareExchange(ref _ordinaryRoots, scope, null) is null ? scope : throw new InvalidOperationException("The PostgreSQL owner is already bound.");
+
+    // Every lookup is bounded by the requested actor IDs and input keys. The host retains no index of the partition's birth history.
+    private async Task<WorkerRoots> ResolveWorkerRootsAsync(WorkerRoots scope, IEnumerable<string> actors, IEnumerable<InboxKey> inputs, CancellationToken token)
+    {
+        if (!scope.Discover) return scope;
+        var actorIds = actors.ToHashSet(StringComparer.Ordinal);
+        HashSet<string> references = new(StringComparer.Ordinal);
+        foreach (var key in inputs)
+        {
+            var (name, creator) = InputBinding(key);
+            (creator ? actorIds : references).Add(name);
+        }
+        if (actorIds.Count + references.Count == 0) return new(scope.Partition, []);
+        var ids = actorIds.ToArray();
+        var refs = references.ToArray();
+        await using var db = create();
+        var found = await db.Database.SqlQuery<WorkerRoot>($"""
+            SELECT "Tenant", "Reference", "Actor", "Partition", "Fingerprint" FROM "FoundationRootBirths"
+            WHERE "Partition" = {scope.Partition} AND "Creation" = 1 AND ("Actor" = ANY({ids}) OR "Reference" = ANY({refs}))
+            """).ToListAsync(token);
+        if (found.Any(root => new InstanceRef(root.Actor).Partition != scope.Partition)) throw RootShape();
+        return new(scope.Partition, found);
     }
 
     public bool CreationIdentityAvailable => _ordinaryRoots is not null;
@@ -54,9 +93,7 @@ public sealed partial class EfStore
         if (bindings.Count != requested.Count || !requested.ToHashSet().SetEquals(bindings.Select(r => (r.Tenant, r.Reference))) ||
             bindings.Any(r => r.Partition != bindings[0].Partition || new InstanceRef(r.Actor).Partition != r.Partition))
             throw new InvalidOperationException("The supplied roots must resolve exactly in their tenant and share one partition.");
-        var result = new WorkerRoots(bindings);
-        return Interlocked.CompareExchange(ref _ordinaryRoots, result, null) is null
-            ? result : throw new InvalidOperationException("The PostgreSQL owner is already bound.");
+        return InstallWorkerScope(new(bindings[0].Partition, bindings));
     }
 
     private static InstanceRow WorkerRow(WorkerRoot root, RootImage image) =>
@@ -100,7 +137,7 @@ public sealed partial class EfStore
                     AND i."Status" = {(int)InstanceStatus.Finished} AND i."FoundationTerminalAt" IS NOT NULL
                     AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
                 """).ToListAsync(cancellationToken);
-            return terminal.Count == 1 && await SettleDirectInputsAsync(db, new(Root.Actor, 1), Done, null, cancellationToken);
+            return terminal.Count == 1 && await SettleDirectInputsAsync(db, Root.Reference, new(Root.Actor, 1), Done, null, cancellationToken);
         }
     }
 
@@ -131,6 +168,23 @@ public sealed partial class EfStore
             batch.Window is not null || batch.PublicationReservation is not null || batch.DueBacklog is not null ||
             batch.Turns.Select(t => t.Instance).Distinct().Count() != batch.Turns.Count) throw RootShape();
 
+        (CommitBatch Batch, RootCheckpoints Checkpoints)? prepared;
+        try { prepared = await PrepareWorkerBatchAsync(roots, batch, fence, cancellationToken); }
+        catch (Exception error) when (error is not (OperationCanceledException or NotSupportedException) &&
+            Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
+        {
+            // Preparation reads inputs before either transactional fence mode has run.
+            if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new(false, 0, []);
+            if (ReferenceEquals(error, failure)) throw;
+            throw failure;
+        }
+        return prepared is { } work ? await CommitAsync(work.Batch, work.Checkpoints, cancellationToken) : new(false, 0, []);
+    }
+
+    private async Task<(CommitBatch, RootCheckpoints)?> PrepareWorkerBatchAsync(WorkerRoots roots, CommitBatch batch,
+        PartitionFence fence, CancellationToken cancellationToken)
+    {
+        roots = await ResolveWorkerRootsAsync(roots, batch.Turns.Select(t => t.Instance), batch.Seen.Concat(batch.Trial), cancellationToken);
         var commands = new List<QualifiedRootCheckpoint>();
         var turns = new List<TurnCommit>();
         var revisions = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -141,7 +195,7 @@ public sealed partial class EfStore
         foreach (var turn in batch.Turns)
         {
             var prepared = await PrepareWorkerTurnAsync(roots.ForActor(turn.Instance), turn, fence, cancellationToken);
-            if (prepared is null) return new(false, 0, []);
+            if (prepared is null) return null;
             commands.Add(prepared.Checkpoint);
             if (prepared.JournalTurn is { } journal)
             {
@@ -149,7 +203,7 @@ public sealed partial class EfStore
                 revisions.Add(journal.Instance, prepared.Checkpoint.JournalRevision);
             }
         }
-        return await CommitAsync(batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions), cancellationToken);
+        return (batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions));
     }
 
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
@@ -204,9 +258,9 @@ public sealed partial class EfStore
                 current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))) throw RootShape();
         await using var db = create();
         var ids = turn.Done.Select(key => key.Id).ToArray();
-        var records = await db.Messages.AsNoTracking().Where(m => m.Target == root.Actor && m.InboxScope == InboxKey.FoundationOccurrenceScope &&
-            ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
-        var inputs = records.Select(PostgresRootAdmission.DecodeDirect).ToArray();
+        var records = await db.Messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
+            m.InboxScope == InboxKey.FoundationOccurrenceScope && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
+        var inputs = records.Select(row => PostgresRootAdmission.DecodeDirect(row, root.Reference)).ToArray();
         if (!inputs.Select(message => message.InboxKey).SequenceEqual(turn.Done)) return null;
         return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
             row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal);
