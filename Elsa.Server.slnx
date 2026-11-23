@@ -580,6 +580,9 @@
   <Folder Name="/Essentials/tests/Architecture/ExtensionBoundary/">
     <Project Path="Essentials/tests/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Architecture/Fixtures/">
+    <Project Path="Essentials/tests/Architecture/Fixtures/JsonHostOptionsProbe/JsonHostOptionsProbe.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Caching/">
     <Project Path="Essentials/tests/Caching/Tests/Elsa.Caching.Tests.csproj" />
   </Folder>
