@@ -113,6 +113,7 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
     internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> InsertAliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> GuardedAliases {get;}=new(StringComparer.Ordinal);
+    internal DbSet<StoreVersionEntity> StoreVersions => Set<StoreVersionEntity>();
     public DbSet<PartitionEntity> Partitions => Set<PartitionEntity>();
     public DbSet<NodeEntity> Nodes => Set<NodeEntity>();
     public DbSet<InstanceEntity> Instances => Set<InstanceEntity>();
@@ -138,6 +139,18 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 
     protected override void OnModelCreating(ModelBuilder model)
     {
+        model.Entity<StoreVersionEntity>(entity =>
+        {
+            entity.ToTable(StoreVersionEntity.Table);
+            entity.Property(row => row.Id).ValueGeneratedNever();
+            entity.HasData(new StoreVersionEntity
+            {
+                Id = StoreVersionEntity.MarkerId,
+                StoreSchema = StoreVersionEntity.StoreSchemaVersion,
+                MessageProtocol = StoreVersionEntity.MessageProtocolVersion,
+                JournalCodec = StoreVersionEntity.JournalCodecVersion
+            });
+        });
         model.Entity<PartitionEntity>(e =>
         {
             e.ToTable("Partitions");
@@ -243,6 +256,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private bool _windowInstalled;
     public bool PhysicalRetirementAvailable => true;
     public bool SupportsCommitWindow => _windowInstalled;
+    public bool SupportsJobTrialClear => _ordinaryRoots is null && Engine is null or SqlServerEngine or MySqlEngine;
 
     public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault(OwnedCommit) ?? true;
 
@@ -310,6 +324,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         var count = partitions ?? (postgres ? Defaults.ServerPartitions : Defaults.SqlitePartitions);
         await using var db = create();
         await db.Database.EnsureCreatedAsync();
+        await RequireStoreVersionsAsync(db, CancellationToken.None);
         await PhysicalRetirement.InstallAsync(db, Engine, postgres);
         if (postgres && Engine is null) await db.Database.ExecuteSqlRawAsync(EventInsert.InstallPostgres);
         if (enableCommitWindow)
@@ -389,7 +404,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             .Any(key => key.Scope == InboxKey.FoundationOccurrenceScope) ||
             batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey.Scope == InboxKey.FoundationOccurrenceScope))))
             throw new StoreException(Failure.Definite, "Qualified PostgreSQL inputs require their root checkpoint writer.");
-        StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable);
+        StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable,
+            supportsJobTrialClear:SupportsJobTrialClear);
         // Marker shape uses the canonical row address. A raw update's alternate spelling is
         // authorized separately by the database-column predicate in AliasUpdateGuard.
         var qualification=batch.Turns.Any(t=>t.Row is {} r && t.Instance!=r.Id)
@@ -590,6 +606,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (turn.Delete)
                 await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0"""), [batch.Partition, turn.Instance], cancellationToken);
         }
+        if (batch.ClearJobTrials.Count != 0 && !await ClearJobTrialsAsync(db, batch, cancellationToken))
+            return new Committed(false, 0, []);
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
@@ -633,11 +651,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
     private string RootPollFilter => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
-             AND (m."InboxScope" <> {InboxKey.FoundationOccurrenceScope} OR EXISTS (
+             AND (m."InboxScope" = 0 OR (m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
-                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired"))
+                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired")))
             """;
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
         ? """, b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";

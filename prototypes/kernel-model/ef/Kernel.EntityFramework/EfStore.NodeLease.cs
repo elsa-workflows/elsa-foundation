@@ -85,8 +85,8 @@ public sealed partial class EfStore
         Engine is null && !postgres ? db.Database.BeginTransactionAsync(cancellationToken) : db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
 
     /// <summary>
-    /// Steps 1 and 2 of a take, under one deadline of a third of the lease (the client's cancel; K4 qualifies the server
-    /// side). 1: the owners of <paramref name="ids"/> other than this node, then their node records: two plain reads,
+    /// The format marker and steps 1 and 2 of a take, under one deadline of a third of the lease (the client's cancel;
+    /// K4 qualifies the server side). 1: the owners of <paramref name="ids"/> other than this node, then their node records: two plain reads,
     /// neither a locking read nor a subquery of the update, so the read of a node record holds no partition row. A missing
     /// record counts as expired. 2: this node's own record (<c>SeenAt</c>, <c>LeaseUntil</c>), whatever the take gets.
     /// Returns the expired owners, which step 3 may take from.
@@ -97,6 +97,7 @@ public sealed partial class EfStore
         deadline.CancelAfter(lease / 3);
         try
         {
+            await RequireStoreVersionsAsync(db, deadline.Token);
             var expired = new List<string>();
             if (ids is not null)
             {
@@ -118,7 +119,7 @@ public sealed partial class EfStore
         }
         catch (Exception e) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            throw new StoreException(Failure.Transient, "The take's read of the node records and its own record's write outlasted a third of the lease.", e);
+            throw new StoreException(Failure.Transient, "The take's format check, node reads and own record write outlasted a third of the lease.", e);
         }
     }
 

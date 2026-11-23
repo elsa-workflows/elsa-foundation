@@ -22,6 +22,12 @@ using Npgsql;
 string[] flags = ["--fence-in-batch", "--checked-fence", "--m5", "--rcsi-off", "--rc", "--ef-commit", "--owned-commit", "--fence-ignores-count"];
 switch (args)
 {
+    case ["sqlite", "version-take", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckTakeVersionsAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "version-take", .. var options]:
+        await new EfProvider(engine, connection, options).CheckTakeVersionsAsync();
+        return 0;
     case ["root-admission-writer"]:
         return await GeneratedRootChecks.WriteFromChildAsync();
     case ["postgres", var connection, "root-journal"]:
@@ -123,6 +129,12 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         "mysql" => new MySqlEngine { Isolation = flags.Contains("--rc") ? System.Data.IsolationLevel.ReadCommitted : null },
         _ => null,
     };
+
+    internal async Task CheckTakeVersionsAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
+        await VersionTakeChecks.Run(fixture.CreateContext, fixture.Store, fixture.NewClient());
+    }
 
     public async Task<ProvidedStore> CreateAsync(int partitions, StoreSetup setup)
     {
