@@ -349,7 +349,7 @@ public sealed class WeaverSessionAutonomyApiTests
     {
         var now = new DateTimeOffset(2026, 11, 2, 0, 0, 0, TimeSpan.Zero);
         var attachment = new WeaverContextAttachment("ctx-1", "source", "source-1", "Label", "text/plain", WeaverContextSensitivity.Internal,
-            "selection", "summary", "content", new Dictionary<string, string> { ["k"] = "v" }) { ModuleId = "module" };
+            "selection", "summary", WeaverJsonData.From("content"), new Dictionary<string, string> { ["k"] = "v" }) { ModuleId = "module" };
         var result = new WeaverToolResult("call-1", "echo", true, "ok");
         var message = new WeaverMessage("m-1", "s-1", WeaverRole.User, "hello", WeaverMessageStatus.Pending, "cap-1", now, now.AddMinutes(1),
             new WeaverError("code", "message", 409), ["ctx-1"], ["p-1"], [attachment])

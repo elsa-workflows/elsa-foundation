@@ -770,7 +770,7 @@ public sealed partial class WeaverCumulativeDisclosureTests
         await sessions.SetMessageStatusAsync(fixture.Session.Id, original.Id, WeaverMessageStatus.Completed);
         var attachment = Assert.Single(original.Context);
         var history = WeaverDisclosureHistory.Freeze(Enumerable.Range(0, retained).Select(index => new WeaverDisclosureSnapshot(
-            [index == 0 ? attachment : attachment with { Content = new { snapshot = index } }], [])));
+            [index == 0 ? attachment : attachment with { Content = WeaverJsonData.From(new { snapshot = index }) }], [])));
         const string priorAnswer = "The authorized earlier snapshots were observed.";
         await sessions.AddMessageAsync(fixture.Session.Id, new(WeaverRole.Assistant, priorAnswer, WeaverMessageStatus.Completed, null, [], [])
         {
@@ -798,7 +798,7 @@ public sealed partial class WeaverCumulativeDisclosureTests
     }
 
     private static WeaverContextAttachment HistoryAttachment(string id, object content)
-        => new(id, Module, "resource", "Resource", "cumulative.resource", WeaverContextSensitivity.Internal, "selection", "Evidence", content,
+        => new(id, Module, "resource", "Resource", "cumulative.resource", WeaverContextSensitivity.Internal, "selection", "Evidence", WeaverJsonData.From(content),
             new Dictionary<string, string>()) { ContributorId = SourceId, ModuleId = Module };
 
     private static void AssertDisclosureDenied(IEnumerable<WeaverStreamEvent> events)
@@ -928,9 +928,9 @@ public sealed partial class WeaverCumulativeDisclosureTests
             if (RefreshPayload)
             {
                 var value = ++payloadRevision;
-                current = current.Select(item => item with { Summary = "Authorized summary " + value, Content = new { timestamp = value } }).ToList();
+                current = current.Select(item => item with { Summary = "Authorized summary " + value, Content = WeaverJsonData.From(new { timestamp = value }) }).ToList();
             }
-            if (Padding > 0) current = current.Select(item => item with { Content = new { pad = new string('q', Padding) } }).ToList();
+            if (Padding > 0) current = current.Select(item => item with { Content = WeaverJsonData.From(new { pad = new string('q', Padding) }) }).ToList();
             return ValueTask.FromResult(new WeaverContextContribution(current, []));
         }
         internal void SetAuthority(string authority)
@@ -940,7 +940,7 @@ public sealed partial class WeaverCumulativeDisclosureTests
         }
         private static WeaverContextAttachment Attachment(string id, string resource, string revision)
             => new(id, Module, resource, "Owned resource", "cumulative.resource", WeaverContextSensitivity.Internal, "selection",
-                resource + " " + revision, new { resource, revision }, new Dictionary<string, string>())
+                resource + " " + revision, WeaverJsonData.From(new { resource, revision }), new Dictionary<string, string>())
             { ModuleId = Module, Target = new(Module, "resource", resource, revision) };
     }
 

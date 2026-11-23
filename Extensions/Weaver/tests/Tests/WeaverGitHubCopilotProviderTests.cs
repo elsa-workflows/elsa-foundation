@@ -174,7 +174,7 @@ public sealed class WeaverGitHubCopilotProviderTests
             WeaverContextSensitivity.Internal,
             "selection",
             "Workflow summary.",
-            new { Name = "Demo" },
+            WeaverJsonData.From(new { Name = "Demo" }),
             new Dictionary<string, string>());
 
         _ = await StreamAsync(new("session-1", "Explain", [context]));

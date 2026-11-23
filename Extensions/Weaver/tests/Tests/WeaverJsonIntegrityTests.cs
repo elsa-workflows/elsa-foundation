@@ -60,6 +60,32 @@ public sealed class WeaverJsonIntegrityTests
         Assert.ThrowsAny<JsonException>(() => Proposal([source.RootElement]));
     }
 
+    [Fact]
+    public void Proposal_operations_validate_and_snapshot_the_same_enumeration()
+    {
+        using var source = JsonDocument.Parse("{\"op\":\"add\"}");
+        using var invalid = JsonDocument.Parse("null");
+        var changing = new ChangingOperations(source.RootElement, invalid.RootElement);
+
+        var proposal = Proposal(changing);
+
+        Assert.Equal(1, changing.Enumerations);
+        Assert.Equal(JsonValueKind.Object, Assert.Single(proposal.Operations).ValueKind);
+        Assert.ThrowsAny<JsonException>(() => Proposal([default]));
+    }
+
+    private sealed class ChangingOperations(JsonElement first, JsonElement later) : IReadOnlyCollection<JsonElement>
+    {
+        public int Count => 1;
+        public int Enumerations { get; private set; }
+        public IEnumerator<JsonElement> GetEnumerator()
+        {
+            Enumerations++;
+            yield return Enumerations == 1 ? first : later;
+        }
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
     private static WeaverActionProposal Proposal(IReadOnlyCollection<JsonElement> operations) =>
         new("proposal", "session", null, "capability", "kind", "Title", "Summary", WeaverRisk.ReviewRequired, null,
             [], operations, [], null, [], "resource", "id", true, WeaverActionProposalStatus.AwaitingApproval, null, null,

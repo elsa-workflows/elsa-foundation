@@ -17,7 +17,7 @@ public sealed class WeaverSessionRecordStoreTests
         var message = Message(session.Id, "message-1") with
         {
             Context = [new("attachment-1", "test", null, "Label", "test.kind", WeaverContextSensitivity.Internal, "scope", "Summary",
-                new { value = 1.50, text = "kept" }, new Dictionary<string, string> { ["ref"] = "1" })],
+                WeaverJsonData.From(new { value = 1.50, text = "kept" }), new Dictionary<string, string> { ["ref"] = "1" })],
             DisclosureHistory = []
         };
         Assert.True((await store.CreateAsync(new(session) { Messages = [new(message)] }, Owner)).Succeeded);

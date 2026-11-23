@@ -399,9 +399,14 @@ public sealed record WeaverActionProposal(
     private static IReadOnlyCollection<JsonElement> SnapshotOperations(IReadOnlyCollection<JsonElement> values)
     {
         ArgumentNullException.ThrowIfNull(values);
-        if (values.Any(value => value.ValueKind != JsonValueKind.Object))
-            throw new JsonException("A Weaver proposal operation must be a JSON object.");
-        return Array.AsReadOnly(values.Select(value => value.Clone()).ToArray());
+        var snapshot = new List<JsonElement>();
+        foreach (var value in values)
+        {
+            if (value.ValueKind != JsonValueKind.Object)
+                throw new JsonException("A Weaver proposal operation must be a JSON object.");
+            snapshot.Add(value.Clone());
+        }
+        return snapshot.AsReadOnly();
     }
 
     public WeaverPreparedToolInvocation? PreparedInvocation { get; init; }
