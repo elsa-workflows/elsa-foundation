@@ -90,16 +90,21 @@ internal static class JsonBaselineSourceScan
                     effective.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" && argument.Expression.IsKind(SyntaxKind.NullLiteralExpression)) ||
                     effective.Length == minimum + 1 && (last is TypeOfExpressionSyntax || last?.ToString().EndsWith(".GetType()", StringComparison.Ordinal) == true)) Add("optionless", call);
             }
-            else if (!serializer && name is "Deserialize" or "DeserializeAsync" &&
-                (effective.Length == 0 || member?.Name is not GenericNameSyntax && effective.Length == 1)) Add("optionless", call);
+            else if (!serializer && member is not null && name is "Deserialize" or "DeserializeAsync" &&
+                (effective.Length == 0 || effective.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" && argument.Expression.IsKind(SyntaxKind.NullLiteralExpression)) ||
+                 member.Name is not GenericNameSyntax && effective.Length == 1 && effective[0].Expression is TypeOfExpressionSyntax)) Add("optionless", call);
             if (member is null) continue;
-            if (name == "Add" && member.Expression is MemberAccessExpressionSyntax list)
+            if (member.Expression is MemberAccessExpressionSyntax list)
             {
                 if (list.Name.Identifier.ValueText == "Converters")
-                    foreach (var converter in arguments) Add("converter:" + ConverterName(converter.Expression), call);
-                if (list.Name.Identifier.ValueText == "Modifiers")
-                    Add("modifier:" + (arguments.FirstOrDefault()?.Expression.ToString() ?? "unknown"), call);
+                {
+                    if (name is "Add" or "Insert") Add("converter:" + ConverterName(arguments.Last().Expression), call);
+                    else if (name is "Remove" or "RemoveAt" or "Clear") Add("converter-mutation:" + name, call);
+                }
+                if (list.Name.Identifier.ValueText == "Modifiers" && name is "Add" or "Insert")
+                    Add("modifier:" + ModifierName(arguments.Last().Expression), call);
             }
+            if (name == "WithAddedModifier" && arguments.Count > 0) Add("modifier:" + ModifierName(arguments.Last().Expression), call);
         }
         foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>().Where(x => x.Left.ToString() == "Converters"))
             foreach (var converter in assignment.Right.DescendantNodesAndSelf().OfType<ObjectCreationExpressionSyntax>()) Add("converter:" + ConverterName(converter), converter);
@@ -132,6 +137,7 @@ internal static class JsonBaselineSourceScan
         },
         _ => expression.ToString()
     };
+    private static string ModifierName(ExpressionSyntax expression) => expression is LambdaExpressionSyntax ? "lambda" : expression.ToString();
     private static bool IsDeviation(string name, string value) => name switch
     {
         "DictionaryKeyPolicy" => value != "null",
@@ -139,7 +145,7 @@ internal static class JsonBaselineSourceScan
         "PropertyNamingPolicy" => value is not ("JsonNamingPolicy.CamelCase" or "JsonKnownNamingPolicy.CamelCase"),
         "NumberHandling" => value != "JsonNumberHandling.Strict",
         "DefaultIgnoreCondition" => value != "JsonIgnoreCondition.Never",
-        "Encoder" => !value.EndsWith("JavaScriptEncoder.UnsafeRelaxedJsonEscaping", StringComparison.Ordinal),
+        "Encoder" => !value.EndsWith("JavaScriptEncoder.UnsafeRelaxedJsonEscaping", StringComparison.Ordinal) && !value.EndsWith("JsonBaseline.Options.Encoder", StringComparison.Ordinal),
         _ => false
     };
 }

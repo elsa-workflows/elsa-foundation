@@ -124,7 +124,7 @@ internal static class HumanReviewRecords
 
     private static bool SameType(ValueTypeDescriptor left, ValueTypeDescriptor right) =>
         left.Alias == right.Alias && left.CollectionKind == right.CollectionKind && left.SchemaVersion == right.SchemaVersion &&
-        left.Schema?.GetRawText() == right.Schema?.GetRawText();
+        Elsa.Serialization.Core.JsonCanonicalForm.Equals(left.Schema, right.Schema);
 }
 
 /// <summary>The decision native admission consumed for one review.</summary>

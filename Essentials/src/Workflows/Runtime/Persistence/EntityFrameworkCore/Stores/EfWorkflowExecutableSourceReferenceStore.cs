@@ -593,13 +593,13 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
                 row.DefinitionVersionIdHash != Hash(Decode(row.DefinitionVersionId)) ||
                 row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
                 throw new InvalidDataException("The persisted workflow executable source reference row is corrupt.");
-            var envelope = JsonNode.Parse(RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableSourceReferenceEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!)?.AsObject()
-                           ?? throw new InvalidDataException("The persisted workflow executable source reference envelope is empty.");
+            using var envelopeDocument = JsonDocument.Parse(RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableSourceReferenceEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
+            var envelope = envelopeDocument.RootElement;
             if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "workflowExecutableSourceReference") ||
                 !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "artifactId")), Decode(row.ArtifactId)) ||
-                envelope["reference"] is null)
+                !envelope.TryGetProperty("reference", out var reference) || reference.ValueKind != JsonValueKind.Object)
                 throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
-            var value = RuntimeArtifactJson.Deserialize<WorkflowExecutableSourceReference>(envelope["reference"]!.ToJsonString());
+            var value = RuntimeArtifactJson.Deserialize<WorkflowExecutableSourceReference>(reference.GetRawText());
             Validate(value);
             if ((value.TenantId is not null && value.TenantId != expectedScope) ||
                 EfRelationalIdentity.Decode(row.ScopeKey) != expectedScope ||
@@ -646,19 +646,12 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
 
     private static string SerializeEnvelope(WorkflowExecutableSourceReference value)
     {
-        var reference = JsonNode.Parse(RuntimeArtifactJson.Serialize(value))
-                       ?? throw new InvalidDataException("The workflow executable source reference payload could not be serialized.");
-        return new JsonObject
-        {
-            ["collection"] = "workflowExecutableSourceReference",
-            ["artifactId"] = Encode(value.ArtifactId),
-            ["reference"] = reference
-        }.ToJsonString();
+        using var reference = JsonDocument.Parse(RuntimeArtifactJson.Serialize(value));
+        return RuntimeArtifactJson.Serialize(new { collection = "workflowExecutableSourceReference", artifactId = Encode(value.ArtifactId), reference = reference.RootElement });
     }
 
-    private static string ReadString(JsonObject node, string property) =>
-        node[property] is JsonValue value &&
-        value.TryGetValue<string>(out var text) &&
+    private static string ReadString(JsonElement node, string property) =>
+        node.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { } text &&
         !string.IsNullOrWhiteSpace(text)
             ? text
             : throw new InvalidDataException($"The source-reference envelope is missing '{property}'.");

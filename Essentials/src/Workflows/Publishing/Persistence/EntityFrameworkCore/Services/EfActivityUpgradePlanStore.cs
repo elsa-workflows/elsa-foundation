@@ -1301,7 +1301,7 @@ public sealed class EfActivityUpgradePlanStore(
     }
 
     private static bool SameMaterial<T>(T left, T right) =>
-        JsonNode.DeepEquals(
+        Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(
             JsonNode.Parse(JsonSerializer.Serialize(left, Json)),
             JsonNode.Parse(JsonSerializer.Serialize(right, Json)));
 

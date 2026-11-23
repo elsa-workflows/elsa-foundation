@@ -222,7 +222,7 @@ public sealed class InMemoryExecutableActivityTemplateStore : IExecutableActivit
 
         var existingJson = ComparableContent(existing);
         var candidateJson = ComparableContent(candidate);
-        if (!JsonNode.DeepEquals(existingJson, candidateJson))
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(existingJson, candidateJson))
         {
             throw new InvalidOperationException(
                 $"Template id '{candidate.TemplateId}' and hash '{candidate.TemplateHash}' are already bound to different content.");

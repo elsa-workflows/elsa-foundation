@@ -1,11 +1,29 @@
 using System.Text.Json;
 using Elsa.Weaver.Core.Models;
 using Elsa.Weaver.Services;
+using Elsa.Weaver.Api;
+using Elsa.Weaver.Api.Models;
 
 namespace Elsa.Weaver.Tests;
 
 public sealed class WeaverJsonIntegrityTests
 {
+    [Fact]
+    public void Api_attachment_input_and_output_keep_the_same_raw_data_contract()
+    {
+        const string raw = """{ "OrderID":9007199254740993, "nil":null, "text":"Ren\u00e9", "amount":1.00 }""";
+        var context = new WeaverJsonContext(Elsa.Serialization.Core.JsonBaseline.CreateCopy());
+        var body = "{\"id\":\"raw\",\"content\":" + raw + "}";
+        var request = Assert.IsType<WeaverContextAttachmentRequest>(JsonSerializer.Deserialize(body,
+            context.GetTypeInfo(typeof(WeaverContextAttachmentRequest))!));
+        Assert.Equal(raw, request.Content!.Value.GetRawText());
+        var response = request.ToDomain().ToResponse();
+        Assert.Equal(raw, response.Content!.Value.GetRawText());
+        var wire = JsonSerializer.SerializeToElement(response, Elsa.Serialization.Core.JsonBaseline.Options);
+        Assert.Equal(raw, wire.GetProperty("content").GetRawText());
+        Assert.Equal(9007199254740993L, wire.GetProperty("content").GetProperty("OrderID").GetInt64());
+    }
+
     [Fact]
     public void Retained_disclosure_rebuilds_enums_and_raw_data_with_the_same_value_digest()
     {

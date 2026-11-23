@@ -168,8 +168,8 @@ public abstract class AgentConnectionModelProvider(
     {
         type = "object", additionalProperties = false,
         properties = new { temperature = new { type = "number", minimum = 0, maximum = 1 } }
-    });
-    private static readonly JsonElement EmptySettingsSchema = JsonSerializer.SerializeToElement(new { type = "object", additionalProperties = false, properties = new { } });
+    }, Elsa.Serialization.Core.JsonBaseline.Options);
+    private static readonly JsonElement EmptySettingsSchema = JsonSerializer.SerializeToElement(new { type = "object", additionalProperties = false, properties = new { } }, Elsa.Serialization.Core.JsonBaseline.Options);
     private static InvalidOperationException Unavailable() => new("The model connection does not satisfy the authorized agent profile.");
     private sealed record Profile(Uri Endpoint, AgentModelCapabilities Capabilities, bool TemperatureSupported, string IncarnationId);
     private sealed class OwnedHttpClient(HttpClient client) : IAsyncDisposable

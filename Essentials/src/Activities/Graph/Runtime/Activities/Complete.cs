@@ -86,7 +86,7 @@ public sealed class Complete : StructuralActivity, IRuntimeStructuralActivity
         runtimeContext.RequestAncestorNotification(
             WellKnownRuntimeActivityConsumers.GraphActivity,
             GraphCompleteNotification.Code,
-            JsonSerializer.SerializeToElement(payload));
+            JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options));
         return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
     }
 }

@@ -82,7 +82,7 @@ internal sealed class AgentActivityProvider(
 
         var payload = JsonSerializer.SerializeToElement(prepared.Descriptor, AgentJson.Options);
         var descriptorSchema = prepared.Descriptor.InvocationControlsProfile is null ? AgentRuntimeIds.DescriptorSchema : AgentRuntimeIds.ContinuityDescriptorSchema;
-        var workerPayload = JsonSerializer.SerializeToElement(new { role = "model-turn" });
+        var workerPayload = JsonSerializer.SerializeToElement(new { role = "model-turn" }, Elsa.Serialization.Core.JsonBaseline.Options);
         var workerContract = new RuntimeContract(AgentRuntimeIds.TurnCapability, "1", AgentRuntimeIds.ConsumerKey, workerPayload, [],
             new(new("String"), true, ActivityValuePolicy.Default, [new("Result", "$", new("String"), true, ActivityValuePolicy.Default)]),
             ["Done"], new(AgentRuntimeIds.ConsumerKey, AgentRuntimeIds.TurnCapability), SideEffectProfile.External, supportsBackgroundExecution: true);
@@ -144,7 +144,7 @@ internal sealed class AgentActivityProvider(
             {
                 var defaultValue = input.Default!;
                 var memberSchema = validator.Prepare(schema.Inputs.Schema.GetProperty("properties").GetProperty(input.Name));
-                var wrapped = JsonSerializer.SerializeToElement(new Dictionary<string, JsonElement> { [input.Name] = defaultValue.Value });
+                var wrapped = JsonSerializer.SerializeToElement(new Dictionary<string, JsonElement> { [input.Name] = defaultValue.Value }, Elsa.Serialization.Core.JsonBaseline.Options);
                 if (!StringComparer.OrdinalIgnoreCase.Equals(defaultValue.Syntax, "Literal") || memberSchema.Schema is null ||
                     memberSchema.Schema.Validate(defaultValue.Value).Count != 0 ||
                     AgentWireTypes.Validate(wrapped, [new(input.Name, input.Type.Alias, input.Type.CollectionKind, input.IsRequired, input.IsNullable)]).Count != 0)
@@ -261,8 +261,8 @@ internal sealed class AgentActivityProvider(
                     return [new("agent-invocation-controls", ActivityVersionChangeArea.Contract, "AgentInvocationContractChanged", new(), null, null,
                         ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major, "The agent's native invocation controls or whole-result metadata changed.")];
                 if (before is not null && after is not null &&
-                    Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(before.InputConstraints), JsonSerializer.SerializeToElement(after.InputConstraints)) &&
-                    Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(before.ResultConstraints), JsonSerializer.SerializeToElement(after.ResultConstraints))) return [];
+                    Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(before.InputConstraints, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(after.InputConstraints, Elsa.Serialization.Core.JsonBaseline.Options)) &&
+                    Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(before.ResultConstraints, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(after.ResultConstraints, Elsa.Serialization.Core.JsonBaseline.Options))) return [];
             }
         }
         return [new("agent-json-constraints", ActivityVersionChangeArea.Contract, "AgentJsonConstraintsChanged", new(), null, null,

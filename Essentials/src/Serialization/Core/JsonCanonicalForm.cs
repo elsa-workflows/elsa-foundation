@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Elsa.Serialization.Core;
 
@@ -15,6 +16,10 @@ public static class JsonCanonicalForm
     /// <summary>Compares optional JSON values while retaining the distinction between omission and explicit null.</summary>
     public static bool Equals(JsonElement? left, JsonElement? right) =>
         left.HasValue == right.HasValue && (!left.HasValue || Equals(left.Value, right!.Value));
+
+    /// <summary>Compares JSON node values with exact numbers, preserving the node API's null-root semantics.</summary>
+    public static bool EqualsNodes(JsonNode? left, JsonNode? right) =>
+        Equals(JsonHashInput.SerializeToElement(left), JsonHashInput.SerializeToElement(right));
 
     internal static byte[] GetBytes(JsonElement value)
     {

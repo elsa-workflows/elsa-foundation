@@ -46,7 +46,7 @@ internal sealed class VariableMapper(IWellKnownTypeRegistry wellKnownTypeRegistr
         var valueType = variableType.IsConstructedGenericType ? variableType.GetGenericArguments().FirstOrDefault() ?? typeof(object) : typeof(object);
         var typeReference = TypeReferenceFactory.FromClrType(valueType, wellKnownTypeRegistry.GetAliasOrDefault);
         var storageDriverType = source.StorageDriverType is not null ? wellKnownTypeRegistry.GetAliasOrDefault(source.StorageDriverType) : null;
-        var value = variableFormatter.Format(source);
+        var value = variableFormatter.Format(source.DefaultValue, valueType);
         return new VariableDefinition(source.Id, source.Name, typeReference, storageDriverType, value);
     }
 

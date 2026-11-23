@@ -212,7 +212,7 @@ internal static class GraphBodyReferenceValidator
             yield break;
         }
 
-        var value = argument.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(argument.Value.Value);
+        var value = argument.Value.Value is JsonElement element ? element : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(argument.Value.Value);
         if (value.ValueKind != JsonValueKind.Object)
             yield break;
 

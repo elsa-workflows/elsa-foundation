@@ -148,3 +148,4 @@ Elsa.Serialization.Core.JsonModuleMetadata
 static Elsa.Serialization.Core.JsonModuleMetadata.Owns(System.Type! type, string! moduleNamespace) -> bool
 static Elsa.Serialization.Core.JsonModuleMetadata.Resolve(System.Text.Json.Serialization.JsonSerializerContext! context, System.Type! type, System.Text.Json.JsonSerializerOptions! hostOptions, string! moduleNamespace) -> System.Text.Json.Serialization.Metadata.JsonTypeInfo?
 override Elsa.Serialization.Core.JsonConversionException.Message.get -> string!
+static Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(System.Text.Json.Nodes.JsonNode? left, System.Text.Json.Nodes.JsonNode? right) -> bool

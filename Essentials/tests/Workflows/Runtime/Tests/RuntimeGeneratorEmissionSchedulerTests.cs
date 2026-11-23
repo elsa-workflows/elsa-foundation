@@ -44,7 +44,7 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
         var payload = workItem.Payload!.Value;
         Assert.Equal("wfexec-1:generated-event:event-5", payload.GetProperty("workItemId").GetString());
         Assert.Equal("event-5", payload.GetProperty("generatedEvent").GetProperty("generatedEventId").GetString());
-        Assert.Equal("actexec-generator", payload.GetProperty("GeneratorActivityExecutionId").GetString());
+        Assert.Equal("actexec-generator", payload.GetProperty("generatorActivityExecutionId").GetString());
         Assert.Equal("GeneratorEmitted", payload.GetProperty("reason").GetString());
     }
 

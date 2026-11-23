@@ -7,7 +7,6 @@ namespace Elsa.Diagnostics.OpenTelemetry;
 
 [JsonSourceGenerationOptions(
     UseStringEnumConverter = true,
-    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(OpenTelemetryResourceFilter))]
 [JsonSerializable(typeof(OpenTelemetryTraceFilter))]

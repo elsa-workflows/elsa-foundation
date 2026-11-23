@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Serialization.Core;
 using Xunit;
 
@@ -33,6 +34,14 @@ public sealed class JsonCanonicalFormTests
         using var a = JsonDocument.Parse(left);
         using var b = JsonDocument.Parse(right);
         Assert.Equal(equal, JsonCanonicalForm.Equals(a.RootElement, b.RootElement));
+        Assert.Equal(equal, JsonCanonicalForm.EqualsNodes(JsonNode.Parse(left), JsonNode.Parse(right)));
         Assert.Equal(equal, JsonHashInput.Hash(a.RootElement) == JsonHashInput.Hash(b.RootElement));
+    }
+
+    [Fact]
+    public void Node_equality_keeps_null_roots_and_absent_object_members_separate()
+    {
+        Assert.True(JsonCanonicalForm.EqualsNodes(null, JsonNode.Parse("null")));
+        Assert.False(JsonCanonicalForm.EqualsNodes(JsonNode.Parse("{}"), JsonNode.Parse("{\"x\":null}")));
     }
 }

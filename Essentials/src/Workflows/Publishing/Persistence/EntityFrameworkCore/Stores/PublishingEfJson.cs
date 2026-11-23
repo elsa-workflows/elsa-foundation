@@ -31,7 +31,7 @@ internal static class PublishingEfJson
 
     /// <summary>Whether two values serialize to the same material, regardless of member order.</summary>
     public static bool SameMaterial<T>(T left, T right) =>
-        JsonNode.DeepEquals(JsonNode.Parse(Serialize(left)), JsonNode.Parse(Serialize(right)));
+        Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(JsonNode.Parse(Serialize(left)), JsonNode.Parse(Serialize(right)));
 
     private static JsonSerializerOptions CreateOptions()
     {

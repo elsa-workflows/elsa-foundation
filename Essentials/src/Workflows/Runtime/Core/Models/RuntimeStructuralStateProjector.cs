@@ -41,7 +41,7 @@ public static class RuntimeStructuralStateProjector
                     throw new InvalidOperationException("A root control stream cannot change its retained identity.");
                 if (prior.SourceWorkItemId == control.SourceWorkItemId)
                 {
-                    if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(prior), JsonSerializer.SerializeToElement(control)))
+                    if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(prior, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(control, Elsa.Serialization.Core.JsonBaseline.Options)))
                         throw new InvalidOperationException("A repeated control source must preserve its exact batch.");
                 }
                 else if (prior.IsTerminal || prior.Ordinal == long.MaxValue || control.Ordinal != prior.Ordinal + 1)

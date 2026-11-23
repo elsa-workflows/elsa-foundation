@@ -161,7 +161,7 @@ public sealed record WeaverContextAttachmentResponse(
     string ContentType,
     string Sensitivity,
     string Scope,
-    object? Content)
+    JsonElement? Content)
 {
     public string ModuleId { get; init; } = string.Empty;
     public string SchemaVersion { get; init; } = "1";
@@ -311,7 +311,7 @@ public sealed class WeaverContextAttachmentRequest
     /// Module-owned structured caller input. Installed sources admit its schema, bound its content
     /// and establish provenance before provider use; client metadata never grants authority.
     /// </summary>
-    public object? Content { get; init; }
+    public JsonElement? Content { get; init; }
 
     public IReadOnlyDictionary<string, string> References { get; init; } = new Dictionary<string, string>();
     public string Source { get; init; } = string.Empty;
@@ -403,7 +403,7 @@ public static class WeaverApiMapping
             attachment.ContentType,
             attachment.Sensitivity.ToContractString(),
             attachment.Scope,
-            attachment.Content)
+            attachment.Content is null ? null : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(attachment.Content))
         {
             ModuleId = attachment.ModuleId,
             SchemaVersion = attachment.SchemaVersion,
@@ -425,7 +425,7 @@ public static class WeaverApiMapping
             ParseSensitivity(attachment.Sensitivity),
             attachment.Scope,
             attachment.Summary,
-            attachment.Content ?? attachment.Summary,
+            attachment.Content is { } content ? (object)content : attachment.Summary,
             attachment.References)
         {
             ModuleId = attachment.ModuleId,

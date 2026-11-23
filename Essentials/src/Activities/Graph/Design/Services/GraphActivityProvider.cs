@@ -686,7 +686,7 @@ public sealed class GraphActivityProvider(
                     JsonElement { ValueKind: JsonValueKind.String } text => JsonDocument.Parse(text.GetString()!).RootElement,
                     JsonElement json => json,
                     string text => JsonDocument.Parse(text).RootElement,
-                    var other => JsonSerializer.SerializeToElement(other)
+                    var other => Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(other)
                 };
                 if (element.ValueKind != JsonValueKind.Array)
                     return null;
@@ -725,7 +725,7 @@ public sealed class GraphActivityProvider(
             JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
             JsonElement { ValueKind: JsonValueKind.Array } element => element.GetArrayLength() == 0 ? null : element.GetRawText(),
             JsonElement element => element.GetRawText(),
-            _ => JsonSerializer.Serialize(value)
+            _ => Elsa.Serialization.Core.JsonConversionContract.Serialize(value)
         };
         if (string.IsNullOrWhiteSpace(text))
             return true;

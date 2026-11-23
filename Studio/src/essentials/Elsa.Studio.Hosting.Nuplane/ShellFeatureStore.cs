@@ -21,7 +21,6 @@ internal sealed class ShellFeatureStore(
     StudioConfigurationMutationGate mutationGate) : IShellFeatureConfigurationStore
 {
     private static readonly byte[] RevisionKey = RandomNumberGenerator.GetBytes(32);
-    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options) { WriteIndented = true };
     private string ShellName => options.Value.ShellName;
     private string Prefix => $"CShells:Shells:{ShellName}:Features";
 
@@ -50,12 +49,13 @@ internal sealed class ShellFeatureStore(
         var current = await SnapshotAsync(node, settings, ShellConfiguration(), cancellationToken);
         if (!string.Equals(current.Revision, expectedRevision, StringComparison.Ordinal))
             throw new FeatureCatalogRevisionConflictException(expectedRevision, current.Revision);
-        node.Clear();
+        var accepted = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         foreach (var feature in features.OrderBy(feature => feature.Id, StringComparer.OrdinalIgnoreCase))
-            node[feature.Id] = feature.Enabled ? JsonNode.Parse(feature.Configuration.GetRawText()) : JsonValue.Create(false);
+            accepted[feature.Id] = feature.Enabled ? feature.Configuration.Clone() : JsonSerializer.SerializeToElement(false, Elsa.Serialization.Core.JsonBaseline.Options);
+        var replacement = JsonSerializer.SerializeToElement(accepted, Elsa.Serialization.Core.JsonBaseline.Options);
         try
         {
-            await AtomicConfigWriter.WriteAtomicAsync(file, document.ToJsonString(JsonOptions) + Environment.NewLine, cancellationToken);
+            await AtomicConfigWriter.WriteAtomicAsync(file, ReplaceFeatures(document, replacement) + Environment.NewLine, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or FormatException)
@@ -63,7 +63,7 @@ internal sealed class ShellFeatureStore(
             throw new StudioHostingException($"Could not persist feature configuration for Studio shell '{ShellName}'.", error);
         }
         AtomicConfigWriter.ReloadAfterSave(configuration, $"Feature configuration for Studio shell '{ShellName}'");
-        return await SnapshotAsync(node, await ComposeAsync(cancellationToken), ShellConfiguration(), cancellationToken);
+        return await SnapshotAsync(replacement, await ComposeAsync(cancellationToken), ShellConfiguration(), cancellationToken);
     }
 
     private async Task<ShellSettings> ComposeAsync(CancellationToken cancellationToken)
@@ -73,21 +73,22 @@ internal sealed class ShellFeatureStore(
         return await provided.Blueprint.ComposeAsync(cancellationToken);
     }
 
-    private async Task<ShellFeatureConfigurationSnapshot> SnapshotAsync(JsonObject? node, ShellSettings settings, JsonElement shellConfiguration, CancellationToken cancellationToken)
+    private async Task<ShellFeatureConfigurationSnapshot> SnapshotAsync(JsonElement? node, ShellSettings settings, JsonElement shellConfiguration, CancellationToken cancellationToken)
     {
         var values = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
         var catalog = await featureCatalog.GetSnapshotAsync(cancellationToken);
         var selection = StudioFeatureSelection.Resolve(settings, catalog.FeatureDescriptors, logger);
         foreach (var id in selection.Enabled)
         {
-            var raw = node?.FirstOrDefault(pair => string.Equals(pair.Key, id, StringComparison.OrdinalIgnoreCase)).Value;
-            values[id] = raw is JsonObject value
-                ? JsonSerializer.SerializeToElement(value)
-                : JsonSerializer.SerializeToElement(ComposedConfiguration(settings, id));
+            var raw = node is { ValueKind: JsonValueKind.Object } featureObject
+                ? featureObject.EnumerateObject().FirstOrDefault(property => string.Equals(property.Name, id, StringComparison.OrdinalIgnoreCase)).Value
+                : default;
+            values[id] = raw.ValueKind == JsonValueKind.Object
+                ? StrictData(raw)
+                : JsonSerializer.SerializeToElement(ComposedConfiguration(settings, id), Elsa.Serialization.Core.JsonBaseline.Options);
         }
-        var rawState = node?.ToJsonString() ?? JsonSerializer.Serialize(values);
-        using var revisionDocument = JsonDocument.Parse(rawState);
-        var revision = Convert.ToHexStringLower(Elsa.Serialization.Core.JsonHashInput.HashKeyed(revisionDocument.RootElement, RevisionKey));
+        var revisionValue = node ?? JsonSerializer.SerializeToElement(values, Elsa.Serialization.Core.JsonBaseline.Options);
+        var revision = Convert.ToHexStringLower(Elsa.Serialization.Core.JsonHashInput.HashKeyed(revisionValue, RevisionKey));
         return new(ShellName, revision, values, shellConfiguration);
     }
 
@@ -104,18 +105,28 @@ internal sealed class ShellFeatureStore(
                 if (parent[part] is not JsonObject child) parent[part] = child = new JsonObject();
                 parent = child;
             }
-            parent[parts[^1]] = JsonSerializer.SerializeToNode(value);
+            parent[parts[^1]] = JsonSerializer.SerializeToNode(value, Elsa.Serialization.Core.JsonBaseline.Options);
         }
         return root;
     }
 
-    private JsonObject Shell(JsonObject document) => Child(Child(Child(document, "CShells"), "Shells"), ShellName);
-    private JsonObject Features(JsonObject document) => Child(Shell(document), "Features");
+    private JsonElement Features(JsonElement document)
+    {
+        foreach (var part in new[] { "CShells", "Shells", ShellName, "Features" })
+        {
+            if (document.ValueKind != JsonValueKind.Object)
+                throw new StudioHostingException($"Studio shell '{ShellName}' requires an object '{part}' in its managed configuration file.");
+            document = document.EnumerateObject().FirstOrDefault(property => string.Equals(property.Name, part, StringComparison.OrdinalIgnoreCase)).Value;
+            if (document.ValueKind != JsonValueKind.Object)
+                throw new StudioHostingException($"Studio shell '{ShellName}' requires an object '{part}' in its managed configuration file.");
+        }
+        return document;
+    }
     private JsonElement ShellConfiguration()
     {
         // Hosting's installed configuration provider composes this section. Features are deliberately separate.
         var section = configuration.GetSection($"CShells:Shells:{ShellName}:Configuration");
-        return section.Exists() ? JsonSerializer.SerializeToElement(ConfigurationNode(section)) : default;
+        return section.Exists() ? JsonSerializer.SerializeToElement(ConfigurationNode(section), Elsa.Serialization.Core.JsonBaseline.Options) : default;
     }
 
     private static JsonNode? ConfigurationNode(IConfigurationSection section)
@@ -128,16 +139,62 @@ internal sealed class ShellFeatureStore(
         return new JsonObject(children.Select(child => KeyValuePair.Create(child.Key, ConfigurationNode(child))));
     }
 
-    private JsonObject Child(JsonObject parent, string key) =>
-        parent.FirstOrDefault(pair => string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase)).Value as JsonObject
-            ?? throw new StudioHostingException($"Studio shell '{ShellName}' requires an object '{key}' in its managed configuration file.");
+    private string ReplaceFeatures(JsonElement document, JsonElement replacement)
+    {
+        var path = new[] { "CShells", "Shells", ShellName, "Features" };
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder }))
+            WritePath(document, 0, writer);
+        return Encoding.UTF8.GetString(stream.ToArray());
 
-    private static async Task<JsonObject> ReadAsync(string file, CancellationToken cancellationToken)
+        void WritePath(JsonElement current, int depth, Utf8JsonWriter writer)
+        {
+            if (depth == path.Length)
+            {
+                writer.WriteRawValue(replacement.GetRawText(), skipInputValidation: true);
+                return;
+            }
+            writer.WriteStartObject();
+            var replaced = false;
+            foreach (var property in current.EnumerateObject())
+            {
+                writer.WritePropertyName(property.Name);
+                if (!replaced && string.Equals(property.Name, path[depth], StringComparison.OrdinalIgnoreCase))
+                {
+                    replaced = true;
+                    WritePath(property.Value, depth + 1, writer);
+                }
+                else writer.WriteRawValue(property.Value.GetRawText(), skipInputValidation: true);
+            }
+            writer.WriteEndObject();
+        }
+    }
+
+    private static JsonElement StrictData(JsonElement value)
     {
         try
         {
-            return JsonNode.Parse(await File.ReadAllTextAsync(file, cancellationToken), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }) as JsonObject
-                ?? throw new StudioHostingException("Studio shell configuration must be a JSON object.");
+            using var strict = JsonDocument.Parse(value.GetRawText());
+            return strict.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            // The managed configuration file also accepts JSONC. Only that syntax needs projection to
+            // strict response JSON; a configuration already written as JSON retains its original bytes.
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder })) value.WriteTo(writer);
+            using var strict = JsonDocument.Parse(stream.ToArray());
+            return strict.RootElement.Clone();
+        }
+    }
+
+    private static async Task<JsonElement> ReadAsync(string file, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(await File.ReadAllTextAsync(file, cancellationToken), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            if (document.RootElement.ValueKind != JsonValueKind.Object) throw new StudioHostingException("Studio shell configuration must be a JSON object.");
+            return document.RootElement.Clone();
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
         {

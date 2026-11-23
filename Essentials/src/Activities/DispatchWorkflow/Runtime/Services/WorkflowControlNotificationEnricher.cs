@@ -29,8 +29,8 @@ internal sealed class WorkflowControlNotificationEnricher(IRuntimeWorkflowContro
                 // A same-work inspection/fault checkpoint can carry an unchanged projection too. The
                 // source-commit anchor travels atomically with its sole outbox row; source work alone is insufficient.
                 var retained = await activities.FindAsync(commit.WorkflowExecutionId, root.InvocationId, cancellationToken);
-                var retainedMatches = Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(retained?.ProducedControl),
-                    JsonSerializer.SerializeToElement(batch));
+                var retainedMatches = Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(retained?.ProducedControl, Elsa.Serialization.Core.JsonBaseline.Options),
+                    JsonSerializer.SerializeToElement(batch, Elsa.Serialization.Core.JsonBaseline.Options));
                 var anchor = root.ProducedControlSourceCommitId ?? (retainedMatches ? retained?.ProducedControlSourceCommitId : null);
                 if (root.ProducedControlSourceCommitId is { } claimed && retainedMatches &&
                     retained?.ProducedControlSourceCommitId is { } original && claimed != original)

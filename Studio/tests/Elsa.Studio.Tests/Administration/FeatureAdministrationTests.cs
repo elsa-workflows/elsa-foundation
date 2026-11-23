@@ -81,6 +81,24 @@ public sealed class FeatureAdministrationTests
     }
 
     [Fact]
+    public async Task Public_store_preserves_accepted_configuration_bytes_through_save_and_reload()
+    {
+        const string raw = """{ "Credential":"raw-private", "Size":10, "OrderID":9007199254740993, "nil":null, "text":"Ren\u00e9", "amount":1.00 }""";
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true);
+        var store = host.App.Services.GetRequiredService<IShellFeatureConfigurationStore>();
+        var before = await store.LoadAsync();
+        using var data = JsonDocument.Parse(raw);
+        var changes = before.Features.Select(pair => new FeatureConfigurationChange(pair.Key, true,
+            pair.Key == "Configured" ? data.RootElement : pair.Value)).ToArray();
+        var saved = await store.SaveAsync(before.Revision, changes);
+        Assert.Equal(raw, saved.Features["Configured"].GetRawText());
+        Assert.Equal(raw, (await store.LoadAsync()).Features["Configured"].GetRawText());
+        using var retained = JsonDocument.Parse(await File.ReadAllTextAsync(host.ShellsFile));
+        Assert.Equal(raw, retained.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("Authoring")
+            .GetProperty("Features").GetProperty("Configured").GetRawText());
+    }
+
+    [Fact]
     public async Task Activation_guards_receive_the_shell_configuration_separately_from_feature_secrets()
     {
         var guard = new ConfigurationGuard();

@@ -333,10 +333,11 @@ public sealed partial class EfExecutableActivityTemplateStore(
         try
         {
             var content = RuntimeArtifactEfModule.Chain.Upcast<ExecutableActivityTemplateEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
-            var envelope = JsonNode.Parse(content)?.AsObject() ?? throw new InvalidDataException("The persisted executable activity template envelope is empty.");
-            if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "executableActivityTemplate") || !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "templateHash")), row.TemplateHash) || envelope["template"] is null)
+            using var envelopeDocument = JsonDocument.Parse(content);
+            var envelope = envelopeDocument.RootElement;
+            if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "executableActivityTemplate") || !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "templateHash")), row.TemplateHash) || !envelope.TryGetProperty("template", out var template) || template.ValueKind != JsonValueKind.Object)
                 throw new InvalidDataException("The persisted executable activity template envelope projection is corrupt.");
-            var value = RuntimeArtifactJson.Deserialize<ExecutableActivityTemplate>(envelope["template"]!.ToJsonString());
+            var value = RuntimeArtifactJson.Deserialize<ExecutableActivityTemplate>(template.GetRawText());
             Validate(value);
             if (value.TemplateId != Decode(row.TemplateId) || value.TemplateHash != row.TemplateHash)
                 throw new InvalidDataException("The persisted executable activity template projection is corrupt.");
@@ -389,7 +390,7 @@ public sealed partial class EfExecutableActivityTemplateStore(
 
     private static void EnsureSameIdentityAndContent(ExecutableActivityTemplate existing, ExecutableActivityTemplate candidate)
     {
-        if (existing.TemplateHash != candidate.TemplateHash || !JsonNode.DeepEquals(ComparableContent(existing), ComparableContent(candidate)))
+        if (existing.TemplateHash != candidate.TemplateHash || !Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(ComparableContent(existing), ComparableContent(candidate)))
             throw new InvalidOperationException($"Template id '{candidate.TemplateId}' and hash '{candidate.TemplateHash}' are already bound to different content.");
     }
 
@@ -403,9 +404,20 @@ public sealed partial class EfExecutableActivityTemplateStore(
 
     private static string SerializeEnvelope(ExecutableActivityTemplate template)
     {
-        var payload = JsonNode.Parse(RuntimeArtifactJson.Serialize(template)) ?? throw new InvalidDataException("Executable activity template payload could not be serialized.");
-        payload.AsObject().Remove("nodesById");
-        return new JsonObject { ["collection"] = "executableActivityTemplate", ["templateHash"] = Encode(template.TemplateHash), ["template"] = payload }.ToJsonString();
+        using var original = JsonDocument.Parse(RuntimeArtifactJson.Serialize(template));
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder }))
+        {
+            writer.WriteStartObject();
+            foreach (var property in original.RootElement.EnumerateObject().Where(property => property.Name != "nodesById"))
+            {
+                writer.WritePropertyName(property.Name);
+                writer.WriteRawValue(property.Value.GetRawText(), skipInputValidation: true);
+            }
+            writer.WriteEndObject();
+        }
+        using var payload = JsonDocument.Parse(stream.ToArray());
+        return RuntimeArtifactJson.Serialize(new { collection = "executableActivityTemplate", templateHash = Encode(template.TemplateHash), template = payload.RootElement });
     }
 
     private string EncodeCursor(string scope, string key) => continuationCodec.EncodeJson(ContinuationPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new Cursor(1, Hash(scope), key))));
@@ -425,7 +437,7 @@ public sealed partial class EfExecutableActivityTemplateStore(
         { throw new ArgumentException("The executable activity template continuation token is invalid.", nameof(token), exception); }
     }
 
-    private static string ReadString(JsonObject node, string property) => node[property] is JsonValue value && value.TryGetValue<string>(out var text) && !string.IsNullOrWhiteSpace(text) ? text : throw new InvalidDataException($"The executable activity template envelope is missing '{property}'.");
+    private static string ReadString(JsonElement node, string property) => node.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { } text && !string.IsNullOrWhiteSpace(text) ? text : throw new InvalidDataException($"The executable activity template envelope is missing '{property}'.");
     private static InvalidOperationException HashCollision(ExecutableActivityTemplate template, string owner) => new($"Template hash '{template.TemplateHash}' is already bound to id '{owner}', not '{template.TemplateId}'.");
     private static void Validate(ExecutableActivityTemplate value) { ArgumentNullException.ThrowIfNull(value); ArgumentException.ThrowIfNullOrWhiteSpace(value.TemplateId); ArgumentException.ThrowIfNullOrWhiteSpace(value.TemplateHash); if (value.TemplateId.Length > RuntimeArtifactEfModule.IdentityMaximumLength) throw new ArgumentOutOfRangeException(nameof(value.TemplateId)); if (value.TemplateHash.Length > RuntimeArtifactEfModule.HashMaximumLength) throw new ArgumentOutOfRangeException(nameof(value.TemplateHash)); }
     private static string CreateId(string scope, string value) => Hash($"{scope.Length}:{scope}{value.Length}:{value}");

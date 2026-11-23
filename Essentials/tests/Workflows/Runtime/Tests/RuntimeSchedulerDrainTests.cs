@@ -1245,7 +1245,7 @@ public sealed class RuntimeSchedulerDrainTests
                 NewPinnedExecutable(),
                 "node-start",
                 $"actexec-{index}",
-                RuntimeStartActivityCommandPayload.ScheduledActivityReason), jsonSerializerOptions));
+                RuntimeStartActivityCommandPayload.ScheduledActivityReason), jsonSerializerOptions ?? Elsa.Serialization.Core.JsonBaseline.Options));
 
     private RuntimeSchedulerWorkItem NewInvokeActivityWorkItem(int index) =>
         NewWorkItem(
@@ -1273,7 +1273,7 @@ public sealed class RuntimeSchedulerDrainTests
                     occurredAt: _now,
                     durability: GeneratedEventDurability.PolicyControlled),
                 enqueuedAt: _now,
-                reason: "GeneratorEmitted")),
+                reason: "GeneratorEmitted"), Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: new Dictionary<string, string>
             {
                 ["GeneratorId"] = $"generator-{index}"

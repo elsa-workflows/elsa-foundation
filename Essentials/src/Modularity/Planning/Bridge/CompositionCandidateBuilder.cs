@@ -354,7 +354,7 @@ public static class CompositionCandidateBuilder
                     if ((existing is JsonArray or JsonObject) && value.ValueKind is not (JsonValueKind.Array or JsonValueKind.Object) || !SameType(TypeOf(existing), value.ValueKind))
                         throw Refuse("bridge-portable-unsafe", "An authored setting changed its JSON shape.");
                     var replacement = JsonNode.Parse(value.GetRawText());
-                    var changed = !JsonNode.DeepEquals(existing, replacement);
+                    var changed = !Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(existing, replacement);
                     obj[existingName] = replacement;
                     return changed;
                 }
@@ -371,7 +371,7 @@ public static class CompositionCandidateBuilder
                     if ((existing is JsonArray or JsonObject) && value.ValueKind is not (JsonValueKind.Array or JsonValueKind.Object) || !SameType(TypeOf(existing), value.ValueKind))
                         throw Refuse("bridge-portable-unsafe", "An authored setting changed its JSON shape.");
                     var replacement = JsonNode.Parse(value.GetRawText());
-                    var changed = !JsonNode.DeepEquals(existing, replacement);
+                    var changed = !Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(existing, replacement);
                     array[arrayIndex] = replacement;
                     return changed;
                 }

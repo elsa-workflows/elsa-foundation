@@ -360,7 +360,7 @@ public sealed class ActivityDraftTestRunService(
         var candidate = JsonSerializer.SerializeToNode(proposed)!.AsObject();
         winner.Remove(nameof(WorkflowExecutable.Identity)); candidate.Remove(nameof(WorkflowExecutable.Identity));
         winner.Remove(nameof(WorkflowExecutable.CreatedAt)); candidate.Remove(nameof(WorkflowExecutable.CreatedAt));
-        if (!JsonNode.DeepEquals(winner, candidate))
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(winner, candidate))
             throw new InvalidDataException("The saved Test Run wrapper content or provenance conflicts with preparation.");
     }
 

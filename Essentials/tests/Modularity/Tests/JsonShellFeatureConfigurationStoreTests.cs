@@ -332,11 +332,11 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
         var withProcessKey = await CreateStore().LoadAsync();
         var withSharedKey = await CreateStore(revisionKey: SharedRevisionKey).LoadAsync();
 
-        var unkeyed = Convert.ToHexStringLower(SHA256.HashData(features));
+        var unkeyed = Elsa.Serialization.Core.JsonHashInput.HashUtf8(features);
         Assert.NotEqual(unkeyed, withProcessKey.Revision);
         Assert.NotEqual(unkeyed, withSharedKey.Revision);
         // The same input reproduces the revision once the key is known, so the key is the only thing the guess lacks.
-        Assert.Equal(Convert.ToHexStringLower(HMACSHA256.HashData(Encoding.UTF8.GetBytes(SharedRevisionKey), features)), withSharedKey.Revision);
+        Assert.Equal(Convert.ToHexStringLower(Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(features, Encoding.UTF8.GetBytes(SharedRevisionKey))), withSharedKey.Revision);
     }
 
     public ValueTask DisposeAsync()
