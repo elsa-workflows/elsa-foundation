@@ -65,14 +65,28 @@ models/Native.Run/run-core-preview.sh
 The first Embedded host starts a Native approval workflow through the public Foundation contract, records Ada's approval,
 and exits at the second wait. The next process opens the same database and reads from the first process's journal bookmark.
 It sends Ada's operation ID again with a different payload, then sends Grace's approval with a new ID. The stored
-checkpoint stays byte for byte through replay. The journal and final result verify that each approval applied once.
+serialized workflow state and checkpoint revision stay unchanged through replay. The journal and final result verify that each approval applied once.
+Between the two owner processes, a separate diagnostic process bound to another tenant checks that it cannot
+send to the workflow or read its checkpoint or journal. This probe uses no measured connection.
 
 The default receipt estimates round trips by adding EF commands and explicit transaction completions. It excludes connection setup. Setup, ownership and journal reads have their own rows.
+The relational store reads its format marker during schema setup, each nonempty take or retake, and each renewing heartbeat.
+The preview counts these reads in setup and ownership. A relational format advance uses a coordinated stop. Fully stop every
+predecessor process before the first advance if it was built before the marker-lock protocol. The missed-stop check serializes
+only readers that already use that lock. The migration race fixture runs such a reader against the previous stored format.
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 
+On a fresh PostgreSQL database, `pg-root-history <owned|ef> <checked|in-batch>` on the same runner
+exercises two ordinary turns with no journal entries. The Minimal workflow saves its first approval. The Full
+workflow consumes an unmatched input admitted while its scheduled start was pending. The owner offers the
+creator at its deadline and releases the input after the first checkpoint. Each workflow reaches revisions
+1, 2 and 3. Its journal has two contiguous positions for revisions 1 and 3. The public tail resumes from
+the start bookmark and returns the recorded entries in revision 3.
+
 To measure TCP turns as well, use a dedicated loopback database with `Host=127.0.0.1`, its published port and
-`SSL Mode=Disable` in `KERNEL_PREVIEW_POSTGRES`:
+`SSL Mode=Disable` in `KERNEL_PREVIEW_POSTGRES`. The meter disables optional GSS encryption for its connection
+and refuses `GSS Encryption Mode=Require`.
 
 ```bash
 KERNEL_PREVIEW_MEASURE_WIRE=1 models/Native.Run/run-core-preview.sh
@@ -91,6 +105,22 @@ multiplexing disabled. The output also reports PostgreSQL Sync and Query groups 
 | Duplicate approval after restart including admission | 5 | 5 |
 | Finishing approval including admission | 19 | 21 |
 
+In two before-and-after runs on PostgreSQL 17, schema setup on an empty database took 34 or 35 TCP turns before
+the format check and 37 with the marker table, seed and read. Both the first and restarted process took 13 TCP
+turns for ownership, up from 12. The five workflow operations above kept their measured counts.
+
+Public PostgreSQL readers check the format once when opening the journal cursor. On two fresh PostgreSQL 17.12
+runs with this check, the first process reported 38 or 39 TCP turns for setup, the restarted process reported six,
+and both still reported 13 for ownership. The five workflow phases retained their earlier counts.
+
+The relational schema marker is now 2 for the readable format columns on node rows. Schema 1 preview databases
+refuse open and acquisition before a node-row write. Use a fresh dedicated preview database for this revision.
+
+The general relational projector checks the format before reading the cursor, reading a journal page and
+writing a projection. A PostgreSQL 17 round that advanced the cursor measured six TCP turns with those
+checks, up from three. The general journal reader, view reader and sweeper each check the marker on entry.
+The public preview uses separate tenant-scoped checkpoint and journal queries.
+
 To run two tenants' Native approvals on the same Embedded worker, use a fresh dedicated database. After building
 `models/Native.Run` in Release, run the following commands from `prototypes/kernel-model`. Supply the three
 references printed by the first process to the second. The third identifies a root outside the owner's set.
@@ -103,7 +133,8 @@ dotnet "$dll" pg-multi-root owned in-batch restart "$first_ref" "$second_ref" "$
 ```
 
 The fixture checks the PostgreSQL transaction IDs for two journal rows at different actor revisions, replays a
-direct input after restart, and checks that a terminal refusal on one root rolls back both turns. The writer choices
+direct input after restart, and checks that a terminal refusal on one root rolls back both turns. The second
+tenant issues its public requests in a separate process bound to that tenant. The writer choices
 are `owned` and `ef`. The fence choices are `in-batch` and `checked`.
 
 To let an Embedded worker discover public roots from their partition, use a fresh dedicated database and run:
@@ -119,7 +150,8 @@ takes the same partition and finishes that approval before the observer looks up
 joins eligible inbox rows to their admitted births, respects its row limit, and returns tenant and reference with
 the creator. Direct inputs admitted before a scheduled birth become eligible after its first checkpoint. The fixture
 checks that an independent ready root runs during that interval, a replay adds no turn, and the other partition keeps its pending work.
-This preview runs one registered workflow actor type on its dedicated database.
+Each tenant uses its own fixed-scope public client process. To select a writer and fence, append `owned` or `ef`
+and `in-batch` or `checked` to both commands. This preview runs one registered workflow actor type on its dedicated database.
 
 To run two processes under the built-in Cluster runtime, point `KERNEL_PREVIEW_POSTGRES` at a fresh dedicated
 PostgreSQL database and run the following after building `models/Native.Run` in Release:
@@ -136,6 +168,19 @@ epoch. Replaying that approval is a duplicate. A new approval completes the work
 assigned sets. This preview covers generated public roots, direct input and graceful handover with the PostgreSQL
 owned-SQL writer. Run `root-set` in PostgreSQL EF conformance for the stale-fence and per-partition Seen/Trial checks.
 
+For an abrupt peer exit in the same two-process Cluster fixture, use a fresh dedicated PostgreSQL database:
+
+```bash
+dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-crash 1024
+```
+
+The coordinator terminates only its spawned peer process while the workflow waits for its second approval.
+The fixture reads the peer's live lease after process exit. A temporary diagnostic trigger on the workflow's
+partition records the peer lease deadline, owner, epoch and both the successful UPDATE's statement start and its
+row-trigger time. The fixture requires that UPDATE to start after the deadline. The provider samples the lease
+earlier in the same transaction. The observer records committed ownership changes. The public journal bookmark
+spans process loss and replay.
+
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
 ```bash
@@ -143,11 +188,12 @@ models/Native.Run/run-core-preview-failover.py
 ```
 
 The fixture starts two Embedded host processes for the same root. The first keeps renewing its lease at the second
-wait. After PostgreSQL refuses the standby's take, the fixture sends SIGKILL to its first child. The same standby
+wait. It drives idle Worker passes and heartbeat renewals beyond the original database lease deadline. The standby
+checks the same node and epoch still have a live renewed lease. After PostgreSQL refuses its take, the fixture sends SIGKILL to its first child. The same standby
 acquires a later epoch after the stored deadline, resumes the journal bookmark, replays Ada's input and records
 Grace's approval. This exercises one fixed partition. K5 covers Cluster placement and balancing across partitions.
 
-For a Durable Flowchart handover, use a fresh database and run:
+For a Durable Flowchart handover, set `KERNEL_PREVIEW_POSTGRES` to a fresh database. Both runtime nodes and the public reader use the scoped continuation format (schema 2, message protocol 3, journal codec 1). Run:
 
 ```sh
 dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-flowchart 1024
@@ -167,7 +213,23 @@ continuations commit together. A stale sibling's fence rolls back a mixed consum
 only the home that writes a journal entry. With `ef` the fixture checks that the store declines grouped
 ownership before changing any lease or inbox row.
 
-### PostgreSQL Flowchart preview
+### Flowchart restart on the public PostgreSQL preview
+
+Set `KERNEL_PREVIEW_POSTGRES` to a fresh PostgreSQL database and run from `prototypes/kernel-model`:
+
+```bash
+models/Native.Run/run-core-preview.sh pg-flowchart-preview
+```
+
+The Flowchart routes an amount of 750 to the approval path and persists a second approval wait. A new process
+loads that wait. Replaying the first approval leaves the checkpoint and journal unchanged and runs zero actor
+turns. The second approval runs one turn and the join fires once. The automatic branch stays inactive and the
+journal records one completion revision.
+
+This is a runnable K7 case on the public Embedded preview. The full Flowchart corpus and Cluster qualification
+remain part of K7.
+
+### Parallel paths in the PostgreSQL Flowchart preview
 
 Use a fresh dedicated database in `KERNEL_PREVIEW_POSTGRES` for each run. From `prototypes/kernel-model`:
 
@@ -191,6 +253,13 @@ self inputs, and an unchanged journal on final replay. `KERNEL_PREVIEW_FENCE=che
 fence mode. This scoped path supports immediate sends back to the exact generated actor creation. Scheduled sends,
 cross-actor sends and other authored effects remain outside this preview.
 
+The Durable command creates a dedicated PostgreSQL database format (schema 2, message protocol 3,
+journal codec 1). Use an empty database for this profile. Fresh creation seeds that marker with the schema.
+Opening an ordinary database checks its existing marker before installing continuation tables or enabling sends.
+The ordinary PostgreSQL preview and other relational providers keep their existing format. Protocol 2 is reserved
+for the job-generation migration. A release migration from that format to 3, including physical data and
+the live-reader check, remains separate. An earlier reader refuses ownership on a continuation database.
+
 The public preview writes ordinary text directly. A payload containing NUL or an isolated UTF-16 unit uses a binary
 field in the same message row. It occupies the original UTF-8 byte budget, with three bytes per isolated unit.
 The adapter maps these inbox rows to a dedicated storage scope. The Worker sees its original issued key, and ordinary issued messages can use the same ID and application kind independently. To run the stored input, size and writer
@@ -199,6 +268,36 @@ are `ef` for the writer and `in-batch` for the fence.
 
 On a fresh database, `dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-flowchart-preview merge-early`
 replaces the join with a merge. The waiting assertion detects the premature finish.
+
+## Built-in Cluster redistribution on PostgreSQL
+
+Set `KERNEL_PREVIEW_POSTGRES` to the connection string of a fresh, empty PostgreSQL database, then run from
+`prototypes/kernel-model`:
+
+```bash
+dotnet restore models/Native.Run --locked-mode
+dotnet run -c Release --no-restore --project models/Native.Run -- pg-runtime-cluster
+```
+
+Append `wake` to use the optional PostgreSQL wake transport. The two processes listen on separate
+connections. After each of the first two admissions commits, the first node queues the target
+partition number for PostgreSQL `NOTIFY`. The receiving node checks both transport callbacks and confirms
+that its active partition forwarded both hints to the durable Worker. After the second
+node leaves, the first node applies the final approval through the inbox with no hint. Run it
+against another empty database to compare with the polling-only run.
+
+Wake hints carry a partition number. They never carry an actor name, tenant or command payload.
+The sender uses a bounded queue and a separate connection. A full queue or connection failure
+can drop a hint. The node still polls on its ordinary interval.
+
+Two operating-system processes run the built-in `RuntimeNode` and a durable Worker per node. PostgreSQL shows
+eight partitions on the first node, four each when the second joins, and all eight back on the first after the
+second stops gracefully. A Native workflow waits twice for approval events. The departing node records Ada, and
+its successor records Grace at the next journal position.
+
+This fixture uses the general PostgreSQL durable workflow path and the Native compatibility adapter. Public
+Foundation use across an owned set, grouped partition transfers, and qualification of the 1,024-partition release
+profile remain K5 work.
 
 ## The simulation
 

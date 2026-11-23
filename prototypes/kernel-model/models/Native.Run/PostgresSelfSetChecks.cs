@@ -10,7 +10,7 @@ internal static class PostgresSelfSetChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Supply a fresh dedicated database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => new(options);
+        KernelDb Open() => KernelDb.ForPostgresRootSelf(options);
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var stop = timeout.Token;
         var store = new EfStore(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };

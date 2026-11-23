@@ -159,7 +159,7 @@ public sealed partial class EfStore
 
     private ValueTask<Committed> CommitPreparedRootAsync(PartitionFence fence, TimeSpan lease, PreparedRoot prepared, CancellationToken token) =>
         CommitAsync(new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [prepared.JournalTurn!], [], []),
-            prepared.Checkpoint, token);
+            prepared.Checkpoint, System.Diagnostics.Stopwatch.GetTimestamp(), token);
 
     private sealed record RootCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> Commands, IReadOnlyDictionary<string, long> Revisions)
         : QualifiedRootCheckpoint(0)
@@ -175,7 +175,7 @@ public sealed partial class EfStore
 
     private static NotSupportedException RootShape() => new("The PostgreSQL root owner cannot persist this batch without dropping effects.");
 
-    private async ValueTask<Committed> CommitWorkerRootAsync(WorkerRoots roots, CommitBatch batch, CancellationToken cancellationToken)
+    private async ValueTask<Committed> CommitWorkerRootAsync(WorkerRoots roots, CommitBatch batch, long sentAt, CancellationToken cancellationToken)
     {
         var fences = batch.Fenced;
         if (fences.Count == 0 || fences.Any(f => !roots.Includes(f.Partition)) ||
@@ -183,8 +183,25 @@ public sealed partial class EfStore
             batch.Window is not null || batch.PublicationReservation is not null || batch.DueBacklog is not null ||
             batch.Turns.Select(t => t.Instance).Distinct().Count() != batch.Turns.Count) throw RootShape();
 
+        if (RootSelfIssuer is null && batch.Seen.Concat(batch.Trial).Any(key => key.Scope == -1)) throw RootShape();
         StoreBatchRules.RequireDistinct(fences);
-        var byPartition = fences.ToDictionary(f => f.Partition);
+        (CommitBatch Batch, RootCheckpoints Checkpoints)? prepared;
+        try { prepared = await PrepareWorkerBatchAsync(roots, batch, cancellationToken); }
+        catch (Exception error) when (error is not (OperationCanceledException or NotSupportedException) &&
+            Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
+        {
+            // Preparation reads inputs before either transactional fence mode has run.
+            if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new(false, 0, []);
+            if (ReferenceEquals(error, failure)) throw;
+            throw failure;
+        }
+        return prepared is { } work ? await CommitAsync(work.Batch, work.Checkpoints, sentAt, cancellationToken) : new(false, 0, []);
+    }
+
+    private async Task<(CommitBatch, RootCheckpoints)?> PrepareWorkerBatchAsync(WorkerRoots roots, CommitBatch batch,
+        CancellationToken cancellationToken)
+    {
+        var byPartition = batch.Fenced.ToDictionary(f => f.Partition);
         PartitionFence FenceFor(WorkerRoot root) =>
             byPartition.TryGetValue(root.Partition, out var fence) ? fence : throw RootShape();
         roots = await ResolveWorkerRootsAsync(roots, batch.Turns.Select(t => t.Instance), batch.Seen.Concat(batch.Trial), cancellationToken);
@@ -199,7 +216,7 @@ public sealed partial class EfStore
         {
             var root = roots.ForActor(turn.Instance);
             var prepared = await PrepareWorkerTurnAsync(root, turn, FenceFor(root), cancellationToken);
-            if (prepared is null) return new(false, 0, []);
+            if (prepared is null) return null;
             commands.Add(prepared.Checkpoint);
             if (prepared.JournalTurn is { } journal)
             {
@@ -207,7 +224,7 @@ public sealed partial class EfStore
                 revisions.Add(journal.Instance, prepared.Checkpoint.JournalRevision);
             }
         }
-        return await CommitAsync(batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions), cancellationToken);
+        return (batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions));
     }
 
     private static bool InputsMatch(WorkerRoot root, TurnCommit turn) =>
@@ -258,8 +275,8 @@ public sealed partial class EfStore
         var state = row.FoundationNullState ? null : row.State;
         if (turn.Expected is null)
         {
-            if (turn.Consumed is not [var key] || key != new InboxKey("root:" + root.Actor) ||
-                turn.Journal is null || turn.Done.Count != 0 || row.Status != InstanceStatus.Running || change is null) throw RootShape();
+            if (turn.Journal is null || turn.Consumed is not [var key] || key != new InboxKey("root:" + root.Actor) ||
+                turn.Done.Count != 0 || row.Status != InstanceStatus.Running || change is null) throw RootShape();
             var creator = await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;
             if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History) throw RootShape();

@@ -97,10 +97,8 @@ internal static class SetGainTimingChecks
         wire.TakeReply.SetResult();
         await gain;
         var safe = worker.Fences.SequenceEqual(retained) && worker.Pending.Keys.Order().SequenceEqual([0, 2]);
-        // This answer sees the current epoch of every row and drops the two stale pending claims.
-        sent = worker.BeforeHeartbeat();
-        worker.HeartbeatAnswered(sent, await store.NodeHeartbeatAsync("a", Defaults.Lease, Defaults.Lease));
-        await worker.RunAsync();
+        await CheckPendingPassGate(worker, wire, check, alreadyHolding ? "incremental grouped gain" : "cold grouped gain");
+        await worker.RunAsync();       // the current answer drops the two stale pending claims
         check(safe && worker.Pending.Count == 0 && worker.Fences.SequenceEqual(retained)
             && heartbeat.Owned.Select(p => p.Partition).SequenceEqual(retained.Select(p => p.Partition))
             && peer.Taken.Count == 2 && peer.Taken.All(p => p.Epoch == 2 && store.Partitions[p.Partition].Epoch == p.Epoch
@@ -133,12 +131,20 @@ internal static class SetGainTimingChecks
         (countingRetake ? wire.RetakeReply : wire.TakeReply).SetResult();
         await request;
         var pending = !worker.Owns && worker.Pending.GetValueOrDefault(0) == (countingRetake ? 2 : 1);
-        sent = worker.BeforeHeartbeat();
-        worker.HeartbeatAnswered(sent, await store.NodeHeartbeatAsync("a", Defaults.Lease, Defaults.Lease));
+        await CheckPendingPassGate(worker, wire, check, countingRetake ? "counted retake" : "fixed take");
         await worker.RunAsync();
         check(pending && !worker.Owns && worker.Pending.Count == 0 && peer?.Epoch == (countingRetake ? 3 : 2)
             && store.Partitions[0].Owner == "b" && store.Partitions[0].Epoch == peer.Epoch,
             $"the late {(countingRetake ? "counting retake" : "fixed-host take")} stays pending across a newer heartbeat until the peer's ownership is confirmed");
+    }
+
+    private static async Task CheckPendingPassGate(Worker worker, IKernelStore store, Action<bool, string> check, string request)
+    {
+        var gate = new NodeHeartbeat(worker.Node, store, [worker], Defaults.Lease, Defaults.Lease);
+        var withheld = await gate.BeatAsync() is null && gate.Withheld == 1;
+        await worker.RunAsync();
+        var renewed = await gate.BeatAsync() is not null;
+        check(withheld && renewed, $"a late {request} leaves the heartbeat withheld until a completed pass");
     }
 
     private static async Task LateResetRetake(Action<bool, string> check)

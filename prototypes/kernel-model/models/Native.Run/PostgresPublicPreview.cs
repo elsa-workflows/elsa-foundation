@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Kernel.EntityFramework;
 using Kernel.Native.Preview;
+using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -10,11 +11,17 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresPublicPreview
 {
-    internal static async Task<int> RunAsync(string phase, string? suppliedReference = null, string? suppliedBookmark = null, long priorEpoch = 0)
+    internal static async Task<int> RunAsync(string phase, string? suppliedReference = null, string? suppliedBookmark = null,
+        long priorEpoch = 0, int priorPid = 0, long originalUntil = 0, bool flowchart = false)
     {
         var birth = phase is "birth" or "hold-owner";
-        if (!birth && (phase is not ("restart" or "terminal" or "standby") || suppliedReference is null || suppliedBookmark is null))
-            throw new ArgumentException("Supply birth or restart with its reference and bookmark.");
+        var tenantProbe = phase == "tenant-probe";
+        if ((phase, suppliedReference, suppliedBookmark, priorEpoch, priorPid, originalUntil) is not
+            (("birth" or "hold-owner", null, null, 0, 0, 0) or
+             ("tenant-probe", not null, null, 0, 0, 0) or
+             ("restart" or "terminal", not null, not null, 0, 0, 0) or
+             ("standby", not null, not null, > 0, > 0, > 0)))
+            throw new ArgumentException("Invalid PostgreSQL Core Preview phase arguments.");
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var stop = timeout.Token;
@@ -24,22 +31,25 @@ internal static class PostgresPublicPreview
         var data = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         Wire? wire = null;
         var measuredConnection = connection;
-        if (Environment.GetEnvironmentVariable("KERNEL_PREVIEW_MEASURE_WIRE") == "1")
+        if (!tenantProbe && Environment.GetEnvironmentVariable("KERNEL_PREVIEW_MEASURE_WIRE") == "1")
         {
             var settings = new Npgsql.NpgsqlConnectionStringBuilder(connection);
             if (settings.Host != "127.0.0.1" || settings.SslMode != Npgsql.SslMode.Disable)
                 throw new ArgumentException("The wire meter requires a dedicated plaintext loopback PostgreSQL connection.");
+            if (settings.GssEncryptionMode == Npgsql.GssEncryptionMode.Require)
+                throw new ArgumentException("The wire meter cannot measure a connection that requires GSS encryption.");
+            settings.GssEncryptionMode = Npgsql.GssEncryptionMode.Disable;
             wire = Wire.Start("postgres", $"Host=127.0.0.1;Port={settings.Port}");
             settings.Port = wire.LocalPort;
             measuredConnection = settings.ConnectionString;
         }
-        var measured = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(measuredConnection)
+        var measured = tenantProbe ? data : new DbContextOptionsBuilder<KernelDb>().UseNpgsql(measuredConnection)
             .AddInterceptors(counter, counter.Transactions).Options;
         long startTrips = 0, startGroups = 0, startConnections = 0;
         var store = new EfStore(() => new(measured), postgres: true);
         var probe = new EfStore(() => new(data), postgres: true);
         var admission = new PostgresRootAdmission(() => new(measured), TimeSpan.FromHours(1));
-        var scope = new Contract.BoundScope("preview");
+        var scope = FixedTenantScope.Bind(tenantProbe ? "preview-other" : "preview");
 
         if (birth)
         {
@@ -49,8 +59,22 @@ internal static class PostgresPublicPreview
         var cursor = await admission.OpenJournalCursorAsync(stop);
         var tail = new PostgresRootJournalReader(store, cursor, 1);
         var foundation = new PostgresPreviewFoundation(admission, store, tail, PublicActor.ActorType);
+        if (tenantProbe)
+        {
+            var otherActor = new Contract.ActorRef(suppliedReference!);
+            Check(PostgresRootAdmission.IsIssuedReferenceShape(otherActor.Id), "foreign host received a valid reference shape");
+            var unavailable = await foundation.SendAsync(scope, new Contract.Target.Ref(otherActor), "missing", "notice",
+                cancellationToken: stop);
+            Check(unavailable is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch, Actor: null },
+                "the foreign host cannot send to the existing actor");
+            Check(await foundation.GetAsync(scope, otherActor, stop) is null &&
+                (await foundation.TailAsync(scope, otherActor, cancellationToken: stop)).Items.Count == 0,
+                "the foreign host cannot read the existing actor or journal");
+            return 0;
+        }
         var workflow = new WorkflowRuntime(foundation, foundation);
-        var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
+        var definition = flowchart ? DirectApprovalWorkflow.BuildFlowchart() : DirectApprovalWorkflow.Build();
+        var registry = new WorkflowRegistry().Add(definition);
         Report("host setup");
 
         Contract.ActorRef actor;
@@ -58,7 +82,7 @@ internal static class PostgresPublicPreview
         if (birth)
         {
             var created = await workflow.StartAsync(scope, Guid.NewGuid().ToString("N"),
-                NativeExecutionModel.Start(DirectApprovalWorkflow.Definition), cancellationToken: stop);
+                NativeExecutionModel.Start(definition.Id), cancellationToken: stop);
             Check(created is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "public start admitted a root");
             actor = created.Actor!.Value;
             Report("start admission");
@@ -71,11 +95,11 @@ internal static class PostgresPublicPreview
 
         Reset();
         var node = $"preview-{Environment.ProcessId}";
-        List<string[]>? standbyTurns = phase == "standby" ? [] : null;
+        List<string[]>? resumedTurns = phase == "standby" || flowchart && !birth ? [] : null;
         var prepared = await PostgresNativeRootOwner.PrepareAsync(store, node, scope.Tenant, actor.Id, registry, stop,
-            standbyTurns is null ? null : (_, inputs, _) => standbyTurns.Add(inputs.Select(input => input.Id).ToArray()));
+            resumedTurns is null ? null : (_, inputs, _) => resumedTurns.Add(inputs.Select(input => input.Id).ToArray()));
         await using var owner = phase == "standby" ?
-            await PostgresPreviewFailover.TakeAfterExitAsync(prepared, store, data, node, priorEpoch, stop) :
+            await PostgresPreviewFailover.TakeAfterExitAsync(prepared, store, data, node, priorEpoch, priorPid, originalUntil, stop) :
             await prepared.TryActivateAsync(stop) ?? throw new InvalidOperationException("The partition is already owned.");
         Console.WriteLine($"owner {Environment.ProcessId}");
         Report("ownership");
@@ -107,14 +131,7 @@ internal static class PostgresPublicPreview
             Console.WriteLine($"reference {actor.Id}");
             Console.WriteLine($"bookmark {bookmark!.Value.Value}");
             if (phase == "hold-owner")
-            {
-                Console.WriteLine($"owner-ready {((Worker)owner).Fences.Single().Epoch}");
-                while (true)
-                {
-                    await prepared.HeartbeatAsync(stop);
-                    await Task.Delay(Defaults.Lease / 4, stop);
-                }
-            }
+                await PostgresPreviewFailover.HoldAsync(prepared, (Worker)owner, data, node, stop);
         }
         else
         {
@@ -122,6 +139,12 @@ internal static class PostgresPublicPreview
             Reset();
             var before = await ReadCheckpoint();
             Check(before is { Revision: 2, Status: InstanceStatus.Running }, "cold process loaded the second wait");
+            if (flowchart)
+            {
+                var waiting = Json.Read<NativeState>(before.State!);
+                Check(waiting.Variables["joinCount"]!.GetValue<int>() == 0 && !waiting.Variables["automaticPath"]!.GetValue<bool>(),
+                    "the approval path still waits and the other path has not run");
+            }
             Check((await foundation.TailAsync(scope, actor, bookmark, stop)) is { Items.Count: 0, AsOf: > 0 },
                 "the previous process's bookmark resumes at the end of revision 2");
             var frame = await ReadFrame();
@@ -132,12 +155,38 @@ internal static class PostgresPublicPreview
                 "public ingress recognized the replay with changed payload");
             await owner.WokenAsync(null, stop);
             await owner.RunAsync(stop);
-            if (standbyTurns is not null)
-                Check(standbyTurns.Count == 0, "the duplicate started zero public actor turns on the standby");
+            if (resumedTurns is not null)
+                Check(resumedTurns.Count == 0, "the duplicate started zero public actor turns on the resumed owner");
             Report("replay including admission");
             var same = await ReadCheckpoint();
-            Check(same.Revision == before.Revision && same.State == before.State, "replay left the checkpoint byte for byte");
+            Check(same.Revision == before.Revision && same.State == before.State, "replay preserved the serialized workflow state and checkpoint revision");
             Check((await foundation.TailAsync(scope, actor, bookmark, stop)).Items.Count == 0, "replay added no journal entries");
+            if (phase == "terminal")
+            {
+                foreach (var invalidKind in new[] { new string('x', 257), "input\ud800" })
+                {
+                    var rejected = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "invalid-kind", invalidKind,
+                        cancellationToken: stop);
+                    Check(rejected is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null, Reason: null },
+                        "invalid ordinary kind metadata on the live root returned a generic refusal");
+                }
+                var normalStart = new Contract.StartSpec(PublicActor.ActorType, "definition");
+                foreach (var (operation, spec) in new[]
+                {
+                    ("~reserved", normalStart), ("extra-data", normalStart with { TypeData = new string('x', 16 * 1024 + 1) }),
+                    ("expanded-start", normalStart with { Input = new string('\0', 3 * 1024 * 1024) })
+                })
+                {
+                    var rejected = await foundation.SendAsync(scope, new Contract.Target.Start(spec), operation, Contract.Kinds.Start,
+                        cancellationToken: stop);
+                    Check(rejected is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null, Reason: null },
+                        "invalid metadata or oversized storage framing on a supported start returned a generic refusal");
+                }
+                var overflow = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "oversized", "notice",
+                    new string('\0', 3 * 1024 * 1024), cancellationToken: stop);
+                Check(overflow is { Outcome: Contract.AdmissionOutcome.Refused, Reason: null, Actor: null },
+                    "a valid root's physical size refusal has no target-mismatch reason");
+            }
 
             Reset();
             Check(await Approve("approval-2", "Grace", frame) == Contract.AdmissionOutcome.Accepted, "second approval admitted");
@@ -146,7 +195,7 @@ internal static class PostgresPublicPreview
             {
                 var extra = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "already-queued", CompositeSignal.Kind,
                     Json.Write(new CompositeSignal(frame, "approve", "third")), cancellationToken: stop);
-                Check(extra.Outcome == Contract.AdmissionOutcome.Accepted, "third input was admitted while the actor was still running");
+                Check(extra.Outcome == Contract.AdmissionOutcome.Accepted && extra.Actor == actor, "third input was admitted while the actor was still running");
                 var diagnosticAdmission = new PostgresRootAdmission(() => new(data), TimeSpan.Zero);
                 var pending = await diagnosticAdmission.ReadPendingDirectAsync(scope.Tenant, actor.Id, stop);
                 queued = pending.Single(input => input.Id == "already-queued");
@@ -159,28 +208,31 @@ internal static class PostgresPublicPreview
                     "a rowless terminal disposition cannot consume the running root's approval");
             }
             var finished = await Drive(3);
-            if (standbyTurns is not null)
-                Check(standbyTurns is [["approval-2"]], "the standby ran one public actor turn for approval-2");
+            if (resumedTurns is not null)
+                Check(resumedTurns is [["approval-2"]], "the resumed owner ran one public actor turn for approval-2");
             Check(finished is { Status: InstanceStatus.Finished, TerminalRevision: 3, TerminalAt: not null } &&
                 Json.Read<NativeState>(finished.State!).Results["approve"]!.AsArray()
                     .Select(n => n!.GetValue<string>()).SequenceEqual(["Ada", "Grace"]),
                 "persisted Native result is Ada, Grace exactly once");
+            if (flowchart)
+            {
+                var state = Json.Read<NativeState>(finished.State!);
+                Check(state.Variables["joinCount"]!.GetValue<int>() == 1 && !state.Variables["automaticPath"]!.GetValue<bool>(),
+                    "the join fired once after the selected path finished");
+            }
             Report(queued is null ? "second approval including admission" : "finish with two queued inputs including admission");
 
             Reset();
             var (entries, _) = await ReadJournal(bookmark);
             Check(entries.Count(e => e.Revision == 3 && Decode(e) == "approved:approval-2") == 1 &&
                 entries.All(e => e.Revision == 3), "the saved bookmark shows only revision 3");
+            if (flowchart)
+                Check(entries.Count(e => Decode(e) == "end") == 1 && Decode(entries[^1]) == "end",
+                    "the public Flowchart tail ends with one lifecycle entry");
             Check((await foundation.GetAsync(scope, actor, stop)) is { Header.Status: Contract.ActorStatus.Finished, Header.EndedAt: > 0 },
                 "public actor read sees the terminal checkpoint");
             Report("inspect final checkpoint and journal");
 
-            Reset();
-            var other = new Contract.BoundScope("preview-other");
-            Check(await foundation.GetAsync(other, actor, stop) is null &&
-                (await foundation.TailAsync(other, actor, cancellationToken: stop)).Items.Count == 0,
-                "public reads stay within the bound tenant");
-            Report("verify read scoping");
             if (queued is not null)
             {
                 var lastBookmark = (await ReadJournal()).Last!.Value;
@@ -213,9 +265,14 @@ internal static class PostgresPublicPreview
         }
         return 0;
 
-        async Task<Contract.AdmissionOutcome> Approve(string id, string name, string frame) =>
-            (await foundation.SendAsync(scope, new Contract.Target.Ref(actor), id, CompositeSignal.Kind,
-                Json.Write(new CompositeSignal(frame, "approve", name)), cancellationToken: stop)).Outcome;
+        async Task<Contract.AdmissionOutcome> Approve(string id, string name, string frame)
+        {
+            var receipt = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), id, CompositeSignal.Kind,
+                Json.Write(new CompositeSignal(frame, "approve", name)), cancellationToken: stop);
+            if (receipt.Outcome is Contract.AdmissionOutcome.Accepted or Contract.AdmissionOutcome.Duplicate)
+                Check(receipt.Actor == actor, $"the {id} receipt names the original workflow");
+            return receipt.Outcome;
+        }
 
         async Task<string> ReadFrame()
         {
@@ -264,11 +321,11 @@ internal static class PostgresPublicPreview
         {
             if (wire is not null)
                 Console.WriteLine($"wire {operation}: {wire.Trips - startTrips} TCP direction turns, {wire.ProtocolRequests - startGroups} PostgreSQL Sync/Query groups, {wire.Connections - startConnections} new TCP connections");
-            Console.WriteLine($"{operation}: {counter.Commands} commands, {counter.Transactions.Ended} transaction completions, {counter.Commands + counter.Transactions.Ended} measured round trips");
+            Console.WriteLine($"{operation}: {counter.Commands} commands, {counter.Transactions.Ended} transaction completions, EF round-trip estimate {counter.Commands + counter.Transactions.Ended}");
         }
     }
 
-    private static string Decode(Contract.JournalEntry entry)
+    internal static string Decode(Contract.JournalEntry entry)
     {
         using var document = JsonDocument.Parse(entry.Entry);
         return document.RootElement.ValueKind == JsonValueKind.String ? document.RootElement.GetString()! : "";

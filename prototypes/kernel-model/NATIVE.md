@@ -229,6 +229,26 @@ route table, built from the definitions, read nothing at request time) and `Http
 Not done: client disconnect mapped to cancel, streaming, bodies by reference (the request sits in `Results` and in
 captured variables, so in state: 571 bytes for http-reference).
 
+### HTTP over the public Actor Foundation
+
+From `prototypes/kernel-model`, run:
+
+```bash
+dotnet run -c Release --project sim -- --public-http-edge-check
+```
+
+This check starts Kestrel on a dynamically assigned loopback port and runs actual HTTP requests against the
+public Actor Foundation with an in-memory Embedded owner. It starts a Native approval, pauses its first
+checkpoint to check that the response stays held, and resumes it with a JSON request. Public reads confirm
+the same actor at its first and second journal revisions. It also checks a 404
+with no publication, a 503 on owner reset, a 504 at the reply deadline, a 500 when a held response's turn parks,
+and completion after the client disconnects. Run with `--flaw EmitBeforeCommit` to make the held-response
+assertion fail before the checkpoint lands.
+
+This run covers the default commit-before-release route on one live receiving node. The local process kill
+between commit and release, remote-owner recovery before and after the reply deadline, provider-backed
+replies and cross-tenant routing still have their own K8 acceptance cases.
+
 ## 5. What it costs
 
 Run, with the counting of FINDINGS section 5: PostgreSQL round trips are command executions plus COMMITs (Npgsql
@@ -455,6 +475,29 @@ Reasoned.
 - Client disconnect mapped to cancel, streaming responses, request bodies by reference.
 - GraphActivity, CreateUserTask, HumanReview, RunEtl, RunRules and EvaluateDecision; Switch, For, Do, CompensationScope.
 - Incident strategies; retries of faulted activities.
+
+## Detached creator handles
+
+A Native detached dispatch through the public contract returns the child's exact reference. Its creator is still
+inserted atomically with the parent's turn. Public recall accepts an issued self-timer handle, so the parent has
+no operation that can use the detached creator's internal ID. New public detached starts leave that ID out of the
+parent checkpoint. The rule applies while the creator is pending, so it needs no check of the child's inbox.
+
+The authored check leaves the first child creator pending, opens a successor, and finishes the child. It
+dispatches a second detached child and an attached child, then sends a qualified terminate to the parent.
+Both detached children complete at revision 1. The attached child remains registered and receives the cascade.
+Run the check in Balanced and Durable from `prototypes/kernel-model`:
+
+```bash
+dotnet run -c Release --project sim -- --native-detached-handles-check
+```
+
+The terminal projection still counts every handle carried in a checkpoint. Older handles stay stored because the
+checkpoint lacks the metadata to distinguish a detached creator from an attached creator. If repeated growth
+parks an older parent, inspect the Park and its retained inputs before retrying. Retrying the same operation
+against the same checkpoint can reach the bound again. An authorized operator can discard the selected Park and
+all its retained inputs, or terminate the selected instance through the existing qualified command. Discard leaves
+the instance faulted. The provider-encoding and near-limit termination cases retain their own checks.
 
 ## 10. Private durable lexical-resource probe
 

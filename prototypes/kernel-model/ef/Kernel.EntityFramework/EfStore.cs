@@ -20,6 +20,9 @@ public sealed class PartitionEntity
 public sealed class NodeEntity
 {
     public string Id { get; set; } = "";
+    public string ReadableStoreSchema { get; set; } = "";
+    public string ReadableMessageProtocol { get; set; } = "";
+    public string ReadableJournalCodec { get; set; } = "";
     public long SeenAt { get; set; }        // database time of the last heartbeat
     public long LeaseUntil { get; set; }    // K1b, the node lease: database time until which no other process may take this one's partitions
 }
@@ -108,11 +111,18 @@ public sealed class JournalEntity
     public string Entries { get; set; } = "";
 }
 
-public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
+public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
 {
+    // EF keys its model cache by context type. Fresh opt-in databases seed their marker in the
+    // same creation transaction as the schema. An existing database keeps its original marker.
+    private sealed class RootSelfDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    internal StoreFormat RequiredFormat => this is RootSelfDb ? StoreFormat.RootSelf : StoreFormat.Current;
+    internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => new RootSelfDb(options);
+
     internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> InsertAliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> GuardedAliases {get;}=new(StringComparer.Ordinal);
+    internal DbSet<StoreVersionEntity> StoreVersions => Set<StoreVersionEntity>();
     public DbSet<PartitionEntity> Partitions => Set<PartitionEntity>();
     public DbSet<NodeEntity> Nodes => Set<NodeEntity>();
     public DbSet<InstanceEntity> Instances => Set<InstanceEntity>();
@@ -138,6 +148,20 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 
     protected override void OnModelCreating(ModelBuilder model)
     {
+        if (this is RootSelfDb && !Database.IsNpgsql())
+            throw new NotSupportedException("The continuation profile requires PostgreSQL.");
+        model.Entity<StoreVersionEntity>(entity =>
+        {
+            entity.ToTable(StoreVersionEntity.Table);
+            entity.Property(row => row.Id).ValueGeneratedNever();
+            entity.HasData(new StoreVersionEntity
+            {
+                Id = StoreVersionEntity.MarkerId,
+                StoreSchema = StoreVersionEntity.StoreSchemaVersion,
+                MessageProtocol = RequiredFormat.MessageProtocol,
+                JournalCodec = StoreVersionEntity.JournalCodecVersion
+            });
+        });
         model.Entity<PartitionEntity>(e =>
         {
             e.ToTable("Partitions");
@@ -148,7 +172,11 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
         model.Entity<NodeEntity>(e =>
         {
             e.ToTable("Nodes");
-            e.Property(n => n.LeaseUntil).HasDefaultValue(0L);      // the membership heartbeat's insert names SeenAt only
+            e.Property(n => n.LeaseUntil).HasDefaultValue(0L); // a membership beat does not acquire a lease
+            // MySQL permits a default on TEXT when the default is an expression.
+            e.Property(n => n.ReadableStoreSchema).IsRequired().HasDefaultValueSql("('')");
+            e.Property(n => n.ReadableMessageProtocol).IsRequired().HasDefaultValueSql("('')");
+            e.Property(n => n.ReadableJournalCodec).IsRequired().HasDefaultValueSql("('')");
         });
         model.Entity<InstanceEntity>(e =>
         {
@@ -243,6 +271,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private bool _windowInstalled;
     public bool PhysicalRetirementAvailable => true;
     public bool SupportsCommitWindow => _windowInstalled;
+    public bool SupportsJobTrialClear => _ordinaryRoots is null && Engine is null or SqlServerEngine or MySqlEngine;
 
     public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault(OwnedCommit) ?? true;
 
@@ -298,6 +327,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireStoreVersionsAsync(db, cancellationToken);
         return await db.Partitions.CountAsync(cancellationToken);
     }
 
@@ -311,6 +341,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         var count = partitions ?? (postgres ? Defaults.ServerPartitions : Defaults.SqlitePartitions);
         await using var db = create();
         await db.Database.EnsureCreatedAsync();
+        await RequireStoreVersionsAsync(db, CancellationToken.None);
         await PhysicalRetirement.InstallAsync(db, Engine, postgres);
         if (postgres && Engine is null) await db.Database.ExecuteSqlRawAsync(EventInsert.InstallPostgres);
         if (enableCommitWindow)
@@ -360,8 +391,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         await using var db = create();
         var now = Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken) : (await db.Database.SqlQueryRaw<long>(
-            $"""INSERT INTO "Nodes" ("Id", "SeenAt") VALUES ({"{0}"}, {Now}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt" RETURNING "SeenAt" AS "Value" """,
-            node).ToListAsync(cancellationToken))[0];
+            $"""INSERT INTO "Nodes" ("Id", "SeenAt", {NodeAdvertisement.Columns}) VALUES ({"{0}"}, {Now}, {NodeAdvertisement.Parameters}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", {NodeAdvertisement.Update} RETURNING "SeenAt" AS "Value" """,
+            NodeAdvertisement.Arguments(node, messageProtocol: db.RequiredFormat.MessageProtocol)).ToListAsync(cancellationToken))[0];
         return await MembershipAsync(db, now, window, cancellationToken);
     }
 
@@ -380,17 +411,22 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Partitions" SET "Owner" = NULL WHERE "Id" = {0} AND "Epoch" = {1}"""), [partition, epoch], cancellationToken);
     }
 
-    public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
-        _ordinaryRoots is { } root ? CommitWorkerRootAsync(root, batch, cancellationToken) : CommitAsync(batch, null, cancellationToken);
+    public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
+    {
+        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        return _ordinaryRoots is { } roots ? CommitWorkerRootAsync(roots, batch, sentAt, cancellationToken)
+            : CommitAsync(batch, null, sentAt, cancellationToken);
+    }
 
-    private async ValueTask<Committed> CommitAsync(CommitBatch batch, QualifiedRootCheckpoint? root, CancellationToken cancellationToken)
+    private async ValueTask<Committed> CommitAsync(CommitBatch batch, QualifiedRootCheckpoint? root, long sentAt, CancellationToken cancellationToken)
     {
         if (postgres && Engine is null && (batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials)
             .Concat(batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])))
             .Any(key => key.Scope is InboxKey.FoundationOccurrenceScope or RootSelfScope) ||
             batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey.Scope == InboxKey.FoundationOccurrenceScope || root is null && message.InboxKey.Scope == RootSelfScope))))
             throw new StoreException(Failure.Definite, "Qualified PostgreSQL inputs require their root checkpoint writer.");
-        StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable);
+        StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable,
+            supportsJobTrialClear:SupportsJobTrialClear);
         // Marker shape uses the canonical row address. A raw update's alternate spelling is
         // authorized separately by the database-column predicate in AliasUpdateGuard.
         var qualification=batch.Turns.Any(t=>t.Row is {} r && t.Instance!=r.Id)
@@ -406,8 +442,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             throw new NotSupportedException("This provider cannot enforce the requested commit window.");
         var waits = Waits(batch);
         var careful = false;
-        // The commit-step deadline counts from the first send: the careful retry below is the same batch, sent again.
-        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        // Both attempts use the original commit-step deadline, including any scoped preparation reads.
         while (true)
         {
             try { return await CommitOnceAsync(batch, waits, careful, sentAt, root, cancellationToken); }
@@ -443,10 +478,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 // moved the position itself.
                 if (FenceInBatch && !DefiniteBeatsFence && failure.Failure is Failure.Definite or Failure.Transient)
                 {
-                    bool holds;
-                    try { holds = await HoldsAsync(batch, cancellationToken); }
-                    catch (Exception check) { throw new StoreException(Failure.Unknown, "the fence could not be read after a failed commit: " + check.Message, check); }
-                    if (!holds)
+                    if (!await HoldsAfterFailureAsync(batch, cancellationToken))
                     {
                         Interlocked.Increment(ref _keyViolationsAsFence);
                         return new Committed(false, 0, []);
@@ -591,6 +623,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (turn.Delete)
                 await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0"""), [batch.Partition, turn.Instance], cancellationToken);
         }
+        if (batch.ClearJobTrials.Count != 0 && !await ClearJobTrialsAsync(db, batch, cancellationToken))
+            return new Committed(false, 0, []);
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
@@ -601,6 +635,12 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // partition's owner writes its instances' waits, under the fence, so nothing else writes these rows meanwhile.
     private const string SubscribeIfAbsent = """INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ({0}, {1}, {2}, {3}) ON CONFLICT DO NOTHING""";
     private const string Unsubscribing = """DELETE FROM "Subscriptions" WHERE "Key" = {0} AND "Instance" = {1} AND "Wait" = {2} AND "Partition" = {3}""";
+
+    private async Task<bool> HoldsAfterFailureAsync(CommitBatch batch, CancellationToken cancellationToken)
+    {
+        try { return await HoldsAsync(batch, cancellationToken); }
+        catch (Exception check) { throw new StoreException(Failure.Unknown, "the fence could not be read after a failed commit: " + check.Message, check); }
+    }
 
     /// <summary>Whether every fence of the batch still holds: one read over its k rows.</summary>
     private async Task<bool> HoldsAsync(CommitBatch batch, CancellationToken cancellationToken)
@@ -632,12 +672,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
     private string RootPollFilter => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
-             AND m."InboxScope" IN (0, {InboxKey.FoundationOccurrenceScope}, {RootSelfScope})
-             AND (m."InboxScope" = 0 OR EXISTS (
+             AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({InboxKey.FoundationOccurrenceScope}, {RootSelfScope}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
-                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired"))
+                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired")))
             """;
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
         ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
@@ -675,8 +714,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             {
                 if (r.Target is null) throw RootShape();
                 var root = bindings.ForActor(r.Target);
-                var logical = key.Scope == RootSelfScope ? InboxKey.Issued(key.Id) : key;
-                if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition || root != bindings.ForInput(logical)) throw RootShape();
+                if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition ||
+                    root != bindings.ForInput(key.Scope == RootSelfScope ? InboxKey.Issued(key.Id) : key)) throw RootShape();
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
@@ -836,7 +875,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     }
 
     private static EventRoute Match(EventEntity e, SubscriptionEntity s) =>
-        new(new(e.Key, e.Id, e.Payload, e.KeepUntil), new(s.Key, s.Instance, s.Wait, s.Start is null ? null : Json.Read<StartSpec>(s.Start)));
+        EventRoute.FromLegacyStoreJoin(new(e.Key, e.Id, e.Payload, e.KeepUntil), new(s.Key, s.Instance, s.Wait, s.Start is null ? null : Json.Read<StartSpec>(s.Start)));
 
     public async ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default)
     {
@@ -848,6 +887,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireStoreVersionsAsync(db, cancellationToken);
         var rows = await db.Journal.AsNoTracking().Where(j => j.Partition == partition && j.Position > after).OrderBy(j => j.Position).Take(take).ToListAsync(cancellationToken);
         return rows.Select(j => new JournalRow(j.Partition, j.Position, j.Instance, j.Revision, j.Entries)).ToList();
     }
@@ -855,6 +895,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
     {
         await using var db = create();      // the index on Journal(Partition, Instance)
+        await RequireStoreVersionsAsync(db, cancellationToken);
         // With RCSI disabled a SQL Server scan needs range locks to hold its committed image for this statement.
         var journal = Engine is SqlServerEngine { ReadCommittedSnapshot: false }
             ? db.Journal.FromSqlRaw("SELECT * FROM [Journal] WITH (HOLDLOCK)")
@@ -872,6 +913,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireStoreVersionsAsync(db, cancellationToken);
         var rows = await db.Database.SqlQueryRaw<ProjectionRow>(
             Q("""SELECT (SELECT "Position" FROM "Projections" WHERE "Partition" = {0}) AS "Position", (SELECT "Position" FROM "Partitions" WHERE "Id" = {0}) AS "Written" """),
             partition).ToListAsync(cancellationToken);
@@ -880,14 +922,15 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     public async ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default)
     {
+        await using var db = create();
+        await RequireStoreVersionsAsync(db, cancellationToken);
         var changes = ViewChange.From(rows);
         var deleted = changes.Where(v => v.Commits == 0).Select(v => v.Instance).ToArray();
         var views = changes.Where(v => v.Commits > 0).ToList();
-        await using var db = create();
         if (postgres && Engine is null)
         {
-            // PostgreSQL: one statement, so one round trip and its own transaction. The view rows are written only if the
-            // projector's row moved from where the round read it.
+            // After the format check, PostgreSQL writes the view and cursor in one statement.
+            // The view rows change only if the cursor still matches the round's starting position.
             var moved = await db.Database.SqlQueryRaw<int>(
                 """
                 WITH moved AS (UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2} RETURNING 1),
@@ -927,6 +970,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireStoreVersionsAsync(db, cancellationToken);
         var rows = await db.Views.AsNoTracking().Where(v => instances.Contains(v.Instance)).ToListAsync(cancellationToken);
         return rows.Select(v => new ViewRow(v.Instance, v.Revision, v.Commits)).ToList();
     }
@@ -934,6 +978,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireStoreVersionsAsync(db, cancellationToken);
         return await db.Database.ExecuteSqlRawAsync(Q($"""DELETE FROM "Messages" WHERE "Done" <> {False} AND "KeepUntil" < {Now}; DELETE FROM "Events" WHERE "KeepUntil" < {Now}"""), cancellationToken);
     }
 
@@ -966,6 +1011,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         for (var inner = e; inner is not null; inner = inner.InnerException)
         {
+            if (inner is StoreException classified) return classified;
             if (Engine?.Classify(inner) is { } failure) return new StoreException(failure, inner.Message, e);
             if (inner is PostgresException pg)
                 return new StoreException(pg.SqlState is "40001" or "40P01" or "55P03" ? Failure.Transient : pg.SqlState.StartsWith("22") || pg.SqlState.StartsWith("23") ? Failure.Definite : Failure.Unknown, pg.MessageText, e);

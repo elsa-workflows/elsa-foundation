@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Kernel.EntityFramework;
+using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -11,16 +12,18 @@ internal static class PostgresFlowchartPreview
     internal const string Definition = "purchase-flowchart";
 
     internal static async Task<int> RunAsync(string route, string? reference = null, string? bookmark = null,
-        long previousEpoch = 0, bool mergeEarly = false, bool durable = false, bool reachWait = false)
+        long previousEpoch = 0, bool mergeEarly = false, bool durable = false, bool reachWait = false, long? waitingRevision = null)
     {
         var birth = reference is null;
+        if (durable && !birth && !reachWait && waitingRevision is not > 0)
+            throw new ArgumentOutOfRangeException(nameof(waitingRevision), "Durable restart requires a positive waiting revision.");
         var manual = route == "manual";
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var stop = deadline.Token;
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Supply a dedicated preview database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => new(options);
+        KernelDb Open() => durable ? KernelDb.ForPostgresRootSelf(options) : new KernelDb(options);
         bool? inBatch = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_FENCE") switch
         {
             null => null, "checked" => false, "in-batch" => true,
@@ -35,8 +38,7 @@ internal static class PostgresFlowchartPreview
         }
 
         if (durable) await store.EnableRootSelfSendsAsync(stop);
-
-        var scope = new Contract.BoundScope("purchase");
+        var scope = FixedTenantScope.Bind("purchase");
         var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 8),
             WorkflowActor.WorkflowActor.ActorType);
         var registry = new WorkflowRegistry().Add(Build(mergeEarly));
@@ -84,11 +86,13 @@ internal static class PostgresFlowchartPreview
             }
             var (journal, end) = await HistoryAsync(null);
             Check(end is not null && journal.All(entry => !IsJoin(entry)), "The waiting Flowchart must have no join entry.");
-            Console.WriteLine($"waiting {Environment.ProcessId} {actor.Id} {end!.Value.Value} {epoch}");
+            var revisionReceipt = durable ? $" {waiting.Revision}" : "";
+            Console.WriteLine($"waiting {Environment.ProcessId} {actor.Id} {end!.Value.Value} {epoch}{revisionReceipt}");
             return 0;
         }
 
         var before = await DriveAsync(manual ? 2 : 1);
+        Check(before.Status == InstanceStatus.Running && (durable ? before.Revision == waitingRevision : before.Revision == (manual ? 2 : 1)), "The cold owner must resume the exact waiting revision.");
         var finance = Frame(State(before), "finance");
         if (manual)
         {
@@ -103,17 +107,20 @@ internal static class PostgresFlowchartPreview
         await ApproveAsync("finance-approval", finance, "Finance accepted", Contract.AdmissionOutcome.Accepted);
         var finished = await DriveAsync(before.Revision + 1, image => image.Status == InstanceStatus.Finished);
         var result = State(finished);
-        var (tail, _) = await HistoryAsync(saved);
-        Check((await api.GetAsync(scope, actor, stop)) is { Header.Status: Contract.ActorStatus.Finished } &&
+        var (tail, completion) = await HistoryAsync(saved);
+        Check((durable ? finished.Revision > before.Revision : finished.Revision == before.Revision + 1) && (await api.GetAsync(scope, actor, stop)) is { Header.Status: Contract.ActorStatus.Finished } &&
             result.Variables["ready"]?.GetValue<bool>() == true &&
             result.Results["finance"]?.GetValue<string>() == "Finance accepted" &&
             (manual ? result.Results["risk"]?.GetValue<string>() == "Risk accepted" : !result.Results.ContainsKey("risk")),
             "The original actor must reach its join with precisely the selected approvals.");
-        Check(tail.Count(IsJoin) == 1 && tail.All(entry => entry.Revision <= finished.Revision && (durable || entry.Revision == finished.Revision)),
+        Check(completion is not null && completion != saved && tail.Count(IsJoin) == 1 &&
+            tail.All(entry => entry.Revision > before.Revision && entry.Revision <= finished.Revision && (durable || entry.Revision == finished.Revision)),
             "One persisted join must appear after the saved bookmark through the final revision.");
         await ApproveAsync("finance-approval", finance, "Replay", Contract.AdmissionOutcome.Duplicate);
         await PassAsync();
-        Check((await ImageAsync())?.Revision == finished.Revision && (await HistoryAsync(saved)).Entries.SequenceEqual(tail) &&
+        var replayed = await ImageAsync();
+        Check(replayed is not null && replayed.Revision == finished.Revision && replayed.State == finished.State &&
+            (await HistoryAsync(completion)).Entries.Count == 0 && (await HistoryAsync(saved)).Entries.SequenceEqual(tail) &&
             (!durable || await PendingSelfAsync(finished) == 0), "Replay must preserve the finished checkpoint and journal.");
         if (durable)
         {
@@ -172,13 +179,9 @@ internal static class PostgresFlowchartPreview
             await owner.RunAsync(stop);
         }
 
-        async Task ApproveAsync(string operation, string frame, string value, Contract.AdmissionOutcome expected)
-        {
-            var payload = JsonSerializer.Serialize(new CompositeSignal(frame, "approve", value));
-            var accepted = await api.SendAsync(scope, new Contract.Target.Ref(actor), operation, CompositeSignal.Kind, payload,
-                cancellationToken: stop);
-            Check(accepted.Outcome == expected, $"Approval '{operation}' returned {accepted.Outcome}.");
-        }
+        Task ApproveAsync(string operation, string frame, string value, Contract.AdmissionOutcome expected) =>
+            PostgresMultiRootClient.Send(api, scope, actor, operation, JsonSerializer.Serialize(new CompositeSignal(frame, "approve", value)),
+                expected, stop);
 
         async Task<(List<Contract.JournalEntry> Entries, Contract.PageToken? End)> HistoryAsync(Contract.PageToken? from)
         {

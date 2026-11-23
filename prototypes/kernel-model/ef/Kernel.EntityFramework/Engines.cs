@@ -237,16 +237,16 @@ public sealed class SqlServerEngine : Engine
         var rows = await db.Database.SqlQueryRaw<long>(lease is null
             ? $"""
              MERGE "Nodes" WITH (HOLDLOCK) AS t USING (SELECT {"{0}"} AS "Id", {Now} AS "SeenAt") AS s ON t."Id" = s."Id"
-             WHEN MATCHED THEN UPDATE SET "SeenAt" = s."SeenAt"
-             WHEN NOT MATCHED THEN INSERT ("Id", "SeenAt") VALUES (s."Id", s."SeenAt")
+             WHEN MATCHED THEN UPDATE SET "SeenAt" = s."SeenAt", {NodeAdvertisement.Update}
+             WHEN NOT MATCHED THEN INSERT ("Id", "SeenAt", {NodeAdvertisement.Columns}) VALUES (s."Id", s."SeenAt", {NodeAdvertisement.Parameters})
              OUTPUT inserted."SeenAt" AS "Value";
              """
             : $"""
-             MERGE "Nodes" WITH (HOLDLOCK) AS t USING (SELECT {"{0}"} AS "Id", n.now AS "SeenAt", n.now + {"{1}"} AS "LeaseUntil" FROM (SELECT {Now} AS now) n) AS s ON t."Id" = s."Id"
-             WHEN MATCHED THEN UPDATE SET "SeenAt" = s."SeenAt", "LeaseUntil" = s."LeaseUntil"
-             WHEN NOT MATCHED THEN INSERT ("Id", "SeenAt", "LeaseUntil") VALUES (s."Id", s."SeenAt", s."LeaseUntil")
+             MERGE "Nodes" WITH (HOLDLOCK) AS t USING (SELECT {"{0}"} AS "Id", n.now AS "SeenAt", n.now + {"{4}"} AS "LeaseUntil" FROM (SELECT {Now} AS now) n) AS s ON t."Id" = s."Id"
+             WHEN MATCHED THEN UPDATE SET "SeenAt" = s."SeenAt", "LeaseUntil" = s."LeaseUntil", {NodeAdvertisement.Update}
+             WHEN NOT MATCHED THEN INSERT ("Id", "SeenAt", "LeaseUntil", {NodeAdvertisement.Columns}) VALUES (s."Id", s."SeenAt", s."LeaseUntil", {NodeAdvertisement.Parameters})
              OUTPUT inserted."SeenAt" AS "Value";
-             """, [node, .. lease is { } ms ? [ms] : Array.Empty<object>()]).ToListAsync(cancellationToken);
+             """, NodeAdvertisement.Arguments(node, lease)).ToListAsync(cancellationToken);
         return rows[0];
     }
 
@@ -335,13 +335,13 @@ public sealed class MySqlEngine : Engine
         // No RETURNING: the upsert and the read of what it wrote, one command of two statements.
         var rows = await db.Database.SqlQueryRaw<long>(Sql(lease is null
             ? $"""
-             INSERT INTO "Nodes" ("Id", "SeenAt") VALUES ({"{0}"}, {Now}) AS n ON DUPLICATE KEY UPDATE "SeenAt" = n."SeenAt";
+             INSERT INTO "Nodes" ("Id", "SeenAt", {NodeAdvertisement.Columns}) VALUES ({"{0}"}, {Now}, {NodeAdvertisement.Parameters}) AS n ON DUPLICATE KEY UPDATE "SeenAt" = n."SeenAt", {NodeAdvertisement.Update};
              SELECT "SeenAt" AS "Value" FROM "Nodes" WHERE "Id" = {"{0}"}
              """
             : $"""
-             INSERT INTO "Nodes" ("Id", "SeenAt", "LeaseUntil") SELECT * FROM (SELECT {"{0}"} AS i, t.now AS s, t.now + {"{1}"} AS l FROM (SELECT {Now} AS now) t) AS n ON DUPLICATE KEY UPDATE "SeenAt" = n.s, "LeaseUntil" = n.l;
+             INSERT INTO "Nodes" ("Id", "SeenAt", "LeaseUntil", {NodeAdvertisement.Columns}) SELECT i, s, l, {NodeAdvertisement.Parameters} FROM (SELECT {"{0}"} AS i, t.now AS s, t.now + {"{4}"} AS l FROM (SELECT {Now} AS now) t) AS n ON DUPLICATE KEY UPDATE "SeenAt" = n.s, "LeaseUntil" = n.l, {NodeAdvertisement.Update};
              SELECT "SeenAt" AS "Value" FROM "Nodes" WHERE "Id" = {"{0}"}
-             """), [node, .. lease is { } ms ? [ms] : Array.Empty<object>()]).ToListAsync(cancellationToken);
+             """), NodeAdvertisement.Arguments(node, lease)).ToListAsync(cancellationToken);
         return rows[0];
     }
 

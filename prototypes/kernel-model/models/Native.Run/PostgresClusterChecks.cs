@@ -15,7 +15,7 @@ internal static class PostgresClusterChecks
     private sealed record Root(Contract.ActorRef Ref, InstanceRef Actor);
     private sealed record Ownership(string? Node, long Epoch);
 
-    internal static async Task<int> RunAsync(int partitions, bool peer, bool flowchart = false)
+    internal static async Task<int> RunAsync(int partitions, bool peer, bool abrupt = false, bool flowchart = false)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         var stop = timeout.Token;
@@ -23,7 +23,7 @@ internal static class PostgresClusterChecks
             throw new ArgumentOutOfRangeException(nameof(partitions), "Use an even partition count between 2 and 1024.");
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES") ?? throw new InvalidOperationException("Supply a fresh dedicated preview database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => new(options);
+        KernelDb Open() => flowchart ? KernelDb.ForPostgresRootSelf(options) : new KernelDb(options);
         var store = new EfStore(Open, postgres: true);
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         if (!peer)
@@ -72,7 +72,7 @@ internal static class PostgresClusterChecks
             return 0;
         }
 
-        var scope = new Contract.BoundScope("cluster");
+        var scope = FixedTenantScope.Bind("cluster");
         var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 64), WorkflowActor.WorkflowActor.ActorType);
         var workflow = new WorkflowRuntime(api, api);
         var roots = new List<Root>();
@@ -124,21 +124,37 @@ internal static class PostgresClusterChecks
             await Send(target, "approve-1", "Ada", Contract.AdmissionOutcome.Accepted);
             await Until(async () => await Image(target) is { Revision: 2 });
             Check(await Placement(target) == beforeApproval, "the same peer epoch spans approval admission and the second checkpoint");
-            await child.StandardInput.WriteLineAsync("stop");
-            await child.WaitForExitAsync(stop);
-            Check(child.ExitCode == 0, "peer stopped cleanly");
+            var prefix = await api.TailAsync(scope, target.Ref, cancellationToken: stop);
+            Check(prefix.Items.Count(e => e.Revision == 2 && PostgresPublicPreview.Decode(e) == "approved:approve-1") == 1 && prefix.Next is not null,
+                "the public journal records the first approval once before peer departure");
+            if (abrupt)
+                await PostgresClusterExit.ObserveAsync(Open, target.Actor.Partition, Peer, beforeApproval.Epoch, Primary, child, stop);
+            else
+            {
+                await child.StandardInput.WriteLineAsync("stop");
+                await child.WaitForExitAsync(stop);
+                Check(child.ExitCode == 0, "peer stopped cleanly");
+            }
             await Until(async () => await Count(Primary) == partitions);
             var afterDeparture = await Placement(target);
             Check(afterDeparture.Node == Primary && afterDeparture.Epoch > beforeApproval.Epoch, "remaining node assumed the exact root's partition at a later epoch");
             await Send(target, "approve-1", "changed", Contract.AdmissionOutcome.Duplicate);
+            Check((await api.TailAsync(scope, target.Ref, prefix.Next, stop)).Items.Count == 0, "replay added no public journal entry");
             await Send(target, "approve-2", "Grace", Contract.AdmissionOutcome.Accepted);
             await Until(async () => await Image(target) is { Status: InstanceStatus.Finished });
             var image = (await Image(target))!;
             var results = Json.Read<NativeState>(image.State!).Results["approve"]!.AsArray().Select(x => x!.GetValue<string>());
+            var suffix = await api.TailAsync(scope, target.Ref, prefix.Next, stop);
+            Check(suffix.Items.All(e => e.Revision == 3 && PostgresPublicPreview.Decode(e) != "approved:approve-1") &&
+                suffix.Items.Count(e => PostgresPublicPreview.Decode(e) == "approved:approve-2") == 1,
+                "the pre-exit bookmark returns only the third revision and its single second approval");
             var journal = await api.TailAsync(scope, target.Ref, cancellationToken: stop);
+            Check(journal.Items.Count(e => PostgresPublicPreview.Decode(e) == "approved:approve-1") == 1 &&
+                journal.Items.Count(e => e.Revision == 3 && PostgresPublicPreview.Decode(e) == "approved:approve-2") == 1,
+                "public journal contains both applied approvals once");
             Check(image.Revision == 3 && results.SequenceEqual(["Ada", "Grace"]) &&
                 journal.Items.Select(x => x.Revision).Distinct().SequenceEqual([1L, 2L, 3L]), "exactly one approval of each kind landed across handover");
-            Check(await api.GetAsync(new("other"), target.Ref, stop) is null, "public read stayed tenant bound");
+            await PostgresMultiRootClient.CallSecondaryAsync(stop, "missing", target.Ref.Id);
             await node.StopAsync(stop);
             Healthy();
             Console.WriteLine($"ok PostgreSQL public Cluster: {partitions} partitions, processes {Environment.ProcessId} and {child.Id}, target {target.Actor.Partition}, epochs {beforeApproval.Epoch}->{afterDeparture.Epoch}, shared journal transaction, 3 revisions.");
@@ -212,26 +228,30 @@ internal static class PostgresClusterChecks
             async Task Signal(string op, string frame, string value, Contract.AdmissionOutcome outcome)
             {
                 var input = Json.Write(new CompositeSignal(frame, "approve", value));
-                Check((await api.SendAsync(scope, new Contract.Target.Ref(target.Ref), op, CompositeSignal.Kind, input, cancellationToken: stop)).Outcome == outcome, op);
+                await PostgresMultiRootClient.Send(api, scope, target.Ref, op, input, outcome, stop);
             }
             await Signal("risk-approval", PostgresFlowchartPreview.Frame(state, "risk"), "Risk accepted", Contract.AdmissionOutcome.Accepted);
             await Until(async () => await Image(target) is { } i && PostgresFlowchartPreview.State(i) is { Agenda.Count: 0 } s &&
                 s.Results.ContainsKey("risk") && s.Frames.Values.All(f => f.Node != "risk"));
             var waiting = (await Image(target))!;
             await Signal("risk-approval", finance, "changed body", Contract.AdmissionOutcome.Duplicate);
+            var afterReplay = await Image(target);
+            Check(waiting.Revision == 6 && afterReplay?.Revision == waiting.Revision && afterReplay.State == waiting.State,
+                "the changed risk replay preserves the exact waiting checkpoint before finance approval");
             await Signal("finance-approval", finance, "Finance accepted", Contract.AdmissionOutcome.Accepted);
             await Until(async () => await Image(target) is { Status: InstanceStatus.Finished });
             var finished = (await Image(target))!;
             state = PostgresFlowchartPreview.State(finished);
             var suffix = await api.TailAsync(scope, target.Ref, birth.Next, stop);
-            Check(finished.Revision == 7 && waiting.Revision < finished.Revision &&
+            Check(finished.Revision == waiting.Revision + 1 &&
                 state.Results["risk"]?.GetValue<string>() == "Risk accepted" &&
                 state.Results["finance"]?.GetValue<string>() == "Finance accepted" &&
                 state.Variables["ready"]?.GetValue<bool>() == true && suffix.Items.Count(PostgresFlowchartPreview.IsJoin) == 1 &&
                 applied.GetValueOrDefault(InboxKey.Issued(persisted!)) == 1, "the successor applied the original stored continuation and joined once");
             await Signal("finance-approval", finance, "changed again", Contract.AdmissionOutcome.Duplicate);
             Check((await Image(target))!.Revision == finished.Revision && (await api.TailAsync(scope, target.Ref, birth.Next, stop)).Items.SequenceEqual(suffix.Items) &&
-                await api.GetAsync(new("other"), target.Ref, stop) is null && await Placement(target) == after, "stable public result and tenant-qualified read");
+                await Placement(target) == after, "stable public result and successor epoch");
+            await PostgresMultiRootClient.CallSecondaryAsync(stop, "missing-durable", target.Ref.Id);
             await using var final = Open();
             var journal = await final.Journal.Where(j => j.Instance == target.Actor.Id).OrderBy(j => j.Position).Select(j => j.Revision).ToListAsync(stop);
             var positions = await final.Journal.Where(j => j.Partition == target.Actor.Partition).OrderBy(j => j.Position).Select(j => j.Position).ToListAsync(stop);
@@ -256,7 +276,7 @@ internal static class PostgresClusterChecks
         {
             var frame = Json.Read<NativeState>((await Image(root))!.State!).Frames.Single().Key;
             var input = Json.Write(new CompositeSignal(frame, "approve", value));
-            Check((await api.SendAsync(scope, new Contract.Target.Ref(root.Ref), id, CompositeSignal.Kind, input, cancellationToken: stop)).Outcome == expected, "direct admission result");
+            await PostgresMultiRootClient.Send(api, scope, root.Ref, id, input, expected, stop);
         }
         Task<EfStore.RootImage?> Image(Root root) => store.ReadFirstRootAsync(scope.Tenant, root.Ref.Id, stop);
         async Task<int> Count(string owner) { await using var db = Open(); return await db.Partitions.CountAsync(p => p.Owner == owner, stop); }
