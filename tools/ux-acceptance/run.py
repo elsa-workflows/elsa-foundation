@@ -88,7 +88,7 @@ CAPTURES = {
     'variable lifecycle warnings and refusals': ['reference', 'lost-update-warning', 'fault-refusal', 'run-lost-update-badge', 'write-history-lost-updates', 'commit-journal', 'compare-refused', 'diagnostics-variable-writes'],
     'variable rename updates script reads and lists the rest': ['reference', 'rename-notice', 'flagged-reference', 'validation-collapsed', 'validation-expanded', 'validation-input-focused'],
     'script variable may-write analysis survives editing and reopening': ['reference', 'literal-writes', 'computed-writes', 'reopened-computed', 'no-writes', 'nearest-scope'],
-    'workflow state native and imported authoring and inspection': ['reference', 'native-effects', 'known-effects', 'computed-effects', 'empty-effects', 'native-completed', 'current-state', 'current-outputs', 'accepted-timeline', 'cleared-state', 'imported-effects', 'imported-completed', 'faulted', 'cancelled', 'protected'],
+    'workflow state native and imported authoring and inspection': ['reference', 'native-effects', 'known-effects', 'computed-effects', 'empty-effects', 'native-completed', 'current-state', 'current-outputs', 'accepted-timeline', 'cleared-state', 'imported-effects', 'imported-completed', 'faulted', 'faulted-incidents', 'cancelled', 'protected-state', 'protected'],
 }
 NATIVE_RESULT_CAPTURES = ('provenance', 'coverage-periods', 'series-1', 'series-2', 'series-3', 'exact-values', 'exact-values-end')
 CAPTURES['native dashboard questions and sharing'] += (

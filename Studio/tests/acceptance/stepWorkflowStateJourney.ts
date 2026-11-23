@@ -173,7 +173,9 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   const importedRun = await run(imported.workflowVersionId, "Completed", "seed");
   expect(importedRun.details.instance).toMatchObject({ correlationId: "new", instanceName: "Ready" });
   expect(importedRun.details.outputs).toHaveProperty("Total");
-  await expect(inspector().getByRole("region", { name: "Committed workflow changes", exact: true })).toContainText("Completion accepted");
+  const importedCommitted = inspector().getByRole("region", { name: "Committed workflow changes", exact: true });
+  await expect(importedCommitted).toContainText("Completion accepted");
+  await fullyVisibleText(importedCommitted.getByText(/^Completion accepted/).first());
   await capture(page, info, "imported-completed");
 
   for (const [mode, status, name] of [["fault", "Faulted", "faulted"], ["cancel", "Cancelled", "cancelled"]]) {
@@ -184,6 +186,12 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
     await expect(inspector().getByRole("region", { name: "Committed workflow changes", exact: true })).toHaveCount(0);
     await fullyVisibleText(inspector().getByRole("heading", { level: 4 }).first());
     await capture(page, info, name);
+    if (mode === "fault") {
+      const faultIncident = inspector().getByRole("region", { name: "Activity incidents", exact: true })
+        .getByText("Review failed", { exact: true });
+      await fullyVisibleText(faultIncident);
+      await capture(page, info, "faulted-incidents");
+    }
   }
   const secret = "s13-protected-sentinel";
   const protectedDefinition = await seed("Protected state", protectedNative, [literal("Secret", secret)]);
@@ -192,6 +200,10 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   expect(protectedRun.details.outputs).not.toHaveProperty("ProtectedAttempt");
   await expect(inspector()).not.toContainText(secret);
   await expect(inspector().getByRole("region", { name: "Committed workflow changes", exact: true })).toHaveCount(0);
+  await capture(page, info, "protected-state");
+  const protectedIncident = inspector().getByRole("region", { name: "Activity incidents", exact: true })
+    .getByText("VF-STATE-003: Protected sources cannot flow into public identity fields or output names.", { exact: true });
+  await fullyVisibleText(protectedIncident);
   await capture(page, info, "protected");
   await info.attach("state-contract.json", { body: JSON.stringify({ native: completed, imported: importedRun, protected: protectedRun }, null, 2), contentType: "application/json" });
 }
