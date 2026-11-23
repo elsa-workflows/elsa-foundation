@@ -282,29 +282,33 @@ internal static class PostgresRootValueChecks
             await using var db = Open();
             Check((await db.StoreVersions.SingleAsync(token)).Format == new StoreFormat(3, 8, 1),
                 "The root values fixture must use its own durable marker.");
-            (Func<KernelDb> Open, StoreFormat Format)[] otherProfiles =
+            (Func<KernelDb> Open, StoreFormat Format, bool ChecksReadMarker)[] otherProfiles =
             [
-                (() => new KernelDb(options), StoreFormat.Current),
-                (() => KernelDb.ForPostgresRootJobs(options), StoreFormat.RootJobs),
-                (() => KernelDb.ForPostgresRootTimedJobIssuance(options), StoreFormat.RootTimedJobIssuance)
+                (() => new KernelDb(options), StoreFormat.Current, false),
+                (() => KernelDb.ForPostgresRootJobs(options), StoreFormat.RootJobs, false),
+                (() => KernelDb.ForPostgresRootTimedJobIssuance(options), StoreFormat.RootTimedJobIssuance, true),
+                (() => KernelDb.ForPostgresRootTimedJobSettlement(options), StoreFormat.RootTimedJobSettlement, true)
             ];
-            foreach (var (open, format) in otherProfiles)
+            foreach (var (open, format, checksReadMarker) in otherProfiles)
             {
                 var old = new EfStore(open, postgres: true);
+                var mismatch = $"Stored {StoreFormat.RootValues}. This build reads {format}.";
                 var markerRefused = false;
                 try { await old.TakeAsync(0, "old-profile-probe", Defaults.Lease, token); }
-                catch (StoreFormatException error) when (error.Message.Contains($"Stored {StoreFormat.RootValues}. This build reads {format}.", StringComparison.Ordinal))
+                catch (StoreFormatException error) when (error.Message.Contains(mismatch, StringComparison.Ordinal))
                 {
                     markerRefused = true;
                 }
                 Check(markerRefused, $"The protocol {format.MessageProtocol} owner must refuse the value database marker.");
                 var stateRefused = false;
                 try { await old.ReadFirstRootAsync(scope.Tenant, actor.Id, token); }
-                catch (StoreException error) when (error.Failure == Failure.Definite && error.Message == "Unsupported qualified actor checkpoint.")
+                catch (StoreException error) when (error.Failure == Failure.Definite && (checksReadMarker
+                    ? error is StoreFormatException && error.Message.Contains(mismatch, StringComparison.Ordinal)
+                    : error.Message == "Unsupported qualified actor checkpoint."))
                 {
                     stateRefused = true;
                 }
-                Check(stateRefused, $"The protocol {format.MessageProtocol} point reader must refuse the value checkpoint family.");
+                Check(stateRefused, $"The protocol {format.MessageProtocol} point reader must refuse the value checkpoint.");
             }
         }
     }
