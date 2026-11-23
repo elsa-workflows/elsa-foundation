@@ -126,16 +126,21 @@
     Public API tracking. A packable project opts in with <ElsaTrackPublicApi>true</ElsaTrackPublicApi> in
     its own project file, beside its PublicAPI.Shipped.txt and PublicAPI.Unshipped.txt; a domain's
     internal-by-default change flips it on for each of the domain's packable projects. PublicApiAnalyzers
-    then fails the build when a public member is added or removed without a matching entry, so every
+    then reports when a public member is added or removed without a matching entry, so every
     change to the public surface is a reviewed diff of those two files. PublicApiFilesGuardTests holds the
     opt-in, the two files and the analyzer together.
 
     Only items are conditioned on the opt-in. The project sets it in its own body, which MSBuild evaluates
     after this file but before any item, so an item condition here sees it and a property condition would
-    not. RS0016 (public API not declared) and RS0017 (declared API removed) are therefore promoted to
-    errors for every project: only a project that runs the analyzer can raise them. This stays additive to
-    the warnings-only analysis policy below, and every other PublicApiAnalyzers rule stays a warning.
-    PrivateAssets="all" keeps the analyzer out of every packed nupkg's dependencies.
+    not. RS0016 (public API not declared) and RS0017 (declared API removed) stay warnings until Elsa 4's
+    first release: there is no compatibility promise yet, and promoting them to errors failed builds
+    before any tests ran. They do not fail the build here because they are not in WarningsAsErrors and
+    root projects do not set TreatWarningsAsErrors. WarningsNotAsErrors is a local safety net only; some
+    non-Studio CI steps still pass -p:WarningsNotAsErrors=NU1603, which is a global property and would
+    override this list. At the first Elsa 4 release (see #4862), put them back in WarningsAsErrors,
+    drop them from WarningsNotAsErrors, and refresh PublicAPI.Shipped.txt as a new baseline. Every other
+    PublicApiAnalyzers rule stays a warning. PrivateAssets="all" keeps the analyzer out of every packed
+    nupkg's dependencies.
 
     The condition reads a project-file property, never $(Configuration), so the Release and Debug restore
     graphs agree; EfCoreDependencyGuardTests admits exactly this condition.
@@ -147,7 +152,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <WarningsAsErrors>$(WarningsAsErrors);RS0016;RS0017</WarningsAsErrors>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);RS0016;RS0017</WarningsNotAsErrors>
   </PropertyGroup>
 
   <!--
