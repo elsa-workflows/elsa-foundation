@@ -7,7 +7,6 @@ namespace Kernel.Native.Run;
 /// <summary>Public Foundation surfaces for the opt-in PostgreSQL direct-input preview.</summary>
 internal sealed class PostgresPreviewFoundation(
     PostgresRootAdmission admission,
-    EfStore store,
     PostgresRootReads reads,
     string actorType,
     Func<Contract.BoundScope, string, bool>? authorizeOperator = null,
@@ -64,16 +63,8 @@ internal sealed class PostgresPreviewFoundation(
         };
     }
 
-    public async ValueTask<Contract.ActorView?> GetAsync(Contract.BoundScope scope, Contract.ActorRef actor,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(scope);
-        cancellationToken.ThrowIfCancellationRequested();
-        if (!PostgresRootAdmission.IsIssuedReferenceShape(actor.Id)) return null;
-        var image = await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken);
-        return image is null ? null : new(new(actor, image.Model, scope.Tenant, (Contract.ActorStatus)image.Status, null,
-            null, image.TerminalAt, image.TypeData, image.Labels), null, null, image.AsOf);
-    }
+    public ValueTask<Contract.ActorView?> GetAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        CancellationToken cancellationToken = default) => reads.GetAsync(scope, actor, cancellationToken);
 
     public ValueTask<Contract.Page<Contract.JournalEntry>> TailAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>

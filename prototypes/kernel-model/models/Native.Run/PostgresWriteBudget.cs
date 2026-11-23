@@ -46,9 +46,9 @@ internal static class PostgresWriteBudget
         var store = new EfStore(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = writer };
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         var cursor = await observeAdmission.OpenJournalCursorAsync(stop);
-        var api = new PostgresPreviewFoundation(admission, store, new(store, cursor, 64), PublicActor.ActorType);
+        var api = new PostgresPreviewFoundation(admission, new(store, cursor, 64), PublicActor.ActorType);
         var runtime = new WorkflowRuntime(api, api);
-        var verifyApi = new PostgresPreviewFoundation(observeAdmission, observer, new(observer, cursor, 64), PublicActor.ActorType);
+        var verifyApi = new PostgresPreviewFoundation(observeAdmission, new(observer, cursor, 64), PublicActor.ActorType);
         var verifyRuntime = new WorkflowRuntime(verifyApi, verifyApi);
         var scope = FixedTenantScope.Bind("write-budget");
         var definition = Reference.WriteLines(Lines);

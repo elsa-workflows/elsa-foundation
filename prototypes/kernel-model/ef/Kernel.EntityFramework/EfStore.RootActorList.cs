@@ -64,6 +64,21 @@ public sealed partial class EfStore
             $install$;
             """, cancellationToken);
 
+    internal async Task<(RootListItem Item, long AsOf)?> ReadRootActorAsync(string tenant, string reference,
+        CancellationToken cancellationToken)
+    {
+        if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root actor reads require PostgreSQL.");
+        await using var db = create();
+        await RequireStoreVersionsAsync(db, cancellationToken);
+        var row = await db.Database.SqlQuery<RootListRow>($"""
+            SELECT l."Reference", l."Status", l."EndedAt", l."Header",
+                floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
+            FROM "FoundationActorList" l
+            WHERE l."Tenant" = {tenant} AND l."Reference" = {reference}
+            """).SingleOrDefaultAsync(cancellationToken);
+        return row is null ? null : (ToRootListItem(row), row.AsOf);
+    }
+
     internal async Task<RootListPage> ReadRootActorListAsync(string tenant, string after, string? type, int? status,
         KeyValuePair<string, string>[] labels, long? endedBefore, bool? parked, int limit, CancellationToken cancellationToken)
     {
@@ -90,12 +105,14 @@ public sealed partial class EfStore
             FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true
             ORDER BY page."Reference" COLLATE "C"
             """).ToListAsync(cancellationToken);
-        var items = rows.Where(row => row.Reference is not null).Select(row =>
-        {
-            var header = DurableKeyJson.Read<RootHeader>(row.Header!);
-            return new RootListItem(row.Reference!, header.Model, (InstanceStatus)row.Status!.Value, row.EndedAt,
-                header.TypeData, header.Labels.ToDictionary(StringComparer.Ordinal));
-        }).ToArray();
+        var items = rows.Where(row => row.Reference is not null).Select(ToRootListItem).ToArray();
         return new(items, rows[0].AsOf);
+    }
+
+    private static RootListItem ToRootListItem(RootListRow row)
+    {
+        var header = DurableKeyJson.Read<RootHeader>(row.Header!);
+        return new(row.Reference!, header.Model, (InstanceStatus)row.Status!.Value, row.EndedAt, header.TypeData,
+            header.Labels.ToDictionary(StringComparer.Ordinal));
     }
 }

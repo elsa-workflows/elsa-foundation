@@ -12,6 +12,15 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
 
+    internal async ValueTask<ActorView?> GetAsync(BoundScope scope, ActorRef actor, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!PostgresRootAdmission.IsIssuedReferenceShape(actor.Id)) return null;
+        var read = await store.ReadRootActorAsync(scope.Tenant, actor.Id, cancellationToken);
+        return read is { } found ? View(scope, found.Item, found.AsOf) : null;
+    }
+
     internal async ValueTask<Page<ActorView>> ListAsync(BoundScope scope, ActorQuery query, PageToken? from,
         CancellationToken cancellationToken)
     {
@@ -30,13 +39,15 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
         int? status = query.Status is { } filter ? (int)filter : null;
         var page = await store.ReadRootActorListAsync(scope.Tenant, after, query.Type, status, labels, query.EndedBefore,
             query.Parked, _pageSize + 1, cancellationToken);
-        var items = page.Items.Take(_pageSize).Select(row => new ActorView(
-            new(new(row.Reference), row.Type, scope.Tenant, (ActorStatus)row.Status, null, null, row.EndedAt, row.TypeData,
-                row.Labels), null, null, page.AsOf)).ToArray();
+        var items = page.Items.Take(_pageSize).Select(row => View(scope, row, page.AsOf)).ToArray();
         PageToken? next = page.Items.Count > _pageSize
             ? new(cursor.Seal(context, Encoding.ASCII.GetBytes(items[^1].Header.Ref.Id))) : null;
         return new(items, next, page.AsOf);
     }
+
+    private static ActorView View(BoundScope scope, EfStore.RootListItem row, long asOf) =>
+        new(new(new(row.Reference), row.Type, scope.Tenant, (ActorStatus)row.Status, null, null, row.EndedAt, row.TypeData,
+            row.Labels), null, null, asOf);
 
     internal async ValueTask<Page<WorkflowRunView>> ListRunsAsync(BoundScope scope, string actorType, WorkflowRunQuery query,
         PageToken? from, CancellationToken cancellationToken)

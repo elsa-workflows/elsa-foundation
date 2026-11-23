@@ -32,7 +32,7 @@ internal static class PostgresStatechartPreview
         }
 
         var scope = FixedTenantScope.Bind("orders");
-        var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 4),
+        var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 4),
             WorkflowActor.WorkflowActor.ActorType);
         var registry = new WorkflowRegistry().Add(OrderStatechart.Build());
         var host = await PostgresNativeRootOwner.PreparePartitionAsync(store, $"order-{Environment.ProcessId}", 0, registry, 1, stop);

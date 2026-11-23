@@ -47,7 +47,7 @@ internal static class PostgresRootTimedJobIssuance
             Check(await PostgresFixtureDatabase.IsEmptyAsync(empty, stop), "Issuance requires the fresh fixture database.");
             await store.CreateAsync(1);
             await roots.InstallAsync(stop);
-            var api = new PostgresPreviewFoundation(roots, store, new(store, await roots.OpenJournalCursorAsync(stop), 16),
+            var api = new PostgresPreviewFoundation(roots, new(store, await roots.OpenJournalCursorAsync(stop), 16),
                 WorkflowActor.WorkflowActor.ActorType);
             var scope = FixedTenantScope.Bind(Tenant);
             var receipt = await new WorkflowRuntime(api, api).StartAsync(scope, "issue", NativeExecutionModel.Start(Definition), cancellationToken: stop);

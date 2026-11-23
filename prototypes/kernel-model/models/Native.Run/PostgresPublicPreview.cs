@@ -58,7 +58,7 @@ internal static class PostgresPublicPreview
         }
         var cursor = await admission.OpenJournalCursorAsync(stop);
         var tail = new PostgresRootReads(store, cursor, 1);
-        var foundation = new PostgresPreviewFoundation(admission, store, tail, PublicActor.ActorType);
+        var foundation = new PostgresPreviewFoundation(admission, tail, PublicActor.ActorType);
         if (tenantProbe)
         {
             var otherActor = new Contract.ActorRef(suppliedReference!);

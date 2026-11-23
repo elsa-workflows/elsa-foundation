@@ -37,7 +37,7 @@ internal static class PostgresWorkflowHistoryChecks
             await store.CreateAsync(1);
             await admission.InstallAsync(ct);
         }
-        var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(ct), 2), Actor.ActorType);
+        var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(ct), 2), Actor.ActorType);
 
         if (phase == "tenant")
         {

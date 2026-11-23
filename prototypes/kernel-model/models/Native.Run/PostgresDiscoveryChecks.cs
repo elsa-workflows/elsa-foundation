@@ -27,7 +27,7 @@ internal static class PostgresDiscoveryChecks
             await store.CreateAsync(2);
             await admission.InstallAsync(stop);
         }
-        var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 64), WorkflowActor.WorkflowActor.ActorType);
+        var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 64), WorkflowActor.WorkflowActor.ActorType);
         var scope = FixedTenantScope.Bind(Primary);
         var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
         var turns = new List<(string Actor, string Input)>();

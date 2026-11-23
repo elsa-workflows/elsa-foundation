@@ -43,7 +43,7 @@ internal static class PostgresRootJobPreview
             await store.CreateAsync(1);
             await admission.InstallAsync(stop);
         }
-        var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 16),
+        var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType);
         var scope = FixedTenantScope.Bind("jobs");
         var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition, Wf.Sequence("main",

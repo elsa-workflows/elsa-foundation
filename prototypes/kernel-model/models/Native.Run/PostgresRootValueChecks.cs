@@ -42,7 +42,7 @@ internal static class PostgresRootValueChecks
 
         await store.EnableRootValuesAsync(token);
         var scope = FixedTenantScope.Bind("value-qualification");
-        var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(token), 32), ActorType);
+        var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(token), 32), ActorType);
         var (roots, partitions) = await store.BindWorkerPartitionAsync(0, token);
         var node = $"values-{Environment.ProcessId}";
         var adapter = new ActorAdapter(new PostgresNativeRootOwner.Headers(roots), new ValueActor(), rootValueReader: store.ReadRootValueAsync);

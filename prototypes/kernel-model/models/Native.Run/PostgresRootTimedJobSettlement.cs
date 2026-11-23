@@ -52,7 +52,7 @@ internal static class PostgresRootTimedJobSettlement
         }
         catch (StoreFormatException) { }
 
-        var api = new PostgresPreviewFoundation(admission, firstStore, new(firstStore, await admission.OpenJournalCursorAsync(stop), 16),
+        var api = new PostgresPreviewFoundation(admission, new(firstStore, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType);
         var scope = FixedTenantScope.Bind(Tenant);
         var receipt = await new WorkflowRuntime(api, api).StartAsync(scope, "issue", NativeExecutionModel.Start(Definition), cancellationToken: stop);
@@ -215,7 +215,7 @@ internal static class PostgresRootTimedJobSettlement
         if (queued is not null)
         {
             var due = queued.Due;
-            var coldApi = new PostgresPreviewFoundation(admission, thirdStore,
+            var coldApi = new PostgresPreviewFoundation(admission,
                 new(thirdStore, await admission.OpenJournalCursorAsync(stop), 16), WorkflowActor.WorkflowActor.ActorType);
             var view = await coldApi.GetAsync(scope, actor, stop)
                 ?? throw new InvalidOperationException("The cold public read did not return the faulted root.");

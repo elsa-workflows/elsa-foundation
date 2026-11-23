@@ -41,7 +41,7 @@ internal static class PostgresRootListChecks
             await admission.InstallAsync(ct);
         }
         var reads = new PostgresRootReads(store, await admission.OpenJournalCursorAsync(ct), 2);
-        var foundation = new PostgresPreviewFoundation(admission, store, reads, Actor.ActorType, (scope, _) => scope == blue);
+        var foundation = new PostgresPreviewFoundation(admission, reads, Actor.ActorType, (scope, _) => scope == blue);
         IActorReads api = foundation;
 
         if (saved is not null)
@@ -57,6 +57,14 @@ internal static class PostgresRootListChecks
             Check(first.Items.Count == 2 && next is { Items.Count: 2, Next: not null } && final is { Items.Count: 1, Next: null } &&
                 actual.Distinct().Count() == 5 && actual.SequenceEqual(actual.Order(StringComparer.Ordinal)),
                 "a saved token crosses a fresh process and three bounded pages without reading owner state or the journal");
+            var listed = first.Items[0];
+            var point = await api.GetAsync(blue, listed.Header.Ref, ct);
+            Check(point is not null && point.Header.Ref == listed.Header.Ref && point.Header.Tenant == listed.Header.Tenant &&
+                point.Header.Status == listed.Header.Status && point.Header.Type == listed.Header.Type &&
+                point.Header.TypeData == listed.Header.TypeData &&
+                query.Labels!.All(label => point.Header.Labels[label.Key] == label.Value) && point.AsOf >= listed.AsOf &&
+                await api.GetAsync(blue, new ActorRef("not a reference"), ct) is null,
+                "a cold point lookup reads committed metadata and the database clock without owner state or the journal");
             Check(await Refused(blue, query with { Status = ActorStatus.Finished }) &&
                 await Refused(blue, query with { Labels = null }) && await Refused(blue, query with { EndedBefore = 10 }) &&
                 await Refused(blue, query with { Parked = null }) && await Refused(blue, query with { Type = null }),
@@ -78,8 +86,8 @@ internal static class PostgresRootListChecks
         var neighbor = new ActorRef(await PostgresMultiRootClient.CallSecondaryAsync(ct, "operator-start"));
         var unusual = await Start(blue, "odd-labels");
         var completed = await Start(blue, "completed", "terminal");
-        Check((await api.ListAsync(blue, query, cancellationToken: ct)).Items.Count == 0,
-            "admitted creators do not project uncommitted actors");
+        Check((await api.ListAsync(blue, query, cancellationToken: ct)).Items.Count == 0 &&
+            await api.GetAsync(blue, unusual, ct) is null, "admitted creators do not project uncommitted actors");
         var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build())
             .Add(Wf.Workflow("terminal", Wf.Node<PostgresFlowchartPreview.Approval>("approval")));
         var prepared = await PostgresNativeRootOwner.PreparePartitionAsync(store, "root-list", 0, registry, 16, ct);
@@ -133,8 +141,11 @@ internal static class PostgresRootListChecks
                     "FoundationWriteRevision" = "Revision" + 1
                 WHERE "FoundationTenant" = {blue.Tenant} AND "FoundationReference" = {unusual.Id}
                 """, ct) == 1, "the database stages a projection change before commit");
-            Check((await api.ListAsync(blue, rollbackFilter, cancellationToken: ct)).Items.Count == 0,
-                "a separate public reader cannot see uncommitted projection metadata");
+            var committed = await api.GetAsync(blue, unusual, ct);
+            Check((await api.ListAsync(blue, rollbackFilter, cancellationToken: ct)).Items.Count == 0 &&
+                committed is not null && committed.Header.Labels.Count == odd.Count &&
+                odd.All(label => committed.Header.Labels.GetValueOrDefault(label.Key) == label.Value),
+                "a separate public reader sees only committed projection metadata");
             await transaction.RollbackAsync(ct);
         }
         Check((await api.ListAsync(blue, rollbackFilter, cancellationToken: ct)).Items.Count == 0 &&
@@ -143,6 +154,8 @@ internal static class PostgresRootListChecks
 
         var terminal = (await api.ListAsync(blue, new(Status: ActorStatus.Finished), cancellationToken: ct)).Items.Single();
         var ended = terminal.Header.EndedAt!.Value;
+        Check(await api.GetAsync(blue, completed, ct) is { Header: { Status: ActorStatus.Finished, EndedAt: var pointEnd } } &&
+            pointEnd == ended, "point and list expose the same persisted terminal time");
         Check(terminal.Header.Ref == completed && (await api.ListAsync(blue, new(EndedBefore: ended), cancellationToken: ct)).Items.Count == 0 &&
             (await api.ListAsync(blue, new(EndedBefore: ended + 1), cancellationToken: ct)).Items is [var finished] && finished.Header.Ref == completed,
             "the persisted end time accepts only a strict end bound");
@@ -164,6 +177,7 @@ internal static class PostgresRootListChecks
             ALTER TABLE "Instances" RENAME TO "FixtureOwnerRows";
             ALTER TABLE "Journal" RENAME TO "FixtureJournalRows";
             """, ct);
+        Check(await api.GetAsync(blue, neighbor, ct) is null, "a foreign reference is a miss on the point projection");
         await PostgresMultiRootClient.CallSecondaryAsync(ct, "operator-list", neighbor.Id, page.Next!.Value.Value);
         Console.WriteLine($"projection-bookmark {page.Next!.Value.Value}");
         Console.WriteLine($"passed projection birth {Environment.ProcessId}");

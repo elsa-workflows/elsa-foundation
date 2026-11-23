@@ -31,8 +31,8 @@ internal static class PostgresRootOperatorChecks
         }
         var journal = new PostgresRootReads(store, await admission.OpenJournalCursorAsync(ct), 8);
         var blue = FixedTenantScope.Bind("blue");
-        var basic = new PostgresPreviewFoundation(admission, store, journal, WorkflowActor.WorkflowActor.ActorType);
-        var operatorApi = new PostgresPreviewFoundation(admission, store, journal, WorkflowActor.WorkflowActor.ActorType,
+        var basic = new PostgresPreviewFoundation(admission, journal, WorkflowActor.WorkflowActor.ActorType);
+        var operatorApi = new PostgresPreviewFoundation(admission, journal, WorkflowActor.WorkflowActor.ActorType,
             (scope, kind) => ReferenceEquals(scope, blue) && kind is Contract.Kinds.Suspend or Contract.Kinds.Resume);
         var runtime = new WorkflowRuntime(basic, basic);
         if (previous is null)
@@ -68,7 +68,7 @@ internal static class PostgresRootOperatorChecks
                 "a new suspension refuses a finished workflow");
             Check((await basic.SendAsync(blue, new Contract.Target.Ref(a), SuspendId, Contract.Kinds.Suspend, cancellationToken: ct)).Outcome ==
                 Contract.AdmissionOutcome.Refused, "the ordinary host has no operator grant");
-            var suspendOnly = new PostgresPreviewFoundation(admission, store, journal, WorkflowActor.WorkflowActor.ActorType,
+            var suspendOnly = new PostgresPreviewFoundation(admission, journal, WorkflowActor.WorkflowActor.ActorType,
                 (scope, kind) => scope.Tenant == blue.Tenant && kind == Contract.Kinds.Suspend);
             Check((await suspendOnly.SendAsync(blue, new Contract.Target.Ref(a), "only-suspend", Contract.Kinds.Resume, cancellationToken: ct)).Outcome ==
                 Contract.AdmissionOutcome.Refused, "a suspension grant cannot authorize Resume");
