@@ -69,6 +69,12 @@ if (args.Contains("--held-job-result-check"))
     await HeldJobResultChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; }, flaws);
     return failed ? 1 : 0;
 }
+if (args.Contains("--park-control-identity-check"))
+{
+    var failed = false;
+    await ParkHandoffCreditChecks.CheckControlIdentities((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--park-coverage-budget-check"))
 {
     var failed = false;
