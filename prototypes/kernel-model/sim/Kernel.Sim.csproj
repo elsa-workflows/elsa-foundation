@@ -5,6 +5,7 @@
     <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../src/Kernel.Workflows/Kernel.Workflows.csproj" />
     <ProjectReference Include="../src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
     <ProjectReference Include="../models/Native.Legacy/Kernel.Native.Legacy.csproj" />
