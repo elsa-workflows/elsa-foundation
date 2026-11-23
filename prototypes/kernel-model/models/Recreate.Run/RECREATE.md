@@ -100,7 +100,8 @@ migration promise. Retired markers are distinct, canonical plain `null` with Ide
 A public actor checkpoint can contain an absent state or the four-character value `null`.
 The physical codec writes `!kernel-state/3:absent` for absence. An opaque value with those
 exact bytes uses the existing escape. The version-2 identity controls and existing values
-keep their encodings. A rollout must upgrade readers before an actor writes its first absent-state
+keep their encodings. Use `StoredState.Restore` for a row that may carry absence. The present-state
+`StoredState.Decode` interface refuses the absent cell. A rollout must upgrade readers before an actor writes its first absent-state
 control. The provider conformance cases named `state envelope` cover this distinction.
 
 ## Evidence, costs and remaining boundaries

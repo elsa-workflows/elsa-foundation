@@ -168,7 +168,7 @@ public sealed partial class EfStore
             row.Creation != 1 || row.NextJobGeneration is not (null or 0) || row.StartIntent != root.Fingerprint || row.Revision != checked((turn.Expected ?? 0) + 1) ||
             row.Status is not (InstanceStatus.Running or InstanceStatus.Finished) ||
             row.FoundationDispatchHeader is not { } header || header.Tenant != root.Tenant || header.Reference != root.Reference ||
-            turn.Journal is null || turn.Unsubscribe != (row.Status == InstanceStatus.Finished) ||
+            turn.Unsubscribe != (row.Status == InstanceStatus.Finished) ||
             turn.Sent.Count != 0 || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 }) throw RootShape();
 
         // Record equality checks the full shape, including extension fields. Adding a new durable effect
@@ -186,7 +186,7 @@ public sealed partial class EfStore
         var state = row.FoundationNullState ? null : row.State;
         if (turn.Expected is null)
         {
-            if (turn.Consumed is not [var key] || key != new InboxKey("root:" + root.Actor) ||
+            if (turn.Journal is null || turn.Consumed is not [var key] || key != new InboxKey("root:" + root.Actor) ||
                 turn.Done.Count != 0 || row.Status != InstanceStatus.Running || change is null) throw RootShape();
             var creator = await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;
