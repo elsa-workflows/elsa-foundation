@@ -63,7 +63,9 @@ public sealed partial class EfStore
         var completion = turn.FoundationRootJobCompletion;
         if (inputs is [var recorded])
         {
-            if (!recorded.FoundationJobResult || recorded.JobGeneration != job.Generation || recorded.Read<JobFinished>().Key != job.Key ||
+            if (!recorded.FoundationJobResult || recorded.JobGeneration != job.Generation ||
+                recorded.Read<JobFinished>() is not { } result || result.Key != job.Key ||
+                row.Status == InstanceStatus.Faulted && result is not { Error: "timeout", Result: null } ||
                 row.Jobs is not null || wires.Length != 0 || completion is not null) throw RootShape();
         }
         else

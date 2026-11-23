@@ -77,11 +77,17 @@ internal sealed partial class ActorAdapter
         return null;
     }
 
-    private void RequireRootOutcome(Durable.TurnOutcome outcome)
+    private void RequireRootOutcome(Durable.TurnOutcome outcome, Durable.InstanceRow? previous)
     {
-        if (outcome.Row is not { Status: Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished } ||
-            !((rootTimedJobIssuance || rootTimedJobSettlement) && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, outcome.Row.Id, outcome.Row.Model)) &&
-                outcome.Sent.Any(m => !SupportedSend(m, outcome.Row)) ||
+        var timedFault = outcome.Row is { Status: Durable.InstanceStatus.Faulted } && rootTimedJobSettlement &&
+            previous is not null && !outcome.OpensPark &&
+            outcome.Consumed is [{ Durable: true, Message: var result }] &&
+            Durable.RootJobTicket.IsRecordedResult(result, previous) &&
+            result.Read<Durable.JobFinished>() is { Error: "timeout", Result: null };
+        if (outcome.Row is not { } next ||
+            next.Status is not (Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished) && !timedFault ||
+            !((rootTimedJobIssuance || rootTimedJobSettlement) && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, next.Id, next.Model)) &&
+                outcome.Sent.Any(m => !SupportedSend(m, next)) ||
             outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
             outcome.Emitted.Count != 0 && (!rootHeldReplies || !outcome.Consumed.Exists(delivery => delivery.ReplyRoute is not null)) ||
