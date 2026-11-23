@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text.Json;
 using Kernel.Foundation.InMemory;
 using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
@@ -36,7 +38,10 @@ internal static class SqlitePlanProjectionChecks
         await projection.InitializeAsync(stop);
         var emptyPlan = await StartAsync("empty-plan");
         var empty = new SqlitePlanProjection(file, Scope, emptyPlan);
-        Check(!await empty.ProjectNextAsync(source, stop) && await empty.BookmarkAsync(stop) is null &&
+        await CheckCancelledReadAsync(empty, emptyPlan, source, expectEmpty: true);
+        var emptyRetry = new TailWitness(source);
+        Check(!await empty.ProjectNextAsync(emptyRetry, stop) && emptyRetry.Calls == 1 && emptyRetry.First is null &&
+            await empty.BookmarkAsync(stop) is null &&
             (await new SqlitePlanProjection(file, Scope, emptyPlan).ReadPageAsync(null, 1, stop)).AsOf == now,
             "A first empty tail must persist its observed time with the null bookmark.");
 
@@ -65,7 +70,7 @@ internal static class SqlitePlanProjectionChecks
         {
             refused = true;
         }
-        Check(refused && await projection.BookmarkAsync(stop) is null && await PersistedRowCountAsync() == 0 &&
+        Check(refused && await projection.BookmarkAsync(stop) is null && await PersistedRowCountAsync(plan) == 0 &&
             (await projection.ReadPageAsync(null, 4, stop)) is { AsOf: 0, Rows.Count: 0 },
             "A failure after the first row write must roll back the page and its cursor.");
         await ExecuteAsync("DROP TRIGGER abort_projection");
@@ -81,7 +86,12 @@ internal static class SqlitePlanProjectionChecks
         now++;
         await AnswerAsync(migrated, "not-at-source", MigrationPlanOutcome.NotAtSource);
         await RecordAsync("close", new MigrationPlanJournal.Closed());
-        Check(await projection.ProjectNextAsync(new ActorList(store, 1), stop) &&
+        var one = new ActorList(store, 1);
+        var beforeClose = await projection.BookmarkAsync(stop);
+        await CheckCancelledReadAsync(projection, plan, one, expectEmpty: false);
+        var closeRetry = new TailWitness(one);
+        Check(await projection.ProjectNextAsync(closeRetry, stop) && beforeClose is not null &&
+            closeRetry.First == beforeClose &&
             (await projection.ReadPageAsync(null, 4, stop)) is { Closed: false } partial && partial.AsOf == lastCaughtUp,
             "A committed close on a later page leaves the partial view at its last confirmed catch-up time.");
         while (await projection.ProjectNextAsync(source, stop)) { }
@@ -113,10 +123,11 @@ internal static class SqlitePlanProjectionChecks
         // The view can be backed by any foundation. Exercise coincident plan refs across tenants in the physical reader.
         await AddNeighborAsync("other", plan.Id, extra);
         await AddNeighborAsync(Scope.Tenant, OtherPlan, extra);
-        var results = await VerifyAsync(file, plan, stop);
-        Check(results[migrated] == MigrationPlanOutcome.Migrated && results[refusedActor] == MigrationPlanOutcome.Refused &&
-            results[unanswered] is null && !results.ContainsKey(extra), "The rows must keep the original selected actors and exact senders.");
-        Console.WriteLine($"projected {Environment.ProcessId} {plan.Id}");
+        var issuedBookmark = reopened.LastNext ?? throw new InvalidOperationException("The source did not issue a bookmark.");
+        var digest = Digest(plan, true, now, issuedBookmark,
+            [new(migrated, MigrationPlanOutcome.Migrated), new(refusedActor, MigrationPlanOutcome.Refused), new(unanswered, null)]);
+        await VerifyAsync(file, plan, digest, stop);
+        Console.WriteLine($"projected {Environment.ProcessId} {plan.Id} {digest}");
         return 0;
 
         async Task<Contract.ActorRef> StartAsync(string id)
@@ -141,7 +152,29 @@ internal static class SqlitePlanProjectionChecks
             }
         }
 
-        async Task<long> PersistedRowCountAsync()
+        async Task CheckCancelledReadAsync(SqlitePlanProjection view, Contract.ActorRef actor, Contract.IActorReads reads, bool expectEmpty)
+        {
+            var before = await view.BookmarkAsync(stop);
+            var snapshot = await view.ReadPageAsync(null, 4, stop);
+            var count = await PersistedRowCountAsync(actor);
+            using var cancel = CancellationTokenSource.CreateLinkedTokenSource(stop);
+            var witness = new TailWitness(reads, afterFirstRead: () => { cancel.Cancel(); return Task.CompletedTask; });
+            try
+            {
+                await view.ProjectNextAsync(witness, cancel.Token);
+                throw new InvalidOperationException("A cancelled projection returned normally.");
+            }
+            catch (OperationCanceledException error) when (error.CancellationToken == cancel.Token && !stop.IsCancellationRequested) { }
+
+            var reopenedView = new SqlitePlanProjection(file, Scope, actor);
+            var after = await reopenedView.ReadPageAsync(null, 4, stop);
+            Check(witness.Calls == 1 && witness.First == before && witness.FirstEmpty == expectEmpty &&
+                await reopenedView.BookmarkAsync(stop) == before && await PersistedRowCountAsync(actor) == count &&
+                snapshot.Closed == after.Closed && snapshot.AsOf == after.AsOf && snapshot.After == after.After &&
+                snapshot.Rows.SequenceEqual(after.Rows), "Cancellation after a journal read must leave its entire SQLite page unchanged.");
+        }
+
+        async Task<long> PersistedRowCountAsync(Contract.ActorRef actor)
         {
             await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = file, Mode = SqliteOpenMode.ReadOnly }.ConnectionString);
             await connection.OpenAsync(stop);
@@ -151,7 +184,7 @@ internal static class SqlitePlanProjectionChecks
                     + (SELECT COUNT(*) FROM plan_outcomes WHERE tenant = $tenant AND plan = $plan)
                 """;
             command.Parameters.AddWithValue("$tenant", Scope.Tenant);
-            command.Parameters.AddWithValue("$plan", plan.Id);
+            command.Parameters.AddWithValue("$plan", actor.Id);
             return (long)(await command.ExecuteScalarAsync(stop))!;
         }
 
@@ -181,16 +214,27 @@ internal static class SqlitePlanProjectionChecks
         }
     }
 
-    internal static async Task<int> InspectAsync(string file, string reference)
+    internal static async Task<int> InspectAsync(string file, string reference, string expectedDigest)
     {
         using var timer = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var plan = new Contract.ActorRef(reference);
-        await VerifyAsync(file, plan, timer.Token);
+        await VerifyAsync(file, plan, expectedDigest, timer.Token);
         Console.WriteLine($"inspected {Environment.ProcessId} {plan.Id} migrated 1 refused 1 no-answer 1");
         return 0;
     }
 
-    private static async Task<Dictionary<Contract.ActorRef, MigrationPlanOutcome?>> VerifyAsync(string file, Contract.ActorRef plan, CancellationToken stop)
+    private static string Digest(Contract.ActorRef plan, bool closed, long asOf, Contract.PageToken bookmark,
+        IEnumerable<SqlitePlanProjection.Outcome> rows)
+    {
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            Plan = plan.Id, Closed = closed, AsOf = asOf, Bookmark = bookmark.Value,
+            Rows = rows.OrderBy(row => row.Actor.Id, StringComparer.Ordinal).Select(row => new { row.Actor.Id, row.Result })
+        });
+        return Convert.ToHexString(SHA256.HashData(bytes));
+    }
+
+    private static async Task VerifyAsync(string file, Contract.ActorRef plan, string expectedDigest, CancellationToken stop)
     {
         var projection = new SqlitePlanProjection(file, Scope, plan);
         var first = await projection.ReadPageAsync(null, 1, stop);
@@ -226,7 +270,9 @@ internal static class SqlitePlanProjectionChecks
         {
             if (!child.HasExited) { child.Kill(); await child.WaitForExitAsync(); }
         }
-        return results;
+        var bookmark = await projection.BookmarkAsync(stop) ?? throw new InvalidOperationException("The stored bookmark is missing.");
+        Check(Digest(plan, first.Closed, first.AsOf, bookmark, first.Rows.Concat(second.Rows).Concat(last.Rows)) == expectedDigest,
+            "The persisted actors, outcomes, closed state, catch-up time and bookmark must match the producer receipt.");
     }
 
     internal static async Task<int> InspectNeighborAsync(string file, string plan, string actor)
@@ -249,16 +295,20 @@ internal static class SqlitePlanProjectionChecks
         private readonly TaskCompletionSource _both = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _calls;
         internal int Calls => _calls;
+        internal bool FirstEmpty { get; private set; }
+        internal Contract.PageToken? LastNext { get; private set; }
         internal Contract.PageToken? First { get; private set; }
 
         public async ValueTask<Contract.Page<Contract.JournalEntry>> TailAsync(Contract.BoundScope scope, Contract.ActorRef actor,
             Contract.PageToken? from = null, CancellationToken cancellationToken = default)
         {
             var page = await inner.TailAsync(scope, actor, from, cancellationToken);
+            if (page.Next is { } next) LastNext = next;
             var call = Interlocked.Increment(ref _calls);
             if (call == 1)
             {
                 First = from;
+                FirstEmpty = page.Items.Count == 0;
                 if (afterFirstRead is not null) await afterFirstRead();
             }
             if (synchronize)
