@@ -395,22 +395,25 @@ approval. The journal records the cancelled frame once. This Embedded preview su
 self inputs on a generated root. Same-turn retraction, whole-workflow operator termination, Park and Cluster timer
 recovery fall outside this case.
 
-### PostgreSQL operator admission preview
+### PostgreSQL Suspend and Resume preview
 
 On a fresh dedicated PostgreSQL database, set `KERNEL_PREVIEW_POSTGRES` and run `models/Native.Run/run-root-operator-preview.sh [owned|ef] [checked|in-batch]`.
-This preview creates an opt-in operator message profile with protocol 5. Existing databases keep their
-original profile, and an owner using a predecessor profile refuses the operator database at startup.
-The first process starts real Native workflows, admits one-way Suspend and Resume commands through an explicitly
-authorized host, and races two requests using the same operation ID. The receipt is per tenant and operation. Replaying
-against another valid reference returns the original target. A second process reads the due commands from the stored
-inbox. An ordinary input ahead of a due command and an independent root can advance. A later input on the same
-root waits. The poll applies these rules before its page limit and uses the database clock to distinguish due
-commands from future commands within the poll horizon. The same eligible input refuses a stale epoch and lands at
-the current one.
 
-This increment covers admission and candidate reads. The workflows remain at their waiting checkpoints. Applying the
-command with its ownership fence, persisting the suspension header and reopening ordinary delivery on Resume follow
-in the dispatcher increment. The existing preview host grants no operator permissions by default.
+The first process starts Native workflows and admits one-way Suspend and Resume through an explicitly authorized
+host. Receipts are scoped to the tenant and operation, including concurrent retries with changed targets. A second
+process applies Suspend with the current ownership fence. A stale owner leaves the exact command pending. On a
+running root the worker clears earlier ready ordinary input before the command. A suspended root withholds ordinary
+input and offers its first due command, allowing Resume to pass the waiting approvals. Independent roots can advance.
+Due controls use the database clock, and the poll applies these rules before the page limit.
+
+A third process loads the suspended Native header at a higher epoch and admits another approval while suspended.
+Resume settles its occurrence and reopens delivery in the same PostgreSQL transaction. The pending approvals then
+finish the original Native frame in order, once each. A command queued behind an input that finishes the root settles
+without changing the terminal checkpoint. The preview host grants no operator permissions by default.
+
+This opt-in profile retains message protocol 5 and can apply commands admitted by the previous build. Restart all
+owners on the new build to enable dispatch. A protocol-5 admission-only owner still withholds ordinary delivery on
+a suspended Native root, but cannot apply its pending commands. Earlier profiles refuse a protocol-5 store at startup.
 
 ## Built-in Cluster redistribution on PostgreSQL
 

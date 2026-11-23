@@ -33,6 +33,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     private const int MaxFaultTextBytes = 4_096;
 
     public bool SupportsFoundationOperator(Durable.InstanceRow? row) => roots is null && row?.Model == actor.Type;
+    bool Durable.IActorType.AcceptsFoundationOperator(Durable.InstanceRow? row, Durable.Message message) =>
+        roots is null ? SupportsFoundationOperator(row) : row?.Model == actor.Type && IsRootSuspension(message);
     bool Durable.IActorType.SupportsFoundationInlineStart(string type) => roots is null && type == actor.Type;
 
     bool Durable.IActorType.SupportsTrialWithdrawal => roots is null;
@@ -344,8 +346,11 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             if (roots is not null)
             {
                 // Withholds can run before this turn has landed. Carry its own metadata in the owner's row.
-                outcome.Row = nextRow with { FoundationDispatchHeader = new(nextHeader.Tenant, nextHeader.Ref.Id,
-                    new(nextHeader.TypeData, nextHeader.Labels)) };
+                outcome.Row = nextRow with
+                {
+                    Suspended = IsRootSuspension(delivery.Message) ? delivery.Message.Kind == Durable.Kinds.Suspend : nextRow.Suspended,
+                    FoundationDispatchHeader = new(nextHeader.Tenant, nextHeader.Ref.Id, new(nextHeader.TypeData, nextHeader.Labels))
+                };
             }
             if (nextRow.ParkCohort is { } cohort && (nextRow.Status != Durable.InstanceStatus.Running ||
                 store.FirstUnheldRecoveryInput(nextRow, cohort, key =>
