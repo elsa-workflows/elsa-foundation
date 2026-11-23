@@ -64,6 +64,8 @@ public sealed partial class EfStore
                 AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}}
             ORDER BY "Seq" LIMIT {4} FOR UPDATE
             """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count).AsNoTracking().ToListAsync(cancellationToken);
+        // A ready operator occurrence precedes any later ordinary input at the same root.
+        if (rows.Any(row => PostgresRootAdmission.IsStoredOperator(row.Start))) return false;
         var messages = rows.Select(row => row.InboxScope == RootSelfScope ? DecodeRootSelf(row, issue) : PostgresRootAdmission.DecodeDirect(row, reference)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(m => m.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
