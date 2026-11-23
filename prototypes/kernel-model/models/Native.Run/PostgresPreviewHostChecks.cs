@@ -16,13 +16,13 @@ internal static class PostgresPreviewHostChecks
         var stop = deadline.Token;
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a dedicated PostgreSQL fixture database.");
-        var actor = new ProbeActor("external-actor");
+        var actor = new ProbeActor("external\0actor");
         foreach (var (name, type, timing, parameter) in new (string, ProbeActor, LoopOptions?, string)[]
         {
             ("bad\0id", actor, null, "node"),
             ("bad\ud800id", actor, null, "node"),
             ("preview", new(" "), null, "actorType"),
-            ("preview", new("bad\0type"), null, "actorType"),
+            ("preview", new("bad\ud800type"), null, "actorType"),
             ("preview", actor, new() { BalanceEvery = TimeSpan.Zero }, "options"),
             ("preview", actor, new() { PollInterval = TimeSpan.FromTicks(1) }, "options"),
             ("preview", actor, new() { Window = TimeSpan.Zero }, "options")
@@ -60,14 +60,16 @@ internal static class PostgresPreviewHostChecks
             actor, message => escalated.TrySetResult(message), new() { PollInterval = TimeSpan.FromMilliseconds(25) }, stop);
         try
         {
-            while (await reads.GetAsync(scope, root, stop) is not { Header.Status: Contract.ActorStatus.Finished })
+            Contract.ActorView? view;
+            while ((view = await reads.GetAsync(scope, root, stop)) is not { Header.Status: Contract.ActorStatus.Finished })
             {
                 if (runtime.LastError is { } error) throw new InvalidOperationException("The host failed before serving the actor.", error);
                 await Task.Delay(25, stop);
             }
-            if (actor.Turns != 1 || (await reads.TailAsync(scope, root, cancellationToken: stop)).Items.Count == 0)
+            if (view.Header.Type != actor.Type || actor.Turns != 1 ||
+                (await reads.TailAsync(scope, root, cancellationToken: stop)).Items.Count == 0)
                 throw new InvalidOperationException("The launcher must serve the public actor and journal its one terminal turn.");
-            Console.WriteLine("ok the launcher serves a plain public actor with a terminal checkpoint and journal");
+            Console.WriteLine("ok the launcher preserves an escaped public actor type in the terminal checkpoint and journal");
 
             hang.Arm();
             await hang.Entered.Task.WaitAsync(stop);

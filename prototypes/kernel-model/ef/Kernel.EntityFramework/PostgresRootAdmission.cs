@@ -32,7 +32,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal static void RequireActorType(string actorType)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(actorType);
-        if (actorType.Contains('\0') || !FoundationMetadataLimits.FitsName(actorType))
+        if (!FoundationMetadataLimits.FitsName(actorType))
             throw new ArgumentException("Invalid PostgreSQL root actor type.", nameof(actorType));
     }
 
