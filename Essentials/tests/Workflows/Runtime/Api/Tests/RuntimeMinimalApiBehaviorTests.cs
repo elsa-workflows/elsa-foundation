@@ -613,7 +613,8 @@ public sealed class RuntimeMinimalApiBehaviorTests
     {
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(status, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         Assert.Equal(
             new[] { "type", "title", "status", "detail", "instance", "errorCode", "traceId", "diagnostics", "cursor" },
             body.EnumerateObject().Select(property => property.Name));

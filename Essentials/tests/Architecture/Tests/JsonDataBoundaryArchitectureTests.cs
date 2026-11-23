@@ -36,8 +36,33 @@ public sealed class JsonDataBoundaryArchitectureTests
         var expected = JsonSerializer.Deserialize<SortedDictionary<string, string>>(File.ReadAllText(path))!;
         var changes = snapshot.Pins.Keys.Union(expected.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal)
             .Where(key => !expected.TryGetValue(key, out var before) || !snapshot.Pins.TryGetValue(key, out var after) || before != after)
-            .Select(key => key + "\n" + snapshot.Shapes.GetValueOrDefault(key, "Root added or removed.")).ToArray();
-        Assert.True(changes.Length == 0, "Review changed wire members against the data roles in docs/serialization.md before updating pins:\n" + string.Join('\n', changes));
+            .Select(key => key + " | actual=" + snapshot.Pins.GetValueOrDefault(key, "removed") + "\n" + snapshot.Shapes.GetValueOrDefault(key, "Root added or removed.")).ToArray();
+        if (changes.Length != 0)
+        {
+            var evidence = Path.Join(Path.GetTempPath(), "elsa-json-wire-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(evidence);
+            File.WriteAllText(Path.Join(evidence, "actual-contracts.json"), JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true }));
+            Assert.Fail("Review changed wire members against the data roles in docs/serialization.md before updating pins. Full actual graph: " + evidence + "\n" + string.Join('\n', changes));
+        }
+    }
+
+    [Fact]
+    public void Loose_members_and_opaque_converter_contracts_need_an_exact_member_level_review()
+    {
+        var snapshot = JsonBoundaryContractGraph.Inspect(JsonBoundaryContractGraph.Contexts(RuntimeLibraries.Assemblies));
+        Assert.Empty(snapshot.Errors);
+        Assert.Equal(new[]
+        {
+            "Elsa.Weaver.Api.WeaverSseJsonContext|Elsa.Weaver.Core.Models.WeaverStreamEvent.payload",
+            "Elsa.Weaver.Api.WeaverSseJsonContext|Elsa.Weaver.Core.Models.WeaverToolCallOutcome.result",
+            "Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Workflows.Publishing.Api.Models.RuntimePreflightProblemDetails.diagnostics"
+        }, snapshot.LooseMembers);
+        Assert.Equal(new[]
+        {
+            "Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ActivityLayoutRecordsPayload|Elsa.Activities.Design.Api.Commands.ActivityLayoutRecordsPayloadJsonConverter",
+            "Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ActivityNodePresentationPayload|Elsa.Activities.Design.Api.Commands.ActivityPresentationPayloadConverter",
+            "Elsa.Etl.Design.Api.EtlDesignJsonContext|Elsa.Etl.Core.EtlPipelineV2|Elsa.Etl.Design.Api.EtlPipelineV2JsonConverter"
+        }, snapshot.OpaqueConverters);
     }
 
     [Theory]

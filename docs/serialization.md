@@ -45,6 +45,32 @@ The paired authority columns are compared with the provider's ordinal collation 
 hydration. Replacing this witness with canonical JSON would hide physical drift and invalidate the SQL verifier.
 Semantic package-manifest catalog hashes still use `JsonHashInput`; a file's JSON extension alone grants no exemption.
 
+## Boundary contract review
+
+`JsonDataBoundaryArchitectureTests` discovers generated contexts across every shipping C# source root, then inspects
+their actual constructed metadata. The [wire pins](../Essentials/tests/Architecture/Tests/Baselines/json-wire-contracts.json)
+make a new root, member, wire name, converter, nullability rule or polymorphic alternative require review. A mismatch
+prints each changed shape and retains the full current graph under the temporary evidence directory named in the
+failure. Updating a pin is a reviewed contract change, not permission to call the new member metadata.
+
+The guard also pins these semantic roles separately:
+
+| Member or contract | Role |
+|---|---|
+| `ArgumentValue.Value`, `ActivityArgumentValue.Value` | Carried literal/default data, held as JSON; CLR producers explicitly apply their scoped conversion contract. |
+| `ValueEnvelope.InlineValue`, `WorkflowExecutionCommand.Payload` | Carried runtime data, held as JSON. Envelope admission and null/missing policies remain S-2-owned. |
+| `WeaverContextAttachment.Content`, `WeaverActionProposal.Operations[*]` | Detached JSON data. Proposal operation roots are objects. |
+| `WeaverStreamEvent.Payload` | Owned event protocol alternatives described by `WeaverSseJsonContext`; their nested carried data remains JSON. It is not an arbitrary workflow-data slot. |
+| `WeaverToolCallOutcome.Result` | The owned `WeaverToolResult` protocol projection; its payload data remains JSON. |
+| `RuntimePreflightProblemDetails.Diagnostics` | An owned diagnostic projection; its three current producers supply empty lists. No arbitrary data producer is admitted by this role. |
+| `ActivityLayoutRecordsPayload`, `ActivityNodePresentationPayload` | Owner converters for layout/presentation request alternatives, including named node metadata. |
+| `EtlPipelineV2` | Its owner converter writes the explicit pipeline protocol; carried connector/configuration values remain JSON. |
+
+These are exact member/contract classifications. They grant no subtree or dictionary exemption. The generated-wire
+graph is one part of enforcement; persistence document bindings, message codecs and producer/converter source
+closures must also be checked before spec 1207 is complete. Retain the real API/store round trips alongside the
+structural controls; shape inspection alone does not prove data passes through unchanged.
+
 ## Types are stored by alias
 
 Type identity is alias-based, everywhere. A workflow Variable/Input/Output persists its type as a
