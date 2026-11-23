@@ -526,6 +526,9 @@ The [PostgreSQL timed job Worker check](../../prototypes/kernel-model/README.md#
 covers the same-actor race and counted takeover on the legacy relational path with both owned fence modes.
 The [PostgreSQL Native background job preview](../../prototypes/kernel-model/README.md#postgresql-native-background-job-preview)
 covers an untimed generated-root job across an Embedded process restart with both owned fence modes.
+The [timed issuance fixture](../../prototypes/kernel-model/README.md#timed-native-job-issuance-qualification)
+checks that starting a Native timed job atomically records the exact ticket and deadline and both reload
+at a higher epoch. Its temporary fixture profile keeps both rows outside Worker delivery.
 Public generated-root deadline settlement, Worker inline promotion and the remaining provider runs still
 need K4 qualification. The [current-owner trial schedule](../../prototypes/kernel-model/sim/ContractJobTrialChecks.cs)
 also needs physical evidence. A timed job settles as a timeout while its callback is still unwinding, and

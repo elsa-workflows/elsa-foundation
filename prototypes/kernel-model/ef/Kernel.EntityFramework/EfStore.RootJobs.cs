@@ -9,20 +9,23 @@ public sealed partial class EfStore
     private sealed record RootJobState(string? Jobs, long? NextGeneration);
 
     internal const long RootJobScope = -6;
+    internal const long RootTimedJobScope = -7;
     internal Func<string, string>? RootJobHandle { get; private set; }
     internal bool RootJobsEnabled => RootJobHandle is not null;
+    internal bool RootTimedJobIssuanceEnabled { get; private set; }
 
     internal async Task EnableRootJobsAsync(CancellationToken token)
     {
         await using var db = create();
         if (!db.UsesRootJobProtocol || !db.Database.IsNpgsql())
-            throw new StoreFormatException("Untimed generated-root jobs require the PostgreSQL job protocol.");
+            throw new StoreFormatException("Generated-root jobs require the PostgreSQL job protocol.");
         await RequireStoreVersionsAsync(db, token);
         var key = await db.Database.SqlQueryRaw<byte[]>("""SELECT "Key" AS "Value" FROM "FoundationRootIssuer" """).SingleAsync(token);
         lock (_workerBinding)
         {
             if (_ordinaryRoots is not null)
                 throw new InvalidOperationException("The PostgreSQL owner is already bound.");
+            RootTimedJobIssuanceEnabled = db.UsesRootTimedJobIssuance;
             RootJobHandle ??= seed => FoundationSelfSend.Handle(key, seed);
         }
     }
@@ -43,12 +46,12 @@ public sealed partial class EfStore
 
     private static Message EncodeRootJob(Message message, WorkerRoot root, string model)
     {
-        if (!message.HasIssuedTicket || RootUntimedJob.Read(message, root.Actor, model) is null) throw RootShape();
+        if (!message.HasIssuedTicket || RootJobTicket.Read(message, root.Actor, model) is null) throw RootShape();
         return (new Message(StoredJobId(message.InboxKey), message.Target, Kinds.Job, message.Payload, root.Actor)
             { JobGeneration = message.JobGeneration }).WithInboxScope(RootJobScope).AsKernelTicket();
     }
 
-    private static Message DecodeRootJob(MessageEntity row)
+    private static Message DecodeRootJob(MessageEntity row, bool timed = false)
     {
         if (row.Kind != Kinds.Job || row.Payload is null || row.EventMatch is not null || row.Start is not null ||
             row.Sender != row.Target || row.Due != 0 || row.KeepUntil is not null || row.ReplyTo is not null ||
@@ -57,7 +60,29 @@ public sealed partial class EfStore
         var key = InboxKey.Ticket(row.Target, ticket.Key, 1, row.JobGeneration);
         var message = (new Message(key.Id, new InstanceRef(row.Target), row.Kind, row.Payload, row.Sender,
             TargetCreation: 1, SenderCreation: 1) { JobGeneration = row.JobGeneration }).WithInboxScope(key.Scope);
-        return row.Id == StoredJobId(key) && RootUntimedJob.Read(message, row.Target, ticket.Model) is not null ? message : throw RootShape();
+        return row.Id == StoredJobId(key) && RootJobTicket.Read(message, row.Target, ticket.Model, timed) is not null ? message : throw RootShape();
+    }
+
+    private static Message EncodeRootTimedJob(Message message) =>
+        (new Message(StoredJobId(message.InboxKey), message.Target, message.Kind, message.Payload, message.Sender, Due: message.Due)
+            { JobGeneration = message.JobGeneration }).WithInboxScope(RootTimedJobScope).AsKernelTicket();
+
+    // This qualification profile commits the pair but keeps it out of Worker dispatch until settlement is supported.
+    internal async Task<(Message Ticket, Message Deadline, long Now)> ReadRootTimedJobIssuanceAsync(WorkerRoot root, CancellationToken token)
+    {
+        if (!RootTimedJobIssuanceEnabled || _ordinaryRoots?.ForActor(root.Actor) != root) throw RootShape();
+        await using var db = create();
+        await RequireStoreVersionsAsync(db, token);
+        var rows = await db.Messages.AsNoTracking().Where(message => message.Target == root.Actor && message.Partition == root.Partition &&
+            message.InboxScope == RootTimedJobScope && !message.Done).OrderBy(message => message.Seq).ToListAsync(token);
+        if (rows is not [var timer, var job]) throw RootShape();
+        var ticket = DecodeRootJob(job, timed: true);
+        var deadline = RootJobTicket.Deadline(root.Actor, ticket.Read<JobTicket>());
+        if (timer.Id != StoredJobId(deadline.InboxKey) || timer.Kind != deadline.Kind || timer.Payload != deadline.Payload ||
+            timer.Sender != root.Actor || timer.Due != deadline.Due || timer.JobGeneration != 0 || timer.EventMatch is not null ||
+            timer.Start is not null || timer.KeepUntil is not null || timer.ReplyTo is not null) throw RootShape();
+        var now = await db.Database.SqlQueryRaw<long>($"""SELECT {RootClockMilliseconds} AS "Value" """).SingleAsync(token);
+        return (ticket, deadline, now);
     }
 
     // A job completion takes its original row, independently of the ordinary input FIFO.
@@ -78,7 +103,7 @@ public sealed partial class EfStore
     }
 
     private static void ValidateRootJobChange(RootImage? before, InstanceRow row, Message[] inputs, IReadOnlyList<Message> sends,
-        RootJobCompletion? completion)
+        RootJobCompletion? completion, bool timed = false)
     {
         var previous = JobRegistry.Read(before?.Jobs);
         var current = JobRegistry.Read(row.Jobs);
@@ -88,17 +113,17 @@ public sealed partial class EfStore
         if (consumed.Length != 0)
         {
             if (inputs is not [var input] || previous is not [var old] ||
-                RootUntimedJob.Read(input, row.Id, row.Model)?.Key != old.Key || input.JobGeneration != old.Generation ||
+                RootJobTicket.Read(input, row.Id, row.Model)?.Key != old.Key || input.JobGeneration != old.Generation ||
                 completion is not { Original.HasIssuedTicket: true, Result.HasIssuedTicket: true } ||
                 completion.Original.WithoutTicketAuthority() != input ||
-                !RootUntimedJob.MatchesCompletion(completion.Original, completion.Result, old.Key)) throw RootShape();
+                !RootJobTicket.MatchesCompletion(completion.Original, completion.Result, old.Key)) throw RootShape();
             previous.Clear();
         }
         else if (completion is not null) throw RootShape();
         if (started.Length != 0)
         {
             if (started is not [var message] || previous.Count != 0 || row.Status != InstanceStatus.Running ||
-                message.JobGeneration != generation || RootUntimedJob.Read(message, row.Id, row.Model) is not { } ticket) throw RootShape();
+                message.JobGeneration != generation || RootJobTicket.Read(message, row.Id, row.Model, timed) is not { } ticket) throw RootShape();
             previous.Add(new(ticket.Key, generation));
             generation = checked(generation + 1);
         }

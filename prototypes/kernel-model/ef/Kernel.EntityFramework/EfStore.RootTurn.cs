@@ -138,7 +138,7 @@ public sealed partial class EfStore
         return new(turn, root);
 
         bool QualifiedInput(Message message) => message.InboxKey.Scope == InboxKey.FoundationOccurrenceScope ||
-            jobState is not null && accepted.Length == 1 && RootUntimedJob.Read(message, current.Actor.Id, current.Model) is not null ||
+            jobState is not null && accepted.Length == 1 && RootJobTicket.Read(message, current.Actor.Id, current.Model) is not null ||
             RootSelfIssuer is { } issue && issue.Allows(message.Due) && FoundationSelfSend.IsSelfInput(message, current.Actor.Id, current.Actor.Creation);
     }
 }
