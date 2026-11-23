@@ -78,8 +78,9 @@ internal sealed partial class PostgresRootAdmission
             if (!db.UsesRootReplyProtocol) return await RefuseAsync(DirectResult.Refused);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
         }
-        if (lockOrdinaryWrites) await EfStore.LockCompatibleStoreFormatAsync(db, cancellationToken);
-        var address = await RootAddressAsync(db, tenant, reference, cancellationToken);
+        var address = lockOrdinaryWrites
+            ? await GuardedRootAddressAsync(db, tenant, reference, cancellationToken)
+            : await RootAddressAsync(db, tenant, reference, cancellationToken);
         if (address is null) return await RefuseAsync(DirectResult.MissingTarget);
         var status = await AdmissionStatusAsync(db, address, tenant, reference, cancellationToken, requireCheckpoint: reply is not null);
         if (status is null) return await RefuseAsync(DirectResult.MissingTarget);
@@ -151,6 +152,21 @@ internal sealed partial class PostgresRootAdmission
             SELECT "Actor" AS "Id", "Creation" FROM "FoundationRootBirths"
             WHERE "Tenant" = {tenant} AND "Reference" = {reference}
             """).SingleOrDefaultAsync(cancellationToken);
+
+    private sealed record GuardedAddress(string? Id, long? Creation, int? StoreSchema, int? MessageProtocol, int? JournalCodec);
+
+    private static async Task<CreationAddress?> GuardedRootAddressAsync(KernelDb db, string tenant, string reference, CancellationToken token)
+    {
+        var row = await db.Database.SqlQueryRaw<GuardedAddress>(AdmissionFormat + """
+
+            SELECT b."Actor" AS "Id", b."Creation", f."StoreSchema", f."MessageProtocol", f."JournalCodec"
+            FROM (SELECT 1) report
+            LEFT JOIN admission_format f ON true
+            LEFT JOIN "FoundationRootBirths" b ON b."Tenant" = {1} AND b."Reference" = {2}
+            """, StoreVersionEntity.MarkerId, tenant, reference).SingleAsync(token);
+        EfStore.RequireSnapshotFormat(db.RequiredFormat, row.StoreSchema, row.MessageProtocol, row.JournalCodec);
+        return row.Id is null || row.Creation is null ? null : new(row.Id, row.Creation.Value);
+    }
 
     // AdmissionStatusAsync already holds a share lock on this exact checkpoint until the receipt lookup ends.
     private static Task<bool> IsTimedFaultTerminalAsync(KernelDb db, CreationAddress address, string tenant, string reference,

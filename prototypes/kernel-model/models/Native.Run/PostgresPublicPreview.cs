@@ -168,10 +168,13 @@ internal static class PostgresPublicPreview
             Check((await reads.TailAsync(scope, actor, bookmark, stop)).Items.Count == 0, "replay added no journal entries");
             if (phase == "terminal")
             {
-                var unauthorized = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "restricted", Contract.Kinds.Suspend,
-                    cancellationToken: stop);
-                Check(unauthorized is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null, Reason: null },
-                    "ordinary provider ingress refuses a privileged suspend on a live root");
+                foreach (var command in new[] { Contract.Kinds.Suspend, Contract.Kinds.Terminate, Contract.Kinds.Delete })
+                {
+                    var unauthorized = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "restricted", command,
+                        cancellationToken: stop);
+                    Check(unauthorized is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null, Reason: null },
+                        $"ordinary provider ingress refuses {command} on a live root");
+                }
                 foreach (var invalidKind in new[] { new string('x', 257), "input\ud800" })
                 {
                     var rejected = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "invalid-kind", invalidKind,
@@ -341,21 +344,33 @@ internal static class PostgresPublicPreview
         var start = new Contract.Target.Start(new(PublicActor.ActorType, "definition"));
         var direct = new Contract.Target.Ref(actor);
         await using var db = new KernelDb(options);
-        await db.Database.ExecuteSqlRawAsync("""UPDATE "KernelStoreVersions" SET "StoreSchema" = "StoreSchema" + 1 """, token);
+        var original = db.RequiredFormat.StoreSchema;
+        var changed = original + 1;
         try
         {
+            Check(await SetSchemaAsync(db, original, changed, token) == 1, "the fixture advances only its expected marker");
             await RefusesFormat(start, "format-new-start", Contract.Kinds.Start);
             await RefusesFormat(direct, "format-direct", "notice");
         }
         finally
         {
-            await db.Database.ExecuteSqlRawAsync("""UPDATE "KernelStoreVersions" SET "StoreSchema" = "StoreSchema" - 1 """,
-                CancellationToken.None);
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await using var restoration = new KernelDb(options);
+            var restored = await SetSchemaAsync(restoration, changed, original, cleanup.Token);
+            Check(restored == 1 || await restoration.StoreVersions.AnyAsync(
+                row => row.Id == StoreVersionEntity.MarkerId && row.StoreSchema == original, cleanup.Token),
+                "cleanup restores or observes the expected marker");
         }
         Check((await ingress.SendAsync(scope, start, "format-new-start", Contract.Kinds.Start, cancellationToken: token)).Outcome ==
             Contract.AdmissionOutcome.Accepted, "the refused start did not claim its receipt");
         Check((await ingress.SendAsync(scope, direct, "format-direct", "notice", cancellationToken: token)).Outcome ==
             Contract.AdmissionOutcome.Accepted, "the refused direct input did not claim its receipt");
+
+        static Task<int> SetSchemaAsync(KernelDb database, int from, int to, CancellationToken cancellationToken) =>
+            database.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "KernelStoreVersions" SET "StoreSchema" = {to}
+                WHERE "Id" = {StoreVersionEntity.MarkerId} AND "StoreSchema" = {from}
+                """, cancellationToken);
 
         async Task RefusesFormat(Contract.Target target, string id, string kind)
         {
@@ -364,7 +379,7 @@ internal static class PostgresPublicPreview
                 await ingress.SendAsync(scope, target, id, kind, cancellationToken: token);
                 throw new InvalidOperationException($"Accepted {kind} after the store format changed.");
             }
-            catch (StoreFormatException)
+            catch (StoreFormatException error) when (error.Message.Contains($"Stored schema={changed},", StringComparison.Ordinal))
             {
                 Console.WriteLine($"ok: open ingress refuses {kind} after the store format changes");
             }

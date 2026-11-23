@@ -44,12 +44,12 @@ internal static class PostgresWriteBudget
             .AddInterceptors(counter, counter.Transactions).Options;
         KernelDb Open() => new(measured);
         var store = new EfStore(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = writer };
-        var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
-        var cursor = await observeAdmission.OpenJournalCursorAsync(stop);
-        var api = new PostgresPreviewFoundation(admission, new(store, cursor, 64), PublicActor.ActorType);
-        var runtime = new WorkflowRuntime(api, api);
-        var verifyApi = new PostgresPreviewFoundation(observeAdmission, new(observer, cursor, 64), PublicActor.ActorType);
-        var verifyRuntime = new WorkflowRuntime(verifyApi, verifyApi);
+        var ingress = await store.OpenPreviewRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1), stop);
+        var reads = await store.OpenPreviewRootReadsAsync(64, stop);
+        var runtime = new WorkflowRuntime(ingress, reads);
+        var verifyIngress = await observer.OpenPreviewRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1), stop);
+        var verifyApi = await observer.OpenPreviewRootReadsAsync(64, stop);
+        var verifyRuntime = new WorkflowRuntime(verifyIngress, verifyApi);
         var scope = FixedTenantScope.Bind("write-budget");
         var definition = Reference.WriteLines(Lines);
         var registry = new WorkflowRegistry().Add(definition);

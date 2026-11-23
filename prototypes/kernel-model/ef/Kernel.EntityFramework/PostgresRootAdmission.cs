@@ -10,11 +10,18 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
 {
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
+    private sealed record GuardedIssuer(byte[]? Key, int? Partitions, int? StoreSchema, int? MessageProtocol, int? JournalCodec);
     private sealed record StartWrite(bool Claimed, bool Enqueued);
     private sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput, bool ExplicitZeroDue = false);
     private const string CreatorPrefix = "!kernel-root/1:";
     // Bound the formatting and payload cost of a duplicate that loses the batched receipt claim.
     private const int BatchedStartInputCodeUnits = 8 * 1024;
+    private const string AdmissionFormat = """
+        WITH admission_format AS MATERIALIZED (
+            SELECT "StoreSchema", "MessageProtocol", "JournalCodec" FROM "KernelStoreVersions"
+            WHERE "Id" = {0} FOR SHARE
+        )
+        """;
     private const string ClaimReceiptSql = """
         INSERT INTO "FoundationRootReceipts" AS r ("Tenant","Operation","Reference","Until")
         SELECT {0}, {1}, {2}, floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {3}
@@ -101,9 +108,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var name = tenant + "_" + Guid.NewGuid().ToString("N");
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
-        if (lockOrdinaryWrites) await EfStore.LockCompatibleStoreFormatAsync(db, cancellationToken);
-        var issuer = await db.Database.SqlQueryRaw<Issuer>("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """)
-            .SingleAsync(cancellationToken);
+        var issuer = await ReadIssuerAsync(db, cancellationToken);
         var actor = InstanceRef.In(InstanceRef.Spread(name, issuer.Partitions), name);
         var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
         var windowMs = (long)window.TotalMilliseconds;
@@ -164,6 +169,24 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             await transaction.CommitAsync(cancellationToken);
             return new(existing, true);
         }
+    }
+
+    private async Task<Issuer> ReadIssuerAsync(KernelDb db, CancellationToken token)
+    {
+        if (!lockOrdinaryWrites)
+            return await db.Database.SqlQueryRaw<Issuer>("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """).SingleAsync(token);
+
+        var row = await db.Database.SqlQueryRaw<GuardedIssuer>(AdmissionFormat + """
+
+            SELECT i."Key", i."Partitions", f."StoreSchema", f."MessageProtocol", f."JournalCodec"
+            FROM (SELECT 1) report
+            LEFT JOIN admission_format f ON true
+            LEFT JOIN "FoundationRootIssuer" i ON true
+            """, StoreVersionEntity.MarkerId).SingleAsync(token);
+        EfStore.RequireSnapshotFormat(db.RequiredFormat, row.StoreSchema, row.MessageProtocol, row.JournalCodec);
+        if (row.Key is null || row.Partitions is null)
+            throw new InvalidOperationException("The generated-root issuer is missing.");
+        return new(row.Key, row.Partitions.Value);
     }
 
     internal async Task<CreationAddress?> ResolveAsync(string tenant, string reference, CancellationToken cancellationToken = default)

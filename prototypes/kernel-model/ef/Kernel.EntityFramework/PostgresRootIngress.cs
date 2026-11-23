@@ -12,7 +12,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(kind);
-        if (kind is Contract.Kinds.Suspend or Contract.Kinds.Resume)
+        if (Contract.Kinds.IsCommand(kind))
         {
             cancellationToken.ThrowIfCancellationRequested();
             return new(Contract.AdmissionOutcome.Refused);

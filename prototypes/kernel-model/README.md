@@ -295,8 +295,9 @@ The Embedded preview composes `IIngress` through `EfStore.OpenPreviewRootIngress
 A trusted host supplies a bound scope, the actor type and the receipt retention window. The provider accepts
 durable starts for that type and ordinary direct input to exact roots. Opening the adapter checks the
 installed schema. Each admission holds the shared store-format lock in its write transaction.
-The lock adds one SQL command to each measured start, direct send or replay. The ordinary adapter refuses
-privileged controls. Held requests and event starts require another profile.
+The same statement locks the marker and reads the issuer or exact root, preserving the admission round-trip
+count. The ordinary adapter refuses privileged controls. Held requests and event-based starts fall outside
+this adapter's scope.
 
 For a format-refusal check, run the Native `pg-core-preview birth` phase in a fresh disposable database,
 then run `pg-core-preview format-probe <reference>` in a new process against the same database.
