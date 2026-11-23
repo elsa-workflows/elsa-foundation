@@ -11,7 +11,7 @@ public sealed partial class EfStore
     private const string RootSelfWire = "!foundation-self/1";
     private sealed record RootSelfHeader(long Revision, int Ordinal, string Kind,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? Due = null);
-    private string RootInboxSource => RootSelfIssuer is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
+    private string RootInboxSource => _ordinaryRoots is null || RootSelfIssuer is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
     internal FoundationSelfIssuer? RootSelfIssuer { get; private set; }
 
     private sealed record SelfInstallation(byte[] Key, bool Installed);
@@ -23,7 +23,11 @@ public sealed partial class EfStore
             throw new StoreFormatException("Immediate public continuations require the PostgreSQL continuation protocol.");
         await RequireStoreVersionsAsync(db, token);
         var install = await db.Database.SqlQueryRaw<SelfInstallation>("""
-            SELECT "Key", to_regprocedure('kernel_root_self_insert_v2()') IS NOT NULL AS "Installed" FROM "FoundationRootIssuer"
+            SELECT "Key", EXISTS (
+                SELECT 1 FROM pg_trigger
+                WHERE tgrelid = '"Messages"'::regclass AND tgname = 'kernel_root_self_insert'
+                    AND tgfoid = to_regprocedure('kernel_root_self_insert_v3()') AND tgenabled IN ('O', 'A')) AS "Installed"
+            FROM "FoundationRootIssuer"
             """).SingleAsync(token);
         if (!install.Installed) await new PostgresRootAdmission(create, TimeSpan.Zero).InstallAsync(token);
         RootSelfIssuer = new(seed => FoundationSelfSend.Handle(install.Key, seed), db.RequiredFormat == StoreFormat.RootTimers);
@@ -31,20 +35,29 @@ public sealed partial class EfStore
 
     // The ordinary writer transports an exceptional payload as base64. Only the compact bytea is stored.
     // Ordinary updates and deletes on -1 keys stay available for every other persisted message kind.
-    internal static Task InstallRootSelfAsync(KernelDb db, CancellationToken token) =>
-        db.Database.ExecuteSqlRawAsync($"""
-            ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "FoundationSelfContent" bytea;
-            CREATE OR REPLACE FUNCTION kernel_root_self_insert_v2() RETURNS trigger LANGUAGE plpgsql AS $fn$
+    internal static async Task InstallRootSelfAsync(KernelDb db, CancellationToken token)
+    {
+        await db.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "FoundationSelfContent" bytea
+            """, token);
+        if (await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM "Messages" WHERE "InboxScope" = {RootSelfScope}
+                AND "EventMatch" IS NOT NULL AND "FoundationSelfContent" IS NOT NULL) AS "Value"
+            """).SingleAsync(token))
+            throw SplitEventPayload();
+
+        await db.Database.ExecuteSqlRawAsync($"""
+            CREATE OR REPLACE FUNCTION kernel_root_self_insert_v3() RETURNS trigger LANGUAGE plpgsql AS $fn$
             DECLARE head text := split_part(NEW."Payload", chr(10), 1);
             BEGIN
-                IF left(head, 1) = 'B' THEN
+                IF NEW."EventMatch" IS NULL AND left(head, 1) = 'B' THEN
                     NEW."FoundationSelfContent" := decode(substr(NEW."Payload", length(head) + 2), 'base64');
                     NEW."Payload" := head;
                 END IF;
                 RETURN NEW;
             END $fn$;
             CREATE OR REPLACE TRIGGER kernel_root_self_insert BEFORE INSERT ON "Messages" FOR EACH ROW
-            WHEN (NEW."InboxScope" = {RootSelfScope}) EXECUTE FUNCTION kernel_root_self_insert_v2();
+            WHEN (NEW."InboxScope" = {RootSelfScope} AND NEW."EventMatch" IS NULL) EXECUTE FUNCTION kernel_root_self_insert_v3();
             CREATE OR REPLACE VIEW "FoundationRootMessages" AS
             SELECT "Id", "InboxScope", "EventMatch", "Seq", "Partition", "Target", "Kind", "Start", "Sender", "Due",
                    "Seen", "Trial", "Attempts", "KeepUntil", "Done", "ReplyTo",
@@ -52,6 +65,10 @@ public sealed partial class EfStore
                         ELSE "Payload" || chr(10) || encode("FoundationSelfContent", 'base64') END AS "Payload", "JobGeneration"
               FROM "Messages";
             """, token);
+    }
+
+    private static StoreFormatException SplitEventPayload() => new(
+        "A matched event has a split payload from an older private inbox trigger. Restore its exact original envelope from the event source before resuming.");
 
     private static string? SelfActor(InboxKey key)
     {
@@ -81,7 +98,7 @@ public sealed partial class EfStore
 
     private static Message DecodeRootSelf(MessageEntity row, FoundationSelfIssuer? issue)
     {
-        var actor = row.InboxScope == RootSelfScope ? SelfActor(InboxKey.Issued(row.Id)) : null;
+        var actor = row.InboxScope == RootSelfScope && row.EventMatch is null ? SelfActor(InboxKey.Issued(row.Id)) : null;
         if (issue is null || row.JobGeneration != 0 || actor != row.Target || row.Sender != actor || row.Kind != RootSelfWire ||
             row.Payload is null || row.Start is not null || row.KeepUntil is not null || row.ReplyTo is not null)
             throw RootShape();

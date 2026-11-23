@@ -2,6 +2,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>Kernel.Sim</RootNamespace>
+    <DefineConstants>$(DefineConstants);NATIVE_FRIEND</DefineConstants>
     <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
