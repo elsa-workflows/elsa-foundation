@@ -683,4 +683,51 @@ describe("review regression cases", () => {
     expect(dialog().querySelector(".wf-trigger-picker-card")?.textContent).toContain("HTTP Endpoint");
     window.history.pushState({}, "", "/");
   });
+  it("renders inline table findings with semantic tones in the Triggers list and panel findings on Trigger details", async () => {
+    discovery.document.capabilities[0].links.push(
+      { rel: "types", href: "custom/types" },
+      { rel: "subscriptions", href: "custom/subscriptions" }
+    );
+    const rows: TriggerView[] = [
+      {
+        ...trigger(),
+        id: "trigger-cron-1",
+        name: "Heartbeat",
+        typeKey: "cron",
+        findings: [{ code: "ScheduleCursorInactive", message: "This saved cursor is inactive; no future firing is scheduled." }]
+      },
+      {
+        ...trigger(),
+        id: "trigger-http-1",
+        name: "Webhook",
+        typeKey: "http",
+        findings: [
+          { code: "ScheduleAdmissionUnavailable", message: "Admission is temporarily unavailable." },
+          { code: "HttpRouteConflict", message: "Route is already reserved." }
+        ]
+      }
+    ];
+    const context = {
+      baseUrl: "https://backend.example/",
+      http: {
+        getJson: vi.fn(async (path: string) => {
+          if (path.endsWith("trigger-identity")) return actor;
+          if (path.includes("types") || path.includes("subscriptions")) return { items: [] };
+          if (path.includes("trigger-cron-1")) return rows[0];
+          return { items: rows };
+        })
+      }
+    } as unknown as StudioEndpointContext;
+
+    const { container } = mount(<TriggersRoute api={apiStub(context)} view="list" navigate={vi.fn()} />);
+    await vi.waitFor(() => expect(container.querySelectorAll(".wf-trigger-findings[data-variant=\"inline\"]")).toHaveLength(2));
+    const inlineFindings = [...container.querySelectorAll<HTMLLIElement>('.wf-trigger-findings[data-variant="inline"] .wf-trigger-finding')];
+    expect(inlineFindings.map(item => item.dataset.tone)).toEqual(["info", "warning", "danger"]);
+    expect(inlineFindings[0].textContent).toContain("This saved cursor is inactive; no future firing is scheduled.");
+
+    window.history.pushState({}, "", "/workflows/triggers/trigger-cron-1");
+    const { container: detailContainer } = mount(<TriggersRoute api={apiStub(context)} view="details" navigate={vi.fn()} />);
+    await vi.waitFor(() => expect(detailContainer.querySelector('.wf-trigger-findings[data-variant="panel"] .wf-trigger-finding[data-tone="info"]')).not.toBeNull());
+    window.history.pushState({}, "", "/");
+  });
 });
