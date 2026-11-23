@@ -92,7 +92,7 @@ internal static class PostgresRootOperatorChecks
                 "an independent resume and a second tenant's operation are admitted");
             Check((await Send(blue, a, "future", Contract.Kinds.Resume, new(DueAt: long.MaxValue, KeepFor: TimeSpan.Zero))).Outcome ==
                 Contract.AdmissionOutcome.Accepted, "a future command may outlive its receipt");
-            while (!await clock.Database.SqlQuery<bool>("""
+            while (!await clock.Database.SqlQueryRaw<bool>("""
                 SELECT EXISTS (SELECT 1 FROM "FoundationOperatorReceipts"
                     WHERE "Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
                 """).SingleAsync(ct)) await Task.Delay(5, ct);
