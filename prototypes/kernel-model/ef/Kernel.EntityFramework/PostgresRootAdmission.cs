@@ -29,6 +29,13 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal static bool IsIssuedReferenceShape(string? reference) =>
         FoundationRootCreator.IsGeneratedReference(reference);
 
+    internal static void RequireActorType(string actorType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorType);
+        if (actorType.Contains('\0') || !FoundationMetadataLimits.FitsName(actorType))
+            throw new ArgumentException("Invalid PostgreSQL root actor type.", nameof(actorType));
+    }
+
     internal async Task<FoundationReadCursor> OpenJournalCursorAsync(CancellationToken cancellationToken)
     {
         await using var db = create();

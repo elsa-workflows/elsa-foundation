@@ -390,7 +390,7 @@ internal static class PostgresClusterChecks
         {
             if (!specialized)
                 return await PostgresPreviewHosting.StartAsync(Open, name,
-                    new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]), loopOptions, stop);
+                    new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]), Environment.FailFast, loopOptions, stop);
 
             var host = PostgresNativeRootOwner.PrepareNode(store, name, partitions, registry, worker);
             var runtime = new RuntimeNode(name, store, partitions, loopOptions);

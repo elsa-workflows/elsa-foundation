@@ -84,10 +84,8 @@ public sealed partial class EfStore
     public async ValueTask<Contract.IIngress> OpenPreviewRootIngressAsync(string actorType, TimeSpan deduplicationWindow,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(actorType);
+        PostgresRootAdmission.RequireActorType(actorType);
         ArgumentOutOfRangeException.ThrowIfLessThan(deduplicationWindow, TimeSpan.Zero);
-        if (!FoundationMetadataLimits.FitsName(actorType))
-            throw new ArgumentException("Invalid root actor type.", nameof(actorType));
         if (!postgres || Engine is not null)
             throw new NotSupportedException("Generated-root preview ingress requires PostgreSQL.");
 

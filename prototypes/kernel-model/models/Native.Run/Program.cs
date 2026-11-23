@@ -69,6 +69,7 @@ if (args is [var chartMode and ("pg-cluster-statechart" or "pg-cluster-statechar
     return await PostgresClusterChecks.RunAsync(chartPartitions, chartMode == "pg-cluster-statechart-peer", statechart: true);
 if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flowchart-peer"), var flowSize] && int.TryParse(flowSize, out var flowPartitions))
     return await PostgresClusterChecks.RunAsync(flowPartitions, flowClusterMode == "pg-cluster-flowchart-peer", flowchart: true);
+if (args is ["pg-preview-host-watchdog"]) return await PostgresPreviewHostChecks.RunAsync();
 if (args is [var clusterMode and ("pg-cluster-roots" or "pg-cluster-peer" or "pg-cluster-crash"), var size] && int.TryParse(size, out var clusterPartitions))
     return await PostgresClusterChecks.RunAsync(clusterPartitions, clusterMode == "pg-cluster-peer", clusterMode == "pg-cluster-crash");
 if (args is ["pg-discover-roots", var discoveryPhase and ("birth" or "restart"), var discoveryScope, .. var modes] &&

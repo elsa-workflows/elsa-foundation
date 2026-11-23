@@ -14,16 +14,26 @@ public static class PostgresPreviewHosting
     /// <summary>
     /// Starts one runtime node for a public actor type. Each node opens its own store and uses the installed
     /// partition count. Configure the same actor type and definitions on every node sharing the store.
-    /// The caller owns the returned node and stops it before shutting down the host.
+    /// The caller stops the returned node before shutting down the host. The caller's endProcess policy
+    /// must terminate the process if the watchdog cannot clear a stuck owner call.
     /// </summary>
     public static async Task<RuntimeNode> StartAsync(Func<KernelDb> create, string node, Contract.IActorType actor,
-        LoopOptions? options = null, CancellationToken cancellationToken = default)
+        Action<string> endProcess, LoopOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
         ArgumentNullException.ThrowIfNull(actor);
-        if (!FoundationMetadataLimits.FitsName(actor.Type))
-            throw new ArgumentException("Invalid root actor type.", nameof(actor));
+        ArgumentNullException.ThrowIfNull(endProcess);
+        if (node.Contains('\0') || !FoundationMetadataLimits.FitsName(node))
+            throw new ArgumentException("Invalid PostgreSQL node name.", nameof(node));
+        PostgresRootAdmission.RequireActorType(actor.Type);
+
+        options ??= new LoopOptions();
+        var millisecond = TimeSpan.FromMilliseconds(1);
+        if (options.BalanceEvery < millisecond || options.BalanceEvery > TimeSpan.FromMilliseconds(int.MaxValue) ||
+            options.PollInterval < millisecond || options.Window < options.BalanceEvery * 2 ||
+            RuntimeNode.Cadence(Defaults.Lease, options) < millisecond)
+            throw new ArgumentException("Configure positive millisecond loop intervals and a membership window of at least two balance rounds.", nameof(options));
 
         int partitions;
         await using (var db = create())
@@ -36,8 +46,10 @@ public static class PostgresPreviewHosting
 
         var store = new EfStore(create, postgres: true);
         var scope = store.BindWorkerNode();
-        var host = DurableHost.ForNode(node, store, new ActorAdapter(new RootHeaders(scope), actor), partitions);
-        var runtime = new RuntimeNode(node, store, partitions, options);
+        var watchdog = new Watchdog(Defaults.Lease, endProcess);
+        var watched = watchdog.Watch(store);
+        var host = DurableHost.ForNode(node, watched, new ActorAdapter(new RootHeaders(scope), actor), partitions);
+        var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync);
         try
         {
             await runtime.StartAsync(host, cancellationToken);
