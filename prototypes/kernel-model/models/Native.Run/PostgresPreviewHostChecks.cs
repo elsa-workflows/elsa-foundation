@@ -72,7 +72,7 @@ internal static class PostgresPreviewHostChecks
             if (view.Header.Type != actor.Type || actor.Turns != 1 ||
                 (await reads.TailAsync(scope, root, cancellationToken: stop)).Items.Count == 0)
                 throw new InvalidOperationException("The launcher must serve the public actor and journal its one terminal turn.");
-            Console.WriteLine("ok the launcher preserves an escaped public actor type in the terminal checkpoint and journal");
+            Console.WriteLine("ok the terminal header preserves the escaped actor type and the journal is nonempty");
 
             hang.Arm();
             await hang.Entered.Task.WaitAsync(stop);
