@@ -170,11 +170,13 @@ public sealed partial class EfStore
 
         (CommitBatch Batch, RootCheckpoints Checkpoints)? prepared;
         try { prepared = await PrepareWorkerBatchAsync(roots, batch, fence, cancellationToken); }
-        catch (StoreException failure) when (failure.Failure is Failure.Definite or Failure.Transient)
+        catch (Exception error) when (error is not (OperationCanceledException or NotSupportedException) &&
+            Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
         {
             // Preparation reads inputs before either transactional fence mode has run.
             if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new(false, 0, []);
-            throw;
+            if (ReferenceEquals(error, failure)) throw;
+            throw failure;
         }
         return prepared is { } work ? await CommitAsync(work.Batch, work.Checkpoints, cancellationToken) : new(false, 0, []);
     }

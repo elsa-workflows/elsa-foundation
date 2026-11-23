@@ -1,5 +1,6 @@
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Kernel.Ef.Conformance;
 
@@ -138,6 +139,8 @@ internal static class DirectSendChecks
             break;
         }
 
+        await CheckPreparationTimeout(create, store, tenant, reference, turn, oldPosition, fence, lease);
+
         // Simulate a future envelope codec while keeping the admitted operation, physical key and payload intact.
         row.Start = "!kernel-direct/2:" + originalHeader[(originalHeader.IndexOf(':') + 1)..];
         await db.SaveChangesAsync();
@@ -181,6 +184,31 @@ internal static class DirectSendChecks
                 e.Message == "Unsupported PostgreSQL public input envelope.") { return; }
             throw new InvalidOperationException("The future envelope must be refused as a definite failure.");
         }
+    }
+
+    private static async Task CheckPreparationTimeout(Func<KernelDb> create, EfStore store, string tenant, string reference,
+        TurnCommit turn, PartitionFence stale, PartitionFence held, TimeSpan lease)
+    {
+        await using var session = create();
+        await session.Database.OpenConnectionAsync();
+        await session.Database.ExecuteSqlRawAsync("SET lock_timeout = '150ms'");
+        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(session.Database.GetDbConnection()).Options;
+        var owner = new EfStore(() => new KernelDb(options), postgres: true, fenceInBatch: store.FenceInBatch) { CommitSql = store.CommitSql };
+        await owner.BindWorkerRootAsync(tenant, reference);
+        ValueTask<Committed> Commit(PartitionFence f) => owner.CommitAsync(new(f.Partition, f.Epoch, f.Position, lease, false, [turn], [], []));
+
+        // Block the root image read in this fixture's disposable database. The partition fence remains readable.
+        await using var blocker = create();
+        await using var transaction = await blocker.Database.BeginTransactionAsync();
+        await blocker.Database.ExecuteSqlRawAsync("""LOCK TABLE "Instances" IN ACCESS EXCLUSIVE MODE""");
+        Check(!(await Commit(stale)).Landed, "a preparation lock timeout with a stale position refuses the batch");
+        try { await Commit(held); }
+        catch (StoreException error) when (error.Failure == Failure.Transient && error.InnerException is PostgresException { SqlState: "55P03" })
+        {
+            Console.WriteLine("ok a preparation lock timeout with the held fence retains its PostgreSQL transient classification");
+            return;
+        }
+        throw new InvalidOperationException("The held fence must surface the preparation lock timeout.");
     }
 
     private static void Check(bool valid, string message)
