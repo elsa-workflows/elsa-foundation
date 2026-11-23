@@ -63,23 +63,7 @@ internal static class PostgresHttpPreview
         var first = await PostgresHeldDirectChecks.TakeAsync(store, "first-http-owner", registry, transport, stop);
         var firstEpoch = first.Fences.Single().Epoch;
 
-        long databaseTime;
-        long clockObservedAt;
-        var samples = 0;
-        do
-        {
-            var began = Stopwatch.GetTimestamp();
-            databaseTime = await admission.ReadReplyTimeAsync(stop);
-            if (++samples == 1 && clockDelay) await Task.Delay(1_200, stop);
-            clockObservedAt = Stopwatch.GetTimestamp();
-            if (Stopwatch.GetElapsedTime(began, clockObservedAt).TotalMilliseconds <= ClockSampleLimitMs) break;
-        } while (true);
-        if (clockDelay)
-        {
-            Require(samples > 1, "The preview must discard the delayed startup observation.");
-            Console.WriteLine("Discarded a delayed PostgreSQL startup clock observation.");
-        }
-
+        var (databaseTime, clockObservedAt) = await SampleClockAsync(admission, clockDelay, stop);
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
         builder.Configuration.Sources.Clear();
@@ -273,39 +257,9 @@ internal static class PostgresHttpPreview
 
             var enteredAt = Stopwatch.GetTimestamp();
             var routeDeadline = databaseTime + (long)Stopwatch.GetElapsedTime(clockObservedAt, enteredAt).TotalMilliseconds + wait;
-            using var budget = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stop);
-            budget.CancelAfter(wait);
-            var token = budget.Token;
-            var handling = ReadAndDispatchAsync();
-            Contract.Reply reply;
-            try { reply = await handling.WaitAsync(token); }
-            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
-            {
-                await ObserveCanceledAsync();
-                disconnected.TrySetResult();
-                throw;
-            }
-            catch (OperationCanceledException) when (budget.IsCancellationRequested && !stop.IsCancellationRequested)
-            {
-                // A canceled database call can still be waiting for its cancellation acknowledgment.
-                _ = ObserveCanceledAsync();
-                return Results.StatusCode(504);
-            }
+            return await ServeAsync(context, wait, ReadAndDispatchAsync, stop, () => disconnected.TrySetResult());
 
-            return reply switch
-            {
-                { Error: "body" } => Results.BadRequest(),
-                { Error: "missing" } => Results.NotFound(),
-                { Error: "timeout" } => Results.StatusCode(504),
-                { Error: "lost" } => Results.StatusCode(503),
-                { Error: null, Channel: "response", Item: JsonNode response } when Values.To<Kernel.Native.HttpResponse>(response) is { } output =>
-                    Results.Text(output.Body is JsonValue text && output.ContentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase) &&
-                        text.TryGetValue<string>(out var value) ? value : output.Body?.ToJsonString(), output.ContentType, statusCode: output.StatusCode),
-                { Error: null, Status: not Contract.ActorStatus.Faulted, Item: null } => Results.NoContent(),
-                _ => Results.StatusCode(500)
-            };
-
-            async Task<Contract.Reply> ReadAndDispatchAsync()
+            async Task<Contract.Reply> ReadAndDispatchAsync(CancellationToken token)
             {
                 if (clockDelay && reference == actor && !observedDeadline.Task.IsCompleted)
                 {
@@ -328,12 +282,68 @@ internal static class PostgresHttpPreview
                 return await ingress.RequestAsync(tenant, new Contract.Target.Ref(reference), Operation, CompositeSignal.Kind,
                     payload, null, new(null, routeDeadline), token);
             }
+        }
+    }
 
-            async Task ObserveCanceledAsync()
+    internal static async Task<(long DatabaseTime, long ClockObservedAt)> SampleClockAsync(
+        PostgresRootAdmission admission, bool delayedSample, CancellationToken stop)
+    {
+        var samples = 0;
+        while (true)
+        {
+            var began = Stopwatch.GetTimestamp();
+            var databaseTime = await admission.ReadReplyTimeAsync(stop);
+            if (++samples == 1 && delayedSample) await Task.Delay(1_200, stop);
+            var clockObservedAt = Stopwatch.GetTimestamp();
+            if (Stopwatch.GetElapsedTime(began, clockObservedAt).TotalMilliseconds > ClockSampleLimitMs) continue;
+            if (delayedSample)
             {
-                try { await handling; }
-                catch (Exception) when (token.IsCancellationRequested) { }
+                Require(samples > 1, "The preview must discard the delayed startup observation.");
+                Console.WriteLine("Discarded a delayed PostgreSQL startup clock observation.");
             }
+            return (databaseTime, clockObservedAt);
+        }
+    }
+
+    internal static async Task<IResult> ServeAsync(HttpContext context, int wait,
+        Func<CancellationToken, Task<Contract.Reply>> dispatch, CancellationToken stop, Action? onDisconnect = null)
+    {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stop);
+        budget.CancelAfter(wait);
+        var token = budget.Token;
+        var handling = dispatch(token);
+        Contract.Reply reply;
+        try { reply = await handling.WaitAsync(token); }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            await ObserveCanceledAsync();
+            onDisconnect?.Invoke();
+            throw;
+        }
+        catch (OperationCanceledException) when (budget.IsCancellationRequested && !stop.IsCancellationRequested)
+        {
+            // A canceled database call can still be waiting for its cancellation acknowledgment.
+            _ = ObserveCanceledAsync();
+            return Results.StatusCode(504);
+        }
+
+        return reply switch
+        {
+            { Error: "body" } => Results.BadRequest(),
+            { Error: "missing" } => Results.NotFound(),
+            { Error: "timeout" } => Results.StatusCode(504),
+            { Error: "lost" } => Results.StatusCode(503),
+            { Error: null, Channel: "response", Item: JsonNode response } when Values.To<Kernel.Native.HttpResponse>(response) is { } output =>
+                Results.Text(output.Body is JsonValue text && output.ContentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase) &&
+                    text.TryGetValue<string>(out var value) ? value : output.Body?.ToJsonString(), output.ContentType, statusCode: output.StatusCode),
+            { Error: null, Status: not Contract.ActorStatus.Faulted, Item: null } => Results.NoContent(),
+            _ => Results.StatusCode(500)
+        };
+
+        async Task ObserveCanceledAsync()
+        {
+            try { await handling; }
+            catch (Exception) when (token.IsCancellationRequested) { }
         }
     }
 

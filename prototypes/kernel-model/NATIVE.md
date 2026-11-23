@@ -314,8 +314,33 @@ committed Running or Finished status when the caller waits for that provider res
 
 This preview uses fixture-private protocol 10 and two Workers with orderly handover in one process.
 It enables the public request contract for exact actor references inside the opt-in PostgreSQL
-preview. External transport, abrupt owner loss, event requests and HTTP-triggered starts
-remain separate K8 cases.
+preview.
+
+### PostgreSQL HTTP across abrupt owner loss
+
+Use the same setup with a fresh PostgreSQL database per run:
+
+```sh
+dotnet run -c Release --project models/Native.Run -- pg-http-owner-loss in-batch before
+```
+
+A Kestrel receiver keeps the original connection open while a separate owner process waits with the
+Native approval staged. A standby process is refused while the first lease is live. The driver ends
+the original process, and PostgreSQL records ownership moving to the next epoch after the lease
+expires. The survivor consumes the exact stored approval, commits one revision and sends the response
+to the receiver through a private process pipe. The transport reads the finished checkpoint and the
+settled approval row before emitting the carrier. The caller receives `202 approved`.
+
+Use `before-late` to let the caller reach 504 first. The survivor still commits the approval. Use
+`after` to end the original owner after PostgreSQL commits and before it sends a response. The
+caller receives 504, and the standby takes ownership without executing the approval again. Both 504
+cases record when the client received its response against the stored deadline and lease expiry. The
+fixture watches the standby through shutdown for any trailing carrier. Use `checked` for the other
+fence mode.
+
+These cases run against the fixture-private exact-reference profile. The pipe carries live output
+between local processes. Cluster transport, HTTP-triggered starts and event requests remain separate
+K8 cases.
 
 ## 5. What it costs
 

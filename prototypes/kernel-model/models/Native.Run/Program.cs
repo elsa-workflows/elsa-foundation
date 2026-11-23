@@ -54,6 +54,10 @@ if (args is ["sqlite-plan-projection", ..])
         """);
     return 2;
 }
+if (args is ["pg-http-owner-loss", var ownerFence and ("checked" or "in-batch"), var loss and ("before" or "before-late" or "after")])
+    return await PostgresHttpOwnerLoss.RunAsync(ownerFence, loss);
+if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batch"), var pause and ("before" or "after" or "resume"), var ownerRef])
+    return await PostgresHttpOwnerLoss.RunOwnerAsync(workerFence, pause, new(ownerRef));
 if (args is ["pg-http-preview", var httpFence and ("checked" or "in-batch"), var httpSchedule and ("timely" or "late" or "disconnect" or "slow-body" or "blocked" or "clock-delay")])
     return await PostgresHttpPreview.RunAsync(httpFence == "in-batch", httpSchedule);
 if (args is ["pg-root-held-direct", var replyFence and ("checked" or "in-batch")])
