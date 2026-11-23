@@ -14,6 +14,8 @@ public sealed record InstanceRow(string Id, string Model, string Definition, Ins
     long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, InboxKey? PendingStart = null, string? CustomHandles = null, bool IdentityOnly = false, bool IdentityMetadataRequired = false)
 {
     internal bool FoundationNullState { get; init; }
+    internal InstanceRow WithFoundationState(string? value) => this with { State = value ?? "null", FoundationNullState = value is null };
+
     internal long? NextJobGeneration { get; init; }
     internal (string Tenant, InboxKey Creator)? FoundationInlineBirth { get; init; }
     internal FoundationHeaderChange? FoundationInlineHeader { get; init; }

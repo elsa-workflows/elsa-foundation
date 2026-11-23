@@ -24,6 +24,9 @@ switch (args)
 {
     case ["root-admission-writer"]:
         return await GeneratedRootChecks.WriteFromChildAsync();
+    case ["postgres", var connection, "root-checkpoint", .. var options]:
+        await new EfProvider("postgres", connection, options).CheckFirstRootAsync();
+        return 0;
     case ["postgres", var connection, "root-admission"]:
         await new EfProvider("postgres", connection, []).CheckRootAdmissionAsync();
         return 0;
@@ -51,6 +54,12 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     private bool CaseEquivalentTopic => engine is "mysql" or "sqlserver";
     private bool Pg => engine == "postgres";
     private string Engine => engine;
+
+    internal async Task CheckFirstRootAsync()
+    {
+        await using var provided = (Provided)await CreateAsync(2, new());
+        await FirstRootChecks.Run(provided.CreateContext, (EfStore)provided.Store, (EfStore)provided.NewClient());
+    }
 
     internal async Task CheckRootAdmissionAsync()
     {
