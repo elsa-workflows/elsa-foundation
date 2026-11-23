@@ -328,13 +328,14 @@ public sealed partial class EfStore
         if (turn.Expected is null)
         {
             if (turn.Journal is null || turn.Consumed is not [var key] || key != new InboxKey("root:" + root.Actor) ||
-                turn.Done.Count != 0 || row.Status != InstanceStatus.Running || row.Suspended || change is null) throw RootShape();
+                turn.Done.Count != 0 || row.Suspended || change is null ||
+                row.Status == InstanceStatus.Finished && (turn.Sent.Count != 0 || row.Jobs is not null)) throw RootShape();
             var creator = await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;
             if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History) throw RootShape();
             if (RootJobsEnabled) ValidateRootJobChange(null, row, [], turn.Sent, turn.FoundationRootJobCompletion);
             return WithSends(PrepareFirstRoot(root.Tenant, root.Reference, creator, fence, state, row.StateVersion,
-                change.TypeData, change.Labels, turn.Journal, jobState));
+                change.TypeData, change.Labels, turn.Journal, jobState, row.Status));
         }
 
         if (turn.Done.Count + turn.Consumed.Count == 0 || !InputsMatch(root, turn, RootJobsEnabled))
