@@ -23,6 +23,8 @@
   <ItemGroup>
     <Compile Include="../../Fixtures/LegacyWorkflowHashFixture.cs" Link="Fixtures/LegacyWorkflowHashFixture.cs" />
     <EmbeddedResource Include="../../Fixtures/legacy-set-v1.json" LogicalName="legacy-set-v1.json" />
+    <EmbeddedResource Include="../../../../../specs/1207-json-data-integrity-baseline/evidence/variable-value-hash-vectors.json" LogicalName="variable-value-hash-vectors.json" />
+    <EmbeddedResource Include="../../../../../specs/1207-json-data-integrity-baseline/evidence/model-material-hash-vectors.json" LogicalName="model-material-hash-vectors.json" />
   </ItemGroup>
 
 </Project>

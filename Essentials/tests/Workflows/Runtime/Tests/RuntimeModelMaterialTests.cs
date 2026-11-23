@@ -12,6 +12,24 @@ public sealed class RuntimeModelMaterialTests
     private static readonly WorkflowExecutableIdentity Pin = new("artifact-model", "definition", "version", "1.0.0", "sha256:" + new string('a', 64));
     private static readonly RuntimeExecutionProtocol Protocol = new("test.semantic-model", 1);
 
+    public static IEnumerable<object[]> HashVectors()
+    {
+        using var source = typeof(RuntimeModelMaterialTests).Assembly.GetManifestResourceStream("model-material-hash-vectors.json")!;
+        using var document = JsonDocument.Parse(source);
+        return document.RootElement.EnumerateArray().Select(item => new object[] { item.Clone() }).ToArray();
+    }
+
+    [Theory]
+    [MemberData(nameof(HashVectors))]
+    public void Model_material_hash_pins_independent_canonical_preimages(JsonElement vector)
+    {
+        using var definition = JsonDocument.Parse(vector.GetProperty("definition").GetString()!);
+        var expected = "sha256:" + vector.GetProperty("sha256").GetString();
+        const string freeze = "First-stable hash freeze: changes require an explicit identity/migration decision.";
+        Assert.True(expected == NewMaterial(definition.RootElement).ComputeContentHash(), vector.GetProperty("name").GetString() + ": " + freeze);
+        Assert.True(expected == "sha256:" + Elsa.Serialization.Core.JsonHashInput.HashJson(vector.GetProperty("canonical").GetString()!), freeze);
+    }
+
     [Fact]
     public void Model_material_detaches_definition_and_binding_collections_without_a_native_root()
     {
