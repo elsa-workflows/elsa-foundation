@@ -148,6 +148,7 @@ public static class Semantics
     [
         RetirementJournalChecks.Case,
         PhysicalRetirementChecks.Case,
+        .. JobTrialClearChecks.Cases,
         MarkerInsertChecks.Case,
         BatchIntegrityChecks.Atomic,
         DeleteShapeChecks.Case,
@@ -158,6 +159,7 @@ public static class Semantics
         IdentityClockChecks.Case,
         IdentityTerminalJobsChecks.Case,
         StoredStateChecks.Case,
+        StoredStateChecks.AbsentState,
         .. OwnedSetChecks.Cases,
         .. NodeLeaseChecks.Cases,
         new("actor addressing: an unwritten workflow retains its identity, state and owed job on alias delivery", Level.Required, VirtualActorAliases.Run),
@@ -829,6 +831,19 @@ public static class Semantics
             Context.Equal(first, published.Event, "publish uses the exact stored event after a caller retries with another spelling");
             Context.Equal(start, published.Wait, "publish uses the exact registered wait");
             Context.Equal(published.Delivery().Message, recovered.Delivery().Message, "publish and catch-up build the same complete delivery");
+            if (published.Event.Key != published.Wait.Key)
+            {
+                RefusesCopiedPair(published with { Event = published.Event with { } });
+                RefusesCopiedPair(published with { Wait = published.Wait with { } });
+                RefusesCopiedPair(new EventRoute(published.Event, published.Wait));
+
+                static void RefusesCopiedPair(EventRoute route)
+                {
+                    try { _ = route.Delivery(); }
+                    catch (ArgumentException) { return; }
+                    throw new ConformanceException("The store's key comparison applies only to the exact rows returned by its join.");
+                }
+            }
             Context.Equal(start, recovered.Wait, "the originally registered spelling, wait, and spec");
             Context.Equal(first, recovered.Event, "the originally published event and payload");
             await Events.CatchUpAsync(c.S, wanted, 1);

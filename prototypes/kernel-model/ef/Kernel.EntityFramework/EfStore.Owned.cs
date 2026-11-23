@@ -36,7 +36,7 @@ public sealed partial class EfStore
 
     private CommitDialect RequireDialect() => Dialect ?? throw new NotSupportedException("This engine has no owned commit dialect yet; use CommitSql.EntityFramework.");
 
-    private async Task<Committed> CommitOwnedAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, long sentAt, CancellationToken cancellationToken)
+    private async Task<Committed> CommitOwnedAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, long sentAt, QualifiedRootCheckpoint? root, CancellationToken cancellationToken)
     {
         var dialect = RequireDialect();
         await using var db = create();
@@ -138,7 +138,7 @@ public sealed partial class EfStore
             if (turn.Journal is not null)
             {
                 Room(2);
-                rows.Row(RowGroups.Kind.JournalInsert, RowGroups.Journal, [Lit(home), Lit(++next[home]), c.P(journal.FindProperty("Instance")!, turn.Instance), Lit(turn.Delete ? -1 : turn.Row?.Revision ?? 0), c.P(journal.FindProperty("Entries")!, turn.Journal)]);
+                rows.Row(RowGroups.Kind.JournalInsert, RowGroups.Journal, [Lit(home), Lit(++next[home]), c.P(journal.FindProperty("Instance")!, turn.Instance), Lit(turn.Delete ? -1 : root?.RevisionFor(turn.Instance) ?? turn.Row?.Revision ?? 0), c.P(journal.FindProperty("Entries")!, turn.Journal)]);
             }
             // Merge with round 3: the set-based deletes of a terminate and a delete, written last (E1, E9: nothing before the fence held).
             if (turn.Unsubscribe) { Room(1); rows.Free(RowGroups.Kind.UnsubscribeAll, $"""DELETE FROM "Subscriptions" WHERE "Instance" = {c.P(subscriptions.FindProperty("Instance")!, turn.Instance)}"""); }
@@ -173,6 +173,9 @@ public sealed partial class EfStore
             if (command.HasFence) now = result.Now;
             seqs.AddRange(result.Seqs);
         }
+        if (batch.ClearJobTrials.Count != 0 && !await ClearJobTrialsAsync(db, batch, cancellationToken))
+            return new Committed(false, 0, []);
+        if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
         return new Committed(true, now, seqs);
@@ -366,6 +369,11 @@ public sealed partial class EfStore
     {
         StoreBatchRules.RequireDistinct(owned);
         if (owned.Count == 0) return new([], 0);
+        if (_ordinaryRoots is not null)
+        {
+            var fence = owned.Single();
+            return await PollAsync(fence.Partition, fence.Epoch, horizon, limit, cancellationToken);
+        }
         var single = Q("""m."Partition" = {0} AND m."Seen" < {1}""");
         if (!PollSql.Contains(single, StringComparison.Ordinal)) throw new InvalidOperationException("The poll has no partition predicate where the set poll replaces it.");
         var set = Q($"""m."Partition" IN ({List(owned.Select(f => f.Partition).Order())}) AND m."Seen" < {EpochOf(owned, "m.\"Partition\"")}""");

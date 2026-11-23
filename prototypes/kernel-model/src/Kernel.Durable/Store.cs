@@ -13,7 +13,11 @@ namespace Kernel.Durable;
 public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null,
     long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, InboxKey? PendingStart = null, string? CustomHandles = null, bool IdentityOnly = false, bool IdentityMetadataRequired = false)
 {
+    // Header travelling with an ordinary qualified root in its owner. Providers reload their persisted image on takeover.
+    internal FoundationDispatchHeader? FoundationDispatchHeader { get; init; }
     internal bool FoundationNullState { get; init; }
+    internal InstanceRow WithFoundationState(string? value) => this with { State = value ?? "null", FoundationNullState = value is null };
+
     internal long? NextJobGeneration { get; init; }
     internal (string Tenant, InboxKey Creator)? FoundationInlineBirth { get; init; }
     internal FoundationHeaderChange? FoundationInlineHeader { get; init; }
@@ -181,6 +185,8 @@ public sealed record TurnCommit(
     internal IReadOnlyList<FoundationValue>? FoundationValues { get; init; }
 }
 
+internal sealed record FoundationDispatchHeader(string Tenant, string Reference, FoundationHeaderChange Header);
+
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);
 
 /// <summary>What the owner of <c>Partition</c> at <c>Epoch</c>, believing the position is <c>Position</c>, writes in one transaction.</summary>
@@ -256,10 +262,14 @@ public enum Failure
     WindowExpired, // the entire transaction rolled back and its time-dependent decisions must be reconsidered
 }
 
-public sealed class StoreException(Failure failure, string message, Exception? inner = null) : Exception(message, inner)
+public class StoreException(Failure failure, string message, Exception? inner = null) : Exception(message, inner)
 {
     public Failure Failure => failure;
 }
+
+/// <summary>The process cannot read the durable store's format.</summary>
+public sealed class StoreFormatException(string message, Exception? inner = null) :
+    StoreException(Failure.Definite, message, inner);
 
 // Optional local scheduling data. These observations never issue a database call.
 internal interface IFoundationSchedulingStore
