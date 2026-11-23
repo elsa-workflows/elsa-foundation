@@ -35,6 +35,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     private readonly object _lifecycle = new();
     private IScopeHost? _host;
     private Task? _stopping;
+    private bool _abandoned;
     private bool _balancing, _listening;
     private Cluster? _cluster;      // K1b: what the node's last renewing heartbeat saw, for the balancing round
 
@@ -53,6 +54,8 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             Task stopping;
             lock (_lifecycle)
             {
+                if (_abandoned)
+                    throw new InvalidOperationException("This runtime cannot restart because its previous shutdown did not complete.");
                 if (_stopping is not { } pending)
                 {
                     _host = host;
@@ -115,8 +118,6 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++)
                 await DeactivateAsync(scope, cancellationToken);
             if (cancellationToken.IsCancellationRequested) return;
-            Array.Clear(_active);
-            Volatile.Write(ref _cluster, null);
             host.Stopped();
             released = true;
         }
@@ -124,12 +125,20 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         catch (Exception error) { failure = error; }
         finally
         {
+            Array.Clear(_active);
+            Volatile.Write(ref _cluster, null);
             lock (_lifecycle)
             {
-                if (released) _host = null;
-                _stopping = null;
+                _host = null;
+                _abandoned = !released;
+                if (released) _stopping = null;
                 if (failure is null) stopped.SetResult();
-                else stopped.SetException(failure);
+                else
+                {
+                    stopped.SetException(failure);
+                    // A kill or cancellation can leave no waiter. Later observers still receive the same error.
+                    _ = stopped.Task.Exception;
+                }
             }
         }
     }

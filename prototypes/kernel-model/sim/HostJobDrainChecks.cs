@@ -16,6 +16,8 @@ internal static class HostJobDrainChecks
         await GracefulAsync(ownedSet: true);
         await GracefulAsync(ownedSet: false);
         await ConcurrentStopAsync();
+        await CanceledStopAsync();
+        await FaultedStopAsync();
         await DisposedSourceAsync();
         await BeforeEntryAsync();
         await AbruptAsync(duringStop: false);
@@ -136,6 +138,101 @@ internal static class HostJobDrainChecks
             "one release completes both stops and the fresh start can own a new fence");
         await lifecycle.StopAsync().AsTask().WaitAsync(Timeout);
         Check(releases == 2 && fixture.Fence.Owner is null, "the restarted runtime can stop and release its own new fence");
+    }
+
+    private static async Task CanceledStopAsync()
+    {
+        var fixture = new Fixture();
+        var runtime = new PartitionRuntime("abandoned-stop", fixture.Store, 1, Timeout);
+        IActorRuntime lifecycle = runtime;
+        var type = new JobProbe();
+        var host = new DurableHost([new Worker(runtime.Node, 0, fixture.Store, new ActorAdapter(fixture.Store, type), fixture.Options)]);
+        var replacement = new DurableHost([new Worker(runtime.Node, 0, fixture.Store, new ActorAdapter(fixture.Store, new JobProbe()), fixture.Options)]);
+        await lifecycle.StartAsync(host);
+        var active = (await runtime.ActivateAsync(0))!;
+        var actor = await fixture.StartActorAsync(runtime.Node);
+        try
+        {
+            for (var pass = 0; pass < 16 && !type.Entered.Task.IsCompleted; pass++) await runtime.PassAsync(0);
+            await type.Entered.Task.WaitAsync(Timeout);
+            var checkpoint = fixture.Checkpoint(actor);
+            using var deadline = new CancellationTokenSource();
+            var stop = lifecycle.StopAsync(deadline.Token).AsTask();
+            await type.Canceled.Task.WaitAsync(Timeout);
+
+            var restart = lifecycle.StartAsync(replacement).AsTask();
+            Check(!restart.IsCompleted, "a replacement host cannot attach while the direct stop is draining the old job");
+            deadline.Cancel();
+            await stop.WaitAsync(Timeout);
+            await RejectAbandonedRestartAsync(restart);
+            Check(!runtime.Owns(0) && runtime.Activation(0) is null && active.Active && fixture.Fence.Owner == runtime.Node &&
+                fixture.Checkpoint(actor) == checkpoint && !type.Exited.Task.IsCompleted,
+                "an abandoned stop detaches its old activations and leaves the physical fence for expiry");
+            await RejectAbandonedRestartAsync(lifecycle.StartAsync(replacement).AsTask());
+        }
+        finally
+        {
+            type.Finish.TrySetResult();
+            if (type.Entered.Task.IsCompleted) await type.Exited.Task.WaitAsync(Timeout);
+        }
+    }
+
+    private static async Task FaultedStopAsync()
+    {
+        var fixture = new Fixture();
+        var runtime = new PartitionRuntime("failed-stop", fixture.Store, 1, Timeout);
+        IActorRuntime lifecycle = runtime;
+        var worker = new Worker(runtime.Node, 0, fixture.Store, new ActorAdapter(fixture.Store, new JobProbe()), fixture.Options);
+        var durable = new DurableHost([worker]);
+        var failing = new FaultedStopHost(durable);
+        await lifecycle.StartAsync(failing);
+        var active = (await runtime.ActivateAsync(0))!;
+        var first = lifecycle.StopAsync().AsTask();
+        await failing.Entered.Task.WaitAsync(Timeout);
+        var second = lifecycle.StopAsync().AsTask();
+        var restart = lifecycle.StartAsync(durable).AsTask();
+        failing.Release.TrySetResult();
+
+        foreach (var observer in new[] { first, second, restart })
+        {
+            try
+            {
+                await observer.WaitAsync(Timeout);
+                throw new InvalidOperationException("The observer must see the host's shutdown fault.");
+            }
+            catch (InvalidOperationException error) when (ReferenceEquals(error, failing.Error)) { }
+        }
+        Check(runtime.Activation(0) is null && active.Active && fixture.Fence.Owner == runtime.Node,
+            "both stop callers and the queued start see the original fault, and the runtime detaches its old activation");
+        await RejectAbandonedRestartAsync(lifecycle.StartAsync(durable).AsTask());
+    }
+
+    private static async Task RejectAbandonedRestartAsync(Task restart)
+    {
+        try { await restart.WaitAsync(Timeout); }
+        catch (InvalidOperationException error) when (error.Message.Contains("previous shutdown", StringComparison.Ordinal))
+        {
+            Console.WriteLine("ok the runtime cannot be restarted after an incomplete shutdown");
+            return;
+        }
+        throw new InvalidOperationException("An incomplete shutdown must prevent this runtime from starting again.");
+    }
+
+    private sealed class FaultedStopHost(IScopeHost inner) : IScopeHost
+    {
+        internal InvalidOperationException Error { get; } = new("The test host could not finish shutdown.");
+        internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default) =>
+            inner.ActivateAsync(scope, cancellationToken);
+
+        public async ValueTask PrepareToStopAsync(CancellationToken cancellationToken = default)
+        {
+            Entered.TrySetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+            throw Error;
+        }
     }
 
     private static async Task DisposedSourceAsync()
@@ -313,9 +410,11 @@ internal static class HostJobDrainChecks
                 new DurableHost([new Worker(node.Node, 0, store, adapter, options ?? Options)]);
         }
 
-        internal async Task<Contract.ActorRef> StartActorAsync(RuntimeNode node)
+        internal Task<Contract.ActorRef> StartActorAsync(RuntimeNode node) => StartActorAsync(node.Node);
+
+        internal async Task<Contract.ActorRef> StartActorAsync(string node)
         {
-            var ingress = new InMemoryIngress(Store, new Requests("job-drain"), node.Node);
+            var ingress = new InMemoryIngress(Store, new Requests("job-drain"), node);
             var receipt = await ingress.SendAsync(Scope, new Contract.Target.Start(new(JobProbe.TypeKey, "drain", History: Contract.History.Full)),
                 "start", Contract.Kinds.Start);
             if (receipt is not { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } actor })
