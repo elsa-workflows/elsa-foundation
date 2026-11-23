@@ -23,13 +23,22 @@ internal sealed class PostgresPreviewFoundation(
             if (kind != Contract.Kinds.Start || payload is not null || spec.Type != actorType || spec.Ephemeral ||
                 !Enum.IsDefined(spec.History))
                 throw new NotSupportedException("The preview starts durable roots of its configured actor type.");
-            var accepted = await admission.AdmitAsync(scope.Tenant, id,
-                new(spec.Type, spec.TypeData, spec.Input, History: (History)spec.History),
-                options?.DueAt, options?.KeepFor, cancellationToken);
-            return new(accepted.Duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted,
-                new Contract.ActorRef(accepted.Reference));
+            if (!FoundationMetadataLimits.IsOutsideMessageId(id))
+                return new(Contract.AdmissionOutcome.Refused);
+            try
+            {
+                var accepted = await admission.AdmitAsync(scope.Tenant, id,
+                    new(spec.Type, spec.TypeData, spec.Input, History: (History)spec.History),
+                    options?.DueAt, options?.KeepFor, cancellationToken);
+                return new(accepted.Duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted,
+                    new Contract.ActorRef(accepted.Reference));
+            }
+            catch (MetadataLimitExceeded)
+            {
+                return new(Contract.AdmissionOutcome.Refused);
+            }
         }
-        if (target is not Contract.Target.Ref direct || !FoundationMetadataLimits.IsOrdinaryKind(kind))
+        if (target is not Contract.Target.Ref direct || FoundationMetadataLimits.IsReservedKind(kind))
             throw new NotSupportedException("The preview supports ordinary input addressed to a root reference.");
         var admitted = await admission.AdmitDirectResultAsync(scope.Tenant, direct.Actor.Id, id, kind, payload,
             options?.DueAt, options?.KeepFor, cancellationToken);
