@@ -307,7 +307,12 @@ public sealed partial class EfStore
     /// <summary>A take of a set: one statement, each row decided as the one-partition take decides it; the death count as that take's.</summary>
     public async ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
-        try { return await TakeSetAsync(partitions, node, lease, cancellationToken); }
+        await using var caller = ProtectMySqlCaller(cancellationToken);
+        try { return await TakeSetAsync(partitions, node, lease, caller?.Token ?? cancellationToken); }
+        catch (Exception error) when (caller is { CallerCancelled: true })
+        {
+            throw await caller.CallerExceptionAsync(error);
+        }
         catch (Exception e) when (TransientTake(e) is { } transient) { throw transient; }
     }
 

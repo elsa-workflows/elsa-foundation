@@ -37,6 +37,9 @@ switch (args)
     case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "job-generation-format", .. var options]:
         await new EfProvider(engine, connection, options).CheckJobGenerationFormatAsync();
         return 0;
+    case ["mysql", var connection, "lease-cancellation", .. var options]:
+        await new EfProvider("mysql", connection, options).CheckLeaseCancellationAsync();
+        return 0;
     case ["sqlite", "node-formats", .. var options]:
         await new EfProvider("sqlite", null, options).CheckNodeFormatsAsync();
         return 0;
@@ -183,6 +186,12 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         "mysql" => new MySqlEngine { Isolation = flags.Contains("--rc") ? System.Data.IsolationLevel.ReadCommitted : null },
         _ => null,
     };
+
+    internal async Task CheckLeaseCancellationAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(1, new StoreSetup());
+        await LeaseCancellationChecks.Run(fixture.CreateContext, interceptor => Store(fixture.CreateAdmin(interceptor), FenceInBatch), (EfStore)fixture.Store);
+    }
 
     internal async Task CheckNodeFormatsAsync()
     {

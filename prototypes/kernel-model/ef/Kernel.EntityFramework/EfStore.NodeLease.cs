@@ -81,6 +81,11 @@ public sealed partial class EfStore
     /// </summary>
     private bool PastCommitStep(long sent, CommitBatch batch) => System.Diagnostics.Stopwatch.GetElapsedTime(sent) > batch.Lease;
 
+    private LeaseIoDeadline? ProtectMySqlCaller(CancellationToken cancellationToken) =>
+        Engine is MySqlEngine && cancellationToken.CanBeCanceled
+            ? new(cancellationToken, Timeout.InfiniteTimeSpan, containCallbacks: true)
+            : null;
+
     private Task<IDbContextTransaction> BeginReadCommittedAsync(KernelDb db, CancellationToken cancellationToken) =>
         Engine is null && !postgres ? db.Database.BeginTransactionAsync(cancellationToken) : db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
 
@@ -93,10 +98,10 @@ public sealed partial class EfStore
     /// </summary>
     private async Task<List<string>> ReadAndRenewAsync(KernelDb db, string? ids, string node, TimeSpan lease, CancellationToken cancellationToken)
     {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(lease / 3);
+        await using var deadline = new LeaseIoDeadline(cancellationToken, lease / 3, Engine is MySqlEngine);
         try
         {
+            deadline.CheckRenewalWindow();
             await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
             var expired = new List<string>();
             if (ids is not null)
@@ -114,12 +119,19 @@ public sealed partial class EfStore
                     expired = [.. owners.Except(live, StringComparer.Ordinal)];
                 }
             }
+            deadline.CheckRenewalWindow();
             await RenewAsync(db, node, lease, deadline.Token);
+            deadline.CheckRenewalWindow();
             return expired;
         }
-        catch (Exception e) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        catch (Exception error) when (deadline.CallerCancelled)
         {
-            throw new StoreException(Failure.Transient, "The take's format check, node reads and own record write outlasted a third of the lease.", e);
+            throw await deadline.CallerExceptionAsync(error);
+        }
+        catch (Exception e) when (deadline.Expired && !cancellationToken.IsCancellationRequested)
+        {
+            throw new StoreException(Failure.Transient, "The take's format check, node reads and own record write outlasted a third of the lease.",
+                await deadline.IncludeCallbackFailureAsync(e));
         }
     }
 
@@ -138,27 +150,46 @@ public sealed partial class EfStore
     /// </summary>
     public async ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken = default)
     {
+        await using var caller = ProtectMySqlCaller(cancellationToken);
+        try { return await NodeHeartbeatCoreAsync(node, lease, window, caller?.Token ?? cancellationToken); }
+        catch (Exception error) when (caller is { CallerCancelled: true })
+        {
+            throw await caller.CallerExceptionAsync(error);
+        }
+    }
+
+    private async ValueTask<NodeBeat> NodeHeartbeatCoreAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken cancellationToken)
+    {
         long now;
         List<OwnedEpoch> owned;
         Cluster? inside = null;
-        using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        await using (var deadline = new LeaseIoDeadline(cancellationToken, lease / 3, Engine is MySqlEngine))
         {
-            deadline.CancelAfter(lease / 3);
             try
             {
                 await using var db = create();
+                deadline.CheckRenewalWindow();
                 await using var transaction = await BeginReadCommittedAsync(db, deadline.Token);
                 // PostgreSQL bounds the heartbeat on the server too (NL-10's bound rests on it); SET LOCAL ends with the transaction.
                 if (Engine is null && postgres) await db.Database.ExecuteSqlRawAsync(FormattableString.Invariant($"SET LOCAL statement_timeout = {Math.Max(1, (long)(lease / 3).TotalMilliseconds)}"), deadline.Token);
                 await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
+                deadline.CheckRenewalWindow();
                 now = await RenewAsync(db, node, lease, deadline.Token);
+                deadline.CheckRenewalWindow();
                 owned = await db.Partitions.AsNoTracking().Where(p => p.Owner == node).OrderBy(p => p.Id).Select(p => new OwnedEpoch(p.Id, p.Epoch)).ToListAsync(deadline.Token);
                 if (MembershipInHeartbeat) inside = await MembershipAsync(db, now, window, deadline.Token);     // MUTATION
+                deadline.CheckRenewalWindow();
                 await transaction.CommitAsync(deadline.Token);
+                deadline.CheckRenewalWindow();
             }
-            catch (Exception e) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            catch (Exception error) when (deadline.CallerCancelled)
             {
-                throw new StoreException(Failure.Unknown, "The heartbeat outlasted a third of the lease.", e);
+                throw await deadline.CallerExceptionAsync(error);
+            }
+            catch (Exception e) when (deadline.Expired && !cancellationToken.IsCancellationRequested)
+            {
+                throw new StoreException(Failure.Unknown, "The heartbeat outlasted a third of the lease.",
+                    await deadline.IncludeCallbackFailureAsync(e));
             }
         }
         if (inside is not null) return new NodeBeat(owned, now, inside);
@@ -182,7 +213,12 @@ public sealed partial class EfStore
     /// </summary>
     private async ValueTask<Lease?> RetakeInTransactionAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken)
     {
-        try { return await RetakeInOneTransactionAsync(partition, node, epoch, lease, countDeaths, cancellationToken); }
+        await using var caller = ProtectMySqlCaller(cancellationToken);
+        try { return await RetakeInOneTransactionAsync(partition, node, epoch, lease, countDeaths, caller?.Token ?? cancellationToken); }
+        catch (Exception error) when (caller is { CallerCancelled: true })
+        {
+            throw await caller.CallerExceptionAsync(error);
+        }
         catch (Exception e) when (TransientTake(e) is { } transient) { throw transient; }
     }
 
