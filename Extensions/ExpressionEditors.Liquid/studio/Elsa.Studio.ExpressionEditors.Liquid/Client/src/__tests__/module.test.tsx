@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { StudioCodeEditor } from "@elsa-workflows/studio-code-editor";
 import { LiquidExpandedEditor, LiquidInlineEditor, LiquidSourceRenderer, register } from "../module";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
+import { createContributionRegistry } from "@elsa-workflows/studio-sdk";
 
 describe("Liquid expression editor module", () => {
   it("registers compact and expanded Liquid expression editor surfaces", () => {
@@ -47,7 +48,7 @@ describe("Liquid expression editor module", () => {
         isSensitive: false,
         surface: "expanded"
       }
-    }) as React.ReactElement;
+    }) as React.ReactElement<{ children: React.ReactNode }>;
 
     expect(rendered.type).toBe("code");
     expect(rendered.props.children).toBe("{{ customer.email }}");
@@ -123,6 +124,7 @@ interface StudioCodeEditorElementProps {
     uri: string;
     language: string;
     value: string;
+    version?: number;
   };
   languageAdapter: {
     language: string;
@@ -159,11 +161,7 @@ function testApi(): ElsaStudioModuleApi {
 }
 
 function registry<T>(): StudioContributionRegistry<T> {
-  const contributions: T[] = [];
-  return {
-    add: contribution => contributions.push(contribution),
-    list: () => [...contributions]
-  };
+  return createContributionRegistry<T>();
 }
 
 function context(syntax: string, surface: "inline" | "expanded" = "inline") {

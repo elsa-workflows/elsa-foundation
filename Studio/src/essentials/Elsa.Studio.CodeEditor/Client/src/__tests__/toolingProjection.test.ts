@@ -2,6 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { createStudioCodeToolingProjection, projectStudioCodeDiagnostics } from "../toolingProjection";
 
 describe("createStudioCodeToolingProjection", () => {
+  it.each(["unavailable", "unauthorized", "incompatible", "stale", "canceled"] as const)("does not expose catalog values from a %s result", async state => {
+    const getCatalog = vi.fn(async () => ({ state, data: { symbols: [{ name: "mustRemainHidden" }] } }));
+    const projection = createStudioCodeToolingProjection({ document: { source: "" }, authoringContext: {}, tooling: { getCatalog } });
+    const completions = await projection.completionProvider({
+      document: { uri: "elsa://drafts/refused", language: "javascript", value: "", version: 1 },
+      position: 0, explicit: true, signal: new AbortController().signal
+    });
+    expect(getCatalog).toHaveBeenCalledOnce();
+    expect(completions).toEqual([]);
+  });
+
   it("merges authoring-context symbols with an asynchronous catalog without SDK imports", async () => {
     const toolingDocument = { source: "for" };
     const authoringContext = {

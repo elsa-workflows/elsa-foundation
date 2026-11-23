@@ -4,6 +4,7 @@ import { createStudioCodeToolingProjection, StudioCodeEditor } from "@elsa-workf
 import { JavaScriptExpandedEditor, JavaScriptInlineEditor, JavaScriptSourceRenderer, register } from "../module";
 import { javaScriptToolingProjection } from "../javaScriptToolingProjection";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
+import { createContributionRegistry } from "@elsa-workflows/studio-sdk";
 
 describe("JavaScript expression editor module", () => {
   it("registers inline and expanded JavaScript expression editor surfaces", () => {
@@ -48,7 +49,7 @@ describe("JavaScript expression editor module", () => {
         isSensitive: false,
         surface: "compact"
       }
-    }) as React.ReactElement;
+    }) as React.ReactElement<{ children: React.ReactNode }>;
 
     expect(rendered.type).toBe("code");
     expect(rendered.props.children).toBe("variables.customer.email");
@@ -210,6 +211,7 @@ interface StudioCodeEditorElementProps {
     uri: string;
     language: string;
     value: string;
+    version?: number;
   };
   readOnly?: boolean;
   theme?: string;
@@ -224,9 +226,10 @@ function findStudioCodeEditor(node: React.ReactNode): React.ReactElement<StudioC
   if (typeof node.type === "function") {
     return findStudioCodeEditor((node.type as (props: unknown) => React.ReactNode)(node.props));
   }
-  if (typeof node.type === "object" && node.type && "type" in node.type &&
-      typeof node.type.type === "function") {
-    return findStudioCodeEditor((node.type.type as (props: unknown) => React.ReactNode)(node.props));
+  const component: unknown = node.type;
+  if (typeof component === "object" && component && "type" in component &&
+      typeof component.type === "function") {
+    return findStudioCodeEditor((component.type as (props: unknown) => React.ReactNode)(node.props));
   }
   for (const child of React.Children.toArray((node.props as { children?: React.ReactNode }).children)) {
     try {
@@ -245,11 +248,7 @@ function testApi(): ElsaStudioModuleApi {
 }
 
 function registry<T>(): StudioContributionRegistry<T> {
-  const contributions: T[] = [];
-  return {
-    add: contribution => contributions.push(contribution),
-    list: () => [...contributions]
-  };
+  return createContributionRegistry<T>();
 }
 
 function context(syntax: string) {

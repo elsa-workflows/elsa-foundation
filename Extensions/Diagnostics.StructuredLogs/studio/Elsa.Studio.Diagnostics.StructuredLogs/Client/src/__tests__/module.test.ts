@@ -523,9 +523,9 @@ class StubEventSource extends EventTarget {
   readonly CONNECTING = 0;
   readonly OPEN = 1;
   readonly CLOSED = 2;
-  onerror: ((this: EventSource, ev: Event) => unknown) | null = null;
-  onmessage: ((this: EventSource, ev: MessageEvent) => unknown) | null = null;
-  onopen: ((this: EventSource, ev: Event) => unknown) | null = null;
+  onerror: ((this: StubEventSource, ev: Event) => unknown) | null = null;
+  onmessage: ((this: StubEventSource, ev: MessageEvent) => unknown) | null = null;
+  onopen: ((this: StubEventSource, ev: Event) => unknown) | null = null;
   readyState = StubEventSource.OPEN;
   static instances: StubEventSource[] = [];
   url: string;

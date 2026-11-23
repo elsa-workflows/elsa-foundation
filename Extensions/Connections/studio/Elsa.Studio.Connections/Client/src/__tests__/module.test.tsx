@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ElsaStudioModuleApi, StudioContributionRegistry } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioFeatureAreaContribution, StudioActivityPropertyEditorContribution, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
+import { createContributionRegistry } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 
 describe("connections module", () => {
@@ -33,7 +34,7 @@ describe("connections module", () => {
 });
 
 function stubApi(): ElsaStudioModuleApi {
-  return {
+  const api: Pick<ElsaStudioModuleApi, "backend" | "featureAreas" | "propertyEditors" | "expressionEditors" | "dialogs"> = {
     backend: {
       baseUrl: "https://server.example",
       http: {
@@ -41,21 +42,18 @@ function stubApi(): ElsaStudioModuleApi {
         getJson: vi.fn(),
         postJson: vi.fn(),
         putJson: vi.fn(),
-        deleteJson: vi.fn()
+        deleteJson: vi.fn(),
+        postForm: vi.fn()
       }
     },
-    featureAreas: registry(),
-    propertyEditors: registry(),
-    expressionEditors: registry(),
+    featureAreas: registry<StudioFeatureAreaContribution>(),
+    propertyEditors: registry<StudioActivityPropertyEditorContribution>(),
+    expressionEditors: registry<StudioExpressionEditorContribution>(),
     dialogs: { confirm: vi.fn(), prompt: vi.fn(), alert: vi.fn() }
   };
+  return api as ElsaStudioModuleApi;
 }
 
-function registry<T>(): StudioContributionRegistry<T> & { items: T[] } {
-  const items: T[] = [];
-  return {
-    items,
-    add: item => items.push(item),
-    list: () => items
-  };
+function registry<T>(): StudioContributionRegistry<T> {
+  return createContributionRegistry<T>();
 }
