@@ -61,11 +61,16 @@ public sealed record RetentionPolicy(
 - **Refused deletes.** A delete the owner refuses (protected, not yet eligible, or a different run or transition) is consumed with no change to the row. A later sweep selects the instance again if it is still eligible, with its current identity.
 - **The same path serves operators.** Delete one instance and delete by filter (definition, tenant, status, age) send the same qualified delete, with reason Operator. Terminate-then-delete for a running instance is one command, below.
 
-The in-memory Foundation uses a host-issued Retention Delete with a reserved id derived from the
-tenant, actor reference and terminal selection. The owner reads the configured window at execution.
-`--retention-delete-check` covers a policy extension, a queued delete across caller-key reuse, an
-unresolved re-park and the new Faulted window after expiry. The policy configuration surface,
-retention worker and its rate control retain their K11 cases.
+The in-memory Foundation derives the reserved operation ID for a host-issued Retention Delete
+from the tenant, exact actor reference and authenticated terminal mark. Reopening a list page
+can return a fresh token for the same mark, which reuses the reserved operation. The owner
+reads the configured window at execution.
+
+`--retention-pass-check` runs one configured public list page per pass, using the tenant, definition
+label, status, `EndedAt`, `AsOf` and opaque selection. It follows the supplied continuation and
+excludes unresolved Parks. `--retention-delete-check` covers policy extension, caller-key reuse,
+an unresolved re-park and the new Faulted window after expiry. The policy configuration surface
+and scheduling rate retain their K11 cases.
 
 ### Proposed: the qualified delete
 
@@ -316,7 +321,7 @@ For [B1](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomm
 
 ## Unverified
 
-- **Not built:** the qualified delete and its checks, the terminal mark, persisted creation on EF and MongoDB, the retention worker, the option a value rows, the later option b sweeper and its instance-scoped names, the archive command and archiver, compaction, keyed hashes, codec headers, the key ring and encryption.
+- **Not built:** the qualified delete and its checks, the terminal mark, persisted creation on EF and MongoDB, retention on physical providers, the option a value rows, the later option b sweeper and its instance-scoped names, the archive command and archiver, compaction, keyed hashes, codec headers, the key ring and encryption.
 - **Done markers:** clearing their payloads assumes no reader uses them. The event-start acceptance receipt and the outside-command duplicate answer must be checked before it is built.
 - **Value store:** its crash durability, pruning and erasure are unqualified (VALUES.md). Decision 10's acceptance run, the `pad=` case against a reference on PostgreSQL with option a, is unrun (POSTGRES.md; write volume decision 2).
 - **Estimates:** all encryption costs.
