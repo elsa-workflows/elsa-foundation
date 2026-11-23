@@ -142,8 +142,14 @@ internal static class JsonBaselineSourceScan
             }
             if (serializer && name is "Serialize" or "SerializeToNode" or "SerializeToElement" or "SerializeToUtf8Bytes" or "SerializeAsync" or "Deserialize" or "DeserializeAsync" or "DeserializeAsyncEnumerable")
             {
-                var minimum = name == "SerializeAsync" || name == "Serialize" && effective.Length > 0 &&
-                    DeclaredType(effective[0].Expression, call) is "Utf8JsonWriter" or "System.Text.Json.Utf8JsonWriter" ? 2 : 1;
+                var writer = name == "Serialize" && (effective.Any(argument => argument.NameColon?.Name.Identifier.ValueText == "writer") ||
+                    effective.FirstOrDefault() is { } first && DeclaredType(first.Expression, call) is "Utf8JsonWriter" or "System.Text.Json.Utf8JsonWriter");
+                var runtimeType = effective.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "inputType" or "returnType") ||
+                    effective.Skip(1).Any(argument => argument.NameColon is null && IsTypeExpression(argument.Expression, call));
+                var topLevelValues = name == "DeserializeAsyncEnumerable" && (effective.Any(argument => argument.NameColon?.Name.Identifier.ValueText == "topLevelValues") ||
+                    effective.Skip(1).Any(argument => argument.Expression.IsKind(SyntaxKind.TrueLiteralExpression) || argument.Expression.IsKind(SyntaxKind.FalseLiteralExpression) ||
+                        DeclaredType(argument.Expression, call) is "bool" or "Boolean" or "System.Boolean"));
+                var minimum = (name == "SerializeAsync" ? 2 : 1) + (writer ? 1 : 0) + (runtimeType ? 1 : 0) + (topLevelValues ? 1 : 0);
                 var last = effective.LastOrDefault()?.Expression;
                 var namedProfile = effective.FirstOrDefault(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo");
                 if (namedProfile is not null ? IsNullProfile(namedProfile.Expression, call) :

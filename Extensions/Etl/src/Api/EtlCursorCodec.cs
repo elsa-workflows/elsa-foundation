@@ -175,8 +175,13 @@ internal sealed record EtlCursorState(
 [JsonSerializable(typeof(EtlCursorState))]
 internal partial class EtlCursorJsonContext : JsonSerializerContext
 {
-    internal static EtlCursorJsonContext WireContext { get; } = new(new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options)
+    internal static EtlCursorJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static JsonSerializerOptions CreateWireOptions()
     {
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
-    });
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
 }

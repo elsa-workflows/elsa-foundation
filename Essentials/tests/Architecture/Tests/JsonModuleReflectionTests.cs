@@ -18,6 +18,9 @@ public sealed class JsonModuleReflectionTests
     {
         var contexts = Contexts();
         Assert.True(contexts.Count >= 20, $"Only {contexts.Count} owner wire contexts were inspected; module discovery is incomplete.");
+        var missingDates = contexts.Where(context => !context.Options.Converters.Any(converter => converter.CanConvert(typeof(DateTime))) ||
+            !context.Options.Converters.Any(converter => converter.CanConvert(typeof(DateTimeOffset)))).Select(context => context.GetType().FullName).ToArray();
+        Assert.True(missingDates.Length == 0, "Owner wire contexts without explicit temporal converters: " + string.Join(", ", missingDates));
         foreach (var context in contexts)
         {
             var options = context.Options;
