@@ -129,8 +129,24 @@ It tries a new Sequence tail, a change to the untaken If branch and a reordered 
 also covers loop bodies and nodes referenced only by a stored result, scheduled child or pending trigger.
 The validator is read-only and handles structured Native checkpoints with unchanged declarations.
 Callers must verify actor status, source definition and version readability before using it.
-Applying a migration, adding defaults, outstanding jobs, Flowchart and StateMachine compatibility are
-separate work.
+This validation covers the same checkpoints used by the command demonstration below. Adding defaults,
+outstanding jobs, Flowchart and StateMachine compatibility are separate work.
+
+### Apply a compatible Native migration
+
+```sh
+dotnet run -c Release --project sim -- --native-migration-apply
+```
+
+The public in-memory command suspends a waiting Native workflow, rebinds a compatible Sequence and
+delivers its result to a plan witness. The workflow resumes on the same event wait and executes the
+target tail. Balanced and Durable runs lose the answer before and after the migration commit. A cold
+owner completes the schedule with one result and one successful lifecycle entry under Full, State
+and Minimal history. An older model holds commands on unreadable running and finished checkpoints.
+A newer owner processes those commands when fresh input releases the hold. A request with a usable
+plan address and a missing definition receives one durable refusal across repeated inputs. The plan witness
+exercises real actor delivery. The product plan actor, declaration mapping and graph and statechart
+migration remain separate work.
 
 ## PostgreSQL Core Preview
 

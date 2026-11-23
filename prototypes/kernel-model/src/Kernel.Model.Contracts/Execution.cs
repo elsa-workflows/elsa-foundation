@@ -31,3 +31,10 @@ public interface IModelMetadata
     void TerminateMetadata(object state);
     bool ProtectsDeletion(object state, long? endedAt, long now);
 }
+
+/// <summary>Validates a definition change that preserves model state and all existing waits.</summary>
+public interface ISimpleModelMigration
+{
+    /// <returns>A value-free refusal code, or null when the checkpoint is compatible.</returns>
+    string? ValidateMigration(InstanceInfo source, object state, string target);
+}
