@@ -10,6 +10,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
 {
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
+    private sealed record StartWrite(bool Claimed, bool Enqueued);
     private sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput, bool ExplicitZeroDue = false);
     private const string CreatorPrefix = "!kernel-root/1:";
 
@@ -89,14 +90,41 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, null);
         var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
         var windowMs = (long)window.TotalMilliseconds;
-        var changed = await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "FoundationRootReceipts" AS r ("Tenant","Operation","Reference","Until")
-            VALUES ({tenant}, {digest}, {reference}, floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
-            ON CONFLICT ("Tenant","Operation") DO UPDATE SET "Reference" = EXCLUDED."Reference",
-                "Until" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs}
-            WHERE r."Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
-            """, cancellationToken);
-        if (changed == 0)
+        var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
+        // Raw PostgreSQL text avoids JSON expansion for large quoted or international inputs. Only a
+        // value that PostgreSQL text cannot represent travels in the reversible JSON envelope.
+        var escaped = spec.Input is { } input && (input.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(input));
+        var payload = escaped ? null : spec.Input;
+        var storedSpec = escaped ? creator.Start! : creator.Start! with { Input = null };
+        var header = CreatorPrefix + DurableKeyJson.Write(new StoredRoot(creator.Id, storedSpec, escaped, due == 0));
+        const int contentLimit = 16 * 1024 * 1024 - 24 * 1024;
+        var fits = Encoding.UTF8.GetByteCount(header) + (payload is null ? 0 : Encoding.UTF8.GetByteCount(payload)) <= contentLimit;
+
+        // A live receipt wins even when the replay's encoded envelope is too large. When no receipt
+        // wins the transaction rolls back the new claim if its creator cannot be stored.
+        var write = (await db.Database.SqlQuery<StartWrite>($"""
+            WITH receipt AS (
+                INSERT INTO "FoundationRootReceipts" AS r ("Tenant","Operation","Reference","Until")
+                VALUES ({tenant}, {digest}, {reference}, floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
+                ON CONFLICT ("Tenant","Operation") DO UPDATE SET "Reference" = EXCLUDED."Reference",
+                    "Until" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs}
+                WHERE r."Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                RETURNING "Reference"
+            ), birth AS (
+                INSERT INTO "FoundationRootBirths" ("Tenant","Reference","Actor","Partition","Creation","Creator","Fingerprint")
+                SELECT {tenant}, receipt."Reference", {actor.Id}, {actor.Partition}, 1, {creator.InboxKey.Id}, {fingerprint}
+                FROM receipt WHERE {fits}
+                RETURNING "Actor", "Partition", "Creator"
+            ), creator AS (
+                INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Payload","Start","Done","Seen","Attempts","Trial","JobGeneration")
+                SELECT birth."Creator", 0, birth."Actor", birth."Partition", {creator.Kind}, {creator.Due ?? 0},
+                    {(fits ? payload : null)}, {(fits ? header : "")}, false, 0, 0, 0, 0
+                FROM birth
+                RETURNING "Id"
+            )
+            SELECT EXISTS (SELECT 1 FROM receipt) AS "Claimed", EXISTS (SELECT 1 FROM creator) AS "Enqueued"
+            """).ToListAsync(cancellationToken)).Single();
+        if (!write.Claimed)
         {
             var existing = await db.Database.SqlQuery<string>($"""
                 SELECT "Reference" AS "Value" FROM "FoundationRootReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
@@ -105,27 +133,9 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             return new(existing, true);
         }
 
-        var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
-        await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "FoundationRootBirths" ("Tenant","Reference","Actor","Partition","Creation","Creator","Fingerprint")
-            VALUES ({tenant}, {reference}, {actor.Id}, {actor.Partition}, 1, {creator.InboxKey.Id}, {fingerprint})
-            """, cancellationToken);
-        // Raw PostgreSQL text avoids JSON expansion for large quoted or international inputs. Only a
-        // value that PostgreSQL text cannot represent travels in the reversible JSON envelope.
-        var escaped = spec.Input is { } input && (input.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(input));
-        var payload = escaped ? null : spec.Input;
-        var storedSpec = escaped ? creator.Start! : creator.Start! with { Input = null };
-        var header = CreatorPrefix + DurableKeyJson.Write(new StoredRoot(creator.Id, storedSpec, escaped, due == 0));
-        // Reserve the 24 KiB fixed frame even for the exceptional encoded representation.
-        if (Encoding.UTF8.GetByteCount(header) + (payload is null ? 0 : Encoding.UTF8.GetByteCount(payload)) > 16 * 1024 * 1024 - 24 * 1024)
-            throw new MetadataLimitExceeded(nameof(spec), 16 * 1024 * 1024 - 24 * 1024);
-        db.Messages.Add(new MessageEntity
-        {
-            Id = creator.InboxKey.Id, Target = actor.Id, Partition = actor.Partition,
-            Kind = creator.Kind, Due = creator.Due ?? 0,
-            Payload = payload, Start = header
-        });
-        await db.SaveChangesAsync(cancellationToken);
+        if (!fits) throw new MetadataLimitExceeded(nameof(spec), contentLimit);
+        if (!write.Enqueued)
+            throw new InvalidOperationException("A generated root start must commit its creator with the receipt.");
         await transaction.CommitAsync(cancellationToken);
         return new(reference, false);
     }

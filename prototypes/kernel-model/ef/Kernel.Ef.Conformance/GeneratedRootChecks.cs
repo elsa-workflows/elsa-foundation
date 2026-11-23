@@ -64,7 +64,7 @@ internal static class GeneratedRootChecks
             await admission.AdmitAsync(tenant, "rollback", spec);
             throw new InvalidOperationException("expected the fixture's inbox constraint to reject the creator");
         }
-        catch (DbUpdateException error) when (error.InnerException is Npgsql.PostgresException { ConstraintName: "fixture_reject_start" }) { }
+        catch (Npgsql.PostgresException error) when (error.ConstraintName == "fixture_reject_start") { }
         Check(await db.Messages.CountAsync() == 2 && await Count("births") == 2 && await Count("receipts") == 2,
             "failed inbox insert rolls back its root receipt and binding");
         await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Messages" DROP CONSTRAINT "fixture_reject_start" """);
@@ -103,9 +103,13 @@ internal static class GeneratedRootChecks
 
         var messageCount = await db.Messages.CountAsync();
         var receiptCount = await Count("receipts");
+        var oversized = spec with { Input = new string('\0', 3 * 1024 * 1024) };
+        var duplicateOversized = await next.AdmitAsync(tenant, operation, oversized);
+        Check(duplicateOversized.Duplicate && duplicateOversized.Reference == afterSweep.Reference,
+            "a live receipt wins before rejecting an oversized encoded replay");
         try
         {
-            await next.AdmitAsync(tenant, "oversize-encoded", spec with { Input = new string('\0', 3 * 1024 * 1024) });
+            await next.AdmitAsync(tenant, "oversize-encoded", oversized);
             throw new InvalidOperationException("expected the encoded creator to exceed its row budget");
         }
         catch (ArgumentException e) when (e.ParamName == "spec") { }
