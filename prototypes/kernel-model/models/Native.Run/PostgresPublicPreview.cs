@@ -325,7 +325,7 @@ internal static class PostgresPublicPreview
         }
     }
 
-    private static string Decode(Contract.JournalEntry entry)
+    internal static string Decode(Contract.JournalEntry entry)
     {
         using var document = JsonDocument.Parse(entry.Entry);
         return document.RootElement.ValueKind == JsonValueKind.String ? document.RootElement.GetString()! : "";

@@ -168,6 +168,19 @@ epoch. Replaying that approval is a duplicate. A new approval completes the work
 assigned sets. This preview covers generated public roots, direct input and graceful handover with the PostgreSQL
 owned-SQL writer. Run `root-set` in PostgreSQL EF conformance for the stale-fence and per-partition Seen/Trial checks.
 
+For an abrupt peer exit in the same two-process Cluster fixture, use a fresh dedicated PostgreSQL database:
+
+```bash
+dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-crash 1024
+```
+
+The coordinator terminates only its spawned peer process while the workflow waits for its second approval.
+The fixture reads the peer's live lease after process exit. A temporary diagnostic trigger on the workflow's
+partition records the peer lease deadline, owner, epoch and both the successful UPDATE's statement start and its
+row-trigger time. The fixture requires that UPDATE to start after the deadline. The provider samples the lease
+earlier in the same transaction. The observer records committed ownership changes. The public journal bookmark
+spans process loss and replay.
+
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
 ```bash
