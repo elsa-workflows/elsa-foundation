@@ -55,7 +55,9 @@ public sealed class JsonModuleReflectionTests
         Assert.True(resolverTypes.Length >= 4, "The four module HTTP resolver contributions must all be inspected.");
         var resolvers = resolverTypes.Select(type => (Resolver: (IJsonTypeInfoResolver)Activator.CreateInstance(type, nonPublic: true)!,
             Owner: type.Assembly.GetName().Name![..^4])).ToArray();
-        var candidates = contexts.SelectMany(context => context.GetType().GetCustomAttributes<JsonSerializableAttribute>().Select(attribute => attribute.Type))
+        var candidates = contexts.SelectMany(context => CustomAttributeData.GetCustomAttributes(context.GetType())
+                .Where(attribute => attribute.AttributeType == typeof(JsonSerializableAttribute))
+                .Select(attribute => attribute.ConstructorArguments[0].Value).OfType<Type>())
             .Concat([typeof(string), typeof(object), typeof(JsonElement), typeof(DateTime), typeof(DateTimeOffset)])
             .Distinct().ToArray();
         Assert.True(candidates.Length >= 100, "The actual generated owner contracts must populate the resolver cross-check.");
