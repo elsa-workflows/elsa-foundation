@@ -81,6 +81,7 @@ internal static class PostgresPublicPreview
         var definition = flowchart ? DirectApprovalWorkflow.BuildFlowchart() : DirectApprovalWorkflow.Build();
         var registry = new WorkflowRegistry().Add(definition);
         Report("host setup");
+        Console.WriteLine("EF command estimates exclude one direct provider batch per admission.");
 
         Contract.ActorRef actor;
         Reset();
@@ -382,27 +383,35 @@ internal static class PostgresPublicPreview
                 Check(await SetSchemaAsync(db, original, changed, token) == 1, "the migration holds the marker before DDL");
                 var waiting = ingress.SendAsync(scope, target, id, kind, cancellationToken: admissionStop.Token).AsTask();
 
-                using var poll = CancellationTokenSource.CreateLinkedTokenSource(token);
-                poll.CancelAfter(TimeSpan.FromSeconds(5));
-                await using var observer = new KernelDb(options);
-                while (!await observer.Database.SqlQuery<bool>($"""
-                    SELECT EXISTS (
-                        SELECT 1 FROM pg_stat_activity activity
-                        WHERE activity.datname = current_database() AND {pid} = ANY(pg_blocking_pids(activity.pid))
-                    ) AS "Value"
-                    """).SingleAsync(poll.Token))
+                try
                 {
-                    if (waiting.IsCompleted) throw new InvalidOperationException("Admission returned before the migration ran.");
-                    await Task.Delay(25, poll.Token);
+                    using var poll = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    poll.CancelAfter(TimeSpan.FromSeconds(5));
+                    await using var observer = new KernelDb(options);
+                    while (!await observer.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (
+                            SELECT 1 FROM pg_stat_activity activity
+                            WHERE activity.datname = current_database() AND {pid} = ANY(pg_blocking_pids(activity.pid))
+                        ) AS "Value"
+                        """).SingleAsync(poll.Token))
+                    {
+                        if (waiting.IsCompleted) throw new InvalidOperationException("Admission returned before the migration ran.");
+                        await Task.Delay(25, poll.Token);
+                    }
+                    Console.WriteLine($"ok the {kind} admission waits on the migration lock");
+                    await db.Database.ExecuteSqlRawAsync(change, token);
+                    await migration.CommitAsync(token);
+                    await RefusesFormat(new(waiting), kind, "The generated-root admission schema is unreadable.");
                 }
-                Console.WriteLine($"ok the {kind} admission waits on the migration lock");
-                await db.Database.ExecuteSqlRawAsync(change, token);
-                await migration.CommitAsync(token);
-                await RefusesFormat(new(waiting), kind, "The generated-root admission schema is unreadable.");
+                finally
+                {
+                    // Observe the contender before rollback makes the original marker writable again.
+                    await admissionStop.CancelAsync();
+                    await ((Task)waiting).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                }
             }
             finally
             {
-                admissionStop.Cancel();
                 await RestoreAsync();
             }
         }

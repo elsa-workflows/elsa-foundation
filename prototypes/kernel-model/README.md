@@ -283,7 +283,8 @@ serialized workflow state and checkpoint revision stay unchanged through replay.
 Between the two owner processes, a separate diagnostic process bound to another tenant checks that it cannot
 send to the workflow or read its checkpoint or journal. This probe uses no measured connection.
 
-The default receipt estimates round trips by adding EF commands and explicit transaction completions. It excludes connection setup. Setup, ownership and journal reads have their own rows.
+The default receipt adds EF commands and explicit transaction completions. It excludes connection setup
+and the provider's direct PostgreSQL batch for each admission. Enable the wire meter for the full count. Setup, ownership and journal reads have their own rows.
 The relational store reads its format marker during schema setup, each nonempty take or retake, and each renewing heartbeat.
 The preview counts these reads in setup and ownership. A relational format advance uses a coordinated stop. Fully stop every
 predecessor process before the first advance if it was built before the marker-lock protocol. The missed-stop check serializes
