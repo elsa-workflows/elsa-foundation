@@ -7,7 +7,7 @@ namespace Elsa.Versioning.Publisher;
 /// <param name="Commit">The commit being built.</param>
 /// <param name="PlanDirectory">The pack job's plan output, with the packed packages in its <see cref="PlanFiles.Packages"/> directory.</param>
 /// <param name="Summary">The step's <c>GITHUB_STEP_SUMMARY</c> file, or null.</param>
-public sealed record PublishOptions(string Repository, string Ref, string Commit, string PlanDirectory, string? Summary);
+public sealed record PublishOptions(string Repository, string Ref, string Commit, string PlanDirectory, string? Summary, string? EvidenceFeed = null);
 
 /// <summary>
 /// The publish job: re-establishes, right before pushing, everything the pack job's plan assumed, then hands the
@@ -50,12 +50,36 @@ public static class PublishCommand
             throw new InvalidOperationException(
                 $"Recomputing {commit} against {GitPublishState.DefaultBranch} {tip ?? "(none)"} gives other versions than the pack job's {PlanFiles.Computation}. Nothing was pushed.");
 
-        var report = await new PackagePublisher(feed, state, log).PublishAsync(
+        var report = await new PackagePublisher(feed, state, log,
+            options.EvidenceFeed is { } feedUrl ? (packed, kind, token) => VerifyDestinationAsync(options.Repository, feedUrl, packed, kind, token) : null).PublishAsync(
             plan, computation, record, Path.Join(options.PlanDirectory, PlanFiles.Packages), cancellationToken);
 
         if (options.Summary is { } summary)
             await File.AppendAllTextAsync(summary, JobSummary.Publish(report), cancellationToken);
 
         return report;
+    }
+
+    private static async Task VerifyDestinationAsync(string repository, string feedUrl, PackedPackage package,
+        PackageOutcomeKind kind, CancellationToken cancellationToken)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("python3") { UseShellExecute = false };
+        start.ArgumentList.Add(Path.Combine(repository, "tools", "versioning", "package-evidence", "verify.py"));
+        start.ArgumentList.Add(package.Path);
+        start.ArgumentList.Add("--destination");
+        start.ArgumentList.Add(kind == PackageOutcomeKind.AlreadyPublished ? "recovered" : "pushed");
+        start.ArgumentList.Add("--feed");
+        start.ArgumentList.Add(feedUrl);
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(start) ?? throw new FeedException("Could not start public package verification.");
+            await process.WaitForExitAsync(cancellationToken);
+            if (process.ExitCode != 0)
+                throw new FeedException("The public package failed digest or original-producer verification; it was not recorded.");
+        }
+        catch (System.ComponentModel.Win32Exception exception)
+        {
+            throw new FeedException("Could not start public package verification.", exception);
+        }
     }
 }

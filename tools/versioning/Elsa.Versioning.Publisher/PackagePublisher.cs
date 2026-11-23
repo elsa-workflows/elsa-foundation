@@ -62,7 +62,8 @@ public sealed record PublishReport(PublishPlan Plan, IReadOnlyList<PackageOutcom
 /// feed with the same fingerprints, and records them, with nobody intervening.
 /// </para>
 /// </remarks>
-public sealed class PackagePublisher(IPackageFeed feed, IPublishState state, TextWriter log)
+public sealed class PackagePublisher(IPackageFeed feed, IPublishState state, TextWriter log,
+    Func<PackedPackage, PackageOutcomeKind, CancellationToken, Task>? verifyDestination = null)
 {
     private const int VersionsShownPerPackage = 5;
 
@@ -89,6 +90,17 @@ public sealed class PackagePublisher(IPackageFeed feed, IPublishState state, Tex
             var outcome = failure is null
                 ? await PushAsync(computed, packed, cancellationToken)
                 : new PackageOutcome(computed.PackageId, packed.Version, PackageOutcomeKind.NotAttempted, "not pushed: the publish stopped at an earlier failure");
+            if (outcome.Recorded && verifyDestination is not null)
+            {
+                try
+                {
+                    await verifyDestination(packed, outcome.Kind, cancellationToken);
+                }
+                catch (FeedException exception)
+                {
+                    outcome = outcome with { Kind = PackageOutcomeKind.Failed, Detail = exception.Message };
+                }
+            }
             outcomes.Add(outcome);
             log.WriteLine($"{outcome.PackageId} {outcome.Version}: {outcome.Kind}. {outcome.Detail}");
             if (outcome.Kind is PackageOutcomeKind.Collision or PackageOutcomeKind.Failed)

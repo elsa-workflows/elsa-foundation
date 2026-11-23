@@ -9,7 +9,7 @@ using Elsa.Versioning.Publisher;
 //          [--remote <name>] [--force-advance <ids> --force-reason <text>] [--github-output <file>] [--summary <file>]
 //        dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- publish \
 //          --ref <GITHUB_REF> --plan-dir <dir> --feed <service index URL> --api-key-env <variable> [--commit <revision>] [--repo <dir>] \
-//          [--remote <name>] [--summary <file>]
+//          [--remote <name>] [--verify-evidence true] [--summary <file>]
 //        dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- repair \
 //          --ref <GITHUB_REF> --commit <GITHUB_SHA> --reason <text> --actor <github.actor> [--repo <dir>] [--remote <name>] [--summary <file>]
 //          (--package-id <id> --feed <service index URL> --api-key-env <variable> [--version <version>] | --main-commit <commit>)
@@ -21,12 +21,12 @@ using Elsa.Versioning.Publisher;
 const string Usage =
     "Usage: plan --ref <ref> --output <dir> [--commit <revision>] [--bootstrap true|false] [--solution <file>] [--repo <dir>] [--remote <name>] " +
     "[--force-advance <ids> --force-reason <text>] [--github-output <file>] [--summary <file>] | " +
-    "publish --ref <ref> --plan-dir <dir> --feed <url> --api-key-env <variable> [--commit <revision>] [--repo <dir>] [--remote <name>] [--summary <file>] | " +
+    "publish --ref <ref> --plan-dir <dir> --feed <url> --api-key-env <variable> [--commit <revision>] [--repo <dir>] [--remote <name>] [--verify-evidence true] [--summary <file>] | " +
     "repair --ref <ref> --commit <revision> --reason <text> --actor <name> [--repo <dir>] [--remote <name>] [--summary <file>] " +
     "(--package-id <id> --feed <url> --api-key-env <variable> [--version <version>] | --main-commit <commit>)";
 
 string[] planOptions = ["--ref", "--output", "--commit", "--bootstrap", "--solution", "--repo", "--remote", "--force-advance", "--force-reason", "--github-output", "--summary"];
-string[] publishOptions = ["--ref", "--plan-dir", "--feed", "--api-key-env", "--commit", "--repo", "--remote", "--summary"];
+string[] publishOptions = ["--verify-evidence", "--ref", "--plan-dir", "--feed", "--api-key-env", "--commit", "--repo", "--remote", "--summary"];
 string[] repairOptions = ["--ref", "--reason", "--actor", "--package-id", "--version", "--main-commit", "--feed", "--api-key-env", "--commit", "--repo", "--remote", "--summary"];
 
 try
@@ -110,7 +110,11 @@ try
         : throw new ArgumentException($"The environment variable {options["--api-key-env"]} holds no API key.");
     using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
     var report = await PublishCommand.RunAsync(
-        new PublishOptions(repository, Required("--ref"), options.GetValueOrDefault("--commit") ?? "HEAD", Required("--plan-dir"), options.GetValueOrDefault("--summary")),
+        new PublishOptions(repository, Required("--ref"), options.GetValueOrDefault("--commit") ?? "HEAD", Required("--plan-dir"), options.GetValueOrDefault("--summary"),
+            options.GetValueOrDefault("--verify-evidence") switch
+            {
+                "true" => Required("--feed"), null => null, _ => throw new ArgumentException("--verify-evidence accepts true when supplied.")
+            }),
         new NuGetFeed(http, new Uri(Required("--feed")), apiKey),
         state,
         Console.Out);

@@ -192,6 +192,9 @@ jobs:
       - name: Check catalog and module README links
         run: python3 tools/maps/check-catalog-links.py
 
+      - name: Verify package evidence reader and recovery
+        run: python3 -m unittest discover -s tools/versioning/package-evidence -p 'test_*.py'
+
       - name: Exercise the tier tooling
         run: |
           python3 -m unittest discover -s tools/ci -p 'test_workflow_scope.py'

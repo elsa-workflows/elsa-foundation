@@ -43,6 +43,40 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
         Assert.Equal((commit, commit), (GitProcess.Run(OriginPath, ["rev-parse", "main"]).Text, Repo.Head));
     }
 
+    [Fact]
+    public async Task Failed_readback_records_only_verified_predecessors_then_recovers_the_existing_bytes()
+    {
+        Edit("src/Http/Http.cs");
+        Edit("src/Tasks/Scheduler.cs");
+        CommitAndPush();
+        var run = PlanAndPack();
+        var verified = new List<string>();
+        var publisher = new PackagePublisher(Feed, State, TextWriter.Null, (package, _, _) =>
+        {
+            if (package.PackageId == "Elsa.Tasks")
+                throw new FeedException("Destination digest mismatch.");
+            verified.Add(package.PackageId);
+            return Task.CompletedTask;
+        });
+        var partial = await publisher.PublishAsync(run.Plan, run.Computation, OriginRecord!, Path.Join(run.Directory, PlanFiles.Packages));
+        Assert.False(partial.Succeeded);
+        Assert.Contains("Elsa.Http", verified);
+        Assert.Equal("4.0.1-preview", RecordedVersions["Elsa.Http"]);
+        Assert.Equal("4.0.0-preview", RecordedVersions["Elsa.Tasks"]);
+
+        var retry = PlanAndPack();
+        var outcomes = new List<PackageOutcomeKind>();
+        var recovering = new PackagePublisher(Feed, State, TextWriter.Null, (_, kind, _) =>
+        {
+            outcomes.Add(kind);
+            return Task.CompletedTask;
+        });
+        var recovered = await recovering.PublishAsync(retry.Plan, retry.Computation, OriginRecord!, Path.Join(retry.Directory, PlanFiles.Packages));
+        Assert.True(recovered.Succeeded, recovered.Failure);
+        Assert.Contains(PackageOutcomeKind.AlreadyPublished, outcomes);
+        Assert.Equal("4.0.1-preview", RecordedVersions["Elsa.Tasks"]);
+    }
+
     /// <summary>A commit that changes no package pushes nothing and writes no record revision.</summary>
     [Fact]
     public async Task A_commit_that_changes_no_package_publishes_nothing()

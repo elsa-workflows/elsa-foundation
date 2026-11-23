@@ -330,3 +330,31 @@ The manual, default read-only exact20 recovery path for consolidation M4 is docu
 the normal publishers. This incident path does not change the normal computation/repair rules above. The incident is
 closed: its workflow, `publish-exact20-recovery.yml`, was deleted with the lean CI (20 Nov 2026), and `recover-exact20
 --execute` only runs from that workflow, so only the read-only preflight remains.
+
+## Verify a Foundation preview package
+
+Download the exact ID and version from the [Foundation Feedz service index](https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json).
+Starting with versions produced by the evidence-enabled Packages workflow, a GitHub-authenticated reader with public read access,
+Python 3 and the GitHub CLI can obtain the signed CycloneDX 1.6 inventory from a checkout of this repository:
+
+```sh
+python3 tools/versioning/package-evidence/verify.py "$PACKAGE" --output package.cdx.json
+```
+
+The verifier checks SLSA build provenance and the CycloneDX predicate for the downloaded SHA-256. Both must originate
+from this repository’s `.github/workflows/packages.yml` on `refs/heads/main`, at the commit in the package’s nuspec.
+The inventory root binds the same file hash, ID and version. Its metadata names the original Actions run and build
+attempt. GitHub indexes attestations by digest, independently of the lifetime of the Actions artifact. The inventory
+contains one component per packed file with its SHA-256. Under each restore target it distinguishes declared dependency
+ranges, the producer’s resolved transitive graph and excluded producer-only inputs. A tool also lists its shipped
+`.deps.json` runtime closure. Template project declarations retain their original ranges. Generate a separate SBOM
+from the final restored/published application to capture a consumer’s runtime choices.
+
+Only affected packages generate new evidence. The build validates inventory schemas and the original locked restore.
+A main publish or authorized bootstrap signs the package bytes and inventory before the first push. The existing state
+and CI gates still determine whether a package can be published. A feed acknowledgment is followed by an anonymous
+download and digest check before write-back. On a duplicate with the expected input fingerprint, identical bytes use the
+same evidence. If a previous producer published different ZIP bytes for those inputs, its own signatures must verify.
+A failed verification stops the publish and preserves earlier verified successes. Previously recorded versions keep
+their existing evidence status; an older version without signatures will fail the verifier. Stable release composition
+and promotion are tracked in [#2085](https://github.com/elsa-workflows/elsa-foundation/issues/2085).
