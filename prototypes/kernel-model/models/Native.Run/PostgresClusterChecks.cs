@@ -51,7 +51,7 @@ internal static class PostgresClusterChecks
                 OnPreparedCheckpoint = (turn, _, _) =>
                 {
                     if (!peer) return;
-                    if ((flowchart && turn.Row is { Revision: 1 } && turn.Sent.Any(m => m.InboxKey.Scope == EfStore.RootSelfScope)) ||
+                    if ((flowchart && turn.Row is { Revision: 1 } && turn.Sent.Any(m => m.InboxKey.Scope == -1)) ||
                         (statechart && turn.Row is { Revision: 2 }))
                         emitting = new InstanceRef(turn.Instance).Partition;
                 },
@@ -63,7 +63,7 @@ internal static class PostgresClusterChecks
                 OnTurn = (_, messages, _) =>
                 {
                     if (!peer)
-                        foreach (var m in messages.Where(m => statechart ? m.Id == PostgresStatechartPreview.Shipment : m.InboxKey.Scope == EfStore.RootSelfScope))
+                        foreach (var m in messages.Where(m => statechart ? m.Id == PostgresStatechartPreview.Shipment : m.InboxKey.Scope == -1))
                             applied.AddOrUpdate(m.InboxKey, 1, (_, count) => count + 1);
                 }
             };
