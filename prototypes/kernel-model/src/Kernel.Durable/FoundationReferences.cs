@@ -295,10 +295,12 @@ public sealed partial class InMemoryStore
     {
         if (_referenceBirths.Count == 0) return;
         var address = new CreationAddress(row.Id, row.Creation);
-        if (!_referenceBirths.ContainsKey(address)) return;
+        if (previous is not null && (previous.Creation != row.Creation || previous.Model != row.Model))
+            RemoveRunHistory(new(previous.Id, previous.Creation), previous.Model);
+        if (!_referenceBirths.TryGetValue(address, out var binding)) return;
         if (row.Retired)
         {
-            RemoveFoundationMetadata(address);
+            RemoveFoundationMetadata(address, row.Model);
             return;
         }
 
@@ -330,10 +332,13 @@ public sealed partial class InMemoryStore
             _foundationEnds[address] = new(row.Revision, now);
         if (turn.OpensPark)
             _foundationParks[address] = new(row.Revision, now);
+
+        ProjectRunHistory(binding, row, now);
     }
 
-    private void RemoveFoundationMetadata(CreationAddress address)
+    private void RemoveFoundationMetadata(CreationAddress address, string actorType)
     {
+        RemoveRunHistory(address, actorType);
         _foundationEnds.Remove(address);
         _foundationHeaders.Remove(address);
         _foundationParks.Remove(address);
