@@ -41,7 +41,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         await using var db = create();
         if (!db.Database.IsNpgsql()) throw new InvalidOperationException("Root admission requires PostgreSQL.");
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
+        await EfStore.LockCompatibleStoreFormatAsync(db, cancellationToken);
         // A second Embedded process can open the same preview database while the first is installing.
         await db.Database.ExecuteSqlRawAsync("""
             SELECT pg_advisory_xact_lock(48602345, 1);

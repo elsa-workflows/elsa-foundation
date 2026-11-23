@@ -43,15 +43,26 @@ for protocol in 1 3 4; do
         sleep 0.5
     done
     [[ $(sql "SELECT to_regclass('\"FoundationActorList\"') IS NULL") == t ]]
+    checkpoint='SELECT jsonb_agg(to_jsonb(i) - $$NextJobGeneration$$ ORDER BY i."Id") FROM "Instances" i'
+    original_checkpoint=$(sql "$checkpoint")
+    [[ -n "$original_checkpoint" ]]
     projected='SELECT count(*) FROM "FoundationActorList" l JOIN "Instances" i
         ON l."Tenant" = i."FoundationTenant" AND l."Reference" = i."FoundationReference"
-        WHERE l."Header" = i."FoundationHeader" AND l."Status" = i."Status"'
+        WHERE l."Header" = i."FoundationHeader" AND l."Status" = i."Status"
+            AND l."EndedAt" IS NOT DISTINCT FROM i."FoundationTerminalAt"
+            AND l."Type" = kernel_actor_list_filter(i."FoundationHeader")-> $$Model$$
+            AND l."Labels" = kernel_actor_list_filter(i."FoundationHeader")-> $$Labels$$'
+    check_backfill() {
+        [[ $(sql "$marker") == "3|$next|1" && $(sql "$checkpoint") == "$original_checkpoint" ]]
+        [[ $(sql 'SELECT count(*) FROM "Instances" WHERE "NextJobGeneration" IS NOT NULL') == 0 ]]
+        [[ $(sql "$projected") == 1 && $(sql 'SELECT count(*) FROM "FoundationActorList"') == 1 ]]
+    }
     [[ $(dotnet "$upgrade" postgres-profile-upgrade) == advanced ]]
-    [[ $(sql "$marker") == "3|$next|1" && $(sql "$projected") == 1 ]]
+    check_backfill
     # Recreate the outcome of an earlier coordinator that advanced the marker without installing the projection.
     sql 'DROP TRIGGER kernel_project_root_actor_list ON "Instances"; DROP TABLE "FoundationActorList"'
     [[ $(dotnet "$upgrade" postgres-profile-upgrade) == "already current" ]]
-    [[ $(sql "$marker") == "3|$next|1" && $(sql "$projected") == 1 ]]
+    check_backfill
     [[ $(dotnet "$upgrade" postgres-profile-upgrade) == "already current" ]]
     if [[ "$protocol" != 1 ]]; then
         [[ $(sql "$private") == "$original" ]]

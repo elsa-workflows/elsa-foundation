@@ -18,6 +18,7 @@ public sealed partial class EfStore
         var next = new StoreFormat(3, continuation ? stored.MessageProtocol : 2, 1);
         var advanced = await AdvanceStoreFormatAsync(expected, next, async (transaction, token) =>
         {
+            await LockRootSchemaAsync(transaction, token);
             await AddGenerationColumns(transaction, token);
             if (continuation) await InstallRootSelfAsync(transaction, token);
             await BackfillRootActorListAsync(transaction, token);
@@ -29,17 +30,21 @@ public sealed partial class EfStore
             var current = await ReadStoreFormatAsync(db, FormatLock.Shared, cancellationToken);
             if (current != next)
                 throw new StoreFormatException($"Cannot prepare the root actor projection for {next}. The store records {current}.");
+            await LockRootSchemaAsync(db, cancellationToken);
             await BackfillRootActorListAsync(db, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
         return advanced;
     }
 
+    // Root admission takes this lock after the format marker and before any root-table DDL.
+    private static Task LockRootSchemaAsync(KernelDb db, CancellationToken token) => db.Database.IsNpgsql()
+        ? db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(48602345, 1)", token)
+        : Task.CompletedTask;
+
     private static async Task BackfillRootActorListAsync(KernelDb db, CancellationToken token)
     {
         if (!db.Database.IsNpgsql()) return;
-        // Serialize with PostgresRootAdmission.InstallAsync. The projection is specific to generated roots.
-        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(48602345, 1)", token);
         var missing = await db.Database.SqlQueryRaw<bool>("""
             SELECT to_regclass('"FoundationRootBirths"') IS NOT NULL
                 AND to_regclass('"FoundationActorList"') IS NULL AS "Value"
