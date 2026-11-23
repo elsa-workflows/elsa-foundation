@@ -12,6 +12,11 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["sqlite-plan-projection", "inspect-neighbor", var neighborFile, var neighborPlan, var neighborActor])
+    return await SqlitePlanProjectionChecks.InspectNeighborAsync(neighborFile, neighborPlan, neighborActor);
+if (args is ["sqlite-plan-projection", "build", var planFile]) return await SqlitePlanProjectionChecks.BuildAsync(planFile);
+if (args is ["sqlite-plan-projection", "inspect", var existingPlanFile, var issuedPlan, var expectedDigest])
+    return await SqlitePlanProjectionChecks.InspectAsync(existingPlanFile, issuedPlan, expectedDigest);
 if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flowchart-peer"), var flowSize] && int.TryParse(flowSize, out var flowPartitions))
     return await PostgresClusterChecks.RunAsync(flowPartitions, flowClusterMode == "pg-cluster-flowchart-peer", flowchart: true);
 if (args is [var clusterMode and ("pg-cluster-roots" or "pg-cluster-peer" or "pg-cluster-crash"), var size] && int.TryParse(size, out var clusterPartitions))
@@ -71,13 +76,14 @@ if (args is ["pg-durable-flowchart-preview", "restart", ..])
     Console.Error.WriteLine("Durable restart requires a route, actor, bookmark, positive previous epoch and positive waiting revision.");
     return 2;
 }
-if (args is [var timerPreview and ("pg-delay-preview" or "pg-durable-delay-preview"), var timerWriter and ("owned" or "ef"), var timerFence and ("checked" or "in-batch"), .. var timerArgs])
+if (args is [var timerPreview and ("pg-delay-preview" or "pg-durable-delay-preview" or "pg-delay-recall-preview"), var timerWriter and ("owned" or "ef"), var timerFence and ("checked" or "in-batch"), .. var timerArgs])
 {
     var persistence = timerPreview == "pg-durable-delay-preview" ? Modes.Durable : Modes.Balanced;
-    if (timerArgs is ["birth"]) return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", persistence, null);
+    var recall = timerPreview == "pg-delay-recall-preview";
+    if (timerArgs is ["birth"]) return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", persistence, null, recall);
     if (timerArgs is ["restart", var timerRef, var timerEpoch, var timerDue, var timerHandle, var timerCursor] &&
         long.TryParse(timerEpoch, out var oldTimerEpoch) && oldTimerEpoch > 0 && long.TryParse(timerDue, out var savedDue))
-        return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", persistence, new(timerRef, oldTimerEpoch, savedDue, timerHandle, timerCursor));
+        return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", persistence, new(timerRef, oldTimerEpoch, savedDue, timerHandle, timerCursor), recall);
     Console.Error.WriteLine("Use birth or restart <actor> <positive previous epoch> <due> <handle> <cursor>.");
     return 2;
 }

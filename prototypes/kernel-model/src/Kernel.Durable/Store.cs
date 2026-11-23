@@ -166,6 +166,7 @@ public sealed record TurnCommit(
     IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<InboxKey>? Held = null, bool Delete = false)
 {
     internal FoundationHeaderChange? FoundationHeader { get; init; }
+    internal IReadOnlySet<InboxKey>? FoundationSelfRecalls { get; init; }
     internal HashSet<InboxKey>? FoundationHeldPromotions { get; init; }
     internal IReadOnlyList<InboxKey>? FoundationReleasedHolds { get; init; }
     internal bool OpensPark { get; init; }
