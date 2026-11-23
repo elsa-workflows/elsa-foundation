@@ -1,12 +1,14 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Npgsql;
 
 namespace Kernel.EntityFramework;
 
 /// <summary>Store operations for externally generated root starts in the single-host PostgreSQL preview.
 /// The calling host supplies the tenant from its bound ingress scope. Schema installation is explicit.</summary>
-internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow)
+internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow, bool lockOrdinaryWrites = false)
 {
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
@@ -101,8 +103,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var name = tenant + "_" + Guid.NewGuid().ToString("N");
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
-        var issuer = await db.Database.SqlQueryRaw<Issuer>("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """)
-            .SingleAsync(cancellationToken);
+        var issuer = await ReadIssuerAsync(db, cancellationToken);
         var actor = InstanceRef.In(InstanceRef.Spread(name, issuer.Partitions), name);
         var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
         var windowMs = (long)window.TotalMilliseconds;
@@ -162,6 +163,56 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                 """).SingleAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return new(existing, true);
+        }
+    }
+
+    private async Task<Issuer> ReadIssuerAsync(KernelDb db, CancellationToken token)
+    {
+        if (!lockOrdinaryWrites)
+            return await db.Database.SqlQueryRaw<Issuer>("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """).SingleAsync(token);
+
+        var issuer = await ReadGuardedAdmissionAsync(db, new("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """),
+            static reader => new Issuer(reader.GetFieldValue<byte[]>(0), reader.GetInt32(1)), token);
+        return issuer ?? throw new InvalidOperationException("The generated-root issuer is missing.");
+    }
+
+    private static async Task<TRow?> ReadGuardedAdmissionAsync<TRow>(KernelDb db, NpgsqlBatchCommand lookup,
+        Func<NpgsqlDataReader, TRow> read, CancellationToken token) where TRow : class
+    {
+        var current = db.Database.CurrentTransaction!;
+        try
+        {
+            // PostgreSQL executes the first statement before it parses or binds the second. The batch holds
+            // the marker before touching either source table, matching the lock order of schema migration.
+            var marker = new NpgsqlBatchCommand("""
+                SELECT "StoreSchema", "MessageProtocol", "JournalCodec" FROM "KernelStoreVersions"
+                WHERE "Id" = $1 FOR SHARE
+                """);
+            marker.Parameters.Add(new NpgsqlParameter<int> { TypedValue = StoreVersionEntity.MarkerId });
+            var transaction = (NpgsqlTransaction)current.GetDbTransaction();
+            await using var batch = new NpgsqlBatch(transaction.Connection, transaction) { BatchCommands = { marker, lookup } };
+            if (db.Database.GetCommandTimeout() is { } timeout)
+                batch.Timeout = timeout;
+            await using var reader = await batch.ExecuteReaderAsync(token);
+            if (!await reader.ReadAsync(token))
+                throw new StoreFormatException("The kernel store version marker is missing.");
+            EfStore.RequireSnapshotFormat(db.RequiredFormat, reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2));
+            if (!await reader.NextResultAsync(token))
+                throw new InvalidOperationException("The guarded root lookup did not return a result.");
+            return await reader.ReadAsync(token) ? read(reader) : null;
+        }
+        catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
+        {
+            throw new StoreFormatException("The generated-root admission schema is unreadable.", error);
+        }
+        catch (PostgresException error) when (
+            error.SqlState == PostgresErrorCodes.FeatureNotSupported ||
+            error.SqlState.StartsWith("42", StringComparison.Ordinal) && error.SqlState != PostgresErrorCodes.InsufficientPrivilege)
+        {
+            // A shape error can surface while the batch is being read or drained, even on a cached plan.
+            await current.RollbackAsync(token);
+            await EfStore.RequireStoreVersionsAsync(db, token);
+            throw;
         }
     }
 

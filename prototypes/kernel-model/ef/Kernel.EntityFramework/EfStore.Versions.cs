@@ -72,7 +72,7 @@ public sealed partial class EfStore
     internal static Task LockCompatibleStoreFormatAsync(KernelDb db, CancellationToken cancellationToken)
         => RequireStoreVersionsAsync(db, cancellationToken, FormatLock.Shared);
 
-    private static void RequireSnapshotFormat(StoreFormat expected, int? schema, int? protocol, int? codec)
+    internal static void RequireSnapshotFormat(StoreFormat expected, int? schema, int? protocol, int? codec)
     {
         if (schema is null || protocol is null || codec is null)
             throw new StoreFormatException("The kernel store version marker is missing.");

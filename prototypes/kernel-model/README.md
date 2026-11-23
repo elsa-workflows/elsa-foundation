@@ -283,13 +283,27 @@ serialized workflow state and checkpoint revision stay unchanged through replay.
 Between the two owner processes, a separate diagnostic process bound to another tenant checks that it cannot
 send to the workflow or read its checkpoint or journal. This probe uses no measured connection.
 
-The default receipt estimates round trips by adding EF commands and explicit transaction completions. It excludes connection setup. Setup, ownership and journal reads have their own rows.
+The default receipt adds EF commands and explicit transaction completions. It excludes connection setup
+and the provider's direct PostgreSQL batch for each admission. Enable the wire meter for the full count. Setup, ownership and journal reads have their own rows.
 The relational store reads its format marker during schema setup, each nonempty take or retake, and each renewing heartbeat.
 The preview counts these reads in setup and ownership. A relational format advance uses a coordinated stop. Fully stop every
 predecessor process before the first advance if it was built before the marker-lock protocol. The missed-stop check serializes
 only readers that already use that lock. The migration race fixture runs such a reader against the previous stored format.
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
+
+The Embedded preview composes `IIngress` through `EfStore.OpenPreviewRootIngressAsync`.
+A trusted host supplies a bound scope, the actor type and the receipt retention window. The provider accepts
+durable starts for that type and ordinary direct input to exact roots. Opening the adapter checks the
+installed schema. Each admission holds the shared store-format lock in its write transaction.
+A PostgreSQL batch first locks the marker and then reads the issuer or exact root in one round trip. The ordinary adapter refuses privileged controls. Held requests and event-based starts fall outside
+this adapter's scope.
+
+For a format-refusal check, run the Native `pg-core-preview birth` phase in a fresh disposable database,
+then run `pg-core-preview format-probe <reference>` in a new process against the same database.
+The probe verifies typed refusal after the format changes. It also starts admission while a migration
+holds the marker, confirms the admission is waiting, then runs the migration's DDL. Both write paths
+must refuse the changed schema without a lock cycle. The probe restores the marker and tables. Its accepted control writes leave test data in that database.
 
 A host can use `EfStore.OpenPreviewRootReadsAsync` to open `IActorReads` for an already-installed ordinary
 PostgreSQL generated-root store. Compose the store with the public `new KernelDb(options)` PostgreSQL context.
@@ -501,7 +515,8 @@ Use `ef` for the EF writer, or `checked` for a separate fence statement. The mea
 admission and ends at the fenced terminal checkpoint, on an already-bound Embedded owner with warmed connections.
 The report lists bind, heartbeat and take separately. Schema setup, replay and verification reads are outside
 the measured interval. The meter reports wire direction turns (round trips), PostgreSQL Sync/Query groups, EF
-commands and transaction completions separately.
+commands and transaction completions separately. The provider's direct admission batch appears in the wire
+count. EF command counters cover commands executed by EF.
 
 PostgreSQL 17 measured **16 round trips in-batch and 17 checked** with both writers. Each public admission cost
 3 trips. Polling and the terminal commit used 13 in-batch or 14 checked. The initial qualified path took 22 and

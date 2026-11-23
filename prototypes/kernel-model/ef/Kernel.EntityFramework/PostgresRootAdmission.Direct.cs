@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Kernel.EntityFramework;
 
@@ -78,7 +79,9 @@ internal sealed partial class PostgresRootAdmission
             if (!db.UsesRootReplyProtocol) return await RefuseAsync(DirectResult.Refused);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
         }
-        var address = await RootAddressAsync(db, tenant, reference, cancellationToken);
+        var address = lockOrdinaryWrites
+            ? await GuardedRootAddressAsync(db, tenant, reference, cancellationToken)
+            : await RootAddressAsync(db, tenant, reference, cancellationToken);
         if (address is null) return await RefuseAsync(DirectResult.MissingTarget);
         var status = await AdmissionStatusAsync(db, address, tenant, reference, cancellationToken, requireCheckpoint: reply is not null);
         if (status is null) return await RefuseAsync(DirectResult.MissingTarget);
@@ -150,6 +153,16 @@ internal sealed partial class PostgresRootAdmission
             SELECT "Actor" AS "Id", "Creation" FROM "FoundationRootBirths"
             WHERE "Tenant" = {tenant} AND "Reference" = {reference}
             """).SingleOrDefaultAsync(cancellationToken);
+
+    private static Task<CreationAddress?> GuardedRootAddressAsync(KernelDb db, string tenant, string reference, CancellationToken token)
+    {
+        var lookup = new NpgsqlBatchCommand("""
+            SELECT "Actor", "Creation" FROM "FoundationRootBirths" WHERE "Tenant" = $1 AND "Reference" = $2
+            """);
+        lookup.Parameters.Add(new NpgsqlParameter<string> { TypedValue = tenant });
+        lookup.Parameters.Add(new NpgsqlParameter<string> { TypedValue = reference });
+        return ReadGuardedAdmissionAsync(db, lookup, static reader => new CreationAddress(reader.GetString(0), reader.GetInt64(1)), token);
+    }
 
     // AdmissionStatusAsync already holds a share lock on this exact checkpoint until the receipt lookup ends.
     private static Task<bool> IsTimedFaultTerminalAsync(KernelDb db, CreationAddress address, string tenant, string reference,

@@ -16,9 +16,10 @@ internal static class PostgresPublicPreview
     {
         var birth = phase is "birth" or "hold-owner";
         var tenantProbe = phase == "tenant-probe";
+        var formatProbe = phase == "format-probe";
         if ((phase, suppliedReference, suppliedBookmark, priorEpoch, priorPid, originalUntil) is not
             (("birth" or "hold-owner", null, null, 0, 0, 0) or
-             ("tenant-probe", not null, null, 0, 0, 0) or
+             ("tenant-probe" or "format-probe", not null, null, 0, 0, 0) or
              ("restart" or "terminal", not null, not null, 0, 0, 0) or
              ("standby", not null, not null, > 0, > 0, > 0)))
             throw new ArgumentException("Invalid PostgreSQL Core Preview phase arguments.");
@@ -56,26 +57,31 @@ internal static class PostgresPublicPreview
             await store.CreateAsync();
             await admission.InstallAsync(stop);
         }
-        var cursor = await admission.OpenJournalCursorAsync(stop);
-        var tail = new PostgresRootReads(store, cursor, 1);
-        var foundation = new PostgresPreviewFoundation(admission, tail, PublicActor.ActorType);
+        var ingress = await store.OpenPreviewRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1), stop);
+        var reads = await store.OpenPreviewRootReadsAsync(1, stop);
         if (tenantProbe)
         {
             var otherActor = new Contract.ActorRef(suppliedReference!);
             Check(PostgresRootAdmission.IsIssuedReferenceShape(otherActor.Id), "foreign host received a valid reference shape");
-            var unavailable = await foundation.SendAsync(scope, new Contract.Target.Ref(otherActor), "missing", "notice",
+            var unavailable = await ingress.SendAsync(scope, new Contract.Target.Ref(otherActor), "missing", "notice",
                 cancellationToken: stop);
             Check(unavailable is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch, Actor: null },
                 "the foreign host cannot send to the existing actor");
-            Check(await foundation.GetAsync(scope, otherActor, stop) is null &&
-                (await foundation.TailAsync(scope, otherActor, cancellationToken: stop)).Items.Count == 0,
+            Check(await reads.GetAsync(scope, otherActor, stop) is null &&
+                (await reads.TailAsync(scope, otherActor, cancellationToken: stop)).Items.Count == 0,
                 "the foreign host cannot read the existing actor or journal");
             return 0;
         }
-        var workflow = new WorkflowRuntime(foundation, foundation);
+        if (formatProbe)
+        {
+            await CheckIngressFormatAsync(data, ingress, scope, new(suppliedReference!), stop);
+            return 0;
+        }
+        var workflow = new WorkflowRuntime(ingress, reads);
         var definition = flowchart ? DirectApprovalWorkflow.BuildFlowchart() : DirectApprovalWorkflow.Build();
         var registry = new WorkflowRegistry().Add(definition);
         Report("host setup");
+        Console.WriteLine("EF command estimates exclude one direct provider batch per admission.");
 
         Contract.ActorRef actor;
         Reset();
@@ -112,7 +118,7 @@ internal static class PostgresPublicPreview
 
             Reset();
             var frame = await ReadFrame();
-            Check((await foundation.GetAsync(scope, actor, stop)) is { Header.Status: Contract.ActorStatus.Running, AsOf: > 0 },
+            Check((await reads.GetAsync(scope, actor, stop)) is { Header.Status: Contract.ActorStatus.Running, AsOf: > 0 },
                 "public actor read sees the running checkpoint");
             Report("inspect first wait");
 
@@ -145,7 +151,7 @@ internal static class PostgresPublicPreview
                 Check(waiting.Variables["joinCount"]!.GetValue<int>() == 0 && !waiting.Variables["automaticPath"]!.GetValue<bool>(),
                     "the approval path still waits and the other path has not run");
             }
-            Check((await foundation.TailAsync(scope, actor, bookmark, stop)) is { Items.Count: 0, AsOf: > 0 },
+            Check((await reads.TailAsync(scope, actor, bookmark, stop)) is { Items.Count: 0, AsOf: > 0 },
                 "the previous process's bookmark resumes at the end of revision 2");
             var frame = await ReadFrame();
             Report("inspect after restart");
@@ -160,12 +166,19 @@ internal static class PostgresPublicPreview
             Report("replay including admission");
             var same = await ReadCheckpoint();
             Check(same.Revision == before.Revision && same.State == before.State, "replay preserved the serialized workflow state and checkpoint revision");
-            Check((await foundation.TailAsync(scope, actor, bookmark, stop)).Items.Count == 0, "replay added no journal entries");
+            Check((await reads.TailAsync(scope, actor, bookmark, stop)).Items.Count == 0, "replay added no journal entries");
             if (phase == "terminal")
             {
+                foreach (var command in new[] { Contract.Kinds.Suspend, Contract.Kinds.Terminate, Contract.Kinds.Delete })
+                {
+                    var unauthorized = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "restricted", command,
+                        cancellationToken: stop);
+                    Check(unauthorized is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null, Reason: null },
+                        $"ordinary provider ingress refuses {command} on a live root");
+                }
                 foreach (var invalidKind in new[] { new string('x', 257), "input\ud800" })
                 {
-                    var rejected = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "invalid-kind", invalidKind,
+                    var rejected = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "invalid-kind", invalidKind,
                         cancellationToken: stop);
                     Check(rejected is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null, Reason: null },
                         "invalid ordinary kind metadata on the live root returned a generic refusal");
@@ -177,12 +190,12 @@ internal static class PostgresPublicPreview
                     ("expanded-start", normalStart with { Input = new string('\0', 3 * 1024 * 1024) })
                 })
                 {
-                    var rejected = await foundation.SendAsync(scope, new Contract.Target.Start(spec), operation, Contract.Kinds.Start,
+                    var rejected = await ingress.SendAsync(scope, new Contract.Target.Start(spec), operation, Contract.Kinds.Start,
                         cancellationToken: stop);
                     Check(rejected is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null, Reason: null },
                         "invalid metadata or oversized storage framing on a supported start returned a generic refusal");
                 }
-                var overflow = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "oversized", "notice",
+                var overflow = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "oversized", "notice",
                     new string('\0', 3 * 1024 * 1024), cancellationToken: stop);
                 Check(overflow is { Outcome: Contract.AdmissionOutcome.Refused, Reason: null, Actor: null },
                     "a valid root's physical size refusal has no target-mismatch reason");
@@ -193,7 +206,7 @@ internal static class PostgresPublicPreview
             Message? queued = null;
             if (phase == "terminal")
             {
-                var extra = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "already-queued", CompositeSignal.Kind,
+                var extra = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "already-queued", CompositeSignal.Kind,
                     Json.Write(new CompositeSignal(frame, "approve", "third")), cancellationToken: stop);
                 Check(extra.Outcome == Contract.AdmissionOutcome.Accepted && extra.Actor == actor, "third input was admitted while the actor was still running");
                 var diagnosticAdmission = new PostgresRootAdmission(() => new(data), TimeSpan.Zero);
@@ -229,7 +242,7 @@ internal static class PostgresPublicPreview
             if (flowchart)
                 Check(entries.Count(e => Decode(e) == "end") == 1 && Decode(entries[^1]) == "end",
                     "the public Flowchart tail ends with one lifecycle entry");
-            Check((await foundation.GetAsync(scope, actor, stop)) is { Header.Status: Contract.ActorStatus.Finished, Header.EndedAt: > 0 },
+            Check((await reads.GetAsync(scope, actor, stop)) is { Header.Status: Contract.ActorStatus.Finished, Header.EndedAt: > 0 },
                 "public actor read sees the terminal checkpoint");
             Report("inspect final checkpoint and journal");
 
@@ -254,7 +267,7 @@ internal static class PostgresPublicPreview
                 var after = await ReadCheckpoint();
                 Check(receipt is { Done: true, Payload: null, Start: null } && after.Revision == finished.Revision &&
                     after.State == finished.State && after.TerminalAt == finished.TerminalAt && after.TerminalRevision == finished.TerminalRevision &&
-                    (await foundation.TailAsync(scope, actor, lastBookmark, stop)).Items.Count == 0 &&
+                    (await reads.TailAsync(scope, actor, lastBookmark, stop)).Items.Count == 0 &&
                     await db.Partitions.Where(p => p.Id == home).Select(p => p.Position).SingleAsync(stop) == position,
                     "fenced terminal cleanup settled the queued occurrence without changing state, mark, journal or position");
                 Check(await Approve("already-queued", "replayed", frame) == Contract.AdmissionOutcome.Duplicate &&
@@ -267,7 +280,7 @@ internal static class PostgresPublicPreview
 
         async Task<Contract.AdmissionOutcome> Approve(string id, string name, string frame)
         {
-            var receipt = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), id, CompositeSignal.Kind,
+            var receipt = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), id, CompositeSignal.Kind,
                 Json.Write(new CompositeSignal(frame, "approve", name)), cancellationToken: stop);
             if (receipt.Outcome is Contract.AdmissionOutcome.Accepted or Contract.AdmissionOutcome.Duplicate)
                 Check(receipt.Actor == actor, $"the {id} receipt names the original workflow");
@@ -286,7 +299,7 @@ internal static class PostgresPublicPreview
             var entries = new List<Contract.JournalEntry>();
             for (var page = 0; page < 32; page++)
             {
-                var read = await foundation.TailAsync(scope, actor, from, stop);
+                var read = await reads.TailAsync(scope, actor, from, stop);
                 if (read.Items.Count == 0) return (entries, from);
                 entries.AddRange(read.Items);
                 from = read.Next ?? throw new InvalidOperationException("A nonempty journal page must have a bookmark.");
@@ -322,6 +335,118 @@ internal static class PostgresPublicPreview
             if (wire is not null)
                 Console.WriteLine($"wire {operation}: {wire.Trips - startTrips} TCP direction turns, {wire.ProtocolRequests - startGroups} PostgreSQL Sync/Query groups, {wire.Connections - startConnections} new TCP connections");
             Console.WriteLine($"{operation}: {counter.Commands} commands, {counter.Transactions.Ended} transaction completions, EF round-trip estimate {counter.Commands + counter.Transactions.Ended}");
+        }
+    }
+
+    private static async Task CheckIngressFormatAsync(DbContextOptions<KernelDb> options, Contract.IIngress ingress,
+        Contract.BoundScope scope, Contract.ActorRef actor, CancellationToken token)
+    {
+        // Run against a disposable database immediately after birth has exited.
+        var start = new Contract.Target.Start(new(PublicActor.ActorType, "definition"));
+        var direct = new Contract.Target.Ref(actor);
+        await using var db = new KernelDb(options);
+        var original = db.RequiredFormat.StoreSchema;
+        var changed = original + 1;
+        try
+        {
+            Check(await SetSchemaAsync(db, original, changed, token) == 1, "the fixture advances only its expected marker");
+            await RefusesFormat(ingress.SendAsync(scope, start, "format-new-start", Contract.Kinds.Start, cancellationToken: token),
+                Contract.Kinds.Start, $"Stored schema={changed},");
+            await RefusesFormat(ingress.SendAsync(scope, direct, "format-direct", "notice", cancellationToken: token),
+                "notice", $"Stored schema={changed},");
+        }
+        finally
+        {
+            await RestoreAsync();
+        }
+
+        await CheckMigrationOverlapAsync(start, "format-new-start", Contract.Kinds.Start, """
+            ALTER TABLE "FoundationRootIssuer" RENAME TO "FoundationRootIssuer_FormatProbe"
+            """);
+        await CheckMigrationOverlapAsync(direct, "format-direct", "notice", """
+            ALTER TABLE "FoundationRootBirths" RENAME TO "FoundationRootBirths_FormatProbe"
+            """);
+
+        Check((await ingress.SendAsync(scope, start, "format-new-start", Contract.Kinds.Start, cancellationToken: token)).Outcome ==
+            Contract.AdmissionOutcome.Accepted, "the refused start did not claim its receipt");
+        Check((await ingress.SendAsync(scope, direct, "format-direct", "notice", cancellationToken: token)).Outcome ==
+            Contract.AdmissionOutcome.Accepted, "the refused direct input did not claim its receipt");
+
+        async Task CheckMigrationOverlapAsync(Contract.Target target, string id, string kind, string change)
+        {
+            using var admissionStop = CancellationTokenSource.CreateLinkedTokenSource(token);
+            try
+            {
+                await using var migration = await db.Database.BeginTransactionAsync(token);
+                await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '3s'", token);
+                var pid = await db.Database.SqlQueryRaw<int>("""SELECT pg_backend_pid() AS "Value" """).SingleAsync(token);
+                Check(await SetSchemaAsync(db, original, changed, token) == 1, "the migration holds the marker before DDL");
+                var waiting = ingress.SendAsync(scope, target, id, kind, cancellationToken: admissionStop.Token).AsTask();
+
+                try
+                {
+                    using var poll = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    poll.CancelAfter(TimeSpan.FromSeconds(5));
+                    await using var observer = new KernelDb(options);
+                    while (!await observer.Database.SqlQuery<bool>($"""
+                        SELECT EXISTS (
+                            SELECT 1 FROM pg_stat_activity activity
+                            WHERE activity.datname = current_database() AND {pid} = ANY(pg_blocking_pids(activity.pid))
+                        ) AS "Value"
+                        """).SingleAsync(poll.Token))
+                    {
+                        if (waiting.IsCompleted) throw new InvalidOperationException("Admission returned before the migration ran.");
+                        await Task.Delay(25, poll.Token);
+                    }
+                    Console.WriteLine($"ok the {kind} admission waits on the migration lock");
+                    await db.Database.ExecuteSqlRawAsync(change, token);
+                    await migration.CommitAsync(token);
+                    await RefusesFormat(new(waiting), kind, "The generated-root admission schema is unreadable.");
+                }
+                finally
+                {
+                    // Observe the contender before rollback makes the original marker writable again.
+                    await admissionStop.CancelAsync();
+                    await ((Task)waiting).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                }
+            }
+            finally
+            {
+                await RestoreAsync();
+            }
+        }
+
+        async Task RestoreAsync()
+        {
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await using var restoration = new KernelDb(options);
+            await restoration.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE IF EXISTS "FoundationRootIssuer_FormatProbe" RENAME TO "FoundationRootIssuer";
+                ALTER TABLE IF EXISTS "FoundationRootBirths_FormatProbe" RENAME TO "FoundationRootBirths"
+                """, cleanup.Token);
+            var restored = await SetSchemaAsync(restoration, changed, original, cleanup.Token);
+            Check(restored == 1 || await restoration.StoreVersions.AnyAsync(
+                row => row.Id == StoreVersionEntity.MarkerId && row.StoreSchema == original, cleanup.Token),
+                "cleanup restores or observes the expected marker");
+        }
+
+        static Task<int> SetSchemaAsync(KernelDb database, int from, int to, CancellationToken cancellationToken) =>
+            database.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "KernelStoreVersions" SET "StoreSchema" = {to}
+                WHERE "Id" = {StoreVersionEntity.MarkerId} AND "StoreSchema" = {from}
+                """, cancellationToken);
+
+        static async Task RefusesFormat(ValueTask<Contract.Admission> admission, string kind, string reason)
+        {
+            try
+            {
+                await admission;
+                throw new InvalidOperationException($"Accepted {kind} after the store format changed.");
+            }
+            catch (StoreFormatException error) when (error.Message.Contains(reason, StringComparison.Ordinal))
+            {
+                Console.WriteLine($"ok: open ingress refuses {kind} with {error.Message}");
+            }
         }
     }
 
