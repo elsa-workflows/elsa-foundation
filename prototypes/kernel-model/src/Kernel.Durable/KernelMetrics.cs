@@ -5,6 +5,8 @@ namespace Kernel.Durable;
 internal static class KernelMetrics
 {
     internal static readonly Meter Meter = new("Elsa.Kernel.Durable");
+    internal static readonly Lazy<Counter<long>> EventTicketFailures = CreateCounter("elsa.kernel.events.ticket_failures", "{attempt}",
+        "Number of committed event ticket step failures.");
     internal static readonly Lazy<Counter<long>> CascadePages = CreateCounter("elsa.kernel.cascade.pages", "{page}",
         "Number of termination cascade pages committed.");
 

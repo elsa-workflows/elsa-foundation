@@ -240,6 +240,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         Committed committed;
         int instancePages = 0, markerPages = 0;
+        int meetFailures = 0, publishFailures = 0;
         lock (_gate)
         {
             // The k-row fence: every fence row the batch touches, locked in ascending partition id, all or nothing.
@@ -348,6 +349,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     {
                         if (expiryWindow.Due) expiryFrom = Math.Max(expiryFrom ?? long.MinValue, expiryWindow.At);
                         else expiryUntil = Math.Min(expiryUntil ?? long.MaxValue, expiryWindow.At);
+                    }
+                    if (turn.FoundationCatchUpFailed is { } failed && failed.Attempts < failed.Limit)
+                    {
+                        if (turn.FoundationPublicationSequence is null) meetFailures++;
+                        else publishFailures++;
                     }
                     if (turn.FoundationPublicationSequence is not null)
                     {
@@ -637,6 +643,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         }
         if (instancePages > 0) KernelMetrics.Add(KernelMetrics.CascadePages, instancePages, new KeyValuePair<string, object?>("where", "instance"));
         if (markerPages > 0) KernelMetrics.Add(KernelMetrics.CascadePages, markerPages, new KeyValuePair<string, object?>("where", "retirement-marker"));
+        if (meetFailures > 0) KernelMetrics.Add(KernelMetrics.EventTicketFailures, meetFailures, new KeyValuePair<string, object?>("kind", "meet"));
+        if (publishFailures > 0) KernelMetrics.Add(KernelMetrics.EventTicketFailures, publishFailures, new KeyValuePair<string, object?>("kind", "publish"));
         return new(committed);
     }
 
