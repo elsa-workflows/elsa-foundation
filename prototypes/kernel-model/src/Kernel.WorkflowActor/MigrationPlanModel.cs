@@ -129,6 +129,8 @@ internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<
 
     private static void Close(ITurn turn, PlanState state)
     {
+        if (turn.Now < state.Request.Deadline && state.DeadlineTimer is { } timer)
+            turn.Recall(timer);
         state.Closed = true;
         state.Pending = null;
         turn.Record(new MigrationPlanJournal.Closed());

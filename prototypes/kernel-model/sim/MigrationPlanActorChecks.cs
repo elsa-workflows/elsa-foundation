@@ -125,8 +125,9 @@ internal static class MigrationPlanActorChecks
         await Refresh(outcomes);
         var saved = store.ReadFoundationActor(scope.Tenant, plan.Id).Actor!.Row.State;
         check(requested && outcomes.Read().Closed && (await reads.GetAsync(scope, plan))?.Header.Status == Contract.ActorStatus.Finished &&
-            !saved.Contains(first.Id, StringComparison.Ordinal) && !saved.Contains(second.Id, StringComparison.Ordinal),
-            "completion closes the plan while the model state retains counters and the cursor without per-actor outcomes");
+            !saved.Contains(first.Id, StringComparison.Ordinal) && !saved.Contains(second.Id, StringComparison.Ordinal) &&
+            (await reads.InboxAsync(scope, plan)).Items.All(item => item.Kind != MigrationPlanControl.Deadline),
+            "completion retains bounded plan state and recalls the still-future deadline");
 
         await ingress.SendAsync(scope, new Contract.Target.Event("event:approval"), "approve", "publish", "yes");
         await Pump(successor);
@@ -162,6 +163,26 @@ internal static class MigrationPlanActorChecks
         await Pump(successor);
         check(!beforeSelection && afterSelection && (await reads.GetAsync(scope, empty))?.Header.Status == Contract.ActorStatus.Finished,
             "an explicit empty final page completes without a dispatch acknowledgment");
+
+        var forced = await StartPlan("force-close-plan", deadline);
+        var late = await StartWorkflow("force-close-selection");
+        await Pump(successor);
+        var forcedReader = NewReader(forced);
+        await forcedReader.SendAsync(MigrationPlanControl.Select, "force-close-batch", new(1, [late], AllSelected: true));
+        await Pump(successor);
+        await forcedReader.SendAsync(MigrationPlanControl.Close, "close", new(1));
+        await Pump(successor);
+        var forcedOutcomes = new MigrationPlanOutcomes(reads, scope, forced);
+        await Refresh(forcedOutcomes);
+        check(forcedOutcomes.Read() is { Closed: true } closedEarly && closedEarly.NoAnswer.SequenceEqual([late]) &&
+            (await reads.InboxAsync(scope, forced)).Items.All(item => item.Kind != MigrationPlanControl.Deadline),
+            "an operator close recalls the future deadline and reports its selected life as unanswered");
+        await ingress.SendAsync(scope, new Contract.Target.Ref(late), "force-close-late", Contract.Kinds.Migrate,
+            Json.Write(new MigrationRequest("source", "target", forced)));
+        await Pump(successor);
+        await Refresh(forcedOutcomes);
+        check(forcedOutcomes.Read().Results[late] == MigrationPlanOutcome.Migrated,
+            "the original actor can answer after the operator closes the plan");
 
         var cancelled = await StartPlan("cancelled-plan", deadline);
         var secondSelection = await StartWorkflow("cancelled-selection");
@@ -245,12 +266,13 @@ internal static class MigrationPlanActorChecks
     private static async Task CheckParkAsync(Action<bool, string> check)
     {
         const long initial = 1_701_900_000_000;
+        const long parkWindow = 1_000;
         var now = initial;
-        var store = new InMemoryStore(1, () => now);
+        var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMilliseconds(parkWindow) };
         var scope = new Contract.BoundScope("plan-park");
         var authority = new MigrationPlanAuthority(RandomNumberGenerator.GetBytes(32));
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("plan-park"), "plan-park",
-            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate or Contract.Kinds.Migrate);
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate or Contract.Kinds.Migrate or Contract.Kinds.Discard);
         Contract.IActorReads reads = new ActorList(store, 8);
         var runtime = new PublicRuntime(ingress, reads);
         var registry = new WorkflowRegistry().Add(Definition("source", "old")).Add(Definition("target", "new"));
@@ -316,6 +338,29 @@ internal static class MigrationPlanActorChecks
         check(outcomes.Read() is { Closed: true } cleared && cleared.NoAnswer.SequenceEqual([selected]) &&
             (await reads.GetAsync(scope, selected))?.Header.Labels.GetValueOrDefault("definition") == "target",
             "Park termination keeps the unanswered classification when an already-admitted migration later applies");
+
+        foreach (var expire in new[] { false, true })
+        {
+            var action = expire ? "expiry" : "discard";
+            var subject = await StartPlan(action, initial + 60_000);
+            await Pump(owner);
+            var reader = new JournalMigrationDispatchState(ingress, reads, authority, scope, subject);
+            await reader.SendAsync(MigrationPlanControl.Select, "final-page", new(1, [selected], AllSelected: true));
+            await Pump(owner);
+            await ingress.SendAsync(scope, new Contract.Target.Ref(subject), action, "fixture-park");
+            await Pump(owner);
+            var projection = new MigrationPlanOutcomes(reads, scope, subject);
+            await Refresh(projection);
+            var parked = projection.Read();
+            if (expire) now += parkWindow;
+            else await Resolve(subject, action, Contract.Kinds.Discard);
+            await Pump(owner);
+            await Refresh(projection);
+            check(parked is { Closed: false } && parked.Pending.SequenceEqual([selected]) &&
+                projection.Read() is { Closed: true } final && final.NoAnswer.SequenceEqual([selected]) &&
+                await reads.GetAsync(scope, subject) is { Header.Status: Contract.ActorStatus.Faulted, Park: null },
+                $"Park {action} closes the projected plan while an unresolved Park keeps its selections pending");
+        }
 
         async Task<Contract.ActorRef> StartPlan(string operation, long deadline) =>
             (await runtime.StartAsync(scope, operation, plans.Start(new("source", "target", deadline)))).Actor!.Value;

@@ -33,7 +33,7 @@ internal abstract record MigrationPlanJournal(string Kind)
         if (record.ValueKind == JsonValueKind.Object && record.TryGetProperty("Operation", out var operation) &&
             operation.ValueKind == JsonValueKind.String && record.TryGetProperty("Cleared", out var cleared) &&
             cleared.ValueKind == JsonValueKind.Number && record.TryGetProperty("Outcome", out var outcome) &&
-            outcome.ValueKind == JsonValueKind.String && outcome.GetString() == "terminated")
+            outcome.ValueKind == JsonValueKind.String && outcome.GetString() is "terminated" or "discarded" or "expired")
             return new Closed();
         if (record.ValueKind != JsonValueKind.Object || !record.TryGetProperty(nameof(Kind), out var kind) ||
             kind.ValueKind != JsonValueKind.String) return null;
