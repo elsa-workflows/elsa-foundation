@@ -167,6 +167,10 @@ internal static class PostgresRootSelfChecks
             (await peerClient.LoadAsync([peer], stop)).Single().Revision == 2 &&
             (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single() == input,
             "a scoped recall for the other root is refused and preserves both timers, checkpoints and the input");
+        var matched = mismatched with { FoundationSelfRecalls = new HashSet<InboxKey> { sibling.InboxKey } };
+        Check((await cold.CommitAsync(Batch(matched) with { Position = 2 }, stop)).Landed &&
+            !await PendingTimer(sibling) && await PendingTimer(peerTimer) && (await cold.LoadAsync([actor], stop)).Single().Revision == 7,
+            "the same commit with this root's timer lands and leaves the second root's timer pending");
         return 0;
 
         async Task<bool> PendingTimer(Message timer)
