@@ -8,6 +8,7 @@ namespace Kernel.Native.Run;
 internal static class SqlitePlanProjectionChecks
 {
     private static readonly Contract.BoundScope Scope = new("migration");
+    private const string OtherPlan = "second-plan-read-fixture";
 
     internal static async Task<int> BuildAsync(string file)
     {
@@ -45,7 +46,7 @@ internal static class SqlitePlanProjectionChecks
         {
             refused = true;
         }
-        Check(refused && await projection.BookmarkAsync(stop) is null &&
+        Check(refused && await projection.BookmarkAsync(stop) is null && await PersistedRowCountAsync() == 0 &&
             (await projection.ReadPageAsync(null, 4, stop)) is { AsOf: 0, Rows.Count: 0 },
             "A failure after the first row write must roll back the page and its cursor.");
         await ExecuteAsync("DROP TRIGGER abort_projection");
@@ -74,6 +75,15 @@ internal static class SqlitePlanProjectionChecks
         while (await secondWriter.ProjectNextAsync(reopened, stop)) { }
         Check(reopened.First == saved && await secondWriter.BookmarkAsync(stop) != saved,
             "The new projector must read from the stored bookmark and advance it.");
+        var lastBookmark = await secondWriter.BookmarkAsync(stop);
+        now++;
+        Check(!await secondWriter.ProjectNextAsync(source, stop) && await secondWriter.BookmarkAsync(stop) == lastBookmark &&
+            (await secondWriter.ReadPageAsync(null, 4, stop)).AsOf == now,
+            "An empty source page advances the observed clock while retaining the bookmark.");
+
+        // The view can be backed by any foundation. Exercise coincident plan refs across tenants in the physical reader.
+        await AddNeighborAsync("other", plan.Id, extra);
+        await AddNeighborAsync(Scope.Tenant, OtherPlan, extra);
         var results = await VerifyAsync(file, plan, stop);
         Check(results[migrated] == MigrationPlanOutcome.Migrated && results[refusedActor] == MigrationPlanOutcome.Refused &&
             results[unanswered] is null && !results.ContainsKey(extra), "The rows must keep the original selected actors and exact senders.");
@@ -100,6 +110,36 @@ internal static class SqlitePlanProjectionChecks
                 await owner.WokenAsync(null, stop);
                 await owner.RunAsync(stop);
             }
+        }
+
+        async Task<long> PersistedRowCountAsync()
+        {
+            await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = file, Mode = SqliteOpenMode.ReadOnly }.ConnectionString);
+            await connection.OpenAsync(stop);
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT (SELECT COUNT(*) FROM plan_cursors WHERE tenant = $tenant AND plan = $plan)
+                    + (SELECT COUNT(*) FROM plan_outcomes WHERE tenant = $tenant AND plan = $plan)
+                """;
+            command.Parameters.AddWithValue("$tenant", Scope.Tenant);
+            command.Parameters.AddWithValue("$plan", plan.Id);
+            return (long)(await command.ExecuteScalarAsync(stop))!;
+        }
+
+        async Task AddNeighborAsync(string tenant, string planRef, Contract.ActorRef actor)
+        {
+            await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = file, Mode = SqliteOpenMode.ReadWrite }.ConnectionString);
+            await connection.OpenAsync(stop);
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO plan_cursors VALUES ($tenant, $plan, NULL, 0, $asOf);
+                INSERT INTO plan_outcomes VALUES ($tenant, $plan, $actor, NULL);
+                """;
+            command.Parameters.AddWithValue("$tenant", tenant);
+            command.Parameters.AddWithValue("$plan", planRef);
+            command.Parameters.AddWithValue("$asOf", now);
+            command.Parameters.AddWithValue("$actor", actor.Id);
+            await command.ExecuteNonQueryAsync(stop);
         }
 
         async Task ExecuteAsync(string sql)
@@ -139,9 +179,12 @@ internal static class SqlitePlanProjectionChecks
             results.Values.Count(outcome => outcome is null) == 1,
             "The closed plan must report exactly one migrated, refused and unanswered actor.");
         var foreign = new SqlitePlanProjection(file, new("other"), plan);
-        var unrelated = new SqlitePlanProjection(file, Scope, new("another-plan"));
-        Check((await foreign.ReadPageAsync(null, 2, stop)).Rows.Count == 0 &&
-            (await unrelated.ReadPageAsync(null, 2, stop)).Rows.Count == 0,
+        var unrelated = new SqlitePlanProjection(file, Scope, new(OtherPlan));
+        var foreignPage = await foreign.ReadPageAsync(null, 2, stop);
+        var otherPlanPage = await unrelated.ReadPageAsync(null, 2, stop);
+        Check(foreignPage is { After: null, Rows: [{ Result: null }], Closed: false } &&
+            otherPlanPage is { After: null, Rows: [{ Result: null }], Closed: false } &&
+            !results.ContainsKey(foreignPage.Rows[0].Actor) && !results.ContainsKey(otherPlanPage.Rows[0].Actor),
             "The same physical database must isolate different tenants and plans.");
         return results;
     }

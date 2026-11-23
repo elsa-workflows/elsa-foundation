@@ -89,7 +89,7 @@ dotnet "$dll" sqlite-plan-projection inspect "$scratch/plan.db" <plan-ref>
 Use the plan reference printed by `build`. A fixture actor records batches and the exact senders' outcomes in
 the public journal. A SQLite transaction persists each page and its source bookmark together. A failed insert
 rolls back both. Two projectors can read the same source page, with one committing it. A new projector resumes
-at the stored bookmark. The independent `inspect` process reads three stable pages with one migrated, one refused
+at the stored bookmark. An empty source page updates freshness, and populated neighboring scopes stay isolated. The independent `inspect` process reads three stable pages with one migrated, one refused
 and one unanswered actor from the closed plan, without rebuilding the view.
 
 This verifies the physical SQLite view and local keyset reads. The journal producer in the fixture uses the

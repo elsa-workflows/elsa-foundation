@@ -45,7 +45,11 @@ internal sealed class SqlitePlanProjection(string file, BoundScope scope, ActorR
         {
             var before = await BookmarkAsync(stop);
             var page = await source.TailAsync(scope, plan, before, stop);
-            if (page.Items.Count == 0) return false;
+            if (page.Items.Count == 0)
+            {
+                if (before is null || await TryApplyAsync(before, before.Value, page.AsOf, [], stop)) return false;
+                continue;
+            }
             if (page.Next is not { } next || next == before)
                 throw new InvalidOperationException("A nonempty plan journal page needs an advancing bookmark.");
             var records = page.Items.Select(item => MigrationPlanJournal.Read(item.Entry)).ToArray();
