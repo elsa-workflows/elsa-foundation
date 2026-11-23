@@ -55,9 +55,12 @@ unchanged and the surviving owner completes the workflow after the second approv
 [Graceful handover](https://github.com/elsa-workflows/elsa-foundation/pull/5517#issuecomment-7104130045)
 · [Abrupt peer exit](https://github.com/elsa-workflows/elsa-foundation/pull/5519#issuecomment-7104274136)
 
-Other increments can demonstrate Flowchart execution and inspecting or recovering a parked workflow. Publish demo
-readiness and milestone acceptance separately. Provider and operator qualification follow the milestones below. The
-owner decides the default switch and approves the retirement inventory at their respective gates.
+The Embedded Flowchart demo restarts from a persisted approval wait and advances the selected branch through its join
+once. [Flowchart run instructions](../../prototypes/kernel-model/README.md#flowchart-restart-on-the-public-postgresql-preview)
+
+A later operator increment can demonstrate inspecting and recovering a parked workflow. Publish demo readiness and
+milestone acceptance separately. Full Flowchart, provider and operator qualification follow the milestones below.
+The owner decides the default switch and approves the retirement inventory at their respective gates.
 
 ## Milestones
 
