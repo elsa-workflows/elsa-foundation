@@ -146,7 +146,8 @@ static class ProviderWatchdog
             Console.WriteLine(message);
             Environment.Exit(Escalated);
         }, () => monotonic);
-        var commit = watchdog.Watch(target.Store(target.Workers())).CommitAsync(Flush(lease), token).AsTask();
+        var provider = new Tally(target.Store(target.Workers()));
+        var commit = watchdog.Watch(provider).CommitAsync(Flush(lease), token).AsTask();
         if (await Console.In.ReadLineAsync(token) is not "cancel") return 2;
         Require(!commit.IsCompleted && watchdog.Check() == 0, "The child commit waits before the watchdog deadline.");
         monotonic = (long)(LeaseTime.TotalMilliseconds * 2);
@@ -160,7 +161,8 @@ static class ProviderWatchdog
         {
             monotonic += (long)(LeaseTime.TotalMilliseconds / 3);
             watchdog.Check();
-            // A live watched call exits this child. A removed call may still be publishing its task outcome.
+            // The provider records its return before the watchdog removes the call and publishes its task.
+            Require(provider.HasCompletedCall("commit"), "A still-blocked provider commit must trigger process escalation.");
             await AwaitInterruptedAsync(commit, Timeout.InfiniteTimeSpan, token);
             return 0;
         }

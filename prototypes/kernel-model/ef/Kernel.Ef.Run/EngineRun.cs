@@ -1108,6 +1108,8 @@ sealed class Tally(IKernelStore inner) : IKernelStore
 
     public int Sum(params string[] parts) => _counts.Where(c => parts.All(c.Key.Contains)).Sum(c => c.Value);
 
+    public bool HasCompletedCall(string op) => _times.TryGetValue(op, out var times) && !times.IsEmpty;
+
     private async ValueTask<T> Call<T>(string op, Func<ValueTask<T>> call)
     {
         var clock = Stopwatch.StartNew();
