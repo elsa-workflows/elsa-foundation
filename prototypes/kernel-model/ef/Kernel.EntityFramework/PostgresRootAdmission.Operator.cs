@@ -9,7 +9,10 @@ internal sealed partial class PostgresRootAdmission
     private const string OperatorPrefix = "!kernel-operator/1:";
     private sealed record StoredOperator(string Reference, string Operation, long Creation, string Kind,
         [property: JsonRequired] bool ExplicitZeroDue);
+    internal const string OperatorOccurrencePrefix = "operator/";
     internal static bool IsStoredOperator(string? header) => header?.StartsWith(OperatorPrefix, StringComparison.Ordinal) == true;
+    internal static bool IsOperatorOccurrence(InboxKey key) => key.Scope == InboxKey.FoundationOccurrenceScope && key.Match is null &&
+        key.Id.StartsWith(OperatorOccurrencePrefix, StringComparison.Ordinal);
 
     private static Task InstallOperatorReceiptsAsync(KernelDb db, CancellationToken token) =>
         db.Database.ExecuteSqlRawAsync("""
@@ -73,7 +76,7 @@ internal sealed partial class PostgresRootAdmission
             return new(prior, true);
         }
         var actor = new InstanceRef(address.Id);
-        var id = $"operator/{reference}/{digest}/{Guid.NewGuid():N}";
+        var id = $"{OperatorOccurrencePrefix}{reference}/{digest}/{Guid.NewGuid():N}";
         var header = OperatorPrefix + DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0));
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial")
@@ -95,8 +98,12 @@ internal sealed partial class PostgresRootAdmission
                 AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" LIKE 'operator/%' AND NOT m."Done"
                 AND m."Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint ORDER BY m."Seq" LIMIT 1
             """).AsNoTracking().SingleOrDefaultAsync(token);
-        if (row is null) return null;
-        if (!IsStoredOperator(row.Start) || row.Kind is not (Kinds.Suspend or Kinds.Resume) ||
+        return row is null ? null : DecodeOperator(row, reference);
+    }
+
+    internal static Message DecodeOperator(MessageEntity row, string reference)
+    {
+        if (!IsOperatorOccurrence(new(row.Id, row.InboxScope)) || !IsStoredOperator(row.Start) || row.Kind is not (Kinds.Suspend or Kinds.Resume) ||
             row.EventMatch is not null || row.Payload is not null || row.ReplyTo is not null || row.Sender is not null ||
             row.JobGeneration != 0 || row.KeepUntil is not { } until)
             throw new StoreException(Failure.Definite, "Unexpected stored one-way operator envelope.");
@@ -105,7 +112,7 @@ internal sealed partial class PostgresRootAdmission
         catch (JsonException error) { throw new StoreException(Failure.Definite, "Invalid stored operator framing.", error); }
         if (header is null) throw new StoreException(Failure.Definite, "Invalid stored operator framing.");
         if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != row.Kind ||
-            header.ExplicitZeroDue && row.Due != 0 || !MatchesDirectOccurrence(reference, header.Operation, row.Id["operator/".Length..]))
+            header.ExplicitZeroDue && row.Due != 0 || !MatchesDirectOccurrence(reference, header.Operation, row.Id[OperatorOccurrencePrefix.Length..]))
             throw new StoreException(Failure.Definite, "The operator occurrence differs from its bound reference and operation.");
         var suffix = row.Id.LastIndexOf('/');
         return FoundationIngressAddress.Occurrence(header.Operation, row.Id[..suffix], row.Id[(suffix + 1)..],

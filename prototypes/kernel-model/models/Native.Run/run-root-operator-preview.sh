@@ -15,4 +15,8 @@ read -r phase pid a b c <<<"${admitted##*$'\n'}"
 cold="$("${run[@]}" read "$a" "$b" "$c")"
 printf '%s\n' "$cold"
 read -r phase pid2 a2 b2 c2 <<<"${cold##*$'\n'}"
-[[ "$phase" == read && "$pid2" =~ ^[1-9][0-9]*$ && "$pid" != "$pid2" && "$a2" == "$a" && "$b2" == "$b" && "$c2" == "$c" ]]
+[[ "$phase" == suspended && "$pid2" =~ ^[1-9][0-9]*$ && "$pid" != "$pid2" && "$a2" == "$a" && "$b2" == "$b" && "$c2" == "$c" ]]
+resumed="$("${run[@]}" resume "$a" "$b" "$c")"
+printf '%s\n' "$resumed"
+read -r phase pid3 a3 <<<"${resumed##*$'\n'}"
+[[ "$phase" == resumed && "$pid3" =~ ^[1-9][0-9]*$ && "$pid3" != "$pid2" && "$pid3" != "$pid" && "$a3" == "$a" ]]
