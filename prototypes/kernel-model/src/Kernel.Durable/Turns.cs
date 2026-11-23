@@ -23,6 +23,7 @@ public interface IActorType
 
     /// <summary>Whether this actor type can verify the operator or parent authority of a terminate.</summary>
     internal bool SupportsTrialWithdrawal => false;
+    internal Func<CancellationToken, ValueTask<long>>? RootTimedJobPublicationClock => null;
 
     /// <summary>Checks whether the queued terminate has authority over the target's current life.</summary>
     internal bool AuthorizesTrialWithdrawal(InstanceRow? row, Message message, Message? creator = null) => false;

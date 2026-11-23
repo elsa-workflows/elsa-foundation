@@ -17,6 +17,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     private readonly Durable.FoundationSelfIssuer? issueSelf;
     private readonly Func<string, string>? rootJobHandle;
     private readonly bool rootTimedJobIssuance;
+    private readonly Func<CancellationToken, ValueTask<long>>? rootTimedJobClock;
+    private bool rootTimedJobSettlement => rootTimedJobClock is not null;
     private Durable.InMemoryStore store => inMemory ?? throw new NotSupportedException("This provider does not implement this foundation operation.");
 
     internal ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
@@ -29,8 +31,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     }
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Durable.FoundationSelfIssuer? issueSelf = null,
-        Func<string, string>? rootJobHandle = null, bool rootTimedJobIssuance = false) =>
-        (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance) = (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance);
+        Func<string, string>? rootJobHandle = null, bool rootTimedJobIssuance = false,
+        Func<CancellationToken, ValueTask<long>>? rootTimedJobClock = null) =>
+        (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance, this.rootTimedJobClock) =
+            (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootTimedJobClock);
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, RootValueReader rootValueReader)
         : this(roots, actor) => this.rootValueReader = rootValueReader;
@@ -45,6 +49,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     bool Durable.IActorType.SupportsFoundationInlineStart(string type) => roots is null && type == actor.Type;
 
     bool Durable.IActorType.SupportsTrialWithdrawal => roots is null;
+    Func<CancellationToken, ValueTask<long>>? Durable.IActorType.RootTimedJobPublicationClock => rootTimedJobClock;
 
     bool Durable.IActorType.AuthorizesTrialWithdrawal(Durable.InstanceRow? row, Durable.Message message, Durable.Message? creator)
     {
@@ -94,7 +99,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     private static bool CapturesParkArrival(Durable.Delivery delivery) => !delivery.Message.IsControl && !delivery.IsWorkerJobCompletion;
 
-    public bool SingleMessage(Durable.Message message) => message.Kind is Contract.Kinds.ChildFinished or Durable.Kinds.JobDeadline;
+    public bool SingleMessage(Durable.Message message) => message.Kind is Contract.Kinds.ChildFinished or Durable.Kinds.JobDeadline ||
+        rootTimedJobSettlement && message.FoundationJobResult;
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
         SettlesEndedChildNotice(row, delivery.Message) ||
@@ -111,8 +117,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition, spec.Input))
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
         if (roots is not null)
-            return RootRefusal(input) is { } reason
-                ? Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, reason) : null;
+            return SettleRootTimedJob(input) ?? (RootRefusal(input) is { } reason
+                ? Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, reason) : null);
         if (message.Kind == Durable.Kinds.ParkExpiry)
             return ExpirePark(input);
         if (message.Kind == Durable.Kinds.Drain)
@@ -284,11 +290,11 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     }
 
     private Durable.TurnOutcome SettleJob(Durable.TurnInput input, Durable.InstanceRow row, Durable.JobFinished result,
-        long generation, string? timer, bool cancel, bool keepCheckpoint = false)
+        long generation, string? timer, bool cancel, bool keepCheckpoint = false, bool root = false)
     {
         var turn = new Durable.DurableTurn(input, foundation: true);
         if (cancel) turn.CancelJob(result.Key);
-        else if (timer is not null && (store.HasStoredJobDeadline(row.Id, row.Creation, timer) ||
+        else if (timer is not null && (root || store.HasStoredJobDeadline(row.Id, row.Creation, timer) ||
             input.VolatileMessage(Durable.InboxKey.Issued(timer)) is { Kind: Durable.Kinds.JobDeadline })) turn.Recall(timer);
         turn.ReportFoundationJobResult(result, generation);
         // The logical job remains pending until the actor applies or cancels this recorded result.
@@ -332,7 +338,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var ambient = local is { } host && input.Taken.Count - input.From == 1 && delivery.Message.ReplyTo is { } address
             ? host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message))
             : null;
-        var turn = new ActorTurn(inMemory, input, header, ambient, issueSelf, rootJobHandle, rootTimedJobIssuance, rootValueReader);
+        var turn = new ActorTurn(inMemory, input, header, ambient, issueSelf, rootJobHandle,
+            rootTimedJobIssuance || rootTimedJobSettlement, rootValueReader);
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray(), turn.Now);
         await actor.TurnAsync(turn, CancellationToken.None);
         var thenDelete = delivery.Message.Operator?.DeleteTarget is not null;
@@ -425,7 +432,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         if (roots is not null)
         {
             if (rootJobHandle is null || type != actor.Type ||
-                job is not Durable.JobContext { FoundationRootReference: { } bound, Creation: 1, Deadline: null })
+                job is not Durable.JobContext { FoundationRootReference: { } bound, Creation: 1 } ||
+                (job.Deadline is not null) != rootTimedJobSettlement)
                 throw new NotSupportedException("This root job needs a bound PostgreSQL actor reference.");
             return actor.ExecuteJobAsync(new Job(new(bound), job), cancellationToken);
         }
