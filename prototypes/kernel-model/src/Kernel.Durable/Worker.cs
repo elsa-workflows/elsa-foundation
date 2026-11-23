@@ -766,7 +766,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 {
                     var fresh = !Owns;
                     if (fresh) Volatile.Write(ref _lastPass, _options.Monotonic());
-                    else RenewGuard(started);       // before the partition joins: a retake sent past the deadline extends nothing
+                    if (!TakeReplyInTime(started))
+                    {
+                        _pending[partition] = lease.Epoch;
+                        (_taking, _gaining) = (false, []);
+                        continue;       // a later answer must confirm this new epoch before the partition can come back
+                    }
+                    if (!fresh) RenewGuard(started);       // before the partition joins: a retake sent past the deadline extends nothing
                     _held[partition] = new(lease.Epoch, lease.Position);
                     _mine.Add((partition, lease.Epoch));
                     Observe(lease.Now);
@@ -894,11 +900,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         catch (Exception) { /* not taken, or taken without knowing: the next take bumps the epoch again */ }
         lock (_turnSync)
         {
-            if (lease is { Taken.Count: > 0 }) Install(lease, started);    // a take of a set keeps what it got
+            if (lease is { Taken.Count: > 0 } && !Install(lease, started)) lease = null;
             _taking = false;        // after the install: ClaimedPartitions never sees neither
         }
         if (lease is { Taken.Count: > 0 }) Installed(lease);
     }
+
+    // A heartbeat may have renewed the node while another owner took these rows. Each take's reply has its own deadline.
+    private bool TakeReplyInTime(long started) => _options.Monotonic() - started < (long)_options.Lease.TotalMilliseconds;
 
     private async ValueTask<OwnedLease?> TakeFencesAsync(IReadOnlyList<int> partitions, CancellationToken cancellationToken)
     {
@@ -964,7 +973,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _retakeSet.Clear();     // in the same critical section as the install: ClaimedPartitions sees the retake's set, or the held one
             if (!stoodDown && taken.Count > 0)
             {
-                Install(new(taken, now), started);
+                if (!Install(new(taken, now), started)) taken.Clear();
                 _woken = true;      // memory went with the reset: the next pass reads the inbox at the new epochs
             }
         }
@@ -989,11 +998,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
-    private void Install(OwnedLease lease, long started)
+    private bool Install(OwnedLease lease, long started)
     {
         lock (_turnSync)
         {
             Reset();    // a take starts from empty memory
+            Volatile.Write(ref _lastPass, _options.Monotonic());     // its first pass, including pending reconciliation, is due within the lease
+            if (!TakeReplyInTime(started))
+            {
+                foreach (var fence in lease.Taken) _pending[fence.Partition] = fence.Epoch;
+                return false;
+            }
             Observe(lease.Now);
             foreach (var taken in lease.Taken)
             {
@@ -1001,7 +1016,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 _mine.Add((taken.Partition, taken.Epoch));
             }
             RenewGuard(started, fresh: true);
-            Volatile.Write(ref _lastPass, _options.Monotonic());     // a fresh take: its first pass is due within the lease
+            return true;
         }
     }
 
@@ -1149,11 +1164,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (lease is not null)
                 {
                     var current = generation == _generation && !_releasing && !_retaking;
+                    var timely = TakeReplyInTime(started);
                     foreach (var fence in lease.Taken)
-                        (current && !_givenUp.Contains(fence.Partition) ? installed : returning).Add(fence);
+                    {
+                        if (!current || _givenUp.Contains(fence.Partition)) returning.Add(fence);
+                        else if (timely) installed.Add(fence);
+                        else _pending[fence.Partition] = fence.Epoch;     // a later heartbeat can confirm or discard it
+                    }
+                    if (!timely && _coldGain && _pending.Count > 0) Volatile.Write(ref _lastPass, _options.Monotonic());
                     if (installed.Count > 0)
                     {
-                        if (!Owns) Install(new(installed, lease.Now), started);
+                        if (!Owns)
+                        {
+                            if (!Install(new(installed, lease.Now), started)) installed.Clear();
+                        }
                         else
                         {
                             RenewGuard(started);

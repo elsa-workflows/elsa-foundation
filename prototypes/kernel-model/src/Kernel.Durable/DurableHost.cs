@@ -219,6 +219,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         await _turn.WaitAsync(cancellationToken);
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             await _node!.GainSetAsync(scopes, cancellationToken);
             return scopes.Where(_node.Holds).Select(Scope).ToArray();
         }

@@ -78,6 +78,7 @@ internal static class WorkerSetChecks
         await GainInFlight(check, lost: true);
         await GainWithPending(check);
         await LateGain(check);
+        await SetGainTimingChecks.Run(check);
         const long time = 100;
         var store = new InMemoryStore(2, () => time);
         var commits = 0;
