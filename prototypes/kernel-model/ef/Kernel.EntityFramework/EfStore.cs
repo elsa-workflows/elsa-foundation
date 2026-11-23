@@ -708,7 +708,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // CASE avoids inspecting row content except for the single shared numeric event slot.
     private string PollSplitEventPayload => postgres && _ordinaryRoots is null
         ? $"""CASE WHEN m."InboxScope" = {RootSelfScope} AND m."EventMatch" IS NOT NULL THEN to_jsonb(m)->>'FoundationSelfContent' IS NOT NULL ELSE FALSE END"""
-        : "0";
+        : False;
     private string PollSql => Engine?.Poll ??
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration", {PollSplitEventPayload} AS "SplitEventPayload"{PollBirthColumns}

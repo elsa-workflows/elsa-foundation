@@ -679,7 +679,7 @@ clock is not modelled. The simulation and the stress tests use their own short l
 
 A physical event slot can share a number with a private continuation. The event match keeps their identities
 distinct. On a reopened continuation or timer database, enabling the writer verifies the active private-body
-trigger. Reinstalling an older trigger is refused if it left a split matched payload. Generic delivery refuses
+trigger. Replacing a predecessor trigger is refused if it left a split matched payload. Generic delivery refuses
 the affected row even when the current trigger is active. Restore the exact envelope from its authoritative
 event source before resuming delivery.
 
