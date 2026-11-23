@@ -450,8 +450,7 @@ of 1,024 and 4,096 virtual partitions, and 28 landed checks. [Integrated receipt
 | Worker fairness and pressure | `--pass-turn-budget-check`, `--tenant-pass-check`, `--scope-age-check`, `--backlog-store-check`, `--backlog-worker-check` and runtime `scope-rounds`. [Turn budget](https://github.com/elsa-workflows/elsa-foundation/pull/5419), [tenant quantum](https://github.com/elsa-workflows/elsa-foundation/pull/5420), [scope age](https://github.com/elsa-workflows/elsa-foundation/pull/5421), [store backlog](https://github.com/elsa-workflows/elsa-foundation/pull/5422), [Worker publication](https://github.com/elsa-workflows/elsa-foundation/pull/5423). |
 | Tenancy and migration dispatch | `--foundation-tenant-check` and `--foundation-migration-dispatch-check`. [Exact caller-key binding](https://github.com/elsa-workflows/elsa-foundation/pull/5396), [tenant isolation](https://github.com/elsa-workflows/elsa-foundation/pull/5397), [authored delivery scope](https://github.com/elsa-workflows/elsa-foundation/pull/5428), [stored-tenant corruption](https://github.com/elsa-workflows/elsa-foundation/pull/5429), and [exact migration dispatch](https://github.com/elsa-workflows/elsa-foundation/pull/5398). |
 
-K3 remains open. The attachment of qualified Delete to an open clear drain still needs DT-1 and DT-6 evidence.
-The repository's three-failure stop holds the earlier clear-drain fixture until the owner explicitly resumes it.
+K3 remains open. The in-memory Worker checks a qualified Delete before and between clear pages, a second owner's completion, competing requests and protection at both boundaries. The DT-1 and DT-6 runs use the original terminal disposition and count the parent's final notices. K11 qualifies final operator responses across the service boundary.
 Any other unqualified run in a listed case still requires its own passing evidence.
 
 ### FC-8 on providers

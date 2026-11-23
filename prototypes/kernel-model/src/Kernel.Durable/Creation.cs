@@ -194,7 +194,8 @@ public static class CreationProtocol
                             ? InstanceStatus.Cancelled : previous.Status,
                         Cascade = row.Cascade, Children = null, Jobs = null
                     })
-                    : Retire(previous, row.HeldCascade)))
+                    : Retire(previous.ParkDiscard is { Kind: ParkClearKind.Terminate, Deletion: not null } drain &&
+                        turn.Consumed.Contains(drain.Control) ? previous with { Status = InstanceStatus.Cancelled } : previous, row.HeldCascade)))
                 RefuseWrite("invalid lifecycle retirement");
             if (!thenDelete) ValidateRetirementObligation(previous!, row.HeldCascade);
             return;
