@@ -31,18 +31,14 @@ internal sealed class PostgresPreviewFoundation(
         }
         if (target is not Contract.Target.Ref direct || !FoundationMetadataLimits.IsOrdinaryKind(kind))
             throw new NotSupportedException("The preview supports ordinary input addressed to a root reference.");
-        FoundationMetadataLimits.RequireContent(payload, nameof(payload));
-        if (!FoundationMetadataLimits.IsOutsideMessageId(id))
-            throw new ArgumentException("The operation ID is outside the Foundation limits.", nameof(id));
-        var admitted = PostgresRootAdmission.IsIssuedReferenceShape(direct.Actor.Id)
-            ? await admission.AdmitDirectAsync(scope.Tenant, direct.Actor.Id, id, kind, payload, options?.DueAt,
-                options?.KeepFor, cancellationToken)
-            : null;
+        var admitted = await admission.AdmitDirectResultAsync(scope.Tenant, direct.Actor.Id, id, kind, payload,
+            options?.DueAt, options?.KeepFor, cancellationToken);
         return admitted switch
         {
-            true => new(Contract.AdmissionOutcome.Accepted, direct.Actor),
-            false => new(Contract.AdmissionOutcome.Duplicate, direct.Actor),
-            null => new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch)
+            PostgresRootAdmission.DirectResult.Accepted => new(Contract.AdmissionOutcome.Accepted, direct.Actor),
+            PostgresRootAdmission.DirectResult.Duplicate => new(Contract.AdmissionOutcome.Duplicate, direct.Actor),
+            PostgresRootAdmission.DirectResult.MissingTarget => new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch),
+            _ => new(Contract.AdmissionOutcome.Refused)
         };
     }
 

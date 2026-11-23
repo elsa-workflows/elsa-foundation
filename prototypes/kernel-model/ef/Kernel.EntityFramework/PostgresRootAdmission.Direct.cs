@@ -21,32 +21,34 @@ internal sealed partial class PostgresRootAdmission
 
     internal static bool IsStoredDirect(string? value) => value?.StartsWith(DirectPrefix, StringComparison.Ordinal) == true;
 
+    internal enum DirectResult { Accepted, Duplicate, Refused, MissingTarget }
+
     /// <returns>True for a new send, false for a duplicate and null for an unavailable exact life or invalid input.</returns>
     internal async Task<bool?> AdmitDirectAsync(string tenant, string reference, string id, string kind, string? payload = null,
         long? due = null, TimeSpan? keepFor = null, CancellationToken cancellationToken = default)
+        => await AdmitDirectResultAsync(tenant, reference, id, kind, payload, due, keepFor, cancellationToken) switch
+        {
+            DirectResult.Accepted => true,
+            DirectResult.Duplicate => false,
+            _ => null
+        };
+
+    internal async Task<DirectResult> AdmitDirectResultAsync(string tenant, string reference, string id, string kind, string? payload = null,
+        long? due = null, TimeSpan? keepFor = null, CancellationToken cancellationToken = default)
     {
-        if (!FoundationMetadataLimits.IsOutsideMessageId(id) || !FoundationMetadataLimits.IsOrdinaryKind(kind) ||
-            !FoundationMetadataLimits.FitsContent(payload)) return null;
+        if (!FoundationRootCreator.IsGeneratedReference(reference) || !FoundationMetadataLimits.IsOutsideMessageId(id) || !FoundationMetadataLimits.IsOrdinaryKind(kind) ||
+            !FoundationMetadataLimits.FitsContent(payload)) return DirectResult.Refused;
         var window = keepFor is { } requested && requested < deduplicationWindow ? requested : deduplicationWindow;
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         var windowMs = (long)window.TotalMilliseconds;
         var digest = FoundationRootCreator.OperationDigest(id);
-        var occurrence = $"{reference}/{digest}/{Guid.NewGuid():N}";
-        var escaped = payload is not null && (payload.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(payload));
-        var body = escaped ? DurableKeyJson.Write(payload) : payload;
-
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
         var address = await db.Database.SqlQuery<CreationAddress>($"""
             SELECT "Actor" AS "Id", "Creation" FROM "FoundationRootBirths"
             WHERE "Tenant" = {tenant} AND "Reference" = {reference}
             """).SingleOrDefaultAsync(cancellationToken);
-        if (address is null) return await RefuseAsync();
-        var escapedKind = kind.Contains('\0') ? kind : null;
-        var header = DirectPrefix + DurableKeyJson.Write(new StoredDirect(id, address.Creation, escaped, due == 0, escapedKind));
-        if (Encoding.UTF8.GetByteCount(header) + (body is null ? 0L : Encoding.UTF8.GetByteCount(body)) >
-            16 * 1024 * 1024 - 24 * 1024) return await RefuseAsync();
-
+        if (address is null) return await RefuseAsync(DirectResult.MissingTarget);
         var status = await LockStatusAsync();
         if (status is null)
         {
@@ -61,7 +63,7 @@ internal sealed partial class PostgresRootAdmission
             if (pending.Count == 0)
             {
                 status = await LockStatusAsync();
-                if (status is null) return await RefuseAsync();
+                if (status is null) return await RefuseAsync(DirectResult.MissingTarget);
             }
         }
 
@@ -74,9 +76,9 @@ internal sealed partial class PostgresRootAdmission
                 """).SingleAsync(cancellationToken))
             {
                 await transaction.CommitAsync(cancellationToken);
-                return false;
+                return DirectResult.Duplicate;
             }
-            return await RefuseAsync();
+            return await RefuseAsync(DirectResult.Refused);
         }
 
         var receipt = await db.Database.SqlQuery<long>($"""
@@ -90,8 +92,17 @@ internal sealed partial class PostgresRootAdmission
         if (receipt.Count == 0)
         {
             await transaction.CommitAsync(cancellationToken);
-            return false;
+            return DirectResult.Duplicate;
         }
+
+        var occurrence = $"{reference}/{digest}/{Guid.NewGuid():N}";
+        var escaped = payload is not null && (payload.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(payload));
+        var body = escaped ? DurableKeyJson.Write(payload) : payload;
+        var escapedKind = kind.Contains('\0') ? kind : null;
+        var header = DirectPrefix + DurableKeyJson.Write(new StoredDirect(id, address.Creation, escaped, due == 0, escapedKind));
+        if (Encoding.UTF8.GetByteCount(header) + (body is null ? 0L : Encoding.UTF8.GetByteCount(body)) >
+            16 * 1024 * 1024 - 24 * 1024)
+            return await RefuseAsync(DirectResult.Refused);
 
         var target = new InstanceRef(address.Id);
         db.Messages.Add(new MessageEntity
@@ -101,12 +112,12 @@ internal sealed partial class PostgresRootAdmission
         });
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return true;
+        return DirectResult.Accepted;
 
-        async Task<bool?> RefuseAsync()
+        async Task<DirectResult> RefuseAsync(DirectResult reason)
         {
             await transaction.RollbackAsync(cancellationToken);
-            return null;
+            return reason;
         }
 
         Task<InstanceStatus?> LockStatusAsync() =>
@@ -120,6 +131,7 @@ internal sealed partial class PostgresRootAdmission
     internal async Task<IReadOnlyList<Message>> ReadPendingDirectAsync(string tenant, string reference,
         CancellationToken cancellationToken = default)
     {
+        if (!FoundationRootCreator.IsGeneratedReference(reference)) return [];
         await using var db = create();
         var rows = await db.Messages.FromSqlInterpolated($"""
             SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target"

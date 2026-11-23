@@ -11,6 +11,13 @@ internal static class StoredStateChecks
         var lease = await c.Take(0);
         var absent = Make.Row(id, 1, state: "null") with { FoundationNullState = true };
         var literal = absent with { Revision = 2, FoundationNullState = false };
+        Context.Equal(("null", false, false), StoredState.Decode(StoredState.Encode(literal)), "the present-state decoder preserves literal null");
+        try
+        {
+            StoredState.Decode(StoredState.Encode(absent));
+            throw new ConformanceException("the present-state decoder accepted an absent state");
+        }
+        catch (StoreException error) when (error.Failure == Failure.Definite) { }
         await c.Lands(() => c.Commit(lease, 0, [Make.Turn(id, absent)]));
         var reader = c.Provided.NewClient();
         Context.That((await reader.LoadAsync([id])).Single() == absent, "physical reload changed absent actor state");
