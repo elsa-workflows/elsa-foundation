@@ -82,7 +82,7 @@ public sealed partial class EfStore
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
                     EXISTS (
                         SELECT 1 FROM pg_catalog.pg_trigger source
-                        WHERE (to_regclass('"Instances"') IS NULL OR source.tgrelid = to_regclass('"Instances"'))
+                        WHERE source.tgrelid = to_regclass('"Instances"')
                             AND source.tgname::text = ANY({RootListSourceTriggers}) AND source.tgenabled IN ('O', 'A')
                             AND source.tgfoid = to_regprocedure(source.tgname::text || '()')
                         GROUP BY source.tgrelid HAVING count(*) = {RootListSourceTriggers.Length}
@@ -94,9 +94,9 @@ public sealed partial class EfStore
                     AND kernel."JournalCodec" = {expected.JournalCodec}
                 """).SingleAsync(cancellationToken);
         }
-        catch (PostgresException error) when (error.SqlState == PostgresErrorCodes.UndefinedTable)
+        catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
         {
-            throw new StoreFormatException("A required root actor projection table is missing.", error);
+            throw new StoreFormatException("The root actor projection has an unreadable schema.", error);
         }
         if (row.StoreSchema is not { } schema || row.MessageProtocol is not { } protocol || row.JournalCodec is not { } codec)
             throw new StoreFormatException("The kernel store version marker is missing.");

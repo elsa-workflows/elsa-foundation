@@ -300,8 +300,8 @@ and leaves the release-wide projector, Park, and operator selections to K9 follo
 
 On a fresh disposable PostgreSQL database, `pg-root-list <owned|ef> <checked|in-batch> birth` prints a
 `projection-bookmark`. Run `pg-root-list <owned|ef> <checked|in-batch> restart <bookmark>` against that database
-from a fresh process. The birth phase renames the checkpoint and journal tables after it captures the bookmark.
-Both reads still work against committed metadata. The fixture also checks that a foreign reference returns no actor.
+from a fresh process. The birth phase renames the owner lookup columns and journal table after it captures the bookmark.
+Both reads still work against committed metadata, with the trigger check bound to the canonical owner table. The fixture also checks that a foreign reference returns no actor.
 
 The opt-in PostgreSQL workflow-history projection is installed via `EfStore.InstallRootWorkflowHistoryAsync`
 after the root admission schema. A version 1 marker, timestamp table, chronology index and checkpoint trigger
