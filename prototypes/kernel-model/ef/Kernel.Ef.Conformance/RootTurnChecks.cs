@@ -137,7 +137,9 @@ internal static class RootTurnChecks
         await Refused(() => Next(terminal, [finish], fence), "turn after Finished");
         await Refused(() => Next(running, [finish], fence), "repeat after losing the final answer");
 
+        Check(cold.SupportsJobTrialClear, "the general PostgreSQL store advertises fenced trial clearing");
         await cold.BindWorkerRootAsync(tenant, reference);
+        Check(!cold.SupportsJobTrialClear, "the scoped PostgreSQL preview store does not advertise fenced trial clearing");
         ValueTask<Committed> Ended(PartitionFence f, params InboxKey[] keys)
         {
             var settled = new TurnCommit(id, null, null, [], keys, [], [], [], null);
