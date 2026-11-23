@@ -6,13 +6,14 @@ internal enum MigrationPlanStep { Idle, SelectionAdmitted, DispatchAdmitted, Wai
 
 /// <summary>The host runs each step outside actor turns under a tenant's operator permission.</summary>
 internal sealed class MigrationPlanOperator(IIngress ingress, IActorReads reads, MigrationPlanModel model,
-    MigrationPlanAuthority authority, Func<BoundScope, bool> authorize)
+    MigrationPlanAuthority authority, Func<BoundScope, bool> authorize, Func<bool> planCreatorsReady)
 {
     internal ValueTask<Admission> StartAsync(BoundScope scope, string operation, MigrationPlanStart request,
         CancellationToken cancellationToken = default)
     {
         Demand(scope);
         if (request.Model is null) throw new ArgumentException("Automatic migration requires an exact execution model.", nameof(request));
+        if (!planCreatorsReady()) throw new InvalidOperationException("Plan creation requires model-bound starts on all eligible owners.");
         return new WorkflowRuntime(ingress, reads).StartAsync(scope, operation, model.Start(request), cancellationToken: cancellationToken);
     }
 

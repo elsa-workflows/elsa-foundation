@@ -34,10 +34,17 @@ internal static class MigrationPlanRunnerChecks
             executionModel == NativeExecutionModel.ModelKey && registry.TryGet(from, out _) && registry.TryGet(to, out _));
         var actorType = new PublicWorkflow([new NativeExecutionModel(registry), model, new OtherExecutionModel()]);
         var allowed = true;
+        var creatorsReady = false;
         var service = NewOperator();
         var expires = initial + 600_000;
         check(await Denied(async () => { await service.StartAsync(other, "wrong-tenant", new(source, target, expires, NativeExecutionModel.ModelKey)); }),
             "the operator service checks the tenant permission before admitting a plan");
+        var versionRefused = false;
+        try { await StartPlan(service, "mixed-creators", source); }
+        catch (InvalidOperationException) { versionRefused = true; }
+        check(versionRefused && observed.Starts == 0,
+            "a mixed-version owner set prevents model-bound creation before any public start admission");
+        creatorsReady = true;
         var first = await StartActor("balanced", source, Modes.Balanced);
         var second = await StartActor("durable", source, Modes.Durable);
         var unrelated = await StartActor("excluded", "selected-for-delete", Modes.Balanced);
@@ -167,7 +174,8 @@ internal static class MigrationPlanRunnerChecks
             "a 129-actor provider page dispatches as 128 plus one even when all refused actors remain at source");
 
         MigrationPlanOperator NewOperator(Contract.IActorReads? sourceReads = null) =>
-            new(observed, sourceReads ?? reads, model, new MigrationPlanAuthority(key), selected => allowed && selected.Tenant == scope.Tenant);
+            new(observed, sourceReads ?? reads, model, new MigrationPlanAuthority(key),
+                selected => allowed && selected.Tenant == scope.Tenant, () => creatorsReady);
         async Task<Contract.ActorRef> StartPlan(MigrationPlanOperator operatorHost, string id, string from, string to = target) =>
             (await operatorHost.StartAsync(scope, id, new(from, to, expires, NativeExecutionModel.ModelKey))).Actor!.Value;
         async Task<Contract.ActorRef> StartActor(string id, string definition, string mode) =>
@@ -217,12 +225,14 @@ internal static class MigrationPlanRunnerChecks
     private sealed class SelectionReceipts(Contract.IIngress inner) : Contract.IIngress
     {
         internal bool DropNext { get; set; }
+        internal int Starts { get; private set; }
         internal List<(string Id, Contract.AdmissionOutcome Outcome)> Selections { get; } = [];
 
         public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target,
             string id, string kind, string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
         {
             var receipt = await inner.SendAsync(scope, target, id, kind, payload, options, cancellationToken);
+            if (kind == Contract.Kinds.Start) Starts++;
             if (kind != MigrationPlanControl.Select) return receipt;
             Selections.Add((id, receipt.Outcome));
             if (!DropNext) return receipt;
