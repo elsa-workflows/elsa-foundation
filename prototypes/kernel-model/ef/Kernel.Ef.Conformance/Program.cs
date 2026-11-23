@@ -48,6 +48,9 @@ switch (args)
         return 0;
     case ["root-admission-writer"]:
         return await GeneratedRootChecks.WriteFromChildAsync();
+    case ["postgres", var connection, "root-set", .. var options]:
+        await new EfProvider("postgres", connection, options).CheckRootSetAsync();
+        return 0;
     case ["postgres", var connection, "root-journal"]:
         await new EfProvider("postgres", connection, []).CheckRootJournalAsync();
         return 0;
@@ -88,6 +91,12 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     private bool Pg => engine == "postgres";
     private string Engine => engine;
 
+    internal async Task CheckRootSetAsync()
+    {
+        await using var provided = (Provided)await CreateAsync(2, new());
+        await RootSetChecks.Run(provided.CreateContext, (EfStore)provided.Store);
+    }
+
     internal async Task CheckRootJournalAsync()
     {
         await using var provided = (Provided)await CreateAsync(2, new());
@@ -98,6 +107,15 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     {
         await using var provided = (Provided)await CreateAsync(2, new());
         await DirectSendChecks.Run(provided.CreateContext, (EfStore)provided.Store);
+        await CheckDeadline(false);
+        if (((EfStore)provided.Store).OwnedSetsAvailable) await CheckDeadline(true);
+
+        async Task CheckDeadline(bool grouped)
+        {
+            await using var deadline = (Provided)await CreateAsync(2, new());
+            await RootPreparationDeadlineChecks.Run(deadline.CreateContext,
+                delay => Store(deadline.CreateAdmin(delay), FenceInBatch), (EfStore)deadline.Store, grouped);
+        }
     }
 
     internal async Task CheckRootTurnAsync()
