@@ -34,7 +34,7 @@ public sealed partial class BpmnDirectExecutionTests
         await using (var input = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "CurrentDelayedCompensation.sqlite.gz")))
         await using (var gzip = new GZipStream(input, CompressionMode.Decompress))
         await using (var output = File.Create(database)) await gzip.CopyToAsync(output);
-        Assert.Equal("175a6880fe295970c6b1de3c4e2e43a23ced75b58a55d94413ad798538289fdd",
+        Assert.Equal("1c692410bd6101187866160e16da4812ea6bc06db27b4cec805290e18b80a25c",
             Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(database))));
         await using var host = await OpenAsync(admitNewExecutions: false,
             configure: services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(TimeProvider.System)));

@@ -25,7 +25,7 @@ public sealed class DelayedCompensationWorkbenchTests
             await using (var input = File.OpenRead(fixture))
             await using (var gzip = new GZipStream(input, CompressionMode.Decompress))
             await using (var output = File.Create(original)) await gzip.CopyToAsync(output);
-            Assert.Equal("175a6880fe295970c6b1de3c4e2e43a23ced75b58a55d94413ad798538289fdd", Hash(await File.ReadAllBytesAsync(original)));
+            Assert.Equal("1c692410bd6101187866160e16da4812ea6bc06db27b4cec805290e18b80a25c", Hash(await File.ReadAllBytesAsync(original)));
             await using var host = await OwnedWorkbench.StartAsync(directBpmn: true, runtimeOnly: true,
                 runtimeSnapshotPath: original, recoverySweepSeconds: 0.2);
             LegacyUpgradeInspection.AssertStandardHost(host);

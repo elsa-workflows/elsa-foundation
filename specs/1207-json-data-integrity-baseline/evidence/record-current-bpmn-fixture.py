@@ -68,12 +68,13 @@ def record(repo, capture, output):
                    capturedAt=report['capturedAt'], executionId=report['model'], phase='queued-result',
                    databaseSha256=sha(data), compressedSha256=sha(compressed), byteLength=len(data), compressedByteLength=len(compressed),
                    binaries=provenance['binaryHashes'], binaryVersions=provenance['binaryVersions'],
-                   captureReportSha256=sha(report_bytes), rowCounts=counts,
+                   captureReportSha256=sha(report_bytes), packagerSha256=sha(Path(__file__).read_bytes()), rowCounts=counts,
                    historicalOriginal=dict(path=original.relative_to(repo).as_posix(), compressedSha256=sha(original_bytes), databaseSha256=original_database_sha,
                        proof='Historical writer/source-bound claims remain attached to the unchanged spec1017 archive, not this current recapture.'),
                    replayGoal='Restart with new admission disabled; settle the queued cancelled result while preserving native worker state, obsolete retry, material incarnation and execution authority.')
     output.mkdir(parents=True)
     (output / 'delayed-compensation.sqlite.gz').write_bytes(compressed)
+    (output / 'delayed-compensation.capture.json').write_bytes(report_bytes)
     (output / 'delayed-compensation.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({key: receipt[key] for key in ['writerSourceSha', 'executionId', 'databaseSha256', 'compressedSha256']}))
 
