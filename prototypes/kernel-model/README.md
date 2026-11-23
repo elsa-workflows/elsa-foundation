@@ -115,8 +115,22 @@ leave the batch pending. An acknowledgment retry inside the same window receives
 
 The fixture uses the real in-memory operator route for `Migrate`. Its selection and acknowledgment messages
 are trusted fixture control inputs. The product adapter must authorize those controls. The product plan actor,
-Native migration validation, operator scheduling and target-side [long-gap replay handling](../../docs/architecture/migrating-running-instances.md#plans-and-bulk-migration)
+operator scheduling and target-side [long-gap replay handling](../../docs/architecture/migrating-running-instances.md#plans-and-bulk-migration)
 remain separate K11 work.
+
+### Validate a waiting Native checkpoint
+
+```sh
+dotnet run -c Release --project sim -- --native-migration-validation
+```
+
+This K11 check loads real Balanced and Durable checkpoints through the in-memory Actor Foundation.
+It tries a new Sequence tail, a change to the untaken If branch and a reordered Parallel. The check
+also covers loop bodies and nodes referenced only by a stored result, scheduled child or pending trigger.
+The validator is read-only and handles structured Native checkpoints with unchanged declarations.
+Callers must verify actor status, source definition and version readability before using it.
+Applying a migration, adding defaults, outstanding jobs, Flowchart and StateMachine compatibility are
+separate work.
 
 ## PostgreSQL Core Preview
 
