@@ -35,7 +35,7 @@ internal static partial class NativeHttpEdgeChecks
         var lease = TimeSpan.FromSeconds(2);
         long timestamp = initial;
         long Now() => Interlocked.Read(ref timestamp);
-        var store = new InMemoryStore(1, Now);
+        var store = new InMemoryStore(1, Now, flaws);
         var reads = new ActorList(store, 16);
         var scope = new Contract.BoundScope("http-remote");
         var requests = new Requests(receiver, flaws);
@@ -52,17 +52,18 @@ internal static partial class NativeHttpEdgeChecks
         var token = deadline.Token;
         var entering = new TaskCompletionSource<CommitBatch>(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var originalTerminalCommits = 0;
         var original = new CountingStore(store, () => { }, beforeCommit: async batch =>
         {
             if (FinishesApproval(batch) && entering.TrySetResult(batch))
                 await release.Task.WaitAsync(token);
         }, observeCommit: (batch, landed) =>
         {
-            if (landed && loss == OwnerLoss.AfterCommit && FinishesApproval(batch))
-            {
-                originalLink.Disconnect();
-                throw new StoreException(Failure.Unknown, "The terminal commit landed and its answer was lost.");
-            }
+            if (!landed || !FinishesApproval(batch)) return;
+            Interlocked.Increment(ref originalTerminalCommits);
+            if (loss != OwnerLoss.AfterCommit) return;
+            originalLink.Disconnect();
+            throw new StoreException(Failure.Unknown, "The terminal commit landed and its answer was lost.");
         });
 
         var owner = NewOwner(firstNode, original, lease, originalLink);
@@ -129,7 +130,8 @@ internal static partial class NativeHttpEdgeChecks
             await DriveAsync(successor, token);
             var terminal = await reads.TailAsync(scope, approval.Header.Ref, born.Next, token);
             Require(await reads.GetAsync(scope, approval.Header.Ref, token) is { Header.Status: Contract.ActorStatus.Finished } &&
-                    terminal.Items.Count > 0 && terminal.Items.All(entry => entry.Revision == 2),
+                    terminal.Next is not null && terminal.Items.Count > 0 && terminal.Items.All(entry => entry.Revision == 2) &&
+                    (await reads.TailAsync(scope, approval.Header.Ref, terminal.Next, token)).Items.Count == 0,
                 "The original approval finishes with exactly one additional checkpoint revision.");
 
             if (loss == OwnerLoss.AfterCommit)
@@ -154,6 +156,8 @@ internal static partial class NativeHttpEdgeChecks
             await DriveAsync(successor, token);
             var final = await reads.TailAsync(scope, approval.Header.Ref, born.Next, token);
             Require(!owner.Owns && terminal.Items.SequenceEqual(final.Items) && transport.WrongDestination is null &&
+                    (await reads.TailAsync(scope, approval.Header.Ref, terminal.Next, token)).Items.Count == 0 &&
+                    Volatile.Read(ref originalTerminalCommits) == (loss == OwnerLoss.AfterCommit ? 1 : 0) &&
                     transport.Responses == (loss == OwnerLoss.BeforeCommit ? 2 : 1),
                 "The expired owner leaves the successor's journal and the edge's outcome intact.");
 
