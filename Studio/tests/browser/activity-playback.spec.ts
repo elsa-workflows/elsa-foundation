@@ -62,8 +62,8 @@ for (const [speed, interval] of [["0.5", 2000], ["1", 1000], ["2", 500], ["4", 2
     await page.clock.install({ time: new Date(clockStart.getTime() - 60_000) }); await page.goto("/activity-playback.html");
     const playback = page.getByRole("region", { name: "Activity playback", exact: true });
     await expect(playback).toContainText("Step 1 of 200"); await page.clock.pauseAt(clockStart);
-    await playback.getByText("Playback options", { exact: true }).click();
-    await playback.getByRole("combobox", { name: "Playback speed" }).selectOption(speed);
+    await playback.getByRole("button", { name: "Playback options", exact: true }).click();
+    await page.getByRole("dialog", { name: "Playback options", exact: true }).getByRole("group", { name: "Playback speed" }).getByRole("button", { name: `${speed}×`, exact: true }).click();
     await playback.getByRole("button", { name: "Play", exact: true }).click();
     await page.clock.runFor(interval - 1); await expect(playback).toContainText("Step 1 of 200");
     await page.clock.runFor(1); await expect(playback).toContainText("Step 2 of 200");
@@ -133,7 +133,8 @@ for (const width of [320, 1440]) {
     const playback = page.getByRole("region", { name: "Activity playback", exact: true });
     await expect(playback).toBeVisible();
     await page.evaluate(() => document.documentElement.style.setProperty("--studio-label-size", "19px"));
-    await expect(playback.locator(".wf-playback-note").first()).toHaveCSS("font-size", "19px");
+    await playback.getByRole("button", { name: "Playback options", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Playback options", exact: true }).locator(".wf-playback-note").first()).toHaveCSS("font-size", "19px");
     await expect(playback.locator(".wf-playback-position")).toHaveCSS("font-size", "19px");
     await expect.poll(() => playback.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: test.info().outputPath("playback-typography.png"), fullPage: true });
@@ -146,7 +147,8 @@ for (const theme of ["light", "dark"]) for (const width of [320, 1280]) {
     await page.goto(`/activity-playback.html?theme=${theme}&scenario=partial`);
     const playback = page.getByRole("region", { name: "Activity playback", exact: true });
     await expect(playback).toContainText("Step 1 of 200");
-    await expect(playback.locator(".wf-playback-options")).toHaveJSProperty("open", false);
+    await expect(playback.getByRole("button", { name: "Playback options", exact: true })).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("dialog", { name: "Playback options", exact: true })).toHaveCount(0);
     await expect(playback.getByRole("status").filter({ hasText: "Partial playback range" })).toBeVisible();
     await expect(playback.getByRole("button", { name: "Next", exact: true })).toBeEnabled();
   });
