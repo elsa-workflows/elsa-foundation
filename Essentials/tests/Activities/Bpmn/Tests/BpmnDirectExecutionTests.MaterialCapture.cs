@@ -7,6 +7,7 @@ using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -14,6 +15,22 @@ namespace Elsa.Activities.Bpmn.Tests;
 
 public sealed partial class BpmnDirectExecutionTests
 {
+    [Fact]
+    public async Task The_archived_format2_hash_is_refused_before_new_material_is_written()
+    {
+        using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ActualNativeModelV2.json")));
+        var material = BpmnServiceFaultPolicyTests.ReadMaterial(fixture.RootElement);
+        Assert.InRange(material.Identity.ArtifactId.Length, 1, RuntimeArtifactEfModule.IdentityMaximumLength);
+        Assert.InRange(material.Identity.ArtifactHash.Length, 1, RuntimeArtifactEfModule.HashMaximumLength);
+        await using var host = await OpenAsync(admitNewExecutions: false);
+        await using var scope = await ScopeAsync(host);
+        var store = scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+        var error = await Assert.ThrowsAsync<ArgumentException>(async () => await store.SaveModelAsync(material));
+        Assert.Equal("material", error.ParamName);
+        Assert.StartsWith("Model material requires its complete behavioral content hash and a supported artifact ID.", error.Message, StringComparison.Ordinal);
+        Assert.Null(await store.FindMaterialAsync(material.Identity.ArtifactId));
+    }
+
     [Fact]
     public async Task A_current_writer_publishes_format2_material_without_inventing_a_fault_policy()
     {
