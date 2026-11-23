@@ -8,6 +8,20 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed partial class EfRuntimeArtifactScopeTests
 {
     [Fact]
+    public async Task Source_reference_complete_envelope_depth_is_refused_before_persistence()
+    {
+        var raw = new string('[', 61) + "0" + new string(']', 61);
+        using var data = JsonDocument.Parse(raw);
+        await using var database = await Database.CreateAsync();
+        await using var owner = database.Open("tenant-a");
+        await owner.Template.SaveAsync(Template("depth-template", "depth-hash"));
+        var reference = Reference("depth-source", "depth-template") with
+        { AuthoredInputs = [new("node", "value", "Literal", data.RootElement)] };
+        await Assert.ThrowsAnyAsync<JsonException>(() => owner.Store.SaveAsync(reference).AsTask());
+        Assert.Empty(await owner.Context.WorkflowExecutableSourceReferences.AsNoTracking().ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Template_and_source_envelopes_keep_raw_data_through_a_new_store_scope()
     {
         const string raw = """{ "Key" : "\u0041", "n":1.0, "nil":null, "large":9007199254740993 }""";

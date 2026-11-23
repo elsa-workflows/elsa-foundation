@@ -231,7 +231,8 @@ internal static class EtlDefinitionRecordCodec
         }
 
         var pipelineHash = HashPipeline(canonicalPipeline);
-        if (!StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), canonicalPipeline) ||
+        using var canonicalDocument = JsonDocument.Parse(canonicalPipeline);
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(artifact.Pipeline, canonicalDocument.RootElement) ||
             !StringComparer.Ordinal.Equals(artifact.ContentHash, pipelineHash))
             throw new ArgumentException("The published ETL artifact pipeline is not canonical or its content hash is invalid.", nameof(artifact));
 

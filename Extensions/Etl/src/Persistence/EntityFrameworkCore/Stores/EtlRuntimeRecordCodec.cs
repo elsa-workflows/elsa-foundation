@@ -120,7 +120,7 @@ internal static class EtlRuntimeRecordCodec
                     throw new ArgumentException("The ETL invocation carries an invalid typed pipeline.", nameof(invocation), exception);
                 }
                 canonicalPipeline = EtlArtifactJson.Write(pipeline);
-                if (!StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), canonicalPipeline.GetRawText()))
+                if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(artifact.Pipeline, canonicalPipeline))
                     throw new ArgumentException("The ETL invocation artifact pipeline is not in its typed canonical representation.", nameof(invocation));
                 if (!StringComparer.Ordinal.Equals(EtlArtifactJson.Hash(canonicalPipeline), artifact.ContentHash))
                     throw new ArgumentException("The ETL invocation artifact hash does not match its pipeline.", nameof(invocation));
@@ -176,7 +176,7 @@ internal static class EtlRuntimeRecordCodec
         {
             var pipeline = EtlArtifactV2Json.Read(artifact.Pipeline);
             var canonical = EtlArtifactV2Json.Write(pipeline);
-            if (!StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), canonical.GetRawText()))
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(artifact.Pipeline, canonical))
                 throw new ArgumentException("The ETL invocation v2 artifact pipeline is not in its typed canonical representation.");
             if (!StringComparer.Ordinal.Equals(EtlArtifactJson.Hash(canonical), artifact.ContentHash))
                 throw new ArgumentException("The ETL invocation v2 artifact hash does not match its pipeline.");

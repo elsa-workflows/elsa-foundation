@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 namespace Elsa.Expressions.JsonConverters;
 
 /// <summary>
-/// Serializes <see cref="Type"/> objects to a simple alias representing said type.
+/// Serializes variable declarations with their aliases and typed default values.
 /// </summary>
 /// <inheritdoc />
 internal sealed class VariableConverter(IVariableMapper variableMapper) : JsonConverter<IVariable>

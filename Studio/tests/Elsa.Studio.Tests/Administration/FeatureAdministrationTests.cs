@@ -99,6 +99,19 @@ public sealed class FeatureAdministrationTests
     }
 
     [Fact]
+    public async Task Public_store_refuses_an_unreadable_complete_file_depth_before_writing()
+    {
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true);
+        var store = host.App.Services.GetRequiredService<IShellFeatureConfigurationStore>();
+        var current = await store.LoadAsync();
+        var before = await File.ReadAllBytesAsync(host.ShellsFile);
+        var raw = string.Concat(Enumerable.Repeat("{\"next\":", 60)) + "0" + new string('}', 60);
+        using var data = JsonDocument.Parse(raw);
+        await Assert.ThrowsAnyAsync<JsonException>(() => store.SaveAsync(current.Revision, [new("Deep", true, data.RootElement)]));
+        Assert.Equal(before, await File.ReadAllBytesAsync(host.ShellsFile));
+    }
+
+    [Fact]
     public async Task Activation_guards_receive_the_shell_configuration_separately_from_feature_secrets()
     {
         var guard = new ConfigurationGuard();

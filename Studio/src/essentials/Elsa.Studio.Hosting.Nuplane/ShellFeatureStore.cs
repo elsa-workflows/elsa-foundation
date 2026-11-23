@@ -53,6 +53,7 @@ internal sealed class ShellFeatureStore(
         foreach (var feature in features.OrderBy(feature => feature.Id, StringComparer.OrdinalIgnoreCase))
             accepted[feature.Id] = feature.Enabled ? feature.Configuration.Clone() : JsonSerializer.SerializeToElement(false, Elsa.Serialization.Core.JsonBaseline.Options);
         var replacement = JsonSerializer.SerializeToElement(accepted, Elsa.Serialization.Core.JsonBaseline.Options);
+        _ = Elsa.Serialization.Core.JsonHashInput.HashKeyed(replacement, RevisionKey); // Refuse an unhashable candidate before changing the file.
         try
         {
             await AtomicConfigWriter.WriteAtomicAsync(file, ReplaceFeatures(document, replacement) + Environment.NewLine, cancellationToken);
@@ -145,7 +146,9 @@ internal sealed class ShellFeatureStore(
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder }))
             WritePath(document, 0, writer);
-        return Encoding.UTF8.GetString(stream.ToArray());
+        var bytes = stream.ToArray();
+        using var validated = JsonDocument.Parse(bytes, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        return Encoding.UTF8.GetString(bytes);
 
         void WritePath(JsonElement current, int depth, Utf8JsonWriter writer)
         {

@@ -32,7 +32,7 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
             if (envelopeBytes > pipeline.Limits.MaxArtifactBytes)
                 throw Refused("etl.executable.too-large");
             var canonical = EtlArtifactV2Json.Write(pipeline);
-            if (!StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), canonical.GetRawText()))
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(artifact.Pipeline, canonical))
                 throw Refused("etl.executable.noncanonical-pipeline");
             var hash = EtlArtifactJson.Hash(canonical);
             if (!StringComparer.Ordinal.Equals(artifact.ContentHash, hash) ||

@@ -355,7 +355,7 @@ public sealed class EtlConnectorExecutableReaderTests
     }
 
     [Fact]
-    public void Reader_requires_canonical_pipeline_json_even_when_hash_and_identity_match()
+    public void Reader_accepts_equivalent_json_spelling_and_still_checks_the_content_identity()
     {
         var artifact = Compile(EtlV2TestPipelines.Create());
         using var noncanonicalDocument = JsonDocument.Parse(artifact.Pipeline.GetRawText().Replace(",", ", ", StringComparison.Ordinal));
@@ -365,9 +365,11 @@ public sealed class EtlConnectorExecutableReaderTests
             hash, artifact.DefinitionId, artifact.DefinitionVersion, noncanonicalDocument.RootElement);
         using var runtime = CreateRuntime();
 
-        var exception = Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(noncanonical));
-
-        Assert.Equal("etl.executable.noncanonical-pipeline", exception.Code);
+        Assert.Equal(artifact.ContentHash, hash);
+        Assert.NotNull(runtime.Reader.Read(noncanonical));
+        var different = new EtlArtifact(2, noncanonical.ArtifactId, new string('0', 64),
+            artifact.DefinitionId, artifact.DefinitionVersion, noncanonicalDocument.RootElement);
+        Assert.Equal("etl.executable.provenance-invalid", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(different)).Code);
     }
 
     [Fact]

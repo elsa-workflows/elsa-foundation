@@ -417,7 +417,9 @@ public sealed partial class EfExecutableActivityTemplateStore(
             writer.WriteEndObject();
         }
         using var payload = JsonDocument.Parse(stream.ToArray());
-        return RuntimeArtifactJson.Serialize(new { collection = "executableActivityTemplate", templateHash = Encode(template.TemplateHash), template = payload.RootElement });
+        var json = JsonSerializer.Serialize(new { collection = "executableActivityTemplate", templateHash = Encode(template.TemplateHash), template = payload.RootElement }, Elsa.Serialization.Core.JsonBaseline.Options);
+        using var validated = JsonDocument.Parse(json); // Raw payload writing must not bypass the complete stored-envelope depth bound.
+        return json;
     }
 
     private string EncodeCursor(string scope, string key) => continuationCodec.EncodeJson(ContinuationPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new Cursor(1, Hash(scope), key))));

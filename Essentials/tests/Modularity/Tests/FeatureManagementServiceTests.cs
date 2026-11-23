@@ -22,6 +22,23 @@ public sealed class FeatureManagementServiceTests
     private readonly List<IFeatureActivationGuard> _guards = [];
 
     [Fact]
+    public async Task Apply_preserves_raw_configuration_and_untouched_values_beside_restored_secrets()
+    {
+        _store.Features[SecuredFeatureId] = Json($$"""{"SigningKey":"{{SigningKeyValue}}"}""");
+        var service = CreateService(SecuredFeature());
+        var catalog = await service.GetCatalogAsync();
+        const string raw = """{ "SigningKey":"new-key", "Mode":"Ren\u00e9", "n":1.0, "nil":null }""";
+        await service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [new(SecuredFeatureId, true, Json(raw))]));
+        Assert.Equal(raw, _store.Features[SecuredFeatureId].GetRawText());
+        catalog = await service.GetCatalogAsync();
+        const string nested = """{ "Key" : "\u0041", "n":1.0, "nil":null }""";
+        var requested = "{\"SigningKey\":\"" + SecretSettingMask.Placeholder + "\",\"Payload\":" + nested + "}";
+        await service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [new(SecuredFeatureId, true, Json(requested))]));
+        Assert.Equal("new-key", _store.Features[SecuredFeatureId].GetProperty("SigningKey").GetString());
+        Assert.Equal(nested, _store.Features[SecuredFeatureId].GetProperty("Payload").GetRawText());
+    }
+
+    [Fact]
     public async Task CatalogMergesShellAndContributorFeatures()
     {
         _store.Features["EnabledFeature"] = Json("{}");

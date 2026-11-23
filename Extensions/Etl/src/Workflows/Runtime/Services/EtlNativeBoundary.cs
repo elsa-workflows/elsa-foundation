@@ -58,7 +58,7 @@ internal static class EtlNativeBoundary
         {
             var pipeline = EtlArtifactV2Json.Read(document);
             var canonical = EtlArtifactV2Json.Write(pipeline);
-            if (!StringComparer.Ordinal.Equals(document.GetRawText(), canonical.GetRawText()))
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(document, canonical))
                 throw Invalid();
             return EtlArtifactJson.Hash(canonical);
         }

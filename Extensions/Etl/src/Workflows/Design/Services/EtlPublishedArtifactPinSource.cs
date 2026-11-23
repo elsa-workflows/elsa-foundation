@@ -112,7 +112,7 @@ internal sealed class EtlPublishedArtifactPinSource(
             {
                 var pipeline = EtlArtifactV2Json.Read(artifact.Pipeline);
                 var canonical = EtlArtifactV2Json.Write(pipeline);
-                canonicalV2 = StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), canonical.GetRawText());
+                canonicalV2 = Elsa.Serialization.Core.JsonCanonicalForm.Equals(artifact.Pipeline, canonical);
                 compiled = canonicalV2
                     ? artifactCompilerV2!.Compile(selection.DefinitionId, selection.DefinitionVersion, pipeline).Artifact
                     : null;
@@ -137,7 +137,7 @@ internal sealed class EtlPublishedArtifactPinSource(
             !StringComparer.Ordinal.Equals(artifact.ContentHash, selection.ContentHash) ||
             !StringComparer.Ordinal.Equals(artifact.ArtifactId, compiled.ArtifactId) ||
             !StringComparer.Ordinal.Equals(artifact.ContentHash, compiled.ContentHash) ||
-            !StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), compiled.Pipeline.GetRawText()))
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(artifact.Pipeline, compiled.Pipeline))
             throw Refused(node, "resolved a published ETL artifact that does not match the selected version and content hash.");
 
         var serialized = JsonSerializer.Serialize(artifact, ArtifactJsonOptions);

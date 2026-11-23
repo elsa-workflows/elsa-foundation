@@ -647,7 +647,9 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
     private static string SerializeEnvelope(WorkflowExecutableSourceReference value)
     {
         using var reference = JsonDocument.Parse(RuntimeArtifactJson.Serialize(value));
-        return RuntimeArtifactJson.Serialize(new { collection = "workflowExecutableSourceReference", artifactId = Encode(value.ArtifactId), reference = reference.RootElement });
+        var json = JsonSerializer.Serialize(new { collection = "workflowExecutableSourceReference", artifactId = Encode(value.ArtifactId), reference = reference.RootElement }, Elsa.Serialization.Core.JsonBaseline.Options);
+        using var validated = JsonDocument.Parse(json); // Validate the wrapper depth before it can become a persisted unreadable row.
+        return json;
     }
 
     private static string ReadString(JsonElement node, string property) =>

@@ -78,6 +78,30 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Saved_and_reloaded_feature_configuration_retains_its_raw_json()
+    {
+        const string raw = """{ "Key":"\u0041", "n":1.0, "nil":null, "large":9007199254740993 }""";
+        var store = CreateStore();
+        var current = await store.LoadAsync();
+        using var data = JsonDocument.Parse(raw);
+        var saved = await store.SaveAsync(current.Revision, [new("Raw", true, data.RootElement)]);
+        Assert.Equal(raw, saved.Features["Raw"].GetRawText());
+        Assert.Equal(raw, (await CreateStore().LoadAsync()).Features["Raw"].GetRawText());
+    }
+
+    [Fact]
+    public async Task Complete_file_depth_is_checked_before_feature_configuration_is_saved()
+    {
+        var store = CreateStore();
+        var current = await store.LoadAsync();
+        var before = await File.ReadAllBytesAsync(_shellsPath);
+        var raw = string.Concat(Enumerable.Repeat("{\"next\":", 60)) + "0" + new string('}', 60);
+        using var data = JsonDocument.Parse(raw);
+        await Assert.ThrowsAnyAsync<JsonException>(() => store.SaveAsync(current.Revision, [new("Deep", true, data.RootElement)]));
+        Assert.Equal(before, await File.ReadAllBytesAsync(_shellsPath));
+    }
+
+    [Fact]
     public async Task SaveReplacesFeatureMapWithEnabledFeatures()
     {
         var store = CreateStore();

@@ -42,7 +42,7 @@ internal sealed class EtlExecutableReader(EtlRuntimeOptions options)
                 throw Refused("etl.executable.too-large");
 
             var canonicalPipeline = EtlArtifactJson.Write(pipeline);
-            if (!string.Equals(rawPipeline, canonicalPipeline.GetRawText(), StringComparison.Ordinal))
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(artifact.Pipeline, canonicalPipeline))
                 throw Refused("etl.executable.noncanonical-pipeline");
 
             var hash = EtlArtifactJson.Hash(canonicalPipeline);
