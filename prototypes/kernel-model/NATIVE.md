@@ -245,9 +245,20 @@ with no publication, a 503 on owner reset, a 504 at the reply deadline, a 500 wh
 and completion after the client disconnects. Run with `--flaw EmitBeforeCommit` to make the held-response
 assertion fail before the checkpoint lands.
 
-This run covers the default commit-before-release route on one live receiving node. The local process kill
-between commit and release, remote-owner recovery before and after the reply deadline, provider-backed
-replies and cross-tenant routing still have their own K8 acceptance cases.
+The companion check keeps the HTTP receiver live while its remote logical owner is lost:
+
+```bash
+dotnet run -c Release --project sim -- --public-http-remote-check
+```
+
+Two Worker identities share the in-memory store and deliver replies through an in-process transport. The
+receiver opens a real loopback HTTP connection. It verifies the persisted reply address, then takes the
+partition at a higher epoch with a second Worker. A loss before commit returns the successor's response
+through the same connection when the deadline is open and returns one 504 when the deadline has passed.
+A loss after the commit lands and before any reply crosses the transport returns one 504 at the deadline.
+Every schedule finishes the same approval at journal revision 2. The fixture disconnects the lost
+owner's reply link and keeps its Worker available to check the late commit. Independent process loss,
+provider-backed replies and cross-tenant routing have separate K8 acceptance cases.
 
 ## 5. What it costs
 
