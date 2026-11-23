@@ -107,7 +107,7 @@ internal static class FoundationValueChecks
         TurnCommit State(CreationAddress actor, FoundationValue addition)
         {
             var previous = store.Instances[actor.Id];
-            return new(actor.Id, previous with { Revision = previous.Revision + 1, State = Json.Write(addition.Reference) },
+            return new(actor.Id, previous.WithFoundationState(Json.Write(addition.Reference)) with { Revision = previous.Revision + 1 },
                 previous.Revision, [], [], [], [], [], "value reference checkpoint") { FoundationValues = [addition] };
         }
         CommitBatch Batch(IReadOnlyList<TurnCommit> turns, long epoch) =>

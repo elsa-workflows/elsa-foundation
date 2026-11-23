@@ -52,6 +52,13 @@
       "kernel.runtime": {
         "type": "Project"
       },
+      "kernel.runtime.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )",
+          "Kernel.Runtime": "[1.0.0, )"
+        }
+      },
       "kernel.sim": {
         "type": "Project",
         "dependencies": {
@@ -71,7 +78,7 @@
       "kernel.statecharts.native": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Native.Legacy": "[1.0.0, )",
+          "Kernel.Native": "[1.0.0, )",
           "Kernel.Statecharts": "[1.0.0, )"
         }
       },
