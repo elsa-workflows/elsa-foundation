@@ -243,7 +243,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private bool _windowInstalled;
     public bool PhysicalRetirementAvailable => true;
     public bool SupportsCommitWindow => _windowInstalled;
-    public bool SupportsJobTrialClear => Engine is null && _ordinaryRoot is null;
+    public bool SupportsJobTrialClear => _ordinaryRoot is null && Engine is null or SqlServerEngine or MySqlEngine;
 
     public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault(OwnedCommit) ?? true;
 
