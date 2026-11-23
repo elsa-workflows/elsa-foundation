@@ -1,0 +1,94 @@
+name: Monitor Foundation release inventories
+
+on:
+  schedule:
+    - cron: '47 5 * * 2'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/release-monitor.yml'
+      - 'tools/release-monitor/**'
+      - 'tools/ci/*image_evidence*'
+      - 'tools/versioning/package-evidence/verify.py'
+
+permissions: {}
+
+concurrency:
+  group: foundation-release-monitor-${{ github.event.pull_request.number || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install the producer reader dependency
+        run: |
+          python3 -m pip install --no-deps --only-binary=:all: --require-hashes --target "$RUNNER_TEMP/reader-deps" -r tools/ci/image_evidence_requirements.txt
+          echo "PYTHONPATH=$RUNNER_TEMP/reader-deps" >> "$GITHUB_ENV"
+      - name: Exercise release monitor and producer contracts
+        run: python3 -m unittest discover -s tools/release-monitor -v
+
+  scan:
+    if: github.event_name != 'pull_request' && github.repository == 'elsa-workflows/elsa-foundation' && github.ref == 'refs/heads/main'
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 155
+    permissions:
+      contents: read
+      actions: read
+      attestations: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GRYPE_DB_AUTO_UPDATE: 'false'
+      GRYPE_DB_VALIDATE_AGE: 'true'
+      GRYPE_DB_MAX_ALLOWED_BUILT_AGE: 120h
+      GRYPE_CHECK_FOR_APP_UPDATE: 'false'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install the producer's image verification tools
+        run: bash tools/ci/install_image_evidence_tools.sh
+      - name: Install verified scanner and signature clients
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          mkdir -p monitor-bin
+          curl -fsSL --retry 3 -o grype.tgz https://github.com/anchore/grype/releases/download/v0.122.1/grype_0.122.1_linux_amd64.tar.gz
+          curl -fsSL --retry 3 -o monitor-bin/cosign https://github.com/sigstore/cosign/releases/download/v3.0.6/cosign-linux-amd64
+          curl -fsSL --retry 3 -o gh.tgz https://github.com/cli/cli/releases/download/v2.105.0/gh_2.105.0_linux_amd64.tar.gz
+          echo 'f1ba7e2917ee1395618de20a98da0aa7c0fb1788927797651047c50502a37538  grype.tgz' | sha256sum -c -
+          echo 'c956e5dfcac53d52bcf058360d579472f0c1d2d9b69f55209e256fe7783f4c74  monitor-bin/cosign' | sha256sum -c -
+          echo '79e7ab5db738c48777b696e374f8b428f0647debfb424f44d2f426370407fe2f  gh.tgz' | sha256sum -c -
+          tar xzf grype.tgz -C monitor-bin grype
+          tar xzf gh.tgz -C monitor-bin --strip-components=2 gh_2.105.0_linux_amd64/bin/gh
+          chmod +x monitor-bin/cosign
+          echo "$RUNNER_TEMP/monitor-bin" >> "$GITHUB_PATH"
+      - name: Refresh advisories and scan verified inventories
+        run: |
+          set -o pipefail
+          timeout --kill-after=15s 120m python3 tools/release-monitor/monitor.py "$RUNNER_TEMP/report.json" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Retain setup or interruption failures
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path(os.environ["RUNNER_TEMP"]) / "report.json"
+          report = json.loads(path.read_text()) if path.exists() else {"database": None, "scanner": "grype 0.122.1", "results": [], "errors": []}
+          report["errors"].append("Workflow failed. Consult the job log and the last completed subject.")
+          path.write_text(json.dumps(report, indent=2))
+          PY
+      - name: Retain the complete report for maintainers
+        if: '!cancelled()'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-monitor-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/report.json
+          if-no-files-found: error
+          retention-days: 90
