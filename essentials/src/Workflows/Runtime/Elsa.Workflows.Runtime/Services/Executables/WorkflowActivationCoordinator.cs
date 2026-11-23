@@ -382,8 +382,9 @@ public sealed partial class WorkflowActivationCoordinator(
 
     /// <summary>
     /// <see cref="WorkflowActivationOutcome.AlreadyActive"/> when <paramref name="slot"/>'s activation activates the
-    /// command's artifact for its tenant through <paramref name="activeReference"/>, and the command does not take the slot
-    /// over from another owner; otherwise <see langword="null"/>.
+    /// command's artifact for its tenant through <paramref name="activeReference"/> with identical non-behavioral
+    /// inspection sidecars, and the command does not take the slot over from another owner; otherwise
+    /// <see langword="null"/>.
     /// </summary>
     private WorkflowActivationResult? TryResolveSameArtifactNoOp(
         ActivationCandidate command,
@@ -394,7 +395,8 @@ public sealed partial class WorkflowActivationCoordinator(
             command.OwnershipIntent == WorkflowActivationOwnershipIntent.TakeOver && slot.Source is { } incumbent && !incumbent.IsSameOwnerAs(command.Source) ||
             activeReference is null ||
             !StringComparer.Ordinal.Equals(activeReference.ArtifactId, command.Identity.ArtifactId) ||
-            !StringComparer.Ordinal.Equals(activeReference.TenantId, command.Reference.TenantId))
+            !StringComparer.Ordinal.Equals(activeReference.TenantId, command.Reference.TenantId) ||
+            !WorkflowExecutableSourceReferenceComparer.SameInspectionSidecars(activeReference, command.Reference))
             return null;
 
         logger?.LogDebug(

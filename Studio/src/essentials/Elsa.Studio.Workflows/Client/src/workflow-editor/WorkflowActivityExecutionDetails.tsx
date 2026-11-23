@@ -1,8 +1,8 @@
 import { getNotifications } from "./notifications";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Activity as ActivityIcon, ChevronRight, Info, Undo2 } from "lucide-react";
-import { StudioButton, StudioTabPanel, StudioTabs } from "@elsa-workflows/studio-ui";
-import type { StudioActivityInputDescriptor, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import { StudioButton, StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
+import type { StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { WorkflowRunRelatedLinks } from "./WorkflowRunRelatedLinks";
 import { getActivityExecutionInspection } from "../api/runtime";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary } from "../workflowTypes";
@@ -18,19 +18,22 @@ import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { formatCaptureMode, formatSnapshotPayload, runtimeValueContextId, RuntimeValueEvidenceCard, RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider } from "./RuntimeValueEvidence";
 import "./activityInspection.css";
 import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
-import type { RunHistorySelection, RuntimeHistoryEvent } from "../runtimeHistoryTypes";
-import { PanelTabList } from "./PanelTabList";
+import type { RunHistorySelection } from "../runtimeHistoryTypes";
 
-const ActivityHistoryJournal = lazy(async () => ({ default: (await import("./run-history/RunHistoryTimeline")).ActivityHistoryJournal }));
+const ActivityHistoryJournal = lazy(async () => ({ default: (await import("./run-history/HistoryInspection")).ActivityHistoryJournal }));
 const ActivityBookmarkHistory = lazy(async () => ({ default: (await import("./run-history/HistoryInspection")).ActivityBookmarkHistory }));
 const HistoryInspection = lazy(async () => ({ default: (await import("./run-history/HistoryInspection")).HistoryInspection }));
 
 const ReusableBoundaryInspector = lazy(async () => ({ default: (await import("./ReusableBoundaryInspector")).ReusableBoundaryInspector }));
-const activityExecutionDetailTabs = [
-  { id: "overview", label: "Overview" },
-  { id: "inputs", label: "Inputs" },
-  { id: "outputs", label: "Outputs" }
-];
+
+export type ActivityExecutionDetailView = "overview" | "inputs" | "outputs" | "events" | "bookmarks";
+export type ActivityExecutionInitialView = ActivityExecutionDetailView | "journal" | "data";
+
+function normalizeInitialView(view: ActivityExecutionInitialView): ActivityExecutionDetailView {
+  if (view === "journal") return "events";
+  if (view === "data") return "overview";
+  return view;
+}
 
 type ActivityExecutionInspectionState = {
   activityExecutionId: string | null;
@@ -77,16 +80,20 @@ export function WorkflowActivityExecutionDetails({
   refreshKey = 0,
   compact = false,
   prepared,
-  initialView = "data",
+  initialView = "overview",
   historyRefreshKey,
   onSelectHistory,
-  onFocusHistory
+  onFocusHistory,
+  onOpenIncident,
+  navigate
 }: {
   prepared?: PreparedAttachedExecution;
-  initialView?: "journal" | "bookmarks" | "data";
+  initialView?: ActivityExecutionInitialView;
   historyRefreshKey?: string | number;
   onSelectHistory?(selection: RunHistorySelection): void;
   onFocusHistory?(activityExecutionId: string): void;
+  onOpenIncident?(incidentId: string): void;
+  navigate?(path: string): void;
   compact?: boolean;
   refreshKey?: number;
   executionNavigation?: ReactNode;
@@ -118,20 +125,21 @@ export function WorkflowActivityExecutionDetails({
   const [copyStatus, setCopyStatus] = useState("");
   const bookmarkRefreshKey = historyRefreshKey ?? JSON.stringify([activity?.status, activity?.completedAt, activity?.bookmarkCount, activity?.bookmarkIds]);
   const historyIdentity = JSON.stringify([selectedContextIdentity, selectedWorkflowExecutionId, selectedActivityExecutionId]);
-  const [historyView, setHistoryView] = useState<{ identity: string; tab: "journal" | "bookmarks" | "data"; selection: RunHistorySelection } | null>(null);
-  const activeHistoryView = historyView?.identity === historyIdentity ? historyView : { identity: historyIdentity, tab: initialView, selection: null };
+  const normalizedInitialView = normalizeInitialView(initialView);
+  const [inlineHistorySelection, setInlineHistorySelection] = useState<{ identity: string; selection: RunHistorySelection } | null>(null);
+  const activeHistorySelection = inlineHistorySelection?.identity === historyIdentity ? inlineHistorySelection.selection : null;
   const selectHistory = (selection: RunHistorySelection) => {
     if (onSelectHistory) onSelectHistory(selection);
-    else setHistoryView({ ...activeHistoryView, selection });
+    else setInlineHistorySelection({ identity: historyIdentity, selection });
   };
-  useEffect(() => {
-    if (focusInputKey) setHistoryView({ identity: historyIdentity, tab: "data", selection: null });
-  }, [focusInputKey, historyIdentity]);
-  const [activeDetailTab, setActiveDetailTab] = useState("overview");
+  const [activeDetailTab, setActiveDetailTab] = useState<ActivityExecutionDetailView>(() => focusInputKey ? "inputs" : normalizedInitialView);
   const detailTabsId = useId();
 
   useEffect(() => {
-    if (focusInputKey) setActiveDetailTab("inputs");
+    if (focusInputKey) {
+      setInlineHistorySelection(null);
+      setActiveDetailTab("inputs");
+    }
   }, [focusInputKey, historyIdentity]);
 
   const requestedRevision = useRef(refreshKey); requestedRevision.current = refreshKey;
@@ -206,6 +214,19 @@ export function WorkflowActivityExecutionDetails({
 
   const catalogItem = activityCatalog.find(item => item.activityTypeKey === activity.activityType);
   const declaredInputs = readDeclaredActivityInputs(catalogItem?.inputs);
+  const inputEvaluations = currentInspectionState.status === "ready"
+    ? (currentInspectionState.inspection?.valueSnapshots ?? []).filter(snapshot => snapshot.subject === "ActivityInput")
+    : [];
+  const inputRows = buildInputInspectionRows({
+    declarations: declaredInputs,
+    authoredSources: executableNodeFacts?.authoredInputs ?? [],
+    compiledBindings: executableNodeFacts?.inputBindings ?? [],
+    evaluations: inputEvaluations,
+    authoredSourceAccess: executableNodeFacts?.authoredInputsAccess
+  });
+  const outputCount = currentInspectionState.status === "ready"
+    ? (currentInspectionState.inspection?.valueSnapshots ?? []).filter(snapshot => snapshot.subject === "ActivityOutput").length
+    : 0;
   const incidentDetails = currentInspectionState.inspection?.incidents;
   const recordedIncidents = Array.isArray(incidentDetails) ? incidentDetails : null;
   const activityLabel = resolveActivityLabel(
@@ -222,6 +243,27 @@ export function WorkflowActivityExecutionDetails({
   const durationLabel = formatDuration(activity.startedAt, activity.completedAt) || "Unknown";
   const bookmarkCount = resolveReportedCount(activity.bookmarkCount, activity.bookmarkIds);
   const incidentCount = resolveReportedCount(activity.incidentCount, activity.incidentIds);
+  const showBookmarksTab = (bookmarkCount ?? 0) > 0 || activity.status === "Suspended" || normalizedInitialView === "bookmarks";
+  const detailTabs: StudioTabItem[] = [
+    { id: "overview", label: "Overview" },
+    {
+      id: "inputs",
+      label: "Inputs",
+      trailing: inputRows.length > 0 ? <span className="wf-activity-tab-count" aria-hidden="true">{inputRows.length}</span> : undefined
+    },
+    {
+      id: "outputs",
+      label: "Outputs",
+      trailing: outputCount > 0 ? <span className="wf-activity-tab-count" aria-hidden="true">{outputCount}</span> : undefined
+    },
+    { id: "events", label: "Events" },
+    ...(showBookmarksTab ? [{
+      id: "bookmarks",
+      label: "Bookmarks",
+      trailing: (bookmarkCount ?? 0) > 0 ? <span className="wf-activity-tab-count" aria-hidden="true">{bookmarkCount}</span> : undefined
+    }] : [])
+  ];
+  const effectiveDetailTab: ActivityExecutionDetailView = detailTabs.some(tab => tab.id === activeDetailTab) ? activeDetailTab : "overview";
   const executionAttempt = currentInspectionState.status === "ready" ? currentInspectionState.inspection?.attempt : null;
   const executionDetailRows = [
     ...(compact ? [
@@ -299,28 +341,20 @@ export function WorkflowActivityExecutionDetails({
       {executionNavigation}
       {childExecutions}
       <WorkflowRunRelatedLinks context={context} session={backendSession} activity={activity} contributions={runRelatedLinks} refreshKey={refreshKey} />
-      <PanelTabList label="Activity execution views" activeTabId={activeHistoryView.tab}
-        tabs={[{ id: "journal", title: "Journal", icon: null, order: 0, render: () => null }, { id: "bookmarks", title: "Bookmarks", icon: null, order: 1, render: () => null }, { id: "data", title: "Data", icon: null, order: 2, render: () => null }]}
-        onSelect={tab => setHistoryView({ identity: historyIdentity, tab: tab as "journal" | "bookmarks" | "data", selection: null })} />
-      {activeHistoryView.selection ? <Suspense fallback={<p role="status">Loading recorded history…</p>}><HistoryInspection context={context}
-        workflowExecutionId={activity.workflowExecutionId} selection={activeHistoryView.selection} refreshKey={bookmarkRefreshKey} onSelect={selectHistory}
-        onBack={() => setHistoryView({ ...activeHistoryView, selection: null })} onFocusTimeline={onFocusHistory} /></Suspense>
-        : activeHistoryView.tab === "journal" ? <Suspense fallback={<p role="status">Loading activity journal…</p>}><ActivityHistoryJournal
-          key={historyIdentity} context={context} workflowExecutionId={activity.workflowExecutionId} activityExecutionId={activity.activityExecutionId}
-          onSelectEvent={(event: RuntimeHistoryEvent) => selectHistory({ kind: "event", id: event.historyEventId })} onOpenTimeline={onFocusHistory} /></Suspense>
-          : activeHistoryView.tab === "bookmarks" ? <Suspense fallback={<p role="status">Loading recorded bookmarks…</p>}><ActivityBookmarkHistory
-            key={historyIdentity} context={context} workflowExecutionId={activity.workflowExecutionId} activityExecutionId={activity.activityExecutionId} refreshKey={bookmarkRefreshKey} onSelect={selectHistory} /></Suspense> : null}
-      {!activeHistoryView.selection && activeHistoryView.tab === "data" ? <>
+      {activeHistorySelection ? <Suspense fallback={<p role="status">Loading recorded history…</p>}><HistoryInspection context={context}
+        workflowExecutionId={activity.workflowExecutionId} selection={activeHistorySelection} refreshKey={bookmarkRefreshKey} onSelect={selectHistory}
+        onBack={() => setInlineHistorySelection(null)} onFocusTimeline={onFocusHistory} /></Suspense> : (
       <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
         <StudioTabs
           baseId={detailTabsId}
-          tabs={activityExecutionDetailTabs}
-          activeTab={activeDetailTab}
-          onSelect={setActiveDetailTab}
+          tabs={detailTabs}
+          activeTab={effectiveDetailTab}
+          onSelect={tab => setActiveDetailTab(tab as ActivityExecutionDetailView)}
           ariaLabel="Activity execution details"
           className="wf-activity-inspection-tabs"
+          compact
         />
-        <StudioTabPanel baseId={detailTabsId} index={0} hidden={activeDetailTab !== "overview"} className="wf-activity-inspection-tab-panel">
+        <StudioTabPanel baseId={detailTabsId} index={0} hidden={effectiveDetailTab !== "overview"} className="wf-activity-inspection-tab-panel">
           {!compact ? <dl className="wf-activity-summary-grid">
             <ActivityMetadataValue scope={copyScope} label="Started" value={startedLabel} copiedLabel="start time" onCopied={markCopied} onCopyFailed={markCopyFailed} />
             <ActivityMetadataValue scope={copyScope} label="Duration" value={durationLabel} copiedLabel="duration" onCopied={markCopied} onCopyFailed={markCopyFailed} />
@@ -359,27 +393,65 @@ export function WorkflowActivityExecutionDetails({
             </details>
           </section>
         </StudioTabPanel>
-        <StudioTabPanel baseId={detailTabsId} index={1} hidden={activeDetailTab !== "inputs"} className="wf-activity-inspection-tab-panel">
-          <WorkflowActivityInputEvidence
-            state={currentInspectionState}
-            declarations={declaredInputs}
-            executableNodeFacts={executableNodeFacts}
-            expressionEditors={expressionEditors}
-            focusInputKey={focusInputKey}
-          />
+        <StudioTabPanel baseId={detailTabsId} index={1} hidden={effectiveDetailTab !== "inputs"} className="wf-activity-inspection-tab-panel">
+          {effectiveDetailTab !== "events" && effectiveDetailTab !== "bookmarks" ? (
+            <WorkflowActivityInputEvidence
+              state={currentInspectionState}
+              rows={inputRows}
+              executableNodeFacts={executableNodeFacts}
+              expressionEditors={expressionEditors}
+              focusInputKey={focusInputKey}
+            />
+          ) : null}
         </StudioTabPanel>
-        <StudioTabPanel baseId={detailTabsId} index={2} hidden={activeDetailTab !== "outputs"} className="wf-activity-inspection-tab-panel">
-          <WorkflowActivityValueEvidence
-            state={currentInspectionState}
-            subject="ActivityOutput"
-            title="Outputs"
-            loadingText="Loading recorded outputs..."
-            failureText="Recorded outputs are unavailable."
-            emptyText="No runtime output snapshots were recorded for this execution."
-          />
+        <StudioTabPanel baseId={detailTabsId} index={2} hidden={effectiveDetailTab !== "outputs"} className="wf-activity-inspection-tab-panel">
+          {effectiveDetailTab !== "events" && effectiveDetailTab !== "bookmarks" ? (
+            <WorkflowActivityValueEvidence
+              state={currentInspectionState}
+              subject="ActivityOutput"
+              title="Outputs"
+              loadingText="Loading recorded outputs..."
+              failureText="Recorded outputs are unavailable."
+              emptyText="No runtime output snapshots were recorded for this execution."
+            />
+          ) : null}
         </StudioTabPanel>
+        <StudioTabPanel baseId={detailTabsId} index={3} hidden={effectiveDetailTab !== "events"} className="wf-activity-inspection-tab-panel wf-activity-inspection-tab-panel--flush">
+          {effectiveDetailTab === "events" ? (
+            <Suspense fallback={<p className="wf-instance-note" role="status">Loading activity events…</p>}>
+              <ActivityHistoryJournal
+                key={historyIdentity}
+                context={context}
+                workflowExecutionId={activity.workflowExecutionId}
+                activityExecutionId={activity.activityExecutionId}
+                refreshKey={bookmarkRefreshKey}
+                onSelectHistory={selectHistory}
+                onOpenTimeline={onFocusHistory}
+                onActivity={onSelectEvidence}
+                onIncident={onOpenIncident}
+                navigate={navigate}
+              />
+            </Suspense>
+          ) : null}
+        </StudioTabPanel>
+        {showBookmarksTab ? (
+          <StudioTabPanel baseId={detailTabsId} index={4} hidden={effectiveDetailTab !== "bookmarks"} className="wf-activity-inspection-tab-panel wf-activity-inspection-tab-panel--flush">
+            {effectiveDetailTab === "bookmarks" ? (
+              <Suspense fallback={<p className="wf-instance-note" role="status">Loading recorded bookmarks…</p>}>
+                <ActivityBookmarkHistory
+                  key={historyIdentity}
+                  context={context}
+                  workflowExecutionId={activity.workflowExecutionId}
+                  activityExecutionId={activity.activityExecutionId}
+                  refreshKey={bookmarkRefreshKey}
+                  onSelect={selectHistory}
+                />
+              </Suspense>
+            ) : null}
+          </StudioTabPanel>
+        ) : null}
       </RuntimeValueEvidenceResolutionProvider>
-      </> : null}
+      )}
     </>
   );
 }
@@ -410,23 +482,16 @@ function WorkflowActivityOutcomeEvidence({ state }: { state: ActivityExecutionIn
   const presentation = state.status === "ready"
     ? outcomeNames.length > 0 ? "recorded" : "empty"
     : state.status === "loading" ? "loading" : "unavailable";
-  const presentationLabel = presentation === "recorded" ? "Recorded"
-    : presentation === "empty" ? "No records"
-      : presentation === "loading" ? "Loading"
-        : "Unavailable";
 
   return (
     <section className="wf-instance-section wf-activity-outcomes" data-state={presentation}>
-      <header className="wf-runtime-evidence-heading">
-        <h4>Outcomes{presentation === "recorded" ? <span className="wf-runtime-evidence-count" aria-label={`${outcomeNames.length} outcomes`}>{outcomeNames.length}</span> : null}</h4>
-        <span className="wf-activity-outcome-state" data-state={presentation}>{presentationLabel}</span>
-      </header>
-      {state.status === "loading" ? <p>Loading runtime outcomes...</p>
+      <h4 className="wf-activity-outcomes-heading">Outcomes</h4>
+      {state.status === "loading" ? <p className="wf-activity-outcome-status">Loading runtime outcomes...</p>
         : state.status === "failed" ? <>
-          <p>Runtime outcomes are unavailable.</p>
-          {state.error ? <p className="wf-instance-note">{state.error}</p> : null}
+          <p className="wf-activity-outcome-status">Runtime outcomes are unavailable.</p>
+          {state.error ? <p className="wf-instance-note wf-activity-outcome-error">{state.error}</p> : null}
         </>
-          : outcomeNames.length === 0 ? <p>No runtime outcomes were recorded for this execution.</p>
+          : outcomeNames.length === 0 ? <p className="wf-activity-outcome-status">No runtime outcomes were recorded for this execution.</p>
             : <div className="wf-activity-outcome-list" role="list">
               {outcomeNames.map((outcomeName, index) => (
                 <span className="wf-activity-outcome-chip" role="listitem" key={`${outcomeName}:${index}`}>{outcomeName}</span>
@@ -475,29 +540,18 @@ function ActivityMetadataValue({
 
 function WorkflowActivityInputEvidence({
   state,
-  declarations,
+  rows,
   executableNodeFacts,
   expressionEditors,
   focusInputKey
 }: {
   state: ActivityExecutionInspectionState;
-  declarations: StudioActivityInputDescriptor[];
+  rows: InputInspectionRow[];
   executableNodeFacts?: ExecutableGraphNodeFacts;
   expressionEditors: StudioExpressionEditorContribution[];
   focusInputKey: string | null;
 }) {
   if (state.status === "idle") return null;
-
-  const evaluations = state.status === "ready"
-    ? (state.inspection?.valueSnapshots ?? []).filter(snapshot => snapshot.subject === "ActivityInput")
-    : [];
-  const rows = buildInputInspectionRows({
-    declarations,
-    authoredSources: executableNodeFacts?.authoredInputs ?? [],
-    compiledBindings: executableNodeFacts?.inputBindings ?? [],
-    evaluations,
-    authoredSourceAccess: executableNodeFacts?.authoredInputsAccess
-  });
 
   return (
     <section className="wf-instance-section">

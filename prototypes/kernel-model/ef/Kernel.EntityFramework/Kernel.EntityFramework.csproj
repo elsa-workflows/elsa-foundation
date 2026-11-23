@@ -13,6 +13,8 @@
     <ProjectReference Include="../../src/Kernel.Durable/Kernel.Durable.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Kernel.Ef.Conformance" />
+    <InternalsVisibleTo Include="Kernel.Native.Run" />
     <Using Include="Kernel.Runtime" />
     <Using Include="Kernel.Durable" />
   </ItemGroup>

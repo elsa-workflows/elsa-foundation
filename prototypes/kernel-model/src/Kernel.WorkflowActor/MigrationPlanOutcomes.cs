@@ -3,7 +3,7 @@ using Kernel.Foundation.Contracts;
 
 namespace Kernel.WorkflowActor;
 
-internal enum MigrationPlanOutcome { Migrated, Refused, NotAtSource }
+internal enum MigrationPlanOutcome { Migrated = 0, Refused = 1, NotAtSource = 2 }
 
 internal abstract record MigrationPlanJournal(string Kind)
 {
@@ -74,7 +74,7 @@ internal sealed class MigrationPlanOutcomes(IActorReads reads, BoundScope scope,
                 if (_bookmark != before) continue;
                 foreach (var record in records) Apply(record);
                 if (page.Items.Count > 0) _bookmark = page.Next;
-                _asOf = Math.Max(_asOf, page.AsOf);
+                else _asOf = Math.Max(_asOf, page.AsOf);
                 return page.Items.Count > 0;
             }
         }
