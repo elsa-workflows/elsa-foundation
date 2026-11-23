@@ -1,0 +1,394 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
+import { StatusChip, StudioAlert, SkeletonRows, studioRowInteraction, StudioField } from "@elsa-workflows/studio-ui";
+import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, KeyRound, Plus, RefreshCw } from "lucide-react";
+import { isStudioWorkspaceTabClick, openStudioWorkspaceTab, useStudioRouteLocation, useStudioWorkspaceTab, type StudioDialogApi, type StudioNotificationApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { OverflowMenu, StudioButton, StudioSearchInput, type OverflowMenuItem , StudioPage, StudioPageHeader, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioTableContainer, StudioResultState, StudioTimestamp} from "@elsa-workflows/studio-ui";
+import { deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret } from "./secretsApi";
+import type { RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata, SecretStatus } from "./secretTypes";
+import { CopySecretNameButton } from "./CopySecretNameButton";
+import { RotateSecretDialog } from "./SecretDialogs";
+
+import { readSecretBrowse, secretPath } from "./secretNavigation";
+
+const secretStatuses: SecretStatus[] = ["Active", "Retired", "Expired", "Revoked", "Deleted"];
+const MAX_SECRETS_PER_LOAD = 100;
+
+export function SecretsPage({ context, dialogs, navigate, notifications }: { context: StudioEndpointContext; dialogs: StudioDialogApi; navigate?(path: string): void; notifications?: StudioNotificationApi }) {
+  useStudioTimeZone();
+  const location = useStudioRouteLocation();
+  const tab = useStudioWorkspaceTab();
+  const initialBrowse = readSecretBrowse(location.search);
+  const [search, setSearch] = useState(initialBrowse.query);
+  const [completedSearch, setCompletedSearch] = useState(initialBrowse.search);
+  const [secrets, setSecrets] = useState<SecretMetadata[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [descriptors, setDescriptors] = useState<SecretDescriptorsResponse | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "rotate"; name: string } | null>(null);
+  const [typeFilter, setTypeFilter] = useState(initialBrowse.type);
+  const [storeFilter, setStoreFilter] = useState(initialBrowse.store);
+  const [scopeFilter, setScopeFilter] = useState(initialBrowse.scope);
+  const [statusFilter, setStatusFilter] = useState(initialBrowse.status);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [descriptorsLoading, setDescriptorsLoading] = useState(true);
+  const [descriptorError, setDescriptorError] = useState(false);
+  const [busyName, setBusyName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const descriptorRequestSequence = useRef(0);
+  const secretsRequestSequence = useRef(0);
+  const attemptedSearch = useRef("");
+  const operationScope = useMemo(() => ({ context, active: false, generation: 0 }), [context]);
+  const currentScope = useRef(operationScope);
+  currentScope.current = operationScope;
+  const busyScope = useRef(operationScope);
+  useLayoutEffect(() => {
+    operationScope.active = true;
+    if (busyScope.current !== operationScope) { busyScope.current = operationScope; setBusyName(null); }
+    return () => { operationScope.active = false; operationScope.generation++; };
+  }, [operationScope]);
+  const captureOperation = () => {
+    const generation = operationScope.generation;
+    return Object.assign(
+      () => currentScope.current === operationScope && operationScope.active && operationScope.generation === generation,
+      { isOwned: () => currentScope.current === operationScope }
+    );
+  };
+
+  const scopes = useMemo(() => Array.from(new Set(secrets.map(secret => secret.scope).filter((scope): scope is string => !!scope))).sort(), [secrets]);
+  const scopeOptions = useMemo(() => {
+    const options = scopes.map(scope => ({ value: scope, label: scope }));
+    if (scopeFilter && !scopes.includes(scopeFilter)) {
+      options.push({ value: scopeFilter, label: `${scopeFilter} (not in loaded results)` });
+    }
+    return options;
+  }, [scopeFilter, scopes]);
+  const filteredSecrets = useMemo(() => {
+    return secrets.filter(secret => {
+      if (typeFilter && secret.typeName !== typeFilter) return false;
+      if (storeFilter && secret.storeName !== storeFilter) return false;
+      if (scopeFilter && (secret.scope ?? "") !== scopeFilter) return false;
+      if (statusFilter && secret.status !== statusFilter) return false;
+      return true;
+    });
+  }, [scopeFilter, secrets, statusFilter, storeFilter, typeFilter]);
+  const dialogSecret = dialog?.kind === "rotate"
+    ? secrets.find(secret => secret.name === dialog.name) ?? null
+    : null;
+  const hasLocalFilters = Boolean(typeFilter || storeFilter || scopeFilter || statusFilter);
+  const hasActiveFilters = Boolean(completedSearch.trim() || hasLocalFilters);
+  const partialResult = totalCount > secrets.length;
+  const noSearchMatches = Boolean(completedSearch.trim()) && totalCount === 0;
+  const localFilterEmpty = !noSearchMatches && hasLocalFilters && secrets.length > 0 && filteredSecrets.length === 0;
+  const emptyTitle = localFilterEmpty
+    ? "No loaded secrets match your filters"
+    : completedSearch.trim()
+      ? `No results for “${completedSearch}”`
+      : "No secrets yet";
+  const emptyDescription = localFilterEmpty
+    ? "Local filters only cover loaded secrets. Try adjusting them or clear the filters."
+    : completedSearch.trim()
+      ? "Try another name or display name, or clear the search."
+      : "Create a secret to make it available to workflows.";
+
+  const loadSecrets = useCallback(async (searchTerm: string) => {
+    const requestSequence = ++secretsRequestSequence.current;
+    attemptedSearch.current = searchTerm;
+    setLoading(true);
+    setLoadError(false);
+    setError(null);
+    try {
+      const list = await listSecrets(context, { search: searchTerm, activeOnly: false, pageSize: MAX_SECRETS_PER_LOAD });
+      if (requestSequence !== secretsRequestSequence.current) return;
+      setSecrets(list.items);
+      setTotalCount(list.totalCount);
+      setCompletedSearch(searchTerm);
+      setDialog(current => current && !list.items.some(secret => secret.name === current.name) ? null : current);
+    } catch {
+      if (requestSequence !== secretsRequestSequence.current) return;
+      setLoadError(true);
+      setError(null);
+      setSecrets([]);
+      setDialog(null);
+    } finally {
+      if (requestSequence === secretsRequestSequence.current) setLoading(false);
+    }
+  }, [context]);
+
+  const loadDescriptors = useCallback(async () => {
+    const requestSequence = ++descriptorRequestSequence.current;
+    setDescriptorsLoading(true);
+    try {
+      const response = await getSecretDescriptors(context);
+      if (requestSequence !== descriptorRequestSequence.current) return;
+      setDescriptors(response);
+      setDescriptorError(false);
+    } catch {
+      if (requestSequence !== descriptorRequestSequence.current) return;
+      setDescriptorError(true);
+    } finally {
+      if (requestSequence === descriptorRequestSequence.current) setDescriptorsLoading(false);
+    }
+  }, [context]);
+
+  const load = useCallback(async (searchTerm: string) => {
+    await Promise.all([loadSecrets(searchTerm), loadDescriptors()]);
+  }, [loadDescriptors, loadSecrets]);
+
+  const appliedSearch = useRef(initialBrowse.search);
+  appliedSearch.current = completedSearch;
+  useEffect(() => {
+    const descriptorSequence = descriptorRequestSequence;
+    const secretsSequence = secretsRequestSequence;
+    void load(appliedSearch.current);
+    return () => {
+      descriptorSequence.current++;
+      secretsSequence.current++;
+      attemptedSearch.current = "";
+    };
+  }, [load]);
+
+  async function refreshWithConfirmation(message: string, isCurrent: ReturnType<typeof captureOperation>) {
+    if (!isCurrent.isOwned()) return;
+    if (isCurrent()) notifications?.notify({ level: "success", title: message });
+    await load(attemptedSearch.current);
+  }
+
+  async function saveRotation(name: string, request: RotateSecretRequest) {
+    const isCurrent = captureOperation();
+    setBusyName(name);
+    setError(null);
+    try {
+      await rotateSecret(context, name, request);
+      await refreshWithConfirmation("Secret rotated.", isCurrent);
+    } finally {
+      if (isCurrent.isOwned()) setBusyName(null);
+    }
+  }
+
+  async function runTest(secret: SecretMetadata) {
+    const isCurrent = captureOperation();
+    setBusyName(secret.name);
+    setError(null);
+    try {
+      const result = await testSecret(context, secret.name);
+      const summary = result.message?.trim() || (result.succeeded ? "Secret resolved successfully." : "Secret test failed.");
+      if (!isCurrent.isOwned()) return;
+      if (result.succeeded && isCurrent()) notifications?.notify({ level: "success", title: "Secret test succeeded.", message: `(${result.code}): ${summary}` });
+      else if (!result.succeeded) setError(`Test failed (${result.code}): ${summary}`);
+    } catch (e) {
+      if (isCurrent.isOwned()) setError(e instanceof Error ? e.message : "Secret test failed.");
+    } finally {
+      if (isCurrent.isOwned()) setBusyName(null);
+    }
+  }
+
+  async function revoke(secret: SecretMetadata) {
+    const isCurrent = captureOperation();
+    if (secret.status === "Revoked" || secret.status === "Deleted") return;
+    if (!(await dialogs.confirm({ message: `Revoke secret "${secret.name}"? Existing references keep the name, but the secret can no longer be used as active material.`, confirmLabel: "Revoke", tone: "danger" })) || !isCurrent.isOwned()) return;
+    setBusyName(secret.name);
+    setError(null);
+    try {
+      await revokeSecret(context, secret.name);
+      await refreshWithConfirmation("Secret revoked.", isCurrent);
+    } catch (e) {
+      if (isCurrent.isOwned()) setError(e instanceof Error ? e.message : "Secret could not be revoked.");
+    } finally {
+      if (isCurrent.isOwned()) setBusyName(null);
+    }
+  }
+
+  async function remove(secret: SecretMetadata) {
+    const isCurrent = captureOperation();
+    if (!(await dialogs.confirm({ message: `Delete secret "${secret.name}"? This removes the metadata record and cannot reveal or recover its value.`, confirmLabel: "Delete", tone: "danger" })) || !isCurrent.isOwned()) return;
+    setBusyName(secret.name);
+    setError(null);
+    try {
+      await deleteSecret(context, secret.name);
+      await refreshWithConfirmation("Secret deleted.", isCurrent);
+    } catch (e) {
+      if (isCurrent.isOwned()) setError(e instanceof Error ? e.message : "Secret could not be deleted.");
+    } finally {
+      if (isCurrent.isOwned()) setBusyName(null);
+    }
+  }
+
+  const rotateSelected = (secret: SecretMetadata) => {
+    setDialog({ kind: "rotate", name: secret.name });
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setTypeFilter("");
+    setStoreFilter("");
+    setScopeFilter("");
+    setStatusFilter("");
+    void load("");
+  };
+
+  const browse = { search: completedSearch, query: search, type: typeFilter, store: storeFilter, scope: scopeFilter, status: statusFilter };
+  const openEditor = (name?: string) => {
+    const path = secretPath(browse, name ?? "", undefined, undefined, location.href);
+    if (tab?.isActive() !== false) window.history.replaceState(window.history.state, "", secretPath(browse, undefined, undefined, name, location.href));
+    if (navigate) navigate(path); else window.location.assign(path);
+  };
+  const focused = useRef<string | null>(null);
+  const collectionRoot = useRef<HTMLElement>(null);
+  const focusName = new URLSearchParams(location.search).get("focusSecret");
+  const focusCreate = new URLSearchParams(location.search).get("focusCreate") === "1";
+  const focusKey = focusName ? `secret:${focusName}` : focusCreate ? "create" : null;
+  useEffect(() => {
+    if (loading || !focusKey || focused.current === focusKey || tab?.isActive() === false || (focusCreate && descriptorsLoading)) return;
+    const button = focusCreate ? collectionRoot.current?.closest(".secrets-shell")?.querySelector<HTMLButtonElement>('button[aria-label="New secret"]') : Array.from(collectionRoot.current?.querySelectorAll<HTMLAnchorElement>("[data-secret-open]") ?? []).find(element => element.dataset.secretOpen === focusName);
+    if (button) {
+      const row = focusCreate ? null : button.closest("tr");
+      button.focus(row ? { preventScroll: true } : undefined);
+      row?.scrollIntoView?.({ block: "nearest", inline: "start" });
+      focused.current = focusKey;
+    }
+  }, [loading, descriptorsLoading, focusName, focusCreate, focusKey, filteredSecrets, tab]);
+
+  return (
+    <StudioPage className="secrets-shell">
+      <StudioPageHeader title="Secrets" headingLevel={2} description="Manage secret metadata; existing values stay masked."
+        refresh={{ id: "secrets", label: "Refresh secrets", refreshing: loading || descriptorsLoading, autoRefresh: true, onRefresh: () => load(attemptedSearch.current) }}
+        actions={<StudioButton variant="primary" size="md" aria-label="New secret" onClick={() => openEditor()} disabled={!descriptors}><Plus size={16} aria-hidden /> New secret</StudioButton>} />
+
+      <StudioCollectionToolbar className="secrets-toolbar" aria-label="Secret filters">
+        <form className="secrets-search-wrap" role="search" aria-label="Secrets" onSubmit={event => event.preventDefault()}>
+          <StudioSearchInput className="secrets-search-control" aria-label="Search secrets" value={search} onChange={event => { setSearch(event.target.value); void loadSecrets(event.target.value); }} placeholder="Search secrets" />
+        </form>
+        <FilterSelect label="Type" value={typeFilter} onChange={setTypeFilter} options={descriptors?.types.map(type => ({ value: type.name, label: type.displayName || type.name })) ?? []} />
+        <FilterSelect label="Store" value={storeFilter} onChange={setStoreFilter} options={descriptors?.stores.map(store => ({ value: store.name, label: store.displayName || store.name })) ?? []} />
+        <FilterSelect
+          label="Scope"
+          value={scopeFilter}
+          onChange={setScopeFilter}
+          options={scopeOptions}
+          helpText="Scopes in loaded results"
+          description={`The list loads up to ${MAX_SECRETS_PER_LOAD} secrets, so other scopes may exist.`}
+        />
+        <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={secretStatuses.map(value => ({ value, label: value }))} />
+      </StudioCollectionToolbar>
+
+      {descriptorError ? (
+        <StudioAlert tone="danger">
+          Secret options could not be refreshed.{descriptors ? " Previously loaded options remain available." : " Create a secret after retrying."}
+          {" "}<StudioButton onClick={() => void loadDescriptors()} disabled={descriptorsLoading}>Retry secret options</StudioButton>
+        </StudioAlert>
+      ) : null}
+      {error ? <StudioAlert tone="danger" dismiss={{ label: "Dismiss error", onDismiss: () => setError(null) }}>{error}</StudioAlert> : null}
+      {!loading && !loadError && partialResult ? (
+        <p className="secrets-coverage">
+          Only the first {MAX_SECRETS_PER_LOAD} results are loaded. Search by name or display name to find other secrets. Filters apply to loaded results.
+        </p>
+      ) : null}
+
+      <section ref={collectionRoot} className="secrets-layout">
+        {loading || loadError || filteredSecrets.length > 0 ? <StudioTableContainer>
+          <table className="studio-table secrets-table" aria-label="Secrets">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Store</th>
+                <th>Scope</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={7} className="secrets-empty"><SkeletonRows rows={3} label="Loading secrets" /></td></tr>
+              ) : null}
+              {!loading && loadError ? (
+                <tr><td colSpan={7} className="secrets-empty">
+                  <StudioResultState headingLevel={3} tone="danger" title="Secrets could not be loaded." description="Check your connection and try again." icon={<AlertCircle size={20} />} actions={<StudioButton onClick={() => void load(attemptedSearch.current)}><RefreshCw size={16} aria-hidden /> Retry</StudioButton>} />
+                </td></tr>
+              ) : null}
+              {!loading && filteredSecrets.map(secret => (
+                <tr key={secret.name} {...studioRowInteraction<HTMLTableRowElement>(() => openEditor(secret.name))}>
+                  <td className="secrets-name-cell">
+                    <div className="secrets-name-heading">
+                      <a className="secrets-row-link studio-row-link" data-secret-open={secret.name} href={secretPath(browse, secret.name, undefined, undefined, location.href)} onClick={event => { const path = secretPath(browse, secret.name, undefined, undefined, location.href); if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(path)) { event.preventDefault(); return; } if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !navigate) return; event.preventDefault(); openEditor(secret.name); }}><strong>{secret.displayName || secret.name}</strong></a>
+                      {!secret.displayName || secret.displayName === secret.name ? <CopySecretNameButton externalValue name={secret.name} notifications={notifications} scope={context} /> : null}
+                    </div>
+                    {secret.displayName && secret.displayName !== secret.name ? <div className="secrets-technical-name"><CopySecretNameButton name={secret.name} notifications={notifications} scope={context} /></div> : null}
+                  </td>
+                  <td>{labelType(descriptors, secret.typeName)}</td>
+                  <td>{labelStore(descriptors, secret.storeName)}</td>
+                  <td>{secret.scope || "-"}</td>
+                  <td><StatusBadge status={secret.status} /></td>
+                  <td><StudioTimestamp value={secret.updatedAt ?? secret.createdAt} fallback="Unavailable" invalidFallback="Unavailable" /></td>
+                  <td>
+                    <div className="secrets-row-actions">
+
+                      <OverflowMenu
+                        ariaLabel={`Actions for ${secret.name}`}
+                        items={[
+                          { id: "rotate", label: "Rotate", disabled: secret.status === "Deleted" || busyName === secret.name, onSelect: () => rotateSelected(secret) },
+                          { id: "test", label: "Test", disabled: busyName === secret.name || secret.status === "Deleted", onSelect: () => void runTest(secret) },
+                          { id: "revoke", label: "Revoke", disabled: busyName === secret.name || secret.status === "Revoked" || secret.status === "Deleted", destructive: true, onSelect: () => void revoke(secret) },
+                          { id: "delete", label: "Delete", disabled: busyName === secret.name || secret.status === "Deleted", destructive: true, onSelect: () => void remove(secret) }
+                        ] satisfies OverflowMenuItem[]}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </StudioTableContainer> : <StudioCollectionEmptyState headingLevel={3} title={emptyTitle} description={emptyDescription} icon={<KeyRound size={20} />} actions={hasActiveFilters ? <StudioButton onClick={clearFilters}>Clear filters</StudioButton> : <StudioButton variant="primary" onClick={() => openEditor()} disabled={!descriptors}><Plus size={16} aria-hidden /> New secret</StudioButton>} />}
+
+      </section>
+
+      <StudioCollectionFooter>{!loading && !loadError ? (
+            <p className="secrets-count" aria-live="polite">
+              {filteredSecrets.length} shown · {secrets.length} loaded · {totalCount} {totalCount === 1 ? "result" : "results"}{completedSearch.trim() ? ` for “${completedSearch}”` : ""}
+            </p>
+          ) : null}</StudioCollectionFooter>
+
+      {dialog?.kind === "rotate" && dialogSecret ? (
+        <RotateSecretDialog
+          key={dialogSecret.id}
+          secret={dialogSecret}
+          descriptors={descriptors}
+          onCancel={() => setDialog(null)}
+          onSave={request => saveRotation(dialogSecret.name, request)}
+        />
+      ) : null}
+    </StudioPage>
+  );
+}
+
+function FilterSelect({ label, value, options, helpText, description, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; helpText?: string; description?: string; onChange(value: string): void }) {
+  
+  const id = useId();
+  const combinedDescription = helpText ? (description ? `${helpText}. ${description}` : helpText) : description;
+  return (
+    <StudioField className="secrets-filter" controlId={id} label={label} description={combinedDescription}>
+      <select id={id} value={value} onChange={event => onChange(event.target.value)}>
+        <option value="">All</option>
+        {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </StudioField>
+  );
+}
+
+const statusTones = { Active: "success", Retired: "warning", Expired: "warning", Revoked: "danger", Deleted: "danger" } as const;
+
+function StatusBadge({ status }: { status: SecretStatus }) {
+  return <StatusChip tone={statusTones[status]}>{status}</StatusChip>;
+}
+
+function labelType(descriptors: SecretDescriptorsResponse | null, typeName: string) {
+  return descriptors?.types.find(type => type.name === typeName)?.displayName ?? typeName;
+}
+
+function labelStore(descriptors: SecretDescriptorsResponse | null, storeName: string) {
+  return descriptors?.stores.find(store => store.name === storeName)?.displayName ?? storeName;
+}
+

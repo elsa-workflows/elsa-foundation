@@ -1,6 +1,7 @@
 import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { formatStudioDate } from "@elsa-workflows/studio-sdk";
-import { useMemo, useRef, useState } from "react";
+import { StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
@@ -23,7 +24,6 @@ import {
   setActivityDefinitionRecommendation
 } from "./api/activityDefinitionLifecycle";
 import { ActivityDefinitionManagementDialogShell } from "./ActivityDefinitionManagementDialogShell";
-import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 
 export function ActivityDefinitionVersionLifecycleDialog({
   context,
@@ -49,8 +49,6 @@ export function ActivityDefinitionVersionLifecycleDialog({
   const [reviewed, setReviewed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLElement>(null);
-  useDialogFocus(dialogRef, submitting ? null : onClose);
 
   const candidatesQuery = useQuery({
     queryKey: [...activityDesignKeys.definitionVersions({ definitionId: definition.definition.definitionId, limit: 100 }), "lifecycle-candidates"],
@@ -125,7 +123,7 @@ export function ActivityDefinitionVersionLifecycleDialog({
           reason: reason.trim(),
           recommendationDecision: recommendationDecision()
         });
-        if (result.versionId !== version.version.versionId || result.lifecycle !== targetLifecycle) {
+        if (result.versionId !== version.version.versionId || !isActivityDefinitionEnumValue(result.lifecycle, targetLifecycle)) {
           throw new Error("The lifecycle response did not match the exact reviewed version transition.");
         }
       }
@@ -151,9 +149,7 @@ export function ActivityDefinitionVersionLifecycleDialog({
   };
 
   return <ActivityDefinitionManagementDialogShell
-    dialogRef={dialogRef}
     title={dialogTitle(action)}
-    kicker="Reviewed exact-version mutation"
     submitting={submitting}
     onClose={onClose}
   >
@@ -178,7 +174,7 @@ export function ActivityDefinitionVersionLifecycleDialog({
         : candidatesQuery.isError
           ? <div className="ad-inline-error" role="alert">Replacement versions could not be confirmed. Choose no recommendation or retry.</div>
           : replacements.length
-            ? <label className="ad-dialog-field"><span>Exact replacement</span><select value={effectiveReplacementId} onChange={event => setReplacementVersionId(event.target.value)}>{replacements.map(item => <option key={item.version.versionId} value={item.version.versionId}>{item.version.version} · {item.version.versionId}</option>)}</select></label>
+            ? <StudioField className="ad-dialog-field" label={<><span>Exact replacement</span></>}><select value={effectiveReplacementId} onChange={event => setReplacementVersionId(event.target.value)}>{replacements.map(item => <option key={item.version.versionId} value={item.version.versionId}>{item.version.version} · {item.version.versionId}</option>)}</select></StudioField>
             : <div className="ad-inline-status" role="status">No other active version is available.</div>
         : null}
       <label><input type="radio" name="recommendation-disposition" checked={recommendationDisposition === "Clear"} onChange={() => setRecommendationDisposition("Clear")} /> Continue with no recommended version</label>
@@ -191,14 +187,15 @@ export function ActivityDefinitionVersionLifecycleDialog({
       {evidenceQuery.data ? evidenceQuery.data.directDependencies.consistency.isAuthoritative && evidenceQuery.data.inboundUsage.consistency.asOf
         ? <><dl className="ad-review-facts"><div><dt>Direct dependency authority</dt><dd>{evidenceQuery.data.directDependencies.consistency.kind}</dd></div><div><dt>Exact direct dependencies</dt><dd>{evidenceQuery.data.directDependencies.items.length}</dd></div><div><dt>Usage snapshot as of</dt><dd>{formatTimestamp(evidenceQuery.data.inboundUsage.consistency.asOf)}</dd></div><div><dt>Visible inbound uses</dt><dd>{evidenceQuery.data.inboundUsage.items.length}</dd></div><div><dt>Usage evidence kind</dt><dd>{evidenceQuery.data.inboundUsage.consistency.kind}</dd></div><div><dt>Usage sequence</dt><dd>{evidenceQuery.data.inboundUsage.consistency.asOfSequence ?? "Not supplied"}</dd></div></dl><p>The API distinguishes authoritative immutable direct dependencies from the rebuildable inbound/transitive usage projection. Counts are bounded to the exact visible as-of snapshot.</p></>
         : <div className="ad-inline-error" role="alert">The API did not return authoritative direct dependencies plus an as-of usage snapshot. Revocation remains disabled.</div> : null}
-      <div className="ad-inline-error" role="alert"><strong>Terminal Host Policy consequence</strong><span> Revoked versions cannot be selected for new placements or used as closed dependencies. Immutable artifacts, identities, dependency evidence, and Runtime Evidence are preserved; no occurrence is upgraded automatically.</span></div>
-      <label className="ad-dialog-field"><span>Type semantic version <code>{version.version.version}</code> to confirm</span><input value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" /></label>
+      <div className="ad-inline-error" role="alert"><strong>Terminal Host Policy consequence</strong><span> Revoked versions cannot be selected for new placements or used as closed dependencies. Immutable artifacts, identities, dependency evidence, and run data are preserved; no occurrence is upgraded automatically.</span></div>
+      <StudioField className="ad-dialog-field" label={<><span>Type semantic version <code>{version.version.version}</code> to confirm</span></>}><input value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" /></StudioField>
     </section> : null}
 
-    <label className="ad-dialog-field"><span>Reason <small>Required and recorded by the server</small></span><textarea value={reason} onChange={event => setReason(event.target.value)} rows={3} /></label>
+    <StudioField className="ad-dialog-field" label={<><span>Reason </span></>}><textarea value={reason} onChange={event => setReason(event.target.value)} rows={3} /><small>Required and recorded by the server</small></StudioField>
     <label className="ad-contract-check"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> I reviewed the exact identities, lifecycle preconditions, recommendation decision, and consequences above.</label>
     {error ? <div className="ad-inline-error" role="alert">{error}</div> : null}
-    <footer><button type="button" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="ad-primary-action" onClick={() => void submit()} disabled={!canSubmit}>{submitting ? "Applying and reconciling…" : submitLabel(action)}</button></footer>
+    <StudioDialogFooter confirmType="button" onCancel={onClose} cancelDisabled={submitting} confirmLabel={submitting ? "Applying and reconciling…" : submitLabel(action)}
+      confirmVariant={action === "revoke" ? "danger" : "primary"} confirmDisabled={!canSubmit} onConfirm={() => void submit()} />
   </ActivityDefinitionManagementDialogShell>;
 }
 
@@ -219,7 +216,7 @@ async function reconcilesAppliedState(
       return currentDefinition.lifecycle.head?.versionId === definition.lifecycle.head?.versionId &&
         currentDefinition.lifecycle.recommendation?.versionId === version.version.versionId;
     }
-    if (currentVersion.lifecycle !== targetLifecycle) return false;
+    if (!isActivityDefinitionEnumValue(currentVersion.lifecycle, targetLifecycle)) return false;
     if (!decision) return true;
     const expectedRecommendation = decision.disposition === "Clear" ? null : decision.replacementVersionId ?? null;
     return (currentDefinition.lifecycle.recommendation?.versionId ?? null) === expectedRecommendation;
@@ -257,7 +254,7 @@ function consequences(action: ActivityDefinitionVersionLifecycleAction) {
   ];
   return [
     "Revocation is terminal and removes the version from direct selection and closed-dependency use.",
-    "Immutable artifacts and Runtime Evidence remain preserved.",
+    "Immutable artifacts and run data remain preserved.",
     "No occurrence is upgraded automatically."
   ];
 }

@@ -1,8 +1,8 @@
 import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { formatStudioDate } from "@elsa-workflows/studio-sdk";
-import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPageHeader, StudioSearchInput, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { qualifyStudioBackendPath, StudioHttpError, useStudioWorkspaceTab } from "@elsa-workflows/studio-sdk";
+import { StudioResultState, SkeletonRows, studioRowInteraction, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioDialog, StudioDialogFooter, StudioPageHeader, StudioSearchInput, StudioTimestamp, type OverflowMenuItem, StudioField } from "@elsa-workflows/studio-ui";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { listExecutables } from "../api/runtime";
@@ -13,13 +13,15 @@ import {
   getPublicationSlotLifecycleSupport,
   listPublicationSlots,
   restorePublicationSlot,
+  unpublishReviewedSlot,
   unpublishSlot,
   type PublicationSlot
 } from "../api/publishing";
 import type { WorkflowExecutableListScope, WorkflowExecutableSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
-import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
+import { WfEmptyState } from "./StatusViews";
 import { ExecutableReferenceList, ExecutableRunStatusLine, CopyValueButton } from "./executableShared";
+import { getNotifications, useNotificationGuard } from "./notifications";
 import { getDialogs } from "./dialogs";
 import type { ExecutableRunState } from "./editorTypes";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
@@ -42,6 +44,7 @@ import {
   pageItems
 } from "./editorHelpers";
 import { WorkflowListIdentifiers, type WorkflowListIdentifier } from "./WorkflowListIdentifiers";
+import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 
 export function openExecutableInspector(artifactId: string, sourceReferenceId?: string | null) {
   const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
@@ -49,9 +52,11 @@ export function openExecutableInspector(artifactId: string, sourceReferenceId?: 
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange, canBrowseDefinitions = true }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void; canBrowseDefinitions?: boolean }) {
+export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange, canBrowseDefinitions = true, canManagePublications = false }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void; canBrowseDefinitions?: boolean; canManagePublications?: boolean }) {
   useStudioTimeZone();
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [refreshing, setRefreshing] = useState(false);
+  const workspaceTab = useStudioWorkspaceTab();
   const [definitionNamesLoading, setDefinitionNamesLoading] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -62,6 +67,8 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
   const [scope, setScope] = useState<WorkflowExecutableListScope>("published");
   const [includeRetired, setIncludeRetired] = useState(false);
   const [expandedArtifactIds, setExpandedArtifactIds] = useState<ReadonlySet<string>>(new Set());
+  const [reviewedUnpublishAvailable, setReviewedUnpublishAvailable] = useState(false);
+  const [unpublishDialogTarget, setUnpublishDialogTarget] = useState<{ artifactId: string; definitionIds: string[] } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(defaultDefinitionPageSize);
   const normalizedDefinitionFilter = definitionFilter?.trim().toLowerCase() ?? "";
@@ -91,20 +98,26 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
   });
   const artifactExport = useExecutableArtifactDownload({
     context,
-    onExported: fileName => { setError(""); setLastRun(null); setStatus(`Exported ${fileName}`); },
+    onExported: (fileName, _executable, canNotify) => { setError(""); setLastRun(null); setStatus(""); if (canNotify()) getNotifications().notify({ level: "success", title: `Exported ${fileName}` }); },
     onFailed: message => { setStatus(""); setLastRun(null); setError(message); }
   });
+  const captureNotificationGuard = useNotificationGuard(context);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (background = false) => {
     const generation = ++loadGeneration.current;
-    setState("loading");
+    if (!background) setState("loading");
+    setRefreshing(true);
     setDefinitionNamesLoading(false);
     setError("");
     try {
-      const items = await listExecutables(context, { scope, includeRetired });
+      const [items, lifecycleSupport] = await Promise.all([
+        listExecutables(context, { scope, includeRetired }),
+        canManagePublications ? getPublicationSlotLifecycleSupport(context).catch(() => null) : Promise.resolve(null)
+      ]);
       if (generation !== loadGeneration.current) return;
       setExecutables(items);
-      setDefinitionNames(new Map());
+      setReviewedUnpublishAvailable(lifecycleSupport?.unpublishReviewed ?? false);
+      if (!background) setDefinitionNames(new Map());
       setState("ready");
       const definitionIds = items.flatMap(getExecutableDefinitionIds);
       setDefinitionNamesLoading(definitionIds.length > 0);
@@ -115,11 +128,16 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
       }
     } catch (e) {
       if (generation !== loadGeneration.current) return;
+      setReviewedUnpublishAvailable(false);
       setDefinitionNamesLoading(false);
       setError(e instanceof Error ? e.message : String(e));
-      setState("failed");
+      const accessDenied = e instanceof StudioHttpError && (e.status === 401 || e.status === 403);
+      if (accessDenied) { setExecutables([]); setDefinitionNames(new Map()); }
+      setState(current => background && !accessDenied && current === "ready" ? current : "failed");
+    } finally {
+      if (generation === loadGeneration.current) setRefreshing(false);
     }
-  }, [context, includeRetired, scope]);
+  }, [canManagePublications, context, includeRetired, scope]);
 
   useEffect(() => {
     void load();
@@ -136,7 +154,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
     if (dispatchAiAction(ai, explainExecutableAction, executable)) {
       setError("");
       setLastRun(null);
-      setStatus(`Sent ${executable.artifactId} to Weaver`);
+      setStatus(""); getNotifications().notify({ level: "success", title: `Sent ${executable.artifactId} to Weaver` });
     }
   };
 
@@ -159,6 +177,24 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
 
   return (
     <>
+      {unpublishDialogTarget ? (
+        <UnpublishExecutablePublicationDialog
+          context={context}
+          artifactId={unpublishDialogTarget.artifactId}
+          definitionIds={unpublishDialogTarget.definitionIds}
+          definitionNames={definitionNames}
+          onClose={() => setUnpublishDialogTarget(null)}
+          onUnpublished={async candidate => {
+            const canNotify = captureNotificationGuard();
+            setUnpublishDialogTarget(null);
+            setError("");
+            setLastRun(null);
+            setStatus("");
+            await load(true);
+            if (canNotify()) getNotifications().notify({ level: "success", title: `Unpublished ${definitionNames.get(candidate.definitionId) ?? candidate.definitionId} · ${candidate.slot.slotName}` });
+          }}
+        />
+      ) : null}
       {executableRun.pending ? (
         <WorkflowRunInputDialog
           inputs={executableRun.pending.inputs}
@@ -169,7 +205,15 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
         />
       ) : null}
       <div className="wf-executables-list">
-      <StudioPageHeader title="Executables" headingLevel={2} description="Inspect and run immutable workflow executables." actions={<StudioButton onClick={() => void load()}>Refresh</StudioButton>} />
+      <StudioPageHeader title="Executables" headingLevel={2} description="Inspect and run immutable workflow executables." refresh={{
+        id: `workflow-executables:${context.baseUrl}`,
+        label: "Refresh executables",
+        onRefresh: () => load(true),
+        refreshing,
+        autoRefresh: true,
+        active: workspaceTab?.active ?? true,
+        disabled: !!executableRun.pending || !!executableRun.runningArtifactId || !!artifactExport.exportingArtifactId
+      }} />
       <StudioCollectionToolbar>
         <StudioSearchInput
           aria-label="Filter executables by workflow definition"
@@ -178,14 +222,11 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           value={definitionFilter ?? ""}
           onChange={event => onDefinitionFilterChange(event.currentTarget.value || null)}
         />
-        <label className="wf-toolbar-field">
-          <span>Scope</span>
-          <select aria-label="Executable reference scope" value={scope} onChange={event => setScope(event.target.value as WorkflowExecutableListScope)}>
+        <StudioField className="wf-toolbar-field" label={<><span>Scope</span></>}><select aria-label="Executable reference scope" value={scope} onChange={event => setScope(event.target.value as WorkflowExecutableListScope)}>
             <option value="published">Published</option>
             <option value="test-runs">Test runs</option>
             <option value="all">All</option>
-          </select>
-        </label>
+          </select></StudioField>
         <label className="wf-toolbar-field wf-toolbar-checkbox">
           <input
             type="checkbox"
@@ -202,23 +243,21 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           <StudioButton onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear</StudioButton>
         ) : null}
       </StudioCollectionToolbar>
-      {state === "failed" ? <WfErrorCard headingLevel={3} message={error} /> : null}
-      {state === "ready" && error ? <WfErrorCard headingLevel={3} message={error} /> : null}
+      {state === "failed" ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" headingLevel={3} description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
+      {state === "ready" && error ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" headingLevel={3} description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
       {status ? <ExecutableRunStatusLine status={status} run={lastRun} /> : null}
-      {state === "loading" ? <WfListSkeleton /> : null}
-      {state === "ready" && visibleExecutables.length === 0 ? (
-        <div className="studio-table-container">{definitionNamesLoading ? (
-          <WfEmptyState headingLevel={3} icon={<Search size={22} />} title="Loading workflow names" description="Checking definition names for matching executables." />
-        ) : (
-          <WfEmptyState headingLevel={3}
-            icon={<Play size={22} />}
-            title="No workflow executables"
-            description={definitionFilter ? "No executables match this definition filter." : "This backend has no executables in the selected scope."}
-            action={definitionFilter
-              ? <StudioButton onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear filter</StudioButton>
-              : canBrowseDefinitions ? <StudioButton variant="primary" onClick={openDefinitions}>Open workflow definitions</StudioButton> : undefined}
-          />
-        )}</div>
+      {state === "loading" ? <SkeletonRows /> : null}
+      {state === "ready" && !error && visibleExecutables.length === 0 ? definitionNamesLoading ? (
+        <div className="studio-table-container"><WfEmptyState headingLevel={3} icon={<Search size={22} />} title="Loading workflow names" description="Checking definition names for matching executables." /></div>
+      ) : (
+        <StudioCollectionEmptyState headingLevel={3}
+          icon={<Play size={22} />}
+          title="No workflow executables"
+          description={definitionFilter ? "No executables match this definition filter." : "This backend has no executables in the selected scope."}
+          actions={definitionFilter
+            ? <StudioButton onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear filter</StudioButton>
+            : canBrowseDefinitions ? <StudioButton variant="primary" onClick={openDefinitions}>Open workflow definitions</StudioButton> : undefined}
+        />
       ) : null}
       {state === "ready" && visibleExecutables.length > 0 ? (
         <div className="studio-table-container wf-executable-table-scroll" role="region" aria-label="Workflow executables table" tabIndex={0}>
@@ -238,9 +277,22 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
               const runTarget = createExecutableWorkflowRunTarget(executable);
               const definitionIds = getExecutableDefinitionIds(executable);
               const primaryName = definitionIds.length ? (definitionNames.get(definitionIds[0]) ?? "Workflow definition") : "Source unavailable";
+              const publicationDefinitionIds = canManagePublications ? getPublishedWorkflowDefinitionIds(executable) : [];
               const identifiers = collectExecutableIdentifiers(executable);
               const sourceSummary = [executable.sourceKind ? formatExecutableSourceKind(executable.sourceKind) : null, executable.sourceVersion ? `Version ${executable.sourceVersion}` : null].filter(Boolean).join(" · ");
               const menuItems: OverflowMenuItem[] = [
+                ...publicationDefinitionIds.map(definitionId => ({
+                  id: `manage-publication:${definitionId}`,
+                  label: publicationDefinitionIds.length === 1
+                    ? "Manage publication"
+                    : `Manage publication · ${definitionNames.get(definitionId) ?? definitionId} (${definitionId})`,
+                  onSelect: () => openExecutablePublicationManagement(definitionId)
+                })),
+                ...(reviewedUnpublishAvailable && publicationDefinitionIds.length ? [{
+                  id: "unpublish-publication",
+                  label: "Unpublish…",
+                  onSelect: () => setUnpublishDialogTarget({ artifactId: executable.artifactId, definitionIds: publicationDefinitionIds })
+                }] : []),
                 ...(artifactExport.supported ? [{
                   id: "export",
                   label: artifactExport.exportingArtifactId === executable.artifactId ? "Exporting…" : "Export",
@@ -258,26 +310,15 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
                   <div
                     className="wf-grid-row"
                     role="row"
-                    tabIndex={0}
+                    {...studioRowInteraction<HTMLDivElement>(() => openExecutableInspector(executable.artifactId))}
                     aria-label={`Inspect executable ${executable.artifactId}`}
-                    onClick={event => {
-                      if (event.target instanceof Element && event.target.closest("button, input, label, a")) return;
-                      openExecutableInspector(executable.artifactId);
-                    }}
-                    onKeyDown={event => {
-                      if (event.target !== event.currentTarget) return;
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        openExecutableInspector(executable.artifactId);
-                      }
-                    }}
                   >
                     <span className="wf-executable-name" role="cell">
                       <WorkflowExecutableOrigins executable={executable} definitionNames={definitionNames} />
                     </span>
-                    <span className="wf-executable-identifiers" role="cell" onClick={event => event.stopPropagation()}>
+                    <span className="wf-executable-identifiers" role="cell">
                       <span className="wf-list-primary-id">
-                        <CopyableIdentifier label="Artifact ID" value={executable.artifactId} />
+                        <CopyableIdentifier label="Executable ID" value={executable.artifactId} />
                       </span>
                       <WorkflowListIdentifiers kind="Workflow executable" name={primaryName} identifiers={identifiers}>
                         {retired ? <p>Retired · Retained for inspection</p> : null}
@@ -285,12 +326,12 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
                       </WorkflowListIdentifiers>
                       {retired ? <span className="wf-chip wf-reference-retired">Retired</span> : null}
                     </span>
-                    <span className="wf-executable-version-cell" role="cell" onClick={event => event.stopPropagation()}>
+                    <span className="wf-executable-version-cell" role="cell">
                       <span className="wf-cell-line">
                         <span>{executable.artifactVersion}</span>
                       </span>
                       {references.length > 0 ? (
-                        <button
+                        <StudioButton
                           type="button"
                           className="wf-link-button wf-reference-toggle"
                           aria-expanded={expanded}
@@ -299,20 +340,15 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
                         >
                           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                           {references.length} reference{references.length === 1 ? "" : "s"}
-                        </button>
+                        </StudioButton>
                       ) : null}
                     </span>
                     <span className="wf-executable-root" role="cell">{formatExecutableRoot(executable)}</span>
                     <span className="wf-executable-published" role="cell">
-                      <time
-                        dateTime={executable.publishedAt ?? executable.createdAt}
-                        title={formatDate(executable.publishedAt ?? executable.createdAt)}
-                      >
-                        {formatExecutableListDate(executable.publishedAt ?? executable.createdAt)}
-                      </time>
+                      <StudioTimestamp value={executable.publishedAt ?? executable.createdAt} fallback={executable.publishedAt ?? executable.createdAt ?? ""} />
                     </span>
                     <span className="wf-row-actions" role="cell" onClick={event => event.stopPropagation()}>
-                      <button type="button" aria-label={`Inspect executable ${executable.artifactId}`} onClick={() => openExecutableInspector(executable.artifactId)}><ScanSearch size={13} /> Inspect</button>
+                      <StudioButton type="button" aria-label={`Inspect executable ${executable.artifactId}`} onClick={() => openExecutableInspector(executable.artifactId)}><ScanSearch size={13} /> Inspect</StudioButton>
                       <ExecutableRunButton
                         target={runTarget}
                         runningArtifactId={executableRun.runningArtifactId}
@@ -340,12 +376,9 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           <span className="wf-pagination-summary" aria-live="polite">
             Showing {pagerFirstItem}-{pagerLastItem} of {totalCount}
           </span>
-          <label className="wf-page-size">
-            Rows
-            <select aria-label="Executable page size" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>
+          <StudioField className="wf-page-size" label="Rows"><select aria-label="Executable page size" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>
               {definitionPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
-            </select>
-          </label>
+            </select></StudioField>
           <div className="wf-page-controls">
             <StudioButton onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="Previous page" title="Previous page">
               <ChevronLeft size={14} /> Previous
@@ -362,16 +395,159 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
   );
 }
 
-function formatExecutableListDate(value?: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : formatStudioDate(date);
+function getPublishedWorkflowDefinitionIds(executable: WorkflowExecutableSummary) {
+  const definitionIds = new Set<string>();
+  for (const reference of executable.references ?? []) {
+    const definitionId = reference.definitionId;
+    if (reference.scope.toLowerCase() !== "published" || !definitionId?.trim() || definitionIds.has(definitionId)) continue;
+    definitionIds.add(definitionId);
+  }
+  return [...definitionIds];
+}
+
+interface ExecutablePublicationSlotMatch {
+  definitionId: string;
+  slot: PublicationSlot;
+}
+
+function executablePublicationSlotMatchKey(match: ExecutablePublicationSlotMatch) {
+  return JSON.stringify([match.definitionId, match.slot.slotName, match.slot.activeActivationId, match.slot.revision]);
+}
+
+function UnpublishExecutablePublicationDialog({ context, artifactId, definitionIds, definitionNames, onClose, onUnpublished }: {
+  context: StudioEndpointContext;
+  artifactId: string;
+  definitionIds: string[];
+  definitionNames: ReadonlyMap<string, string>;
+  onClose(): void;
+  onUnpublished(match: ExecutablePublicationSlotMatch): Promise<void>;
+}) {
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "failed">("loading");
+  const [matches, setMatches] = useState<ExecutablePublicationSlotMatch[]>([]);
+  const [selectedMatchKey, setSelectedMatchKey] = useState<string | null>(null);
+  const [readError, setReadError] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setLoadState("loading");
+    setMatches([]);
+    setSelectedMatchKey(null);
+    setReadError("");
+    setError("");
+    void Promise.all(definitionIds.map(async definitionId => {
+      const view = await listPublicationSlots(context, definitionId);
+      if (!view.available) throw new Error(view.reason);
+      return view.slots
+        .filter(slot => Boolean(slot.activeActivationId) && slot.publication?.artifactId === artifactId)
+        .map(slot => ({ definitionId, slot }));
+    })).then(results => {
+      if (!active) return;
+      const candidates = results.flat().sort((left, right) =>
+        left.definitionId.localeCompare(right.definitionId)
+        || left.slot.slotName.localeCompare(right.slot.slotName));
+      setMatches(candidates);
+      setSelectedMatchKey(!notice && candidates.length === 1 ? executablePublicationSlotMatchKey(candidates[0]) : null);
+      setLoadState("ready");
+    }).catch(caught => {
+      if (!active) return;
+      setReadError(caught instanceof Error ? caught.message : String(caught));
+      setLoadState("failed");
+    });
+    return () => { active = false; };
+  }, [artifactId, context, definitionIds, notice, reload]);
+
+  const selectedMatch = matches.find(match => executablePublicationSlotMatchKey(match) === selectedMatchKey) ?? null;
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedMatch || loadState !== "ready" || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await unpublishReviewedSlot(context, selectedMatch.definitionId, selectedMatch.slot.slotName, selectedMatch.slot.revision);
+      await onUnpublished(selectedMatch);
+    } catch (caught) {
+      if (caught instanceof StudioHttpError && caught.status === 409) {
+        setNotice("This slot changed after you reviewed it. The current live slots have been reloaded; review and confirm again.");
+        setSelectedMatchKey(null);
+        setLoadState("loading");
+        setReload(current => current + 1);
+      } else {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <StudioDialog open title="Unpublish publication slot" description="Choose the live publication slot that currently serves this artifact."
+      onClose={onClose} dismissDisabled={busy} dismissOnOutsideClick={false}
+      onSubmit={event => { void submit(event); }}
+      footer={<StudioDialogFooter
+        onCancel={onClose}
+        cancelDisabled={busy}
+        confirmLabel={busy ? "Unpublishing…" : "Unpublish"}
+        confirmDisabled={busy || loadState !== "ready" || !selectedMatch}
+      />}>
+      <div className="wf-run-input-list">
+        <p>Unpublishing a slot stops new runs from starting through that slot. Existing runs and other publication slots are unaffected.</p>
+        {notice ? <p role="status">{notice}</p> : null}
+        {loadState === "loading" ? <p role="status">Checking live publication slots…</p> : null}
+        {loadState === "failed" ? (
+          <div role="alert">
+            <p>Couldn't verify which live slots serve this artifact. {readError}</p>
+            <StudioButton type="button" disabled={busy} onClick={() => { setNotice(""); setReload(current => current + 1); }}>Reload slots</StudioButton>
+          </div>
+        ) : null}
+        {loadState === "ready" && matches.length === 0 ? <p role="status">No live publication slots currently serve this artifact.</p> : null}
+        {loadState === "ready" && matches.length > 0 ? (
+          <fieldset disabled={busy}>
+            <legend>{matches.length === 1 ? "Publication slot" : "Select a publication slot"}</legend>
+            {matches.map(match => {
+              const key = executablePublicationSlotMatchKey(match);
+              const definitionName = definitionNames.get(match.definitionId) ?? match.definitionId;
+              return (
+                <label key={key}>
+                  <input
+                    type="radio"
+                    name="executable-publication-slot"
+                    value={key}
+                    checked={selectedMatchKey === key}
+                    onChange={() => setSelectedMatchKey(key)}
+                  />
+                  {definitionName} ({match.definitionId}) · Slot {match.slot.slotName}
+                </label>
+              );
+            })}
+          </fieldset>
+        ) : null}
+        {selectedMatch ? (
+          <p role="note">
+            Confirming will stop new runs through {definitionNames.get(selectedMatch.definitionId) ?? selectedMatch.definitionId} · slot {selectedMatch.slot.slotName}. Existing runs and other slots will continue unaffected.
+          </p>
+        ) : null}
+        {error ? <p role="alert">Couldn't unpublish this slot. {error}</p> : null}
+      </div>
+    </StudioDialog>
+  );
+}
+
+function openExecutablePublicationManagement(definitionId: string) {
+  const definitionUrl = new URL(qualifyStudioBackendPath("/workflows/definitions"), window.location.href);
+  const url = updateWorkflowDefinitionIdInUrl(definitionUrl, definitionId, "artifacts");
+  window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 function collectExecutableIdentifiers(executable: WorkflowExecutableSummary): WorkflowListIdentifier[] {
   const definitionIds = getExecutableDefinitionIds(executable);
   const items: WorkflowListIdentifier[] = [
-    { label: "Artifact hash", value: executable.artifactHash },
+    { label: "Executable hash", value: executable.artifactHash },
     { label: "Source ID", value: executable.sourceId || executable.definitionVersionId },
     { label: "Definition version ID", value: executable.definitionVersionId },
     ...definitionIds.map((id, index) => ({
@@ -401,16 +577,16 @@ function WorkflowExecutableOrigins({ executable, definitionNames }: { executable
       {definitionIds.map(definitionId => {
         const name = definitionNames.get(definitionId) ?? "Workflow definition";
         return (
-          <button
+          <StudioButton
             type="button"
-            className="wf-link-button wf-executable-workflow-name"
+            className="wf-executable-workflow-name"
             key={definitionId}
-            title={name}
+            title={`Open source workflow: ${name}`}
             aria-label={`Open source definition ${definitionId}: ${name}`}
             onClick={() => openSourceDefinition(definitionId)}
           >
             {name}
-          </button>
+          </StudioButton>
         );
       })}
       {definitionIds.length === 0 ? <strong title="Source unavailable">Source unavailable</strong> : null}
@@ -435,7 +611,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
   });
   const artifactExport = useExecutableArtifactDownload({
     context,
-    onExported: fileName => { setError(""); setLastRun(null); setStatus(`Exported ${fileName}`); },
+    onExported: (fileName, _executable, canNotify) => { setError(""); setLastRun(null); setStatus(""); if (canNotify()) getNotifications().notify({ level: "success", title: `Exported ${fileName}` }); },
     onFailed: message => { setStatus(""); setLastRun(null); setError(message); }
   });
 
@@ -474,18 +650,20 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
     if (dispatchAiAction(ai, explainExecutableAction, artifact)) {
       setError("");
       setLastRun(null);
-      setStatus(`Sent ${artifact.artifactId} to Weaver`);
+      setStatus(""); getNotifications().notify({ level: "success", title: `Sent ${artifact.artifactId} to Weaver` });
     }
   };
 
+  const captureNotificationGuard = useNotificationGuard(context);
   const unpublish = async (slot: PublicationSlot) => {
+    const canNotify = captureNotificationGuard();
     if (!(await getDialogs().confirm({ message: `Unpublish slot ${slot.slotName}? Existing workflow runs keep their pinned executable, but this slot will stop starting new runs.`, confirmLabel: "Unpublish", tone: "danger" }))) return;
     setStatus("");
     setLastRun(null);
     setError("");
     try {
       await unpublishSlot(context, definitionId, slot.slotName);
-      setStatus(`Unpublished ${slot.slotName}`);
+      if (canNotify()) getNotifications().notify({ level: "success", title: `Unpublished ${slot.slotName}` });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -493,12 +671,13 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
   };
 
   const restore = async (slot: PublicationSlot) => {
+    const canNotify = captureNotificationGuard();
     setStatus("");
     setLastRun(null);
     setError("");
     try {
       await restorePublicationSlot(context, definitionId, slot.slotName);
-      setStatus(`Restored ${slot.slotName}`);
+      if (canNotify()) getNotifications().notify({ level: "success", title: `Restored ${slot.slotName}` });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -518,7 +697,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
   const markCopied = (label: string) => {
     setError("");
     setLastRun(null);
-    setStatus(`Copied ${label}`);
+    setStatus(""); getNotifications().notify({ level: "success", title: `Copied ${label}` });
   };
 
   const markCopyFailed = (label: string) => {
@@ -540,8 +719,8 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
       ) : null}
       <div className="wf-artifacts-toolbar">
         <span>{artifacts.length} artifact{artifacts.length === 1 ? "" : "s"}</span>
-        <button type="button" onClick={() => void load()}><RotateCcw size={13} /> Refresh</button>
-        <button type="button" onClick={openExecutablePage}>Open list</button>
+        <StudioButton type="button" onClick={() => void load()}><RotateCcw size={13} /> Refresh</StudioButton>
+        <StudioButton type="button" onClick={openExecutablePage}>Open list</StudioButton>
       </div>
       {state === "failed" || error ? <div className="wf-alert compact"><AlertCircle size={14} /> {error}</div> : null}
       {status ? <ExecutableRunStatusLine status={status} run={lastRun} compact /> : null}
@@ -567,9 +746,9 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
                     slot. The backend answers with a 404 (surfaced above as an error) when there is nothing to
                     restore. */}
                 {!slot.activeActivationId ? (
-                  <button type="button" aria-label={`Restore publication slot ${slot.slotName}`} disabled={!lifecycleSupport.restore} onClick={() => void restore(slot)}><RotateCcw size={13} /> Restore</button>
+                  <StudioButton type="button" aria-label={`Restore publication slot ${slot.slotName}`} disabled={!lifecycleSupport.restore} onClick={() => void restore(slot)}><RotateCcw size={13} /> Restore</StudioButton>
                 ) : slot.publication ? (
-                  <button type="button" aria-label={`Unpublish publication slot ${slot.slotName}`} disabled={!lifecycleSupport.unpublish} onClick={() => void unpublish(slot)}>Unpublish</button>
+                  <StudioButton type="button" aria-label={`Unpublish publication slot ${slot.slotName}`} disabled={!lifecycleSupport.unpublish} onClick={() => void unpublish(slot)}>Unpublish</StudioButton>
                 ) : null}
               </div>
             </article>
@@ -599,11 +778,11 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
               <div className="wf-artifact-card-values">
                 <span className="wf-cell-line">
                   <code title={artifact.artifactId}>{artifact.artifactId}</code>
-                  <CopyValueButton value={artifact.artifactId} ariaLabel={`Copy artifact ID ${artifact.artifactId}`} copiedLabel="artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                  <CopyValueButton scope={context} value={artifact.artifactId} ariaLabel={`Copy executable ID ${artifact.artifactId}`} copiedLabel="executable ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
                 </span>
                 <span className="wf-cell-line wf-cell-line-muted">
                   <code title={artifact.artifactHash}>{artifact.artifactHash}</code>
-                  <CopyValueButton value={artifact.artifactHash} ariaLabel={`Copy artifact hash ${artifact.artifactHash}`} copiedLabel="artifact hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                  <CopyValueButton scope={context} value={artifact.artifactHash} ariaLabel={`Copy executable hash ${artifact.artifactHash}`} copiedLabel="executable hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
                 </span>
               </div>
               <dl>
@@ -611,7 +790,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
                 <div><dt>Root</dt><dd>{formatExecutableRoot(artifact)}</dd></div>
               </dl>
               <div className="wf-row-actions">
-                <button type="button" aria-label={`Inspect executable ${artifact.artifactId}`} onClick={() => openExecutableInspector(artifact.artifactId)}><ScanSearch size={13} /> Inspect</button>
+                <StudioButton type="button" aria-label={`Inspect executable ${artifact.artifactId}`} onClick={() => openExecutableInspector(artifact.artifactId)}><ScanSearch size={13} /> Inspect</StudioButton>
                 <ExecutableRunButton
                   target={runTarget}
                   runningArtifactId={executableRun.runningArtifactId}
@@ -626,7 +805,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
                     onRequest={artifactExport.exportArtifact}
                   />
                 ) : null}
-                {explainExecutableAction ? <button type="button" onClick={() => explain(artifact)}><Sparkles size={13} /> Explain</button> : null}
+                {explainExecutableAction ? <StudioButton type="button" onClick={() => explain(artifact)}><Sparkles size={13} /> Explain</StudioButton> : null}
               </div>
               </article>
             );

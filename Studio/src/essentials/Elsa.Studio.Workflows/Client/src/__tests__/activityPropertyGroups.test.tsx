@@ -2,6 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { javaScriptLanguageAdapter, StudioCodeEditor } from "@elsa-workflows/studio-code-editor";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputDescriptor,
@@ -28,6 +29,7 @@ let replaceActivity: (next: ActivityNode) => void = noRenderedPanel;
 let replaceDraftId: (next: string) => void = noRenderedPanel;
 let replaceEditors: (next: StudioActivityPropertyEditorContribution[]) => void = noRenderedPanel;
 let replaceReadOnly: (next: boolean) => void = noRenderedPanel;
+let requestInputFocus: (key: string | undefined, request: number | undefined) => void = noRenderedPanel;
 
 const backendExpressionDescriptors: StudioExpressionDescriptor[] = [
   { type: "Literal", displayName: "Literal", editingMode: "literal" },
@@ -51,6 +53,7 @@ afterEach(() => {
   replaceDraftId = noRenderedPanel;
   replaceEditors = noRenderedPanel;
   replaceReadOnly = noRenderedPanel;
+  requestInputFocus = noRenderedPanel;
   unmountActivePanel();
 });
 
@@ -68,6 +71,8 @@ function renderPanel(
     draftId?: string;
     strictMode?: boolean;
     readOnly?: boolean;
+    focusInputKey?: string;
+    focusInputRequest?: number;
     onRetryDescriptors?(): void;
     onChange?(activity: ActivityNode): void;
     updateActivity?: boolean;
@@ -86,18 +91,21 @@ function renderPanel(
     customProperties: options.customProperties
   };
   const initialActivity = options.activity ?? activity();
+  const visibleVariables: React.ComponentProps<typeof ActivityPropertiesPanel>["visibleVariables"] = [];
 
   function Harness() {
     const [currentActivity, setCurrentActivity] = React.useState(initialActivity);
     const [currentDraftId, setCurrentDraftId] = React.useState(options.draftId);
     const [currentEditors, setCurrentEditors] = React.useState(options.editors ?? []);
     const [readOnly, setReadOnly] = React.useState(options.readOnly ?? false);
+    const [focus, setFocus] = React.useState({ key: options.focusInputKey, request: options.focusInputRequest });
     const optionsRef = React.useRef(options);
     optionsRef.current = options;
     replaceActivity = setCurrentActivity;
     replaceDraftId = setCurrentDraftId;
     replaceEditors = setCurrentEditors;
     replaceReadOnly = setReadOnly;
+    requestInputFocus = (key, request) => setFocus({ key, request });
     const handleChange = React.useCallback((nextActivity: ActivityNode) => {
       optionsRef.current.onChange?.(nextActivity);
       if (optionsRef.current.updateActivity !== false) setCurrentActivity(nextActivity);
@@ -115,8 +123,10 @@ function renderPanel(
         expressionDescriptors={options.expressionDescriptors ?? backendExpressionDescriptors}
         expressionDescriptorStatus={options.expressionDescriptorStatus ?? "ready"}
         onRetryDescriptors={options.onRetryDescriptors}
+        focusInputKey={focus.key}
+        focusInputRequest={focus.request}
         descriptorStatus="ready"
-        visibleVariables={[]}
+        visibleVariables={visibleVariables}
         scopeStatus="ready"
         onChange={handleChange}
       />
@@ -144,7 +154,118 @@ function input(name: string, overrides: Partial<StudioActivityInputDescriptor> =
 }
 
 function propertyLabels(container: HTMLElement) {
-  return [...container.querySelectorAll(".wf-property-row-header label")].map(label => label.textContent);
+  return [...container.querySelectorAll(".wf-property-row[role='group']")].map(label => label.getAttribute("aria-label")?.replace(/ property$/, ""));
+}
+
+it("focuses the input targeted by validation navigation", async () => {
+  const container = renderPanel([input("Text", { referenceKey: "Text", isWrapped: false })], {
+    focusInputKey: "Text",
+    focusInputRequest: 1
+  });
+  const row = container.querySelector<HTMLElement>(".wf-property-row[role='group']")!;
+  const field = row.querySelector<HTMLElement>("input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [contenteditable='true']")!;
+
+  await nextFrame();
+  expect(document.activeElement).toBe(field);
+});
+
+describe("validation navigation to compact code editors", () => {
+  const editor: StudioExpressionEditorContribution = {
+    id: "compact-code",
+    supports: context => context.syntax === "JavaScript",
+    surfaces: {
+      inline: props => <>
+        <button type="button">Unrelated editor action</button>
+        <input aria-label="Disabled editor control" disabled />
+        <StudioCodeEditor
+          document={{ uri: "elsa://validation-focus/text", language: "javascript", value: String(props.value) }}
+          profile="compact"
+          ariaLabel="Text JavaScript"
+          languageAdapter={javaScriptLanguageAdapter}
+          onExpand={props.onExpand}
+          onChange={document => props.onChange(document.value)}
+        />
+      </>,
+      expanded: props => <StudioCodeEditor
+        document={{ uri: "elsa://validation-focus/text/expanded", language: "javascript", value: String(props.value) }}
+        ariaLabel="Expanded Text JavaScript"
+        focusOnMount
+        languageAdapter={javaScriptLanguageAdapter}
+        onChange={document => props.onChange(document.value)}
+      />
+    }
+  };
+
+  function navigateTo(source: string, focus: { key?: string; request?: number } = { key: "text", request: 1 }) {
+    return renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: source } } }),
+      expressionEditors: [editor],
+      editors: [],
+      focusInputKey: focus.key,
+      focusInputRequest: focus.request
+    });
+  }
+
+  it("activates and focuses the real single-line rich editor without choosing header or adornment controls", async () => {
+    const container = navigateTo("return 1;");
+    await vi.waitFor(() => {
+      const richEditor = container.querySelector<HTMLElement>(".cm-content");
+      expect(richEditor).not.toBeNull();
+      expect(document.activeElement).toBe(richEditor);
+    });
+    expect(container.querySelector(".studio-code-editor-preview")).toBeNull();
+    expect(document.querySelector(".wf-property-editor-dialog")).toBeNull();
+  });
+
+  it("focuses the multiline preview and opens the expanded editor only on activation", async () => {
+    const container = navigateTo("const value = 1;\nreturn value;");
+    const preview = container.querySelector<HTMLButtonElement>(".studio-code-editor-preview")!;
+    await vi.waitFor(() => expect(document.activeElement).toBe(preview));
+    expect(preview.tagName).toBe("BUTTON");
+    expect(preview.type).toBe("button");
+    expect(document.querySelector(".wf-property-editor-dialog")).toBeNull();
+    // Native Enter/Space activation uses this button's click action; focus alone must not expand it.
+    flushSync(() => preview.click());
+    await vi.waitFor(() => {
+      const expanded = document.querySelector<HTMLElement>(".wf-property-editor-dialog .cm-content");
+      expect(expanded).not.toBeNull();
+      expect(document.activeElement).toBe(expanded);
+    });
+  });
+
+  it("honors a changed focus target on an otherwise unchanged mounted row", async () => {
+    const container = navigateTo("return 1;", { request: 1 });
+    await nextFrame();
+    expect(container.querySelector(".studio-code-editor-preview")).not.toBeNull();
+    flushSync(() => requestInputFocus("text", 1));
+    await vi.waitFor(() => {
+      const rich = container.querySelector<HTMLElement>(".cm-content");
+      expect(rich).not.toBeNull();
+      expect(document.activeElement).toBe(rich);
+    });
+  });
+
+  it("honors another request for the same unchanged mounted input after focus leaves it", async () => {
+    const container = navigateTo("return 1;", { key: "text" });
+    await nextFrame();
+    expect(container.querySelector(".studio-code-editor-preview")).not.toBeNull();
+    for (const request of [1, 2]) {
+      flushSync(() => requestInputFocus("text", request));
+      await vi.waitFor(() => {
+        const rich = container.querySelector<HTMLElement>(".cm-content");
+        expect(rich).not.toBeNull();
+        expect(document.activeElement).toBe(rich);
+      });
+      flushSync(() => container.querySelector<HTMLButtonElement>("button")!.focus());
+      await vi.waitFor(() => expect(container.querySelector(".studio-code-editor-preview")).not.toBeNull());
+    }
+  });
+});
+
+function toggleWorkflowInputBindings(container: HTMLElement) {
+  const button = container.querySelector<HTMLButtonElement>(".wf-input-bindings-toggle")!;
+  flushSync(() => button.click());
+  return button;
 }
 
 it("commits related literal inputs atomically and refreshes contributed editors after a sibling edit", () => {
@@ -176,6 +297,183 @@ it("refreshes a contributed editor when only a sibling literal input changes", a
 });
 
 describe("activity property organization", () => {
+  it("groups adjacent editor rows under an accessible heading regardless of syntax or editability", () => {
+    const propertyGroup = { id: "assignment", label: "Assignment", description: "Choose one person or one group." };
+    const editors: StudioActivityPropertyEditorContribution[] = [
+      {
+        id: "assignment.assignee",
+        propertyGroup,
+        supports: descriptor => descriptor.uiHint === "assignment-assignee",
+        component: ({ value }) => <output>{String(value ?? "")}</output>
+      },
+      {
+        id: "assignment.group",
+        propertyGroup,
+        supports: descriptor => descriptor.uiHint === "assignment-group",
+        component: ({ value }) => <output>{String(value ?? "")}</output>
+      }
+    ];
+    const container = renderPanel([
+      input("AssigneeId", { referenceKey: "assigneeId", uiHint: "assignment-assignee", isWrapped: true }),
+      input("GroupId", { referenceKey: "groupId", uiHint: "assignment-group", isWrapped: true }),
+      input("Other", { isWrapped: false })
+    ], {
+      editors,
+      readOnly: true,
+      activity: activity({
+        assigneeId: { typeName: "System.String", expression: { type: "Literal", value: "alice" } },
+        groupId: { typeName: "System.String", expression: { type: "JavaScript", value: "currentGroup()" } }
+      })
+    });
+
+    const group = container.querySelector<HTMLFieldSetElement>("fieldset.wf-property-editor-group");
+    expect(group?.querySelector("legend")?.textContent).toBe("Assignment");
+    const descriptionId = group?.getAttribute("aria-describedby");
+    expect(descriptionId).toBeTruthy();
+    expect(document.getElementById(descriptionId!)?.textContent).toBe("Choose one person or one group.");
+    const rows = [...group!.querySelectorAll<HTMLElement>(".wf-property-row")];
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.getAttribute("aria-label")).toBe("AssigneeId property");
+    expect(rows[1]?.getAttribute("aria-label")).toBe("GroupId property");
+    expect(rows[1]?.querySelector(".wf-syntax-picker-trigger")?.getAttribute("aria-label")).toContain("GroupId expression syntax");
+    expect(container.querySelector<HTMLElement>('[aria-label="Other property"]')?.closest("fieldset")).toBeNull();
+  });
+
+  it("renders a complete editor group once and commits its related literal inputs atomically", () => {
+    const onChange = vi.fn();
+    const propertyGroup = {
+      id: "assignment",
+      label: "Assignment",
+      description: "Choose one person or one group.",
+      inputKeys: ["AssigneeId", "GroupId"],
+      component: ({ inputs, context }: import("@elsa-workflows/studio-sdk").StudioActivityPropertyEditorGroupProps) => <>
+        <output aria-label="Assignment input count">{inputs.length}</output>
+        <button type="button" aria-label="Assign a person" onClick={() => context.setLiteralInputs?.({ AssigneeId: "alice", GroupId: null })}>Assign</button>
+      </>
+    };
+    const editors: StudioActivityPropertyEditorContribution[] = [
+      { id: "assignment.person", propertyGroup, supports: descriptor => descriptor.uiHint === "assignment-person", component: () => null },
+      { id: "assignment.group", propertyGroup, supports: descriptor => descriptor.uiHint === "assignment-group", component: () => null }
+    ];
+    const container = renderPanel([
+      input("AssigneeId", { referenceKey: "AssigneeId", uiHint: "assignment-person", isWrapped: true }),
+      input("GroupId", { referenceKey: "GroupId", uiHint: "assignment-group", isWrapped: true }),
+      input("Other", { isWrapped: false })
+    ], {
+      activity: activity({
+        AssigneeId: { typeName: "System.String", expression: { type: "Literal", value: "" } },
+        GroupId: { typeName: "System.String", expression: { type: "Literal", value: "reviewers" } },
+        Other: "preserve"
+      }),
+      editors,
+      onChange
+    });
+
+    expect(container.querySelector('[aria-label="Assignment input count"]')?.textContent).toBe("2");
+    expect(container.querySelectorAll(".wf-property-row")).toHaveLength(1);
+    flushSync(() => container.querySelector<HTMLButtonElement>('[aria-label="Assign a person"]')!.click());
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0].AssigneeId.expression.value).toBe("alice");
+    expect(onChange.mock.calls[0][0].GroupId.expression.value).toBeNull();
+    expect(onChange.mock.calls[0][0].Other).toBe("preserve");
+  });
+
+  it("clears the sibling in the same commit when a grouped host row switches to an expression", () => {
+    const onChange = vi.fn();
+    const propertyGroup = {
+      id: "assignment",
+      label: "Assignment",
+      inputKeys: ["AssigneeId", "GroupId"],
+      component: ({ renderExpressionEditor }: import("@elsa-workflows/studio-sdk").StudioActivityPropertyEditorGroupProps) => <>
+        {renderExpressionEditor("AssigneeId")}
+      </>
+    };
+    const editors: StudioActivityPropertyEditorContribution[] = [
+      { id: "assignment.person", propertyGroup, supports: descriptor => descriptor.uiHint === "assignment-person", component: () => null },
+      { id: "assignment.group", propertyGroup, supports: descriptor => descriptor.uiHint === "assignment-group", component: () => null }
+    ];
+    const container = renderPanel([
+      input("AssigneeId", { referenceKey: "AssigneeId", uiHint: "assignment-person", isWrapped: true }),
+      input("GroupId", { referenceKey: "GroupId", uiHint: "assignment-group", isWrapped: true })
+    ], {
+      activity: activity({
+        AssigneeId: { typeName: "System.String", expression: { type: "Literal", value: "" } },
+        GroupId: { typeName: "System.String", expression: { type: "Literal", value: "reviewers" }, argumentExtras: { marker: "keep" } }
+      }),
+      editors,
+      onChange
+    });
+
+    expect(container.querySelector(".wf-property-row")?.outerHTML).toContain("wf-syntax-picker-trigger");
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")!.click());
+    const javaScript = [...document.querySelectorAll<HTMLButtonElement>("[role='option']")].find(option => option.textContent === "JavaScript");
+    expect(javaScript).toBeDefined();
+    flushSync(() => javaScript!.click());
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0].AssigneeId.expression.type).toBe("JavaScript");
+    expect(onChange.mock.calls[0][0].GroupId.expression).toEqual({ type: "Literal", value: null });
+    expect(onChange.mock.calls[0][0].GroupId.argumentExtras.marker).toBe("keep");
+  });
+
+  it("preserves sibling inputs when a grouped editor opts into independent expressions", () => {
+    const onChange = vi.fn();
+    const propertyGroup = {
+      id: "task-form",
+      label: "Task form",
+      inputKeys: ["FormId", "FormVersion"],
+      preserveSiblingOnExpression: true,
+      component: ({ renderExpressionEditor }: import("@elsa-workflows/studio-sdk").StudioActivityPropertyEditorGroupProps) => <>
+        {renderExpressionEditor("FormId")}
+      </>
+    };
+    const editors: StudioActivityPropertyEditorContribution[] = [
+      { id: "task-form.id", propertyGroup, supports: descriptor => descriptor.uiHint === "task-form-id", component: () => null },
+      { id: "task-form.version", propertyGroup, supports: descriptor => descriptor.uiHint === "task-form-version", component: () => null }
+    ];
+    const container = renderPanel([
+      input("FormId", { referenceKey: "FormId", uiHint: "task-form-id", isWrapped: true }),
+      input("FormVersion", { referenceKey: "FormVersion", uiHint: "task-form-version", isWrapped: true })
+    ], {
+      activity: activity({
+        FormId: { typeName: "System.String", expression: { type: "Literal", value: "" } },
+        FormVersion: { typeName: "System.String", expression: { type: "Literal", value: "1" }, argumentExtras: { marker: "keep" } }
+      }),
+      editors,
+      onChange
+    });
+
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")!.click());
+    const javaScript = [...document.querySelectorAll<HTMLButtonElement>("[role='option']")].find(option => option.textContent === "JavaScript");
+    expect(javaScript).toBeDefined();
+    flushSync(() => javaScript!.click());
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0].FormId.expression.type).toBe("JavaScript");
+    expect(onChange.mock.calls[0][0].FormVersion.expression).toEqual({ type: "Literal", value: "1" });
+    expect(onChange.mock.calls[0][0].FormVersion.argumentExtras.marker).toBe("keep");
+  });
+
+  it("falls back to individual property rows when the required group inputs are incomplete", () => {
+    const propertyGroup = {
+      id: "assignment",
+      label: "Assignment",
+      inputKeys: ["AssigneeId", "GroupId"],
+      component: () => <output data-testid="combined-assignment">Combined</output>
+    };
+    const editors: StudioActivityPropertyEditorContribution[] = [{
+      id: "assignment.person",
+      propertyGroup,
+      supports: descriptor => descriptor.uiHint === "assignment-person",
+      component: ({ value }) => <output>{String(value ?? "")}</output>
+    }];
+    const container = renderPanel([input("AssigneeId", { uiHint: "assignment-person", isWrapped: false })], { editors });
+
+    expect(container.querySelector('[data-testid="combined-assignment"]')).toBeNull();
+    expect(container.querySelector(".wf-property-row[aria-label='AssigneeId property']")).not.toBeNull();
+  });
+
   it("binds a selected workflow input into JavaScript args and preserves the expression source", async () => {
     const changes: ActivityNode[] = [];
     const source = "`Started Order ID: ${args.OrderId}`";
@@ -200,6 +498,12 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-bindings-toggle")).not.toBeNull());
+    const disclosure = container.querySelector<HTMLButtonElement>(".wf-input-bindings-toggle")!;
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(disclosure.getAttribute("aria-label")).toBe("Workflow input bindings");
+    expect(container.querySelector(".wf-js-input-bindings select")).toBeNull();
+    toggleWorkflowInputBindings(container);
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
     const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
     expect(picker).not.toBeNull();
@@ -218,6 +522,7 @@ describe("activity property organization", () => {
         OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" }
       }
     });
+    expect(container.querySelector(".wf-input-bindings-toggle")?.getAttribute("aria-label")).toBe("Workflow input bindings (1)");
     expect(container.textContent).toContain("args.OrderId");
 
     const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
@@ -228,6 +533,80 @@ describe("activity property organization", () => {
       parameters: { Existing: { kind: "Literal", value: "preserve me" } }
     });
     expect(Object.keys(removed.parameters)).toEqual(["Existing"]);
+    expect(container.querySelector(".wf-input-bindings-toggle")?.getAttribute("aria-label")).toBe("Workflow input bindings");
+  });
+
+  it("keeps workflow input bindings collapsed and intact when reopened", async () => {
+    const source = "args.OrderId";
+    const binding = { kind: "WorkflowRequest", memberKey: "OrderId" };
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source,
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { OrderId: binding },
+            options: {},
+            capabilityProfile: "binding-readonly-v1"
+          }
+        }
+      } }),
+      workflowState: { inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }] }
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-bindings-toggle")).not.toBeNull());
+    const disclosure = container.querySelector<HTMLButtonElement>(".wf-input-bindings-toggle")!;
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(disclosure.getAttribute("aria-label")).toBe("Workflow input bindings (1)");
+    expect(container.querySelector(".wf-js-input-bindings select")).toBeNull();
+    expect(container.querySelector("[aria-label='Bound workflow inputs']")).toBeNull();
+
+    toggleWorkflowInputBindings(container);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(container.textContent).toContain("OrderId");
+    toggleWorkflowInputBindings(container);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector(".wf-js-input-bindings select")).toBeNull();
+
+    toggleWorkflowInputBindings(container);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(container.textContent).toContain("OrderId → args.OrderId");
+  });
+
+  it("lets read-only authors inspect bindings while keeping mutation controls disabled", async () => {
+    const binding = { kind: "WorkflowRequest", memberKey: "OrderId" };
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source: "args.OrderId",
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { OrderId: binding },
+            options: {},
+            capabilityProfile: "binding-readonly-v1"
+          }
+        }
+      } }),
+      workflowState: { inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }] },
+      readOnly: true,
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-bindings-toggle")).not.toBeNull());
+    const disclosure = container.querySelector<HTMLButtonElement>(".wf-input-bindings-toggle")!;
+    expect(disclosure.disabled).toBe(false);
+    toggleWorkflowInputBindings(container);
+    expect(container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")?.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")?.disabled).toBe(true);
+    expect(container.textContent).toContain("OrderId → args.OrderId");
+    expect(changes).toHaveLength(0);
   });
 
   it("keeps a stale workflow input binding removable after the input is deleted", async () => {
@@ -251,6 +630,8 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-bindings-toggle")).not.toBeNull());
+    toggleWorkflowInputBindings(container);
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
     const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
     expect(picker.disabled).toBe(true);
@@ -283,6 +664,8 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-bindings-toggle")).not.toBeNull());
+    toggleWorkflowInputBindings(container);
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
     expect(container.textContent).toContain("Unknown workflow input (invalid workflow input binding)");
     const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
@@ -310,6 +693,8 @@ describe("activity property organization", () => {
       onChange: next => changes.push(next)
     });
 
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-bindings-toggle")).not.toBeNull());
+    toggleWorkflowInputBindings(container);
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
     const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
     expect(picker.querySelector<HTMLOptionElement>("option[value='constructor']")?.disabled).toBe(false);
@@ -370,6 +755,27 @@ describe("activity property organization", () => {
     expect(container.textContent).toContain("No editor is available for Literal");
     expect(container.textContent).not.toContain("JavaScript");
     expect(container.textContent).not.toContain("Liquid");
+  });
+
+  it("renders a missing-editor hint as a direct child of the field so its buttons sit beside the text (#4742)", () => {
+    const container = renderPanel([
+      input("Text", { isWrapped: true, defaultSyntax: "Literal" })
+    ], {
+      // Minimal composition: the backend has no JavaScript descriptor and no editor module is registered.
+      expressionDescriptors: backendExpressionDescriptors.filter(descriptor => descriptor.type === "Literal"),
+      activity: activity({
+        text: { typeName: "System.String", expression: { type: "JavaScript", value: { language: "JavaScript", source: "args.manual" } } }
+      })
+    });
+
+    const hint = container.querySelector<HTMLElement>(".wf-expression-editor-hint")!;
+    expect(hint.textContent).toContain("No editor is available for JavaScript.");
+    // styles.css lays this field out as a row with `:has(> .wf-expression-editor > .wf-expression-editor-hint)`,
+    // which only matches while the hint and the inline buttons keep this structure.
+    const field = hint.parentElement!.parentElement!;
+    expect(hint.parentElement!.classList.contains("wf-expression-editor")).toBe(true);
+    expect(field.classList.contains("wf-expression-field")).toBe(true);
+    expect(field.querySelector(":scope > .wf-syntax-picker.inline")).not.toBeNull();
   });
 
   it("reports loading and failed expression metadata without replacing a preserved backend snapshot", () => {
@@ -477,10 +883,10 @@ describe("activity property organization", () => {
     expect(advanced).not.toBeNull();
     expect(advanced!.querySelector(".studio-disclosure-fold-label")?.textContent).toBe("More options");
     expect(advanced!.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("false");
-    expect([...container.querySelectorAll(".wf-properties > .wf-property-group .wf-property-row-header label")]
-      .map(label => label.textContent)).toEqual(["Url", "Method", "Content", "Connection"]);
-    expect([...advanced!.querySelectorAll(".wf-property-row-header label")]
-      .map(label => label.textContent)).toEqual(["ContentType", "RequestHeaders", "ExpectedStatusCodes", "Timeout"]);
+    expect([...container.querySelectorAll(".wf-properties > .wf-property-group .wf-property-row[role='group']")]
+      .map(label => label.getAttribute("aria-label")?.replace(/ property$/, ""))).toEqual(["Url", "Method", "Content", "Connection"]);
+    expect([...advanced!.querySelectorAll(".wf-property-row[role='group']")]
+      .map(label => label.getAttribute("aria-label")?.replace(/ property$/, ""))).toEqual(["ContentType", "RequestHeaders", "ExpectedStatusCodes", "Timeout"]);
     expect(advanced!.querySelectorAll(".wf-property-row")).toHaveLength(4);
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -497,11 +903,11 @@ describe("activity property organization", () => {
     ]);
 
     const advanced = container.querySelector<HTMLElement>(".studio-advanced-section")!;
-    expect([...container.querySelectorAll(".wf-properties > .wf-property-group .wf-property-row-header label")]
-      .map(label => label.textContent)).toEqual([
+    expect([...container.querySelectorAll(".wf-properties > .wf-property-group .wf-property-row[role='group']")]
+      .map(label => label.getAttribute("aria-label")?.replace(/ property$/, ""))).toEqual([
       "Legacy", "NullTier", "UnknownTier", "SettingTier", "CaseMismatch", "RequiredOptional"
     ]);
-    expect([...advanced.querySelectorAll(".wf-property-row-header label")].map(label => label.textContent))
+    expect([...advanced.querySelectorAll(".wf-property-row[role='group']")].map(label => label.getAttribute("aria-label")?.replace(/ property$/, "")))
       .toEqual(["Optional"]);
   });
 
@@ -515,9 +921,8 @@ describe("activity property organization", () => {
     };
     const container = renderPanel([input("UnknownEditor", { tier: "optional" })], { editors: [unknownEditor] });
 
-    await nextFrame();
     const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
-    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    await vi.waitFor(() => expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true"));
     expect(disclosure.querySelector(".studio-status-pill")).toBeNull();
   });
 
@@ -586,9 +991,8 @@ describe("activity property organization", () => {
       tier: "optional"
     })], { expressionEditors: [expressionEditor] });
 
-    await nextFrame();
     const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
-    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    await vi.waitFor(() => expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true"));
     expect(disclosure.querySelector(".studio-status-pill")).toBeNull();
   });
 
@@ -1337,7 +1741,7 @@ describe("activity property organization", () => {
     ], { activity: initial, onChange: next => changes.push(next) });
 
     const methodRow = [...container.querySelectorAll<HTMLElement>(".wf-property-row")]
-      .find(row => row.querySelector(".wf-property-row-header label")?.textContent === "Method")!;
+      .find(row => row.getAttribute("aria-label") === "Method property")!;
     const methodInput = methodRow.querySelector<HTMLInputElement>("input")!;
     for (const method of ["HEAD", "POST", "GET"]) {
       changeTextInput(methodInput, method);
@@ -1951,6 +2355,8 @@ describe("activity property organization", () => {
     expect(container.querySelector<HTMLInputElement>("input[aria-label='Template expression']")?.value).toBe("{{ order.{");
     expect(container.querySelector(".wf-expression-editor-diagnostic.warning")?.textContent)
       .toContain("Expression is incomplete.");
+    expect(container.querySelector(".wf-conversion-toggle")).not.toBeNull();
+    expect(container.querySelector(".wf-property-row-header-meta > span")).toBeNull();
   });
 
   it("uses text mode instead of a collection repeater for collection-typed expressions", () => {
@@ -2149,7 +2555,7 @@ describe("secret-only inputs", () => {
     ...options
   });
   const rowOf = (container: HTMLElement, label: string) =>
-    [...container.querySelectorAll<HTMLElement>(".wf-property-row")].find(row => row.querySelector("label")?.textContent === label)!;
+    [...container.querySelectorAll<HTMLElement>(".wf-property-row")].find(row => row.getAttribute("aria-label") === `${label} property`)!;
   const syntaxOptions = (row: HTMLElement) => {
     flushSync(() => row.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.click());
     return [...document.querySelectorAll("[role='option']")].map(option => option.textContent);

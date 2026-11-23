@@ -16,6 +16,9 @@ import type {
   WorkflowInstanceDetails,
   WorkflowInstanceSummary
 } from "../workflowTypes";
+import { historyBookmark, historyCoverage, historyEvent, historyPage } from "./runtimeHistoryFixtures";
+import { readRunHistoryLocation } from "../workflow-editor/run-history/historyLocation";
+import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError, capabilityIds } from "../api/capabilities";
 import { bpmnActivity, flowchartActivity, sequenceActivity, writeLine } from "./fixtures";
 
 const api = vi.hoisted(() => ({
@@ -31,6 +34,10 @@ const api = vi.hoisted(() => ({
   supportsWorkflowInstanceHealthFilter: vi.fn(),
   listActivities: vi.fn()
 }));
+const historyApi = vi.hoisted(() => ({ supportsWorkflowHistory: vi.fn(), getWorkflowHistoryPage: vi.fn(), getWorkflowHistoryEvent: vi.fn(), getWorkflowHistoryBookmark: vi.fn(), listWorkflowHistoryBookmarks: vi.fn() }));
+const playbackApi = vi.hoisted(() => ({ readActivityPlayback: vi.fn() }));
+vi.mock("../api/activityPlayback", async importOriginal => ({ ...await importOriginal<typeof import("../api/activityPlayback")>(), ...playbackApi }));
+vi.mock("../api/runtimeHistory", async importOriginal => ({ ...await importOriginal<typeof import("../api/runtimeHistory")>(), ...historyApi }));
 const designApi = vi.hoisted(() => ({
   listDefinitions: vi.fn(),
   getDefinition: vi.fn()
@@ -41,6 +48,12 @@ const useActualReactFlow = vi.hoisted(() => ({ enabled: false }));
 
 vi.mock("../api/runtime", () => ({
   ...api,
+  // Native fetch rejects an already-aborted read. Keep a retired workbench's delayed
+  // import continuation from entering the next test's replacement inspection mock.
+  getActivityExecutionInspection: async (...args: Parameters<typeof import("../api/runtime").getActivityExecutionInspection>) => {
+    args[3]?.throwIfAborted();
+    return api.getActivityExecutionInspection(...args);
+  },
   WorkflowInstanceHealthFilterUnavailableError: class extends Error {}
 }));
 vi.mock("../api/activityDesign", () => ({ listActivities: api.listActivities }));
@@ -97,6 +110,7 @@ const scrollIntoView = vi.fn();
 const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/workflows/instances/run-1");
   HTMLElement.prototype.scrollIntoView = scrollIntoView;
   window.localStorage.clear();
   window.localStorage.setItem("elsa-studio-run-detail-inspector-maximized", "true");
@@ -138,7 +152,23 @@ beforeEach(() => {
   api.getExecutableInputSources.mockResolvedValue({ authoredInputs: [], compiledInputs: [], access: "allowed" });
   api.supportsActivityExecutionInspection.mockResolvedValue(false);
   api.supportsActivityExecutionBrowsing.mockResolvedValue(false);
+  playbackApi.readActivityPlayback.mockRejectedValue(new ApiCapabilityUnavailableError(capabilityIds.runtime, "workflow-history-occurrences"));
   api.getActivityExecutionInspection.mockResolvedValue(activityInspection());
+  historyApi.supportsWorkflowHistory.mockResolvedValue(true);
+  historyApi.getWorkflowHistoryPage.mockImplementation(async (_context, _run, request) => {
+    const snapshot = await api.getWorkflowInstance.mock.results.at(-1)?.value as WorkflowInstanceDetails;
+    const items = (snapshot?.activities ?? []).map((activity, index) => historyEvent(index + 1, { workflowExecutionId: "run-1", historyEventId: `event-${activity.activityExecutionId}`, activityExecutionId: activity.activityExecutionId, executableNodeId: activity.executableNodeId, name: activity.status === "Completed" ? "ActivityCompleted" : "ActivityFaulted" }));
+    return historyPage(request.continuationToken ? [] : items, { upperSequence: items.length, scannedCount: items.length, catchUpToken: "catchup" });
+  });
+  historyApi.getWorkflowHistoryEvent.mockImplementation(async (_context, _run, id: string) => {
+    const snapshot = await api.getWorkflowInstance.mock.results.at(-1)?.value as WorkflowInstanceDetails;
+    const index = snapshot?.activities.findIndex(activity => `event-${activity.activityExecutionId}` === id) ?? -1;
+    const activity = snapshot?.activities[index];
+    return { coverage: historyCoverage, event: historyEvent(Math.max(1, index + 1), { workflowExecutionId: "run-1", historyEventId: id,
+      ...(activity ? { activityExecutionId: activity.activityExecutionId, executableNodeId: activity.executableNodeId,
+        name: activity.status === "Completed" ? "ActivityCompleted" : "ActivityFaulted" } : {}) }), readAt: "2026-10-01T12:02:00Z" };
+  });
+  historyApi.listWorkflowHistoryBookmarks.mockResolvedValue({ coverage: historyCoverage, items: [], totalCount: null, activeCount: null, scopeComplete: true, readAt: "2026-10-01T12:02:00Z" });
   designApi.listDefinitions.mockResolvedValue({ definitions: [], page: 1, pageSize: 100, totalCount: 0 });
   designApi.getDefinition.mockRejectedValue(new Error("not found"));
 });
@@ -148,12 +178,13 @@ afterEach(() => {
   container.remove();
   HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
   window.localStorage.clear();
+  window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
   vi.resetAllMocks();
 });
 
 describe("workflow run workbench incident navigation", () => {
-  it("keeps failed ancestry blocked instead of falling back to wider run evidence", async () => {
+  it("keeps failed ancestry blocked instead of falling back to wider run data", async () => {
     api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
     api.browseActivityExecutions.mockResolvedValue({ items: [{ execution: activityExecution(), position: 1 }], totalCount: 1, previousCursor: null, nextCursor: null });
     api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => {
@@ -196,6 +227,42 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
   });
 
+  it.each([
+    ["forbidden", { status: 403 }, "with your permissions"],
+    ["not found", { status: 404 }, "on this backend"],
+    ["missing capability", new ApiCapabilityUnavailableError(capabilityIds.activityDesign, "activity-catalog"), "on this backend"],
+    ["unsupported capability", new ApiCapabilityVersionMismatchError(capabilityIds.activityDesign, "1", "2"), "on this backend"]
+  ] as const)("keeps authorized runtime history available without optional activity definitions (%s)", async (_kind, error, limitation) => {
+    api.listActivities.mockRejectedValue(error);
+    api.getExecutableInputSources.mockRejectedValue({ status: 403 });
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ incidents: [] }));
+    const historySearch = "?historyEvent=retained-event&keep=unchanged";
+    window.history.replaceState(null, "", `/workflows/instances/run-1${historySearch}`);
+    renderWorkbench("timeline", null, "timeline", historySearch);
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
+    expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+    expect(container.textContent).toContain(`Activity definitions are not available ${limitation}`);
+    expect(container.textContent).toContain("Activity labels and input descriptions may be limited.");
+    expect(container.textContent).not.toContain("Something went wrong");
+    await vi.waitFor(() => expect(historyApi.getWorkflowHistoryEvent).toHaveBeenCalledWith(expect.anything(), "run-1", "retained-event", expect.anything()));
+    expect(new URLSearchParams(window.location.search).get("historyEvent")).toBe("retained-event");
+    expect(new URLSearchParams(window.location.search).get("keep")).toBe("unchanged");
+    expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 503])("keeps authentication and transient activity-definition failures explicit (%s)", async status => {
+    api.listActivities.mockRejectedValue({ status });
+    renderWorkbench("timeline", null, "timeline");
+
+    await vi.waitFor(() => expect(container.textContent).toContain("Something went wrong"));
+    expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
+    expect(historyApi.getWorkflowHistoryEvent).not.toHaveBeenCalled();
+    expect(historyApi.getWorkflowHistoryPage).not.toHaveBeenCalled();
+    expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  });
+
   it("makes an interrupted ancestry read retryable after refresh", async () => {
     api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
     api.browseActivityExecutions.mockResolvedValue({ items: [{ execution: activityExecution(), position: 1 }], totalCount: 1, previousCursor: null, nextCursor: null });
@@ -214,7 +281,7 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector(".wf-activity-overview")).toBeNull();
   });
 
-  it("keeps pending exact-execution ancestry when the active Activity tab is activated again", async () => {
+  it.each(["activity", "timeline"] as const)("keeps pending exact-execution ancestry when the active Activity tab is activated again (%s)", async initialTab => {
     api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
     api.browseActivityExecutions.mockImplementation(async (_context, _run, request: { anchorActivityExecutionId?: string }) => ({
       items: [{ execution: request.anchorActivityExecutionId === "slow-parent" ? { ...activityExecution(), activityExecutionId: "slow-parent" } : activityExecution(), position: 1 }],
@@ -223,7 +290,7 @@ describe("workflow run workbench incident navigation", () => {
     const pending = deferred<ActivityExecutionInspection>();
     api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => id === "slow-parent" ? pending.promise
       : activityInspection({ provenance: { parentActivityExecutionId: "slow-parent" } as ActivityExecutionInspection["provenance"] }));
-    renderWorkbench("activity", "execution-target");
+    renderWorkbench(initialTab, "execution-target");
     await vi.waitFor(() => expect(container.textContent).toContain("Resolving execution scope"));
     const activeTab = container.querySelector<HTMLButtonElement>("[data-tab-id='activity']");
     expect(activeTab?.getAttribute("aria-selected")).toBe("true");
@@ -231,10 +298,26 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.textContent).toContain("Resolving execution scope");
     expect(buttonByText(container, "Retry execution scope")).toBeFalsy();
     pending.resolve(activityInspection({ activityExecutionId: "slow-parent", provenance: {} as ActivityExecutionInspection["provenance"] }));
-    await vi.waitFor(() => expect(container.querySelector(".wf-activity-execution-details")).toBeTruthy());
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity journal']")).toBeTruthy());
     expect(container.textContent).not.toContain("interrupted");
     expect(container.textContent).not.toContain("Resolving execution scope");
     expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("retains accepted workflow changes on the current run timeline without inventing history events", async () => {
+    const effects = { workflowStateEffects: ["outputs", "correlationId"], workflowStateEffectReceipts: [{
+      attemptId: "accepted-attempt", acceptedAt: "2026-07-09T10:00:01Z", transition: "Completion" as const, kinds: ["outputs", "correlationId"]
+    }] };
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [{ ...activityExecution(), ...effects }], incidents: [] }));
+    api.getActivityExecutionInspection.mockResolvedValue({ ...activityInspection(), ...effects });
+    renderWorkbench("activity", "execution-target", "timeline");
+    await vi.waitFor(() => expect(container.querySelector('[aria-label="Accepted workflow changes"]')).toBeTruthy());
+    const accepted = container.querySelector('[aria-label="Accepted workflow changes"]')!;
+    expect(accepted.textContent).toContain("Committed changes: workflow outputs, correlation");
+    expect(accepted.textContent).toContain("Completion accepted");
+    expect(accepted.textContent).toContain("Current values may differ");
+    expect(accepted.querySelectorAll(".wf-history-event")).toHaveLength(0);
   });
 
   it.each(["Timeline", "Collapse run details panel", "Restore run details panel", "Back to workflow run canvas"])("makes pending ancestry retryable after %s", async action => {
@@ -342,6 +425,35 @@ describe("workflow run workbench incident navigation", () => {
     }
   });
 
+  it("keeps event selection in Timeline and opens its exact occurrence only through the owner action", async () => {
+    const first = activityExecution();
+    const second = { ...first, activityExecutionId: "execution-second", scheduledAt: "2026-10-01T12:01:00Z" };
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [first, second], incidents: [] }));
+    renderWorkbench("activity", null, "timeline");
+
+    await vi.waitFor(() => expect(container.querySelectorAll(".wf-run-history-view .wf-history-event")).toHaveLength(2));
+    const entries = container.querySelectorAll<HTMLButtonElement>(".wf-run-history-view .wf-history-event");
+    const readsBeforeSelection = api.getActivityExecutionInspection.mock.calls.length;
+    entries[0].focus(); click(entries[0]);
+    await vi.waitFor(() => expect(entries[0]?.getAttribute("aria-pressed")).toBe("true"));
+    expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+    expect(document.activeElement).toBe(entries[0]);
+    expect(entries[0]?.isConnected).toBe(true);
+
+    entries[1].focus(); click(entries[1]);
+    await vi.waitFor(() => expect(entries[1]?.getAttribute("aria-pressed")).toBe("true"));
+    expect(entries[0]?.getAttribute("aria-pressed")).toBe("false");
+    expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+    expect(document.activeElement).toBe(entries[1]);
+    expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(readsBeforeSelection);
+
+    await vi.waitFor(() => expect(buttonByText(container, "Inspect owning execution →")).toBeTruthy());
+    click(buttonByText(container, "Inspect owning execution →"));
+    await vi.waitFor(() => expect(container.textContent).toContain(second.activityExecutionId));
+    expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
+    expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("uses the pinned Sequence canvas without authoring controls", async () => {
     api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [], incidents: [] }));
     designApi.getDefinition.mockResolvedValue({
@@ -355,7 +467,7 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector(".wf-sequence-insert, .wf-sequence-actions")).toBeNull();
     expect(container.querySelector(".wf-sequence-step")?.getAttribute("draggable")).toBe("false");
     expect(api.getExecutable).toHaveBeenCalledWith(expect.anything(), "artifact-1", "reference-1");
-    await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell > header")?.textContent).toContain("Current renamed Flowchart"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-detail-header h2")?.textContent).toContain("Current renamed Flowchart"));
     expect(container.querySelector(".wf-sequence-designer")).toBeTruthy();
   });
 
@@ -378,11 +490,15 @@ describe("workflow run workbench incident navigation", () => {
     renderWorkbench();
 
     await vi.waitFor(() => expect(container.querySelector(".wf-mock-react-flow")).toBeTruthy());
+    expect(container.querySelector(".wf-instance-breadcrumb")).toBeNull();
+    expect(container.querySelector(".wf-execution-scope")).toBeNull();
     expect(container.querySelector(".wf-sequence-designer")).toBeNull();
     click(buttonByText(container, "Show affected activity"));
     await vi.waitFor(() => expect(container.querySelector(".wf-sequence-step[data-runtime-node-id='target-node']")).toBeTruthy());
+    expect(container.querySelector(".wf-instance-breadcrumb button")?.textContent).toBe("Root");
     click(buttonByText(container.querySelector(".wf-instance-breadcrumb")!, "Root"));
     await vi.waitFor(() => expect(container.querySelector(".wf-mock-react-flow")).toBeTruthy());
+    expect(container.querySelector(".wf-instance-breadcrumb")).toBeNull();
     expect(container.querySelector(".wf-sequence-designer")).toBeNull();
   });
 
@@ -430,7 +546,7 @@ describe("workflow run workbench incident navigation", () => {
     }
   });
 
-  it("restores the nested canvas from a maximized Issues view and keeps input evidence navigation in Activity", async () => {
+  it("restores the nested canvas from a maximized Issues view and keeps input data navigation in Activity", async () => {
     renderWorkbench();
 
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench.inspector-maximized")).toBeTruthy());
@@ -443,7 +559,7 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
 
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("true"));
   });
@@ -497,6 +613,121 @@ describe("workflow run workbench incident navigation", () => {
     expect(scrollIntoView).toHaveBeenCalled();
   });
 
+  it.each([true, false])("opens an activity-only phone link only when its exact execution resolves (%s)", async found => {
+    observedWidth = 320;
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [], incidents: [] }));
+    api.supportsActivityExecutionInspection.mockResolvedValue(true);
+    if (found) api.getActivityExecutionInspection.mockResolvedValue(activityInspection({ incidents: [] }));
+    else api.getActivityExecutionInspection.mockRejectedValue({ status: 404 });
+    renderWorkbench("activity", "execution-target");
+
+    await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow")).toBeTruthy());
+    await vi.waitFor(() => expect(api.getActivityExecutionInspection.mock.calls.map(call => call.slice(0, 3))).toContainEqual([
+      expect.anything(), "run-1", "execution-target"]));
+    await vi.waitFor(() => expect(container.querySelector(".narrow-inspector-view") !== null).toBe(found));
+    expect(container.querySelector(".narrow-canvas-view") !== null).toBe(!found);
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview") !== null).toBe(found));
+    expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(false);
+    expect(historyApi.getWorkflowHistoryEvent).not.toHaveBeenCalled();
+    expect(historyApi.getWorkflowHistoryBookmark).not.toHaveBeenCalled();
+    expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  });
+
+  it.each(["event", "bookmark"] as const)("opens unavailable exact %s details on a phone without requiring an activity owner", async kind => {
+    observedWidth = 320;
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [], incidents: [] }));
+    const id = kind === "event" ? "purged-event" : "missing-bookmark";
+    const parameter = kind === "event" ? "historyEvent" : "bookmark";
+    const historySearch = `?${parameter}=${id}&returnTo=%2Fuser-tasks&keep=unchanged`;
+    window.history.replaceState(null, "", `/workflows/instances/run-1${historySearch}`);
+    historyApi.getWorkflowHistoryEvent.mockRejectedValue({ status: 404 });
+    historyApi.getWorkflowHistoryBookmark.mockRejectedValue({ status: 404 });
+    renderWorkbench("timeline", null, "timeline", historySearch);
+
+    await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow.narrow-inspector-view")).toBeTruthy());
+    const inspector = container.querySelector<HTMLElement>("[aria-label='Run details panel']")!;
+    await vi.waitFor(() => expect(inspector.textContent).toContain("This recorded target is unavailable or no longer retained."));
+    expect(inspector.closest("[hidden]")).toBeNull();
+    expect(inspector.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+    expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(true);
+    const exactRead = kind === "event" ? historyApi.getWorkflowHistoryEvent : historyApi.getWorkflowHistoryBookmark;
+    const otherRead = kind === "event" ? historyApi.getWorkflowHistoryBookmark : historyApi.getWorkflowHistoryEvent;
+    expect(exactRead).toHaveBeenCalledTimes(1);
+    expect(exactRead).toHaveBeenCalledWith(expect.anything(), "run-1", id, expect.anything());
+    expect(otherRead).not.toHaveBeenCalled();
+    expect(api.getActivityExecutionInspection).not.toHaveBeenCalled();
+    expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+    expect(new URLSearchParams(window.location.search).get(parameter)).toBe(id);
+    expect(new URLSearchParams(window.location.search).get("returnTo")).toBe("/user-tasks");
+    expect(new URLSearchParams(window.location.search).get("keep")).toBe("unchanged");
+  });
+
+  it.each(["issues", "details"] as const)("preserves an explicit %s phone startup tab with a retained history target", async tab => {
+    observedWidth = 320;
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [], incidents: [] }));
+    const historySearch = `?historyEvent=retained-event&tab=${tab}`;
+    window.history.replaceState(null, "", `/workflows/instances/run-1${historySearch}`);
+    renderWorkbench(tab, null, "timeline", historySearch);
+
+    await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow.narrow-inspector-view")).toBeTruthy());
+    const inspector = container.querySelector<HTMLElement>("[aria-label='Run details panel']")!;
+    expect(inspector.querySelector(`[data-tab-id='${tab}']`)?.getAttribute("aria-selected")).toBe("true");
+    if (tab === "issues") expect(inspector.textContent).toContain("No incidents recorded.");
+    else expect(inspector.querySelector(".wf-instance-meta")?.textContent).toContain("Run Kind");
+    expect(historyApi.getWorkflowHistoryEvent).not.toHaveBeenCalled();
+    expect(new URLSearchParams(window.location.search).get("historyEvent")).toBe("retained-event");
+    await vi.waitFor(() => expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false));
+
+    click(inspector.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
+    await vi.waitFor(() => expect(inspector.querySelector("[aria-label='History event details']")).toBeTruthy());
+    expect(historyApi.getWorkflowHistoryEvent).toHaveBeenCalledWith(expect.anything(), "run-1", "retained-event", expect.anything());
+    expect(new URLSearchParams(window.location.search).get("historyEvent")).toBe("retained-event");
+    expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  });
+
+  it("keeps the Timeline primary and returns from an exact journal event to the same activity tab", async () => {
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ incidents: [] }));
+    renderWorkbench("activity", "execution-target", "timeline");
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-history .wf-history-event")).toBeTruthy());
+    expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+    expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(true);
+    expect(container.querySelector("[data-tab-id='journal']")?.getAttribute("aria-selected")).toBe("true");
+    const journalEvent = container.querySelector<HTMLButtonElement>(".wf-activity-history .wf-history-event")!;
+    journalEvent.focus();
+    click(journalEvent);
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
+    expect(container.querySelector(".wf-activity-history")?.closest("[hidden]")).toBeTruthy();
+    click(buttonByText(container, "Back to activity inspection"));
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeNull());
+    expect(container.querySelector("[data-tab-id='journal']")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.querySelector(".wf-activity-overview")?.closest("[hidden]")).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(journalEvent));
+  });
+
+  it("opens Diagram itself when leaving the stacked Timeline on a phone", async () => {
+    observedWidth = 320;
+    renderWorkbench("activity", "execution-target", "timeline");
+    await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow.wf-run-history-workspace")).toBeTruthy());
+    click(buttonByText(container, "Diagram"));
+    await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow.narrow-canvas-view")).toBeTruthy());
+    expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(false);
+    expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("leaves another retained workspace's URL and selection untouched", async () => {
+    window.history.replaceState({ workspace: "other" }, "", "/workflows/instances/other?selected=other-owner&bookmark=other-bookmark&returnTo=%2Fuser-tasks");
+    renderWorkbench("activity", "execution-target", "timeline");
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
+    click(buttonByText(container, "Diagram"));
+    expect(window.location.pathname).toBe("/workflows/instances/other");
+    expect(new URLSearchParams(window.location.search).get("selected")).toBe("other-owner");
+    expect(new URLSearchParams(window.location.search).get("bookmark")).toBe("other-bookmark");
+    expect(new URLSearchParams(window.location.search).get("view")).toBeNull();
+    expect(window.history.state).toEqual({ workspace: "other" });
+    window.history.replaceState(null, "", "/");
+  });
+
   it("keeps the selected occurrence in the URL so a reload reopens it (spec 260 FR-423)", async () => {
     window.history.replaceState(null, "", "/workflows/instances/run-1?activityExecutionId=execution-target&tab=activity");
     api.getWorkflowInstance.mockResolvedValue(workflowDetails({ incidents: [] }));
@@ -505,10 +736,10 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench("activity", "execution-target");
 
-    await vi.waitFor(() => expect(window.location.search).toBe("?tab=activity&selected=execution-target"));
+    await vi.waitFor(() => expect(new URLSearchParams(window.location.search).get("selected")).toBe("execution-target"));
     click(container.querySelector<HTMLButtonElement>(".wf-sequence-step[data-id='target-node']"));
     // A design node is not an occurrence, so the URL no longer names one.
-    await vi.waitFor(() => expect(window.location.search).toBe("?tab=activity"));
+    await vi.waitFor(() => expect(new URLSearchParams(window.location.search).get("selected")).toBeNull());
     window.history.replaceState(null, "", "/");
   });
 
@@ -521,7 +752,7 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench.inspector-drawer-open")).toBeTruthy());
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(1));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='details']"));
     click(container.querySelector<HTMLButtonElement>("[aria-label='Close run details panel']"));
@@ -550,7 +781,7 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect this activity execution"));
     expect(container.querySelector(".wf-instance-incident[data-selected='true']")).toBeTruthy();
 
@@ -560,7 +791,7 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-incident-summary")).toBeTruthy());
     expect(container.querySelector(".wf-instance-incident[data-selected='true']")).toBeNull();
 
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(api.supportsActivityExecutionInspection).toHaveBeenCalledTimes(4));
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(2));
     click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
@@ -575,7 +806,7 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector("[data-tab-id='issues']")?.getAttribute("aria-selected")).toBe("true");
   });
 
-  it("keeps denied and mismatched activity evidence unavailable while retrying only transient failures", async () => {
+  it("keeps denied and mismatched activity data unavailable while retrying only transient failures", async () => {
     const incidents = [
       incident({ incidentId: "denied-incident", activityExecutionId: "denied-execution" }),
       incident({ incidentId: "mismatch-incident", activityExecutionId: "mismatch-execution" }),
@@ -584,7 +815,11 @@ describe("workflow run workbench incident navigation", () => {
     api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [], incidents }));
     api.supportsActivityExecutionInspection.mockResolvedValue(true);
     let transientAttempt = 0;
+    let phase = "initial";
+    const inspectionTrace: unknown[] = [];
     api.getActivityExecutionInspection.mockImplementation(async (_context, workflowExecutionId: string, activityExecutionId: string) => {
+      if (inspectionTrace.length < 12) inspectionTrace.push({ workflowExecutionId, activityExecutionId, phase, transientAttempt,
+        stack: new Error().stack?.split("\n").slice(1, 7) });
       if (activityExecutionId === "denied-execution") throw Object.assign(new Error("Forbidden"), { status: 403 });
       if (activityExecutionId === "mismatch-execution") return activityInspection({ activityExecutionId: "different-execution", workflowExecutionId });
       transientAttempt++;
@@ -593,9 +828,20 @@ describe("workflow run workbench incident navigation", () => {
     });
 
     renderWorkbench();
-    await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect 1 exact activity execution"));
-    expect(container.textContent).toContain("Runtime returned a different run or activity execution for 1 association");
-    expect(container.textContent).toContain("Some affected activities are not shown yet (1 remaining)");
+    try {
+      await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect 1 exact activity execution"));
+      expect(container.textContent).toContain("Runtime returned a different run or activity execution for 1 association");
+      expect(api.getActivityExecutionInspection.mock.calls.map(([, , id]) => id)).toEqual([
+        "denied-execution", "mismatch-execution", "transient-execution"
+      ]);
+      expect(container.textContent).toContain("Some affected activities are not shown yet (1 remaining)");
+    } catch (error) {
+      console.error("Initial incident association diagnostic", JSON.stringify({ inspectionTrace,
+        runReads: api.getWorkflowInstance.mock.calls.length, executableReads: api.getExecutable.mock.calls.length,
+        inspectionSupportReads: api.supportsActivityExecutionInspection.mock.calls.length }));
+      throw error;
+    }
+    phase = "manual-retry";
     click(buttonByText(container, "Load more affected activities (1)"));
 
     await vi.waitFor(() => expect(transientAttempt).toBe(2));
@@ -669,13 +915,15 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("true"));
 
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
     click([...container.querySelectorAll<HTMLButtonElement>(".wf-instance-incident-summary")]
       .find(button => button.textContent?.includes("Second failure.")));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
+    await vi.waitFor(() => expect(buttonByText(container, "Data")).toBeTruthy());
+    click(buttonByText(container, "Data"));
 
     await vi.waitFor(() => expect(container.textContent).toContain("execution-second"));
     await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")).toBeTruthy());
@@ -706,11 +954,16 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect this activity execution"));
 
-    click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
-    click(container.querySelector<HTMLButtonElement>(".wf-timeline-entry"));
+    click(buttonByText(container, "Timeline"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-history-event")).toBeTruthy());
+    click(container.querySelector<HTMLButtonElement>(".wf-history-event"));
+    expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
+    await vi.waitFor(() => expect(buttonByText(container, "Inspect owning execution →")).toBeTruthy());
+    click(buttonByText(container, "Inspect owning execution →"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     await vi.waitFor(() => expect(container.textContent).toContain("execution-healthy"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
@@ -745,14 +998,19 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(1));
 
     click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(container.textContent).toContain("RefreshedFailure"));
-    click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
-    click(container.querySelector<HTMLButtonElement>(".wf-timeline-entry"));
+    click(buttonByText(container, "Timeline"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-history-event")).toBeTruthy());
+    click(container.querySelector<HTMLButtonElement>(".wf-history-event"));
+    expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
+    await vi.waitFor(() => expect(buttonByText(container, "Inspect owning execution →")).toBeTruthy());
+    click(buttonByText(container, "Inspect owning execution →"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
 
@@ -765,6 +1023,7 @@ describe("workflow run workbench incident navigation", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed");
+    click(buttonByText(container, "Data"));
     const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
       .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
     expect(incidentCount).toBe("0");
@@ -820,10 +1079,13 @@ describe("workflow run workbench incident navigation", () => {
     click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(container.textContent).toContain("ResolvedFailure-50"));
-    click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
-    const timelineEntries = container.querySelectorAll<HTMLButtonElement>(".wf-timeline-entry");
+    click(buttonByText(container, "Timeline"));
+    await vi.waitFor(() => expect(container.querySelectorAll(".wf-history-event")).toHaveLength(lastIndex + 1));
+    const timelineEntries = container.querySelectorAll<HTMLButtonElement>(".wf-history-event");
     expect(timelineEntries).toHaveLength(lastIndex + 1);
     click(timelineEntries[lastIndex]);
+    await vi.waitFor(() => expect(buttonByText(container, "Inspect owning execution →")).toBeTruthy());
+    click(buttonByText(container, "Inspect owning execution →"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     await vi.waitFor(() => expect(container.textContent).toContain(executionId(lastIndex)));
 
@@ -838,6 +1100,7 @@ describe("workflow run workbench incident navigation", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed");
+    click(buttonByText(container, "Data"));
     const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
       .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
     expect(incidentCount).toBe("0");
@@ -855,7 +1118,7 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench();
     await vi.waitFor(() => expect(buttonByText(container, "Load more affected activities (1)")).toBeTruthy());
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
 
@@ -881,7 +1144,7 @@ describe("workflow run workbench incident navigation", () => {
     renderWorkbench();
     await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect 1 exact activity execution"));
     expect(container.textContent).toContain("Some affected activities are not shown yet (1 remaining)");
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
 
@@ -899,13 +1162,13 @@ describe("workflow run workbench incident navigation", () => {
       Promise.resolve(activityInspection({ workflowExecutionId, activityExecutionId })));
 
     renderWorkbench();
-    await vi.waitFor(() => expect(container.textContent).toContain("Exact affected activity evidence is unavailable from this server."));
-    click(buttonByText(container, "View input evidence"));
+    await vi.waitFor(() => expect(container.textContent).toContain("Exact affected activity data is unavailable from this server."));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
 
     await vi.waitFor(() => expect(buttonByText(container, "Load more affected activities (1)")).toBeTruthy());
-    expect(container.textContent).not.toContain("Exact affected activity evidence is unavailable from this server.");
+    expect(container.textContent).not.toContain("Exact affected activity data is unavailable from this server.");
     expect(container.textContent).toContain("Some affected activities are not shown yet (1 remaining)");
   });
 
@@ -948,7 +1211,7 @@ describe("workflow run workbench incident navigation", () => {
     for (let index = 50; index <= lastIndex; index++) {
       const row = [...container.querySelectorAll<HTMLElement>(".wf-instance-incident")]
         .find(candidate => candidate.textContent?.includes(`Failure-${index}`));
-      click(buttonByText(row!, "View input evidence"));
+      click(buttonByText(row!, "View input data"));
       await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
       await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
       if (index < lastIndex) {
@@ -975,7 +1238,7 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.textContent).not.toContain("Some affected activities are not shown yet");
     expect(container.textContent).not.toContain("You do not have permission to inspect 1 exact activity execution");
     click(buttonByText([...container.querySelectorAll<HTMLElement>(".wf-instance-incident")]
-      .find(candidate => candidate.textContent?.includes(`Failure-${lastIndex}`))!, "View input evidence"));
+      .find(candidate => candidate.textContent?.includes(`Failure-${lastIndex}`))!, "View input data"));
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
     const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
       .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
@@ -1045,11 +1308,11 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(container.querySelectorAll(".wf-instance-incident")).toHaveLength(2));
     const incidentRow = (message: string) => [...container.querySelectorAll<HTMLElement>(".wf-instance-incident")]
       .find(row => row.textContent?.includes(message));
-    const olderAction = buttonByText(incidentRow("The earlier attempt failed.")!, "View input evidence");
+    const olderAction = buttonByText(incidentRow("The earlier attempt failed.")!, "View input data");
     expect(olderAction).toBeTruthy();
     click(olderAction);
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(1));
-    const newerAction = buttonByText(incidentRow("The current attempt failed.")!, "View input evidence");
+    const newerAction = buttonByText(incidentRow("The current attempt failed.")!, "View input data");
     expect(newerAction).toBeTruthy();
     click(newerAction);
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(2));
@@ -1061,11 +1324,14 @@ describe("workflow run workbench incident navigation", () => {
       bookmarks: [bookmarkSummary("current-1"), bookmarkSummary("current-2")]
     }));
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
+    const dataTabs = container.querySelector<HTMLElement>('[role="tablist"][aria-label="Activity execution details"]')!;
+    expect(buttonByText(dataTabs, "Inputs")?.getAttribute("aria-selected")).toBe("true");
+    click(buttonByText(dataTabs, "Overview"));
     const metadataValue = (label: string) => [...container.querySelectorAll<HTMLElement>(".wf-activity-meta-item")]
       .find(item => item.querySelector("dt")?.textContent === label)
       ?.querySelector(".wf-activity-meta-value")?.textContent;
     expect(metadataValue("Incidents")).toBe("1");
-    expect(metadataValue("Bookmarks")).toBe("2");
+    expect(metadataValue("Current bookmarks")).toBe("2");
 
     olderLookup.resolve(activityInspection({
       activityExecutionId: "execution-shared",
@@ -1078,7 +1344,7 @@ describe("workflow run workbench incident navigation", () => {
 
     expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed");
     expect(metadataValue("Incidents")).toBe("1");
-    expect(metadataValue("Bookmarks")).toBe("2");
+    expect(metadataValue("Current bookmarks")).toBe("2");
   });
 });
 
@@ -1089,7 +1355,7 @@ describe("workflow run workbench definition names", () => {
 
     renderWorkbench();
 
-    await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("definition-1"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-detail-header h2")?.textContent).toContain("definition-1"));
     expect(container.textContent).not.toContain("Loading workflow run...");
     expect(container.textContent).not.toContain("Loading run details...");
     expect(container.textContent).not.toContain("Order fulfillment");
@@ -1101,8 +1367,7 @@ describe("workflow run workbench definition names", () => {
       totalCount: 1
     });
 
-    await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("Order fulfillment"));
-    expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("1.0.0");
+    await vi.waitFor(() => expect(container.querySelector(".wf-detail-header h2")?.textContent).toBe("Run · Order fulfillment"));
   });
 
   it("keeps definition and version ids on the Details row before and after the name loads", async () => {
@@ -1137,7 +1402,7 @@ describe("workflow run workbench definition names", () => {
     renderWorkbench("details");
 
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-inspector .wf-identity-cell")).toBeTruthy());
-    expect(container.textContent).toContain("Executable graph unavailable");
+    expect(container.textContent).toContain("pinned executable graph could not be resolved");
     expect(container.querySelector(".wf-instance-inspector .wf-identity-cell")?.querySelector("strong")?.textContent)
       .toBe("definition-1");
 
@@ -1161,11 +1426,26 @@ describe("workflow run workbench definition names", () => {
 
     renderWorkbench();
 
-    await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("definition-1"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-detail-header h2")?.textContent).toContain("definition-1"));
     expect(container.textContent).not.toContain("Loading workflow run...");
     expect(container.textContent).not.toContain("Design is unavailable");
     expect(container.querySelector(".studio-result-state[data-tone=\"danger\"]")).toBeNull();
   });
+});
+
+it.each([1440, 320])("keeps Timeline row focus and reads only event evidence when selecting a recorded event at %spx", async width => {
+  observedWidth = width;
+  renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelector(".wf-run-history-view .wf-history-event")).toBeTruthy());
+  const row = container.querySelector<HTMLButtonElement>(".wf-run-history-view .wf-history-event")!;
+  const activityReads = api.getActivityExecutionInspection.mock.calls.length;
+  valueApi.getActivityExecutionValuePayload.mockClear();
+  row.focus(); click(row);
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
+  expect(document.activeElement).toBe(row);
+  expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+  expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(activityReads);
+  expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
 });
 
 function buttonByText(scope: ParentNode, text: string) {
@@ -1174,13 +1454,16 @@ function buttonByText(scope: ParentNode, text: string) {
 
 function renderWorkbench(
   initialInspectorTab: "issues" | "details" | "timeline" | "activity" = "issues",
-  initialActivityExecutionId: string | null = null
+  initialActivityExecutionId: string | null = null,
+  initialView: "diagram" | "timeline" = "diagram",
+  initialHistorySearch = ""
 ) {
   flushSync(() => root.render(<WorkflowInstanceDetailsWorkbench
     context={{} as StudioEndpointContext}
     ai={{ promptActions: { list: () => [] } } as unknown as StudioWeaverRegistry}
     workflowExecutionId="run-1"
     initialActivityExecutionId={initialActivityExecutionId}
+    initialHistoryLocation={{ ...readRunHistoryLocation(initialHistorySearch), view: initialView }}
     initialInspectorTab={initialInspectorTab}
     navigate={() => {}}
   />));
@@ -1188,6 +1471,12 @@ function renderWorkbench(
 
 function click(button: HTMLElement | undefined | null) {
   flushSync(() => button?.click());
+}
+
+async function showActivityData() {
+  await vi.waitFor(() => expect(container.querySelector("[data-tab-id='data']")).toBeTruthy());
+  click(container.querySelector<HTMLButtonElement>("[data-tab-id='data']"));
+  await vi.waitFor(() => expect(container.querySelector("[data-tab-id='data']")?.getAttribute("aria-selected")).toBe("true"));
 }
 
 function deferred<T>() {
@@ -1415,7 +1704,7 @@ it.each([undefined, {}])("distinguishes unavailable workflow output evidence fro
   await vi.waitFor(() => expect(container.querySelector('[aria-label="Workflow outputs"]')?.textContent).toContain(outputs ? "No workflow outputs have been captured." : "Workflow output inspection is unavailable on this host."));
 });
 
-it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404", "failed"])("preserves exact scope evidence and deliberate focus during %s navigation", async mode => {
+it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404", "failed", "disposed"])("preserves exact scope evidence and deliberate focus during %s navigation", async mode => {
   api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
   const make = (id: string, node: string, authored: string, parent: string | null) => ({ ...activityExecution(), activityExecutionId: id,
     executableNodeId: node, authoredActivityId: authored, status: "Completed", incidentCount: 0, incidentIds: [],
@@ -1426,13 +1715,17 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   if (mode === "ambiguous") rows.push(make("write5b", "compiled-target", "target-node", "scope5"));
   api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: rows, incidents: [] }));
   let pending = deferred<ActivityExecutionInspection>();
+  const pendingChild = deferred<ActivityExecutionBrowsePage>();
   let delay = false;
   api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => {
     if (delay && id === "scope5") return pending.promise;
     const row = rows.find(item => item.activityExecutionId === id)!;
     return activityInspection({ ...row, outcomeNames: [], incidents: [], provenance: row.provenance as ActivityExecutionInspection["provenance"] });
   });
+  const initialScopePage = mode === "ambiguous" ? deferred<void>() : null;
   api.browseActivityExecutions.mockImplementation(async (_context, _run, request) => {
+    if (mode === "disposed" && request.ancestorActivityExecutionId === "scope5" && request.limit === 1) return pendingChild.promise;
+    if (initialScopePage && request.executableNodeId === "compiled-nested-sequence") await initialScopePage.promise;
     const matches = rows.filter(item => (!request.executableNodeId || item.executableNodeId === request.executableNodeId) &&
       (!request.parentActivityExecutionId || item.parentActivityExecutionId === request.parentActivityExecutionId) &&
       (!request.ancestorActivityExecutionId || item.parentActivityExecutionId === request.ancestorActivityExecutionId));
@@ -1443,10 +1736,14 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   renderWorkbench("activity", "write4");
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
   await vi.waitFor(() => expect(container.querySelector(".wf-execution-scope-occurrence .wf-execution-choice")).toBeTruthy());
+  // The chooser mounts before its initial page enables occurrence navigation.
+  initialScopePage?.resolve();
+  await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']")?.disabled).toBe(false));
+  await showActivityData();
   const overview = container.querySelector(".wf-activity-overview")!;
   const details = container.querySelector<HTMLDetailsElement>(".wf-activity-execution-details")!;
   details.open = true;
-  delay = true;
+  delay = mode !== "disposed";
   const chooser = container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence .wf-execution-choice")!;
   let control: HTMLButtonElement;
   if (mode === "chooser") {
@@ -1464,6 +1761,26 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   expect(overview.isConnected).toBe(true);
   expect(details.open).toBe(true);
   expect(window.location.search).toContain("write4");
+  if (mode === "disposed") {
+    await vi.waitFor(() => expect(api.browseActivityExecutions.mock.calls.some(([, , request]) =>
+      request.ancestorActivityExecutionId === "scope5" && request.limit === 1)).toBe(true));
+    const childRequest = api.browseActivityExecutions.mock.calls.find(([, , request]) =>
+      request.ancestorActivityExecutionId === "scope5" && request.limit === 1)!;
+    flushSync(() => root.unmount());
+    root = createRoot(container);
+    expect(childRequest[3]?.aborted).toBe(true);
+    const inspectionCalls = api.getActivityExecutionInspection.mock.calls.length;
+    const browseCalls = api.browseActivityExecutions.mock.calls.length;
+    const payloadCalls = valueApi.getActivityExecutionValuePayload.mock.calls.length;
+    pendingChild.resolve({ items: [{ execution: rows[4], position: 1, previousActivityExecutionId: null, nextActivityExecutionId: null }], totalCount: 1, previousCursor: null, nextCursor: null });
+    await pendingChild.promise;
+    // The production React bundle has no act; settle the detached navigation's lazy import before checking calls.
+    await vi.dynamicImportSettled();
+    expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(inspectionCalls);
+    expect(api.browseActivityExecutions).toHaveBeenCalledTimes(browseCalls);
+    expect(valueApi.getActivityExecutionValuePayload).toHaveBeenCalledTimes(payloadCalls);
+    return;
+  }
   if (mode === "failed" || /^(denied|missing)/.test(mode)) {
     const denied = mode !== "failed";
     delay = false;
@@ -1573,6 +1890,7 @@ it.each(["empty", "mismatched"])("does not revive an unavailable prepared child 
   await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']")?.disabled).toBe(false));
   click(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']"));
   await vi.waitFor(() => expect(window.location.search).toContain("write5"));
+  await showActivityData();
   await vi.waitFor(() => expect(container.textContent).toContain("PREPARED_CHILD_VALUE"));
 
   phase = "unavailable";
@@ -1593,5 +1911,306 @@ it.each(["empty", "mismatched"])("does not revive an unavailable prepared child 
   // Only a new matching authoritative page may restore the selected child.
   pending.resolve(pageFor({ executableNodeId: "compiled-target", ancestorActivityExecutionId: "scope5" }));
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  await showActivityData();
   await vi.waitFor(() => expect(container.textContent).toContain("PREPARED_CHILD_VALUE"));
+});
+
+
+function enableRecordedPlayback() {
+  const rows = [0, 1, 2].map(index => ({ ...activityExecution(), activityExecutionId: `playback-execution-${index}`,
+    status: "Completed", incidentCount: 0, incidentIds: [], parentActivityExecutionId: null }));
+  api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: rows, incidents: [] }));
+  api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
+  api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => activityInspection({
+    ...rows.find(row => row.activityExecutionId === id)!, outcomeNames: [], provenance: { parentActivityExecutionId: null } as ActivityExecutionInspection["provenance"], incidents: [], valueSnapshots: [] }));
+  api.browseActivityExecutions.mockImplementation(async () => ({ items: rows.map((execution, index) => ({ execution, position: index + 1,
+    previousActivityExecutionId: rows[index - 1]?.activityExecutionId ?? null, nextActivityExecutionId: rows[index + 1]?.activityExecutionId ?? null })),
+    totalCount: rows.length, previousCursor: null, nextCursor: null }));
+  const readPage = (_context: unknown, _run: string, request: { position?: string; anchorActivityExecutionId?: string } = {}) => {
+    const selected = request.position !== undefined ? Number(request.position) : request.anchorActivityExecutionId ? rows.findIndex(row => row.activityExecutionId === request.anchorActivityExecutionId) : 0;
+    return { state: "available", reason: null, sequenceToken: "fixture-frozen-window", upperSequence: "3", retainedAfterSequence: "0", totalCount: "3",
+      selectedPosition: String(selected), readAt: "2026-11-14T06:00:00Z", hasNewerHistory: false,
+      coverage: { ...historyCoverage, firstSequence: "1", lastSequence: "3", settledSequence: "3", purgedThroughSequence: "0" },
+      items: rows.map((row, index) => ({ workflowExecutionId: "run-1", activityExecutionId: row.activityExecutionId,
+        historyEventId: `event-${row.activityExecutionId}`, position: String(index), sequence: String(index + 1), observationKind: "ActivityCompleted",
+        executableNodeId: row.executableNodeId, occurredAt: "2026-11-14T06:00:00Z", recordedAt: "2026-11-14T06:00:01Z",
+        previousActivityExecutionId: rows[index - 1]?.activityExecutionId ?? null, nextActivityExecutionId: rows[index + 1]?.activityExecutionId ?? null })) };
+  };
+  playbackApi.readActivityPlayback.mockImplementation(async (...args: Parameters<typeof readPage>) => readPage(...args));
+  return { rows, readPage };
+}
+
+it.each(["pointerdown", "keydown", "wheel"] as const)("preserves independent exact ancestry when %s pauses initial playback preparation", async interaction => {
+  const { rows, readPage } = enableRecordedPlayback();
+  const occurrences = deferred<ReturnType<typeof readPage>>();
+  playbackApi.readActivityPlayback.mockReturnValueOnce(occurrences.promise);
+  const ancestry = deferred<ActivityExecutionInspection>();
+  const preparation = deferred<unknown>();
+  historyApi.getWorkflowHistoryEvent.mockReturnValue(preparation.promise);
+  api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => id === "slow-parent" ? ancestry.promise
+    : activityInspection({ ...rows[0], outcomeNames: [], provenance: { parentActivityExecutionId: "slow-parent" } as ActivityExecutionInspection["provenance"] }));
+  api.browseActivityExecutions.mockImplementation(async (_context, _run, request: { anchorActivityExecutionId?: string }) => ({
+    items: [{ execution: request.anchorActivityExecutionId === "slow-parent" ? { ...rows[0], activityExecutionId: "slow-parent" } : rows[0], position: 1 }],
+    totalCount: 1, previousCursor: null, nextCursor: null
+  }));
+  renderWorkbench("timeline", rows[0].activityExecutionId, "timeline");
+  await vi.waitFor(() => expect(api.getActivityExecutionInspection.mock.calls.some(call => call[2] === "slow-parent")).toBe(true));
+  expect(container.textContent).toContain("Resolving execution scope");
+  const request = playbackApi.readActivityPlayback.mock.calls[0];
+  occurrences.resolve(readPage(request[0], request[1], request[2]));
+  await vi.waitFor(() => expect(historyApi.getWorkflowHistoryEvent).toHaveBeenCalled());
+  const activeTab = container.querySelector<HTMLButtonElement>("[data-tab-id='activity']")!;
+  expect(activeTab.getAttribute("aria-selected")).toBe("true");
+  flushSync(() => activeTab.dispatchEvent(interaction === "keydown"
+    ? new KeyboardEvent(interaction, { key: "Enter", bubbles: true })
+    : interaction === "wheel" ? new WheelEvent(interaction, { deltaY: 1, bubbles: true })
+      : new Event(interaction, { bubbles: true })));
+  click(activeTab);
+  expect(historyApi.getWorkflowHistoryEvent.mock.calls.at(-1)?.[3]?.aborted).toBe(true);
+  expect(api.getActivityExecutionInspection.mock.calls.find(call => call[2] === "slow-parent")?.[3]?.aborted).toBe(false);
+  ancestry.resolve(activityInspection({ ...rows[0], outcomeNames: [], activityExecutionId: "slow-parent", provenance: {} as ActivityExecutionInspection["provenance"] }));
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  expect(container.textContent).not.toContain("Resolving execution scope");
+  expect(buttonByText(container, "Retry execution scope")).toBeFalsy();
+  preparation.resolve({ event: historyEvent(1, { activityExecutionId: rows[0].activityExecutionId }) });
+});
+
+it("keeps the chosen Diagram canvas visible when advancing playback on a phone", async () => {
+  observedWidth = 320;
+  const { rows } = enableRecordedPlayback(); renderWorkbench("activity", rows[0].activityExecutionId, "timeline");
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 1 of 3"));
+  click(buttonByText(container, "Diagram"));
+  await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow.narrow-canvas-view")).toBeTruthy());
+  click(buttonByText(container.querySelector(".wf-playback-transport")!, "Next"));
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
+  expect(buttonByText(container, "Diagram")?.getAttribute("aria-pressed")).toBe("true");
+  expect(container.querySelector(".run-layout-narrow.narrow-canvas-view")).toBeTruthy();
+  expect(container.querySelector(".narrow-inspector-view")).toBeNull();
+});
+
+it("keeps the user's Issues tab when playback is initially admitted at the existing exact occurrence", async () => {
+  const { rows } = enableRecordedPlayback(); renderWorkbench("issues", rows[1].activityExecutionId, "timeline");
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
+  expect(container.querySelector("[data-tab-id='issues']")?.getAttribute("aria-selected")).toBe("true");
+  expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+});
+it.each(["event", "bookmark"])("keeps an existing exact %s deep link during initial playback admission", async kind => {
+  const { rows } = enableRecordedPlayback();
+  const id = kind === "event" ? `event-${rows[1].activityExecutionId}` : "retained-bookmark";
+  const parameter = kind === "event" ? "historyEvent" : "bookmark";
+  const search = `?${parameter}=${id}`; window.history.replaceState(null, "", `/workflows/instances/run-1${search}`);
+  if (kind === "bookmark") historyApi.getWorkflowHistoryBookmark.mockRejectedValue({ status: 404 });
+  renderWorkbench("activity", null, "timeline", search);
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step"));
+  expect(new URLSearchParams(window.location.search).get(parameter)).toBe(id);
+  if (kind === "event") {
+    expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3");
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain(rows[1].activityExecutionId));
+  }
+});
+it("keeps explicit Activity inspection when opening an exact occurrence deep link", async () => {
+  const { rows } = enableRecordedPlayback(); renderWorkbench("activity", rows[1].activityExecutionId, "diagram");
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
+  expect(container.querySelector("[aria-label='History event details']")).toBeNull();
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+});
+it("anchors a retained bookmark's exact owner without replacing its lifecycle inspection", async () => {
+  const { rows } = enableRecordedPlayback(); const item = historyBookmark();
+  item.bookmark.identity = { ...item.bookmark.identity, workflowExecutionId: "run-1", activityExecutionId: rows[1].activityExecutionId };
+  historyApi.getWorkflowHistoryBookmark.mockResolvedValue({ coverage: historyCoverage, bookmark: item, readAt: "2026-11-14T06:00:00Z" });
+  const search = "?bookmark=bookmark-1"; window.history.replaceState(null, "", `/workflows/instances/run-1${search}`);
+  renderWorkbench("activity", null, "timeline", search);
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
+  expect(new URLSearchParams(window.location.search).get("bookmark")).toBe("bookmark-1");
+  expect(container.querySelector("[aria-label='History event details']")).toBeNull();
+});
+it("retains a visible exact later observation when an initial deep link is outside Highlights", async () => {
+  const { rows } = enableRecordedPlayback(); const normal = historyApi.getWorkflowHistoryEvent.getMockImplementation()!;
+  historyApi.getWorkflowHistoryEvent.mockImplementation(async (...args) => args[2] === "claimed-later"
+    ? { coverage: historyCoverage, event: historyEvent(32, { workflowExecutionId: "run-1", historyEventId: "claimed-later",
+      activityExecutionId: rows[1].activityExecutionId, name: "ActivityAttemptClaimed" }), readAt: "2026-11-14T06:00:00Z" }
+    : normal(...args));
+  const search = "?historyEvent=claimed-later"; window.history.replaceState(null, "", `/workflows/instances/run-1${search}`);
+  renderWorkbench("activity", null, "timeline", search);
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
+  expect(container.querySelector("[aria-label='Run timeline'] [data-history-event-id='claimed-later'][aria-pressed='true']")).toBeTruthy();
+  expect(new URLSearchParams(window.location.search).get("historyEvent")).toBe("claimed-later");
+});
+it("shows the selected first observation when the default Highlights filter omits it", async () => {
+  const { rows, readPage } = enableRecordedPlayback();
+  playbackApi.readActivityPlayback.mockImplementation(async (...args: Parameters<typeof readPage>) => {
+    const page = readPage(...args); return { ...page, items: page.items.map(row => ({ ...row, observationKind: "ActivityScheduled" })) };
+  });
+  const normal = historyApi.getWorkflowHistoryEvent.getMockImplementation()!;
+  historyApi.getWorkflowHistoryEvent.mockImplementation(async (...args) => {
+    const value = await normal(...args); return { ...value, event: { ...value.event, name: "ActivityScheduled" } };
+  });
+  historyApi.getWorkflowHistoryPage.mockResolvedValue(historyPage(rows.map((row, index) => historyEvent(index + 1, {
+    historyEventId: `event-${row.activityExecutionId}`, activityExecutionId: row.activityExecutionId, name: "ActivityScheduled"
+  }))));
+  renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 1 of 3"));
+  click(buttonByText(container.querySelector(".wf-playback-transport")!, "Next"));
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
+  expect(container.querySelector(`[aria-label='Run timeline'] [data-history-event-id='event-${rows[1].activityExecutionId}'][aria-pressed='true']`)).toBeTruthy();
+  expect(container.querySelector<HTMLSelectElement>("[aria-label='History detail']")?.value).toBe("highlights");
+  click(buttonByText(container, "Diagram")); click(buttonByText(container, "Timeline"));
+  expect(container.querySelector(`[aria-label='Run timeline'] [data-history-event-id='event-${rows[1].activityExecutionId}'][aria-pressed='true']`)).toBeTruthy();
+  click(buttonByText(container, "Timeline"));
+  expect(container.querySelector(`[aria-label='Run timeline'] [data-history-event-id='event-${rows[1].activityExecutionId}'][aria-pressed='true']`)).toBeTruthy();
+});
+it("requires a deliberate repeated-node occurrence choice after automatic playback visits", async () => {
+  const { rows } = enableRecordedPlayback(); renderWorkbench("activity", null, "diagram");
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 1 of 3"));
+  const speed = container.querySelector<HTMLSelectElement>("[aria-label='Playback speed']")!;
+  flushSync(() => { speed.value = "4"; speed.dispatchEvent(new Event("change", { bubbles: true })); });
+  click(buttonByText(container.querySelector(".wf-playback-transport")!, "Play"));
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 3 of 3"));
+  const node = container.querySelector<HTMLElement>('.wf-run-diagram-view [data-id="target-node"]')!;
+  expect(node).toBeTruthy(); click(node);
+  await vi.waitFor(() => expect(container.textContent).toContain("Choose a recorded execution to inspect its run data."));
+  expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 3 of 3");
+  expect(container.querySelector(".wf-activity-overview")).toBeNull();
+  click(container.querySelector<HTMLElement>(".wf-instance-inspector .wf-execution-choice"));
+  const first = container.querySelector<HTMLElement>(".wf-instance-inspector .wf-execution-list button"); expect(first).toBeTruthy(); click(first);
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 1 of 3"));
+  expect(playbackApi.readActivityPlayback.mock.calls.some(call => call[2]?.anchorActivityExecutionId === rows[0].activityExecutionId)).toBe(true);
+});
+
+it("retains confirmed inspector content until playback's exact destination is prepared", async () => {
+  const { rows } = enableRecordedPlayback(); renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain(rows[0].activityExecutionId));
+  const previous = container.querySelector("[aria-label='History event details']")!;
+  const held = deferred<ActivityExecutionInspection>();
+  const normal = api.getActivityExecutionInspection.getMockImplementation()!;
+  api.getActivityExecutionInspection.mockImplementation((...args) => args[2] === rows[1].activityExecutionId ? held.promise : normal(...args));
+  const next = buttonByText(container.querySelector(".wf-playback-transport")!, "Next")!; next.focus(); click(next);
+  await vi.waitFor(() => expect(api.getActivityExecutionInspection.mock.calls.some(call => call[2] === rows[1].activityExecutionId)).toBe(true));
+  expect(previous.isConnected).toBe(true); expect(previous.textContent).toContain(rows[0].activityExecutionId);
+  expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Loading step 2");
+  held.resolve(activityInspection({ ...rows[1], outcomeNames: [], provenance: { parentActivityExecutionId: null } as ActivityExecutionInspection["provenance"], incidents: [] }));
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain(rows[1].activityExecutionId));
+  expect(container.querySelector("[aria-label='History event details']")?.textContent).not.toContain("Loading exact recorded event");
+  expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true"); expect(document.activeElement).toBe(next);
+});
+it("admits a manually selected timeline occurrence while initial playback admission is still pending", async () => {
+  const { rows, readPage } = enableRecordedPlayback(); const held = deferred<ReturnType<typeof readPage>>();
+  playbackApi.readActivityPlayback.mockReturnValueOnce(held.promise);
+  renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelector(`[data-history-event-id='event-${rows[1].activityExecutionId}']`)).toBeTruthy());
+  click(container.querySelector<HTMLElement>(`[data-history-event-id='event-${rows[1].activityExecutionId}']`));
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
+  held.resolve(readPage({}, "run-1")); await vi.dynamicImportSettled();
+  expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3");
+  expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+});
+it("retires prepared playback evidence if the mounted exact-event read subsequently loses access", async () => {
+  const { rows } = enableRecordedPlayback(); const normal = historyApi.getWorkflowHistoryEvent.getMockImplementation()!; let count = 0;
+  historyApi.getWorkflowHistoryEvent.mockImplementation(async (...args) => {
+    if (++count > 1) throw { status: 403 };
+    const value = await normal(...args); return { ...value, event: { ...value.event, name: "ActivityScheduled" } };
+  });
+  historyApi.getWorkflowHistoryPage.mockResolvedValue(historyPage(rows.map((row, index) => historyEvent(index + 1, {
+    historyEventId: `event-${row.activityExecutionId}`, activityExecutionId: row.activityExecutionId, name: "ActivityScheduled" }))));
+  renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(count).toBeGreaterThan(1));
+  await vi.waitFor(() => expect(container.querySelector(".wf-playback-details")).toBeNull());
+  expect(container.querySelector(".wf-playback-selected-observation")).toBeNull();
+});
+
+it.each(["ActivityCompleted", "ActivityScheduled"])("keeps exact %s playback identity through explicit owning Activity Data and Timeline return", async name => {
+  const { rows, readPage } = enableRecordedPlayback();
+  playbackApi.readActivityPlayback.mockImplementation(async (...args: Parameters<typeof readPage>) => {
+    const page = readPage(...args); return { ...page, items: page.items.map(row => ({ ...row, observationKind: name })) };
+  });
+  const normal = historyApi.getWorkflowHistoryEvent.getMockImplementation()!;
+  historyApi.getWorkflowHistoryEvent.mockImplementation(async (...args) => {
+    const value = await normal(...args); return { ...value, event: { ...value.event, name } };
+  });
+  historyApi.getWorkflowHistoryPage.mockResolvedValue(historyPage(rows.map((row, index) => historyEvent(index + 1, {
+    historyEventId: `event-${row.activityExecutionId}`, activityExecutionId: row.activityExecutionId, name }))));
+  renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 1 of 3"));
+  click(buttonByText(container.querySelector(".wf-playback-transport")!, "Next"));
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain(rows[1].activityExecutionId));
+  click(buttonByText(container, "Inspect owning execution →")); await showActivityData();
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-execution-details")?.textContent).toContain(rows[1].activityExecutionId));
+  click(buttonByText(container, "Timeline"));
+  await vi.waitFor(() => expect(container.querySelector(`[data-history-event-id='event-${rows[1].activityExecutionId}']`)).toBeTruthy());
+  const row = container.querySelector<HTMLButtonElement>(`[data-history-event-id='event-${rows[1].activityExecutionId}']`)!;
+  row.focus(); click(row);
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain(rows[1].activityExecutionId));
+  expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3");
+  expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true"); expect(document.activeElement).toBe(row);
+  expect(container.querySelector('button[aria-label="Pause playback"]')).toBeNull();
+});
+
+it("clears playback cursor and prepared protected inspection after the final owner recheck denies access", async () => {
+  const { rows, readPage } = enableRecordedPlayback(); renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain(rows[0].activityExecutionId));
+  let requests = 0;
+  playbackApi.readActivityPlayback.mockImplementation(async (...args: Parameters<typeof readPage>) => {
+    if (args[2]?.position === "1" && ++requests === 2) throw { status: 403 };
+    return readPage(...args);
+  });
+  click(buttonByText(container.querySelector(".wf-playback-transport")!, "Next"));
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("unavailable with your current access"));
+  expect(container.querySelector("[aria-label='History event details']")).toBeNull();
+  expect(container.querySelector(".wf-playback-details")).toBeNull(); expect(container.querySelector(".wf-activity-overview")).toBeNull();
+});
+
+
+it.each([false, true])("restores the exact later resume event without playback and permits a transient retry (%s)", async transient => {
+  const owner = activityExecution();
+  api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [owner], incidents: [] }));
+  const events = [
+    historyEvent(1, { workflowExecutionId: "run-1", historyEventId: "completed-owner", activityExecutionId: owner.activityExecutionId, name: "ActivityCompleted" }),
+    historyEvent(2, { workflowExecutionId: "run-1", historyEventId: "later-resume", activityExecutionId: owner.activityExecutionId,
+      name: "DeliveryUnmatched", category: "DeliveryObservation", authority: "DeliveryObservation", checkpointId: null, checkpointOrdinal: null,
+      physicalCommitId: null, metadata: { "history.reasonCode": "receiver-wait-no-longer-eligible" } })
+  ];
+  historyApi.getWorkflowHistoryPage.mockResolvedValue(historyPage(events));
+  historyApi.getWorkflowHistoryEvent.mockImplementation(async (_context, _run, id) => ({ coverage: historyCoverage,
+    event: events.find(event => event.historyEventId === id)!, readAt: "2026-10-01T12:02:00Z" }));
+  renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelectorAll(".wf-run-history-view .wf-history-event")).toHaveLength(2));
+  const row = container.querySelector<HTMLButtonElement>('[data-history-event-id="later-resume"]')!;
+  click(row);
+  await vi.waitFor(() => expect(row.getAttribute("aria-pressed")).toBe("true"));
+  click(buttonByText(container, "Inspect owning execution →")); await showActivityData();
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-execution-details")?.textContent).toContain(owner.activityExecutionId));
+  const priorReads = historyApi.getWorkflowHistoryEvent.mock.calls.length;
+  if (transient) historyApi.getWorkflowHistoryEvent.mockRejectedValueOnce(Object.assign(new Error("Temporary exact-event read failure"), { status: 503 }));
+  click(buttonByText(container, "Timeline"));
+  if (transient) {
+    await vi.waitFor(() => expect(container.textContent).toContain("The requested recorded event could not be loaded."));
+    expect(row.getAttribute("aria-pressed")).toBe("false");
+    click(buttonByText(container, "Timeline"));
+  }
+  await vi.waitFor(() => expect(row.getAttribute("aria-pressed")).toBe("true"));
+  expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain("Resume skipped");
+  expect(historyApi.getWorkflowHistoryEvent.mock.calls.slice(priorReads).length).toBeGreaterThanOrEqual(transient ? 2 : 1);
+  expect(historyApi.getWorkflowHistoryEvent.mock.calls.slice(priorReads).every(([, , id]) => id === "later-resume")).toBe(true);
+});
+
+it.each(["unattributed", "admitted", "legacy"] as const)("keeps child authoring attribution truthful for %s source data", async mode => {
+  const details = workflowDetails({ activities: [], incidents: [] });
+  details.instance.parentWorkflowExecutionId = "parent-run";
+  details.instance.sourceReferenceId = mode === "unattributed" ? null : mode === "admitted" ? "reference-1" : undefined;
+  api.getWorkflowInstance.mockResolvedValue(details);
+  designApi.listDefinitions.mockResolvedValue({ definitions: [{ id: "definition-1", name: "First producer label" }], page: 1, pageSize: 100, totalCount: 1 });
+  designApi.getDefinition.mockResolvedValue({ definition: { id: "definition-1", name: "First producer label" } });
+  renderWorkbench("details", null, "timeline");
+  const header = () => container.querySelector(".wf-detail-header__title")?.textContent;
+  if (mode === "unattributed") {
+    await vi.waitFor(() => expect(header()).toContain("Child run · run-1"));
+    expect(header()).not.toContain("First producer label");
+    expect(buttonByText(container, "Open definition")).toBeUndefined();
+    expect(container.textContent).toContain("Source definition is unavailable for this child run.");
+    expect(container.textContent).toContain("definition-1");
+  } else {
+    await vi.waitFor(() => expect(header()).toContain("First producer label"));
+    await vi.waitFor(() => expect(buttonByText(container, "Open definition")).toBeTruthy());
+    expect(container.textContent).not.toContain("Source definition is unavailable for this child run.");
+  }
 });

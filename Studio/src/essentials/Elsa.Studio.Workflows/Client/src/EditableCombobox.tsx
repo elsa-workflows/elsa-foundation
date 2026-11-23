@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { ChevronDown } from "lucide-react";
 import "./EditableCombobox.css";
@@ -52,7 +53,7 @@ export function EditableCombobox({ label, value, suggestions, onChange, disabled
     }
   };
 
-  return <div className={`wf-editable-field ${className}`}><label htmlFor={inputId}>{label}</label><div className="wf-editable-combobox">
+  return <div className={`wf-editable-field ${className}`}><StudioField controlId={inputId} label={<>{label}</>}><div className="wf-editable-combobox">
     <input
       id={inputId}
       ref={inputRef}
@@ -96,5 +97,5 @@ export function EditableCombobox({ label, value, suggestions, onChange, disabled
         <button id={`${listboxId}-${index}`} role="option" aria-selected={index === activeIndex} tabIndex={-1} type="button" onPointerDown={event => event.preventDefault()} onClick={() => choose(suggestion)}>{suggestion}</button>
       </li>)}
     </ul> : null}
-  </div></div>;
+  </div></StudioField></div>;
 }

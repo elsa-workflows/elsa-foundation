@@ -64,13 +64,27 @@ explicitly exposed by the owning structure. Identity is independent of the displ
   `ConditionalOccurrence`, `AvailabilityUnknown`, `UnavailableProducer`, then `EarlierProducerRun` (the
   structure holding producer and consumer, or one around it, does not state that no earlier run of the
   producer can lead to this input, as on a Flowchart cycle or in a Sequence on a BPMN gateway loop), then
-  `NoTypedResult` (the producer declares no typed whole result). Its identity stays inspectable, and
-  expression authoring may still bind it as a portable parameter.
+  `NoTypedResult` (the producer declares no typed whole result). Its identity stays inspectable.
+  Expression authoring uses a separate, server-admitted canonical portable-parameter offer: an
+  `EarlierProducerRun` direct refusal can still have a portable offer under the existing parameter
+  rules. `NoTypedResult` proves absence of a declared whole result and remains refused; uncertain or
+  missing shape metadata alone does not prove that absence. The client never infers permission from
+  a null direct binding or a reason code.
 - To read a conditional producer optionally, the client sends a focused query whose source is the
   scope-free binding with `isOptional: true`, for example
   `{"expressionType":"ActivityResult","value":{"producerNodeId":"fetch","projectionKey":"$result","isOptional":true}}`.
   Where the rule admits it, the single returned source carries that binding, which the client stores
   unchanged. On a path where the producer did not run, the read resolves to no value instead of failing.
+- To read one member, the client sends a focused query whose source is the whole read and whose `memberPath`
+  holds the exact segments. The single returned source carries the member read, which the client stores unchanged.
+  A member path is never answered with the whole read: while member reads are off the query reports
+  `ActivityData/UnsupportedMemberBinding` and returns no source, and a source that has no member read (a scoped
+  result read, a legacy dotted request read) reports `ActivityData/InvalidSource`. Every analysis carries
+  `memberReadsEnabled`; a client offers member selection only when it is `true`, and an answer without it reads as
+  `false`. The flag is meaningful only on a current `supported` or `empty` answer. Clients must not learn or
+  update it from an `invalid` answer, including the activity owner's `document-invalid` analysis, which may carry
+  the default `false`. A focused member response is selectable only when its canonical role, literal path and
+  source identity match the request; a whole binding is never a fallback for a member choice.
 - Workflow inputs retain their stable input identity; display-name edits do not rebind them.
 - Variables retain declaration identity and lexical scope; same-name/shadowed variables remain distinct.
 - Current item is a structure-owned projection of an existing value role with iteration scope. The
@@ -138,6 +152,12 @@ an otherwise unauthorized resource. Use no-store responses and bounded in-memory
 purge that metadata on permission/session/backend changes. Log safe codes, not source paths, symbol names,
 authored documents or source text.
 
+A refused source or target is answered with state `invalid` and the analysis that refused it, so its findings
+(code and consuming input path) can explain the refusal. That answer passes the same authorization, catalog and
+base rechecks as a supported one before disclosure. A client may read its safe findings but must not offer sources
+from an `invalid` answer, even when its analysis carries candidates. It does not use that analysis to update member
+capability or target facts.
+
 The Foundation leaf does not adapt expression-shaped host metadata filters into neutral policy. When
 either `IExpressionAuthoringContextFilter` or `IExpressionAuthoringSymbolFilter` is configured, both
 neutral resource endpoints return `unavailable` with `activity-data.metadata-policy-unavailable`, after
@@ -186,6 +206,16 @@ Selection in a supported text editor uses the installed syntax adapter's inserti
 nested member, bind the existing whole-source role/projection as a portable parameter and let the adapter
 insert escaped member access; this does not require new portable-parameter wire fields. The basic
 language-neutral member binding and explicit expression lowering remain separate contracts.
+
+For portable insertion the metadata query supplies the installed `expressionType` and, when focused,
+an existing whole `parameterSource` plus the literal `memberPath`. Direct `source` and portable
+`parameterSource` modes are mutually exclusive. The answer advertises `expressionParametersEnabled`,
+echoes the syntax, and supplies a canonical parameter offer and its exact `parameterPath`; a focused
+answer must match the current resource, consuming input, document/base revision and pinned snapshot.
+The path describes metadata traversal only and never becomes a persisted parameter member kind.
+Older servers omit the capability or return false: Studio preserves the expression and explains that
+compatible insertion is unavailable. Portable metadata support does not enable native MemberReads or
+override the source admission, owner restrictions or protected-path rules.
 
 Choose a legal alias without replacing a different existing parameter. Reuse an alias only when its
 binding is identical; otherwise allocate a distinct alias and preserve all existing manual source,

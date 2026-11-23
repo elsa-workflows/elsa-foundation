@@ -3,12 +3,13 @@ import type { Node } from "@xyflow/react";
 import { SequenceDesigner } from "../graph-authoring/SequenceDesigner";
 import type { WorkflowNodeData } from "../workflowAdapter";
 
-export function ReadOnlyWorkflowSequence({ nodes, onSelectActivity, onSelectEvidence, focusNodeId, focusRequestId }: {
+export function ReadOnlyWorkflowSequence({ nodes, onSelectActivity, onSelectEvidence, focusNodeId, focusRequestId, moveKeyboardFocus = true }: {
   nodes: Node<WorkflowNodeData>[];
   onSelectActivity(nodeId: string): void;
   onSelectEvidence(evidenceId: string | null): void;
   focusNodeId: string | null;
   focusRequestId: number;
+  moveKeyboardFocus?: boolean;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -17,11 +18,11 @@ export function ReadOnlyWorkflowSequence({ nodes, onSelectActivity, onSelectEvid
     const frame = requestAnimationFrame(() => {
       const step = [...(canvasRef.current?.querySelectorAll<HTMLElement>("[data-id]") ?? [])]
         .find(element => element.dataset.id === focusNodeId);
-      step?.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "auto" });
-      step?.focus({ preventScroll: true });
+      step?.scrollIntoView?.({ block: moveKeyboardFocus ? "nearest" : "center", inline: "nearest", behavior: "auto" });
+      if (moveKeyboardFocus) step?.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(frame);
-  }, [focusNodeId, focusRequestId]);
+  }, [focusNodeId, focusRequestId, moveKeyboardFocus]);
 
   return <SequenceDesigner
     nodes={nodes}

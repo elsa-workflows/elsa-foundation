@@ -98,10 +98,15 @@ export function resolveActivityDefinitionTitle(displayName: string | null | unde
  * misleading "01/01/1". Otherwise the locale date is shown.
  */
 export function formatActivityDefinitionDate(value?: string | null) {
-  if (!value) return "—";
+  if (!isActivityDefinitionTimestamp(value)) return "—";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime()) || date.getFullYear() < 2000) return "—";
   return formatStudioDate(date);
+}
+
+export function isActivityDefinitionTimestamp(value?: string | null): value is string {
+  if (!value) return false;
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime()) && date.getFullYear() >= 2000;
 }
 
 /** Names an incident's resolution action and who applied it, e.g. "WaitForIntervention (StructuralIntervention)". */

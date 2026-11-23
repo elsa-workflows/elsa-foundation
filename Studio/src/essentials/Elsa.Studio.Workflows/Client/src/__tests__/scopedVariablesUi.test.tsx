@@ -135,7 +135,8 @@ describe("variable picker", () => {
     const options = [...container.querySelectorAll<HTMLOptionElement>("optgroup option")];
     expect(options).toHaveLength(2);
     expect(options.every(option => !option.disabled)).toBe(true);
-    expect(container.textContent).toContain("JSON?");
+    clickButton(container.querySelector<HTMLButtonElement>(".wf-conversion-toggle")!);
+    expect(container.querySelector(".wf-conversion-expected-type")?.textContent).toBe("Expected type: JSON?");
   });
 
   it("does not widen scalar variables into JSON collection inputs described by element alias", () => {

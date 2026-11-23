@@ -20,6 +20,8 @@ export type IncidentActivityInspection = Pick<ActivityExecutionInspection,
   | "bookmarks"
   | "incidents"
   | "metadata"
+  | "workflowStateEffects"
+  | "workflowStateEffectReceipts"
 >;
 
 export function activityExecutionSummaryFromInspection(inspection: IncidentActivityInspection): ActivityExecutionStateSummary {
@@ -41,7 +43,9 @@ export function activityExecutionSummaryFromInspection(inspection: IncidentActiv
     bookmarkIds: bookmarks?.map(bookmark => bookmark.bookmarkId),
     incidentCount: incidents?.length ?? null,
     incidentIds: incidents?.map(incident => incident.incidentId),
-    metadata: inspection.metadata
+    metadata: inspection.metadata,
+    ...(inspection.workflowStateEffects !== undefined ? { workflowStateEffects: inspection.workflowStateEffects } : {}),
+    ...(inspection.workflowStateEffectReceipts !== undefined ? { workflowStateEffectReceipts: inspection.workflowStateEffectReceipts } : {})
   };
 }
 

@@ -29,6 +29,7 @@ import {
   writeDictionaryEditorSession,
   type DictionaryEditorTab
 } from "./dictionaryEditorSession";
+import { getNotifications, useNotificationGuard } from "./workflow-editor/notifications";
 import { copyTextToClipboard } from "./workflow-editor/editorHelpers";
 
 const jsonAdapter: StudioCodeLanguageAdapter = { language: "json", displayName: "JSON" };
@@ -103,11 +104,14 @@ export function DictionaryValueEditor({
   const [filter, setFilter] = useState("");
   const [pinnedRowIds, setPinnedRowIds] = useState<Set<string>>(() => new Set());
   const [removed, setRemoved] = useState<RemovedEntry | null>(null);
-  const [notice, setNotice] = useState<{ key: string; message: string } | null>(null);
+  const [copyError, setCopyError] = useState("");
   const [pendingTab, setPendingTab] = useState<DictionaryEditorTab | null>(null);
   const effectiveTab: DictionaryEditorTab = variant === "inline" ? "table" : activeTab;
   const emittedSignature = useRef<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const copyScope = useMemo(() => ({ sessionKey, externalSignature, jsonDraft }), [sessionKey, externalSignature, jsonDraft]);
+  const captureNotificationGuard = useNotificationGuard(copyScope);
+  useEffect(() => setCopyError(""), [copyScope]);
   const mountedRef = useRef(false);
   const keyRefs = useRef(new Map<string, HTMLInputElement>());
   const tableValidation = useMemo(
@@ -268,8 +272,14 @@ export function DictionaryValueEditor({
   };
 
   const copyJson = async () => {
-    await copyTextToClipboard(jsonDraft);
-    setNotice({ key: `copied-${Date.now()}`, message: "JSON copied" });
+    const canNotify = captureNotificationGuard();
+    setCopyError("");
+    try {
+      await copyTextToClipboard(jsonDraft);
+      if (canNotify()) getNotifications().notify({ level: "success", title: "JSON copied" });
+    } catch {
+      if (canNotify()) setCopyError("Could not copy JSON.");
+    }
   };
 
   const visibleRows = filterRows(rows, filter, variant, tableValidation.valid ? [] : tableValidation.errors, pinnedRowIds);
@@ -296,7 +306,7 @@ export function DictionaryValueEditor({
                 ? (tableValidation.valid ? 0 : tableValidation.errors.length) + invalidComplexDraftIds.size
                 : jsonValidation.valid ? 0 : jsonValidation.errors.length;
               return (
-                <button
+                <StudioButton
                   type="button"
                   role="tab"
                   id={`${tabsId}-tab-${index}`}
@@ -309,7 +319,7 @@ export function DictionaryValueEditor({
                   onClick={() => requestTab(tab)}
                 >
                   {tab === "table" ? "Table" : "JSON"}{errors > 0 ? ` (${errors} errors)` : ""}
-                </button>
+                </StudioButton>
               );
             })}
           </div>
@@ -429,14 +439,8 @@ export function DictionaryValueEditor({
           onAction={undoRemove}
           onDismiss={() => setRemoved(null)}
         />
-      ) : notice ? (
-        <StudioActionNotice
-          key={notice.key}
-          className="wf-dictionary-notice"
-          message={notice.message}
-          onDismiss={() => setNotice(null)}
-        />
       ) : null}
+      {copyError ? <p role="alert">{copyError}</p> : null}
     </div>
   );
 }
@@ -557,9 +561,9 @@ function DictionaryRowEditor({
         )}
       </div>
       <div role="cell" className="wf-dictionary-row-actions">
-        <button type="button" aria-label={`Remove ${label}`} title="Remove entry" disabled={disabled} onClick={onRemove}>
+        <StudioButton type="button" aria-label={`Remove ${label}`} title="Remove entry" disabled={disabled} onClick={onRemove}>
           <Trash2 size={14} />
-        </button>
+        </StudioButton>
       </div>
       {errors.length > 0 ? <p id={errorId} className="wf-dictionary-row-error">{errors.map(error => error.message).join(" ")}</p> : null}
     </div>
@@ -600,10 +604,10 @@ function ComplexValueEditor({
 
   return (
     <div className="wf-dictionary-complex-editor">
-      <button type="button" className="wf-dictionary-complex-toggle" aria-expanded={open} onClick={() => setOpen(current => !current)}>
+      <StudioButton type="button" className="wf-dictionary-complex-toggle" aria-expanded={open} onClick={() => setOpen(current => !current)}>
         <span>{summarizeComplexValue(value)}</span>
         <small>{open ? "Hide JSON editor" : "Edit value JSON"}</small>
-      </button>
+      </StudioButton>
       {open ? (
         <StudioCodeEditor
           ariaLabel={`${label} JSON`}

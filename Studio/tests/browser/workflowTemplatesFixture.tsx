@@ -1,8 +1,11 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
+import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 import { createNotificationController, type StudioWeaverRegistry, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowTemplatesPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTemplatesPage";
-import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
 import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
 import { setNotifications } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/notifications";
@@ -10,9 +13,19 @@ import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/a
 import { createEditorContext } from "./activityDuplicateEditorFixture";
 import type { WorkflowTemplate } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTemplates";
 
+const WorkflowEditor = lazy(() => import("../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const storage = "workflow-template-fixture";
 const read = () => JSON.parse(localStorage.getItem(storage) ?? "[]") as WorkflowTemplate[];
+const navigation = getStudioNavigation([
+  { id: "home", label: "Home", path: "/dashboard", placement: "main", order: 10 },
+  { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main", order: 20 }
+], { includeThemeBuilder: false });
+const panels = new URLSearchParams(location.search).has("bottom-panel") ? [
+  { id: "console", title: "Console", component: () => <p>Console stream connected.</p> },
+  { id: "structured-logs", title: "Structured Logs", component: () => <p>Structured log stream connected.</p> },
+  { id: "opentelemetry", title: "OpenTelemetry", component: () => <p>OpenTelemetry stream connected.</p> }
+] : [];
 function context(): StudioEndpointContext {
   const base = createEditorContext();
   return { ...base, baseUrl: "workflow-template-fixture", http: {
@@ -73,11 +86,15 @@ export function WorkflowTemplatesFixture() {
     if (path.startsWith("/workflows/definitions")) { setCreated(true); return; }
     const url = new URL(path, window.location.origin); url.pathname = "/"; url.searchParams.set("mode", "workflow-templates");
     url.searchParams.set("theme", document.documentElement.dataset.themeMode ?? "light");
+    if (new URLSearchParams(window.location.search).has("bottom-panel")) url.searchParams.set("bottom-panel", "");
     window.history.pushState({}, "", url); window.dispatchEvent(new PopStateEvent("popstate"));
   };
-  return <div className="activity-duplicate-editor"><QueryClientProvider client={queryClient}>
-    {created ? <><h1>Workflow created</h1><output data-testid="created-document">{localStorage.getItem("created-template-workflow")}</output></> :
-      new URLSearchParams(window.location.search).has("source-workflow") ? <WorkflowEditor {...props} definitionId="definition-1" autosaveEnabledByDefault={false} onBack={() => navigate("/workflows/templates")} /> :
-        <WorkflowTemplatesPage {...props} navigate={navigate} />}
-  </QueryClientProvider><ToastHost controller={notifications} navigate={navigate} /></div>;
+  return <ThemeProvider><ShellFrame navigation={navigation} panels={panels} path="/workflows/templates" title="Workflow templates" backendBaseUrl="https://backend.example/" onNavigate={() => undefined}>
+    <QueryClientProvider client={queryClient}>
+      {created ? <><h1>Workflow created</h1><output data-testid="created-document">{localStorage.getItem("created-template-workflow")}</output></> :
+        new URLSearchParams(window.location.search).has("source-workflow") ? <Suspense fallback={<p role="status">Loading workflow designer…</p>}><WorkflowEditor {...props} definitionId="definition-1" autosaveEnabledByDefault={false} onBack={() => navigate("/workflows/templates")} /></Suspense> :
+          <WorkflowTemplatesPage {...props} navigate={navigate} />}
+    </QueryClientProvider>
+    <ToastHost controller={notifications} navigate={navigate} />
+  </ShellFrame></ThemeProvider>;
 }

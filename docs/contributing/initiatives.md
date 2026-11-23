@@ -56,7 +56,7 @@ Contribution never makes someone an approver.
 
 | Role | How it is known | What it does |
 |---|---|---|
-| **Coordinator** | The initiative issue's **assignee**. Reassigning the issue hands the role over. A delegation (for a sync, or while away) is recorded on the board. | Owns **board consistency** and is the **only writer of the board**, or its recorded delegate: syncs incoming work into it, reports pending reviews and blockers, offers reminders, and prepares meetings. Doing research or drafting ADRs is optional, not part of the role. |
+| **Coordinator** | The initiative issue's **assignee**. Reassigning the issue hands the role over. A delegation (for a sync, or while away) is recorded on the board. | Owns **board consistency** and is the **only writer of the board**, or its recorded delegate: runs the [kick-off](#kick-off), syncs incoming work into the board, reports pending reviews and blockers, offers reminders, and prepares meetings. Apart from the kick-off's proposal set, doing research or drafting ADRs is optional, not part of the role. |
 | **Approver** (technical architect) | Listed in the board's **Approvers** list, designated under the project's governance, with the capacity they act in. | Writes analyses, drafts and reviews ADRs and specs, and agrees decisions by approving PRs. |
 | **Developer** | Not defined yet. It is defined when an initiative first reaches implementation. | |
 
@@ -69,14 +69,17 @@ being listed there, or opening a PR, does not make someone an approver.
 
 The board states which phase the initiative is in.
 
-1. **Analysis and decisions.** Architects analyse, propose ADRs and agree on them. Every decision rests on at least
+1. **Kick-off.** Before its scope is fixed, a new initiative gathers everyone's input, agrees its boundaries, and
+   reviews the coordinator's proposal set: the ADRs to change, the specs to write and their order (see *Kick-off*
+   below). It ends when the scope and the proposal set are agreed.
+2. **Analysis and decisions.** Architects analyse, propose ADRs and agree on them. Every decision rests on at least
    one thorough analysis. Several analyses are welcome, including analyses that build on another architect's.
    Analyses lead to discussion and, in the end, to decisions.
-2. **Specs.** A spec may be drafted at any time, as long as the draft says it is **provisional**. A provisional spec is
+3. **Specs.** A spec may be drafted at any time, as long as the draft says it is **provisional**. A provisional spec is
    written as if the ADRs it applies were agreed, so its plan and tasks test whether those ADRs work in the code (see
    *Provisional specs* below). Its formal approval needs the ADRs it depends on to be agreed. Each spec row on the board
    names the ADRs and decisions it needs.
-3. **Implementation.** Production implementation of a spec needs the approved spec and every ADR and decision it
+4. **Implementation.** Production implementation of a spec needs the approved spec and every ADR and decision it
    applies, agreed and merged into the initiative branch. The implementation is built on that branch and lands on
    `main` with the initiative (see *Implementing a spec on the branch* below). ADR and spec PRs both follow the
    final-commit agreement rule below.
@@ -89,6 +92,56 @@ experiment is allowed in any phase, but it never silently becomes production imp
 
 No activation by a program goal is needed for any phase.
 
+## Kick-off
+
+A new initiative starts with a kick-off, right after its issue and branch exist (*Start an initiative* in the
+[skill](../skills/catalog.md#initiative-coordination)). It replaces a scope fixed by one person up front with a scope
+the participants shape together: first open input, then alignment, then one written review of a concrete proposal,
+then a meeting. The coordinator, or the recorded delegate, runs every step. The participants are the approvers and
+anyone the coordinator invites. Kick-off inputs and reviews are the one exception to the rule that analyses are not
+posted on the initiative issue: no ADR PR exists for them yet. Keep them short and link longer research.
+
+1. **Open input round.** Before the scope is defined, every participant thinks about the initiative's area and records
+   what is on their mind: research, inputs, questions, concerns, ideas. Each posts it as one comment on the initiative
+   issue headed `Kick-off input`. Nothing needs to be complete or agreed; an input is not an analysis, and one that
+   grows into an analysis becomes an `A-n` row later. The coordinator sets a deadline.
+2. **Alignment meeting.** All participants meet to align the overlaps between the inputs and to set the initiative's
+   boundaries: what is in scope and what is not. The coordinator groups the inputs into agenda items beforehand.
+   Afterwards the coordinator records the scope in the board's **Goal** and **Kick-off** sections.
+3. **The coordinator's analysis.** From the agreed scope, the coordinator writes the **proposal set**:
+   - the ADRs that must change or be written, and the direction of each change;
+   - where code is missing or implemented wrongly, with pointers;
+   - the **spec roadmap**: the specs that together meet the initiative's goal completely;
+   - the **dependency map** between those ADRs and specs.
+
+   The proposal set is committed at `docs/initiatives/<n>/kick-off.md` in a draft PR against the initiative branch.
+   It proposes direction; it does not draft the ADRs or specs themselves.
+4. **One review round.** The coordinator requests every participant's review of the proposal-set PR and messages
+   them. Reviewers review only the spec roadmap and the ADR proposals, and may do their own research and bring their
+   own evidence. Each reviewer makes one pass, in one session, and records the result, thoughts and counter-proposals
+   in one comment on the initiative issue headed `Kick-off review`, which the coordinator links from the board. A
+   reviewer who agrees also approves the PR. There is no second written round.
+5. **Meeting.** If every reviewer agrees with the proposal set as it stands, the meeting is skipped. Otherwise the
+   coordinator plans and prepares a meeting right after the review round, and every result, thought and
+   counter-proposal is discussed there; one meeting is quicker than more written rounds. The meeting, not a
+   reconciliation table, answers the kick-off reviews.
+
+**Meetings.** Both kick-off meetings run on the same mechanics. The coordinator prepares an agenda on the initiative
+branch, at `docs/initiatives/<n>/<date>-meeting-agenda.md`, in which every item has one short **spoken anchor**: an
+ID and a two-to-three word handle. In the meeting, the coordinator opens and closes each item by saying its anchor;
+the meeting is recorded and transcribed and ends with a **read-back** of every anchor and its outcome. Afterwards the
+coordinator, not the participants, classifies the transcript's outcomes against the anchors, confirms each with the
+participants before applying it, and applies it; the participants then only verify the applied text.
+
+**Leaving the kick-off.** The coordinator applies the outcomes of the review round, and of the meeting if one was
+held, to the proposal set. Its PR names an approval plan, like any proposal, and follows the agreement rule below,
+except that it has no status line: every non-author approver approves its final text, and an author who is an approver
+confirms the final commit in a PR comment. Because the coordinator authored it, the recorded delegate or a non-author
+approver merges it into the initiative branch as the initiative's scope record (see *The initiative branch*). The
+coordinator then fills the board from the agreed set: an ADR row for each ADR to change or write, and a spec row for
+each spec on the roadmap, with what it needs. Numbers for new ADRs and specs are reserved when each is drafted, as
+usual. The board moves to the analysis-and-decisions phase, and the initiative continues with the normal phases.
+
 ## How work flows
 
 **Analysis.**
@@ -96,7 +149,8 @@ No activation by a program goal is needed for any phase.
   ADR PR it leads to.
 - When there is no ADR PR yet, the analysis's author decides whether and when an ADR is drafted from it. Receiving an
   analysis for discussion is not authorization to publish an ADR from it.
-- Analyses inside an initiative are not filed as spike issues, and are not posted on the initiative issue.
+- Analyses inside an initiative are not filed as spike issues, and are not posted on the initiative issue, except the
+  [kick-off](#kick-off)'s inputs and reviews.
 
 **Approval plan.** Every ADR or spec PR names its required human approvers, and the capacity each acts in, in its
 description. By default that is the initiative's Approvers list. A different plan, or an exception to the rules on
@@ -398,8 +452,8 @@ A meeting that cannot reach a decision follows the governance route in *Review* 
 Every initiative has one integration branch in this repository, `initiative/<n>-<slug>`, cut from `main` when the
 initiative starts and named in the board's header. It holds the initiative's **agreed decision artifacts** and nothing
 else: ADRs and ADR amendments; spec, plan and tasks; the CONTEXT, glossary or constitution edits those decisions
-imply; and the initiative's meeting agendas (`docs/initiatives/<n>/`), which land with it as part of the decision
-log. Once a spec's decisions are agreed, it also holds that spec's **implementation** (see *Implementing a spec on
+imply; and the [kick-off](#kick-off)'s proposal set and meeting agendas (`docs/initiatives/<n>/`), which land with
+it as part of the decision log. Once a spec's decisions are agreed, it also holds that spec's **implementation** (see *Implementing a spec on
 the branch* below), so the decisions and the code built on them land together. Because every proposal is checked
 against everything already on it, the branch is the initiative's shared, consistent knowledge base: what the
 initiative has decided so far, in one place. Everyone taking part works from it — authors cut their proposal branches
@@ -420,17 +474,18 @@ follow their own subsection below where it differs.
   still open when its parent merges is retargeted to the initiative branch and becomes a proposal of its own.
 - **No required CI for decision documents.** ADR, amendment and spec proposals carry no required checks.
   Architecture is judged by agreement and the pre-merge gate, not by builds and tests, which would only re-run
-  unchanged code. Implementation PRs do run the full checks (see below), and the landing PR runs every required check
+  unchanged code. Implementation PRs do run the configured checks (see below), and the landing PR runs every required check
   on `main`.
 - **The coordinator merges** proposals into the initiative branch, by squash, after agreement and a clean pre-merge
   gate. Code Review does not merge initiative proposals ([org review and merge rules][org-agents-review]). Each
   accepted proposal is one squash commit, so the branch reads as a decision log. The coordinator also merges
-  implementation PRs, after Code Review's approval and green checks instead of the gate. The coordinator also pushes the merges
-  of `main`, the ADR index updates and any renumbering of merged items; nobody else pushes to the branch. The
-  coordinator merges a proposal they authored too, once its agreement is recorded. When the coordinator is away, the
-  recorded delegate, or else an approver, stands in: they run the gate, push what it needs and merge the proposal. A
-  stand-in who is not the recorded delegate does not edit the board: they post the `main` commit and the merge commit
-  in a pointer comment, and the coordinator records them at the next sync.
+  implementation PRs, after Code Review's approval and green checks instead of the gate. The coordinator also pushes
+  the merges of `main`, the ADR index updates, any renumbering of merged items and, with the recorded delegate, the
+  kick-off's meeting agendas; nobody else pushes to the branch. When the coordinator is away, or authored or
+  committed to a proposal, a non-author recorded delegate, or else a non-author approver, stands in: they run the
+  gate, push what it needs and merge the proposal, because an author never merges their own PR. A stand-in who is
+  not the recorded delegate does not edit the board: they post the `main` commit and the merge commit in a pointer
+  comment, and the coordinator records them at the next sync.
 - **Merging closes the issues the PR fixes.** GitHub closes an issue from `Fixes #n`, `Closes #n` or `Resolves #n`
   only when the PR merges into the default branch, and the initiative reaches `main` only when it lands. Whoever merges
   a PR into the initiative branch therefore closes, right after the merge, every issue it fixes
@@ -526,8 +581,8 @@ moves its board row to implementation, recording the branch commit it starts fro
 - The implementer cuts a branch from `origin/initiative/<n>-<slug>` and implements the spec there (Speckit implement),
   so the code is written against the decisions it applies. The implementation PR targets the initiative branch and
   says `Part of #N`. It may be split into several PRs, each naming the spec and its tasks.
-- **It runs the full checks.** Unlike ADR and spec proposals, an implementation PR changes code, so it runs the
-  repository's CI tiers, the same checks a PR to `main` runs. Its author runs the local review loop on the draft,
+- **It runs the configured checks.** Unlike ADR and spec proposals, an implementation PR changes code, so it runs
+  the same configured CI checks a PR to `main` runs. Its author runs the local review loop on the draft,
   marks it ready with the evidence, and requests Code Review.
 - **Code Review reviews, the coordinator merges.** Code Review reviews and approves it as it would a PR to `main`, but
   does not merge it (the [org rule][org-agents-review] for `initiative/*` bases stands). The coordinator merges it
@@ -581,7 +636,7 @@ Last synced <date> by the coordinator. Newer updates are in the comments below.
 
 # Initiative: <objective>
 
-**Phase:** analysis and decisions | specs | implementation (per spec: name the specs in implementation)
+**Phase:** kick-off | analysis and decisions | specs | implementation (per spec: name the specs in implementation)
 
 **Coordinator:** @<assignee>. Delegate: <none, or @person for what and until when>.
 
@@ -593,6 +648,12 @@ Last synced <date> by the coordinator. Newer updates are in the comments below.
 ## Approvers
 | Person | Capacity | Designated by |
 |---|---|---|
+
+## Kick-off
+- Inputs: <links to `Kick-off input` comments; deadline>
+- Alignment meeting: <date, agenda>. Scope: <in>; out of scope: <out>
+- Proposal set: <PR>. Reviews: <links to `Kick-off review` comments>
+- Review meeting: <date, agenda, read-back>, or "skipped: all agreed"
 
 ## Who is needed where
 | Person | Needed for |

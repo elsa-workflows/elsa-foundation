@@ -1,0 +1,117 @@
+using System.Text.Json;
+using System.Reflection;
+using Elsa.Expressions.Core.Models;
+
+namespace Elsa.Workflows.Design.Core.Authoring;
+
+/// <summary>
+/// A typed authoring-time source. It is lowered immediately to authored argument state and is never
+/// stored in a workflow executable or used as runtime value storage.
+/// </summary>
+public abstract class WorkflowValue<T>
+{
+    internal abstract ArgumentValue Lower(MemberInfo? inputMember = null);
+    internal virtual WorkflowValueScope Scope => WorkflowValueScope.Unscoped;
+}
+
+internal enum WorkflowValueScopeKind
+{
+    Unscoped,
+    Variable,
+    ActivityResult
+}
+
+internal readonly record struct WorkflowValueScope(WorkflowValueScopeKind Kind, string? ScopeId)
+{
+    public static WorkflowValueScope Unscoped { get; } = new(WorkflowValueScopeKind.Unscoped, null);
+}
+
+public sealed class WorkflowRequestRead<T> : WorkflowValue<T>
+{
+    internal WorkflowRequestRead(string memberKey, string? path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(memberKey);
+        MemberKey = memberKey;
+        Path = path;
+    }
+
+    public string MemberKey { get; }
+    public string? Path { get; }
+
+    internal override ArgumentValue Lower(MemberInfo? inputMember = null) => new(
+        JsonSerializer.SerializeToElement(new { memberKey = MemberKey, path = Path }, Elsa.Serialization.Core.JsonBaseline.Options),
+        AuthoringExpressionTypes.WorkflowRequest);
+}
+
+public sealed class VariableRead<T> : WorkflowValue<T>
+{
+    internal VariableRead(string referenceKey, string declaringScopeId)
+    {
+        ReferenceKey = referenceKey;
+        DeclaringScopeId = declaringScopeId;
+    }
+
+    public string ReferenceKey { get; }
+    public string DeclaringScopeId { get; }
+
+    internal override WorkflowValueScope Scope => new(WorkflowValueScopeKind.Variable, DeclaringScopeId);
+
+    internal override ArgumentValue Lower(MemberInfo? inputMember = null) => new(
+        JsonSerializer.SerializeToElement(new { referenceKey = ReferenceKey, declaringScopeId = DeclaringScopeId }, Elsa.Serialization.Core.JsonBaseline.Options),
+        AuthoringExpressionTypes.Variable);
+}
+
+public sealed class ActivityResultSource<T> : WorkflowValue<T>
+{
+    internal ActivityResultSource(string producerNodeId, string projectionKey, string producerScopeId)
+    {
+        ProducerNodeId = producerNodeId;
+        ProjectionKey = projectionKey;
+        ProducerScopeId = producerScopeId;
+    }
+
+    public string ProducerNodeId { get; }
+    public string ProjectionKey { get; }
+    public string ProducerScopeId { get; }
+
+    internal override WorkflowValueScope Scope => new(WorkflowValueScopeKind.ActivityResult, ProducerScopeId);
+
+    internal override ArgumentValue Lower(MemberInfo? inputMember = null) => new(
+        JsonSerializer.SerializeToElement(new
+        {
+            producerNodeId = ProducerNodeId,
+            projectionKey = ProjectionKey,
+            producerScopeId = ProducerScopeId
+        }, Elsa.Serialization.Core.JsonBaseline.Options),
+        AuthoringExpressionTypes.ActivityResult);
+}
+
+public sealed class ExpressionSource<T> : WorkflowValue<T>
+{
+    internal ExpressionSource(string language, string source)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        Language = language;
+        Source = source;
+    }
+
+    public string Language { get; }
+    public string Source { get; }
+
+    internal override ArgumentValue Lower(MemberInfo? inputMember = null) => ArgumentValue.FromClr(Source, Language);
+}
+
+internal sealed class LiteralWorkflowValue<T>(T? value) : WorkflowValue<T>
+{
+    internal override ArgumentValue Lower(MemberInfo? inputMember = null) => ArgumentValue.FromClr(value, AuthoringExpressionTypes.Literal, typeof(T), inputMember);
+}
+
+internal static class AuthoringExpressionTypes
+{
+    public const string Literal = "Literal";
+    public const string Variable = "Variable";
+    public const string WorkflowRequest = "WorkflowRequest";
+    public const string ActivityResult = "ActivityResult";
+    public const string Default = "Default";
+}

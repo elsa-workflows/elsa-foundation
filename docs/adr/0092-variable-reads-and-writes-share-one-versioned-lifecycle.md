@@ -312,10 +312,6 @@ example a payment made, the operator can keep it instead of repeating it: that i
 
 #### Amendment (2026-11-16): `InvocationId` is the logical invocation identity
 
-*Accepted by the initiative coordinator (@j03y-nxxbz) on 2026-11-16 in the spec 1221 implementation PR (#4316), without
-a separate architect review: it settles a consequence of this decision that implementation surfaced, and it changes no
-behaviour the decision promised.*
-
 Implementing this decision showed that in the runtime `InvocationId` is the activity execution row's own id, and that
 `RetryFaultedActivity/1` replaces a faulted row with a successor row (ADR 0045 §3 lineage, ADR 0049 jobs). Read
 literally, "a retry keeps the `InvocationId`" would require re-running the faulted row in place and giving up that

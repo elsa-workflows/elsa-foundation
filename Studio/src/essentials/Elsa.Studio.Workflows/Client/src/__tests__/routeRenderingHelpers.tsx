@@ -3,8 +3,8 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, vi } from "vitest";
-import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
-import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
+import { createWeaverRegistry, StudioWorkspaceTabProvider } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition, StudioWorkspaceTabHandle } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
@@ -44,7 +44,9 @@ export async function renderRegisteredRoute(
   configureApi?: (api: ElsaStudioModuleApi) => void,
   followNavigation = false,
   capabilities = capabilityDocument(),
-  historyState: unknown = {}
+  historyState: unknown = {},
+  retained = false,
+  wrapRoute?: (screen: React.ReactNode) => React.ReactNode
 ) {
   if (typeof ResizeObserver === "undefined") {
     vi.stubGlobal("ResizeObserver", class {
@@ -91,11 +93,23 @@ export async function renderRegisteredRoute(
       window.dispatchEvent(new PopStateEvent("popstate"));
     };
     const Component = route.component;
-    return <Component navigate={navigate} />;
+    const screen = <Component navigate={navigate} />;
+    return wrapRoute ? wrapRoute(screen) : screen;
   }
 
+  let visible = true;
+  let retainedLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const workspaceTab: StudioWorkspaceTabHandle = {
+    id: "retained-route",
+    get active() { return visible; },
+    get location() { return retainedLocation; },
+    isActive: () => visible,
+    markPendingWork: vi.fn(),
+    setTitle: vi.fn()
+  };
   const rerender = () => flushSync(() => {
-    root.render(<QueryClientProvider client={queryClient}><RegisteredRouteHost /></QueryClientProvider>);
+    const route = <RegisteredRouteHost />;
+    root.render(<QueryClientProvider client={queryClient}>{retained ? <React.Activity mode={visible ? "visible" : "hidden"}><StudioWorkspaceTabProvider value={workspaceTab}>{route}</StudioWorkspaceTabProvider></React.Activity> : route}</QueryClientProvider>);
   });
   rerender();
 
@@ -107,7 +121,10 @@ export async function renderRegisteredRoute(
   };
   mountedRouteHosts.add(unmount);
 
-  return { api, container, rerender, unmount };
+  return { api, container, rerender, unmount, setVisible: (next: boolean) => {
+    if (visible) retainedLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    visible = next; rerender();
+  } };
 }
 
 function routeMatchesPath(routePath: string, path: string) {
@@ -154,12 +171,18 @@ export function testApi(): ElsaStudioModuleApi {
 
 function copyPlacementMetadata(nav: {
   placement?: string;
+  parentId?: string;
+  childDisplay?: "links" | "views";
+  viewLabel?: string;
   requiresFeature?: string;
   requiresRole?: string;
   requiresPermission?: string;
 }) {
   return {
     ...(nav.placement ? { placement: nav.placement } : {}),
+    ...(nav.parentId ? { parentId: nav.parentId } : {}),
+    ...(nav.childDisplay ? { childDisplay: nav.childDisplay } : {}),
+    ...(nav.viewLabel ? { viewLabel: nav.viewLabel } : {}),
     ...(nav.requiresFeature ? { requiresFeature: nav.requiresFeature } : {}),
     ...(nav.requiresRole ? { requiresRole: nav.requiresRole } : {}),
     ...(nav.requiresPermission ? { requiresPermission: nav.requiresPermission } : {})
@@ -188,14 +211,14 @@ function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: Re
         ...copyPlacementMetadata(featureArea.nav)
       });
       for (const [index, item] of (featureArea.nav.items ?? []).entries()) {
-        if (item.path === featureArea.nav.path) {
+        if (item.path === featureArea.nav.path && featureArea.nav.childDisplay !== "views" && featureArea.nav.childDisplay !== "links") {
           continue;
         }
         navigation.add({
           id: item.id ?? `${featureArea.id}-${slug(item.title)}`,
           label: item.title,
           path: item.path,
-          parentId: item.placement ? undefined : parentId,
+          parentId: item.parentId ?? (item.placement ? undefined : parentId),
           activePathPrefix: item.path,
           order: item.order ?? (featureArea.order ?? 500) + index + 1,
           iconColor: item.iconColor ?? featureArea.nav.iconColor,

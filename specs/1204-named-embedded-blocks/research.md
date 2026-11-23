@@ -24,6 +24,8 @@ Evidence:
 
 **S001 result:** the committed paired baseline reproduced inside-to-outside result loss. PR #3767 records the direct completed-child edge using existing runtime metadata, guarded by committed matching completions and exact parent ownership. Existing visibility/branch/iteration/ambiguity filtering remains intact. The [prototype receipts](evidence/prototype/README.md) include actual composed-host crossings, distinct occurrences, strict restart/resume, cancellation, supported native rescheduling and nearest control targets. This is bounded linear proof, not general fork/join visibility.
 
+**Current-main reconciliation (12 November):** mandatory shared source analysis now runs in workflow publication and Activity Graph compilation. It rejects a plain child result read from outside its new structured parent, even with an explicit legacy producer scope. The historical submit/publish runtime proof did not pass through this newer admission path and remains historical; the causal bridge is not publication acceptance. T002 integrates through an explicit ordinary Set/ancestor-variable rewrite under the plan's typed-reference direction, without changing scope authority. The [data boundary contract](data-model.md#refactoring-preview) records its bounded profile and inverse behavior. Shared golden planner documents feed actual publication/runtime regressions; generating or comparing them is not a runtime pass. Member-result crossings remain pre-mutation refusals.
+
 **Finding:** nesting Flowchart adds an ordinary composite incident on child failure; Sequence leaves its parent waiting on the faulted child. The additional inspection node is expected, but successful recovery and downstream behavior are unproved. Grouping must not add an independent retry/transaction/compensation policy.
 
 **Decision:** prove waits/resumption, cancellation, child fault/recovery and nearest-loop Break/nearest-graph Complete behavior in paired baselines. Promotion refuses external Break targets and Complete targets that would change at the new reusable boundary.
@@ -65,3 +67,7 @@ The current built-in mapping table has no FlowNode/Container entry. Resolver fal
 ## Delivery structure
 
 Native issue types are Program, Epic, Feature and Task; this organization's available native types do not include Spike, so S001 uses native Task plus `type:spike`. Bug issues will be created only for reproduced defects. No invented checkpoint issues. The native hierarchy and Project are scheduling surfaces; spec/plan/tasks remain canonical requirements/design and issue/PR comments hold receipts.
+
+## Current-main integration: expression observation when adding variables
+
+Introducing even a freshly named variable can change JavaScript ambient-snapshot selection: the runtime can match getter markers in inert strings/comments before executing source. A token blacklist is not an absence proof. Following Studio ADR 0002, Workflows now asks a language-neutral, revision-bound preservation contribution and refuses if absent. The JavaScript expression module owns a deliberately finite direct `args.<declared parameter>`/numeric-operand admission profile; it does not evaluate source or claim general JavaScript safety. T003 host composition and real-host behavioral qualification remain required.

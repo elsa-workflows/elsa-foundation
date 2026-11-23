@@ -1,0 +1,54 @@
+{
+  "sourceSha": "2161b81b9267fb3b5c9af9966e6b65ef02b0f1bd",
+  "sourceDirty": false,
+  "mode": "live",
+  "status": "passed",
+  "stage": "complete",
+  "liveQualified": true,
+  "requestedModel": "gpt-6.1-sol",
+  "executed": 2,
+  "restartExecuted": 1,
+  "hostLifetimes": [
+    {
+      "phase": "authoring",
+      "backendPid": 67168,
+      "studioPid": 69225,
+      "backendExit": 0,
+      "studioExit": 0
+    },
+    {
+      "phase": "provider-disabled-restart",
+      "backendPid": 76144,
+      "studioPid": 76751,
+      "backendExit": 0,
+      "studioExit": 0,
+      "sameOwnedStores": true
+    }
+  ],
+  "startedAt": "2026-11-13T18:35:14Z",
+  "finishedAt": "2026-11-13T18:41:51Z",
+  "independentVisualAcceptance": {
+    "status": "passed",
+    "originalPngsInspected": 30,
+    "scope": "weekly query grouping/filter refinement, native saved question/dashboard/share/drill and same-store real host restart"
+  },
+  "math": {
+    "initial": {
+      "current": 62.5,
+      "baseline": 50,
+      "delta": 12.5
+    },
+    "refined": {
+      "current": 75,
+      "baseline": 25,
+      "delta": 50
+    },
+    "newFault": {
+      "current": 80,
+      "baseline": 25,
+      "delta": 55
+    }
+  },
+  "clockScope": "Controlled real workflow-start handler timestamps; no historical execution-duration claim.",
+  "privacy": "Zero observed privacy failures and zero additional SDK sends in each native phase; raw oracles and retained-state manifest stay private."
+}

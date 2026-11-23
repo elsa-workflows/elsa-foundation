@@ -1,5 +1,6 @@
 import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { formatStudioDate } from "@elsa-workflows/studio-sdk";
+import "./WorkflowInstanceTimeline.css";
 import { workflowStateEffectLabels } from "./workflowInstanceInspection";
 import { useMemo } from "react";
 import { resolveRuntimeActivityLabel as resolveActivityLabel } from "./runtimeActivityDisplay";

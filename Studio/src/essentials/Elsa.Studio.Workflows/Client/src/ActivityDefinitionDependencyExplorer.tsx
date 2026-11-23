@@ -1,5 +1,6 @@
 import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { formatStudioDate } from "@elsa-workflows/studio-sdk";
+import { studioRowInteraction, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useRef, useState, type UIEvent } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowRight, RefreshCw } from "lucide-react";
@@ -155,9 +156,7 @@ export function ActivityDefinitionDependencyExplorer({
     </header>
 
     <section className="ad-dependency-controls" aria-label="Usage query">
-      <label>
-        <span>Version</span>
-        <select value={rootVersionId} onChange={event => setRootVersionId(event.target.value)}>
+      <StudioField label={<><span>Version</span></>}><select value={rootVersionId} onChange={event => setRootVersionId(event.target.value)}>
           <option value="">Choose a version</option>
           {showConfirmedInitialVersion ? <option value={confirmedInitialVersion.version.versionId} title={confirmedInitialVersion.version.version}>
             {displayActivityDefinitionVersion(confirmedInitialVersion.version.version)} · {confirmedInitialVersion.version.lifecycle}
@@ -166,8 +165,7 @@ export function ActivityDefinitionDependencyExplorer({
             <option key={item.version.versionId} value={item.version.versionId} title={item.version.version}>
               {displayActivityDefinitionVersion(item.version.version)} · {item.version.lifecycle}
             </option>)}
-        </select>
-      </label>
+        </select></StudioField>
       <fieldset className="ad-dependency-direction">
         <legend>Show</legend>
         <label><input type="radio" name="dependency-direction" checked={direction === "inbound"} onChange={() => setDirection("inbound")} /> Used by</label>
@@ -213,8 +211,8 @@ export function ActivityDefinitionDependencyExplorer({
     {rootVersion && included.length > 0 && dependenciesQuery.isPending ? <div className="ad-inline-status" role="status">Loading evidence…</div> : null}
     {privacyFailure ? <div className="ad-inline-error" role="alert">Evidence is unavailable for this account or version. No identities or counts are shown.</div> : null}
     {responseBindingMismatch && !rows.length ? <div className="ad-inline-error" role="alert">Results did not match this version or snapshot. No identities or counts are shown. <button type="button" onClick={restart}>Restart scan</button></div> : null}
-    {usageUnavailable ? <div className="ad-inline-error" role="alert">Usage information is unavailable. Ask an administrator to restart the server to rebuild it, then try again. <button type="button" onClick={restart}>Try again</button></div> : null}
-    {dependenciesQuery.isError && !privacyFailure && !usageUnavailable && !rows.length ? <div className="ad-inline-error" role="alert">Could not confirm these results. No unconfirmed rows are shown. <button type="button" onClick={restart}>Try again</button></div> : null}
+    {usageUnavailable ? <div className="ad-inline-error" role="alert">Usage information is unavailable. Ask an administrator to restart the server to rebuild it, then try again. <button type="button" onClick={restart}>Retry</button></div> : null}
+    {dependenciesQuery.isError && !privacyFailure && !usageUnavailable && !rows.length ? <div className="ad-inline-error" role="alert">Could not confirm these results. No unconfirmed rows are shown. <button type="button" onClick={restart}>Retry</button></div> : null}
     {isStale ? <div className="ad-stale-warning" role="alert"><div><strong>This scan is out of date</strong><span>{cursorFailure === "expired" ? "The snapshot is no longer available. Confirmed rows remain visible." : "The next page did not match this version, filters, or snapshot. Confirmed rows remain visible."} Pages from another snapshot were not combined.</span></div><button type="button" onClick={restart}><RefreshCw size={15} aria-hidden /> Restart scan</button></div> : null}
 
     {snapshot && rows.length ? <details className="ad-scan-details">
@@ -228,9 +226,9 @@ export function ActivityDefinitionDependencyExplorer({
     </details> : null}
 
     {dependenciesQuery.isSuccess && rootVersion && rows.length === 0 ? <div className="ad-inline-status" role="status">No evidence matches this version and filters.</div> : null}
-    {rows.length ? <div className="ad-dependency-table-scroll" onScroll={onScroll}>
-      <table className="ad-dependency-table" aria-label={direction === "outbound" ? "Dependency evidence" : "Used by evidence"}>
-        <thead><tr><th>{direction === "inbound" ? "Used in" : "Version"}</th><th>Where</th><th>{direction === "inbound" ? "Activity" : "Uses"}</th><th>Evidence</th><th>Path</th></tr></thead>
+    {rows.length ? <div className="studio-table-container ad-dependency-table-scroll" role="region" aria-label={direction === "outbound" ? "Dependency evidence table" : "Used by evidence table"} tabIndex={0} onScroll={onScroll}>
+      <table className="studio-table ad-dependency-table" aria-label={direction === "outbound" ? "Dependency evidence" : "Used by evidence"}>
+        <thead><tr><th scope="col">{direction === "inbound" ? "Used in" : "Version"}</th><th scope="col">Where</th><th scope="col">{direction === "inbound" ? "Activity" : "Uses"}</th><th scope="col">Evidence</th><th scope="col">Path</th></tr></thead>
         <tbody>
           {start > 0 ? <tr aria-hidden><td colSpan={5} style={{ height: start * dependencyRowHeight, padding: 0 }} /></tr> : null}
           {visibleRows.map(item => <DependencyRow
@@ -269,7 +267,7 @@ function DependencyRow({
 }) {
   
   const sourceHref = exactOwnerHref(item);
-  return <tr className={selected ? "is-selected" : ""}>
+  return <tr className={selected ? "is-selected" : ""} aria-selected={selected} {...studioRowInteraction<HTMLTableRowElement>(onSelect)}>
     <td data-label={direction === "inbound" ? "Used in" : "Version"}><strong>{referenceLabel(item.owner)}</strong><code>{referenceIdentity(item.owner)}</code></td>
     <td data-label="Where"><strong>{item.occurrence.occurrenceId}</strong><span>{item.occurrence.nodeOrigin.length} origin steps</span></td>
     <td data-label={direction === "inbound" ? "Activity" : "Uses"}><strong>{referenceLabel(item.dependency)}</strong><code>{referenceIdentity(item.dependency)}</code></td>

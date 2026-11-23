@@ -30,6 +30,38 @@ test("new Switch exposes visual case authoring", async ({ page }) => {
   await expect(page.locator(".wf-sequence-slots").getByRole("button", { name: "Open Approved, Empty", exact: true })).toBeVisible();
 });
 
+test("Sequence previews a named case beside the fallback without editing the workflow", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/?mode=activity-duplicate-editor&host=activity&composition=sequence&collection-slots=switch&theme=dark");
+  await canvasAdd(page).click();
+  const beforePreview = await savedOwner(page);
+  const toggle = page.getByRole("button", { name: "Preview activities" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await toggle.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  const named = page.getByRole("button", { name: "Open Case 1, Empty", exact: true });
+  const fallback = page.getByRole("button", { name: "Open Default, Empty", exact: true });
+  await expect(named).toBeVisible();
+  const first = (await named.boundingBox())!;
+  const second = (await fallback.boundingBox())!;
+  expect(second.y).toBe(first.y);
+  expect(second.x).toBeGreaterThan(first.x);
+  await expect(canvasAdd(page)).toBeVisible();
+  await expect(named.locator(".wf-sequence-child-empty")).not.toHaveCSS("border-inline-start-width", "2px");
+  await expect(named.locator(".wf-sequence-child-empty")).not.toHaveCSS("border-radius", "0px");
+  await page.locator(".wf-sequence-item").screenshot({ path: testInfo.outputPath("expanded-switch.png") });
+  expect(await savedOwner(page)).toEqual(beforePreview);
+  await page.reload();
+  const persistedToggle = page.getByRole("button", { name: "Preview activities" });
+  await expect(persistedToggle).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Open Case 1, Empty", exact: true }).locator(".wf-sequence-child-empty")).toBeVisible();
+  expect(await savedOwner(page)).toEqual(beforePreview);
+  const persistedFallback = page.getByRole("button", { name: "Open Default, Empty", exact: true });
+  await persistedFallback.press("Enter");
+  await expect(page.getByRole("button", { name: "Switch / Default", exact: true })).toBeVisible();
+  expect(await savedOwner(page)).toEqual(beforePreview);
+});
+
 for (const host of ["activity", "workflow"]) for (const composition of ["sequence", "flowchart", "bpmn"]) {
   test(`${host} ${composition}: cases preserve branch content, history and saved reload`, async ({ page }, testInfo) => {
     const errors: string[] = [];
@@ -72,11 +104,12 @@ for (const host of ["activity", "workflow"]) for (const composition of ["sequenc
     await expect(first).toHaveValue("[$&]{match}東京");
     expect(await savedOwner(page)).toEqual(beforeReload);
 
-    page.once("dialog", dialog => dialog.dismiss());
     await cases(page).getByRole("button", { name: "Remove case 1", exact: true }).click();
+    const confirmRemoval = page.getByRole("dialog", { name: "Remove case?" });
+    await confirmRemoval.getByRole("button", { name: "Cancel" }).click();
     await expect(cases(page).getByRole("textbox")).toHaveCount(2);
-    page.once("dialog", dialog => dialog.accept());
     await cases(page).getByRole("button", { name: "Remove case 1", exact: true }).click();
+    await confirmRemoval.getByRole("button", { name: "Remove case", exact: true }).click();
     await expect(cases(page).getByRole("textbox")).toHaveCount(1);
     await page.getByRole("button", { name: /^Undo(?: Activity Graph edit)?$/ }).click();
     if (host === "workflow") await ownerNode(page).click();

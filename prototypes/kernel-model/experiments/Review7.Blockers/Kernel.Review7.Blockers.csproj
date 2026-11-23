@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Gate 2, seventh review: executable evidence for R7-B1 (NT-2) and R7-M1 (MX-1), on the real Native model,
+       Turn, DurableTurn, WorkflowInstance and InMemoryStore. Project references only, so the harness rebuilds from
+       the prototype source at any revision. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Kernel.Review7</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Kernel.Native brings Kernel.Workflows, Kernel.Durable, Kernel.Runtime and Kernel.Graph. -->
+    <ProjectReference Include="../../models/Native.Legacy/Kernel.Native.Legacy.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+    <Using Include="Kernel.Native" />
+    <Using Include="Kernel.ReviewFixtures" />
+    <Compile Include="../ModeledTicket.cs" Link="ModeledTicket.cs" />
+  </ItemGroup>
+</Project>

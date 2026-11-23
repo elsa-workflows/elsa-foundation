@@ -13,8 +13,11 @@ import "../../src/essentials/Elsa.Studio.Dashboard/Client/src/styles.css";
 const searchParams = new URLSearchParams(window.location.search);
 const edit = searchParams.get("edit") === "1";
 const before = searchParams.get("mode") === "home-before";
-const dark = searchParams.get("theme") === "dark";
-const appearance = dark ? "dark" : "light";
+const requestedTheme = searchParams.get("theme");
+const dark = requestedTheme === "dark";
+const themeId = dark ? "classic" : requestedTheme ?? "classic";
+const requestedAppearance = searchParams.get("appearance");
+const appearance = dark ? "dark" : requestedAppearance === "dark" || requestedAppearance === "dim" || requestedAppearance === "high-contrast" ? requestedAppearance : "light";
 const runtimeAccess = searchParams.get("runtimeAccess");
 const fixtureSession: AuthSession = {
   status: "authenticated", subject: "home-access-fixture", tenantId: "fixture", roles: [],
@@ -254,15 +257,15 @@ function installCurrentDraftFixture(api: ElsaStudioModuleApi, scenario: string) 
 }
 
 export function HomeFixture() {
-  writeAppearancePreferences({ themeId: "classic", mode: appearance, navigation: "left" });
+  writeAppearancePreferences({ themeId, mode: appearance, navigation: "left" });
   const navigation = getStudioNavigation(moduleNavigation);
   const api = before ? createEmptyHomeApi() : createHomeApi();
   const draftScenario = searchParams.get("drafts");
   if (draftScenario) installCurrentDraftFixture(api, draftScenario);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", "classic");
-    document.documentElement.setAttribute("data-theme-mode", appearance);
+    document.documentElement.setAttribute("data-theme", themeId);
+    document.documentElement.setAttribute("data-theme-mode", appearance === "light" ? "light" : "dark");
     document.documentElement.setAttribute("data-theme-appearance", appearance);
     if (edit) {
       const editButton = [...document.querySelectorAll("button")].find(item => item.textContent?.includes("Edit home"));

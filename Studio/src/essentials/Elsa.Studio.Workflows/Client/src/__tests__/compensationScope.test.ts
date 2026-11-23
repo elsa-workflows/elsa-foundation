@@ -66,6 +66,23 @@ describe("compensation scope model", () => {
     expect(readCompensationSteps(next)[1].activity?.nodeId).toBe("confirm");
   });
 
+  it("preserves authored step metadata and omitted optional children through an overview edit", () => {
+    const scope = reservationScope();
+    const rows = scope.structure!.payload.steps as Record<string, unknown>[];
+    rows[0].future = { keep: "row metadata" };
+    delete rows[1].compensation;
+    const before = structuredClone(scope);
+    const slot = getChildSlots(scope)[0];
+    const edited = { ...slot.activities[0], inputs: [{ referenceKey: "text", value: { expressionType: "Literal", value: "edited" } }] };
+
+    const next = replaceSlotActivities(scope, slot, slot.activities.map(child => child.nodeId === edited.nodeId ? edited : child));
+
+    const expectedRows = structuredClone(before.structure!.payload.steps as Record<string, unknown>[]);
+    expectedRows[0].activity = edited;
+    expect(next.structure!.payload.steps).toEqual(expectedRows);
+    expect(scope).toEqual(before);
+  });
+
   it("adds, moves, renames and removes steps", () => {
     const steps = readCompensationSteps(reservationScope());
 

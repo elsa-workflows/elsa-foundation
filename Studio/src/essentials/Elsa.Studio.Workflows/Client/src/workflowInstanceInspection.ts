@@ -1,4 +1,4 @@
-import type { InspectionGranularity, PersistenceMode, WorkflowInstanceDetails } from "./workflowTypes";
+import type { InspectionGranularity, PersistenceMode, WorkflowInstanceDetails, WorkflowInstanceSummary } from "./workflowTypes";
 
 const persistenceModes: readonly PersistenceMode[] = ["Durable", "Balanced", "Ephemeral"];
 const inspectionGranularities: readonly InspectionGranularity[] = ["activity-level", "boundary-level"];
@@ -20,6 +20,11 @@ export function mapWorkflowInstanceDetails(payload: WorkflowInstanceDetails): Wo
     persistenceMode,
     inspectionGranularity
   };
+}
+
+/** A retained child can carry executable producer metadata without an attributed authoring source. */
+export function hasUnattributedChildDefinition(instance: Pick<WorkflowInstanceSummary, "parentWorkflowExecutionId" | "sourceReferenceId"> | null | undefined): boolean {
+  return Boolean(instance?.parentWorkflowExecutionId?.trim()) && instance?.sourceReferenceId === null;
 }
 
 const stateEffectLabels: Readonly<Record<string, string>> = {

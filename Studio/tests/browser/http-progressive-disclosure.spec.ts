@@ -42,9 +42,13 @@ for (const theme of ["light", "dark"] as const) {
   test(`HTTP properties stay lossless and usable in ${theme} at laptop size`, async ({ page }, testInfo) => {
     const inspector = await openInspector(page, { theme, width: 1365, seeded: true });
     await expect(inspector.getByRole("heading", { name: "Send HTTP Request" })).toBeVisible();
-    const directLabels = inspector.locator(".wf-properties > .wf-property-group .wf-property-row-header label");
-    await expect(directLabels).toHaveText(["URL", "Method", "Content", "Connection"]);
-    await expect(directLabels.nth(3)).toBeInViewport();
+    const primaryRows = inspector.locator(".wf-properties > .wf-property-group .wf-property-row");
+    await expect(primaryRows).toHaveCount(4);
+    for (const [index, name] of ["URL", "Method", "Content", "Connection"].entries()) {
+      await expect(primaryRows.nth(index)).toHaveAccessibleName(`${name} property`);
+      await expect(primaryRows.nth(index).getByText(name, { exact: true })).toBeVisible();
+      await expect(primaryRows.nth(index).getByLabel(name, { exact: true })).toBeInViewport();
+    }
     await expect(inspector.getByRole("combobox", { name: "Connection", exact: true })).toBeInViewport();
 
     const disclosure = inspector.locator(".studio-advanced-section");

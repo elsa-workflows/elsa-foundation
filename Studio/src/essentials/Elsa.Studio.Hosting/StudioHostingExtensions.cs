@@ -44,6 +44,7 @@ public static class StudioHostingExtensions
         }
         settings = settings with { AuthEnabled = builder.Configuration.GetValue("Studio:Auth:Enabled", false) };
         builder.WebHost.UseStaticWebAssets();
+        builder.Services.Configure<RouteOptions>(routes => routes.SetParameterPolicy<StudioDocumentNavigationConstraint>("studioHtmlNavigation"));
         builder.Services.AddSingleton(settings);
         builder.Services.TryAddScoped<IStudioModuleManifestProvider, SelectedShellModuleManifestProvider>();
         builder.Services.AddSingleton<IConfigurationRoot>(builder.Configuration);

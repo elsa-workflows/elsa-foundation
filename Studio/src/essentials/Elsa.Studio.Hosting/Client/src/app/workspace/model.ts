@@ -33,7 +33,7 @@ export interface WorkspaceState {
 /** Background tabs kept mounted besides the active one. Older clean tabs are released and remount on return. */
 export const maxRetainedBackgroundTabs = 5;
 /** Upper bound on open tabs; opening another releases the oldest clean unpinned background tab. */
-export const maxWorkspaceTabs = 30;
+export const maxWorkspaceTabs = 12;
 export const homeLocation = "/";
 
 let tabSequence = 0;
@@ -59,7 +59,7 @@ export function normalizeOrder(tabs: WorkspaceTab[]) {
 export function activateTab(state: WorkspaceState, id: string, now = Date.now()): WorkspaceState {
   if (!state.tabs.some(tab => tab.id === id)) return state;
   const tabs = state.tabs.map(tab => tab.id === id ? { ...tab, retained: true, guarded: false, lastActiveAt: now } : tab);
-  return { tabs: releaseBackgroundTabs(tabs, id), activeId: id };
+  return { tabs: releaseBackgroundTabs(trimOpenTabs(tabs, id), id), activeId: id };
 }
 
 /** Records what the outgoing tab looked like as it goes to the background. */
@@ -74,7 +74,7 @@ export function insertTab(state: WorkspaceState, tab: WorkspaceTab): WorkspaceSt
   const firstUnpinned = tabs.findIndex(candidate => !candidate.pinned);
   const index = Math.max(activeIndex + 1, firstUnpinned === -1 ? tabs.length : firstUnpinned);
   tabs.splice(index, 0, tab);
-  return { ...state, tabs: trimOpenTabs(tabs, state.activeId) };
+  return { ...state, tabs: trimOpenTabs(tabs, state.activeId, tab.id) };
 }
 
 /** The neighbour that becomes active when `id` closes: the next tab, else the previous one. */
@@ -137,10 +137,10 @@ function releaseBackgroundTabs(tabs: WorkspaceTab[], activeId: string) {
   return release.size === 0 ? tabs : tabs.map(tab => release.has(tab.id) ? { ...tab, retained: false, historyState: undefined } : tab);
 }
 
-function trimOpenTabs(tabs: WorkspaceTab[], activeId: string) {
+export function trimOpenTabs(tabs: WorkspaceTab[], activeId: string, openingId?: string) {
   if (tabs.length <= maxWorkspaceTabs) return tabs;
   const closable = tabs
-    .filter(tab => tab.id !== activeId && !tab.pinned && !tab.guarded)
+    .filter(tab => tab.id !== activeId && tab.id !== openingId && !tab.pinned && !tab.guarded)
     .sort((a, b) => a.lastActiveAt - b.lastActiveAt)
     .slice(0, tabs.length - maxWorkspaceTabs)
     .map(tab => tab.id);

@@ -1,5 +1,8 @@
 import { useStudioTimeZone } from "../../sdk/timeZone";
 import { formatStudioDate } from "../../sdk/timeZone";
+import { StudioButton, StudioIconButton } from "../ui/forms/Button";
+import { AnchoredPopover } from "../ui/overlay/AnchoredPopover";
+import { enabledMenuIndexes, focusIndexedItem, stepEnabledIndex } from "../ui/disclosure/menuNavigation";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, CheckCircle2, ChevronDown, History, Plus, Shield, X } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioWeaverPromptRequest, StudioWeaverSurface } from "../../sdk";
@@ -100,9 +103,9 @@ export function WeaverSurface({
             onChange={session.setAutoApplyMode}
           />
           {onClose ? (
-            <button type="button" className="weaver-close" aria-label="Close assistant" onClick={onClose}>
+            <StudioIconButton type="button" className="weaver-close" aria-label="Close assistant" onClick={onClose}>
               <X size={16} />
-            </button>
+            </StudioIconButton>
           ) : null}
         </div>
       </header>
@@ -117,7 +120,7 @@ export function WeaverSurface({
         <div className="weaver-mode-status" id={autoApplyStatusId} role="status" aria-label="Auto-apply mode status" data-autonomy-state={session.autoApplyState}>
           <span>{autoApplyStatus}</span>
           {session.autoApplyState === "unresolved" ? (
-            <button type="button" className="weaver-mode-retry" onClick={session.retryAutoApplyMode}>Retry mode change</button>
+            <StudioButton type="button" className="weaver-mode-retry" onClick={session.retryAutoApplyMode}>Retry</StudioButton>
           ) : null}
         </div>
       ) : null}
@@ -187,10 +190,10 @@ function WeaverRecovery({ session }: { session: UseWeaverSession }) {
           <span>{describeRecoveryNotice(notice)}</span>
           {notice.kind === "owned-elsewhere" || notice.kind === "lost" ? (
             // A reread waits while a mode change is unconfirmed, as prompts and recorded actions do.
-            <button type="button" disabled={session.reopening || session.autoApplyBlocked} onClick={() => session.reopenSession(notice.sessionId)}>Try again</button>
+            <StudioButton type="button" disabled={session.reopening || session.autoApplyBlocked} onClick={() => session.reopenSession(notice.sessionId)}>Retry</StudioButton>
           ) : null}
           {notice.kind === "limit" ? (
-            <button type="button" disabled={session.busy || session.pendingProposalIds.has("continue-session")} onClick={session.continueInNewSession}>Continue in a new session</button>
+            <StudioButton type="button" disabled={session.busy || session.pendingProposalIds.has("continue-session")} onClick={session.continueInNewSession}>Continue in a new session</StudioButton>
           ) : null}
         </div>
       ) : null}
@@ -200,16 +203,16 @@ function WeaverRecovery({ session }: { session: UseWeaverSession }) {
           <ul aria-label="Recent conversations">
             {offered.map(item => (
               <li key={item.id}>
-                <button type="button" disabled={session.reopening} data-session-id={item.id} onClick={() => session.reopenSession(item.id)}>
+                <StudioButton type="button" disabled={session.reopening} data-session-id={item.id} onClick={() => session.reopenSession(item.id)}>
                   {describeSessionSummary(item)}
-                </button>
+                </StudioButton>
               </li>
             ))}
           </ul>
         </div>
       ) : null}
       {session.sessionId !== null && session.chatState !== "streaming" ? (
-        <button type="button" className="weaver-new-conversation" onClick={session.startNewConversation}><Plus size={13} aria-hidden="true" /> New conversation</button>
+        <StudioButton type="button" className="weaver-new-conversation" onClick={session.startNewConversation}><Plus size={13} aria-hidden="true" /> New conversation</StudioButton>
       ) : null}
     </section>
   );
@@ -275,40 +278,26 @@ function WeaverAutoApplyMenu({
 }) {
   
   const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+  const enabledIndexes = enabledMenuIndexes(modes.map(mode => pendingMode !== null && mode !== pendingMode));
+  const [focusIndex, setFocusIndex] = useState(0);
+  function openMenu(index: number) {
+    setFocusIndex(index);
+    setOpen(true);
+  }
 
-  useEffect(() => {
-    if (!open) return;
-
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!wrapperRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnOutsidePointer);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [open]);
-
-  const selectMode = (mode: WeaverAutoApplyMode) => {
-    onChange(mode);
+  function closeMenu() {
     setOpen(false);
-  };
+    trigger.current?.focus();
+  }
 
   return (
-    <div className="weaver-auto-apply" ref={wrapperRef} data-autonomy-state={state} data-pending-mode={pendingMode ?? undefined}>
+    <div className="weaver-auto-apply" data-autonomy-state={state} data-pending-mode={pendingMode ?? undefined}>
       {/* The button always names the mode in effect (acknowledged); a pending request is only described. */}
-      <button
+      <StudioButton
         type="button"
+        ref={trigger}
         className="weaver-mode-button"
         aria-label="Auto-apply mode"
         aria-haspopup="menu"
@@ -317,34 +306,60 @@ function WeaverAutoApplyMenu({
         aria-describedby={statusId}
         disabled={disabled}
         title={AUTO_APPLY_HINTS[value]}
-        onClick={() => setOpen(current => !current)}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => open ? closeMenu() : openMenu(enabledIndexes.includes(modes.indexOf(value)) ? modes.indexOf(value) : enabledIndexes[0])}
+        onKeyDown={event => {
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+          event.preventDefault();
+          openMenu(event.key === "ArrowDown" ? enabledIndexes[0] : enabledIndexes[enabledIndexes.length - 1]);
+        }}
       >
         <span>{AUTO_APPLY_LABELS[value]}</span>
         <ChevronDown size={14} aria-hidden="true" />
-      </button>
-      {open ? (
-        <div className="weaver-mode-menu" role="menu" aria-label="Auto-apply mode">
-          {modes.map(mode => (
-            <button
+      </StudioButton>
+      <AnchoredPopover anchorRef={trigger} open={open} className="weaver-mode-menu" minWidth={320} onDismiss={closeMenu} onPositioned={() => focusIndexedItem(menuId, focusIndex)}>
+        <div id={menuId} role="menu" aria-label="Auto-apply mode" onKeyDown={event => {
+          if (event.key === "Escape" || event.key === "Tab") {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+            closeMenu();
+            return;
+          }
+          const index = Number((event.target as HTMLElement).closest("[data-index]")?.getAttribute("data-index"));
+          const target = event.key === "Home" ? enabledIndexes[0]
+            : event.key === "End" ? enabledIndexes[enabledIndexes.length - 1]
+            : event.key === "ArrowDown" ? stepEnabledIndex(enabledIndexes, index, 1)
+            : event.key === "ArrowUp" ? stepEnabledIndex(enabledIndexes, index, -1) : undefined;
+          if (target === undefined) return;
+          event.preventDefault();
+          focusIndexedItem(menuId, target);
+        }}>
+          {modes.map((mode, index) => (
+            <StudioButton
               type="button"
               role="menuitemradio"
               aria-checked={mode === value}
               className="weaver-mode-option"
               key={mode}
+              id={`${menuId}-item-${index}`}
+              data-index={index}
+              tabIndex={-1}
               // One change per conversation at a time: other modes are unavailable until it resolves.
               disabled={pendingMode !== null && mode !== pendingMode}
               title={AUTO_APPLY_HINTS[mode]}
-              onClick={() => selectMode(mode)}
+              onClick={() => { onChange(mode); closeMenu(); }}
             >
               <span>
                 <strong>{AUTO_APPLY_LABELS[mode]}</strong>
                 <small>{AUTO_APPLY_HINTS[mode]}</small>
               </span>
               {mode === value ? <Check size={14} aria-hidden="true" /> : null}
-            </button>
+            </StudioButton>
           ))}
         </div>
-      ) : null}
+      </AnchoredPopover>
     </div>
   );
 }

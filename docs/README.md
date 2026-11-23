@@ -22,8 +22,11 @@ Read these roughly in order:
 7. [Durable timers](runtime-durable-timers.md): the `Delay` activity, the durable timer store and pump, why firing is safe to repeat, and the at-least-once guarantee of Timer/Cron start triggers.
 8. [Bookmark expiration](bookmark-expiration.md): the `ExpiresAt` cut-off, why it is not a timeout, and examples of finite and indefinite waits.
 
+Looking ahead: the [kernel walkthrough](https://vowful-mustard-pd8t.here.now/) is an interactive tour of the proposed clean-slate execution kernel. It is a design under review, not the architecture the pages above describe.
+
 ## Build human work into a workflow
 
+- [Named blocks](named-blocks.md): group steps into named Sequence, Flowchart and BPMN blocks, extract and ungroup them, and promote a block to a reusable activity.
 - [User Tasks](user-tasks.md): author action paths and reusable forms, work from assigned/group inboxes, and integrate custom task/form clients.
 
 ## Rules to follow

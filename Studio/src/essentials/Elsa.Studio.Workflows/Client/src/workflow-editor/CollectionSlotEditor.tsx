@@ -1,6 +1,8 @@
-import { useId, useState, type ReactNode } from "react";
+import { StudioField } from "@elsa-workflows/studio-ui";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import type { ActivityNode } from "../workflowTypes";
+import { getDialogs } from "./dialogs";
 import { addCollectionItem, collectionSlotItems, removeCollectionItem, renameCollectionItem, moveCollectionItem, setCollectionCondition, setSwitchMode, type CollectionSlot } from "../collectionSlots";
 import "./collectionSlotEditor.css";
 
@@ -13,6 +15,11 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
   renderCondition?(item: Record<string, unknown>): ReactNode;
   hasOutgoingConnections?(index: number): boolean;
 }) {
+  const currentActivity = useRef<ActivityNode | null>(null);
+  useLayoutEffect(() => {
+    currentActivity.current = readOnly ? null : activity;
+    return () => { currentActivity.current = null; };
+  }, [activity, readOnly]);
   const modeId = useId();
   const items = collectionSlotItems(activity, collection);
   if (!items) return null;
@@ -54,12 +61,21 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
           readOnly={readOnly}
           duplicate={value => items.some((candidate, position) => position !== index && candidate[collection.labelProperty] === value)}
           onRename={value => onChange(renameCollectionItem(activity, collection, index, item[collection.labelProperty] as string, value))}
-          onRemove={() => {
+          onRemove={async () => {
             const connected = hasOutgoingConnections?.(index) === true;
             const message = connected
               ? `Remove this ${collection.itemName}, its outgoing connections, and any nested activity content?`
               : `Remove this ${collection.itemName} and its activity, including nested content?`;
-            if ((item[collection.childProperty] || connected) && !window.confirm(message)) return;
+            if (item[collection.childProperty] || connected) {
+              const accepted = await getDialogs().confirm({ title: `Remove ${collection.itemName}?`, message,
+                confirmLabel: `Remove ${collection.itemName}`, cancelLabel: "Cancel", tone: "danger" });
+              const latest = currentActivity.current;
+              if (!accepted || !latest || latest.nodeId !== activity.nodeId) return;
+              const latestItem = collectionSlotItems(latest, collection)?.[index];
+              if (JSON.stringify(latestItem) !== JSON.stringify(item)) return;
+              onChange(removeCollectionItem(latest, collection, index, item[collection.labelProperty] as string));
+              return;
+            }
             onChange(removeCollectionItem(activity, collection, index, item[collection.labelProperty] as string));
           }}
           removeLabel={`Remove ${collection.itemName} ${index + 1}`}
@@ -106,8 +122,8 @@ function CollectionItemRow({ label, item, value, readOnly, duplicate, onRename, 
   const error = duplicate(text);
   const commit = () => { if (!readOnly && !error && text !== value) onRename(text); };
   return (
-    <div className="wf-slot-collection-item">
-      <label htmlFor={id}>{label}</label>
+    <div className="wf-slot-collection-item"><StudioField controlId={id} label={<>{label}</>}>
+
       <div className="wf-slot-collection-label-row">
         <input id={id} type="text" value={text} readOnly={readOnly} aria-invalid={error || undefined} aria-describedby={error ? `${id}-error` : undefined}
           onChange={event => setEdit({ signature, text: event.target.value })}
@@ -120,6 +136,6 @@ function CollectionItemRow({ label, item, value, readOnly, duplicate, onRename, 
       </div>
       {error ? <p id={`${id}-error`} className="wf-slot-collection-error" role="alert">This value is already used. Each {label.endsWith("match") ? "case match" : label.endsWith("label") ? "case label" : "branch name"} must be unique.</p> : null}
       {children}
-    </div>
+    </StudioField></div>
   );
 }

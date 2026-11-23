@@ -79,6 +79,16 @@ export function formatStudioDate(value: string | number | Date | null | undefine
   return `${new Intl.DateTimeFormat(undefined, { timeZone: zone, dateStyle: "medium", timeStyle: "medium" }).format(date)} UTC${offsetText(offsetMinutes(date, zone))}`;
 }
 
+/** The shared timestamp keeps its date/time layout while using the selected zone and a visible offset. */
+export function formatStudioDateParts(date: Date, preference = getStudioTimeZonePreference()) {
+  const timeZone = resolveStudioTimeZone(preference);
+  return {
+    date: new Intl.DateTimeFormat(undefined, { timeZone, dateStyle: "medium" }).format(date),
+    time: `${new Intl.DateTimeFormat(undefined, { timeZone, timeStyle: "medium" }).format(date)} UTC${offsetText(offsetMinutes(date, timeZone))}`,
+    dateTime: formatStudioDate(date, preference)
+  };
+}
+
 function wallParts(date: Date, timeZone: string): number[] {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(date);
   return ["year", "month", "day", "hour", "minute", "second"].map(type => Number(parts.find(part => part.type === type)?.value));

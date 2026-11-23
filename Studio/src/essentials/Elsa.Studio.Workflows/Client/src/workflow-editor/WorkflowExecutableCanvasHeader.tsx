@@ -21,7 +21,7 @@ export function WorkflowExecutableCanvasHeader({
           {version ? <> <small>Version {version}</small></> : null}
         </h3>
         <CopyableIdentifier
-          label="Artifact ID"
+          label="Executable ID"
           value={artifactId}
           className="wf-executable-artifact-id"
         />

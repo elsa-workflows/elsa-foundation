@@ -1,7 +1,6 @@
-import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
-import { useStudioRouteLocation, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
-import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioWeaverRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import { useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
+import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioWeaverRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution, StudioIncidentRootCauseProviderContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowWeaverController } from "../workflowWeaver";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
@@ -49,6 +48,7 @@ export function WorkflowManagementPage({
   operations?: {publishing:StudioContributionAvailability;testRuns:StudioContributionAvailability};
 }) {
   const [definitionId, setDefinitionId] = useState(readDefinitionIdFromUrl);
+  const [requestedPanel, setRequestedPanel] = useState(readWorkflowEditorPanelFromUrl);
   const [homeCreateRequestId, setHomeCreateRequestId] = useState<string | null>(null);
   const homeCreateSequence = useRef(0);
   const browseSession = useWorkflowDefinitionBrowseSession(context);
@@ -63,6 +63,7 @@ export function WorkflowManagementPage({
         window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
       }
       setDefinitionId(selectedDefinitionId);
+      setRequestedPanel(selectedDefinitionId && url.searchParams.get("panel") === "artifacts" ? "artifacts" : null);
       setHomeCreateRequestId(shouldCreate && !selectedDefinitionId
         ? `home-create-${++homeCreateSequence.current}`
         : null);
@@ -84,20 +85,20 @@ export function WorkflowManagementPage({
 
   return definitionId
     ? (
-      <WorkflowLazyBoundary label="workflow designer">
-        <WorkflowEditor onOpenBpmnProcesses={onOpenBpmnProcesses} backendSession={backendSession} operations={operations} key={definitionId} context={context} definitionId={definitionId} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} runRelatedLinks={runRelatedLinks} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
+      <WorkflowLazyBoundary label="workflow designer" backdropOptOut>
+        <WorkflowEditor onOpenBpmnProcesses={onOpenBpmnProcesses} backendSession={backendSession} operations={operations} key={definitionId} context={context} definitionId={definitionId} requestedPanel={requestedPanel} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} runRelatedLinks={runRelatedLinks} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
       </WorkflowLazyBoundary>
     )
     : (
       <WorkflowsPageFrame definitions>
         <WorkflowLazyBoundary label="workflow definitions">
-          <WorkflowDefinitions context={context} ai={ai} weaver={weaver} onOpen={openDefinition} session={browseSession} homeCreateRequestId={homeCreateRequestId} onHomeCreateRequestHandled={acknowledgeHomeCreate} />
+          <WorkflowDefinitions context={context} ai={ai} weaver={weaver} onOpen={openDefinition} session={browseSession} homeCreateRequestId={homeCreateRequestId} onHomeCreateRequestHandled={acknowledgeHomeCreate} runInputEditors={runInputEditors} />
         </WorkflowLazyBoundary>
       </WorkflowsPageFrame>
     );
 }
 
-export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrowseDefinitions }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; canBrowseDefinitions?: boolean }) {
+export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrowseDefinitions, canManagePublications }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; canBrowseDefinitions?: boolean; canManagePublications?: boolean }) {
   const [definitionFilter, setDefinitionFilter] = useState(readExecutableDefinitionFilterFromUrl);
 
   useEffect(() => {
@@ -123,7 +124,7 @@ export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrows
   return (
     <WorkflowsPageFrame>
       <WorkflowLazyBoundary label="workflow executables">
-        <WorkflowExecutables context={context} ai={ai} runInputEditors={runInputEditors} canBrowseDefinitions={canBrowseDefinitions} definitionFilter={definitionFilter} onDefinitionFilterChange={updateDefinitionFilter} />
+        <WorkflowExecutables context={context} ai={ai} runInputEditors={runInputEditors} canBrowseDefinitions={canBrowseDefinitions} canManagePublications={canManagePublications} definitionFilter={definitionFilter} onDefinitionFilterChange={updateDefinitionFilter} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
@@ -139,7 +140,7 @@ export function WorkflowInstancesPage({ context, navigate }: { context: StudioEn
   );
 }
 
-export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], navigate }: {
+export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], incidentRootCauseProviders = [], navigate }: {
   context: StudioEndpointContext;
   ai: StudioWeaverRegistry;
   /** The Workflows module's Weaver state: the run page contributes the exact Run and selected activity execution (spec 1193 FR-029). */
@@ -147,27 +148,62 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
   expressionEditors?: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
+  incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
   navigate(path: string): void;
 }) {
   // A background workspace tab can render while another tab owns the address bar.
   const routeLocation = useStudioRouteLocation();
   const workflowExecutionId = readWorkflowExecutionIdFromUrl(routeLocation.pathname);
   const searchParams = routeLocation.searchParams;
-  // The run view rewrites the selection in the URL as the operator moves around (spec 260 FR-423); read it once per run
-  // so a later render never reloads the run for a selection the view itself wrote. Keep the list destination from that
-  // same initial URL because the detail view may replace its query while the operator moves between activities.
-  const initialSelection = useRef<{ workflowExecutionId: string; activityExecutionId: string | null; returnTo: string | null } | null>(null);
-  if (initialSelection.current?.workflowExecutionId !== workflowExecutionId) {
+  const workspaceTab = useStudioWorkspaceTab();
+  const currentWorkspaceTab = useRef(workspaceTab); currentWorkspaceTab.current = workspaceTab;
+  const [historyNavigation, setHistoryNavigation] = useState(0);
+  useEffect(() => {
+    // The host emits popstate for accepted navigation and stops cross-tab entries in capture phase.
+    // Local replaceState and workspace tab restoration have no such navigation event.
+    const navigated = () => {
+      if (currentWorkspaceTab.current && !currentWorkspaceTab.current.isActive()) return;
+      if (readWorkflowExecutionIdFromUrl(window.location.pathname) === workflowExecutionId)
+        setHistoryNavigation(value => value + 1);
+    };
+    window.addEventListener("popstate", navigated);
+    return () => window.removeEventListener("popstate", navigated);
+  }, [workflowExecutionId]);
+  // The host tab location changes for real navigation, while local selection synchronization only
+  // replaces the address bar. Apply new same-run intents without replaying our own URL writes.
+  const routeIntent = workspaceTab?.location ?? `${routeLocation.pathname}${routeLocation.search}`;
+  const initialSelection = useRef<{ workflowExecutionId: string; routeIntent: string; navigation: number; activityExecutionId: string | null; returnTo: string | null; historySearch: string } | null>(null);
+  if (initialSelection.current?.workflowExecutionId !== workflowExecutionId || initialSelection.current.navigation !== historyNavigation
+      || workspaceTab && initialSelection.current.routeIntent !== routeIntent) {
     initialSelection.current = {
       workflowExecutionId,
+      routeIntent,
+      navigation: historyNavigation,
       activityExecutionId: readRunSelection(routeLocation.search),
-      returnTo: searchParams.get("returnTo")
+      returnTo: searchParams.get("returnTo"),
+      historySearch: routeLocation.search
     };
+  } else if (initialSelection.current.routeIntent !== routeIntent) {
+    // Older hosts expose only the address bar. Preserve the established per-run activity/return
+    // context when local selection writes it, while still forwarding new history targets.
+    initialSelection.current = { ...initialSelection.current, routeIntent, historySearch: routeLocation.search };
   }
   const initialActivityExecutionId = initialSelection.current.activityExecutionId;
   const initialReturnTo = initialSelection.current.returnTo;
   const requestedInspectorTab = searchParams.get("tab");
-  useStudioWorkspaceTitle(workflowExecutionId ? `Run ${workflowExecutionId.length > 10 ? `${workflowExecutionId.slice(0, 8)}…` : workflowExecutionId}` : null, "Execution");
+  const [runTitleState, setRunTitleState] = useState({ id: workflowExecutionId, title: "Run" });
+  const runTitle = runTitleState.id === workflowExecutionId ? runTitleState.title : "Run";
+  const setRunTitle = useCallback((title: string) => {
+    setRunTitleState({ id: workflowExecutionId, title });
+  }, [workflowExecutionId]);
+  useStudioWorkspaceTitle(
+    runTitle !== "Run"
+      ? runTitle
+      : workflowExecutionId
+        ? `Run ${workflowExecutionId.length > 10 ? `${workflowExecutionId.slice(0, 8)}…` : workflowExecutionId}`
+        : null,
+    "Execution"
+  );
   const initialInspectorTab = requestedInspectorTab === "issues"
     ? "issues"
     : requestedInspectorTab === "variables"
@@ -181,33 +217,21 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
           : "timeline";
 
   return (
-    <WorkflowsPageFrame
-      title="Run"
-      workbench
-      context={workflowExecutionId ? (
-        <div className="wf-page-context">
-          <span>Workflow Instance ID</span>
-          <code title={workflowExecutionId}>{workflowExecutionId}</code>
-        </div>
-      ) : null}
-    >
+    <WorkflowsPageFrame workbench>
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} incidentRootCauseProviders={incidentRootCauseProviders} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} initialHistorySearch={initialSelection.current.historySearch} initialHistoryNavigation={historyNavigation} navigate={navigate} onRunTitleChange={setRunTitle} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
 }
 
-function WorkflowsPageFrame({ title, context, workbench = false, definitions = false, children }: {
-  title?: string;
-  context?: React.ReactNode;
+function WorkflowsPageFrame({ workbench = false, definitions = false, children }: {
   workbench?: boolean;
   definitions?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className={`studio-page wf-page${workbench ? " wf-page--run-workbench" : ""}${definitions ? " wf-page--definitions" : ""}`}>
-      {title ? <StudioPageHeader title={title} headingLevel={2} actions={context} /> : null}
+    <section className={`studio-page wf-page${workbench ? " wf-page--run-workbench" : ""}${definitions ? " wf-page--definitions" : ""}`} data-studio-workspace-backdrop={workbench ? "none" : undefined}>
       {children}
     </section>
   );
@@ -215,6 +239,11 @@ function WorkflowsPageFrame({ title, context, workbench = false, definitions = f
 
 function readDefinitionIdFromUrl() {
   return new URLSearchParams(window.location.search).get("definition");
+}
+
+function readWorkflowEditorPanelFromUrl(): "artifacts" | null {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("definition") && params.get("panel") === "artifacts" ? "artifacts" : null;
 }
 
 function readExecutableDefinitionFilterFromUrl() {

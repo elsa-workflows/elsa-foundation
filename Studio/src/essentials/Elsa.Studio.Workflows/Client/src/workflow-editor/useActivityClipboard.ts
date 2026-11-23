@@ -9,7 +9,10 @@ import {
   type ActivityClipboardSnapshot
 } from "./duplicateActivities";
 
+import type { ActivityReferenceResourceKind } from "./activityReferenceRemapping";
+
 interface ActivityClipboardParams {
+  resourceKind: ActivityReferenceResourceKind;
   draft: WorkflowDraft | null;
   frames: ScopeFrame[];
   catalogByVersion: Map<string, ActivityCatalogItem>;
@@ -28,6 +31,7 @@ export function useActivityClipboard({
   selectedNodeIds,
   disabled,
   definitionId,
+  resourceKind,
   editDraft,
   select,
   setStatus
@@ -70,6 +74,7 @@ export function useActivityClipboard({
           draft: current,
           frames: currentFrames,
           snapshot,
+          resourceKind,
           catalog: catalogByVersion,
           insertAfterNodeId
         });
@@ -83,7 +88,7 @@ export function useActivityClipboard({
     select(selectedNodeId);
     setStatus(status);
     return true;
-  }, [catalogByVersion, disabled, editDraft, select, setStatus]);
+  }, [catalogByVersion, disabled, editDraft, resourceKind, select, setStatus]);
 
   const copy = useCallback(() => {
     const snapshot = snapshotFrom(selectedNodeIds);

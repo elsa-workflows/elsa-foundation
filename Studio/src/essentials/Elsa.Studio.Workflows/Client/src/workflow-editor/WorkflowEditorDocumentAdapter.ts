@@ -1,3 +1,4 @@
+import type { NativeBlockValidation } from "../graph-authoring/NativeBlockCommands";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 
@@ -5,6 +6,7 @@ import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes"
 export interface WorkflowEditorDocumentAdapter {
   load(context: StudioEndpointContext, id: string): Promise<WorkflowDefinitionDetails>;
   save(context: StudioEndpointContext, draft: WorkflowDraft): Promise<WorkflowDraft>;
+  validateCandidate?(context: StudioEndpointContext, draft: WorkflowDraft): Promise<NativeBlockValidation>;
   metadata(context: StudioEndpointContext, id: string, patch: { name: string; description?: string | null }): Promise<WorkflowDefinitionDetails>;
   /**
    * The Weaver resource this document is (spec 1193 FR-024): a Reusable Workflow Template is its own resource, disclosed as

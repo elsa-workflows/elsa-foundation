@@ -31,7 +31,7 @@ export function fromDraftValidationError(error: DraftValidationError): Validatio
   const nodeId = error.nodeId?.trim() || null;
   const member = error.member?.trim() || null;
   const path = nodeId ? (member ? `${nodeId}/${member}` : nodeId) : (member ? `$workflow/${member}` : "$workflow");
-  return { type: error.code, code: error.code, message: error.message, path };
+  return { type: error.code, code: error.code, message: error.message, path, severity: error.severity };
 }
 
 /**

@@ -2,7 +2,34 @@ import { describe, expect, it, vi } from "vitest";
 import { definition, renderRegisteredRoute, response } from "./routeRenderingHelpers";
 
 describe("Executable Inspector toolbar", () => {
-  it("renders Run as the filled primary StudioButton and the rest as default StudioButtons", async () => {
+  it.each([200, 500])("keeps the refreshed executable when an older response returns %s", async status => {
+    let finishFirst!: (response: Response) => void;
+    const first = new Promise<Response>(resolve => { finishFirst = resolve; });
+    let requests = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/executables/artifact-1")) {
+        requests++;
+        return requests === 1 ? first : response({ ...executableDetail(), artifactHash: "sha256:current" });
+      }
+      if (url.includes("/activities")) return response({ activities: [] });
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+    // The registered inspector route is lazy; wait for its toolbar before judging request ordering.
+    await vi.waitFor(() => expect(toolbarButton(container, "Refresh")).not.toBeNull(), { timeout: 5_000 });
+    await vi.waitFor(() => expect(requests).toBe(1));
+    toolbarButton(container, "Refresh")!.click();
+    await vi.waitFor(() => expect(container.textContent).toContain("sha256:current"));
+    finishFirst(response(executableDetail(), status));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(container.textContent).toContain("sha256:current");
+    expect(container.textContent).not.toContain("sha256:abc");
+    expect(container.querySelector("time")?.dateTime).toBe(executableDetail().createdAt);
+    await unmount();
+  });
+
+  it("renders Run as the filled primary StudioButton, quiet return navigation and default actions", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
       unobserve() {}
@@ -43,7 +70,11 @@ describe("Executable Inspector toolbar", () => {
       if (!toolbarButton(container, "Run")) throw new Error("Timed out waiting for Run");
     });
 
-    const labels = ["Executables", "Refresh", "Run", "Explain", "Open source definition"];
+    const returnLink = container.querySelector<HTMLAnchorElement>(".wf-executable-toolbar nav[aria-label='Breadcrumb'] a");
+    expect(returnLink?.textContent).toBe("Executables");
+    expect(returnLink?.getAttribute("href")).toBe("/workflows/executables");
+
+    const labels = ["Refresh", "Run", "Explain", "Open source definition"];
     for (const label of labels) {
       const button = toolbarButton(container, label);
       expect(button, label).toBeTruthy();
@@ -51,19 +82,23 @@ describe("Executable Inspector toolbar", () => {
     }
 
     expect(toolbarButton(container, "Run")?.getAttribute("data-variant")).toBe("primary");
-    for (const label of ["Executables", "Refresh", "Explain", "Open source definition"]) {
+    for (const label of ["Refresh", "Explain", "Open source definition"]) {
       expect(toolbarButton(container, label)?.getAttribute("data-variant")).toBe("default");
     }
+    for (const label of ["Refresh"]) {
+      expect(toolbarButton(container, label)?.getAttribute("data-size")).toBe("sm");
+    }
 
-    expect(container.querySelector(".wf-instance-inspector .wf-panel-tab-list button")).toBeTruthy();
+    expect(container.querySelectorAll(".wf-instance-inspector .wf-panel-tab-list button")).toHaveLength(3);
     expect(container.querySelector(".wf-instance-inspector .wf-panel-action-button")).toBeTruthy();
+    expect(container.querySelector(".wf-instance-inspector [role='tab'][aria-selected='true']")?.textContent).toContain("Identity");
 
     await unmount();
   });
 });
 
 function toolbarButton(container: HTMLElement, text: string) {
-  return [...container.querySelectorAll<HTMLButtonElement>(".wf-toolbar button")]
+  return [...container.querySelectorAll<HTMLButtonElement>(".wf-executable-toolbar button")]
     .find(button => button.textContent?.replace(/\s+/g, " ").trim().includes(text)) ?? null;
 }
 

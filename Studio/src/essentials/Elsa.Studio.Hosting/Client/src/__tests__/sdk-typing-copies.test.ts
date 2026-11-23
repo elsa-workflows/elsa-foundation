@@ -9,9 +9,9 @@ import { describe, expect, it } from "vitest";
 // Secrets consumes the canonical SDK directly and runs its own package typecheck.
 const typingSources = [
   { label: "canonical SDK", path: "../sdk/index.ts", hasPropertyEditors: true },
-  { label: "JavaScript copy", path: "../../../../../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/studio-sdk.d.ts", hasPropertyEditors: false },
-  { label: "Liquid copy", path: "../../../../../../../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client/src/studio-sdk.d.ts", hasPropertyEditors: false },
-  { label: "Connections copy", path: "../../../../../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/studio-sdk.d.ts", hasPropertyEditors: true }
+  { label: "JavaScript copy", path: "../../../../../../../extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/studio-sdk.d.ts", hasPropertyEditors: false },
+  { label: "Liquid copy", path: "../../../../../../../extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client/src/studio-sdk.d.ts", hasPropertyEditors: false },
+  { label: "Connections copy", path: "../../../../../../../extensions/Connections/studio/Elsa.Studio.Connections/Client/src/studio-sdk.d.ts", hasPropertyEditors: true }
 ];
 
 const inputContract = `

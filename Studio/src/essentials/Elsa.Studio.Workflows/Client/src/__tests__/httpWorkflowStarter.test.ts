@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canonicalizeStateForWire } from "../activityInputWire";
-import { getCreateInitialState } from "../workflow-editor/editorHelpers";
+import { getCreateInitialState } from "../workflow-editor/createWorkflowInitialDocument";
 import { createHttpStarterState, httpStarterActivities } from "../workflow-editor/httpWorkflowStarter";
 import type { ActivityNode, WorkflowDefinitionState } from "../workflowTypes";
 import { flowchartActivity, writeLine } from "./fixtures";

@@ -18,7 +18,7 @@ import { publicationPreflight, publishedSlot } from "./fixtures/publicationSlots
 // replay-safe warning, or a Connections warning) are listed under their own heading with an icon and never block; errors
 // still block; an entry without a severity is an error.
 
-const replaySafeWarning = "\"Charge card\" is marked safe to repeat, so its call may not be committed before it runs; if the process stops, recovery may not know it happened. Mark it as an external effect unless it has none.";
+const replaySafeWarning = "\"Charge card\" is marked safe to repeat, so if the process stops before Elsa records its attempt, recovery may not know whether it ran. If this is demo-only logging, no action is needed. If it performs a real external operation, replace it with an External activity and make retries safe with an idempotency key.";
 const connectionWarning = "The connection 'crm' is not available in this environment.";
 
 let mounted: { root: ReturnType<typeof createRoot>; container: HTMLDivElement } | null = null;
@@ -112,6 +112,31 @@ describe("publication review warnings", () => {
     expect(button(container, "Publish").disabled).toBe(true);
   });
 
+  it("offers the validation-panel handoff only when the editor confirms a locatable current finding", () => {
+    const message = "The Text input is required.";
+    const onOpenValidationIssue = vi.fn();
+    const container = render(ready(review([{ path: "write-line/inputs/Text", type: "InputOutput/MissingRequired", message }])), {
+      canOpenValidationIssue: candidate => candidate === message,
+      onOpenValidationIssue
+    });
+
+    const jump = button(container, "Open in validation panel");
+    expect(jump).not.toBeNull();
+    flushSync(() => jump.click());
+    expect(onOpenValidationIssue).toHaveBeenCalledWith(message);
+    expect(button(container, "Publish").disabled).toBe(true);
+  });
+
+  it("does not offer a validation-panel handoff for an unlocatable finding", () => {
+    const message = "The workflow is invalid.";
+    const container = render(ready(review([{ message }])), {
+      canOpenValidationIssue: () => false,
+      onOpenValidationIssue: vi.fn()
+    });
+
+    expect(container.querySelector(".wf-publication-validation-jump")).toBeNull();
+  });
+
   it("shows no warnings section when there are none", () => {
     const container = render(ready(review([])));
 
@@ -160,7 +185,10 @@ function draft(validationErrors: ValidationError[]): WorkflowDraft {
   };
 }
 
-function render(value: PublicationReviewState) {
+function render(value: PublicationReviewState, handoff?: {
+  canOpenValidationIssue?(message: string): boolean;
+  onOpenValidationIssue?(message: string): void;
+}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -171,6 +199,7 @@ function render(value: PublicationReviewState) {
       busy={false}
       onPublish={vi.fn(async () => undefined)}
       onCancel={() => undefined}
+      {...handoff}
     />));
   return container;
 }

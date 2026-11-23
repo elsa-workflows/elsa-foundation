@@ -1,0 +1,64 @@
+using Elsa.Connections.Core.Models;
+using Elsa.Secrets.Core.Models;
+
+namespace Elsa.Integrations.Connectors.OAuth2;
+
+/// <summary>
+/// Well-known identifiers for the OAuth2 connector. The client name keys the named
+/// <see cref="System.Net.Http.HttpClient"/> that token-endpoint requests resolve from
+/// <see cref="System.Net.Http.IHttpClientFactory"/>.
+/// </summary>
+public static class OAuth2HttpClientNames
+{
+    /// <summary>
+    /// The <see cref="System.Net.Http.IHttpClientFactory"/> logical client name used for
+    /// OAuth token-endpoint requests. Isolated from activity HTTP traffic so handlers
+    /// registered for <c>Elsa.Activities.Http</c> do not observe those calls.
+    /// </summary>
+    public const string HttpClientName = "Elsa.Connections.OAuth2";
+}
+
+public static class OAuth2GrantTypes
+{
+    public const string AuthorizationCode = HttpOAuth2GrantTypes.AuthorizationCode;
+    public const string ClientCredentials = HttpOAuth2GrantTypes.ClientCredentials;
+    public const string RefreshToken = "refresh_token";
+}
+
+public static class OAuth2SettingKeys
+{
+    public const string GrantType = HttpOAuth2SettingKeys.GrantType;
+    public const string AuthorizationUrl = "authorizationUrl";
+    public const string TokenUrl = "tokenUrl";
+    public const string ScopesUrl = "scopesUrl";
+    public const string Scopes = "scopes";
+    public const string ClientId = "clientId";
+    public const string TokenHeaderScheme = "tokenHeaderScheme";
+}
+
+public static class OAuth2SecretFields
+{
+    public const string ClientSecret = "clientSecret";
+}
+
+internal static class OAuth2SecretKeys
+{
+    public static string Grant(string connectionName) => $"connection:{connectionName}:oauth2-grant";
+
+    public static string Pkce(string connectionName, string nonce) =>
+        $"connection:{connectionName}:oauth2-pkce:{nonce}";
+}
+
+internal static class OAuth2GrantStorePolicy
+{
+    public static readonly TimeSpan PkceLifetime = TimeSpan.FromMinutes(10);
+
+    public static void EnsureWritable(SecretStoreDescriptor store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        var writable = !store.IsReadOnly && store.Capabilities.HasFlag(SecretStoreCapabilities.Write);
+        if (!writable)
+            throw new InvalidOperationException(
+                $"OAuth2 grants require a writable secret store. '{store.Name}' is read-only (RequiresWritableStore).");
+    }
+}

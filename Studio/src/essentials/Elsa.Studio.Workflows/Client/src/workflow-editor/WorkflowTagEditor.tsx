@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
+import { StudioShellBreadcrumbs, StudioButton, StudioPage, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
 import { useStudioWorkspaceWhenActive, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createWorkflowTag, getWorkflowTag, updateWorkflowTag, workflowOperationKey, type WorkflowTag, type WorkflowTagInput } from "../api/workflowOrganization";
+import { StudioLink } from "../StudioLink";
 import { getNotifications } from "./notifications";
 import "./workflowTags.css";
 
 const newTag = (): WorkflowTagInput => ({ name: "", description: "", mode: "marker", cardinality: "single", values: [], deprecated: false });
 
-export function WorkflowTagEditor({ context, tag, onBack, onCreated }: {
-  context: StudioEndpointContext; tag?: WorkflowTag; onBack(): void; onCreated(tag: WorkflowTag): void;
+export function WorkflowTagEditor({ context, tag, onBack, navigate, onCreated }: {
+  context: StudioEndpointContext; tag?: WorkflowTag; onBack(): void; navigate(path: string): void; onCreated(tag: WorkflowTag): void;
 }) {
   const whenActive = useStudioWorkspaceWhenActive();
   const active = useRef(true);
@@ -50,18 +51,23 @@ export function WorkflowTagEditor({ context, tag, onBack, onCreated }: {
     } catch (caught) { complete(() => setError(caught instanceof Error ? caught.message : "Couldn't reload the selected tag.")); }
   };
   return <StudioPage className="wf-tag-page" aria-labelledby="workflow-tag-title">
-    <StudioPageHeader title={editingId ? "Edit workflow tag" : "Create workflow tag"} titleId="workflow-tag-title"
+    <StudioShellBreadcrumbs items={[
+      { href: "/workflows/definitions", label: "Definitions" },
+      { href: "/workflows/tags", label: "Workflow tags" }
+    ]} current={editingId ? tag!.name : "New tag"} renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />
+    <StudioPageHeader
+      title={editingId ? "Edit workflow tag" : "New workflow tag"} titleId="workflow-tag-title"
       description={editingId ? "Update this tag and its values." : "Create a reusable label or controlled classification for workflows."}
-      actions={<StudioButton onClick={onBack} disabled={busy}>Back to tags</StudioButton>} />
+    />
     <form className="wf-tag-form" onSubmit={event => { event.preventDefault(); void save(); }}>
-        <label>Name<input aria-label="Tag name" required maxLength={200} value={draft.name} disabled={busy} onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} /></label>
-        <label>Description<textarea aria-label="Tag description" value={draft.description ?? ""} maxLength={1000} disabled={busy} onChange={event => setDraft(current => ({ ...current, description: event.target.value }))} /></label>
-        <label>Kind<select aria-label="Tag kind" value={draft.mode} disabled={busy || Boolean(editingId)} onChange={event => setDraft(current => ({ ...current, mode: event.target.value as WorkflowTag["mode"], values: [] }))}><option value="marker">Simple label</option><option value="controlled">Controlled values</option></select></label>
+        <StudioField label="Name"><input aria-label="Tag name" required maxLength={200} value={draft.name} disabled={busy} onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} /></StudioField>
+        <StudioField label="Description"><textarea aria-label="Tag description" value={draft.description ?? ""} maxLength={1000} disabled={busy} onChange={event => setDraft(current => ({ ...current, description: event.target.value }))} /></StudioField>
+        <StudioField label="Kind"><select aria-label="Tag kind" value={draft.mode} disabled={busy || Boolean(editingId)} onChange={event => setDraft(current => ({ ...current, mode: event.target.value as WorkflowTag["mode"], values: [] }))}><option value="marker">Simple label</option><option value="controlled">Controlled values</option></select></StudioField>
         {draft.mode === "controlled" ? <>
-          <label>Values allowed<select aria-label="Tag cardinality" value={draft.cardinality} disabled={busy || Boolean(editingId)} onChange={event => setDraft(current => ({ ...current, cardinality: event.target.value as WorkflowTag["cardinality"] }))}><option value="single">One value per workflow</option><option value="multiple">Several values per workflow</option></select></label>
+          <StudioField label="Values allowed"><select aria-label="Tag cardinality" value={draft.cardinality} disabled={busy || Boolean(editingId)} onChange={event => setDraft(current => ({ ...current, cardinality: event.target.value as WorkflowTag["cardinality"] }))}><option value="single">One value per workflow</option><option value="multiple">Several values per workflow</option></select></StudioField>
           <fieldset className="wf-tag-value-editor"><legend>Controlled values</legend>
             {(draft.values ?? []).map((value, index) => <div className="wf-library-control-row" key={value.id}>
-              <label>Value name<input aria-label={`Value name ${index + 1}`} required maxLength={200} value={value.name} disabled={busy} onChange={event => setDraft(current => ({ ...current, values: current.values?.map((item, position) => position === index ? { ...item, name: event.target.value } : item) }))} /></label>
+              <StudioField label="Value name"><input aria-label={`Value name ${index + 1}`} required maxLength={200} value={value.name} disabled={busy} onChange={event => setDraft(current => ({ ...current, values: current.values?.map((item, position) => position === index ? { ...item, name: event.target.value } : item) }))} /></StudioField>
               <label className="wf-library-check"><input type="checkbox" checked={value.deprecated ?? false} disabled={busy} onChange={event => setDraft(current => ({ ...current, values: current.values?.map((item, position) => position === index ? { ...item, deprecated: event.target.checked } : item) }))} />Retired</label>
             </div>)}
             <StudioButton type="button" disabled={busy || (draft.values?.length ?? 0) >= 100} onClick={() => setDraft(current => ({ ...current, values: [...(current.values ?? []), { id: workflowOperationKey(), name: "", deprecated: false }] }))}>Add controlled value</StudioButton>
@@ -74,7 +80,7 @@ export function WorkflowTagEditor({ context, tag, onBack, onCreated }: {
         {status ? <p role="status">{status}</p> : null}
       <div className="studio-page-actions">
         <StudioButton type="button" onClick={onBack} disabled={busy}>Cancel</StudioButton>
-        <StudioButton variant="primary" type="submit" disabled={busy || !draft.name.trim()}>{busy ? "Saving…" : editingId ? "Save tag" : "Create tag"}</StudioButton>
+        <StudioButton variant="primary" type="submit" disabled={busy || !draft.name.trim()}>{busy ? "Saving…" : editingId ? "Save tag" : "Create"}</StudioButton>
       </div>
     </form>
   </StudioPage>;

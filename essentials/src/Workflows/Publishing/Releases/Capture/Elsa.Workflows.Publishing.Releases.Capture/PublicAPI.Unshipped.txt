@@ -1,0 +1,5 @@
+#nullable enable
+Elsa.Workflows.Publishing.Releases.Capture.WorkflowReleaseCaptureFeature
+Elsa.Workflows.Publishing.Releases.Capture.WorkflowReleaseCaptureFeature.WorkflowReleaseCaptureFeature() -> void
+virtual Elsa.Workflows.Publishing.Releases.Capture.WorkflowReleaseCaptureFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Workflows.Publishing.Releases.Capture.WorkflowReleaseCaptureFeature.PostConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

@@ -196,7 +196,7 @@ dotnet run --no-build --project src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj 
 
 Open `http://localhost:5089` and sign in with the Development seed. Keep Studio on this origin because the backend CORS and login return-origin settings name it. No Data Protection certificate is configured here, so this setup makes no encryption-at-rest claim.
 
-Follow [Exercise a visible edit](studio-source-quickstart.md#exercise-a-visible-edit). For [Run a workflow in the browser](studio-source-quickstart.md#run-a-workflow-in-the-browser), use the name `Contributor packaged journey 585` instead of `Contributor source journey 583`, and set the Write Line text to `Hello from the packaged contributor journey 585` instead of the source walkthrough’s `583` text. Verify the run completes with no active incidents and confirm its expected stdout with `docker logs "$cid"` in the backend terminal.
+Follow the Dashboard heading edit and browser journey in [Earlier recorded source-edit exercise](studio-source-quickstart.md#earlier-recorded-source-edit-exercise). For the browser journey, use the name `Contributor packaged journey 585` instead of `Contributor source journey 583`, and set the Write Line text to `Hello from the packaged contributor journey 585`. Verify the run completes with no active incidents and confirm its expected stdout with `docker logs "$cid"` in the backend terminal.
 
 When finished, stop your Studio host with Ctrl+C in its terminal. In the backend terminal, stop only the container you started and remove its two disposable volumes by their recorded names. The cleanup function checks each result and reports incomplete cleanup if any stop, remove, or volume removal fails:
 

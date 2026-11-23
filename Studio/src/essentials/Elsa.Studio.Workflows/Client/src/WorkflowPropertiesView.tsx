@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listVariableTypeDescriptors } from "./api/expressions";
 import { getActivityAuthoringCapabilities } from "./api/activityDesign";
@@ -17,9 +17,11 @@ import {
   generateUniqueName,
   isPlainRecord,
   literalDefault,
+  parseWorkflowInputDefault,
   readArgumentType,
   readStringField,
   readVariableDefault,
+  readWorkflowInputDefault,
   referenceKeyKeys,
   storageDriverKeys,
   updateInput,
@@ -172,14 +174,14 @@ function PickerCell({ value, options, placeholder, allowEmpty, ariaLabel, disabl
   // No descriptors available → free-text fallback so the field stays editable.
   if (!options) {
     return (
-      <input
-        type="text"
+      <StudioField label={ariaLabel}><input
         aria-label={ariaLabel}
+        type="text"
         disabled={disabled}
         value={value}
         placeholder={placeholder}
         onChange={event => onChange(event.target.value)}
-      />
+      /></StudioField>
     );
   }
 
@@ -189,7 +191,7 @@ function PickerCell({ value, options, placeholder, allowEmpty, ariaLabel, disabl
   const grouped = groups.length > 0;
 
   return (
-    <select aria-label={ariaLabel} value={value} disabled={disabled} onChange={event => onChange(event.target.value)}>
+    <StudioField label={ariaLabel}><select aria-label={ariaLabel} value={value} disabled={disabled} onChange={event => onChange(event.target.value)}>
       {allowEmpty ? <option value="">{placeholder ?? "—"}</option> : null}
       {/* An alias the descriptor list doesn't know about is preserved but shown as an unresolved, disabled option. */}
       {!hasValue ? <option value={value} disabled>{value} (unresolved)</option> : null}
@@ -202,7 +204,7 @@ function PickerCell({ value, options, placeholder, allowEmpty, ariaLabel, disabl
             </optgroup>
           ))
         : options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-    </select>
+    </select></StudioField>
   );
 }
 
@@ -219,9 +221,9 @@ function CollectionKindCell({ value, ariaLabel, onChange }: {
   onChange(kind: CollectionKind): void;
 }) {
   return (
-    <select aria-label={ariaLabel} value={value} onChange={event => onChange(event.target.value as CollectionKind)}>
+    <StudioField label={ariaLabel}><select aria-label={ariaLabel} value={value} onChange={event => onChange(event.target.value as CollectionKind)}>
       {collectionKinds.map(kind => <option key={kind} value={kind}>{collectionKindLabels[kind]}</option>)}
-    </select>
+    </select></StudioField>
   );
 }
 
@@ -292,47 +294,172 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
   );
 }
 
-function EditorSection({ title, addLabel, emptyLabel, headers, isEmpty, onAdd, children }: {
+function WorkflowInputDefaultCell({ input, editor, onChange }: {
+  input: WorkflowInput;
+  editor: string;
+  onChange(enabled: boolean, value?: unknown): void;
+}) {
+  const enabledFromInput = Object.prototype.hasOwnProperty.call(input, "defaultValue") && input.defaultValue !== undefined;
+  const [enabled, setEnabled] = useState(enabledFromInput);
+  const [draft, setDraft] = useState(() => readWorkflowInputDefault(input.defaultValue));
+  const unsupportedSyntax = Boolean(input.defaultSyntax && input.defaultSyntax !== "Literal");
+  const [error, setError] = useState(() => defaultInputError(input, editor, enabledFromInput));
+
+  useEffect(() => {
+    setEnabled(enabledFromInput);
+    setDraft(readWorkflowInputDefault(input.defaultValue));
+    setError(defaultInputError(input, editor, enabledFromInput));
+  }, [enabledFromInput, editor, input]);
+
+  const commit = (nextDraft: string) => {
+    setDraft(nextDraft);
+    const parsed = parseWorkflowInputDefault(input, nextDraft, editor);
+    setError(parsed.error);
+    if (!parsed.error && Object.prototype.hasOwnProperty.call(parsed, "value")) onChange(true, parsed.value);
+  };
+
+  const toggle = (checked: boolean) => {
+    setEnabled(checked);
+    setError(undefined);
+    if (!checked) {
+      setDraft("");
+      onChange(false);
+      return;
+    }
+    const initial = initialWorkflowInputDefault(input, editor);
+    setDraft(initial);
+    const parsed = parseWorkflowInputDefault(input, initial, editor);
+    setError(parsed.error);
+    if (!parsed.error && Object.prototype.hasOwnProperty.call(parsed, "value")) onChange(true, parsed.value);
+  };
+
+  const valueDisabled = editor === "none" || unsupportedSyntax;
+  const specialized = fitsEditor(editor, draft);
+  const valueEditor = specialized ? editor : "text";
+  return (
+    <div className="wf-input-default-editor">
+      <input
+        type="checkbox"
+        aria-label={`Default for ${input.displayName || input.name}`}
+        checked={enabled}
+        disabled={!enabled && editor === "none"}
+        onChange={event => toggle(event.currentTarget.checked)}
+      />
+      {enabled ? (
+        <>
+          {valueEditor === "json" ? (
+            <textarea
+              aria-label="Input default value"
+              value={draft}
+              rows={3}
+              disabled={valueDisabled}
+              aria-invalid={error ? true : undefined}
+              onChange={event => commit(event.currentTarget.value)}
+            />
+          ) : valueEditor === "checkbox" ? (
+            <input
+              type="checkbox"
+              aria-label="Input default value"
+              checked={draft === "true"}
+              disabled={valueDisabled}
+              aria-invalid={error ? true : undefined}
+              onChange={event => commit(event.currentTarget.checked ? "true" : "false")}
+            />
+          ) : valueEditor === "number" || valueEditor === "date" ? (
+            <input
+              type={valueEditor}
+              aria-label="Input default value"
+              value={draft}
+              disabled={valueDisabled}
+              aria-invalid={error ? true : undefined}
+              onChange={event => commit(event.currentTarget.value)}
+            />
+          ) : (
+            <input
+              type="text"
+              aria-label="Input default value"
+              value={draft}
+              disabled={valueDisabled}
+              aria-invalid={error ? true : undefined}
+              onChange={event => commit(event.currentTarget.value)}
+            />
+          )}
+          {error ? <span role="alert">{error}</span> : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function initialWorkflowInputDefault(input: WorkflowInput, editor: string): string {
+  if (editor === "checkbox") return "false";
+  if (editor === "number") return "0";
+  if (editor === "json" && input.type.collectionKind !== "Single") return "[]";
+  if (editor === "json") return "{}";
+  return "";
+}
+
+function defaultInputError(input: WorkflowInput, editor: string, enabled: boolean): string | undefined {
+  if (!enabled) return undefined;
+  if (input.defaultSyntax && input.defaultSyntax !== "Literal") return "Literal defaults only.";
+  return parseWorkflowInputDefault(input, readWorkflowInputDefault(input.defaultValue), editor).error;
+}
+
+export function WorkflowPropertySection({ title, headingLevel = 3, description, addLabel, addDisabled, emptyLabel, headers, isEmpty, keepMountedChildren, onAdd, children, afterTable, className }: {
   title: string;
+  headingLevel?: 2 | 3;
+  description?: ReactNode;
   addLabel: string;
+  addDisabled?: boolean;
   emptyLabel: string;
   headers: string[];
   isEmpty: boolean;
+  keepMountedChildren?: boolean;
   onAdd(): void;
   children: ReactNode;
+  afterTable?: ReactNode;
+  className?: string;
 }) {
+  const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
-    <section className="wf-properties-section">
+    <section className={`wf-properties-section${className ? ` ${className}` : ""}`}>
       <div className="wf-properties-section-head">
-        <h3>{title}</h3>
-        <StudioButton variant="default" size="md" className="wf-properties-add" onClick={onAdd}><Plus size={14} aria-hidden="true" />{addLabel}</StudioButton>
+        <div><Heading>{title}</Heading>{description ? <p className="wf-muted">{description}</p> : null}</div>
+        <StudioButton variant="default" size="md" className="wf-properties-add" onClick={onAdd} disabled={addDisabled}><Plus size={14} aria-hidden="true" />{addLabel}</StudioButton>
       </div>
-      {isEmpty ? (
+      {isEmpty && !keepMountedChildren ? (
         <p className="wf-muted">{emptyLabel}</p>
       ) : (
         <table className="wf-properties-table">
           <thead>
             <tr>
               {headers.map(header => <th key={header}>{header}</th>)}
-              <th aria-label="Actions" />
+              <th scope="col"><span className="wf-toolbar-sr-only">Actions</span></th>
             </tr>
           </thead>
-          <tbody>{children}</tbody>
+          <tbody>
+            {isEmpty ? <tr className="wf-properties-empty-row"><td colSpan={headers.length + 1}><p className="wf-muted">{emptyLabel}</p></td></tr> : null}
+            {children}
+          </tbody>
         </table>
       )}
+      {afterTable}
     </section>
   );
 }
 
-function RemoveCell({ label, onRemove }: { label: string; onRemove(): void }) {
+export function WorkflowPropertyRemoveCell({ label, disabled, onRemove }: { label: string; disabled?: boolean; onRemove(): void }) {
   return (
     <td>
-      <button type="button" className="wf-properties-remove" aria-label={label} title={label} onClick={onRemove}>
+      <button type="button" className="wf-properties-remove" aria-label={label} title={label} onClick={onRemove} disabled={disabled}>
         <Trash2 size={14} />
       </button>
     </td>
   );
 }
+
+const EditorSection = WorkflowPropertySection;
+const RemoveCell = WorkflowPropertyRemoveCell;
 
 function RequiredCell({ checked, ariaLabel, onChange }: {
   checked: boolean;
@@ -344,11 +471,12 @@ function RequiredCell({ checked, ariaLabel, onChange }: {
   );
 }
 
-// Which optional columns a collection renders. Only Variables carry a Default (an ArgumentValue); the
-// backend Input/Output records have no default member. Inputs alone carry the `isRequired` flag.
+// Variables store defaults as ArgumentValue; workflow inputs store typed JSON literals. Outputs have
+// no default, and inputs alone carry the `isRequired` flag.
 interface ArgumentColumns {
   default: boolean;
   storage: boolean;
+  workflowInputDefault?: boolean;
   required?: boolean;
 }
 
@@ -404,6 +532,7 @@ function ArgumentsEditor({
 
   return (
     <EditorSection
+      className="wf-arguments-section"
       title={title}
       addLabel={addLabel}
       emptyLabel={emptyLabel}
@@ -419,10 +548,12 @@ function ArgumentsEditor({
         const warning = referenceKey ? warnings?.get(referenceKey) : undefined;
         const typeEditor = editorForAlias(argType.alias);
         // JSON defaults keep their raw syntax for scalar values and collections alike.
-        const editor = argType.collectionKind === "Single" || typeEditor === "json" ? typeEditor : "text";
+        const editor = columns.workflowInputDefault && argType.collectionKind !== "Single"
+          ? "json"
+          : argType.collectionKind === "Single" || typeEditor === "json" ? typeEditor : "text";
         return (
-          <tr key={index}>
-            <td>
+          <tr key={index} data-variable-index={columns.default && !columns.workflowInputDefault ? index : undefined}>
+            <td data-label="Name">
               <input
                 type="text"
                 aria-label={`${namePrefix} name`}
@@ -437,7 +568,7 @@ function ArgumentsEditor({
               />
               {warning ? <span className="wf-properties-warning" role="note" title={warning}>{warning}</span> : null}
             </td>
-            <td>
+            <td data-label="Type">
               <PickerCell
                 ariaLabel={`${namePrefix} type`}
                 value={argType.alias}
@@ -446,7 +577,7 @@ function ArgumentsEditor({
                 onChange={value => update(index, { type: { alias: value, collectionKind: argType.collectionKind } })}
               />
             </td>
-            <td>
+            <td data-label="Collection">
               <CollectionKindCell
                 ariaLabel={`${namePrefix} collection kind`}
                 value={argType.collectionKind}
@@ -454,20 +585,29 @@ function ArgumentsEditor({
               />
             </td>
             {columns.default ? (
-              <td>
-                {/* Only Variables render this column; the value is their ArgumentValue default. */}
-                <DefaultValueCell
-                  ariaLabel={`${namePrefix} default value`}
-                  value={readVariableDefault((item as VariableDefinition).default)}
-                  editor={editor}
-                  onChange={value => update(index, { default: editor === "json" && value !== ""
-                    ? { value, expressionType: "Object" }
-                    : literalDefault(value) })}
-                />
+              <td data-label="Default" data-variable-default={!columns.workflowInputDefault || undefined} data-workflow-input-default={columns.workflowInputDefault || undefined}>
+                {columns.workflowInputDefault ? (
+                  <WorkflowInputDefaultCell
+                    input={item as unknown as WorkflowInput}
+                    editor={editor}
+                    onChange={(enabled, value) => update(index, enabled
+                      ? { defaultValue: value, defaultSyntax: "Literal" }
+                      : { defaultValue: undefined, defaultSyntax: undefined })}
+                  />
+                ) : (
+                  <DefaultValueCell
+                    ariaLabel={`${namePrefix} default value`}
+                    value={readVariableDefault((item as VariableDefinition).default)}
+                    editor={editor}
+                    onChange={value => update(index, { default: editor === "json" && value !== ""
+                      ? { value, expressionType: "Object" }
+                      : literalDefault(value) })}
+                  />
+                )}
               </td>
             ) : null}
             {columns.storage ? (
-              <td>
+              <td data-label="Storage">
                 <PickerCell
                   ariaLabel={`${namePrefix} storage driver`}
                   value={readStringField(item, storageDriverKeys)}
@@ -480,7 +620,7 @@ function ArgumentsEditor({
               </td>
             ) : null}
             {columns.required ? (
-              <td>
+              <td data-label="Required">
                 <RequiredCell
                   ariaLabel={`${namePrefix} required`}
                   checked={item.isRequired === true}
@@ -561,7 +701,7 @@ function InputsEditor({ items, typeOptions, storageOptions, storageOptionsStatus
       emptyLabel="No inputs defined."
       create={(name, alias) => createInput({ name, alias })}
       patch={(existing, next) => updateInput(existing as WorkflowInput, next)}
-      columns={{ default: false, storage: true, required: true }}
+      columns={{ default: true, storage: true, workflowInputDefault: true, required: true }}
       onChange={onChange}
     />
   );
@@ -656,20 +796,20 @@ function InformationSection({ definition, definitionId, onMetaChange }: {
         <dt><label htmlFor="wf-def-name">Name</label></dt>
         <dd>
           {editable ? (
-            <input
+            <StudioField label="Workflow name"><input
               id="wf-def-name"
               type="text"
               aria-label="Workflow name"
               value={name}
               onChange={event => setName(event.target.value)}
               onBlur={commitName}
-            />
+            /></StudioField>
           ) : (definition?.name ?? "—")}
         </dd>
         <dt><label htmlFor="wf-def-description">Description</label></dt>
         <dd>
           {editable ? (
-            <textarea
+            <StudioField label="Workflow description"><textarea
               id="wf-def-description"
               aria-label="Workflow description"
               rows={2}
@@ -677,7 +817,7 @@ function InformationSection({ definition, definitionId, onMetaChange }: {
               placeholder="No description"
               onChange={event => setDescription(event.target.value)}
               onBlur={commitDescription}
-            />
+            /></StudioField>
           ) : (definition?.description?.trim() ? definition.description : <span className="wf-muted">No description</span>)}
         </dd>
         <dt>Definition ID</dt>

@@ -34,10 +34,15 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
       ] } } } }
   });
   cleanup(async () => { await api(`/design/workflows/definitions/${submitted.definition.id}`, "DELETE"); });
+  const editorUrl = new URL(page.url());
+  editorUrl.pathname = "/workflows/definitions";
+  editorUrl.searchParams.set("definition", submitted.definition.id);
   const cases = () => page.getByRole("region", { name: "Cases", exact: true });
   async function selectOwner() {
     await page.locator('.wf-sequence-step[data-id="switch"]').press("Enter");
     const inspector = page.getByRole("complementary", { name: "Inspector panel", exact: true });
+    const expand = inspector.getByRole("button", { name: "Expand inspector panel", exact: true });
+    if (await expand.isVisible()) await expand.press("Enter");
     await inspector.getByRole("tab", { name: "Inspector", exact: true }).press("Enter");
     // A captured Test Run opens Run data; configuration is the read-only authoring surface.
     const configuration = inspector.getByRole("tab", { name: "Configuration", exact: true });
@@ -54,7 +59,7 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     await selectOwner();
   }
   async function open() {
-    await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy`);
+    await page.goto(editorUrl.toString());
     await selectOwner();
   }
   async function condition(index: number, value: boolean) {
@@ -62,8 +67,11 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     const syntax = row.getByRole("button", { name: /Condition expression syntax:/ });
     if (!(await syntax.getAttribute("aria-label"))?.includes("JavaScript")) {
       await syntax.click(); await page.getByRole("option", { name: /JavaScript/ }).click();
+      await expect(row.locator(".cm-content").first()).toBeFocused();
+    } else {
+      const preview = row.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true });
+      if (await preview.isVisible()) await preview.click();
     }
-    await row.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
     const editor = row.locator(".cm-content").first();
     await editor.fill(String(value)); await editor.press("Escape");
   }
@@ -81,7 +89,7 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
   }
   async function configureBody(text: string) {
     await page.getByRole("complementary", { name: "Inspector panel", exact: true }).getByRole("tab", { name: "Inputs", exact: true }).click();
-    const row = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Text$/ }) });
+    const row = page.getByRole("group", { name: "Text property", exact: true });
     const editor = row.getByRole("textbox").first();
     await editor.fill(text); await editor.press("Tab");
   }

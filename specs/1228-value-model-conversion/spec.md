@@ -363,7 +363,8 @@ sensitive and redacted where the variable is.
   listing the lossy paths; it is never a refusal. A lossy number passed to a host function MUST log a warning naming
   the function and the argument path, and not refuse the call. The host function argument conversion is S-1's; S-8
   supplies the loss information it checks.
-- **FR-016**: Elsa MUST never turn a number into a string by itself.
+- **FR-016**: The JavaScript value bridge MUST NOT turn a number into a string to avoid a precision-loss refusal.
+  This does not prohibit the separately publication-pinned Double-to-String binding conversion of spec 1227.
 
 **Kinds (*Kinds*)**
 

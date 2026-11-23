@@ -56,15 +56,24 @@ export function parseWorkflowRunInputs(
   const contributionFailureEntries: [string, WorkflowRunInputContributionFailure][] = [];
 
   for (const input of inputs) {
-    const draft = Object.prototype.hasOwnProperty.call(drafts, input.referenceKey)
+    const hasDraft = Object.prototype.hasOwnProperty.call(drafts, input.referenceKey);
+    const draft = hasDraft
       ? drafts[input.referenceKey]
       : "";
-    if (draft === "") {
-      if (input.isRequired) errorEntries.push([input.referenceKey, `${input.displayName || input.name} is required.`]);
+    if (!hasDraft) {
+      if (input.isRequired && !hasUsableWorkflowInputDefault(input)) {
+        errorEntries.push([input.referenceKey, `${input.displayName || input.name} is required.`]);
+      }
       continue;
     }
 
     const editor = fallbackInputKeys.has(input.referenceKey) ? undefined : resolveWorkflowRunInputEditor(editors, input);
+    if (draft === "" && !editor && !isEmptyStringInput(input)) {
+      if (input.isRequired && !hasUsableWorkflowInputDefault(input)) {
+        errorEntries.push([input.referenceKey, `${input.displayName || input.name} is required.`]);
+      }
+      continue;
+    }
     const context = { input, draft };
     const parsed: WorkflowRunInputDraftParseResult = editor
       ? parseContributionDraft(editor, context)
@@ -76,10 +85,11 @@ export function parseWorkflowRunInputs(
       if (parsed.contributionFailure) contributionFailureEntries.push([input.referenceKey, parsed.contributionFailure]);
       continue;
     }
-    if (input.isRequired && parsed.value === null) {
-      errorEntries.push([input.referenceKey, `${input.displayName || input.name} is required.`]);
-    }
-    else {
+    if (parsed.value === null && (input.isRequired || !input.isNullable)) {
+      errorEntries.push([input.referenceKey, input.isRequired
+        ? `${input.displayName || input.name} is required.`
+        : `${input.displayName || input.name} cannot be null.`]);
+    } else {
       const alias = canonicalAlias(input.type.alias);
       try {
         const value = alias === "datetime" || alias === "datetimeoffset"
@@ -90,6 +100,7 @@ export function parseWorkflowRunInputs(
         valueEntries.push([input.name, value]);
       } catch (error) { errorEntries.push([input.referenceKey, error instanceof Error ? error.message : "Enter a valid date and time."]); }
     }
+
   }
 
   return {
@@ -99,6 +110,18 @@ export function parseWorkflowRunInputs(
       ? { contributionFailures: Object.fromEntries(contributionFailureEntries) }
       : {})
   };
+}
+
+function hasUsableWorkflowInputDefault(input: WorkflowInput): boolean {
+  if (!Object.prototype.hasOwnProperty.call(input, "defaultValue") || input.defaultValue === undefined) return false;
+  if (input.defaultSyntax && input.defaultSyntax !== "Literal") return false;
+  return input.defaultValue !== null || (!input.isRequired && input.isNullable);
+}
+
+function isEmptyStringInput(input: WorkflowInput): boolean {
+  if (input.type.collectionKind !== "Single") return false;
+  const alias = canonicalAlias(input.type.alias);
+  return alias === "string" || alias === "timespan" || alias === "uri";
 }
 
 interface WorkflowRunInputDraftParseResult {

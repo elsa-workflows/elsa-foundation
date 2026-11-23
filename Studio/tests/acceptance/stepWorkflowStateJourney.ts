@@ -8,6 +8,7 @@ type Step = { activityExecutionId: string; authoredActivityId: string };
 /** Real native and Elsa 3 bodies through the source composition. No intercepted API or synthetic runtime records. */
 export async function stepWorkflowStateJourney(page: Page, info: TestInfo, capture: Capture, cleanup: (work: () => Promise<void>) => void) {
   const base = process.env.ELSA_WORKBENCH_URL!;
+  const signedInUrl = new URL(page.url());
   const stamp = `${info.project.name}-${crypto.randomUUID().slice(0, 8)}`;
   async function api<T>(path: string, method = "GET", data?: unknown): Promise<T> {
     const response = await page.request.fetch(`${base}${path}`, { method, data, timeout: 30_000 });
@@ -43,10 +44,16 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
     return result;
   }
   async function author(definitionId: string, nodeId = "body") {
-    await page.goto(`/workflows/definitions?definition=${definitionId}&backend=legacy`);
+    const editorUrl = new URL(signedInUrl);
+    editorUrl.pathname = "/workflows/definitions";
+    editorUrl.searchParams.set("definition", definitionId);
+    await page.goto(editorUrl.toString());
     const node = page.locator(`.wf-sequence-step[data-id="${nodeId}"], .react-flow__node[data-id="${nodeId}"]`).first();
     await expect(node).toBeAttached();
     await node.press("Enter");
+    const inspector = page.getByRole("complementary", { name: "Inspector panel", exact: true });
+    const expand = inspector.getByRole("button", { name: "Expand inspector panel", exact: true });
+    if (await expand.isVisible()) await expand.press("Enter");
   }
   const inspector = () => page.getByRole("complementary", { name: "Run details panel", exact: true });
   async function fullyVisibleText(locator: Locator) {
@@ -78,6 +85,8 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
     await page.goto(`/workflows/instances/${result.workflowExecutionId}?selected=${step.activityExecutionId}`);
     await inspector().getByRole("tab", { name: "Activity", exact: true }).click();
     await expect(inspector()).toContainText(expected);
+    await inspector().getByRole("tablist", { name: "Activity execution views", exact: true }).getByRole("tab", { name: "Data", exact: true }).press("Enter");
+    await expect(inspector().locator(".wf-activity-outcomes")).toHaveAttribute("data-state", /^(recorded|empty)$/);
     return { path, step, details: await api<{ instance: { correlationId: string | null; instanceName: string | null }; outputs: Record<string, unknown> }>(path) };
   }
   const nativeDefinition = await seed("Native state", native, [literal("Mode", "complete")]);
@@ -91,7 +100,7 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   const effect = () => page.getByRole("note").filter({ hasText: /May change: output Count/ });
   await expect(effect()).toBeVisible();
   await capture(page, info, "known-effects");
-  const row = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Script$/ }) });
+  const row = page.getByRole("group", { name: "Script property", exact: true });
   const editor = row.getByRole("textbox").first();
   async function edit(source: string) {
     const analysis = page.waitForResponse(response => response.request().method() === "POST" &&
@@ -119,13 +128,15 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   await expect(inspector()).toContainText("Ready for review");
   await expect(inspector()).toContainText("order-42");
   await expect(inspector().getByRole("region", { name: "Workflow outputs", exact: true })).toContainText("Count");
+  await inspector().getByText("Correlation", { exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "current-state");
   await inspector().getByRole("region", { name: "Workflow outputs", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "current-outputs");
-  await inspector().getByRole("tab", { name: "Timeline", exact: true }).press("Enter");
-  await expect(inspector()).toContainText("Completion accepted");
-  await fullyVisibleText(inspector().getByText(/^Committed changes:/).first());
-  await fullyVisibleText(inspector().getByText(/^Completion accepted/).first());
+  await page.getByRole("navigation", { name: "Run workspace views", exact: true }).getByRole("button", { name: "Timeline", exact: true }).press("Enter");
+  const timeline = page.getByRole("region", { name: "Run timeline", exact: true });
+  await expect(timeline).toContainText("Completion accepted");
+  await fullyVisibleText(timeline.getByText(/^Committed changes:/).first());
+  await fullyVisibleText(timeline.getByText(/^Completion accepted/).first());
   await capture(page, info, "accepted-timeline");
   const clearDefinition = await seed("Cleared state", native, [literal("Mode", "clear")], { activityVersionId: native, inputs: [literal("Mode", "complete")] });
   const cleared = await run(clearDefinition.version.id, "Completed");
@@ -133,9 +144,10 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   await inspector().getByRole("tab", { name: "Details", exact: true }).press("Enter");
   await expect(inspector().locator("dl")).toContainText("Instance nameNone");
   await expect(inspector().locator("dl")).toContainText("CorrelationNone");
+  await inspector().getByText("Correlation", { exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "cleared-state");
 
-  const source = JSON.parse(readFileSync(new URL("../../../Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/script-workflow-state.json", import.meta.url), "utf8"));
+  const source = JSON.parse(readFileSync(new URL("../../../extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/script-workflow-state.json", import.meta.url), "utf8"));
   source.id = `state-version-${stamp}`; source.definitionId = `state-${stamp}`; source.name = `Imported state ${stamp}`;
   // Nested same-body getters exercise the repaired overlapping edit ordering through actual import and execution.
   source.root.activities[0].script.expression.value = source.root.activities[0].script.expression.value.replace("return [", "setCorrelationId(getCorrelationId()); setWorkflowInstanceName(getWorkflowInstanceName()); return [");
@@ -161,7 +173,9 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   const importedRun = await run(imported.workflowVersionId, "Completed", "seed");
   expect(importedRun.details.instance).toMatchObject({ correlationId: "new", instanceName: "Ready" });
   expect(importedRun.details.outputs).toHaveProperty("Total");
-  await expect(inspector().getByRole("region", { name: "Committed workflow changes", exact: true })).toContainText("Completion accepted");
+  const importedCommitted = inspector().getByRole("region", { name: "Committed workflow changes", exact: true });
+  await expect(importedCommitted).toContainText("Completion accepted");
+  await fullyVisibleText(importedCommitted.getByText(/^Completion accepted/).first());
   await capture(page, info, "imported-completed");
 
   for (const [mode, status, name] of [["fault", "Faulted", "faulted"], ["cancel", "Cancelled", "cancelled"]]) {
@@ -172,6 +186,12 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
     await expect(inspector().getByRole("region", { name: "Committed workflow changes", exact: true })).toHaveCount(0);
     await fullyVisibleText(inspector().getByRole("heading", { level: 4 }).first());
     await capture(page, info, name);
+    if (mode === "fault") {
+      const faultIncident = inspector().getByRole("region", { name: "Activity incidents", exact: true })
+        .getByText("Review failed", { exact: true });
+      await fullyVisibleText(faultIncident);
+      await capture(page, info, "faulted-incidents");
+    }
   }
   const secret = "s13-protected-sentinel";
   const protectedDefinition = await seed("Protected state", protectedNative, [literal("Secret", secret)]);
@@ -180,6 +200,11 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   expect(protectedRun.details.outputs).not.toHaveProperty("ProtectedAttempt");
   await expect(inspector()).not.toContainText(secret);
   await expect(inspector().getByRole("region", { name: "Committed workflow changes", exact: true })).toHaveCount(0);
+  await fullyVisibleText(inspector().getByRole("heading", { level: 4 }).first());
+  await capture(page, info, "protected-state");
+  const protectedIncident = inspector().getByRole("region", { name: "Activity incidents", exact: true })
+    .getByText("VF-STATE-003: Protected sources cannot flow into public identity fields or output names.", { exact: true });
+  await fullyVisibleText(protectedIncident);
   await capture(page, info, "protected");
   await info.attach("state-contract.json", { body: JSON.stringify({ native: completed, imported: importedRun, protected: protectedRun }, null, 2), contentType: "application/json" });
 }

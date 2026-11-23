@@ -1,3 +1,4 @@
+import { StudioButton } from "../ui/forms/Button";
 import React, { Suspense } from "react";
 import { AlertTriangle, Check, Loader2, Play, X } from "lucide-react";
 import { presentsResourceModule, type StudioWeaverResultControlContribution, type StudioWeaverResultRendererContribution, type StudioWeaverResultRendererProps } from "../../sdk";
@@ -94,22 +95,22 @@ export function WeaverProposalReview({
               <div className="weaver-proposal-resolve" role="group" aria-label="Resolve uncertain change">
                 <small>Weaver cannot confirm whether this change was applied, and it will not run it again. Check the resource, then say what you found.</small>
                 {(Object.keys(RESOLUTION_LABELS) as WeaverOwnerResolutionClaim[]).map(claim => (
-                  <button key={claim} type="button" disabled={disabled || pending || resolveDisabled} onClick={() => onResolve!(proposal, claim)}>{RESOLUTION_LABELS[claim]}</button>
+                  <StudioButton key={claim} type="button" disabled={disabled || pending || resolveDisabled} onClick={() => onResolve!(proposal, claim)}>{RESOLUTION_LABELS[claim]}</StudioButton>
                 ))}
               </div>
             ) : null}
             {!reviewable ? <small>Proposal details are still loading. Approval is available after review details arrive.</small> : null}
             <footer>
-              {proposal.confirmationPending && onRetryConfirmation ? <button type="button" disabled={controlsDisabled} onClick={() => onRetryConfirmation(proposal)}>Retry confirmation</button> : null}
-              <button type="button" disabled={controlsDisabled || proposal.status !== "awaiting-approval" || !reviewable} onClick={() => onApprove(proposal)}>
+              {proposal.confirmationPending && onRetryConfirmation ? <StudioButton type="button" disabled={controlsDisabled} onClick={() => onRetryConfirmation(proposal)}>Retry confirmation</StudioButton> : null}
+              <StudioButton type="button" disabled={controlsDisabled || proposal.status !== "awaiting-approval" || !reviewable} onClick={() => onApprove(proposal)}>
                 <Check size={14} /> Approve
-              </button>
-              <button type="button" disabled={controlsDisabled || proposal.status !== "awaiting-approval" || !reviewable} onClick={() => onDeny(proposal)}>
+              </StudioButton>
+              <StudioButton type="button" disabled={controlsDisabled || proposal.status !== "awaiting-approval" || !reviewable} onClick={() => onDeny(proposal)}>
                 <X size={14} /> Deny
-              </button>
-              <button type="button" disabled={controlsDisabled || proposal.status !== "approved" || !reviewable} onClick={() => onExecute(proposal)}>
+              </StudioButton>
+              <StudioButton type="button" disabled={controlsDisabled || proposal.status !== "approved" || !reviewable} onClick={() => onExecute(proposal)}>
                 <Play size={14} /> Apply
-              </button>
+              </StudioButton>
             </footer>
           </article>
         );

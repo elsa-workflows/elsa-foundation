@@ -283,6 +283,30 @@ describe("workflow run inputs", () => {
     });
   });
 
+  it("leaves omitted inputs for server defaults and preserves explicit zero, false, and empty-string overrides", () => {
+    const inputs = [
+      workflowInput("count", "Count", "Int32", true, "Single", { defaultValue: 10, defaultSyntax: "Literal" }),
+      workflowInput("enabled", "Enabled", "Boolean", true, "Single", { defaultValue: true, defaultSyntax: "Literal" }),
+      workflowInput("label", "Label", "String", false, "Single", { defaultValue: "default", defaultSyntax: "Literal" })
+    ];
+
+    expect(parseWorkflowRunInputs(inputs, {})).toEqual({ values: {}, errors: {} });
+    expect(parseWorkflowRunInputs(inputs, { count: "0", enabled: "false", label: "" })).toEqual({
+      values: { Count: 0, Enabled: false, Label: "" },
+      errors: {}
+    });
+  });
+
+  it("accepts explicit null only for nullable optional inputs", () => {
+    const nullable = workflowInput("nullable", "Nullable", "JsonElement", false, "Single", { isNullable: true });
+    const nonNullable = workflowInput("non-nullable", "NonNullable", "JsonElement", false);
+    const required = workflowInput("required", "Required", "JsonElement", true, "Single", { isNullable: true });
+
+    expect(parseWorkflowRunInputs([nullable], { nullable: "null" })).toEqual({ values: { Nullable: null }, errors: {} });
+    expect(parseWorkflowRunInputs([nonNullable], { "non-nullable": "null" }).errors).toEqual({ "non-nullable": "NonNullable cannot be null." });
+    expect(parseWorkflowRunInputs([required], { required: "null" }).errors).toEqual({ required: "Required is required." });
+  });
+
   it("validates booleans, declared complex values, and every collection kind", () => {
     const inputs = [
       workflowInput("enabled", "Enabled", "Boolean", true),
@@ -345,7 +369,7 @@ describe("workflow run inputs", () => {
     expect(parseWorkflowRunInputs([input], { when: "2026-02-30T12:30" }).errors.when).toContain("calendar");
   });
 
-  it("omits blank optional values and reports declared scalar type errors", () => {
+  it("preserves explicit blank optional strings and reports declared scalar type errors", () => {
     const inputs = [
       workflowInput("optional", "Optional", "String", false),
       workflowInput("whole", "Whole", "Int32", false),
@@ -359,7 +383,7 @@ describe("workflow run inputs", () => {
       when: "yesterday-ish",
       id: "not-a-guid"
     })).toEqual({
-      values: {},
+      values: { Optional: "" },
       errors: {
         whole: "Enter a whole number.",
         when: "Enter a valid date and time.",
@@ -587,6 +611,52 @@ describe("workflow run inputs", () => {
     expect(onSubmit).toHaveBeenCalledWith({ Greeting: "Hello", Attempts: 3 });
   });
 
+  it("explains server defaults and allows an explicit empty-string override", () => {
+    const onSubmit = vi.fn();
+    const container = render(
+      <WorkflowRunInputDialog
+        inputs={[workflowInput("greeting", "Greeting", "String", true, "Single", { defaultValue: "hello", defaultSyntax: "Literal" })]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />
+    );
+
+    expect(container.textContent).toContain("Uses default if omitted.");
+    expect(container.querySelector("input[aria-label='Greeting']")?.getAttribute("aria-required")).toBe("false");
+    flushSync(() => button(container, "Use empty string").click());
+    submit(container);
+
+    expect(onSubmit).toHaveBeenCalledWith({ Greeting: "" });
+  });
+
+  it("restores omission after overriding a default, including with an empty string", () => {
+    const onSubmit = vi.fn();
+    const container = render(
+      <WorkflowRunInputDialog
+        inputs={[workflowInput("greeting", "Greeting", "String", true, "Single", { defaultValue: "hello", defaultSyntax: "Literal" })]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />
+    );
+
+    fill(container.querySelector("input[aria-label='Greeting']"), "Override");
+    submit(container);
+    expect(onSubmit).toHaveBeenLastCalledWith({ Greeting: "Override" });
+
+    flushSync(() => button(container, "Use default").click());
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Greeting']")!.value).toBe("");
+    submit(container);
+    expect(onSubmit).toHaveBeenLastCalledWith({});
+
+    flushSync(() => button(container, "Use empty string").click());
+    submit(container);
+    expect(onSubmit).toHaveBeenLastCalledWith({ Greeting: "" });
+
+    flushSync(() => button(container, "Use default").click());
+    submit(container);
+    expect(onSubmit).toHaveBeenLastCalledWith({});
+  });
+
   it("cancels without submitting input values", () => {
     const onSubmit = vi.fn();
     const onCancel = vi.fn();
@@ -644,7 +714,7 @@ describe("workflow run inputs", () => {
     expect(document.activeElement).toBe(first);
     submitButton.focus();
     submitButton.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
-    expect(document.activeElement).toBe(first);
+    expect(document.activeElement).toBe(container.querySelector('[aria-label="Close dialog"]'));
     first.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(onCancel).toHaveBeenCalledOnce();
   });
@@ -672,7 +742,7 @@ function render(ui: React.ReactElement) {
   const root = createRoot(container);
   flushSync(() => root.render(ui));
   active = { root, container };
-  return container;
+  return document.body;
 }
 
 function fill(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null, value: string) {
@@ -701,7 +771,8 @@ function workflowInput(
   name: string,
   alias: string,
   isRequired: boolean,
-  collectionKind: WorkflowInput["type"]["collectionKind"] = "Single"
+  collectionKind: WorkflowInput["type"]["collectionKind"] = "Single",
+  options: Partial<Pick<WorkflowInput, "defaultValue" | "defaultSyntax" | "isNullable">> = {}
 ): WorkflowInput {
   return {
     referenceKey,
@@ -713,7 +784,8 @@ function workflowInput(
     storageDriverType: null,
     type: { alias, collectionKind },
     isRequired,
-    isNullable: false
+    isNullable: false,
+    ...options
   };
 }
 

@@ -243,6 +243,12 @@ export interface StartActivityDraftTestRunRequest {
   correlationId?: string | null;
 }
 
+export interface StartActivityVersionTestRunRequest {
+  idempotencyKey: string;
+  inputs?: Record<string, ActivityDraftTestRunInput>;
+  correlationId?: string | null;
+}
+
 export interface ActivityDraftTestRunFailure {
   kind: "Validation" | "RuntimeDispatch" | string;
   code: string;
@@ -272,6 +278,7 @@ export interface ActivityDraftTestRunCancellation {
 export interface ActivityDraftTestRunView {
   testRunId: string;
   draftId: string;
+  sourceVersionId?: string | null;
   draftRevision: number;
   artifactId?: string | null;
   sourceReferenceId?: string | null;
@@ -442,6 +449,21 @@ export async function startActivityDraftTestRun(
     createWorkflowExecutionRequestInit(request));
 }
 
+export async function startActivityVersionTestRun(
+  context: StudioEndpointContext,
+  versionId: string,
+  request: StartActivityVersionTestRunRequest
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "activity-version-test-run-dispatch",
+    { versionId });
+  return context.http.requestJson<ActivityDraftTestRunView>(
+    path,
+    createWorkflowExecutionRequestInit(request));
+}
+
 export async function getActivityDraftTestRun(
   context: StudioEndpointContext,
   testRunId: string
@@ -464,6 +486,19 @@ export async function getActivityDraftTestRunByIdempotencyKey(
     capabilityIds.publishing,
     "activity-draft-test-run-idempotency-status",
     { draftId, idempotencyKey });
+  return context.http.getJson<ActivityDraftTestRunView>(path);
+}
+
+export async function getActivityVersionTestRunByIdempotencyKey(
+  context: StudioEndpointContext,
+  versionId: string,
+  idempotencyKey: string
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "activity-version-test-run-idempotency-status",
+    { versionId, idempotencyKey });
   return context.http.getJson<ActivityDraftTestRunView>(path);
 }
 
@@ -538,11 +573,12 @@ async function joinPublicationRecord(context: StudioEndpointContext, slot: Workf
 
 /** Which slot lifecycle commands the host advertises; Studio offers only those, never a guessed route. */
 export async function getPublicationSlotLifecycleSupport(context: StudioEndpointContext) {
-  const [unpublish, restore] = await Promise.all([
+  const [unpublish, unpublishReviewed, restore] = await Promise.all([
     hasCapabilityLink(context, capabilityIds.publishing, "publication-slot-unpublish"),
+    hasCapabilityLink(context, capabilityIds.publishing, "publication-slot-unpublish-reviewed"),
     hasCapabilityLink(context, capabilityIds.publishing, "publication-slot-restore")
   ]);
-  return { unpublish, restore };
+  return { unpublish, unpublishReviewed, restore };
 }
 
 // The lifecycle responses carry Publishing's own slot shape; Studio reloads the joined slot view instead.
@@ -553,6 +589,15 @@ export async function unpublishSlot(context: StudioEndpointContext, definitionId
     "publication-slot-unpublish",
     { definitionId, slotName });
   return context.http.deleteJson<unknown>(path);
+}
+
+export async function unpublishReviewedSlot(context: StudioEndpointContext, definitionId: string, slotName: string, expectedRevision: number) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "publication-slot-unpublish-reviewed",
+    { definitionId, slotName, expectedRevision: String(expectedRevision) });
+  return context.http.requestJson<unknown>(path, { method: "POST" });
 }
 
 export async function restorePublicationSlot(context: StudioEndpointContext, definitionId: string, slotName: string) {
