@@ -514,6 +514,13 @@
       "kernel.runtime": {
         "type": "Project"
       },
+      "kernel.runtime.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Foundation.Contracts": "[1.0.0, )",
+          "Kernel.Runtime": "[1.0.0, )"
+        }
+      },
       "kernel.workflowactor": {
         "type": "Project",
         "dependencies": {
