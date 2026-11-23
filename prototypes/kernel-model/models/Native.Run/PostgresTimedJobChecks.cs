@@ -1,6 +1,8 @@
 using Kernel.EntityFramework;
 using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Kernel.Native.Run;
 
@@ -23,6 +25,15 @@ internal static class PostgresTimedJobChecks
         var store = new EfStore(open, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         var stop = timeout.Token;
+        await using (var db = open())
+        {
+            var database = db.GetService<IRelationalDatabaseCreator>();
+            if (await database.ExistsAsync(stop) && await database.HasTablesAsync(stop))
+            {
+                Console.Error.WriteLine("Use a fresh dedicated PostgreSQL database for the timed job Worker check.");
+                return 2;
+            }
+        }
         await store.CreateAsync(1);
         var firstModel = new Probe();
         var retryModel = new Probe();
@@ -177,10 +188,11 @@ internal static class PostgresTimedJobChecks
         async Task<Physical> Snapshot()
         {
             await using var db = open();
-            return new(await db.Instances.AsNoTracking().SingleAsync(row => row.Id == Actor.Id, stop),
-                await db.Messages.AsNoTracking().Where(row => row.Target == Actor.Id &&
-                    (row.Kind == Kinds.Job || row.Kind == Kinds.JobDeadline || row.Kind == Kinds.JobFinished)).OrderBy(row => row.Seq).ToArrayAsync(stop),
-                await db.Journal.AsNoTracking().Where(row => row.Instance == Actor.Id).OrderBy(row => row.Position).ToArrayAsync(stop));
+            return new(await db.Instances.AsNoTracking().SingleAsync(row => row.Id == Actor.Id && row.Partition == Actor.Partition, stop),
+                await db.Messages.AsNoTracking().Where(row => row.Target == Actor.Id && row.Partition == Actor.Partition)
+                    .OrderBy(row => row.Seq).ToArrayAsync(stop),
+                await db.Journal.AsNoTracking().Where(row => row.Instance == Actor.Id && row.Partition == Actor.Partition)
+                    .OrderBy(row => row.Position).ToArrayAsync(stop));
         }
 
         async Task Pass(Worker worker)

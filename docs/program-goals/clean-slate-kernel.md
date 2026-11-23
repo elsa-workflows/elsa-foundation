@@ -524,8 +524,10 @@ SQLite, PostgreSQL, SQL Server and MySQL support the counted clear on EF and own
 after a transport failure before or after commit. Owned SQL also checks a group across two partition epochs.
 The [PostgreSQL timed job Worker check](../../prototypes/kernel-model/README.md#timed-jobs-on-the-postgresql-worker)
 covers the same-actor race and counted takeover on the legacy relational path with both owned fence modes.
-Public generated-root deadline settlement, Worker inline promotion and the remaining provider runs retain
-their K4 qualification. MongoDB-specific checks are deferred.
+Public generated-root deadline settlement, Worker inline promotion and the remaining provider runs still
+need K4 qualification. The [current-owner trial schedule](../../prototypes/kernel-model/sim/ContractJobTrialChecks.cs)
+also needs physical evidence. A timed job settles as a timeout while its callback is still unwinding, and
+trial isolation keeps a competing command pending until the callback exits. MongoDB-specific checks are deferred.
 
 ### K11 foundation contract cases
 
