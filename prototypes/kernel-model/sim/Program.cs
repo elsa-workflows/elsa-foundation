@@ -245,6 +245,12 @@ if (args.Contains("--foundation-value-check"))
     await FoundationValueChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--workflow-run-history-check"))
+{
+    var failed = false;
+    await WorkflowRunHistoryChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--retention-pass-check"))
 {
     var failed = false;

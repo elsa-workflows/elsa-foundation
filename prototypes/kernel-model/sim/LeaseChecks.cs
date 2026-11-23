@@ -13,6 +13,7 @@ public static class LeaseChecks
         await FoundationReferenceChecks.Run(Check);
         await FoundationChildReferences.Run(Check);
         await ActorListChecks.Run(Check);
+        await WorkflowRunHistoryChecks.Run(Check);
         await ActorJournalChecks.Run(Check);
         await ActorInboxChecks.Run(Check);
         await ActorInboxChecks.PublicHold(Check);
