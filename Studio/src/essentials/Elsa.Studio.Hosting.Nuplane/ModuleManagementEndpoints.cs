@@ -145,7 +145,7 @@ internal static class ModuleManagementEndpoints
         {
             if (IndexOf(feeds, feed.Name) >= 0) return Results.Json(new ModuleManagementErrorResponse($"Feed '{feed.Name}' already exists."), options: WireJson, statusCode: 409);
             feeds.Add(FeedJson(feed, feed.Name));
-            return Results.Json(new ModuleManagementConfigurationWriteResponse(true, "Feed added. Restart the host to activate registration changes."), options: WireJson);
+            return Results.Json(new ModuleManagementConfigurationWriteResponse(true, "Feed added. Restart the host to activate registration changes."), options: WireJson, statusCode: StatusCodes.Status200OK);
         });
     }
 
@@ -157,7 +157,7 @@ internal static class ModuleManagementEndpoints
             var index = IndexOf(feeds, name);
             if (index < 0) return Results.Json(new ModuleManagementErrorResponse($"Feed '{name}' was not found."), options: WireJson, statusCode: 404);
             feeds[index] = FeedJson(feed, name, feeds[index] as JsonObject);
-            return Results.Json(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate registration changes."), options: WireJson);
+            return Results.Json(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate registration changes."), options: WireJson, statusCode: StatusCodes.Status200OK);
         });
     }
 
@@ -167,7 +167,7 @@ internal static class ModuleManagementEndpoints
             var index = IndexOf(feeds, name);
             if (index < 0) return Results.Json(new ModuleManagementErrorResponse($"Feed '{name}' was not found."), options: WireJson, statusCode: 404);
             feeds.RemoveAt(index);
-            return Results.Json(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate registration changes."), options: WireJson);
+            return Results.Json(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate registration changes."), options: WireJson, statusCode: StatusCodes.Status200OK);
         });
 
     private static async Task<IResult> MutateFeedsAsync(ManagementConfigurationStore store, CancellationToken token, Func<JsonArray, IResult> mutate)
