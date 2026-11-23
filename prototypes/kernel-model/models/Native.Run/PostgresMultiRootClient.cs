@@ -12,11 +12,12 @@ internal static class PostgresMultiRootClient
 {
     internal const string Primary = "preview-a", Secondary = "preview-b";
 
-    internal static Func<KernelDb> Database(bool durable = false)
+    internal static Func<KernelDb> Database(bool durable = false, bool operators = false)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a dedicated PostgreSQL preview database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        if (operators) return () => KernelDb.ForPostgresRootOperators(options);
         return () => durable ? KernelDb.ForPostgresRootSelf(options) : new KernelDb(options);
     }
 
@@ -54,7 +55,7 @@ internal static class PostgresMultiRootClient
     internal static async Task<int> SecondaryAsync(string[] args)
     {
         var scope = FixedTenantScope.Bind(Secondary);
-        var open = Database(durable: args is ["missing-durable", _]);
+        var open = Database(durable: args is ["missing-durable", _], operators: args is ["operator-start"] or ["operator-resume", _]);
         var store = new EfStore(open, postgres: true);
         var ingress = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -64,6 +65,18 @@ internal static class PostgresMultiRootClient
         {
             case ["start"]:
                 Console.WriteLine((await Start(foundation, scope, "start", token)).Id);
+                break;
+            case ["operator-start"]:
+                Console.WriteLine((await Start(foundation, scope, "charlie", token)).Id);
+                break;
+            case ["operator-resume", var actorRef]:
+                var operatorApi = new PostgresPreviewFoundation(ingress, store,
+                    new(store, await ingress.OpenJournalCursorAsync(token), 64), WorkflowActor.WorkflowActor.ActorType,
+                    (request, kind) => ReferenceEquals(request, scope) && kind == Contract.Kinds.Resume);
+                var reply = await operatorApi.SendAsync(scope, new Contract.Target.Ref(new(actorRef)),
+                    PostgresRootOperatorChecks.SuspendId, Contract.Kinds.Resume, cancellationToken: token);
+                if (reply.Outcome != Contract.AdmissionOutcome.Accepted || reply.Actor?.Id != actorRef)
+                    throw new InvalidOperationException("The second tenant's Resume was not admitted against its actor.");
                 break;
             case ["start-receipt", var operation, var result] when Enum.TryParse<Contract.AdmissionOutcome>(result, out var required):
                 Console.WriteLine((await Start(foundation, scope, operation, token, required)).Id);
