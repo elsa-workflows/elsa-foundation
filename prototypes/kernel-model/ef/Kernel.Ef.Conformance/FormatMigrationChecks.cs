@@ -77,10 +77,10 @@ internal static class FormatMigrationChecks
         await SetNode(node =>
         {
             node.LeaseUntil = long.MaxValue;
-            node.ReadableMessageProtocol = "1,2";
+            node.ReadableMessageProtocol = "2,3";
             node.ReadableJournalCodec = "1,2";
         });
-        var newer = next with { MessageProtocol = 2 };
+        var newer = next with { MessageProtocol = 3 };
         Check(await store.AdvanceStoreFormatAsync(next, newer) && await ReadVersion() == newer,
             "a live node that advertises every target version can remain present");
 

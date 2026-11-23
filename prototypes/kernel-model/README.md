@@ -272,7 +272,7 @@ checks the same node and epoch still have a live renewed lease. After PostgreSQL
 acquires a later epoch after the stored deadline, resumes the journal bookmark, replays Ada's input and records
 Grace's approval. This exercises one fixed partition. K5 covers Cluster placement and balancing across partitions.
 
-For a Durable Flowchart handover, set `KERNEL_PREVIEW_POSTGRES` to a fresh database. Both runtime nodes and the public reader use the scoped continuation format (schema 2, message protocol 3, journal codec 1). Run:
+For a Durable Flowchart handover, set `KERNEL_PREVIEW_POSTGRES` to a fresh database. Both runtime nodes and the public reader use the scoped continuation format (schema 3, message protocol 3, journal codec 1). Run:
 
 ```sh
 dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-flowchart 1024
@@ -332,12 +332,12 @@ self inputs, and an unchanged journal on final replay. `KERNEL_PREVIEW_FENCE=che
 fence mode. This scoped path supports immediate sends back to the exact generated actor creation. Scheduled sends,
 cross-actor sends and other authored effects remain outside this preview.
 
-The Durable command creates a dedicated PostgreSQL database format (schema 2, message protocol 3,
-journal codec 1). Use an empty database for this profile. Fresh creation seeds that marker with the schema.
+The Durable command creates a dedicated PostgreSQL database format (schema 3, message protocol 3,
+journal codec 1). Fresh creation seeds that marker with the schema. Existing continuation databases
+use the [coordinated job-generation upgrade](#relational-job-generation-format) and retain their private inputs.
 Opening an ordinary database checks its existing marker before installing continuation tables or enabling sends.
-The ordinary PostgreSQL preview and other relational providers keep their existing format. Protocol 2 is reserved
-for the job-generation migration. A release migration from that format to 3, including physical data and
-the live-reader check, remains separate. An earlier reader refuses ownership on a continuation database.
+An ordinary protocol-2 database still requires a separate migration to adopt protocol 3. An earlier reader
+refuses ownership after the schema advance.
 
 The public preview writes ordinary text directly. A payload containing NUL or an isolated UTF-16 unit uses a binary
 field in the same message row. It occupies the original UTF-8 byte budget, with three bytes per isolated unit.
@@ -356,8 +356,9 @@ On a fresh dedicated PostgreSQL database set `KERNEL_PREVIEW_POSTGRES` and run:
 models/Native.Run/run-delay-preview.sh owned checked
 ```
 
-The Delay profile seeds schema 2, message protocol 4 and journal codec 1. Its issued deadlines require a fresh
-database. The immediate-continuation Flowchart stays on protocol 3 and the ordinary preview stays on protocol 1.
+The Delay profile seeds schema 3, message protocol 4 and journal codec 1. An existing schema-2 Delay store
+retains its deadlines through the [coordinated job-generation upgrade](#relational-job-generation-format).
+The immediate-continuation Flowchart stays on protocol 3 and the ordinary preview uses protocol 2.
 Pass `durable` as a third script argument to run the same Delay in Durable mode. The default is Balanced.
 
 The first Embedded process starts a public Native sequence with an eight-second Delay. It checks that the saved wait
@@ -672,3 +673,25 @@ counted and sent round trips do not.
 
 All monotonic clocks tick at the database's rate; wall clocks are skewed and jump. Bounded drift of the monotonic
 clock is not modelled. The simulation and the stress tests use their own short leases; the kernel's default is 10 s.
+
+
+### Relational job-generation format
+
+During the coordinated stop, call `EfStore.UpgradeJobGenerationFormatAsync` before reopening a schema-2
+database. The ordinary relational format advances from (2, 1, 1) to (3, 2, 1). The PostgreSQL immediate-continuation
+format advances from (2, 3, 1) to (3, 3, 1). The PostgreSQL Delay format advances from (2, 4, 1) to (3, 4, 1).
+Both keep their existing private inputs and refresh the private inbox view in the schema transaction.
+The three numbers identify schema, message protocol and journal codec.
+Checkpoints that predate the creation's next-job counter read as null. Existing messages read as generation zero.
+MySQL prepares the two additive columns on a separate connection while the migration holds the version marker.
+An interrupted preparation can be retried. Reopening requires a reader for the resulting three-part format.
+
+To check a real PostgreSQL predecessor, build its Native runner and this checkout's Native and EF conformance
+runners in Release. Run `bash ef/Kernel.Ef.Conformance/check-generation-profiles.sh /absolute/path/to/old/Kernel.Native.Run.dll`
+from this prototype. The script uses a disposable PostgreSQL 17 container and three fresh databases. It starts each
+workflow with the old executable and completes the same wait or pending private input after the schema upgrade.
+
+Run `job-generation-format` with the EF conformance executable to exercise the
+migration and cold field reads. The legacy writer still refuses qualified Foundation
+job turns. K4's Worker, Park, current-generation result and job-entry cases require
+the qualified relational writer.
