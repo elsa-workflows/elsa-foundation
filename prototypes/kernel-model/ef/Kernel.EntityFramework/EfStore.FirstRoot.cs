@@ -124,7 +124,7 @@ public sealed partial class EfStore
     }
 
     private static (string? State, string Header) EncodeRootContent(string model, string definition, string? state,
-        int stateVersion, string typeData, IReadOnlyDictionary<string, string> labels, string journal)
+        int stateVersion, string typeData, IReadOnlyDictionary<string, string> labels, string? journal)
     {
         if (stateVersion < 1 || !FoundationMetadataLimits.FitsContent(typeData, FoundationMetadataLimits.TypeDataBytes))
             throw new ArgumentException("Invalid qualified root checkpoint header.");
@@ -137,9 +137,12 @@ public sealed partial class EfStore
                 throw new ArgumentException("A root checkpoint accepts four ordinally distinct labels of at most 1,024 UTF-8 bytes per key and value.", nameof(labels));
         }
 
-        using var entries = JsonDocument.Parse(journal);
-        if (entries.RootElement.ValueKind != JsonValueKind.Array)
-            throw new ArgumentException("Qualified root checkpoint journal entries must form an array.", nameof(journal));
+        if (journal is not null)
+        {
+            using var entries = JsonDocument.Parse(journal);
+            if (entries.RootElement.ValueKind != JsonValueKind.Array)
+                throw new ArgumentException("Qualified root checkpoint journal entries must form an array.", nameof(journal));
+        }
 
         var escaped = state is not null && (state.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(state));
         var storedState = escaped ? DurableKeyJson.Write(state) : state;

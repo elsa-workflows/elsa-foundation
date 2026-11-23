@@ -127,6 +127,25 @@ internal static class PostgresPublicPreview
             Check((await foundation.TailAsync(scope, actor, bookmark, stop)).Items.Count == 0, "replay added no journal entries");
             if (phase == "terminal")
             {
+                foreach (var invalidKind in new[] { new string('x', 257), "input\ud800" })
+                {
+                    var rejected = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "invalid-kind", invalidKind,
+                        cancellationToken: stop);
+                    Check(rejected is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null, Reason: null },
+                        "invalid ordinary kind metadata on the live root returned a generic refusal");
+                }
+                var normalStart = new Contract.StartSpec(PublicActor.ActorType, "definition");
+                foreach (var (operation, spec) in new[]
+                {
+                    ("~reserved", normalStart), ("extra-data", normalStart with { TypeData = new string('x', 16 * 1024 + 1) }),
+                    ("expanded-start", normalStart with { Input = new string('\0', 3 * 1024 * 1024) })
+                })
+                {
+                    var rejected = await foundation.SendAsync(scope, new Contract.Target.Start(spec), operation, Contract.Kinds.Start,
+                        cancellationToken: stop);
+                    Check(rejected is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null, Reason: null },
+                        "invalid metadata or oversized storage framing on a supported start returned a generic refusal");
+                }
                 var overflow = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "oversized", "notice",
                     new string('\0', 3 * 1024 * 1024), cancellationToken: stop);
                 var missing = await foundation.SendAsync(new Contract.BoundScope("preview-other"), new Contract.Target.Ref(actor),

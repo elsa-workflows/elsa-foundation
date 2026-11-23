@@ -71,6 +71,13 @@ The default receipt estimates round trips by adding EF commands and explicit tra
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 
+On a fresh PostgreSQL database, `pg-root-history <owned|ef> <checked|in-batch>` on the same runner
+exercises two ordinary turns with no journal entries. The Minimal workflow saves its first approval. The Full
+workflow consumes an unmatched input admitted while its scheduled start was pending. The owner offers the
+creator at its deadline and releases the input after the first checkpoint. Each workflow reaches revisions
+1, 2 and 3. Its journal has two contiguous positions for revisions 1 and 3. The public tail resumes from
+the start bookmark and returns the recorded entries in revision 3.
+
 To measure TCP turns as well, use a dedicated loopback database with `Host=127.0.0.1`, its published port and
 `SSL Mode=Disable` in `KERNEL_PREVIEW_POSTGRES`. The meter disables optional GSS encryption for its connection
 and refuses `GSS Encryption Mode=Require`.
