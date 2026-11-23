@@ -27,11 +27,11 @@ internal sealed class PostgresNativeRootOwner
     internal static DurableHost PrepareNode(EfStore store, string node, int partitions, WorkflowRegistry registry, WorkerOptions options)
     {
         var roots = store.BindWorkerNode();
-        return DurableHost.ForNode(node, store, Adapter(roots, registry), partitions, options);
+        return DurableHost.ForNode(node, store, Adapter(store, roots, registry), partitions, options);
     }
 
-    private static ActorAdapter Adapter(EfStore.WorkerRoots roots, WorkflowRegistry registry) =>
-        new(new Headers(roots), new PublicActor([new NativeExecutionModel(registry)]));
+    private static ActorAdapter Adapter(EfStore store, EfStore.WorkerRoots roots, WorkflowRegistry registry) =>
+        new(new Headers(roots), new PublicActor([new NativeExecutionModel(registry)]), store.RootSelfIssuer);
 
     internal static async Task<PostgresNativeRootOwner> PreparePartitionAsync(EfStore store, string node, int partition,
         WorkflowRegistry registry, int pollLimit, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn = null)
@@ -44,7 +44,7 @@ internal sealed class PostgresNativeRootOwner
     private static async Task<PostgresNativeRootOwner> PrepareAsync(EfStore store, string node, EfStore.WorkerRoots root,
         WorkflowRegistry registry, int pollLimit, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn, int partitions)
     {
-        var adapter = Adapter(root, registry);
+        var adapter = Adapter(store, root, registry);
         var worker = new Worker(node, root.Partition, store, adapter, new WorkerOptions { PollLimit = pollLimit, OnTurn = onTurn, Partitions = partitions });
         var host = new DurableHost([worker]);
         var prepared = new PostgresNativeRootOwner(host, root.Partition);

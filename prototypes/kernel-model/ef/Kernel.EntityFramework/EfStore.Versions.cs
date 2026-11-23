@@ -27,6 +27,9 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat Current { get; } = new(StoreVersionEntity.StoreSchemaVersion,
         StoreVersionEntity.MessageProtocolVersion, StoreVersionEntity.JournalCodecVersion);
 
+    // Protocol 2 is allocated to the independent job-generation migration.
+    internal static StoreFormat RootSelf => Current with { MessageProtocol = 3 };
+
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
 }
@@ -40,12 +43,13 @@ internal static class NodeAdvertisement
     internal const string Update = "\"ReadableStoreSchema\" = {1}, \"ReadableMessageProtocol\" = {2}, \"ReadableJournalCodec\" = {3}";
 
     private static readonly string Schema = StoreVersionEntity.StoreSchemaVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    private static readonly string Protocol = StoreVersionEntity.MessageProtocolVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private static readonly string Codec = StoreVersionEntity.JournalCodecVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    internal static object[] Arguments(string node, long? lease = null) => lease is { } ms
-        ? [node, Schema, Protocol, Codec, ms]
-        : [node, Schema, Protocol, Codec];
+    internal static object[] Arguments(string node, long? lease = null, int messageProtocol = StoreVersionEntity.MessageProtocolVersion)
+    {
+        var protocol = messageProtocol.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return lease is { } ms ? [node, Schema, protocol, Codec, ms] : [node, Schema, protocol, Codec];
+    }
 }
 
 public sealed partial class EfStore
@@ -59,8 +63,8 @@ public sealed partial class EfStore
         FormatLock formatLock)
     {
         var stored = await ReadStoreFormatAsync(db, formatLock, cancellationToken);
-        if (stored != StoreFormat.Current)
-            throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {StoreFormat.Current}.");
+        if (stored != db.RequiredFormat)
+            throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {db.RequiredFormat}.");
     }
 
     private static async Task<StoreFormat> ReadStoreFormatAsync(KernelDb db, FormatLock formatLock, CancellationToken cancellationToken)

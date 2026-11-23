@@ -9,9 +9,13 @@ public sealed partial class EfStore
     // An Embedded owner serves generated roots in one partition, optionally restricted to an explicit set.
     internal sealed record WorkerRoot(string Tenant, string Reference, string Actor, int Partition, string Fingerprint)
     {
-        internal bool Owns(InboxKey key) => key.Match is null && (key.Scope == 0
-            ? key.Id == "root:" + Actor
-            : key.Scope == InboxKey.FoundationOccurrenceScope && key.Id.StartsWith(Reference + "/", StringComparison.Ordinal));
+        internal bool Owns(InboxKey key) => key.Match is null && key.Scope switch
+        {
+            0 => key.Id == "root:" + Actor,
+            -1 => SelfActor(key) == Actor,
+            InboxKey.FoundationOccurrenceScope => key.Id.StartsWith(Reference + "/", StringComparison.Ordinal),
+            _ => false
+        };
     }
 
     internal sealed class WorkerRoots(int? partition, IReadOnlyList<WorkerRoot> roots, bool discover = false)
@@ -35,6 +39,7 @@ public sealed partial class EfStore
     private static (string Name, bool Creator) InputBinding(InboxKey key)
     {
         if (key.Match is null && key.Scope == 0 && key.Id.StartsWith("root:", StringComparison.Ordinal)) return (key.Id[5..], true);
+        if (SelfActor(key) is { } self) return (self, true);
         var split = key.Id.IndexOf('/');
         if (key.Match is null && key.Scope == InboxKey.FoundationOccurrenceScope && split > 0) return (key.Id[..split], false);
         throw RootShape();
@@ -123,7 +128,7 @@ public sealed partial class EfStore
                     var ids = group.Select(key => key.Id).ToArray();
                     var count = await db.Database.ExecuteSqlInterpolatedAsync($"""
                         UPDATE "Messages" SET "Seen" = {Epoch}, "Trial" = CASE WHEN {trial} THEN {Epoch} ELSE "Trial" END
-                        WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {group.Key}
+                        WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {(group.Key == -1 ? RootSelfScope : group.Key)}
                             AND "Id" = ANY({ids}) AND "EventMatch" IS NULL AND NOT "Done"
                         """, cancellationToken);
                     if (count != ids.Length) return false;
@@ -133,7 +138,7 @@ public sealed partial class EfStore
         }
     }
 
-    private sealed record FinishedRootInputs(WorkerRoot Root, IReadOnlyList<InboxKey> Done) : QualifiedRootCheckpoint(0)
+    private sealed record FinishedRootInputs(WorkerRoot Root, IReadOnlyList<InboxKey> Keys, Func<string, string>? Issue) : QualifiedRootCheckpoint(0)
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -146,7 +151,7 @@ public sealed partial class EfStore
                     AND i."Status" = {(int)InstanceStatus.Finished} AND i."FoundationTerminalAt" IS NOT NULL
                     AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
                 """).ToListAsync(cancellationToken);
-            return terminal.Count == 1 && await SettleDirectInputsAsync(db, Root.Reference, new(Root.Actor, 1), Done, null, cancellationToken);
+            return terminal.Count == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys, null, Issue, cancellationToken);
         }
     }
 
@@ -178,6 +183,7 @@ public sealed partial class EfStore
             batch.Window is not null || batch.PublicationReservation is not null || batch.DueBacklog is not null ||
             batch.Turns.Select(t => t.Instance).Distinct().Count() != batch.Turns.Count) throw RootShape();
 
+        if (RootSelfIssuer is null && batch.Seen.Concat(batch.Trial).Any(key => key.Scope == -1)) throw RootShape();
         StoreBatchRules.RequireDistinct(fences);
         (CommitBatch Batch, RootCheckpoints Checkpoints)? prepared;
         try { prepared = await PrepareWorkerBatchAsync(roots, batch, cancellationToken); }
@@ -221,16 +227,27 @@ public sealed partial class EfStore
         return (batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions));
     }
 
+    private static bool InputsMatch(WorkerRoot root, TurnCommit turn) =>
+        turn.Done.All(k => k.Scope == InboxKey.FoundationOccurrenceScope && root.Owns(k)) &&
+        turn.Consumed.All(k => k.Scope == -1 && root.Owns(k));
+
+    private static bool SameInputs(IEnumerable<Message> inputs, IEnumerable<InboxKey> expected)
+    {
+        var keys = inputs.Select(m => m.InboxKey).ToArray();
+        return keys.Where(k => k.Scope == -1).SequenceEqual(expected.Where(k => k.Scope == -1)) &&
+            keys.Where(k => k.Scope == InboxKey.FoundationOccurrenceScope).SequenceEqual(expected.Where(k => k.Scope == InboxKey.FoundationOccurrenceScope));
+    }
+
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
         if (turn.Row is null)
         {
             var ended = new TurnCommit(root.Actor, null, null, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed,
                 turn.Unsubscribed, null, Held: turn.Held);
-            if (turn != ended || turn.Done.Count == 0 || turn.Consumed.Count != 0 || turn.Sent.Count != 0 ||
+            if (turn != ended || turn.Done.Count + turn.Consumed.Count == 0 || turn.Sent.Count != 0 ||
                 turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
-                !turn.Done.All(key => root.Owns(key) && key.Scope == InboxKey.FoundationOccurrenceScope)) throw RootShape();
-            return new(null, new FinishedRootInputs(root, turn.Done));
+                !InputsMatch(root, turn)) throw RootShape();
+            return new(null, new FinishedRootInputs(root, [.. turn.Done, .. turn.Consumed], RootSelfIssuer));
         }
         var row = turn.Row;
         if (row.Id != root.Actor ||
@@ -238,7 +255,7 @@ public sealed partial class EfStore
             row.Status is not (InstanceStatus.Running or InstanceStatus.Finished) ||
             row.FoundationDispatchHeader is not { } header || header.Tenant != root.Tenant || header.Reference != root.Reference ||
             turn.Unsubscribe != (row.Status == InstanceStatus.Finished) ||
-            turn.Sent.Count != 0 || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 }) throw RootShape();
+            turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 }) throw RootShape();
 
         // Record equality checks the full shape, including extension fields. Adding a new durable effect
         // fails closed here until the qualified SQL writer can represent it.
@@ -252,6 +269,9 @@ public sealed partial class EfStore
         if (change is not null && (change.TypeData != header.Header.TypeData || change.Labels.Count != header.Header.Labels.Count ||
             change.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))) throw RootShape();
 
+        var wires = turn.Sent.Select((message, index) => EncodeRootSelf(root, row.Revision, index, message)).ToArray();
+        PreparedRoot WithSends(PreparedRoot prepared) => wires.Length == 0 ? prepared :
+            prepared with { JournalTurn = prepared.JournalTurn! with { Sent = wires } };
         var state = row.FoundationNullState ? null : row.State;
         if (turn.Expected is null)
         {
@@ -260,11 +280,11 @@ public sealed partial class EfStore
             var creator = await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;
             if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History) throw RootShape();
-            return PrepareFirstRoot(root.Tenant, root.Reference, creator, fence, state, row.StateVersion,
-                change.TypeData, change.Labels, turn.Journal);
+            return WithSends(PrepareFirstRoot(root.Tenant, root.Reference, creator, fence, state, row.StateVersion,
+                change.TypeData, change.Labels, turn.Journal));
         }
 
-        if (turn.Consumed.Count != 0 || turn.Done.Count == 0 || !turn.Done.All(key => root.Owns(key) && key.Scope == InboxKey.FoundationOccurrenceScope))
+        if (turn.Done.Count + turn.Consumed.Count == 0 || !InputsMatch(root, turn))
             throw RootShape();
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, cancellationToken);
         if (current?.Revision != turn.Expected) return null;
@@ -272,12 +292,13 @@ public sealed partial class EfStore
             change is null && (header.Header.TypeData != current.TypeData || header.Header.Labels.Count != current.Labels.Count ||
                 current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))) throw RootShape();
         await using var db = create();
-        var ids = turn.Done.Select(key => key.Id).ToArray();
-        var records = await db.Messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
-            m.InboxScope == InboxKey.FoundationOccurrenceScope && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
-        var inputs = records.Select(row => PostgresRootAdmission.DecodeDirect(row, root.Reference)).ToArray();
-        if (!inputs.Select(message => message.InboxKey).SequenceEqual(turn.Done)) return null;
-        return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
-            row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal);
+        var ids = turn.Done.Concat(turn.Consumed).Select(key => key.Id).ToArray();
+        var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
+        var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
+            (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == RootSelfScope) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
+        var inputs = records.Select(row => row.InboxScope == RootSelfScope ? DecodeRootSelf(row, RootSelfIssuer) : PostgresRootAdmission.DecodeDirect(row, root.Reference)).ToArray();
+        if (!SameInputs(inputs, turn.Done.Concat(turn.Consumed))) return null;
+        return WithSends(PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
+            row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal));
     }
 }

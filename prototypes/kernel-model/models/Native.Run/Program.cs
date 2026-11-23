@@ -53,11 +53,24 @@ if (args is ["variants", var variantMode]) return await VariantChecks.RunAsync(v
 if (args is ["replay-variants"]) return await ReplayVariantChecks.RunAsync();
 if (args is ["join-variants", var joinMode]) return await JoinVariantChecks.RunAsync(joinMode);
 if (args is ["join-replay-variants"]) return await JoinReplayVariantChecks.RunAsync();
-if (args is ["pg-flowchart-preview", "birth", var birthRoute and ("manual" or "automatic")])
-    return await PostgresFlowchartPreview.RunAsync(birthRoute);
+if (args is [var birthMode and ("pg-flowchart-preview" or "pg-durable-flowchart-preview"), "birth", var birthRoute and ("manual" or "automatic")])
+    return await PostgresFlowchartPreview.RunAsync(birthRoute, durable: birthMode == "pg-durable-flowchart-preview");
+if (args is ["pg-durable-flowchart-preview", "wait", var waitRoute and ("manual" or "automatic"), var seededRef, var seededEpoch] &&
+    long.TryParse(seededEpoch, out var priorFlowEpoch) && priorFlowEpoch > 0)
+    return await PostgresFlowchartPreview.RunAsync(waitRoute, seededRef, previousEpoch: priorFlowEpoch, durable: true, reachWait: true);
 if (args is ["pg-flowchart-preview", "restart", var resumedRoute and ("manual" or "automatic"), var flowRef, var flowBookmark, var flowEpoch] &&
     long.TryParse(flowEpoch, out var previousEpoch) && previousEpoch > 0)
     return await PostgresFlowchartPreview.RunAsync(resumedRoute, flowRef, flowBookmark, previousEpoch);
+if (args is ["pg-durable-flowchart-preview", "restart", var durableRoute and ("manual" or "automatic"), var durableRef, var durableBookmark, var durableEpoch, var revision] &&
+    long.TryParse(durableEpoch, out var heldEpoch) && heldEpoch > 0 && long.TryParse(revision, out var waitRevision) && waitRevision > 0)
+    return await PostgresFlowchartPreview.RunAsync(durableRoute, durableRef, durableBookmark, heldEpoch, durable: true, waitingRevision: waitRevision);
+if (args is ["pg-durable-flowchart-preview", "restart", ..])
+{
+    Console.Error.WriteLine("Durable restart requires a route, actor, bookmark, positive previous epoch and positive waiting revision.");
+    return 2;
+}
+if (args is ["pg-root-self", var selfWriter and ("ef" or "owned"), var selfFence and ("checked" or "in-batch")])
+    return await PostgresRootSelfChecks.RunAsync(selfWriter == "owned", selfFence == "in-batch");
 if (args is ["pg-flowchart-preview", "merge-early"])
 {
     try { return await PostgresFlowchartPreview.RunAsync("automatic", mergeEarly: true); }

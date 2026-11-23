@@ -111,8 +111,14 @@ public sealed class JournalEntity
     public string Entries { get; set; } = "";
 }
 
-public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
+public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
 {
+    // EF keys its model cache by context type. Fresh opt-in databases seed their marker in the
+    // same creation transaction as the schema. An existing database keeps its original marker.
+    private sealed class RootSelfDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    internal StoreFormat RequiredFormat => this is RootSelfDb ? StoreFormat.RootSelf : StoreFormat.Current;
+    internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => new RootSelfDb(options);
+
     internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> InsertAliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> GuardedAliases {get;}=new(StringComparer.Ordinal);
@@ -142,6 +148,8 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 
     protected override void OnModelCreating(ModelBuilder model)
     {
+        if (this is RootSelfDb && !Database.IsNpgsql())
+            throw new NotSupportedException("The continuation profile requires PostgreSQL.");
         model.Entity<StoreVersionEntity>(entity =>
         {
             entity.ToTable(StoreVersionEntity.Table);
@@ -150,7 +158,7 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
             {
                 Id = StoreVersionEntity.MarkerId,
                 StoreSchema = StoreVersionEntity.StoreSchemaVersion,
-                MessageProtocol = StoreVersionEntity.MessageProtocolVersion,
+                MessageProtocol = RequiredFormat.MessageProtocol,
                 JournalCodec = StoreVersionEntity.JournalCodecVersion
             });
         });
@@ -384,7 +392,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         await using var db = create();
         var now = Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken) : (await db.Database.SqlQueryRaw<long>(
             $"""INSERT INTO "Nodes" ("Id", "SeenAt", {NodeAdvertisement.Columns}) VALUES ({"{0}"}, {Now}, {NodeAdvertisement.Parameters}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", {NodeAdvertisement.Update} RETURNING "SeenAt" AS "Value" """,
-            NodeAdvertisement.Arguments(node)).ToListAsync(cancellationToken))[0];
+            NodeAdvertisement.Arguments(node, messageProtocol: db.RequiredFormat.MessageProtocol)).ToListAsync(cancellationToken))[0];
         return await MembershipAsync(db, now, window, cancellationToken);
     }
 
@@ -414,8 +422,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         if (postgres && Engine is null && (batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials)
             .Concat(batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])))
-            .Any(key => key.Scope == InboxKey.FoundationOccurrenceScope) ||
-            batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey.Scope == InboxKey.FoundationOccurrenceScope))))
+            .Any(key => key.Scope is InboxKey.FoundationOccurrenceScope or RootSelfScope) ||
+            batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey.Scope == InboxKey.FoundationOccurrenceScope || root is null && message.InboxKey.Scope == RootSelfScope))))
             throw new StoreException(Failure.Definite, "Qualified PostgreSQL inputs require their root checkpoint writer.");
         StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable,
             supportsJobTrialClear:SupportsJobTrialClear);
@@ -664,7 +672,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
     private string RootPollFilter => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
-             AND (m."InboxScope" = 0 OR (m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND EXISTS (
+             AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({InboxKey.FoundationOccurrenceScope}, {RootSelfScope}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
@@ -674,11 +682,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
     private string PollMessages => _ordinaryRoots is { Discover: true }
         ? $"""
-           ("Messages" m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
+           ({RootInboxSource} m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
               AND b."Creation" = 1 AND m."EventMatch" IS NULL
-              AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" = {InboxKey.FoundationOccurrenceScope}))
+              AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" = {InboxKey.FoundationOccurrenceScope} OR m."InboxScope" = {RootSelfScope}))
            """
-        : "\"Messages\" m";
+        : RootInboxSource + " m";
     private string PollSql => Engine?.Poll ??
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"{PollBirthColumns}
@@ -706,14 +714,15 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             {
                 if (r.Target is null) throw RootShape();
                 var root = bindings.ForActor(r.Target);
-                if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition || root != bindings.ForInput(key)) throw RootShape();
+                if (!bindings.Includes(root.Partition) || new InstanceRef(r.Target).Partition != root.Partition ||
+                    root != bindings.ForInput(key.Scope == RootSelfScope ? InboxKey.Issued(key.Id) : key)) throw RootShape();
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
-                    : PostgresRootAdmission.DecodeDirect(entity, root.Reference);
+                    : key.Scope == RootSelfScope ? DecodeRootSelf(entity, RootSelfIssuer) : PostgresRootAdmission.DecodeDirect(entity, root.Reference);
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
             }
-            if (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start))
+            if (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) || key.Scope == RootSelfScope)
                 throw new StoreException(Failure.Definite, "PostgreSQL public inputs require a qualified foundation owner.");
             return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo).WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);

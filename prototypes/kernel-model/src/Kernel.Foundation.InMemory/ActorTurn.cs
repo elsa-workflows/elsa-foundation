@@ -11,6 +11,7 @@ internal sealed partial class ActorAdapter
     private sealed class ActorTurn : Contract.IActorTurn
     {
         private readonly Durable.InMemoryStore? _inMemory;
+        private readonly Func<string, string>? _issueSelf;
         private Durable.InMemoryStore Store => _inMemory ?? throw new NotSupportedException("The ordinary-root provider does not implement this authored effect.");
         private readonly Durable.TurnInput _input;
         private readonly Durable.DurableTurn _turn;
@@ -25,9 +26,10 @@ internal sealed partial class ActorAdapter
         private object? _output;
         private bool _emitted;
 
-        public ActorTurn(Durable.InMemoryStore? store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient)
+        public ActorTurn(Durable.InMemoryStore? store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient, Func<string, string>? issueSelf)
         {
             _inMemory = store;
+            _issueSelf = issueSelf;
             _input = input;
             _turn = new(input, foundation: true);
             Header = header;
@@ -75,6 +77,8 @@ internal sealed partial class ActorAdapter
                   throw new ArgumentException("The actor reference was not found.", nameof(target));
             if (kind is Contract.Kinds.Start or Contract.Kinds.Event or Contract.Kinds.ChildFinished or Contract.Kinds.JobFinished)
                 throw new ArgumentException("The foundation issues this message kind.", nameof(kind));
+            if (_issueSelf is not null && target == Header.Ref && dueAt is null)
+                return _turn.SendImmediateToSelf(_issueSelf, kind, payload);
             return _turn.SendFromActor(Store, new(address.Id), address.Creation, kind, payload, dueAt);
         }
 
