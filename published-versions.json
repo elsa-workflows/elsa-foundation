@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "9941a612d902f1695cb4f0f80fb4203b3484a009",
+  "last_publish_commit": "c98c0cda94980b100e5e4e9b7805dc4c25051ddd",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
-      "version": "4.0.32-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.33-preview",
+      "commit": "c98c0cda94980b100e5e4e9b7805dc4c25051ddd"
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Api",
@@ -24,8 +24,8 @@
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Interchange",
-      "version": "4.0.34-preview",
-      "commit": "3fb6c8ec2cb87183be99087f4d5d1f31c1e4a7ba"
+      "version": "4.0.35-preview",
+      "commit": "c98c0cda94980b100e5e4e9b7805dc4c25051ddd"
     },
     {
       "package_id": "Elsa.Activities.Compensation",
@@ -1109,13 +1109,13 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
-      "version": "4.0.54-preview",
-      "commit": "fa8f147651b0b227994a22db0b71528e8d567fb8"
+      "version": "4.0.55-preview",
+      "commit": "c98c0cda94980b100e5e4e9b7805dc4c25051ddd"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.93-preview",
-      "commit": "fa8f147651b0b227994a22db0b71528e8d567fb8"
+      "version": "4.0.94-preview",
+      "commit": "c98c0cda94980b100e5e4e9b7805dc4c25051ddd"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
@@ -1129,8 +1129,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Http",
-      "version": "4.0.19-preview",
-      "commit": "371a390fb39be4863a61d20ba7ff914d4dcf8c40"
+      "version": "4.0.20-preview",
+      "commit": "c98c0cda94980b100e5e4e9b7805dc4c25051ddd"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Inspection.Core",
