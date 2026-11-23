@@ -107,6 +107,14 @@ if (args is ["pg-root-list", var listWriter and ("owned" or "ef"), var listFence
     if (listArgs is ["birth"]) return await PostgresRootListChecks.RunAsync(listWriter == "owned", listFence == "in-batch", null);
     if (listArgs is ["restart", var token]) return await PostgresRootListChecks.RunAsync(listWriter == "owned", listFence == "in-batch", new(token));
 }
+if (args is ["pg-root-workflow-history", var runWriter and ("owned" or "ef"), var runFence and ("checked" or "in-batch"), .. var runArgs])
+{
+    if (runArgs is ["birth"]) return await PostgresWorkflowHistoryChecks.RunAsync(runWriter == "owned", runFence == "in-batch", "birth");
+    if (runArgs is ["restart", var runToken])
+        return await PostgresWorkflowHistoryChecks.RunAsync(runWriter == "owned", runFence == "in-batch", "restart", new(runToken));
+    if (runArgs is ["tenant", var tenantToken, var admittedReference])
+        return await PostgresWorkflowHistoryChecks.RunAsync(runWriter == "owned", runFence == "in-batch", "tenant", new(tenantToken), admittedReference);
+}
 if (args is ["pg-root-history", var historyWriter and ("owned" or "ef"), var historyFence and ("checked" or "in-batch")])
     return await PostgresRootHistoryChecks.RunAsync(historyWriter == "owned", historyFence == "in-batch");
 if (args is ["pg-statechart-preview", "birth"]) return await PostgresStatechartPreview.RunAsync(null);
