@@ -159,6 +159,27 @@ internal static class StructuredMigrationChecks
             "Durable persists a scheduled child before its frame starts");
         check(StructuredMigration.Validate(source, Definition("remove-queued", Wf.Set("tail", "output", 1)), state)
             == StructuredMigrationFinding.LiveNode, "a scheduled child remains live even without a frame");
+
+        var nested = Wf.Sequence("nested", Wait());
+        await CheckUnstarted(nested, Wf.Sequence("nested", Wait(), Prefix()),
+            "a scheduled Sequence can append to its unstarted children");
+        var branch = Wf.If("nested", true, Wait(), Prefix());
+        await CheckUnstarted(branch, Wf.If("nested", true, Wf.Event("new-then", "first"), Wf.Event("new-else", "second")),
+            "a scheduled If can change either branch before choosing one");
+
+        async Task CheckUnstarted(Node scheduled, Node changed, string message)
+        {
+            var workflow = Definition("scheduled-container", scheduled);
+            await using var pending = await WaitingActor.StartAsync(workflow, Modes.Durable, singleTurn: true);
+            var checkpoint = Json.Read<NativeState>(pending.Checkpoint());
+            var queued = checkpoint.Agenda.Single();
+            check(!queued.Resume && queued.Node == scheduled.Id && queued.Parent is { } parent &&
+                checkpoint.Frames[parent].Node == "sequence" && !checkpoint.Frames.ContainsKey(queued.Frame),
+                $"{scheduled.Type.Name} has a pending start in its parent and no frame yet");
+            check(StructuredMigration.Validate(workflow, Definition("child-list", changed), checkpoint) is null, message);
+            check(StructuredMigration.Validate(workflow, Definition("parent-prefix", Wf.Set("inserted", "output", 1), changed), checkpoint)
+                == StructuredMigrationFinding.SequencePrefix, "the running parent still protects the scheduled child's position");
+        }
     }
 
     private static async Task CheckFinished(string mode, Action<bool, string> check)

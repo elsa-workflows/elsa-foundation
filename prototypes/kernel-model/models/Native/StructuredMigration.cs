@@ -54,12 +54,18 @@ internal static class StructuredMigration
         }
 
         var framesByNode = state.Frames.Values.ToLookup(frame => frame.Node, StringComparer.Ordinal);
+        var starts = state.Agenda.Where(work => !work.Resume && !work.Gone && work.Node is not null)
+            .Select(work => work.Node!).ToHashSet(StringComparer.Ordinal);
         var children = state.Frames.Values.Select(frame => (frame.Parent, Node: (string?)frame.Node))
             .Concat(state.Agenda.Where(work => work.Node is not null).Select(work => (work.Parent, work.Node)))
             .ToLookup(child => child.Parent, child => child.Node!, StringComparer.Ordinal);
         foreach (var (before, after) in comparisons)
         {
             if (!typeof(CompositeActivity).IsAssignableFrom(before.Type)) continue;
+            // A scheduled start has no Sequence cursor or chosen If branch until its frame executes.
+            // Another activation of the same node may already have a frame and must still be checked.
+            if ((before.Type == typeof(Sequence) || before.Type == typeof(If)) &&
+                !framesByNode.Contains(before.Id) && starts.Contains(before.Id)) continue;
             var selected = framesByNode[before.Id].Select(frame => children[frame.Id].ToArray());
             if (before.Type == typeof(Sequence))
             {
