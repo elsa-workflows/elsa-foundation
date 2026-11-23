@@ -223,10 +223,51 @@ value-bearing commit, and 12 against 20 for a fresh owner to read it, plus one b
 measured no WAL, TOAST, pages or PostgreSQL round trips, and file-store durability, pruning and erasure are
 unqualified.** So the byte saving is shown, the WAL saving is inferred, and the cost is extra calls and a second store.
 
-What decision 10 needs before it is accepted: the existing `pad=` case against that witness or a successor (same
-states, the value changing each turn and not), measuring WAL per commit and TOAST growth on PostgreSQL, plus the load
-path's round trips. The cost harness (`Writes.cs`, `pad=`) does not drive the witness today, so it needs wiring for the
-reference side. **That run is the acceptance test, and it is unrun.**
+### Same-database value comparison
+
+The `pg-root-value-volume` qualification runs the PostgreSQL `pad=` comparison for decision 10 on the same-database
+writer. Each arm uses a fresh database on a dedicated disposable PostgreSQL 17.12 server in Docker, with 8 KiB blocks,
+full-page writes and autovacuum enabled, WAL compression off, and default table settings. A single local owner runs
+one partition with the owned SQL writer, the in-batch fence and Full history. Both paths use qualification protocol 8.
+
+Each sample starts one actor and commits an initial empty state before the baseline. It then commits 64 numbered
+inputs, each advancing the state and writing the same logical journal entries in both paths. The final turn ends the
+actor at revision 65. The pad is 4,096 pseudorandom bytes, either reused or regenerated with a new deterministic seed on
+each turn. Inline state serializes Base64 within JSON. The reference uses an immutable `bytea` row and stores the
+digest and length in the checkpoint. The reused arm stages the value once. PostgreSQL reported no column compression
+for the measured checkpoints or value payloads. The final inline state was 6,011 bytes reused and 6,076 bytes changing,
+including JSON escaping and the state envelope. The reference state was 236 bytes before PostgreSQL's datum header.
+
+| 4 KiB pad | WAL bytes per committed turn, median (range) | Instances TOAST growth | Values TOAST growth | Retained value rows (payload bytes) | Cold load wire trips |
+|---|---:|---:|---:|---:|---:|
+| Inline, reused | 8,154.6 (8,154.6–8,155.0) | 557,056 B | 0 B | 0 (0 B) | 3 |
+| Reference, reused | 1,579.9 (1,579.5–1,581.8) | 0 B | 16,384 B | 1 (4,096 B) | 5 |
+| Inline, changing | 8,179.5 (8,178.8–8,179.5) | 540,672 B | 0 B | 0 (0 B) | 3 |
+| Reference, changing | 6,530.5 (6,526.4–6,531.2) | 0 B | 385,024 B | 64 (262,144 B) | 5 |
+
+Three samples per arm. Each WAL window starts after the outside input commits and ends when the worker advances
+its fenced journal position. It includes polling, marks, settling the input, checkpoint, journal and value writes.
+Admission, schema setup, the initial birth, verification reads, release and cleanup are outside the windows. The
+counter sums the actual PostgreSQL WAL insert-LSN deltas. They include any incidental server WAL in those windows.
+TOAST is the increase in allocated TOAST storage, including its indexes, from the post-birth baseline to the final
+commit. Both TOAST relations start at 8,192 bytes in each sample.
+
+The cold-load sample uses a new store with no loaded actor on one warmed TCP connection. It counts the qualified
+checkpoint load and, for a reference, the capability check and payload read. The wire meter reported six PostgreSQL
+protocol groups for inline and ten for references, with zero new connections. The runner verifies the exact final
+payload, ordered journal digests, terminal revision, settled inputs and retained value count in every sample.
+
+Reusing the reference reduced measured WAL per turn by about 81%. A changing reference still inserted 64
+out-of-line values. Its smaller WAL total reflects these binary value rows and this inline JSON encoding.
+Public value APIs, qualified actor erasure and measurement on the final release schema remain open.
+
+Use a fresh database for each of the four `inline|reference` and `reused|changing` combinations. Point
+`KERNEL_PREVIEW_POSTGRES` at the disposable server over plaintext loopback with `Host=127.0.0.1` and
+`SSL Mode=Disable`, then run from `prototypes/kernel-model`.
+
+```sh
+dotnet run -c Release --project models/Native.Run -- pg-root-value-volume reference reused pad=4096 turns=64
+```
 
 ## Partitioned inbox: fit report
 
