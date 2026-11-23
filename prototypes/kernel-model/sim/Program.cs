@@ -153,6 +153,12 @@ if (args.Contains("--private-kinds-check"))
     await PrivateKindsChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--sequential-cascade-check"))
+{
+    var failed = false;
+    await SequentialCascadeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--cascade-pages-check"))
 {
     var failed = false;
