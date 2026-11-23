@@ -272,6 +272,11 @@ internal static class ParkDeleteChecks
             check(accepted && retainedBefore.SequenceEqual(Kept()),
                 $"{scenario}: takeover preserves the cursor, deletion selection and exact control");
             if (!accepted) return;
+            var publicView = await reads.GetAsync(scope, child);
+            var parkedList = await reads.ListAsync(scope, new(Parked: true));
+            check(publicView?.Park?.OpenResolution == "deleting" &&
+                  parkedList.Items.Any(actor => actor.Header.Ref == child && actor.Park?.OpenResolution == "deleting"),
+                $"{scenario}: the public point and list reads report the attached Delete as the open resolution");
             probe.Protect = protectsAtComplete;
             await DriveUntil(attaching, competing!);
             check(competing!.Answer is CreationResult { Result: "InProgress", OwningOperation: "takeover-delete" } &&

@@ -864,6 +864,11 @@ internal static class ParkKeptChecks
             });
         check(preserves, "Delete rejects the old Park mark and attaches to the ended Recover under the model end's exact mark");
         if (!preserves) return;
+        var deleting = await reads.GetAsync(scope, target.Actor);
+        var parkedList = await reads.ListAsync(scope, new(Parked: true));
+        check(deleting?.Park?.OpenResolution == "deleting" &&
+              parkedList.Items.Any(actor => actor.Header.Ref == target.Actor && actor.Park?.OpenResolution == "deleting"),
+            "public point and list reads show Delete attached to the ended recovery");
 
         probe.ProtectAfterRecoveryEnd = true;
         var secondCommand = new Contract.OperatorCommand(competes ? park : selection,

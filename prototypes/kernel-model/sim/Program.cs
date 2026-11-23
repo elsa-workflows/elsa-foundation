@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Kernel.Sim;
 
+if (args is ["--park-operator-demo"]) return await ParkOperatorDemo.RunAsync();
+
 // Usage:
 //   dotnet run -c Release --project sim -- --seeds 10000 [--from 1] [--actions 300] [--flaw Name[,Name]] [--count 1024|4096]
 //   dotnet run -c Release --project sim -- --seed 42 [--actions 300] [--flaw Name]      replay one seed; prints a shrunk trace if it fails
