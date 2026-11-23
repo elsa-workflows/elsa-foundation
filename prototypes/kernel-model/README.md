@@ -99,6 +99,25 @@ and one unanswered actor from the closed plan. A separately tenant-bound reader 
 This verifies the physical SQLite view and local keyset reads. The journal producer in the fixture uses the
 in-memory Actor Foundation. Operator API tokens, other view providers and K11 migration orchestration remain open.
 
+### Dispatch a committed migration batch
+
+From `prototypes/kernel-model`:
+
+```sh
+dotnet run -c Release --project sim -- --migration-plan-dispatch
+```
+
+This K11 dispatch example reads a committed batch and sends `Migrate` outside actor turns to its exact actor refs.
+A lost admission reply leaves the batch pending. Within the FC-16 receipt window, the restarted runner sends the
+same operation IDs and receives deduplication receipts. A deleted selection stays unanswered even when the caller key
+has been reused. The journal shows one result per responding life in this run. Authorization and input-size refusals
+leave the batch pending. An acknowledgment retry inside the same window receives a duplicate receipt.
+
+The fixture uses the real in-memory operator route for `Migrate`. Its selection and acknowledgment messages
+are trusted fixture control inputs. The product adapter must authorize those controls. The product plan actor,
+Native migration validation, operator scheduling and target-side [long-gap replay handling](../../docs/architecture/migrating-running-instances.md#plans-and-bulk-migration)
+remain separate K11 work.
+
 ## PostgreSQL Core Preview
 
 Set `KERNEL_PREVIEW_POSTGRES` to the connection string of an empty PostgreSQL 17 database dedicated to the preview.

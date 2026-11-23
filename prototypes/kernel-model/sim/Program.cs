@@ -298,6 +298,12 @@ if (args.Contains("--foundation-migration-dispatch-check"))
     await FoundationMigrationDispatchChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--migration-plan-dispatch"))
+{
+    try { await MigrationPlanDispatchChecks.RunAsync(); return 0; }
+    catch (InvalidOperationException error) { Console.Error.WriteLine(error.Message); return 1; }
+}
+
 if (args.Contains("--migration-plan-reads"))
 {
     try { await MigrationPlanReadChecks.RunAsync(); return 0; }
