@@ -1,0 +1,96 @@
+using System.Diagnostics;
+using Kernel.EntityFramework;
+using Kernel.Native.Preview;
+using Kernel.Runtime.Hosting;
+using Kernel.WorkflowActor;
+using Microsoft.EntityFrameworkCore;
+using Contract = Kernel.Foundation.Contracts;
+
+namespace Kernel.Native.Run;
+
+internal static class PostgresMultiRootClient
+{
+    internal const string Primary = "preview-a", Secondary = "preview-b";
+
+    internal static Func<KernelDb> Database()
+    {
+        var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
+            ?? throw new InvalidOperationException("Use a dedicated PostgreSQL preview database.");
+        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        return () => new KernelDb(options);
+    }
+
+    internal static async Task<Contract.ActorRef> Start(PostgresPreviewFoundation foundation, Contract.BoundScope scope, string id, CancellationToken token)
+    {
+        var workflow = new WorkflowRuntime(foundation, foundation);
+        var accepted = await workflow.StartAsync(scope, id, NativeExecutionModel.Start(DirectApprovalWorkflow.Definition), cancellationToken: token);
+        return accepted is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } actor } ? actor
+            : throw new InvalidOperationException("The generated root was not accepted.");
+    }
+
+    internal static async Task Send(PostgresPreviewFoundation foundation, Contract.BoundScope scope, Contract.ActorRef actor,
+        string id, string payload, Contract.AdmissionOutcome expected, CancellationToken token)
+    {
+        var receipt = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), id, CompositeSignal.Kind, payload, cancellationToken: token);
+        if (receipt.Outcome != expected || receipt.Actor != actor) throw new InvalidOperationException("Unexpected exact input receipt.");
+    }
+
+    internal static async Task CheckReads(PostgresPreviewFoundation foundation, Contract.BoundScope scope, Contract.ActorRef own,
+        Contract.ActorRef foreign, CancellationToken token)
+    {
+        var journal = await foundation.TailAsync(scope, own, cancellationToken: token);
+        var ownMarker = Json.Write("approved:" + scope.Tenant + "-two");
+        var foreignMarker = Json.Write("approved:" + (scope.Tenant == Primary ? Secondary : Primary) + "-two");
+        var inaccessible = await foundation.TailAsync(scope, foreign, cancellationToken: token);
+        if (!journal.Items.Select(e => e.Revision).Distinct().SequenceEqual([1L, 2L, 3L]) ||
+            journal.Items.Count(e => e.Revision == 3 && e.Entry == ownMarker) != 1 || journal.Items.Any(e => e.Entry == foreignMarker) ||
+            journal.Items.Count(e => e.Entry == Json.Write("end")) != 1 || journal.Items[^1].Entry != Json.Write("end") ||
+            await foundation.GetAsync(scope, foreign, token) is not null || inaccessible.Items.Count != 0 || inaccessible.Next is not null)
+            throw new InvalidOperationException("The public journal or tenant read did not match the two-root fixture.");
+    }
+
+    // Each process has exactly one configured public ingress identity.
+    internal static async Task<int> SecondaryAsync(string[] args)
+    {
+        var scope = FixedTenantScope.Bind(Secondary);
+        var open = Database();
+        var store = new EfStore(open, postgres: true);
+        var ingress = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var token = limit.Token;
+        var foundation = new PostgresPreviewFoundation(ingress, store, new(store, await ingress.OpenJournalCursorAsync(token), 64), WorkflowActor.WorkflowActor.ActorType);
+        switch (args)
+        {
+            case ["start"]:
+                Console.WriteLine((await Start(foundation, scope, "start", token)).Id);
+                break;
+            case ["send", var reference, var id, var payload, var expected] when Enum.TryParse<Contract.AdmissionOutcome>(expected, out var outcome):
+                await Send(foundation, scope, new(reference), id, payload, outcome, token);
+                break;
+            case ["reads", var own, var foreign]:
+                await CheckReads(foundation, scope, new(own), new(foreign), token);
+                break;
+            default: return 2;
+        }
+        return 0;
+    }
+
+    internal static async Task<string> CallSecondaryAsync(CancellationToken token, params string[] args)
+    {
+        var start = new ProcessStartInfo("dotnet") { UseShellExecute = false, RedirectStandardOutput = true };
+        start.ArgumentList.Add(typeof(PostgresMultiRootClient).Assembly.Location);
+        start.ArgumentList.Add("pg-multi-root-secondary");
+        foreach (var arg in args) start.ArgumentList.Add(arg);
+        using var child = Process.Start(start) ?? throw new InvalidOperationException("Could not start the second tenant client.");
+        try
+        {
+            var output = await child.StandardOutput.ReadToEndAsync(token);
+            await child.WaitForExitAsync(token);
+            return child.ExitCode == 0 ? output.Trim() : throw new InvalidOperationException("The second tenant client failed.");
+        }
+        finally
+        {
+            if (!child.HasExited) { child.Kill(); await child.WaitForExitAsync(); }
+        }
+    }
+}

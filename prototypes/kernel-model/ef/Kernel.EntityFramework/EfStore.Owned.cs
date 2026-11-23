@@ -138,7 +138,7 @@ public sealed partial class EfStore
             if (turn.Journal is not null)
             {
                 Room(2);
-                rows.Row(RowGroups.Kind.JournalInsert, RowGroups.Journal, [Lit(home), Lit(++next[home]), c.P(journal.FindProperty("Instance")!, turn.Instance), Lit(turn.Delete ? -1 : root?.JournalRevision ?? turn.Row?.Revision ?? 0), c.P(journal.FindProperty("Entries")!, turn.Journal)]);
+                rows.Row(RowGroups.Kind.JournalInsert, RowGroups.Journal, [Lit(home), Lit(++next[home]), c.P(journal.FindProperty("Instance")!, turn.Instance), Lit(turn.Delete ? -1 : root?.RevisionFor(turn.Instance) ?? turn.Row?.Revision ?? 0), c.P(journal.FindProperty("Entries")!, turn.Journal)]);
             }
             // Merge with round 3: the set-based deletes of a terminate and a delete, written last (E1, E9: nothing before the fence held).
             if (turn.Unsubscribe) { Room(1); rows.Free(RowGroups.Kind.UnsubscribeAll, $"""DELETE FROM "Subscriptions" WHERE "Instance" = {c.P(subscriptions.FindProperty("Instance")!, turn.Instance)}"""); }
@@ -369,7 +369,7 @@ public sealed partial class EfStore
     {
         StoreBatchRules.RequireDistinct(owned);
         if (owned.Count == 0) return new([], 0);
-        if (_ordinaryRoot is not null)
+        if (_ordinaryRoots is not null)
         {
             var fence = owned.Single();
             return await PollAsync(fence.Partition, fence.Epoch, horizon, limit, cancellationToken);
