@@ -73,6 +73,28 @@ The example stores its view and bookmark in memory and uses a fixture to write t
 The persisted view and its paging are separate K9 work. K11 supplies the migration plan actor, exact-ref dispatch
 and operator controls.
 
+### Persisted plan outcomes in SQLite
+
+From `prototypes/kernel-model`, build the runner and give it a new SQLite file:
+
+```sh
+dotnet restore models/Native.Run --locked-mode
+dotnet build -c Release models/Native.Run --no-restore
+dll=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+scratch=$(mktemp -d)
+dotnet "$dll" sqlite-plan-projection build "$scratch/plan.db"
+dotnet "$dll" sqlite-plan-projection inspect "$scratch/plan.db" <plan-ref>
+```
+
+Use the plan reference printed by `build`. A fixture actor records batches and the exact senders' outcomes in
+the public journal. A SQLite transaction persists each page and its source bookmark together. A failed insert
+rolls back both. Two projectors can read the same source page, with one committing it. A new projector resumes
+at the stored bookmark. The independent `inspect` process reads three stable pages with one migrated, one refused
+and one unanswered actor from the closed plan, without rebuilding the view.
+
+This verifies the physical SQLite view and local keyset reads. The journal producer in the fixture uses the
+in-memory Actor Foundation. Operator API tokens, other view providers and K11 migration orchestration remain open.
+
 ## The simulation
 
 ```

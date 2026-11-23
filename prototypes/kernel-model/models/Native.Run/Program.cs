@@ -12,6 +12,8 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["sqlite-plan-projection", "build", var planFile]) return await SqlitePlanProjectionChecks.BuildAsync(planFile);
+if (args is ["sqlite-plan-projection", "inspect", var existingPlanFile, var issuedPlan]) return await SqlitePlanProjectionChecks.InspectAsync(existingPlanFile, issuedPlan);
 if (args is ["deadlines"]) return await Deadlines.RunAsync();
 if (args is ["smoke"]) return await Smoke.RunAsync();
 if (args is ["variants", var variantMode]) return await VariantChecks.RunAsync(variantMode);
