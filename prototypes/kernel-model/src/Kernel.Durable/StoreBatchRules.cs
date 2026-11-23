@@ -12,6 +12,10 @@ public static class StoreBatchRules
         if (batch.ClearJobTrials.Count > 0 && (!supportsJobTrialClear || batch.HandOver || batch.Turns.Count > 0 ||
             batch.Seen.Count > 0 || batch.Trial.Count > 0 || batch.ClearJobTrials.Distinct().Count() != batch.ClearJobTrials.Count))
             throw new StoreException(Failure.Definite, "A job trial clear requires supported, distinct keys in a separate fenced batch.");
+        // A ticket scope is its origin's string length plus one. Physical key encodings
+        // and other issued key domains cannot appear in a logical trial clear.
+        if (batch.ClearJobTrials.Any(key => key is not { Scope: > 0 and <= (long)int.MaxValue + 1, Match: null }))
+            throw new StoreException(Failure.Definite, "A job trial clear requires logical ticket keys.");
         if (batch.PublicationReservation is { } publication && (!supportsFoundationParkResolution ||
             batch.Trial is not [var key] || key != publication.Key || batch.Seen.Count != 0 || batch.Turns.Count != 0 ||
             batch.ClearJobTrials.Count != 0))

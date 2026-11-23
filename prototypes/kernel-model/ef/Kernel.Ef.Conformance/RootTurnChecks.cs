@@ -43,6 +43,13 @@ internal static class RootTurnChecks
             string? r = null, InstanceStatus status = InstanceStatus.Running, string? state = "opaque\0\ud800") =>
             store.CommitRootTurnAsync(t, r ?? reference, before, selected, f, timeout, status, state, 1, "layout2", labels, """["step"]""");
 
+        var duplicateLabels = new Dictionary<string, string>(ReferenceEqualityComparer.Instance)
+        {
+            [new string('x', 3)] = "first",
+            [new string('x', 3)] = "second"
+        };
+        await Refused(() => store.CommitRootTurnAsync(tenant, reference, current, [inputs[0]], fence, timeout,
+            InstanceStatus.Running, "changed", 1, "layout2", duplicateLabels, "[]"), "duplicate ordinal labels on a subsequent root checkpoint");
         await Refused(() => Next(current, [inputs[0]], fence with { Epoch = lease.Epoch - 1 }), "stale epoch");
         await Refused(() => Next(current, [inputs[0]], fence with { Position = 0 }), "old position");
         await Refused(() => Next(current, [inputs[0]], fence, t: "other"), "other tenant");
@@ -85,6 +92,11 @@ internal static class RootTurnChecks
 
         await roots.AdmitDirectAsync(tenant, reference, "finish", "done", due: 0);
         var finish = (await roots.ReadPendingDirectAsync(tenant, reference)).Single(m => m.Id == "finish");
+        await Refused(() => store.CommitRootTurnAsync(tenant, reference, running, [finish], fence, timeout, InstanceStatus.Finished,
+            "terminal", 1, "layout2", labels, null), "finished checkpoint without a journal entry");
+        Check((await cold.ReadFirstRootAsync(tenant, reference)) is { Revision: 2, Status: InstanceStatus.Running, TerminalRevision: null, TerminalAt: null } &&
+            (await roots.ReadPendingDirectAsync(tenant, reference)).Contains(finish) && (await cold.ReadJournalOfAsync(home, id, 0)).Count == 2,
+            "missing terminal journal leaves the original revision, pending input and history intact");
         var legacyRow = new InstanceRow(id, "", "", InstanceStatus.Running, "overwritten", 3, null);
         await Refused(() => store.CommitAsync(Legacy(bare with { Row = legacyRow, Expected = 2 })), "legacy overwrite after a qualified revision");
         await roots.AdmitDirectAsync(tenant, reference, "queued-1", "step");
@@ -125,7 +137,9 @@ internal static class RootTurnChecks
         await Refused(() => Next(terminal, [finish], fence), "turn after Finished");
         await Refused(() => Next(running, [finish], fence), "repeat after losing the final answer");
 
+        Check(cold.SupportsJobTrialClear, "the general PostgreSQL store advertises fenced trial clearing");
         await cold.BindWorkerRootAsync(tenant, reference);
+        Check(!cold.SupportsJobTrialClear, "the scoped PostgreSQL preview store does not advertise fenced trial clearing");
         ValueTask<Committed> Ended(PartitionFence f, params InboxKey[] keys)
         {
             var settled = new TurnCommit(id, null, null, [], keys, [], [], [], null);

@@ -179,7 +179,23 @@ public sealed partial class EfStore
             batch.Turns.Select(t => t.Instance).Distinct().Count() != batch.Turns.Count) throw RootShape();
 
         StoreBatchRules.RequireDistinct(fences);
-        var byPartition = fences.ToDictionary(f => f.Partition);
+        (CommitBatch Batch, RootCheckpoints Checkpoints)? prepared;
+        try { prepared = await PrepareWorkerBatchAsync(roots, batch, cancellationToken); }
+        catch (Exception error) when (error is not (OperationCanceledException or NotSupportedException) &&
+            Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
+        {
+            // Preparation reads inputs before either transactional fence mode has run.
+            if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new(false, 0, []);
+            if (ReferenceEquals(error, failure)) throw;
+            throw failure;
+        }
+        return prepared is { } work ? await CommitAsync(work.Batch, work.Checkpoints, cancellationToken) : new(false, 0, []);
+    }
+
+    private async Task<(CommitBatch, RootCheckpoints)?> PrepareWorkerBatchAsync(WorkerRoots roots, CommitBatch batch,
+        CancellationToken cancellationToken)
+    {
+        var byPartition = batch.Fenced.ToDictionary(f => f.Partition);
         PartitionFence FenceFor(WorkerRoot root) =>
             byPartition.TryGetValue(root.Partition, out var fence) ? fence : throw RootShape();
         roots = await ResolveWorkerRootsAsync(roots, batch.Turns.Select(t => t.Instance), batch.Seen.Concat(batch.Trial), cancellationToken);
@@ -194,7 +210,7 @@ public sealed partial class EfStore
         {
             var root = roots.ForActor(turn.Instance);
             var prepared = await PrepareWorkerTurnAsync(root, turn, FenceFor(root), cancellationToken);
-            if (prepared is null) return new(false, 0, []);
+            if (prepared is null) return null;
             commands.Add(prepared.Checkpoint);
             if (prepared.JournalTurn is { } journal)
             {
@@ -202,7 +218,7 @@ public sealed partial class EfStore
                 revisions.Add(journal.Instance, prepared.Checkpoint.JournalRevision);
             }
         }
-        return await CommitAsync(batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions), cancellationToken);
+        return (batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions));
     }
 
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
@@ -221,7 +237,7 @@ public sealed partial class EfStore
             row.Creation != 1 || row.NextJobGeneration is not (null or 0) || row.StartIntent != root.Fingerprint || row.Revision != checked((turn.Expected ?? 0) + 1) ||
             row.Status is not (InstanceStatus.Running or InstanceStatus.Finished) ||
             row.FoundationDispatchHeader is not { } header || header.Tenant != root.Tenant || header.Reference != root.Reference ||
-            turn.Journal is null || turn.Unsubscribe != (row.Status == InstanceStatus.Finished) ||
+            turn.Unsubscribe != (row.Status == InstanceStatus.Finished) ||
             turn.Sent.Count != 0 || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 }) throw RootShape();
 
         // Record equality checks the full shape, including extension fields. Adding a new durable effect
@@ -239,7 +255,7 @@ public sealed partial class EfStore
         var state = row.FoundationNullState ? null : row.State;
         if (turn.Expected is null)
         {
-            if (turn.Consumed is not [var key] || key != new InboxKey("root:" + root.Actor) ||
+            if (turn.Journal is null || turn.Consumed is not [var key] || key != new InboxKey("root:" + root.Actor) ||
                 turn.Done.Count != 0 || row.Status != InstanceStatus.Running || change is null) throw RootShape();
             var creator = await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;

@@ -37,6 +37,8 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     /// <summary>When the node last began to give the partition up (Environment.TickCount64), if it ever did.</summary>
     public long? ReleaseBegan(int partition) => _releases.TryGetValue(partition, out var at) ? at : null;
 
+    internal (int Partition, Task Completion)? HoldScalarPoll { get; set; }
+
     public int SetReleases => Volatile.Read(ref _setReleases);
 
     /// <summary>The node's commits answered "not landed".</summary>
@@ -226,6 +228,12 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _polls);
+        if (HoldScalarPoll is { } hold && hold.Partition == partition)
+            return Call<Polled>(async () =>
+            {
+                await hold.Completion.WaitAsync(cancellationToken);
+                return await inner.PollAsync(partition, epoch, horizon, limit, cancellationToken);
+            });
         return Call(() => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken));
     }
     /// <summary>A set poll is one call, as on a SQL store; it still counts one poll per partition, for the cost run's column.</summary>

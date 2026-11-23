@@ -11,6 +11,17 @@ internal sealed class DirectApprovalWorkflow : CompositeActivity, ISignalledComp
 
     internal static Workflow Build() => Wf.Workflow(Definition, Wf.Node<DirectApprovalWorkflow>("approve"));
 
+    internal static Workflow BuildFlowchart() => Wf.Workflow("flowchart-approval",
+        Wf.Flowchart("flow",
+            [Wf.If("needs-approval", Binding.Expr("amount > 500")),
+                Wf.Node<DirectApprovalWorkflow>("approve"),
+                Wf.Set("automatic", "automaticPath", true),
+                Wf.Set("joined", "joinCount", Binding.Expr("joinCount + 1"))],
+            [new("needs-approval", "approve", "True"), new("needs-approval", "automatic", "False"),
+                new("approve", "joined"), new("automatic", "joined")],
+            ("needs-approval", Gateway.Decision), ("joined", Gateway.ParallelJoin)),
+        ("amount", 750), ("automaticPath", false), ("joinCount", 0));
+
     protected override void Execute(CompositeContext context)
     {
         context.SetState(Array.Empty<string>());

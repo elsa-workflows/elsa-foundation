@@ -9,6 +9,9 @@ internal static class FoundationRootCreator
     internal static string OperationDigest(string id) =>
         Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
 
+    internal static bool IsGeneratedReference(string? reference) =>
+        reference is { Length: 64 } && reference.AsSpan().IndexOfAnyExcept("0123456789ABCDEF") < 0;
+
     internal static string ReferenceFor(byte[] issuerKey, string tenant, CreationAddress address)
     {
         var id = Convert.ToBase64String(DurableKeyJson.CodeUnits(address.Id));

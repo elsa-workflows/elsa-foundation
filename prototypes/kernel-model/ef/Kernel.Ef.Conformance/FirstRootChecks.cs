@@ -11,7 +11,7 @@ internal static class FirstRootChecks
         await roots.InstallAsync();
         var timeout = TimeSpan.FromSeconds(30);
         const string tenant = "demo";
-        var labels = new Dictionary<string, string> { ["purpose"] = "review" };
+        var labels = new Dictionary<string, string> { ["purpose"] = "review", ["Purpose"] = "display" };
         var spec = new StartSpec("workflow", "original header", "in");
         var first = await roots.AdmitAsync(tenant, "first", spec);
         var second = await roots.AdmitAsync(tenant, "second", spec);
@@ -39,10 +39,35 @@ internal static class FirstRootChecks
             (await cold.ReadJournalOfAsync(home, creator.Target.Id, 0)).Count == 0,
             "all refused first checkpoints preserve the creator, journal and absence of state");
 
+        var duplicate = new Dictionary<string, string>(ReferenceEqualityComparer.Instance)
+        {
+            [new string('x', 4)] = "first",
+            [new string('x', 4)] = "second"
+        };
+        var tooMany = Enumerable.Range(0, 5).ToDictionary(i => i.ToString(), _ => "value");
+        var tooLong = new string('é', 513);
+        foreach (var invalidLabels in new[] { duplicate, tooMany, new() { [tooLong] = "value" }, new() { ["key"] = tooLong } })
+        {
+            try
+            {
+                await store.CommitFirstRootAsync(tenant, first.Reference, creator, fence, timeout, null, 14, "data", invalidLabels, "[]");
+                throw new InvalidOperationException("The checkpoint accepted an invalid label set.");
+            }
+            catch (ArgumentException e) when (e.ParamName == "labels") { }
+        }
+        await using (var inspect = create())
+        {
+            Check(await roots.ReadPendingCreatorAsync(tenant, first.Reference) == creator &&
+                await cold.ReadFirstRootAsync(tenant, first.Reference) is null &&
+                (await cold.ReadJournalOfAsync(home, creator.Target.Id, 0)).Count == 0 &&
+                await inspect.Partitions.Where(p => p.Id == home).Select(p => p.Position).SingleAsync() == fence.Position,
+                "invalid labels preserve the creator, absent revision, fence position and empty journal");
+        }
+
         var landed = await Save(tenant, first.Reference, creator, fence, state: null);
         var takenUp = await cold.ReadFirstRootAsync(tenant, first.Reference);
         Check(landed.Landed && takenUp is { State: null, Model: "workflow", TypeData: "changed data", Definition: "original header", StateVersion: 14, Revision: 1 } &&
-            takenUp.Actor == new CreationAddress(creator.Target.Id, 1) && takenUp.Labels["purpose"] == "review",
+            takenUp.Actor == new CreationAddress(creator.Target.Id, 1) && takenUp.Labels is { Count: 2 } && takenUp.Labels["purpose"] == "review" && takenUp.Labels["Purpose"] == "display",
             "landed first checkpoint restores the exact qualified identity, absent state, headers, model and revision");
         Check(await roots.ReadPendingCreatorAsync(tenant, first.Reference) is null &&
             (await cold.ReadJournalOfAsync(home, creator.Target.Id, 0)).Single() is { Revision: 1, Entries: """["started","waiting"]""" } j &&
