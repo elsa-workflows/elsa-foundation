@@ -118,10 +118,10 @@ internal static class PostgresDelayPreview
             var final = (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))!;
             var tail = await api.TailAsync(scope, actor, bookmark, stop);
             await Pass();
-            Check(applications.Count == 0 && final.AsOf >= restart.Due && !Json.Read<NativeState>(final.State!).Variables.ContainsKey("result") &&
+            Check(ordinary.Count == 1 && applications.Count == 0 && final.AsOf >= restart.Due && !Json.Read<NativeState>(final.State!).Variables.ContainsKey("result") &&
                 tail.Items.Any(j => j.Entry == "\"end\"") && !tail.Items.Any(j => j.Entry.Contains("finished-delay", StringComparison.Ordinal)) &&
                 (await api.TailAsync(scope, actor, bookmark, stop)).Items.SequenceEqual(tail.Items), "the recalled timer must never resume its frame");
-            Console.WriteLine($"finished {Environment.ProcessId} {actor.Id} epoch {epoch} due {restart.Due} ordinary 1 timer 0");
+            Console.WriteLine($"finished {Environment.ProcessId} {actor.Id} epoch {epoch} due {restart.Due} ordinary {ordinary.Count} timer {applications.Count}");
             return 0;
         }
         var saved = coldState.Waits.Single(p => p.Value.Kind == "timer");
