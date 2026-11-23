@@ -84,8 +84,7 @@ internal static class VersionTakeChecks
     internal static async Task Refuses(Func<Task> action, string reason, string operation = "operation")
     {
         try { await action(); }
-        catch (StoreException error) when (error.Failure == Failure.Definite &&
-            error.Message.Contains(reason, StringComparison.Ordinal))
+        catch (StoreFormatException error) when (error.Message.Contains(reason, StringComparison.Ordinal))
         {
             Check(true, $"{operation} refused with {reason}");
             return;

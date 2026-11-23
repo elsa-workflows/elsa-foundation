@@ -18,11 +18,12 @@ internal static class VersionServiceChecks
                 Partition = journal.Partition, Position = journal.Position, Instance = journal.Instance,
                 Revision = journal.Revision, Entries = journal.Entries
             });
-            db.Messages.Add(new MessageEntity { Id = "retained", Target = actor, Kind = "input", Done = true, KeepUntil = 1 });
-            db.Events.Add(new EventEntity { Id = "expired", Key = "updates", KeepUntil = 1 });
+            db.Messages.Add(new MessageEntity { Id = "retained", Target = actor, Kind = "input", Payload = "retained input", Done = true, KeepUntil = 1 });
+            db.Events.Add(new EventEntity { Id = "expired", Key = "updates", Payload = "retained event", KeepUntil = 1 });
             await db.SaveChangesAsync();
         }
 
+        var original = await ReadServiceRowsAsync();
         (string Operation, Func<Task> Call)[] services =
         [
             ("projector position", () => store.ProjectedAsync(0).AsTask()),
@@ -70,18 +71,23 @@ internal static class VersionServiceChecks
         async Task CheckUnchangedAsync(StoreFormat unsupported)
         {
             await using var db = create();
-            var unchangedJournal = await db.Journal.AsNoTracking().SingleAsync();
-            Check((await db.Projections.SingleAsync(row => row.Partition == 0)).Position == 0 &&
-                !await db.Views.AnyAsync() &&
-                new JournalRow(unchangedJournal.Partition, unchangedJournal.Position, unchangedJournal.Instance,
-                    unchangedJournal.Revision, unchangedJournal.Entries) == journal &&
-                await db.Messages.AnyAsync(row => row.Id == "retained" && row.Done && row.KeepUntil == 1) &&
-                await db.Events.AnyAsync(row => row.Id == "expired" && row.Key == "updates" && row.KeepUntil == 1) &&
-                (await db.StoreVersions.SingleAsync()).Format == unsupported,
+            Check(await ReadServiceRowsAsync() == original && (await db.StoreVersions.SingleAsync()).Format == unsupported,
                 $"refused services preserve the journal, cursor, views, retained data and marker for {unsupported}");
         }
 
+        async Task<ServiceRows> ReadServiceRowsAsync()
+        {
+            await using var db = create();
+            return new(
+                Json.Write(await db.Journal.AsNoTracking().OrderBy(row => row.Partition).ThenBy(row => row.Position).ToArrayAsync()),
+                Json.Write(await db.Projections.AsNoTracking().OrderBy(row => row.Partition).ToArrayAsync()),
+                Json.Write(await db.Views.AsNoTracking().OrderBy(row => row.Instance).ToArrayAsync()),
+                Json.Write(await db.Messages.AsNoTracking().OrderBy(row => row.Seq).ToArrayAsync()),
+                Json.Write(await db.Events.AsNoTracking().OrderBy(row => row.Key).ThenBy(row => row.Id).ToArrayAsync()));
+        }
     }
+
+    private sealed record ServiceRows(string Journal, string Projections, string Views, string Messages, string Events);
 
     private static void Check(bool valid, string message)
     {
