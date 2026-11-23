@@ -344,36 +344,102 @@ internal static class PostgresPublicPreview
         }
     }
 
+    private sealed record StartReceipt(string Tenant, string Operation, string Reference, long Until);
+
     private static async Task CheckSchemaInstallAsync(DbContextOptions<KernelDb> options, EfStore store,
         Contract.BoundScope scope, Contract.ActorRef actor, Contract.PageToken bookmark, CancellationToken token)
     {
         // Model an older preview missing the actor list. Its issuer, checkpoint and journal remain intact.
         await using var db = new KernelDb(options);
-        var before = await store.ReadFirstRootAsync(scope.Tenant, actor.Id, token);
+        var before = await store.ReadFirstRootAsync(scope.Tenant, actor.Id, token)
+            ?? throw new InvalidOperationException("The predecessor checkpoint is missing.");
         Check(before is { Revision: 2, Status: InstanceStatus.Running }, "the predecessor left a committed wait");
+        var beforeCheckpoint = await ReadCheckpointRowAsync();
+        var beforeReceipt = await ReadStartReceiptAsync();
+        var oldReads = await store.OpenPreviewRootReadsAsync(64, token);
+        var beforeJournal = await oldReads.TailAsync(scope, actor, cancellationToken: token);
+        Check(beforeJournal is { Items.Count: > 0, Next: not null }, "the predecessor left a nonempty journal prefix");
+
         await db.Database.ExecuteSqlRawAsync("""
             DROP TRIGGER kernel_project_root_actor_list ON "Instances";
             DROP TABLE "FoundationActorList"
             """, token);
+        await CheckInstallSerializationAsync();
 
-        var concurrentInstaller = new EfStore(() => new(options), postgres: true);
-        await Task.WhenAll(store.InstallPreviewRootSchemaAsync(token), concurrentInstaller.InstallPreviewRootSchemaAsync(token));
-        Console.WriteLine("ok two explicit schema installers finished");
         var ingress = await store.OpenPreviewRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1), token);
-        var reads = await store.OpenPreviewRootReadsAsync(1, token);
+        var reads = await store.OpenPreviewRootReadsAsync(64, token);
         Check(await reads.ListAsync(scope, new(Type: PublicActor.ActorType), cancellationToken: token)
                 is { Items: [var listed], Next: null } && listed.Header.Ref == actor &&
             await reads.GetAsync(scope, actor, token) is { Header.Status: Contract.ActorStatus.Running },
             "repeated installation backfills the predecessor checkpoint once");
-        Check(await reads.TailAsync(scope, actor, bookmark, token) is { Items.Count: 0, AsOf: > 0 },
-            "the previous bookmark still names the current end of journal");
+        Check(await reads.TailAsync(scope, actor, bookmark, token) is { Items.Count: 0, AsOf: > 0 } &&
+            (await reads.TailAsync(scope, actor, cancellationToken: token)).Items.SequenceEqual(beforeJournal.Items),
+            "the bookmark and complete predecessor journal prefix survive installation");
+        Check(await ReadStartReceiptAsync() == beforeReceipt, "installation preserves the original start receipt");
         var replay = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "approval-1", CompositeSignal.Kind,
             cancellationToken: token);
         Check(replay is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var original } && original == actor,
             "the previous direct receipt still resolves to the original root");
-        var after = await store.ReadFirstRootAsync(scope.Tenant, actor.Id, token);
-        Check(after is not null && after.Revision == before!.Revision && after.State == before.State,
-            "reinstallation and replay preserve the actor checkpoint");
+        Check(await ReadCheckpointRowAsync() == beforeCheckpoint, "reinstallation and replay preserve the complete checkpoint row");
+
+        async Task CheckInstallSerializationAsync()
+        {
+            using var installStop = CancellationTokenSource.CreateLinkedTokenSource(token);
+            await using var blocker = await db.Database.BeginTransactionAsync(token);
+            var blockerPid = await db.Database.SqlQueryRaw<int>("""SELECT pg_backend_pid() AS "Value" """).SingleAsync(token);
+            // Park the first installer between taking the exclusive format marker and doing its DDL.
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(48602345, 1)", token);
+            var first = store.InstallPreviewRootSchemaAsync(installStop.Token);
+            Task? second = null;
+            try
+            {
+                var firstPid = await ObserveBlockedBackendAsync(options, blockerPid, first, token);
+                var secondStore = new EfStore(() => new(options), postgres: true);
+                second = secondStore.InstallPreviewRootSchemaAsync(installStop.Token);
+                var secondPid = await ObserveBlockedBackendAsync(options, firstPid, second, token, markerOnly: true);
+                Check(firstPid != secondPid, "the second installer waits on the first installer's format marker");
+                await blocker.CommitAsync(token);
+                await Task.WhenAll(first, second);
+            }
+            finally
+            {
+                await installStop.CancelAsync();
+                await first.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                if (second is not null) await second.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            }
+        }
+
+        Task<string> ReadCheckpointRowAsync() =>
+            db.Database.SqlQuery<string>($"""
+                SELECT row_to_json(i)::text AS "Value" FROM "Instances" i WHERE i."Id" = {before.Actor.Id}
+                """).SingleAsync(token);
+
+        Task<StartReceipt> ReadStartReceiptAsync() =>
+            db.Database.SqlQuery<StartReceipt>($"""
+                SELECT "Tenant", "Operation", "Reference", "Until" FROM "FoundationRootReceipts"
+                WHERE "Tenant" = {scope.Tenant} AND "Reference" = {actor.Id}
+                """).SingleAsync(token);
+    }
+
+    private static async Task<int> ObserveBlockedBackendAsync(DbContextOptions<KernelDb> options, int blockerPid,
+        Task blocked, CancellationToken token, bool markerOnly = false)
+    {
+        using var poll = CancellationTokenSource.CreateLinkedTokenSource(token);
+        poll.CancelAfter(TimeSpan.FromSeconds(5));
+        await using var observer = new KernelDb(options);
+        while (!blocked.IsCompleted)
+        {
+            var pid = await observer.Database.SqlQuery<int>($"""
+                SELECT activity.pid AS "Value" FROM pg_stat_activity activity
+                WHERE activity.datname = current_database() AND {blockerPid} = ANY(pg_blocking_pids(activity.pid))
+                    AND (NOT {markerOnly} OR activity.query LIKE '%"KernelStoreVersions"%')
+                LIMIT 1
+                """).SingleOrDefaultAsync(poll.Token);
+            if (pid != 0) return pid;
+            await Task.Delay(25, poll.Token);
+        }
+        await blocked.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        throw new InvalidOperationException("The operation returned before the database reported the expected lock wait.");
     }
 
     private static async Task CheckIngressFormatAsync(DbContextOptions<KernelDb> options, Contract.IIngress ingress,
@@ -423,19 +489,7 @@ internal static class PostgresPublicPreview
 
                 try
                 {
-                    using var poll = CancellationTokenSource.CreateLinkedTokenSource(token);
-                    poll.CancelAfter(TimeSpan.FromSeconds(5));
-                    await using var observer = new KernelDb(options);
-                    while (!await observer.Database.SqlQuery<bool>($"""
-                        SELECT EXISTS (
-                            SELECT 1 FROM pg_stat_activity activity
-                            WHERE activity.datname = current_database() AND {pid} = ANY(pg_blocking_pids(activity.pid))
-                        ) AS "Value"
-                        """).SingleAsync(poll.Token))
-                    {
-                        if (waiting.IsCompleted) throw new InvalidOperationException("Admission returned before the migration ran.");
-                        await Task.Delay(25, poll.Token);
-                    }
+                    await ObserveBlockedBackendAsync(options, pid, waiting, token, markerOnly: true);
                     Console.WriteLine($"ok the {kind} admission waits on the migration lock");
                     await db.Database.ExecuteSqlRawAsync(change, token);
                     await migration.CommitAsync(token);
