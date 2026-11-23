@@ -291,6 +291,29 @@ are `ef` for the writer and `in-batch` for the fence.
 On a fresh database, `dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-flowchart-preview merge-early`
 replaces the join with a merge. The waiting assertion detects the premature finish.
 
+### PostgreSQL Delay preview
+
+On a fresh dedicated PostgreSQL database set `KERNEL_PREVIEW_POSTGRES` and run:
+
+```sh
+models/Native.Run/run-delay-preview.sh owned checked
+```
+
+The Delay profile seeds schema 2, message protocol 4 and journal codec 1. Its issued deadlines require a fresh
+database. The immediate-continuation Flowchart stays on protocol 3 and the ordinary preview stays on protocol 1.
+Pass `durable` as a third script argument to run the same Delay in Durable mode. The default is Balanced.
+
+The first Embedded process starts a public Native sequence with an eight-second Delay. It checks that the saved wait
+and its issued timer share a PostgreSQL transaction and that the deadline equals the issuing turn time plus eight
+seconds. A second process reads the original handle and absolute deadline
+at a higher ownership epoch. A future-horizon poll sees the timer early. A ready poll excludes it, and an ordinary
+application input of the same kind leaves the frame waiting. At the deadline the worker resumes the frame once.
+A process restarted after the deadline observes the timer ready immediately and completes the same frame.
+The receipt prints the deadline, the worker's application time, the database's terminal checkpoint time and
+whether the early-input check ran. The
+fixture checks the public journal after another worker pass. Use `ef` for the EF writer or `in-batch` for the batch
+fence. This preview exercises a single generated root, one partition and a clean process restart.
+
 ## Built-in Cluster redistribution on PostgreSQL
 
 Set `KERNEL_PREVIEW_POSTGRES` to the connection string of a fresh, empty PostgreSQL database, then run from

@@ -47,7 +47,7 @@ internal static class PostgresSelfSetChecks
                 new Dictionary<string, string>(), """["birth"]""", stop)).Landed, "initial checkpoint");
             fences[p] = fences[p] with { Position = 1 };
             var id = creator.Target.Id;
-            var handle = store.RootSelfIssuer!(FoundationSelfSend.Seed(CreationProtocol.Origin(id, 1), 2, 0));
+            var handle = FoundationSelfSend.Issue(store.RootSelfIssuer!.Handle, CreationProtocol.Origin(id, 1), 2, 0, null);
             var follow = FoundationSelfSend.Create(id, 1, handle, "step", "resume");
             emitted.Add(p, follow);
             await ingress.AdmitDirectAsync(tenant, reference, "begin", "begin", cancellationToken: stop);
