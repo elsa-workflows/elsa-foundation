@@ -1,6 +1,8 @@
+using System.Data.Common;
 using System.Text;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Kernel.Native.Run;
 
@@ -10,7 +12,8 @@ internal static class PostgresRootSelfChecks
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a dedicated PostgreSQL preview database.");
-        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        var clock = new DeadlineClock();
+        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).AddInterceptors(clock).Options;
         KernelDb Open() => timers ? KernelDb.ForPostgresRootTimers(options) : KernelDb.ForPostgresRootSelf(options);
         EfStore Client() => new(Open, postgres: true, fenceInBatch: inBatch)
             { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
@@ -55,8 +58,10 @@ internal static class PostgresRootSelfChecks
         }
         var zero = Timer(1, 0);
         var future = Timer(2, long.MaxValue);
+        const long deadline = 4_102_444_800_000; // 2100-01-01 UTC
+        var boundary = Timer(3, deadline);
         CommitBatch Batch(params TurnCommit[] turns) => new(0, lease.Epoch, 1, window, false, turns, [], []);
-        var emit = new TurnCommit(actor, row with { Revision = 2 }, 1, [], [direct.InboxKey], [sent, zero, future], [], [], null);
+        var emit = new TurnCommit(actor, row with { Revision = 2 }, 1, [], [direct.InboxKey], [sent, zero, future, boundary], [], [], null);
         if (!timers)
         {
             try { await scoped.CommitAsync(Batch(emit), stop); throw new InvalidOperationException("A protocol-3 writer accepted a timer."); }
@@ -139,7 +144,29 @@ internal static class PostgresRootSelfChecks
                 await db.Messages.CountAsync(m => m.Target == actor && !m.Done && m.InboxScope == EfStore.RootSelfScope &&
                     m.Id == future.InboxKey.Id && m.Due == long.MaxValue, stop) == 1,
                 "the pending future timer and checkpoint survive the early settlement attempt");
+        // Pin just the database clock used by the real poll and transactional settlement SQL.
+        clock.At = "timestamptz '2099-12-31 23:59:59.999750+00'";
+        var before = await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop);
+        Check(before.Now == deadline - 1 && before.Messages.Count == 0 && !(await cold.CommitAsync(Batch(Advance(boundary)), stop)).Landed,
+            "a quarter millisecond before the deadline, neither poll nor settlement exposes the timer");
+        clock.At = "timestamptz '2100-01-01 00:00:00+00'";
+        var at = await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop);
+        Check(at.Now == deadline && at.Messages.Single().Message == boundary && (await cold.CommitAsync(Batch(Advance(boundary)), stop)).Landed,
+            "at the exact deadline, poll and settlement accept the original timer");
         return 0;
+    }
+
+    private sealed class DeadlineClock : DbCommandInterceptor
+    {
+        internal string? At { get; set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (At is not null && command.CommandText.Contains("\"Due\" <=", StringComparison.Ordinal))
+                command.CommandText = command.CommandText.Replace("clock_timestamp()", At, StringComparison.Ordinal);
+            return new(result);
+        }
     }
 
     private static async Task RequireFormatRefusal(Func<Task> check)

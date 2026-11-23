@@ -695,10 +695,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
               AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" = {InboxKey.FoundationOccurrenceScope} OR m."InboxScope" = {RootSelfScope}))
            """
         : RootInboxSource + " m";
+    private const string RootClockMilliseconds = "floor(extract(epoch from clock_timestamp()) * 1000)::bigint";
     private string PollSql => Engine?.Poll ??
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"{PollBirthColumns}
-         FROM (SELECT {Now} AS now) t
+         FROM (SELECT {(RootSelfIssuer is { SupportsTimers: true } ? RootClockMilliseconds : Now)} AS now) t
          LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter}
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;

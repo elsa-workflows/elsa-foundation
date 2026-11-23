@@ -12,6 +12,8 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flowchart-peer"), var flowSize] && int.TryParse(flowSize, out var flowPartitions))
+    return await PostgresClusterChecks.RunAsync(flowPartitions, flowClusterMode == "pg-cluster-flowchart-peer", flowchart: true);
 if (args is [var clusterMode and ("pg-cluster-roots" or "pg-cluster-peer" or "pg-cluster-crash"), var size] && int.TryParse(size, out var clusterPartitions))
     return await PostgresClusterChecks.RunAsync(clusterPartitions, clusterMode == "pg-cluster-peer", clusterMode == "pg-cluster-crash");
 if (args is ["pg-discover-roots", var discoveryPhase and ("birth" or "restart"), var discoveryScope, .. var modes] &&
@@ -81,6 +83,8 @@ if (args is [var timerPreview and ("pg-delay-preview" or "pg-durable-delay-previ
 }
 if (args is [var selfMode and ("pg-root-self" or "pg-root-timer"), var selfWriter and ("ef" or "owned"), var selfFence and ("checked" or "in-batch")])
     return await PostgresRootSelfChecks.RunAsync(selfWriter == "owned", selfFence == "in-batch", selfMode == "pg-root-timer");
+if (args is ["pg-root-self-set", var setWriter and ("ef" or "owned"), var setFence and ("checked" or "in-batch")])
+    return await PostgresSelfSetChecks.RunAsync(setWriter == "owned", setFence == "in-batch");
 if (args is ["pg-flowchart-preview", "merge-early"])
 {
     try { return await PostgresFlowchartPreview.RunAsync("automatic", mergeEarly: true); }

@@ -9,7 +9,7 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresFlowchartPreview
 {
-    private const string Definition = "purchase-flowchart";
+    internal const string Definition = "purchase-flowchart";
 
     internal static async Task<int> RunAsync(string route, string? reference = null, string? bookmark = null,
         long previousEpoch = 0, bool mergeEarly = false, bool durable = false, bool reachWait = false, long? waitingRevision = null)
@@ -197,7 +197,7 @@ internal static class PostgresFlowchartPreview
         }
     }
 
-    private static Workflow Build(bool mergeEarly) => Wf.Workflow(Definition,
+    internal static Workflow Build(bool mergeEarly = false) => Wf.Workflow(Definition,
         Wf.Flowchart("purchase",
             [Wf.Set("start", "ready", false), Wf.If("decision", Binding.Expr("input.manualReview")),
              Wf.Node<Approval>("risk"), Wf.Set("bypass", "bypassed", true), Wf.Node<Approval>("finance"),
@@ -207,9 +207,9 @@ internal static class PostgresFlowchartPreview
             ("join", mergeEarly ? Gateway.Merge : Gateway.ParallelJoin)),
         ("bypassed", false));
 
-    private static NativeState State(EfStore.RootImage image) => Json.Read<NativeState>(image.State!);
-    private static string Frame(NativeState state, string node) => state.Frames.Values.Single(frame => frame.Node == node).Id;
-    private static bool IsJoin(Contract.JournalEntry entry) =>
+    internal static NativeState State(EfStore.RootImage image) => Json.Read<NativeState>(image.State!);
+    internal static string Frame(NativeState state, string node) => state.Frames.Values.Single(frame => frame.Node == node).Id;
+    internal static bool IsJoin(Contract.JournalEntry entry) =>
         entry.Entry.StartsWith("\"j:", StringComparison.Ordinal) && entry.Entry.Contains(":join:", StringComparison.Ordinal);
 
     private static void Check(bool ok, string message)

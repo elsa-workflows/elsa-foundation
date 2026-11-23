@@ -52,7 +52,7 @@ public sealed partial class EfStore
         var rows = await db.Messages.FromSqlRaw($$"""
             SELECT * FROM {{source}} WHERE "Target" = {0} AND "Partition" = {1}
                 AND "InboxScope" IN ({2}, {3}) AND "EventMatch" IS NULL
-                AND NOT "Done" AND "Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}}
             ORDER BY "Seq" LIMIT {4} FOR UPDATE
             """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count).AsNoTracking().ToListAsync(cancellationToken);
         var messages = rows.Select(row => row.InboxScope == RootSelfScope ? DecodeRootSelf(row, issue) : PostgresRootAdmission.DecodeDirect(row, reference)).ToArray();
