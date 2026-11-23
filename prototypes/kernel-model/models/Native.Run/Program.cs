@@ -74,10 +74,21 @@ if (args is ["pg-multi-root", var writer and ("owned" or "ef"), var fence and ("
 }
 if (args is ["pg-timed-job-worker", var jobFence and ("checked" or "in-batch")])
     return await PostgresTimedJobChecks.RunAsync(jobFence == "in-batch");
-if (args is ["pg-runtime-cluster"]) return await PostgresRuntimeCluster.RunAsync();
-if (args is ["pg-runtime-cluster", "wake"]) return await PostgresRuntimeCluster.RunAsync(wake: true);
-if (args is ["pg-runtime-cluster-member"]) return await PostgresRuntimeCluster.MemberAsync();
-if (args is ["pg-runtime-cluster-member", "wake"]) return await PostgresRuntimeCluster.MemberAsync(wake: true);
+if (args is [var runtimeCluster and ("pg-runtime-cluster" or "pg-runtime-cluster-member"), .. var clusterOptions])
+{
+    var wake = clusterOptions.LastOrDefault() == "wake";
+    var sizeArguments = wake ? clusterOptions[..^1] : clusterOptions;
+    var partitions = PostgresRuntimeCluster.DefaultPartitions;
+    if (sizeArguments.Length > 1 || sizeArguments is [var count] && (!int.TryParse(count, out partitions) ||
+        partitions is < 4 or > Defaults.ServerPartitions || partitions % 2 != 0))
+    {
+        Console.Error.WriteLine("Usage: pg-runtime-cluster [even partition count from 4 to 1024] [wake]");
+        return 2;
+    }
+    return runtimeCluster == "pg-runtime-cluster"
+        ? await PostgresRuntimeCluster.RunAsync(partitions, wake)
+        : await PostgresRuntimeCluster.MemberAsync(partitions, wake);
+}
 if (args is ["pg-root-list", var listWriter and ("owned" or "ef"), var listFence and ("checked" or "in-batch"), .. var listArgs])
 {
     if (listArgs is ["birth"]) return await PostgresRootListChecks.RunAsync(listWriter == "owned", listFence == "in-batch", null);
@@ -167,7 +178,7 @@ if (args is ["cost", "postgres", var connection])
     return failures;
 }
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
-Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | memory [runs] | pg-runtime-cluster [wake]");
+Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | memory [runs] | pg-runtime-cluster [partitions] [wake]");
 return 2;
 
 static class Cost
