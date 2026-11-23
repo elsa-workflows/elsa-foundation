@@ -86,8 +86,9 @@ internal static class PostgresPreview
             await SignalAsync("approval-1", expectedNew: false);
             var replay = await Checkpoint();
             Require(replay, InstanceStatus.Running, 1, "second");
-            if (replay!.Revision != current!.Revision || !(await Journal()).SequenceEqual(previous))
-                throw new InvalidOperationException("Replay changed the saved revision or workflow journal.");
+            if (replay!.Revision != current!.Revision || replay.State != current.State ||
+                !(await Journal()).SequenceEqual(previous))
+                throw new InvalidOperationException("Replay changed the saved revision, state or workflow journal.");
             PrintCost("replay of first approval");
             await SignalAsync("approval-2", expectedNew: true);
             var finished = await Checkpoint();
