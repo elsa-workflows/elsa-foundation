@@ -518,6 +518,26 @@ approval. The journal records the cancelled frame once. This Embedded preview su
 self inputs on a generated root. Same-turn retraction, whole-workflow operator termination, Park and Cluster timer
 recovery fall outside this case.
 
+### PostgreSQL Native background job preview
+
+Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated PostgreSQL database and run from `prototypes/kernel-model`:
+
+```sh
+models/Native.Run/run-root-job-preview.sh checked
+```
+
+Use `in-batch` on another fresh database to exercise the other owned SQL fence. The first Embedded process starts
+two public Native workflows. Each start commits the waiting checkpoint, issued job ticket and journal together.
+A replacement process reads the same ticket at a higher epoch. The background activity receives and returns its
+own opaque public actor reference. The Worker commits the job result in the Native checkpoint, consumes its
+ticket and advances the workflow to completion. The public journal shows one activity completion per root.
+
+The profile uses schema 3, message protocol 6 and journal codec 1. Readers of the ordinary protocol refuse
+ownership. The fixture also checks refusal of a cross-root ticket, a stale fence, a missing Worker completion and an
+outside completion. This opt-in uses Embedded, Balanced persistence and one active untimed job per generated root.
+Timed and held results, job cancellation, inline promotion and recovery after repeated callback failures require
+separate qualification.
+
 ### PostgreSQL Suspend and Resume preview
 
 On a fresh dedicated PostgreSQL database, set `KERNEL_PREVIEW_POSTGRES` and run `models/Native.Run/run-root-operator-preview.sh [owned|ef] [checked|in-batch]`.

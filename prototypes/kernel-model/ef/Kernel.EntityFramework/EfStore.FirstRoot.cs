@@ -12,6 +12,8 @@ public sealed partial class EfStore
     internal sealed record RootImage(CreationAddress Actor, string Model, string Definition, string TypeData,
         IReadOnlyDictionary<string, string> Labels, string? State, int StateVersion, long Revision)
     {
+        internal string? Jobs { get; init; }
+        internal long? NextJobGeneration { get; init; }
         internal History History { get; init; }
         internal InstanceStatus Status { get; init; }
         internal bool Suspended { get; init; }
@@ -107,7 +109,7 @@ public sealed partial class EfStore
 
     private PreparedRoot PrepareFirstRoot(string tenant, string reference, Message creator,
         PartitionFence fence, string? state, int stateVersion, string typeData,
-        IReadOnlyDictionary<string, string> labels, string journal)
+        IReadOnlyDictionary<string, string> labels, string journal, RootJobState? jobState = null)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("First root checkpoints require PostgreSQL.");
         if (creator.Start is not { Parent: null, Creation: { Generation: 1, Previous: 0 } } start ||
@@ -118,7 +120,8 @@ public sealed partial class EfStore
         var (storedState, header) = EncodeRootContent(start.Model, start.Definition, state, stateVersion, typeData, labels, journal);
         // Model and definition are in the qualified header, including values that PostgreSQL text cannot carry.
         var row = new InstanceRow(creator.Target.Id, "", "", InstanceStatus.Running, "null", 1, null,
-            History: start.History, StateVersion: stateVersion).WithFoundationState(storedState);
+            History: start.History, StateVersion: stateVersion, Jobs: jobState?.Jobs).WithFoundationState(storedState)
+            with { NextJobGeneration = jobState?.NextGeneration };
         // BindCheckpointAsync consumes the exact, due creator before this same transaction lands.
         var turn = new TurnCommit(row.Id, row, null, [], [], [], [], [], journal);
         return new(turn, new FirstRootCheckpoint(tenant, reference, creator, header));
@@ -155,7 +158,8 @@ public sealed partial class EfStore
     }
 
     private sealed record PhysicalRoot(string Id, long Creation, string State, int StateVersion, long Revision, string Header,
-        History History, InstanceStatus Status, bool Suspended, long? TerminalRevision, long? TerminalAt, long AsOf);
+        History History, InstanceStatus Status, bool Suspended, long? TerminalRevision, long? TerminalAt, long AsOf,
+        string? Jobs, long? NextJobGeneration);
 
     internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
@@ -163,7 +167,8 @@ public sealed partial class EfStore
         var physical = await db.Database.SqlQuery<PhysicalRoot>($"""
             SELECT i."Id", b."Creation", i."State", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
                 i."History", i."Status", i."Suspended", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
-                floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
+                floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
+                i."Jobs", i."NextJobGeneration"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Reference" = i."FoundationReference"
                 AND b."Actor" = i."Id" AND b."Tenant" = i."FoundationTenant"
             WHERE i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference} AND i."Partition" = b."Partition" AND NOT i."Retired"
@@ -179,7 +184,7 @@ public sealed partial class EfStore
             header.Labels.ToDictionary(StringComparer.Ordinal), state, physical.StateVersion, physical.Revision)
             {
                 History = physical.History, Status = physical.Status, Suspended = physical.Suspended, TerminalRevision = physical.TerminalRevision,
-                TerminalAt = physical.TerminalAt, AsOf = physical.AsOf
+                TerminalAt = physical.TerminalAt, AsOf = physical.AsOf, Jobs = physical.Jobs, NextJobGeneration = physical.NextJobGeneration
             };
     }
 }

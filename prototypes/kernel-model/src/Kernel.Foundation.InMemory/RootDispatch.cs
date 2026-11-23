@@ -42,11 +42,14 @@ internal sealed partial class ActorAdapter
         if (input.Row is { Status: not Durable.InstanceStatus.Running }) return "Ended";
         if (input.Row is { } row && (row.Creation != 1 || row.Retired || row.Parent is not null ||
             row.ParkRecovery is not null || row.ParkCohort is not null || row.ParkDiscard is not null || row.Cascade is not null ||
-            row.Jobs is not null || row.Children is not null))
+            rootJobHandle is null && row.Jobs is not null || row.Children is not null))
             return "RootDispatchUnavailable";
 
         if (input.Row is not null && input.Taken is [var command] && command.Durable && IsRootSuspension(command.Message) &&
             command.Message.Target.Id == input.Actor) return null;
+
+        if (rootJobHandle is not null && input.Row is { } bound && input.Taken is [var job] &&
+            Durable.RootUntimedJob.IsCompletion(job, bound)) return null;
 
         foreach (var delivery in input.Taken)
         {
@@ -73,11 +76,15 @@ internal sealed partial class ActorAdapter
     private void RequireRootOutcome(Durable.TurnOutcome outcome)
     {
         if (outcome.Row is not { Status: Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished } ||
-            outcome.Sent.Any(m => issueSelf is null || !issueSelf.Allows(m.Due) || !Durable.FoundationSelfSend.IsSelfInput(m, outcome.Row.Id, outcome.Row.Creation)) ||
+            outcome.Sent.Any(m => !SupportedSend(m, outcome.Row)) ||
             outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
             outcome.Emitted.Count != 0 || outcome.FoundationCascade is not null || outcome.InMemory)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
+
+        bool SupportedSend(Durable.Message message, Durable.InstanceRow row) =>
+            rootJobHandle is not null && message.HasIssuedTicket && Durable.RootUntimedJob.Read(message, row.Id, row.Model) is not null ||
+            issueSelf is { } issuer && issuer.Allows(message.Due) && Durable.FoundationSelfSend.IsSelfInput(message, row.Id, row.Creation);
     }
 }

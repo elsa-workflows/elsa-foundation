@@ -72,6 +72,13 @@ if (args is ["pg-multi-root", var writer and ("owned" or "ef"), var fence and ("
     if (phaseArgs is ["birth"]) return await PostgresMultiRootChecks.RunAsync([], writer == "owned", fence == "in-batch");
     if (phaseArgs is ["restart", var a, var b, var outside]) return await PostgresMultiRootChecks.RunAsync([a, b, outside], writer == "owned", fence == "in-batch");
 }
+if (args is ["pg-root-job-preview", var rootJobFence and ("checked" or "in-batch"), "birth"])
+    return await PostgresRootJobPreview.RunAsync(rootJobFence == "in-batch", null);
+if (args is ["pg-root-job-preview", var rootJobRestartFence and ("checked" or "in-batch"), "restart",
+    var jobActor, var jobNeighbor, var jobEpoch, var jobPosition, var jobBookmark] &&
+    long.TryParse(jobEpoch, out var priorJobEpoch) && priorJobEpoch > 0 && long.TryParse(jobPosition, out var priorJobPosition) && priorJobPosition > 0)
+    return await PostgresRootJobPreview.RunAsync(rootJobRestartFence == "in-batch",
+        new(jobActor, jobNeighbor, priorJobEpoch, priorJobPosition, jobBookmark));
 if (args is ["pg-timed-job-worker", var jobFence and ("checked" or "in-batch")])
     return await PostgresTimedJobChecks.RunAsync(jobFence == "in-batch");
 if (args is ["pg-runtime-cluster"]) return await PostgresRuntimeCluster.RunAsync();
