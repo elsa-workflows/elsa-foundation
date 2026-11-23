@@ -3,6 +3,7 @@ using Kernel.Durable;
 using Kernel.Foundation.InMemory;
 using Kernel.Native;
 using Kernel.Runtime;
+using Kernel.Runtime.Hosting;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 using Contract = Kernel.Foundation.Contracts;
@@ -25,7 +26,7 @@ internal static class PublicOrderExample
         const long start = 1_705_000_000_000;
         var now = start;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("orders");
+        var scope = FixedTenantScope.Bind("orders");
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var token = budget.Token;
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("orders-ingress"), "orders-ingress");
@@ -72,6 +73,10 @@ internal static class PublicOrderExample
                 var confirmation = await SignalAsync(actor, frame, "shipment-release-confirmed", "shipment-released");
                 Require(confirmation.Outcome == Contract.AdmissionOutcome.Accepted, "The shipment release acknowledgement must be admitted.");
                 await DriveAsync(replacement);
+                var (confirmationHistory, _) = await HistoryAsync(actor, beforeReplay);
+                var entered = confirmationHistory.Where(entry => entry[2] == "entry").Select(entry => entry[3]);
+                Require(entered.SequenceEqual(["ReleasingStock"]),
+                    "The saved payment bookmark must show only the new stock release entry after shipment confirmation.");
                 Require(await GetStatusAsync(actor) == Contract.ActorStatus.Running,
                     "Releasing stock must wait for its acknowledgement before closing the order.");
                 Require(Marks().SequenceEqual(["reserve stock", "book shipment", "release shipment", "release stock"]),
@@ -126,10 +131,9 @@ internal static class PublicOrderExample
             }
         }
 
-        async Task<(List<string?[]> Entries, Contract.PageToken? End)> HistoryAsync(Contract.ActorRef actor)
+        async Task<(List<string?[]> Entries, Contract.PageToken? End)> HistoryAsync(Contract.ActorRef actor, Contract.PageToken? bookmark = null)
         {
             var entries = new List<string?[]>();
-            Contract.PageToken? bookmark = null;
             while (true)
             {
                 var page = await reads.TailAsync(scope, actor, bookmark, token);
