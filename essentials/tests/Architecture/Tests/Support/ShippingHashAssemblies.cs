@@ -119,7 +119,7 @@ internal sealed class ShippingHashAssemblies : IDisposable
     }
 
     internal static IReadOnlyList<Project> Discover(string repoRoot, string configuration) =>
-        ModuleRoots.Resolve(repoRoot, [.. ModuleRoots.Production, "Studio/src", "Extensions/*/studio"])
+        ModuleRoots.Resolve(repoRoot, [.. ModuleRoots.Production, "Studio/src", "extensions/*/studio"])
             .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
             .Where(path => !RepoPaths.IsBuildOutput(repoRoot, path) && ModuleRoots.IsNotTestFile(repoRoot, path))
             .Distinct(StringComparer.Ordinal)
@@ -130,7 +130,7 @@ internal sealed class ShippingHashAssemblies : IDisposable
     {
         var parts = Relative(repoRoot, project).Split('/');
         return parts.Length > 2 && parts[0] == "Studio" && parts[1] == "src" ||
-            parts.Length > 3 && parts[0] == "Extensions" && parts[2] == "studio";
+            parts.Length > 3 && parts[0] == "extensions" && parts[2] == "studio";
     }
 
     internal static List<string> ValidateInputs(string repoRoot, IReadOnlyList<Project> projects, string configuration,

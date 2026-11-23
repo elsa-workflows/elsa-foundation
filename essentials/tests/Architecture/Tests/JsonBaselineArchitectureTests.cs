@@ -188,10 +188,10 @@ public sealed class JsonBaselineArchitectureTests
     public void Every_production_root_uses_the_baseline_or_a_specific_recorded_deviation()
     {
         var register = JsonBaselineSourceScan.ReadRegister(File.ReadAllText(Path.Join(RepoPaths.RepoRoot, "docs/serialization.md")));
-        var legacyPath = Path.Join(RepoPaths.RepoRoot, "Essentials/tests/Architecture/Tests/Baselines/json-optionless-calls.txt");
+        var legacyPath = Path.Join(RepoPaths.RepoRoot, "essentials/tests/Architecture/Tests/Baselines/json-optionless-calls.txt");
         Assert.True(File.Exists(legacyPath), "Missing shrinking option-less own-contract inventory.");
         var legacy = File.ReadAllLines(legacyPath).Where(line => line.Length > 0 && !line.StartsWith('#')).ToHashSet(StringComparer.Ordinal);
-        var paths = ModuleRoots.Resolve(RepoPaths.RepoRoot, [.. ModuleRoots.Production, "Studio/src", "Extensions/*/studio"])
+        var paths = ModuleRoots.Resolve(RepoPaths.RepoRoot, [.. ModuleRoots.Production, "Studio/src", "extensions/*/studio"])
             .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
             .Where(path => !RepoPaths.IsBuildOutput(path) && ModuleRoots.IsNotTestFile(path)).Distinct().ToArray();
         Assert.NotEmpty(paths);

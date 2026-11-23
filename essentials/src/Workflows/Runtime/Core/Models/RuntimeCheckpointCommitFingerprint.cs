@@ -134,7 +134,7 @@ public static class RuntimeCheckpointCommitFingerprint
         if (commit.ExpectedBookmarkResume is not null)
             element = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new { ExactBookmarkResumeVersion = 1, Payload = payload, commit.ExpectedBookmarkResume }, RuntimeJsonHashProjection.For);
         else if (commit.StateChanges.ActivityExecutionInspections.Any(change => change.State.CheckpointValueCapture is not null))
-            // Preserve the new raw owner identifiers before the historical JSON conversion can replace UTF-16 units.
+            // This domain tag identifies commits that carry checkpoint value capture.
             element = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new { CheckpointValueCaptureVersion = 1, Payload = payload }, RuntimeJsonHashProjection.For);
         else
             element = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(payload, RuntimeJsonHashProjection.For);
@@ -143,8 +143,8 @@ public static class RuntimeCheckpointCommitFingerprint
         if (commit.PostCommitIntents.Any(intent => intent.HistoryCausation is not null) ||
             commit.StateChanges.PostCommitOutbox.Any(change => change.State?.Intent?.HistoryCausation is not null))
         {
-            // Only the new conditional shape binds original opaque origin/source fields exactly. The legacy
-            // payload serializer may replace unpaired UTF-16; do not derive these identities from that JSON.
+            // Bind the causation domain and its ordered intent/outbox inventory explicitly.
+            // The shared opaque projection preserves the original UTF-16 identities throughout.
             element = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new { RuntimePostCommitHistoryCausationVersion = 1,
                 Payload = element,
                 Intents = commit.PostCommitIntents.Where(intent => intent.HistoryCausation is not null)
@@ -156,8 +156,7 @@ public static class RuntimeCheckpointCommitFingerprint
             element = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new { RuntimeHistoryCausationVersion = 1, Payload = element, Cause = cause }, RuntimeJsonHashProjection.For);
         if (commit.HistorySourceFacts is { Count: > 0 } facts)
             element = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new { RuntimeHistorySourceVersion = 1, Payload = element, SourceFacts = facts }, RuntimeJsonHashProjection.For);
-        // Preserve legacy cleanup marker bytes. New history-owner input must also bind the exact native
-        // cleanup inventory; older payload branches do not all contain ActivityScopeCleanups.
+        // History-owned cleanup adds its own domain tag and exact ordered native cleanup inventory.
         if (commit.StateChanges.ActivityScopeCleanups.Count > 0 &&
             (commit.HistorySourceFacts is not null || commit.HistoryBatches is { Count: > 0 } ||
              commit.StateChanges.ActivityScopeCleanups.Any(request => request.HistoryBookmarks is not null)))

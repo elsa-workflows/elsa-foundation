@@ -11,11 +11,14 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
     public void Inventory_includes_hosts_and_all_Studio_CSharp_roots()
     {
         var projects = ShippingHashAssemblies.Discover(RepoPaths.RepoRoot, Configuration);
-        Assert.Contains(projects, project => project.Path.Replace('\\', '/').Contains("Essentials/apps/Elsa.Workbench/", StringComparison.Ordinal));
-        Assert.Contains(projects, project => project.Path.Replace('\\', '/').Contains("Essentials/apps/Elsa.Foundation.Host/", StringComparison.Ordinal));
+        Assert.Contains(projects, project => project.Path.Replace('\\', '/').Contains("apps/Elsa.Workbench/", StringComparison.Ordinal));
+        Assert.Contains(projects, project => project.Path.Replace('\\', '/').Contains("apps/Elsa.Foundation.Host/", StringComparison.Ordinal));
         Assert.Contains(projects, project => project.Path.Replace('\\', '/').Contains("Studio/src/", StringComparison.Ordinal));
+        Assert.Contains(projects, project => project.Path.Replace('\\', '/').Contains("extensions/Connections/studio/", StringComparison.Ordinal));
         Assert.DoesNotContain(projects, project => !ModuleRoots.IsNotTestFile(RepoPaths.RepoRoot, project.Path));
-        Assert.All(projects.Where(project => project.Path.Replace('\\', '/').Contains("Essentials/src/Studio/Preferences/", StringComparison.Ordinal)),
+        var preferences = projects.Where(project => project.Path.Replace('\\', '/').Contains("essentials/src/Studio/Preferences/", StringComparison.Ordinal)).ToArray();
+        Assert.NotEmpty(preferences);
+        Assert.All(preferences,
             project => Assert.False(ShippingHashAssemblies.IsStudioProject(RepoPaths.RepoRoot, project.Path)));
         Assert.All(projects.Where(project => project.Path.Replace('\\', '/').Contains("Studio/src/", StringComparison.Ordinal) ||
             project.Path.Replace('\\', '/').Contains("/studio/", StringComparison.Ordinal)),
@@ -124,7 +127,7 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
         var root = NewRoot();
         try
         {
-            var directory = Path.Join(root, "Essentials", "src", "First");
+            var directory = Path.Join(root, "essentials", "src", "First");
             Directory.CreateDirectory(directory);
             var first = Path.Join(directory, "Elsa.PreflightValid.csproj");
             File.WriteAllText(first, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
@@ -132,7 +135,7 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
             Directory.CreateDirectory(Path.GetDirectoryName(binary)!);
             File.WriteAllBytes(binary, FixtureCompiler.Compile("Elsa.PreflightValid", "public class Valid { }"));
             File.SetLastWriteTimeUtc(first, DateTime.UtcNow.AddMinutes(-2));
-            var other = Path.Join(root, "Essentials", "src", "Missing");
+            var other = Path.Join(root, "essentials", "src", "Missing");
             Directory.CreateDirectory(other);
             File.WriteAllText(Path.Join(other, "Elsa.PreflightMissing.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
             using var inventory = ShippingHashAssemblies.Load(root, Configuration, project => [project.Path]);
@@ -267,7 +270,7 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
             var commonPath = Path.Join(root, commonName + ".dll");
             File.WriteAllBytes(commonPath, FixtureCompiler.Compile(commonName, "namespace FixtureCommon; public class Argument { }"));
             var common = compiler.LoadFromAssemblyPath(commonPath);
-            var backend = WriteProject("Essentials/src/Fixture", backendName,
+            var backend = WriteProject("essentials/src/Fixture", backendName,
                 FixtureCompiler.Compile(backendName, "public static class Backend { public static void Call(FixtureCommon.Argument value) { } }", [common]));
             var backendAssembly = compiler.LoadFromAssemblyPath(backend.AssemblyPath);
             var studio = WriteProject("Studio/src/Fixture", studioName,

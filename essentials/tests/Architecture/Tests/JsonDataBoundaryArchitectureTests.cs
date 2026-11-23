@@ -14,7 +14,7 @@ public sealed class JsonDataBoundaryArchitectureTests
     public void Every_shipping_generated_context_is_loaded_and_every_declared_wire_root_can_be_described()
     {
         var contexts = JsonBoundaryContractGraph.Contexts(RuntimeLibraries.Assemblies);
-        var sourcePaths = ModuleRoots.Resolve(RepoPaths.RepoRoot, [.. ModuleRoots.Production, "Studio/src", "Extensions/*/studio"])
+        var sourcePaths = ModuleRoots.Resolve(RepoPaths.RepoRoot, [.. ModuleRoots.Production, "Studio/src", "extensions/*/studio"])
             .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
             .Where(path => !RepoPaths.IsBuildOutput(path) && ModuleRoots.IsNotTestFile(path)).Distinct().ToArray();
         var declared = JsonBoundaryContractGraph.DeclaredContexts(sourcePaths.Select(File.ReadAllText));
@@ -32,7 +32,7 @@ public sealed class JsonDataBoundaryArchitectureTests
     {
         var snapshot = JsonBoundaryContractGraph.Inspect(JsonBoundaryContractGraph.Contexts(RuntimeLibraries.Assemblies));
         Assert.Empty(snapshot.Errors);
-        var path = Path.Join(RepoPaths.RepoRoot, "Essentials/tests/Architecture/Tests/Baselines/json-wire-contracts.json");
+        var path = Path.Join(RepoPaths.RepoRoot, "essentials/tests/Architecture/Tests/Baselines/json-wire-contracts.json");
         var expected = JsonSerializer.Deserialize<SortedDictionary<string, string>>(File.ReadAllText(path))!;
         var changes = snapshot.Pins.Keys.Union(expected.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal)
             .Where(key => !expected.TryGetValue(key, out var before) || !snapshot.Pins.TryGetValue(key, out var after) || before != after)

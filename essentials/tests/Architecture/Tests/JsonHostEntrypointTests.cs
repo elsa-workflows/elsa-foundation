@@ -20,8 +20,8 @@ public sealed class JsonHostEntrypointTests
         Exception? failure = null;
         try
         {
-            var hook = Output("Essentials/tests/Architecture/Fixtures/JsonHostOptionsProbe", "JsonHostOptionsProbe");
-            var assembly = name == "JsonHostOptionsProbe" ? hook : Output("Essentials/apps/" + name, name);
+            var hook = Output("essentials/tests/Architecture/Fixtures/JsonHostOptionsProbe", "JsonHostOptionsProbe");
+            var assembly = name == "JsonHostOptionsProbe" ? hook : Output("apps/" + name, name);
             await File.WriteAllTextAsync(Path.Combine(directory, "shells.json"), """{"CShells":{"Shells":{"default":{"Name":"default","Features":{}}}}}""");
             var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
             {
