@@ -74,8 +74,10 @@ public sealed partial class EfStore
         {
             if (_ordinaryRoots is not null)
                 throw new InvalidOperationException("The PostgreSQL owner is already bound.");
-            if (db.UsesRootJobProtocol != RootJobsEnabled)
+            if (db.UsesRootJobProtocol != RootJobsEnabled || db.UsesRootTimedJobIssuance != RootTimedJobIssuanceEnabled)
                 throw new StoreFormatException("The PostgreSQL owner must initialize its job capability before binding to the job profile.");
+            if (RootTimedJobIssuanceEnabled && (scope.Discover || scope.Actors.Length != 1))
+                throw new NotSupportedException("The timed job issuance fixture binds exactly one generated root.");
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
         }
@@ -200,13 +202,13 @@ public sealed partial class EfStore
     }
 
     private sealed record RootCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> Commands, IReadOnlyDictionary<string, long> Revisions,
-        bool JobProfile)
+        bool JobProfile, bool TimedJobIssuance)
         : QualifiedRootCheckpoint(0)
     {
         internal override long RevisionFor(string actor) => Revisions[actor];
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
-            if (db.UsesRootJobProtocol != JobProfile) return false;
+            if (db.UsesRootJobProtocol != JobProfile || db.UsesRootTimedJobIssuance != TimedJobIssuance) return false;
             foreach (var command in Commands)
                 if (!await command.BindCheckpointAsync(db, cancellationToken)) return false;
             return true;
@@ -265,7 +267,7 @@ public sealed partial class EfStore
                 revisions.Add(journal.Instance, prepared.Checkpoint.JournalRevision);
             }
         }
-        return (batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions, RootJobsEnabled));
+        return (batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled));
     }
 
     private static bool InputsMatch(WorkerRoot root, TurnCommit turn, bool jobs = false) =>
@@ -319,8 +321,11 @@ public sealed partial class EfStore
         if (change is not null && (change.TypeData != header.Header.TypeData || change.Labels.Count != header.Header.Labels.Count ||
             change.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))) throw RootShape();
 
-        var wires = turn.Sent.Select((message, index) => RootJobsEnabled && message.Kind == Kinds.Job
-            ? EncodeRootJob(message, root, row.Model) : EncodeRootSelf(root, row.Revision, index, message)).ToArray();
+        if (RootTimedJobIssuanceEnabled && (turn.Expected is not null ||
+            !RootJobTicket.StartsTimedPair(turn.Sent, root.Actor, row.Model))) throw RootShape();
+        var wires = RootTimedJobIssuanceEnabled ? turn.Sent.Select(EncodeRootTimedJob).ToArray() :
+            turn.Sent.Select((message, index) => RootJobsEnabled && message.Kind == Kinds.Job
+                ? EncodeRootJob(message, root, row.Model) : EncodeRootSelf(root, row.Revision, index, message)).ToArray();
         var jobState = RootJobsEnabled ? new RootJobState(row.Jobs, row.NextJobGeneration) : null;
         PreparedRoot WithSends(PreparedRoot prepared) => wires.Length == 0 ? prepared :
             prepared with { JournalTurn = prepared.JournalTurn! with { Sent = wires } };
@@ -333,7 +338,7 @@ public sealed partial class EfStore
             var creator = await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;
             if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History) throw RootShape();
-            if (RootJobsEnabled) ValidateRootJobChange(null, row, [], turn.Sent, turn.FoundationRootJobCompletion);
+            if (RootJobsEnabled) ValidateRootJobChange(null, row, [], turn.Sent, turn.FoundationRootJobCompletion, RootTimedJobIssuanceEnabled);
             return WithSends(PrepareFirstRoot(root.Tenant, root.Reference, creator, fence, state, row.StateVersion,
                 change.TypeData, change.Labels, turn.Journal, jobState, row.Status));
         }

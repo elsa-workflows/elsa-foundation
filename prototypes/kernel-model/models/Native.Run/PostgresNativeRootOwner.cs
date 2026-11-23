@@ -31,7 +31,7 @@ internal sealed class PostgresNativeRootOwner
     }
 
     private static ActorAdapter Adapter(EfStore store, EfStore.WorkerRoots roots, WorkflowRegistry registry) =>
-        new(new Headers(roots), new PublicActor([new NativeExecutionModel(registry)]), store.RootSelfIssuer, store.RootJobHandle);
+        new(new Headers(roots), new PublicActor([new NativeExecutionModel(registry)]), store.RootSelfIssuer, store.RootJobHandle, store.RootTimedJobIssuanceEnabled);
 
     internal static async Task<PostgresNativeRootOwner> PreparePartitionAsync(EfStore store, string node, int partition,
         WorkflowRegistry registry, int pollLimit, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn = null)

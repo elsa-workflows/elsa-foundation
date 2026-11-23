@@ -595,6 +595,21 @@ argument change between preparation and the locked read. Only the qualified Work
 This opt-in uses Embedded, Balanced persistence and one active untimed job per generated root.
 Timed and held results, job cancellation, inline promotion and job fault recovery require separate qualification.
 
+#### Timed Native job issuance qualification
+
+On a disposable PostgreSQL server with permission to create a database, set `KERNEL_PREVIEW_POSTGRES` and run
+the Native runner with `pg-root-timed-job-issuance checked` or `pg-root-timed-job-issuance in-batch`.
+The fixture creates and drops its own database. It uses an isolated schema-3, protocol-7, codec-1
+marker so a protocol-6 owner refuses it. Existing database profiles have no upgrade into the fixture.
+
+A Native background node declares a timeout. The first process exits after the fenced commit, before
+the Worker sees its answer or hands off locally. A second process takes the same partition at a higher epoch and inspects the
+same Native wait, generation, private ticket and deadline. It checks the original absolute deadline against
+the database clock and verifies that both rows, the checkpoint and the journal share a transaction.
+Changing the persisted deadline by one millisecond makes the original ticket pair fail validation.
+The cold owner's store poll excludes both rows after the deadline. Production settlement, result delivery and
+recovery still need qualification.
+
 ### PostgreSQL Suspend and Resume preview
 
 On a fresh dedicated PostgreSQL database, set `KERNEL_PREVIEW_POSTGRES` and run `models/Native.Run/run-root-operator-preview.sh [owned|ef] [checked|in-batch]`.

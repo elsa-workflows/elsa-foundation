@@ -2377,7 +2377,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var generation = _generation;
         var job = ticket.Message.Read<JobTicket>();
         if (loadedSlot.Row is { FoundationDispatchHeader: not null } bound &&
-            RootUntimedJob.Read(ticket.Message, bound.Id, bound.Model) is null)
+            RootJobTicket.Read(ticket.Message, bound.Id, bound.Model) is null)
             throw new StoreException(Failure.Definite, "The job ticket does not belong to its generated root.");
         if (!HasPhysicalTrial(ticket))
         {

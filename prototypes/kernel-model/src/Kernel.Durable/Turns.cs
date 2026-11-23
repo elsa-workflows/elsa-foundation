@@ -235,7 +235,8 @@ public sealed class TurnInput
     public long CheckpointTime => _worker.Now;
 
     /// <summary>Say that the actor's code is about to run, with what it is given (for tests).</summary>
-    public void Started(IReadOnlyList<Message> inbox) => _worker.Started(Actor, inbox, Services.Now);
+    public void Started(IReadOnlyList<Message> inbox) => Started(inbox, Services.Now);
+    internal void Started(IReadOnlyList<Message> inbox, long turnNow) => _worker.Started(Actor, inbox, turnNow);
 }
 
 /// <summary>What a turn did, for the committer: the row, what it consumed and held, sent, subscribed, cancelled.</summary>

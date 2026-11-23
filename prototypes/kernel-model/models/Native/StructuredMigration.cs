@@ -133,7 +133,7 @@ internal static class StructuredMigration
         before.Select(child => (child.Id, child.Slot)).SequenceEqual(after.Select(child => (child.Id, child.Slot)));
 
     private static bool SameAuthoredNode(Node before, Node after) =>
-        before.Slot == after.Slot &&
+        before.Slot == after.Slot && before.JobTimeout == after.JobTimeout &&
         SameEntries(before.Inputs, after.Inputs, SameBinding) &&
         SameEntries(before.Captures, after.Captures, StringComparer.Ordinal.Equals) &&
         before.Connections.SequenceEqual(after.Connections) &&

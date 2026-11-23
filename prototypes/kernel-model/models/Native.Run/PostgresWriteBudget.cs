@@ -46,10 +46,9 @@ internal static class PostgresWriteBudget
         var store = new EfStore(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = writer };
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         var cursor = await observeAdmission.OpenJournalCursorAsync(stop);
-        var reads = new PostgresRootReads(observer, cursor, 64);
-        var api = new PostgresPreviewFoundation(admission, observer, reads, PublicActor.ActorType);
+        var api = new PostgresPreviewFoundation(admission, store, new(store, cursor, 64), PublicActor.ActorType);
         var runtime = new WorkflowRuntime(api, api);
-        var verifyApi = new PostgresPreviewFoundation(observeAdmission, observer, reads, PublicActor.ActorType);
+        var verifyApi = new PostgresPreviewFoundation(observeAdmission, observer, new(observer, cursor, 64), PublicActor.ActorType);
         var verifyRuntime = new WorkflowRuntime(verifyApi, verifyApi);
         var scope = FixedTenantScope.Bind("write-budget");
         var definition = Reference.WriteLines(Lines);
@@ -97,32 +96,28 @@ internal static class PostgresWriteBudget
                     throw new InvalidOperationException("Balanced must complete this workflow at a single checkpoint revision.");
                 Check(await verifyApi.GetAsync(scope, actor, stop) is { Header.Status: Contract.ActorStatus.Finished, Header.EndedAt: > 0 },
                     "The public read must expose an ended root with its terminal time.");
-                await using (var db = Probe())
-                    Check(await db.Database.SqlQuery<bool>($"""
-                        SELECT EXISTS (
-                            SELECT 1 FROM "Instances" i
-                            JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Reference" = i."FoundationReference"
-                            JOIN "Journal" j ON j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j.xmin = i.xmin
-                            WHERE i."Id" = {checkpoint.Actor.Id} AND j."Revision" = 1
-                                AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id" AND m."Id" = b."Creator")
-                        ) AS "Value"
-                        """).SingleAsync(stop), "The first checkpoint and journal must share a transaction and consume the creator.");
+                await VerifyAtRest(checkpoint.Actor.Id);
                 Check(stdout.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
                     .SequenceEqual(Enumerable.Range(1, Lines).Select(line => $"line {line}")),
                     "The ten Native WriteLines must execute once in authored order.");
-                var journal = await api.TailAsync(scope, actor, cancellationToken: stop);
+                var journal = await verifyApi.TailAsync(scope, actor, cancellationToken: stop);
                 var entries = journal.Items.Select(PostgresPublicPreview.Decode).ToArray();
                 var writes = entries.Where(entry => entry.StartsWith("c:", StringComparison.Ordinal) && entry.Contains(":write-", StringComparison.Ordinal))
                     .Select(entry => entry[(entry.LastIndexOf(':') + 1)..]);
                 Check(journal.Items.All(entry => entry.Revision == 1) &&
                     writes.SequenceEqual(Enumerable.Range(1, Lines).Select(line => $"write-{line}")) &&
                     entries.Count(entry => entry == "end") == 1 && journal.Next is { } bookmark &&
-                    (await api.TailAsync(scope, actor, bookmark, stop)).Items.Count == 0,
+                    (await verifyApi.TailAsync(scope, actor, bookmark, stop)).Items.Count == 0,
                     "The public journal must preserve the ordered completions and one end in revision 1.");
                 var replay = await verifyRuntime.StartAsync(scope, operation, start, cancellationToken: stop);
+                var afterReplay = await observer.ReadFirstRootAsync(scope.Tenant, actor.Id, stop);
                 Check(replay is { Outcome: Contract.AdmissionOutcome.Duplicate } && replay.Actor == actor &&
+                    afterReplay is not null && afterReplay.Actor == checkpoint.Actor && afterReplay.Revision == checkpoint.Revision &&
+                    afterReplay.State == checkpoint.State && afterReplay.Status == checkpoint.Status &&
+                    afterReplay.TerminalRevision == checkpoint.TerminalRevision && afterReplay.TerminalAt == checkpoint.TerminalAt &&
                     (await verifyApi.TailAsync(scope, actor, journal.Next, stop)).Items.Count == 0,
-                    "A repeat of the start must resolve to the same completed actor and add no journal entry.");
+                    "A repeat of the start must retain the same complete checkpoint and add no journal entry.");
+                await VerifyAtRest(checkpoint.Actor.Id);
                 max = Math.Max(max, total.Trips);
             }
         }
@@ -131,10 +126,65 @@ internal static class PostgresWriteBudget
             WriteLine.Out = previousOutput;
         }
 
+        await VerifySubscriptionGuard(((Worker)owner).Fences.Single());
+
         var meetsBudget = max <= RoundTripBudget;
         var sql = writer == CommitSql.Owned ? "owned SQL" : "EF";
         Console.WriteLine($"PostgreSQL {sql} ({(inBatch ? "in-batch" : "checked")} fence), {Samples} Balanced public starts: maximum {max} wire round trips, budget {RoundTripBudget} ({(meetsBudget ? "met" : "missed")}).");
         return requireBudget && !meetsBudget ? 1 : 0;
+
+        async Task VerifySubscriptionGuard(PartitionFence fence)
+        {
+            var ready = await verifyRuntime.StartAsync(scope, "budget-guard", NativeExecutionModel.Start(definition.Id, Modes.Balanced),
+                cancellationToken: stop);
+            if (ready is not { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } actor } ||
+                await observeAdmission.ReadPendingCreatorAsync(scope.Tenant, actor.Id, stop) is not { Start: { } spec } creator)
+                throw new InvalidOperationException("The subscription control requires an admitted creator.");
+            var header = new FoundationHeaderChange(spec.Definition, new Dictionary<string, string>());
+            var row = new InstanceRow(creator.Target.Id, spec.Model, spec.Definition, InstanceStatus.Finished, "null", 1, null,
+                History: spec.History, Creation: 1, StartIntent: CreationProtocol.Fingerprint(spec, creator.Kind, creator.Payload))
+            {
+                FoundationDispatchHeader = new(scope.Tenant, actor.Id, header)
+            };
+            var turn = new TurnCommit(row.Id, row, null, [creator.InboxKey], [], [], [], [], """["end"]""", Unsubscribe: true)
+            {
+                FoundationHeader = header
+            };
+            var batch = new CommitBatch(fence.Partition, fence.Epoch, fence.Position, TimeSpan.FromSeconds(10), false, [turn], [], []);
+            await using var database = Probe();
+            var wait = new SubscriptionEntity { Instance = row.Id, Key = "block-first-finish", Wait = "wait", Partition = fence.Partition };
+            database.Subscriptions.Add(wait);
+            await database.SaveChangesAsync(stop);
+            Check(!(await store.CommitAsync(batch, stop)).Landed &&
+                await observeAdmission.ReadPendingCreatorAsync(scope.Tenant, actor.Id, stop) == creator &&
+                await observer.ReadFirstRootAsync(scope.Tenant, actor.Id, stop) is null &&
+                await database.Subscriptions.AnyAsync(subscription => subscription.Instance == row.Id, stop) &&
+                !await database.Journal.AnyAsync(entry => entry.Instance == row.Id, stop) &&
+                await database.Partitions.Where(partition => partition.Id == fence.Partition)
+                    .Select(partition => partition.Position).SingleAsync(stop) == fence.Position,
+                "A live subscription must refuse first completion without consuming its creator, wait or journal position.");
+            database.Subscriptions.Remove(wait);
+            await database.SaveChangesAsync(stop);
+            Check((await store.CommitAsync(batch, stop)).Landed &&
+                await observer.ReadFirstRootAsync(scope.Tenant, actor.Id, stop) is { Status: InstanceStatus.Finished, TerminalRevision: 1 },
+                "The same pending creator must finish after the blocking wait is removed.");
+            await VerifyAtRest(row.Id);
+            Console.WriteLine("Subscription guard: the live wait refused terminal birth, and the same creator finished after removal.");
+        }
+
+        async Task VerifyAtRest(string id)
+        {
+            await using var db = Probe();
+            Check(await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (
+                    SELECT 1 FROM "Instances" i JOIN "Journal" j ON j."Instance" = i."Id"
+                        AND j."Partition" = i."Partition" AND j.xmin = i.xmin
+                    WHERE i."Id" = {id} AND j."Revision" = 1
+                        AND (SELECT count(*) FROM "Journal" history WHERE history."Instance" = i."Id") = 1
+                        AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = i."Id")
+                ) AS "Value"
+                """).SingleAsync(stop), "The exact actor must have one journal row sharing the checkpoint transaction and no inbox work.");
+        }
 
         Measurement Read() => new(wire.Trips, wire.ProtocolRequests, wire.Connections, counter.Commands, counter.Transactions.Ended);
     }
