@@ -10,8 +10,8 @@ internal sealed class StoreVersionEntity
 {
     internal const string Table = "KernelStoreVersions";
     internal const int MarkerId = 1;
-    internal const int StoreSchemaVersion = 2;
-    internal const int MessageProtocolVersion = 1;
+    internal const int StoreSchemaVersion = 3;
+    internal const int MessageProtocolVersion = 2;
     internal const int JournalCodecVersion = 1;
 
     public int Id { get; set; }
@@ -27,7 +27,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat Current { get; } = new(StoreVersionEntity.StoreSchemaVersion,
         StoreVersionEntity.MessageProtocolVersion, StoreVersionEntity.JournalCodecVersion);
 
-    // Protocol 2 is allocated to the independent job-generation migration.
+    // The dedicated PostgreSQL continuation profile retains its own message protocol.
     internal static StoreFormat RootSelf => Current with { MessageProtocol = 3 };
 
     internal static StoreFormat RootTimers => Current with { MessageProtocol = 4 };
