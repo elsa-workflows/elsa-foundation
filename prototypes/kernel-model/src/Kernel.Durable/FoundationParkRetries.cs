@@ -157,7 +157,7 @@ public sealed partial class InMemoryStore
         digest = null;
         if (token.Length % 4 != 0) return false;
         var padding = token.EndsWith("==", StringComparison.Ordinal) ? 2 : token.EndsWith('=') ? 1 : 0;
-        var size = token.Length / 4 * 3 - padding - CursorNonceBytes - CursorTagBytes;
+        var size = token.Length / 4 * 3 - padding - FoundationReadCursor.Overhead;
         if (size <= RetryHeaderBytes || size > MaxRetryPlainBytes) return false;
         Span<byte> plain = stackalloc byte[size];
         if (!TryOpenReadCursor(context, token, plain)) return false;
