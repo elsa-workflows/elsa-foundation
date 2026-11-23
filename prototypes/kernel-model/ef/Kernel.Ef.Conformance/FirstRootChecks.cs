@@ -39,6 +39,28 @@ internal static class FirstRootChecks
             (await cold.ReadJournalOfAsync(home, creator.Target.Id, 0)).Count == 0,
             "all refused first checkpoints preserve the creator, journal and absence of state");
 
+        await using (var mutate = create())
+        {
+            foreach (var (kept, matched) in new (long? Retention, byte[]? Match)[] { (1L, null), (null, new byte[32]) })
+            {
+                await mutate.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "KeepUntil" = {kept}, "EventMatch" = {matched}
+                    WHERE "Id" = {creator.InboxKey.Id} AND "InboxScope" = 0
+                    """);
+                await Refused(Save(tenant, first.Reference, creator, fence), "qualified creator with unexpected kept or event metadata");
+                var physical = await mutate.Messages.AsNoTracking().SingleAsync(message => message.Id == creator.InboxKey.Id);
+                Check(physical.KeepUntil == kept && (physical.EventMatch ?? []).SequenceEqual(matched ?? []) &&
+                    await cold.ReadFirstRootAsync(tenant, first.Reference) is null &&
+                    (await cold.ReadJournalOfAsync(home, creator.Target.Id, 0)).Count == 0 &&
+                    await mutate.Partitions.Where(partition => partition.Id == home).Select(partition => partition.Position).SingleAsync() == fence.Position,
+                    "refusal preserves the changed creator, empty checkpoint and journal, and fence position");
+            }
+            await mutate.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Messages" SET "KeepUntil" = NULL, "EventMatch" = NULL
+                WHERE "Id" = {creator.InboxKey.Id} AND "InboxScope" = 0
+                """);
+        }
+
         var duplicate = new Dictionary<string, string>(ReferenceEqualityComparer.Instance)
         {
             [new string('x', 4)] = "first",
