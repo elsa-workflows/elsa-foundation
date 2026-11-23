@@ -39,7 +39,7 @@ internal static class PostgresPublicPreview
             settings.Port = wire.LocalPort;
             measuredConnection = settings.ConnectionString;
         }
-        var measured = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(measuredConnection)
+        var measured = tenantProbe ? data : new DbContextOptionsBuilder<KernelDb>().UseNpgsql(measuredConnection)
             .AddInterceptors(counter, counter.Transactions).Options;
         long startTrips = 0, startGroups = 0, startConnections = 0;
         var store = new EfStore(() => new(measured), postgres: true);
