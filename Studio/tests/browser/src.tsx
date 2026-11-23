@@ -854,6 +854,8 @@ function Fixture() {
 }
 
 function ExpressionCodeIntelligenceFixture() {
+  const [focusInputRequest, setFocusInputRequest] = useState(0);
+  const source = searchParams.has("multiline") ? "const value = 1;\nreturn value;" : referenceJavaScriptExpression;
   const manyFields = expressionFieldCount > 1;
   const expressionDescriptor = useMemo<StudioActivityDescriptor>(() => manyFields ? {
     ...descriptor,
@@ -882,7 +884,7 @@ function ExpressionCodeIntelligenceFixture() {
           inputs: []
         }
       : {
-          path: { typeName: "System.String", expression: { type: "JavaScript", value: referenceJavaScriptExpression } },
+          path: { typeName: "System.String", expression: { type: "JavaScript", value: source } },
           inputs: []
         }),
     outputs: [],
@@ -898,6 +900,7 @@ function ExpressionCodeIntelligenceFixture() {
   return (
     <main className="wf-editor browser-fixture">
       <h1>Expression code intelligence</h1>
+      {searchParams.has("validation-focus") ? <button type="button" onClick={() => setFocusInputRequest(request => request + 1)}>Go to Path input</button> : null}
       <aside className="wf-inspector browser-inspector" aria-label="Activity inspector">
         <h2>Expression activity</h2>
         <ActivityPropertiesPanel
@@ -913,6 +916,8 @@ function ExpressionCodeIntelligenceFixture() {
           descriptorStatus="ready"
           visibleVariables={[]}
           scopeStatus="ready"
+          focusInputKey={focusInputRequest ? "Path" : undefined}
+          focusInputRequest={focusInputRequest || undefined}
           onChange={setActivity}
         />
       </aside>

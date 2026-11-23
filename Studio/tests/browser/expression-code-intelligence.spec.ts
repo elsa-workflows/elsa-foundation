@@ -1,5 +1,30 @@
 import { expect, test } from "@playwright/test";
 
+test("validation navigation activates the actual single-line rich editor", async ({ page }) => {
+  await page.goto("/?mode=expression-code-intelligence&validation-focus=1");
+  await page.getByRole("button", { name: "Go to Path input", exact: true }).press("Enter");
+  await expect(page.locator(".studio-code-editor-rich-compact .cm-content")).toBeFocused();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await test.info().attach("validation-single-line-focused", { body: await page.screenshot(), contentType: "image/png" });
+});
+
+for (const activation of ["Enter", "Space"]) {
+  test(`validation navigation leaves multiline expansion to native ${activation} activation`, async ({ page }) => {
+    await page.goto("/?mode=expression-code-intelligence&validation-focus=1&multiline=1");
+    await page.getByRole("button", { name: "Go to Path input", exact: true }).press("Enter");
+    const preview = page.getByRole("button", { name: /JavaScript expression\. Activate to edit\./ });
+    await expect(preview).toBeFocused();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await test.info().attach("validation-multiline-preview-focused", { body: await page.screenshot(), contentType: "image/png" });
+    await preview.press(activation);
+    const dialog = page.getByRole("dialog", { name: "Path", exact: true });
+    await expect(dialog.locator(".studio-code-editor-rich-expanded .cm-content")).toBeFocused();
+    await test.info().attach("validation-multiline-expanded-focused", { body: await page.screenshot(), contentType: "image/png" });
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+  });
+}
+
 test("the activity inspector preserves a JavaScript session across compact, expanded, and Liquid surfaces", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 620 });
   await page.goto("/?mode=expression-code-intelligence");
