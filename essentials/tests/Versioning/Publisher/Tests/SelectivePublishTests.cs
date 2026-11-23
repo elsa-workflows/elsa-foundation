@@ -314,6 +314,7 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
         Assert.False(run.Report!.Succeeded);
         Assert.Equal(PackageOutcomeKind.Pushed, run.Report.Packages.Single().Kind);
         Assert.Contains("write-back failed", run.Report.Failure, StringComparison.Ordinal);
+        Assert.Contains("Write-back unconfirmed", JobSummary.Publish(run.Report), StringComparison.Ordinal);
         Assert.Equal("4.0.0-preview", RecordedVersions["Elsa.Tasks"]);
 
         var next = await RunAsync();
