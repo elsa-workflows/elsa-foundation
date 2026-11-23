@@ -147,6 +147,14 @@
           "SQLitePCLRaw.core": "3.0.3"
         }
       },
+      "elsa.activities.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.connections.core": {
         "type": "Project",
         "dependencies": {
@@ -172,6 +180,13 @@
         "dependencies": {
           "Elsa.Pipelines.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
+        }
+      },
+      "elsa.expressions.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.persistence.core": {
@@ -214,6 +229,17 @@
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
         }
       },
       "CShells": {
@@ -397,51 +423,6 @@
         "dependencies": {
           "SQLitePCLRaw.config.e_sqlite3": "3.0.3",
           "SourceGear.sqlite3": "3.50.4.5"
-        }
-      },
-      "elsa.activities.runtime.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Events.Core": "[4.0.0-dev, )",
-          "Elsa.Expressions.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.events.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Pipelines.Core": "[4.0.0-dev, )",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
-        }
-      },
-      "elsa.expressions.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Primitives": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.pipelines.core": {
-        "type": "Project",
-        "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
-        }
-      },
-      "elsa.serialization.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Events.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )"
-        }
-      },
-      "elsa.workflows.runtime.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
-          "Elsa.Expressions.Core": "[4.0.0-dev, )",
-          "Elsa.Primitives": "[4.0.0-dev, )",
-          "Elsa.Serialization.Core": "[4.0.0-dev, )",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
-          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
         }
       }
     }

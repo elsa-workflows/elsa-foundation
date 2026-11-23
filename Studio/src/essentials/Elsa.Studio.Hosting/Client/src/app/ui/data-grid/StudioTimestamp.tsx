@@ -9,7 +9,7 @@ export function formatStudioDateTime(value: string | null, fallback: string): st
 
 export function StudioTimestamp({ value, fallback = null, invalidFallback, format = "stacked" }: {
   value?: string | null;
-  /** Inline diagnostic readings retain seconds. The default stacks a date above short time. */
+  /** All layouts show seconds and a UTC offset; the default stacks the date above the time. */
   format?: "stacked" | "time" | "date-time";
   fallback?: React.ReactNode;
   invalidFallback?: React.ReactNode;

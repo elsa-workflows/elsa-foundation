@@ -159,6 +159,7 @@
           "Elsa.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
           "Microsoft.Extensions.Configuration.EnvironmentVariables": "[10.0.10, )",
@@ -181,6 +182,13 @@
       },
       "elsa.primitives": {
         "type": "Project"
+      },
+      "elsa.serialization.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
       },
       "elsa.studio.dashboard.core": {
         "type": "Project",

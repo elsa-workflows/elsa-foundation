@@ -1684,6 +1684,7 @@ export function WorkflowEditor({
         inputs={publishedRun.pending.inputs}
         editors={runInputEditors}
         busy={!!publishedRun.runningArtifactId}
+        returnFocusTo={publishedRun.pending.opener}
         onSubmit={inputs => { void publishedRun.confirm(inputs); }}
         onCancel={publishedRun.cancel}
       /> : null}

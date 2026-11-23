@@ -60,7 +60,7 @@ describe("appearance model", () => {
   });
 
   it("reset removes every listed appearance and chrome key and returns the defaults", () => {
-    expect(appearanceResetStorageKeys).toHaveLength(12);
+    expect(appearanceResetStorageKeys).toHaveLength(13);
     expect([...appearanceResetStorageKeys]).toEqual([
       appearanceStorageKeys.themeId,
       appearanceStorageKeys.workspaceStyle,
@@ -81,6 +81,7 @@ describe("appearance model", () => {
       "elsa-studio-theme-mode": "dark",
       "elsa-studio-nav-mode": "left",
       "elsa-studio-sidebar-color": "light",
+      "elsa-studio-time-zone": "Europe/Amsterdam",
       "elsa-studio-sidebar-collapsed": "true",
       "elsa-studio-bottom-panel-collapsed": "false",
       "elsa-studio-bottom-panel-height": "320",
