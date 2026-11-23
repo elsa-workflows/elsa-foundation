@@ -315,11 +315,12 @@ public sealed partial class EfStore
         if (recalls is not null && (RootSelfIssuer is null || turn.Expected is null ||
             recalls.Any(key => key.Scope != -1 || !root.Owns(key)) ||
             turn.Consumed.Any(recalls.Contains) || turn.Sent.Any(m => recalls.Contains(m.InboxKey)))) throw RootShape();
+        var timedFault = RootTimedJobSettlementEnabled && turn.Expected is not null && row.Status == InstanceStatus.Faulted;
         if (row.Id != root.Actor ||
             row.Creation != 1 || !RootJobsEnabled && row.NextJobGeneration is not (null or 0) || row.StartIntent != root.Fingerprint || row.Revision != checked((turn.Expected ?? 0) + 1) ||
-            row.Status is not (InstanceStatus.Running or InstanceStatus.Finished) ||
+            row.Status is not (InstanceStatus.Running or InstanceStatus.Finished) && !timedFault ||
             row.FoundationDispatchHeader is not { } header || header.Tenant != root.Tenant || header.Reference != root.Reference ||
-            turn.Unsubscribe != (row.Status == InstanceStatus.Finished) ||
+            turn.Unsubscribe != (row.Status == InstanceStatus.Finished || timedFault) ||
             turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 }) throw RootShape();
 
         // Record equality checks the full shape, including extension fields. Adding a new durable effect

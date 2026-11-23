@@ -348,7 +348,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var outcome = turn.Seal();
         if (outcome.Sent.Count + outcome.Held.Count(outcome.ConvertsHeldJobResult) > Durable.FoundationMetadataLimits.MaxTurnSends)
             throw new InvalidOperationException($"A turn may send at most {Durable.FoundationMetadataLimits.MaxTurnSends:N0} messages.");
-        if (roots is not null) RequireRootOutcome(outcome);
+        if (roots is not null) RequireRootOutcome(outcome, input.Row);
         if (outcome.Row is { } nextRow)
         {
             var nextHeader = header with

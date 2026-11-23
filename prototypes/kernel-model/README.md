@@ -668,6 +668,8 @@ and a current fence offered an early timeout leave the pair pending.
 
 Settlement replaces both rows with one recorded result and advances the checkpoint without changing the
 saved Native wait. A third owner applies that stored result through Native and records one terminal outcome.
+Use `unhandled-timeout` to run a workflow with no timeout handler. The third owner consumes the exact recorded
+timeout and persists an authored `Faulted` outcome with workflow substatus `job`, an end marker and no Park.
 The fixture counts durable outcomes. The completion case deliberately executes the callback again after takeover.
 
 ### PostgreSQL Suspend and Resume preview

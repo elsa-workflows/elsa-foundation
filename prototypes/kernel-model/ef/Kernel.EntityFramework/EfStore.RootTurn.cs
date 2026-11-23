@@ -48,7 +48,7 @@ public sealed partial class EfStore
                         AND "Kind" = {RootSelfWire} AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
                     """, cancellationToken);
             }
-            var finished = Status == InstanceStatus.Finished;
+            var ended = Status is InstanceStatus.Finished or InstanceStatus.Faulted;
             var jobs = JobState is null ? Current.Jobs : JobState.Jobs;
             var nextJobGeneration = JobState is null ? Current.NextJobGeneration : JobState.NextGeneration;
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
@@ -59,11 +59,11 @@ public sealed partial class EfStore
                     "Status" = {(int)Status}, "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "Suspended" = {OperatorSuspension ?? Current.Suspended},
                     "Jobs" = {jobs}, "NextJobGeneration" = {nextJobGeneration},
-                    "FoundationTerminalRevision" = CASE WHEN {finished} THEN {JournalRevision} ELSE NULL END,
-                    "FoundationTerminalAt" = CASE WHEN {finished} THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint ELSE NULL END
+                    "FoundationTerminalRevision" = CASE WHEN {ended} THEN {JournalRevision} ELSE NULL END,
+                    "FoundationTerminalAt" = CASE WHEN {ended} THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint ELSE NULL END
                 WHERE "Id" = {Current.Actor.Id} AND "Partition" = {home} AND "FoundationTenant" = {Tenant}
                     AND "FoundationReference" = {Reference} AND "Revision" = {Current.Revision}
-                    AND (NOT {finished} OR NOT EXISTS (SELECT 1 FROM "Subscriptions"
+                    AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions"
                         WHERE "Instance" = {Current.Actor.Id}))
                 """, cancellationToken);
             return updated == 1 && (Values is not { Count: > 0 } values ||
@@ -128,10 +128,10 @@ public sealed partial class EfStore
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
             new InstanceRef(current.Actor.Id).Partition != fence.Partition ||
-            status is not (InstanceStatus.Running or InstanceStatus.Finished))
+            status is not (InstanceStatus.Running or InstanceStatus.Finished) && !(timedJob && status == InstanceStatus.Faulted))
             throw new ArgumentException("Invalid running root or target disposition.", nameof(current));
-        if (status == InstanceStatus.Finished && journal is null)
-            throw new ArgumentException("A finished public root requires its terminal journal entry.", nameof(journal));
+        if (status != InstanceStatus.Running && journal is null)
+            throw new ArgumentException("A terminal public root requires its journal entry.", nameof(journal));
         var accepted = inputs.ToArray();
         if (accepted.Length == 0 || accepted.Any(message => !QualifiedInput(message) ||
             message.InboxKey.Match is not null || message.Target.Id != current.Actor.Id || message.TargetCreation != current.Actor.Creation) ||
