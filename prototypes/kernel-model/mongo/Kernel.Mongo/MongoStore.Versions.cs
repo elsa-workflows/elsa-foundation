@@ -39,8 +39,8 @@ public sealed partial class MongoStore
             throw new StoreException(Failure.Definite, $"The database has {recorded} partitions and was opened with {partitions}. The count is fixed at creation: recreate the database.");
     }
 
-    private async Task RequireVersionsAsync(IClientSessionHandle session, CancellationToken cancellationToken) =>
-        RequireVersions(await _meta.Find(session, PartitionMarker).FirstOrDefaultAsync(cancellationToken));
+    private async Task RequireVersionsAsync(IClientSessionHandle session, CancellationToken cancellationToken, FindOptions? options = null) =>
+        RequireVersions(await _meta.Find(session, PartitionMarker, options).FirstOrDefaultAsync(cancellationToken));
 
     private static int RequireVersions(BsonDocument? marker)
     {

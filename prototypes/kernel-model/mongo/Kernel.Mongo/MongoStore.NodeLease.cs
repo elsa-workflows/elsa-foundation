@@ -70,7 +70,7 @@ public sealed partial class MongoStore
             var bounded = new FindOptions { MaxTime = lease / 3 };
             try
             {
-                await RequireVersionsAsync(session, deadline.Token);
+                await RequireVersionsAsync(session, deadline.Token, bounded);
                 var owners = (await _partitions.Find(session, new BsonDocument { { "_id", ids }, { "owner", new BsonDocument("$nin", new BsonArray { BsonNull.Value, node }) } }, bounded)
                     .Project(new BsonDocument("owner", 1)).ToListAsync(deadline.Token)).Select(d => d["owner"].AsString).Distinct(StringComparer.Ordinal).ToList();
                 if (owners.Count > 0)

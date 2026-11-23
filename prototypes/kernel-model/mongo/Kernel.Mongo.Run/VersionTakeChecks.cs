@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -7,7 +8,14 @@ internal static class VersionTakeChecks
 {
     internal static async Task RunAsync(string connection, MongoStoreOptions options)
     {
-        using var client = MongoProvider.Client(connection, "kernel-version-check");
+        var markerTimeouts = new ConcurrentQueue<long>();
+        using var client = MongoProvider.Client(connection, "kernel-version-check", started =>
+        {
+            var command = started.Command;
+            if (started.CommandName == "find" && command["find"] == "meta" &&
+                command.GetValue("autocommit", true) == false && command["filter"]["_id"] == "partitions")
+                markerTimeouts.Enqueue(command.GetValue("maxTimeMS", -1).ToInt64());
+        });
         using var coldClient = MongoProvider.Client(connection, "kernel-version-check-cold");
         var database = "kfmt_" + Guid.NewGuid().ToString("N");
         var store = new MongoStore(client, database, options);
@@ -39,6 +47,9 @@ internal static class VersionTakeChecks
                 "initialization at the recorded count repairs a partial store with the original marker");
 
             Check(await store.TakeAsync(0, "owner", lease) is { Epoch: 1 }, "a supported marker permits the take");
+            var timeouts = markerTimeouts.ToArray();
+            Check(timeouts.Length > 0 && timeouts.All(ms => ms == (long)(lease / 3).TotalMilliseconds),
+                "the transactional take marker read carries the third-lease server deadline");
             var stable = await Snapshot();
             foreach (var (family, value) in new (string, BsonValue)[] { ("storeSchema", 0), ("messageProtocol", 2), ("journalCodec", 2), ("journalCodec", "1") })
             {
