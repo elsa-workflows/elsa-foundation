@@ -129,6 +129,22 @@ checks the same node and epoch still have a live renewed lease. After PostgreSQL
 acquires a later epoch after the stored deadline, resumes the journal bookmark, replays Ada's input and records
 Grace's approval. This exercises one fixed partition. K5 covers Cluster placement and balancing across partitions.
 
+### Flowchart restart on the public PostgreSQL preview
+
+Set `KERNEL_PREVIEW_POSTGRES` to a fresh PostgreSQL database and run from `prototypes/kernel-model`:
+
+```bash
+models/Native.Run/run-core-preview.sh pg-flowchart-preview
+```
+
+The Flowchart routes an amount of 750 to the approval path and persists a second approval wait. A new process
+loads that wait. Replaying the first approval leaves the checkpoint and journal unchanged and runs zero actor
+turns. The second approval runs one turn and the join fires once. The automatic branch stays inactive and the
+journal records one completion revision.
+
+This is a runnable K7 case on the public Embedded preview. The full Flowchart corpus and Cluster qualification
+remain part of K7.
+
 ## Built-in Cluster redistribution on PostgreSQL
 
 Set `KERNEL_PREVIEW_POSTGRES` to the connection string of a fresh, empty PostgreSQL database, then run from
