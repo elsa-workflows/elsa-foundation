@@ -941,40 +941,40 @@ public static class Semantics
             var lease = await c.Take(0);
             var hold = await c.Provided.HoldPartitionAsync(0);
             if (hold is null) throw new SkipException("the provider cannot hold the partition record");
-            // SQLite can block synchronously while its other connection holds the write lock.
-            // Dispatch the commit separately so that the observation window can release that lock.
-            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var commit = Task.Run(() =>
+            var turn = new CommitBatch(0, lease.Epoch, lease.Position, Context.Long, false, [Make.New("0/a")], [], []);
+            // Run even synchronous provider calls alongside the observer that owns the hold.
+            var attempt = Task.Run(async () =>
             {
-                started.SetResult();
-                return c.Commit(lease, 0, [Make.New("0/a")]);
+                try { return (Committed?)await c.Provided.PartitionContender().CommitAsync(turn); }
+                catch (StoreException error) when (error.Failure == Failure.Transient) { return null; }
             });
-            bool returnedWhileHeld;
-            try
+            var observation = ObserveAndReleaseAsync();
+            await Task.WhenAll(attempt, observation);
+            var (waited, completedWhileHeld) = await observation;
+            if (await attempt is { } result)
             {
-                await started.Task;
-                returnedWhileHeld = await Task.WhenAny(commit, Task.Delay(500)) == commit;
-            }
-            finally
-            {
-                await hold.DisposeAsync();
-            }
-
-            if (returnedWhileHeld)
-            {
-                try
-                {
-                    var result = await commit;
-                    throw new ConformanceException($"beside a held partition record the commit returned at once, landed: {result.Landed}");
-                }
-                catch (StoreException e) { Context.Equal(Failure.Transient, e.Failure, "failure beside a held record"); }
-                c.Notes.Add("transient while held");
-                await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a")]), "the commit tried again after the other writer let go");
+                Context.That(!completedWhileHeld, $"beside a held partition record the commit completed before release, landed: {result.Landed}");
+                Context.That(result.Landed, "the commit did not land after release");
+                c.Notes.Add(waited ? "engine observed a lock wait" : "in flight at release");
             }
             else
             {
-                c.Notes.Add("waits");
-                Context.That((await commit).Landed, "the commit that waited did not land");
+                if (waited) c.Notes.Add("engine observed a lock wait");
+                c.Notes.Add(completedWhileHeld ? "transient while held" : "transient in flight at release");
+                await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a")]), "the commit tried again after the other writer let go");
+            }
+
+            async Task<(bool Waited, bool CompletedWhileHeld)> ObserveAndReleaseAsync()
+            {
+                try
+                {
+                    var blocked = await c.Provided.ObservePartitionContentionAsync(attempt);
+                    return (blocked, attempt.IsCompleted);
+                }
+                finally
+                {
+                    await hold.DisposeAsync();
+                }
             }
             Context.Equal(1, (await c.S.ReadJournalAsync(0, 0, 10)).Count, "journal rows");
         }),

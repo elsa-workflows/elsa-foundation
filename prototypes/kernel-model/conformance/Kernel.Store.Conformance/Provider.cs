@@ -53,6 +53,16 @@ public abstract class ProvidedStore : IAsyncDisposable
     /// </summary>
     public virtual Task<IAsyncDisposable?> HoldPartitionAsync(int partition) => Task.FromResult<IAsyncDisposable?>(null);
 
+    /// <summary>A client for the commit that contends with <see cref="HoldPartitionAsync"/>.</summary>
+    public virtual IKernelStore PartitionContender() => Store;
+
+    /// <summary>Wait for the attempt to finish or the held lock to block it. Return true with an engine-observed wait.</summary>
+    public virtual async Task<bool> ObservePartitionContentionAsync(Task attempt)
+    {
+        await Task.WhenAny(attempt, Task.Delay(500));
+        return false;
+    }
+
     /// <summary>
     /// Open the same database again, as a node that starts does, with <c>partitions</c> partitions (the store's create),
     /// or null when the store has no database to reopen (the in-memory store is made with its count).
