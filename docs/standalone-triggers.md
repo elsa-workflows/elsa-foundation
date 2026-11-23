@@ -24,7 +24,7 @@ Authoring metadata does not install intake. `StandaloneTriggersApi` deliberately
 
 `AddWorkflowRuntime()` selects the coherent in-memory family by default. Its state is process-local. The complete EF provider replaces that family together; independently replacing a resource store or an outbox does not establish durable acceptance. Mixed physical providers, missing source adapters and unavailable retention/queue capabilities refuse operations. Distributed placement, arbitrary third-party storage combinations and remote queue acknowledgements have no acceptance claim here. Genuine direct BPMN dispatch currently requires the ordinary in-process actor and qualified model queue.
 
-The checked-in Workbench feature list does not select the standalone management/authoring/schedule features automatically. Add the features required for your host explicitly. Keep the host's existing identity, permission, persistence and shell-route configuration.
+Workbench's default shell enables standalone management, HTTP/Event/Timer/Cron authoring and schedule intake. Other hosts select the features they need explicitly, keeping their existing identity, permission, persistence and shell-route configuration.
 
 ## Use Studio
 
