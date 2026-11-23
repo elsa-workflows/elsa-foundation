@@ -271,14 +271,14 @@ records it, and nothing retries it. Built and run in the prototype except where 
 | The turn that wrote the response writes nothing else, so it has no commit (Ephemeral, or nothing to write) | The response, at once (run: NATIVE.md section 4, case 5) |
 | The owner resets on the receiving node while the request waits | 503 at once (run) |
 | The owning process dies after `COMMIT` and before the release, and it is also the receiving node | A dropped connection, with the process (reasoned) |
-| The owner is on another node and is lost before its turn commits | The delivery keeps `ReplyTo` on its durable row (`ReplyTo` in `EfStore.cs`, written by the owned insert in `EfStore.Owned.cs`). The new owner runs the turn again; if that commit lands within the reply deadline, the response goes to the reply address, otherwise the caller gets 504 at the deadline ([run on PostgreSQL](../../prototypes/kernel-model/NATIVE.md#postgresql-http-across-abrupt-owner-loss) with a fixture-local reply link) |
+| The owner is on another node and is lost before its turn commits | The delivery keeps `ReplyTo` on its durable row (`ReplyTo` in `EfStore.cs`, written by the owned insert in `EfStore.Owned.cs`). The new owner runs the turn again; the caller receives the response when the commit lands and the carrier reaches the live receiver before its deadline. Otherwise the caller gets 504 at the deadline ([run on PostgreSQL](../../prototypes/kernel-model/NATIVE.md#postgresql-http-across-abrupt-owner-loss) with a fixture-local reply link) |
 | The owner is on another node and is lost after its turn commits, before the release | 504 at the reply deadline, the route's timeout ([run on PostgreSQL](../../prototypes/kernel-model/NATIVE.md#postgresql-http-across-abrupt-owner-loss) with a separate receiver process) |
 | The turn that wrote the response parks | 500 at once; the held response is dropped (owner, 17 November) |
 | The client disconnects or times out | Nothing; the workflow is not cancelled. A route option that maps a disconnect to a cancel is proposed and not built (NATIVE.md section 4, "Not done") |
 
 In every case the workflow's committed state is unaffected and continues under its owner. A turn that runs again
-before the reply deadline answers the waiting caller through `ReplyTo`; output after the caller has had its answer, or
-after the deadline, reaches no caller. A caller never receives two responses. For a turn that writes, the caller never
+can answer the waiting caller through `ReplyTo` if its carrier arrives before the deadline. The receiver drops
+output after the caller has had its answer or after the deadline. A caller never receives two responses. For a turn that writes, the caller never
 receives a response whose commit did not land, unless the route opted out.
 
 ## Kernel schema and protocol compatibility (proposed)
