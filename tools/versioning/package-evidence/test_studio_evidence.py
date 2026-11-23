@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from studio_archives import inspect, main as inspect_cli, nuget_payload, sha256
-from studio_publish_npm import ORDER, publish
+from studio_publish_npm import ORDER, check_tag, publish
 
 
 def data(body):
@@ -42,7 +42,8 @@ def npm(directory, short, body=b"content", peer="^19"):
 
 
 class StudioEvidence(unittest.TestCase):
-    def test_npm_archive_and_release_order(self):
+    @patch("studio_publish_npm.check_tag")
+    def test_npm_archive_and_release_order(self, tag_check):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder)
             rows = [inspect(npm(path, name))[0] for name in reversed(ORDER)]
@@ -56,10 +57,24 @@ class StudioEvidence(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "integrity differs"):
                     publish(path, "https://example.invalid/", "preview", False)
                 run.assert_not_called()
+            tag_check.side_effect = [None, None, ValueError("Cannot promote")]
+            with patch("studio_publish_npm.observed", return_value=None), patch("studio_publish_npm.subprocess.run") as run:
+                with self.assertRaisesRegex(ValueError, "Cannot promote"):
+                    publish(path, "https://example.invalid/", "preview", False)
+                run.assert_not_called()
             with self.assertRaisesRegex(ValueError, "payload mismatch"):
                 inspect(npm(path, ORDER[0], body=b"changed"))
             with self.assertRaisesRegex(ValueError, "declarations differ"):
                 inspect(npm(path, ORDER[0], peer="^18"))
+
+    def test_tag_semver_precedence(self):
+        for current in [None, "4.0.0-preview.2", "4.0.0-preview.10"]:
+            with patch("studio_publish_npm.registry_view", return_value=current):
+                check_tag("pkg", "preview", "4.0.0-preview.10", "registry")
+        for current in ["4.0.0", "4.0.0-preview.11"]:
+            with patch("studio_publish_npm.registry_view", return_value=current):
+                with self.assertRaisesRegex(ValueError, "Cannot promote"):
+                    check_tag("pkg", "preview", "4.0.0-preview.10", "registry")
 
     def test_snapshot_is_required_after_signing(self):
         script = Path(__file__).with_name("studio_snapshot.sh")

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { createRequire } from "node:module";
 import type { Plugin } from "vite";
 
 // Keep Rollup's retained module owners and inter-package imports outside product outputs.
@@ -44,8 +45,10 @@ export function releaseInventory(kind: string): Plugin | false {
           for (const source of item.originalFileNames) recordSource(source);
         } else {
           for (const source of item.moduleIds) {
-            if (!isAbsolute(source)) continue;
-            const directory = recordSource(source);
+            // Vite emits browser runtime helpers as virtual modules with no source file.
+            const viteRuntime = source === "\0vite/modulepreload-polyfill.js" || source === "\0vite/preload-helper.js";
+            if (!isAbsolute(source) && !(viteRuntime && item.modules[source].renderedLength > 0)) continue;
+            const directory = recordSource(viteRuntime ? createRequire(import.meta.url).resolve("vite/package.json") : source);
             if (directory) owners.set(source, directory);
           }
           if (item.isEntry && item.facadeModuleId && isAbsolute(item.facadeModuleId)) {

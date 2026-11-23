@@ -2,6 +2,7 @@
 """Publish verified tarballs in dependency order and compare the registry-reported SRI."""
 import argparse
 import json
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -12,18 +13,40 @@ from studio_archives import check, inspect
 ORDER = ["studio-sdk", "studio-ui", "studio-code-editor", "studio-workflows"]
 
 
-def observed(spec, registry):
-    p = subprocess.run(["npm", "view", spec, "name", "version", "dist", "--json", "--registry", registry],
+def registry_view(spec, fields, registry):
+    p = subprocess.run(["npm", "view", spec, *fields, "--json", "--registry", registry],
                        capture_output=True, text=True, timeout=60)
     if p.returncode:
         if json.loads(p.stdout or "{}").get("error", {}).get("code") == "E404":
             return None
         raise ValueError("npm could not read " + spec + " from " + registry)
     result = json.loads(p.stdout)
+    check(result is not None, "Missing npm response for " + spec)
+    return result
+
+
+def observed(spec, registry):
+    result = registry_view(spec, ["name", "version", "dist"], registry)
+    if result is None:
+        return None
     check(result.get("name", "") + "@" + result.get("version", "") == spec, "Unexpected registry identity for " + spec)
     integrity = result.get("dist", {}).get("integrity")
     check(isinstance(integrity, str) and integrity.startswith("sha512-"), "Missing registry integrity for " + spec)
     return integrity
+
+
+def check_tag(name, tag, candidate, registry):
+    current = registry_view(name + "@" + tag, ["version"], registry)
+    if current is None:
+        return
+    check(isinstance(current, str), "Unexpected npm tag response for " + name)
+    # Use the SemVer implementation installed with the selected npm CLI, including
+    # npm's ordering of prerelease identifiers. Nothing is installed in this job.
+    npm = Path(shutil.which("npm")).resolve()
+    compare = ("const sv = require('node:module').createRequire(process.argv[1])('semver');"
+               "process.exitCode = sv.gt(process.argv[2], process.argv[3]) ? 1 : 0")
+    result = subprocess.run(["node", "-e", compare, str(npm), current, candidate], check=False)
+    check(result.returncode == 0, f"Cannot promote {name}@{candidate} over {tag} at {current}")
 
 
 def publish(directory, registry, tag, dry_run):
@@ -41,6 +64,8 @@ def publish(directory, registry, tag, dry_run):
         spec = row["id"] + "@" + row["version"]
         previous = None if dry_run else observed(spec, registry)
         check(previous is None or previous == row["integrity"], "Registry integrity differs for " + spec)
+        if not dry_run:
+            check_tag(name, tag, row["version"], registry)
         candidates.append((row, path, spec, previous))
     for row, path, spec, previous in candidates:
         if previous is None:

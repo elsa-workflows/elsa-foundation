@@ -64,6 +64,8 @@ async function inventory(name, directory, builds, output) {
     edges.get(from).add(to);
   }
   graphRow(root['bom-ref']);
+  const requiredInstall = new Map();
+  const runtime = new Set([root['bom-ref']]);
   const visited = new Set();
   function addLocked(id) {
     if (visited.has(id)) return;
@@ -118,6 +120,11 @@ async function inventory(name, directory, builds, output) {
         if (optional && !components.has(ref)) continue;
         assert.ok(components.has(ref) || ref === root['bom-ref'], 'Lock SBOM lacks installed ' + ref);
         edge(parent, ref);
+        // Distinct installations of the same PURL can share an edge. Any required
+        // declaration makes that edge required for the aggregate component.
+        const kinds = requiredInstall.get(parent) ?? new Map();
+        requiredInstall.set(parent, kinds);
+        kinds.set(ref, kinds.get(ref) || !optional);
         installedEdges(dirname(file), ref);
       }
     }
@@ -140,6 +147,7 @@ async function inventory(name, directory, builds, output) {
     property(c, 'bundled', 'true');
     components.set(ref, c);
     bundledRefs.set(key, ref);
+    runtime.add(ref);
   }
   const dependencyNames = pkg => Object.keys({ ...pkg.dependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies });
   const packageName = specifier => specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/');
@@ -152,6 +160,7 @@ async function inventory(name, directory, builds, output) {
       property(c, 'version-context', 'producer-resolved external');
       components.set(ref, c);
     }
+    runtime.add(ref);
     if (!dependencyNames(actual).length) graphRow(ref);
     return ref;
   }
@@ -182,6 +191,18 @@ async function inventory(name, directory, builds, output) {
     }
     for (const [file, expected] of Object.entries(r.files)) {
       assert.equal(hash(join(r.outDir, file)), expected, 'Stale bundle output: ' + file);
+    }
+  }
+  if (mode === 'npm') {
+    // Optional peers and their transitive closure stay optional unless another
+    // required path or a retained runtime import also reaches them.
+    for (const from of runtime) {
+      for (const to of edges.get(from) ?? []) {
+        if (requiredInstall.get(from)?.get(to) !== false) runtime.add(to);
+      }
+    }
+    for (const [ref, component] of components) {
+      if (!runtime.has(ref)) component.scope = 'optional';
     }
   }
   const declarationImports = new Set();
