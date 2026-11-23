@@ -41,6 +41,13 @@ if (args is ["pg-durable-flowchart-preview", "wait", var waitRoute and ("manual"
 if (args is [var resumedMode and ("pg-flowchart-preview" or "pg-durable-flowchart-preview"), "restart", var resumedRoute and ("manual" or "automatic"), var flowRef, var flowBookmark, var flowEpoch] &&
     long.TryParse(flowEpoch, out var previousEpoch) && previousEpoch > 0)
     return await PostgresFlowchartPreview.RunAsync(resumedRoute, flowRef, flowBookmark, previousEpoch, durable: resumedMode == "pg-durable-flowchart-preview");
+if (args is ["pg-delay-preview", var timerWriter and ("owned" or "ef"), var timerFence and ("checked" or "in-batch"), .. var timerArgs])
+{
+    if (timerArgs is ["birth"]) return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", null);
+    if (timerArgs is ["restart", var timerRef, var timerEpoch, var timerDue, var timerHandle, var timerCursor] &&
+        long.TryParse(timerEpoch, out var oldTimerEpoch) && long.TryParse(timerDue, out var savedDue))
+        return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", new(timerRef, oldTimerEpoch, savedDue, timerHandle, timerCursor));
+}
 if (args is ["pg-root-self", var selfWriter and ("ef" or "owned"), var selfFence and ("checked" or "in-batch")])
     return await PostgresRootSelfChecks.RunAsync(selfWriter == "owned", selfFence == "in-batch");
 if (args is ["pg-flowchart-preview", "merge-early"])

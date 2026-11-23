@@ -153,8 +153,8 @@ and the initial checkpoint share a PostgreSQL transaction ID. The next process p
 to the finance wait. A third process resumes the same workflow using its saved journal cursor. The manual route
 replays the risk approval with a changed body and checks the saved result. Both routes require one join, no remaining
 self inputs, and an unchanged journal on final replay. `KERNEL_PREVIEW_FENCE=checked` or `in-batch` selects the
-fence mode. This scoped path supports immediate sends back to the exact generated actor creation. Scheduled sends,
-cross-actor sends and other authored effects remain outside this preview.
+fence mode. This scoped path supports immediate and timed sends back to the exact generated actor creation. Cross-actor sends
+and other authored effects remain outside this preview.
 
 The public preview writes ordinary text directly. A payload containing NUL or an isolated UTF-16 unit uses a binary
 field in the same message row. It occupies the original UTF-8 byte budget, with three bytes per isolated unit.
@@ -164,6 +164,22 @@ are `ef` for the writer and `in-batch` for the fence.
 
 On a fresh database, `dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-flowchart-preview merge-early`
 replaces the join with a merge. The waiting assertion detects the premature finish.
+
+### PostgreSQL Delay preview
+
+On a fresh dedicated PostgreSQL database set `KERNEL_PREVIEW_POSTGRES` and run:
+
+```sh
+models/Native.Run/run-delay-preview.sh owned checked
+```
+
+The first Embedded process starts a public Native sequence with an eight-second Delay. It checks that the saved wait
+and its issued timer share a PostgreSQL transaction. A second process reads the original handle and absolute deadline
+at a higher ownership epoch. A future-horizon poll sees the timer early. A ready poll excludes it, and an ordinary
+application input of the same kind leaves the frame waiting. At the deadline the worker resumes the frame once.
+The receipt prints the deadline, the worker's application time and the database's terminal checkpoint time. The
+fixture checks the public journal after another worker pass. Use `ef` for the EF writer or `in-batch` for the batch
+fence. This preview exercises a single generated root, one partition and a clean process restart.
 
 ## The simulation
 

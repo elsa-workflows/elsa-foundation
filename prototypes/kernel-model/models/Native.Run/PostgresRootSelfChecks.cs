@@ -36,10 +36,17 @@ internal static class PostgresRootSelfChecks
         var direct = (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single();
         const string suffix = "\0\ud800\u007f\udfff\U0001f642\n";
         var payload = new string('"', FoundationMetadataLimits.MessageContentBytes - Encoding.UTF8.GetByteCount(suffix)) + suffix;
-        var logical = scoped.RootSelfIssuer!(FoundationSelfSend.Seed(CreationProtocol.Origin(actor, 1), 2, 0));
+        var logical = FoundationSelfSend.Issue(scoped.RootSelfIssuer!, CreationProtocol.Origin(actor, 1), 2, 0, null);
         var sent = FoundationSelfSend.Create(actor, 1, logical, "ordinary\0step", payload);
+        Message Timer(int ordinal, long due)
+        {
+            var handle = FoundationSelfSend.Issue(scoped.RootSelfIssuer!, CreationProtocol.Origin(actor, 1), 2, ordinal, due);
+            return FoundationSelfSend.Create(actor, 1, handle, "wake", null, due);
+        }
+        var zero = Timer(1, 0);
+        var future = Timer(2, long.MaxValue);
         CommitBatch Batch(params TurnCommit[] turns) => new(0, lease.Epoch, 1, window, false, turns, [], []);
-        var emit = new TurnCommit(actor, row with { Revision = 2 }, 1, [], [direct.InboxKey], [sent], [], [], null);
+        var emit = new TurnCommit(actor, row with { Revision = 2 }, 1, [], [direct.InboxKey], [sent, zero, future], [], [], null);
         Check((await scoped.CommitAsync(Batch(emit), stop)).Landed, "silent checkpoint and full-size emitted input");
         var key = sent.InboxKey;
         var stored = key with { Scope = EfStore.RootSelfScope };
@@ -82,6 +89,20 @@ internal static class PostgresRootSelfChecks
         Check((await cold.CommitAsync(Batch(new TurnCommit(actor, row with { Revision = 3 }, 2, [key], [], [], [], [], null)), stop)).Landed,
             "qualified owner consumes the exact input with the next silent checkpoint");
 
+        var nowDue = (await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop)).Messages.Single();
+        Check(nowDue.Message == zero && nowDue.Message.Due == 0 && zero.Id != FoundationSelfSend.Issue(
+            scoped.RootSelfIssuer!, CreationProtocol.Origin(actor, 1), 2, 1, null),
+            "cold poll distinguishes the explicit zero deadline from an immediate send");
+        row = (await cold.LoadAsync([actor], stop)).Single();
+        TurnCommit Advance(Message input) => new(actor, row with { Revision = row.Revision + 1 }, row.Revision, [input.InboxKey], [], [], [], [], null);
+        Check((await cold.CommitAsync(Batch(Advance(zero)), stop)).Landed, "the zero-deadline timer can settle");
+        row = (await cold.LoadAsync([actor], stop)).Single();
+        Check(!(await cold.CommitAsync(Batch(Advance(future)), stop)).Landed, "the fenced settlement refuses the future timer");
+        await using (var db = Open())
+            Check((await cold.LoadAsync([actor], stop)).Single().Revision == 4 &&
+                await db.Messages.CountAsync(m => m.Target == actor && !m.Done && m.InboxScope == EfStore.RootSelfScope &&
+                    m.Id == future.InboxKey.Id && m.Due == long.MaxValue, stop) == 1,
+                "the pending future timer and checkpoint survive the early settlement attempt");
         return 0;
     }
 

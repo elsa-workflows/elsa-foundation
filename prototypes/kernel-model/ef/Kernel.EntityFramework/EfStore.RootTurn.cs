@@ -89,7 +89,7 @@ public sealed partial class EfStore
             status is not (InstanceStatus.Running or InstanceStatus.Finished))
             throw new ArgumentException("Invalid running root or target disposition.", nameof(current));
         var accepted = inputs.ToArray();
-        if (accepted.Length == 0 || accepted.Any(message => (message.InboxKey.Scope != InboxKey.FoundationOccurrenceScope && (RootSelfIssuer is null || !FoundationSelfSend.IsImmediate(message, current.Actor.Id, current.Actor.Creation))) ||
+        if (accepted.Length == 0 || accepted.Any(message => (message.InboxKey.Scope != InboxKey.FoundationOccurrenceScope && (RootSelfIssuer is null || !FoundationSelfSend.IsSelfInput(message, current.Actor.Id, current.Actor.Creation))) ||
             message.InboxKey.Match is not null || message.Target.Id != current.Actor.Id || message.TargetCreation != current.Actor.Creation) ||
             accepted.Select(message => message.InboxKey).Distinct().Count() != accepted.Length)
             throw new ArgumentException("The turn requires distinct ordinary inputs for its exact actor creation.", nameof(inputs));

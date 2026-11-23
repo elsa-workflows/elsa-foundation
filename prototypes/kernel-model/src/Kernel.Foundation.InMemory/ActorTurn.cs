@@ -77,8 +77,8 @@ internal sealed partial class ActorAdapter
                   throw new ArgumentException("The actor reference was not found.", nameof(target));
             if (kind is Contract.Kinds.Start or Contract.Kinds.Event or Contract.Kinds.ChildFinished or Contract.Kinds.JobFinished)
                 throw new ArgumentException("The foundation issues this message kind.", nameof(kind));
-            if (_issueSelf is not null && target == Header.Ref && dueAt is null)
-                return _turn.SendImmediateToSelf(_issueSelf, kind, payload);
+            if (_issueSelf is not null && target == Header.Ref)
+                return _turn.SendToSelf(_issueSelf, kind, payload, dueAt);
             return _turn.SendFromActor(Store, new(address.Id), address.Creation, kind, payload, dueAt);
         }
 
