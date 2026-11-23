@@ -5,6 +5,7 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     private WorkerRoots? _ordinaryRoots;
+    private readonly object _workerBinding = new();
 
     // An Embedded owner serves generated roots in one partition, optionally restricted to an explicit set.
     internal sealed record WorkerRoot(string Tenant, string Reference, string Actor, int Partition, string Fingerprint)
@@ -66,8 +67,19 @@ public sealed partial class EfStore
         return InstallWorkerScope(new(null, [], discover: true));
     }
 
-    private WorkerRoots InstallWorkerScope(WorkerRoots scope) =>
-        Interlocked.CompareExchange(ref _ordinaryRoots, scope, null) is null ? scope : throw new InvalidOperationException("The PostgreSQL owner is already bound.");
+    private WorkerRoots InstallWorkerScope(WorkerRoots scope)
+    {
+        using var db = create();
+        lock (_workerBinding)
+        {
+            if (_ordinaryRoots is not null)
+                throw new InvalidOperationException("The PostgreSQL owner is already bound.");
+            if (db.UsesRootJobProtocol != RootJobsEnabled)
+                throw new StoreFormatException("The PostgreSQL owner must initialize its job capability before binding to the job profile.");
+            Volatile.Write(ref _ordinaryRoots, scope);
+            return scope;
+        }
+    }
 
     // Every lookup is bounded by the requested actor IDs and input keys. The host retains no index of the partition's birth history.
     private async Task<WorkerRoots> ResolveWorkerRootsAsync(WorkerRoots scope, IEnumerable<string> actors, IEnumerable<InboxKey> inputs, CancellationToken token)
@@ -186,12 +198,14 @@ public sealed partial class EfStore
             prepared.Checkpoint, System.Diagnostics.Stopwatch.GetTimestamp(), token);
     }
 
-    private sealed record RootCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> Commands, IReadOnlyDictionary<string, long> Revisions)
+    private sealed record RootCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> Commands, IReadOnlyDictionary<string, long> Revisions,
+        bool JobProfile)
         : QualifiedRootCheckpoint(0)
     {
         internal override long RevisionFor(string actor) => Revisions[actor];
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
+            if (db.UsesRootJobProtocol != JobProfile) return false;
             foreach (var command in Commands)
                 if (!await command.BindCheckpointAsync(db, cancellationToken)) return false;
             return true;
@@ -250,7 +264,7 @@ public sealed partial class EfStore
                 revisions.Add(journal.Instance, prepared.Checkpoint.JournalRevision);
             }
         }
-        return (batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions));
+        return (batch with { Turns = turns, Seen = [], Trial = [] }, new RootCheckpoints(commands, revisions, RootJobsEnabled));
     }
 
     private static bool InputsMatch(WorkerRoot root, TurnCommit turn, bool jobs = false) =>

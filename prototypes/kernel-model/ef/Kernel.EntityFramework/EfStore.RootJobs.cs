@@ -19,7 +19,12 @@ public sealed partial class EfStore
             throw new StoreFormatException("Untimed generated-root jobs require the PostgreSQL job protocol.");
         await RequireStoreVersionsAsync(db, token);
         var key = await db.Database.SqlQueryRaw<byte[]>("""SELECT "Key" AS "Value" FROM "FoundationRootIssuer" """).SingleAsync(token);
-        RootJobHandle = seed => FoundationSelfSend.Handle(key, seed);
+        lock (_workerBinding)
+        {
+            if (_ordinaryRoots is not null)
+                throw new InvalidOperationException("The PostgreSQL owner is already bound.");
+            RootJobHandle ??= seed => FoundationSelfSend.Handle(key, seed);
+        }
     }
 
     private static string? JobActor(InboxKey key)

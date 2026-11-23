@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Kernel.EntityFramework;
 using Kernel.Native;
+using Kernel.Native.Preview;
 using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +18,8 @@ internal static class PostgresRootJobPreview
     private const string Definition = "native-root-job";
     private const string ActivityName = "background";
     private const string Successor = "successor";
-    internal sealed record Restart(string Primary, string Neighbor, long Epoch, long Position, string PrimaryBookmark, string NeighborBookmark);
+    internal sealed record Restart(string Primary, string Neighbor, string Approval, long Epoch, long Position,
+        string PrimaryBookmark, string NeighborBookmark);
 
     internal static async Task<int> RunAsync(bool inBatch, Restart? restart, bool finish = false)
     {
@@ -40,17 +43,26 @@ internal static class PostgresRootJobPreview
             await store.CreateAsync(1);
             await admission.InstallAsync(stop);
         }
-        await store.EnableRootJobsAsync(stop);
         var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType);
         var scope = FixedTenantScope.Bind("jobs");
         var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition, Wf.Sequence("main",
-            Wf.Node<ReturnActor>(ActivityName), Wf.Node<ReturnActor>(Successor), Wf.Set("advance", "advanced", true)), ("advanced", false)));
+            Wf.Node<ReturnActor>(ActivityName), Wf.Node<ReturnActor>(Successor), Wf.Set("advance", "advanced", true)), ("advanced", false)))
+            .Add(DirectApprovalWorkflow.Build());
+        var approval = restart is null ? await Start("job-free", DirectApprovalWorkflow.Definition) : new Contract.ActorRef(restart.Approval);
+        if (restart is null) await VerifyMissingInitialization(approval);
+        await store.EnableRootJobsAsync(stop);
         ReturnActor.Entries.Clear();
         ReturnActor.ActivityToComplete = restart is null ? null : finish ? Successor : ActivityName;
         var completions = new List<(InstanceRef Actor, Message Result)>();
         var host = await PostgresNativeRootOwner.PreparePartitionAsync(store, $"jobs-{Environment.ProcessId}", 0, registry, 8, stop,
             (actor, items, _) => completions.AddRange(items.Where(input => input.Kind == Kinds.JobFinished).Select(input => (actor, input))));
+        if (restart is null)
+        {
+            var capability = store.RootJobHandle;
+            await RefuseLateInitialization(() => store.EnableRootJobsAsync(stop));
+            Check(ReferenceEquals(capability, store.RootJobHandle), "A bound owner's job capability must remain unchanged.");
+        }
         await using var activation = await host.TryActivateAsync(stop)
             ?? throw new InvalidOperationException("The PostgreSQL job owner could not take its partition.");
         var worker = (Worker)activation;
@@ -64,7 +76,9 @@ internal static class PostgresRootJobPreview
             var direct = new EfStore(Open, postgres: true) { CommitSql = CommitSql.Owned };
             await RefuseDirect(() => direct.CommitFirstRootAsync(scope.Tenant, primary.Id, creator, worker.Fences.Single(),
                 TimeSpan.FromSeconds(10), "null", 14, Definition, new Dictionary<string, string>(), """["manual start"]""", stop));
-            await Drive(async () => await Image(scope, primary) is not null && await Image(scope, neighbor) is not null);
+            await Drive(async () => await Image(scope, primary) is not null && await Image(scope, neighbor) is not null &&
+                await Image(scope, approval) is not null);
+            await LoadJobFree(approval, 1);
             var first = await ReadWaiting(scope, primary, 1);
             var second = await ReadWaiting(scope, neighbor, 1);
             Check(first.Actor != second.Actor && first.Ticket != second.Ticket && completions.Count == 0,
@@ -74,7 +88,7 @@ internal static class PostgresRootJobPreview
             var (_, neighborBookmark) = await History(scope, neighbor);
             var fence = worker.Fences.Single();
             Check(primaryBookmark is not null && neighborBookmark is not null, "The first owner must leave a journal bookmark for each root.");
-            Console.WriteLine($"waiting {Environment.ProcessId} {primary.Id} {neighbor.Id} {fence.Epoch} {fence.Position} " +
+            Console.WriteLine($"waiting {Environment.ProcessId} {primary.Id} {neighbor.Id} {approval.Id} {fence.Epoch} {fence.Position} " +
                 $"{primaryBookmark!.Value.Value} {neighborBookmark!.Value.Value}");
             return 0;
         }
@@ -84,12 +98,16 @@ internal static class PostgresRootJobPreview
         var current = worker.Fences.Single();
         Check(current.Epoch > restart.Epoch, "The cold owner must acquire a higher epoch.");
         var revision = finish ? 2L : 1L;
+        var approvalFrame = await LoadJobFree(approval, revision);
         var left = await ReadWaiting(scope, actor, revision);
         var right = await ReadWaiting(scope, other, revision);
         if (!finish)
         {
             await VerifyRefusals(left, right);
-            await Drive(async () => (await Image(scope, actor))?.Revision == 2 && (await Image(scope, other))?.Revision == 2);
+            await Approve(approvalFrame, "first approval");
+            await Drive(async () => (await Image(scope, actor))?.Revision == 2 && (await Image(scope, other))?.Revision == 2 &&
+                (await Image(scope, approval))?.Revision == 2);
+            await LoadJobFree(approval, 2);
             var leftSuccessor = await ReadWaiting(scope, actor, 2);
             var rightSuccessor = await ReadWaiting(scope, other, 2);
             Check(left.Actor == leftSuccessor.Actor && right.Actor == rightSuccessor.Actor &&
@@ -98,13 +116,19 @@ internal static class PostgresRootJobPreview
             CheckCallbacks();
             await CheckAtomicIssuance(leftSuccessor, rightSuccessor, 2);
             var fence = worker.Fences.Single();
-            Console.WriteLine($"successor {Environment.ProcessId} {actor.Id} {other.Id} {fence.Epoch} {fence.Position} " +
+            Console.WriteLine($"successor {Environment.ProcessId} {actor.Id} {other.Id} {approval.Id} {fence.Epoch} {fence.Position} " +
                 $"{restart.PrimaryBookmark} {restart.NeighborBookmark}");
             return 0;
         }
 
+        await Approve(approvalFrame, "second approval");
         await Drive(async () => (await Image(scope, actor))?.Status == InstanceStatus.Finished &&
-            (await Image(scope, other))?.Status == InstanceStatus.Finished);
+            (await Image(scope, other))?.Status == InstanceStatus.Finished && (await Image(scope, approval))?.Status == InstanceStatus.Finished);
+        var jobFree = (await Image(scope, approval))!;
+        Check(jobFree is { Revision: 3, NextJobGeneration: 0, Jobs: null } &&
+            Json.Read<NativeState>(jobFree.State!).Results["approve"] is JsonArray approvals &&
+            approvals.Select(item => item!.GetValue<string>()).SequenceEqual(["first approval", "second approval"]),
+            "Both cold approval turns must finish the job-free root and keep its generation at zero.");
         CheckCallbacks();
         var leftEnd = await CheckFinished(scope, actor, left, new(restart.PrimaryBookmark));
         var rightEnd = await CheckFinished(scope, other, right, new(restart.NeighborBookmark));
@@ -112,7 +136,7 @@ internal static class PostgresRootJobPreview
         Check((await History(scope, actor, leftEnd)).Entries.Count == 0 &&
             (await History(scope, other, rightEnd)).Entries.Count == 0 && completions.Count == 2,
             "Neither root may append a second result after another pass.");
-        Console.WriteLine($"finished {Environment.ProcessId} {actor.Id} epoch {current.Epoch} two sequential results per actor revision 3");
+        Console.WriteLine($"finished {Environment.ProcessId} {actor.Id} epoch {current.Epoch} two sequential results per actor revision 3; job-free approval finished with generation zero");
         return 0;
 
         void CheckCallbacks() =>
@@ -197,13 +221,41 @@ internal static class PostgresRootJobPreview
             Check(atomic, "Each issued ticket, checkpoint and journal must share a transaction.");
         }
 
-        async Task<Contract.ActorRef> Start(string operation)
+        async Task<Contract.ActorRef> Start(string operation, string definition = Definition)
         {
             var receipt = await new WorkflowRuntime(api, api).StartAsync(scope, operation,
-                NativeExecutionModel.Start(Definition), cancellationToken: stop);
+                NativeExecutionModel.Start(definition), cancellationToken: stop);
             return receipt is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } started }
                 ? started : throw new InvalidOperationException("Use a fresh preview database.");
         }
+
+        async Task VerifyMissingInitialization(Contract.ActorRef id)
+        {
+            var uninitialized = new EfStore(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
+            await RefuseBinding(async () => { await uninitialized.BindWorkerPartitionAsync(0, stop); });
+            await RefuseBinding(async () => { await uninitialized.BindWorkerRootsAsync([(scope.Tenant, id.Id)], stop); });
+            await RefuseBinding(() => { uninitialized.BindWorkerNode(); return Task.CompletedTask; });
+            await using var db = Open();
+            Check(!uninitialized.CreationIdentityAvailable && !await db.Nodes.AnyAsync(stop) &&
+                await db.Partitions.AsNoTracking().AllAsync(partition => partition.Epoch == 0, stop) &&
+                await Image(scope, id) is null && await admission.ReadPendingCreatorAsync(scope.Tenant, id.Id, stop) is not null,
+                "Missing job initialization must leave scope unbound, epoch zero and the approval creator pending.");
+        }
+
+        async Task<string> LoadJobFree(Contract.ActorRef id, long expectedRevision)
+        {
+            var image = await Image(scope, id) ?? throw new InvalidOperationException("The job-free Native approval is absent.");
+            var row = (await store.LoadAsync([image.Actor.Id], stop)).Single();
+            Check(image is { Status: InstanceStatus.Running, NextJobGeneration: 0, Jobs: null } && image.Revision == expectedRevision &&
+                row is { NextJobGeneration: 0, Jobs: null } && row.Revision == expectedRevision &&
+                row.FoundationDispatchHeader?.Reference == id.Id,
+                "A job-free Native checkpoint must persist generation zero and cold-load with its exact public reference.");
+            return Json.Read<NativeState>(row.State).Frames.Values.Single(frame => frame.Node == "approve").Id;
+        }
+
+        Task Approve(string frame, string value) =>
+            PostgresMultiRootClient.Send(api, scope, approval, value, JsonSerializer.Serialize(new CompositeSignal(frame, "approve", value)),
+                Contract.AdmissionOutcome.Accepted, stop);
 
         Task<EfStore.RootImage?> Image(Contract.BoundScope tenant, Contract.ActorRef id) => store.ReadFirstRootAsync(tenant.Tenant, id.Id, stop);
 
@@ -291,6 +343,22 @@ internal static class PostgresRootJobPreview
     {
         try { Check(!(await commit()).Landed, message); }
         catch (NotSupportedException) { }
+    }
+
+    private static async Task RefuseLateInitialization(Func<Task> initialize)
+    {
+        try { await initialize(); }
+        catch (InvalidOperationException error) when (error.Message == "The PostgreSQL owner is already bound.")
+        { return; }
+        throw new InvalidOperationException("A bound owner must refuse job capability initialization.");
+    }
+
+    private static async Task RefuseBinding(Func<Task> bind)
+    {
+        try { await bind(); }
+        catch (StoreFormatException error) when (error.Message == "The PostgreSQL owner must initialize its job capability before binding to the job profile.")
+        { return; }
+        throw new InvalidOperationException("Binding protocol 6 without its job capability must be refused.");
     }
 
     private static async Task RefuseDirect(Func<ValueTask<Committed>> commit)
