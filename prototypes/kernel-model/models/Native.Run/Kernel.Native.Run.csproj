@@ -8,6 +8,7 @@
     <Compile Include="../../sim/Models.cs" Link="Models.cs" />
     <ProjectReference Include="../Native.Legacy/Kernel.Native.Legacy.csproj" />
     <ProjectReference Include="../../ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
+    <ProjectReference Include="../../runtime/Kernel.Runtime.Hosting/Kernel.Runtime.Hosting.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

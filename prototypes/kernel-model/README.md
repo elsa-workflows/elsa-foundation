@@ -53,6 +53,25 @@ for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conform
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
+## Built-in Cluster redistribution on PostgreSQL
+
+Set `KERNEL_PREVIEW_POSTGRES` to the connection string of a fresh, empty PostgreSQL database, then run from
+`prototypes/kernel-model`:
+
+```bash
+dotnet restore models/Native.Run --locked-mode
+dotnet run -c Release --no-restore --project models/Native.Run -- pg-runtime-cluster
+```
+
+Two operating-system processes run the built-in `RuntimeNode` and a durable Worker per node. PostgreSQL shows
+eight partitions on the first node, four each when the second joins, and all eight back on the first after the
+second stops gracefully. A Native workflow waits twice for approval events. The departing node records Ada, and
+its successor records Grace at the next journal position.
+
+This fixture uses the general PostgreSQL durable workflow path and the Native compatibility adapter. Public
+Foundation use across an owned set, grouped partition transfers, and qualification of the 1,024-partition release
+profile remain K5 work.
+
 ## The simulation
 
 ```
