@@ -407,9 +407,9 @@ export function ActivityDefinitionPublicationReview({
       onPublish={publishFromToolbar}
     />
     {phase !== "idle" && !dialogOpen ? actionableStatus ? <div className={`ad-publication-toolbar-status${needsAttention ? " is-attention" : ""}`} role={needsAttention ? "alert" : "status"}>
-      <AlertTriangle size={18} aria-hidden />
+      <AlertTriangle size={14} aria-hidden />
       <div><strong>{attentionTitle}{diagnosticCounts ? ` · ${diagnosticCounts}` : ""}</strong>{failure ? <p>{failure}</p> : null}</div>
-      <StudioButton size="sm" onClick={() => setDialogOpen(true)} aria-haspopup="dialog">{diagnosticSource.length ? "View issues" : "View details"}</StudioButton>
+      <StudioButton variant="ghost" size="sm" className="ad-draft-diagnostics-link" onClick={() => setDialogOpen(true)} aria-haspopup="dialog">{diagnosticSource.length ? "View issues" : "View details"}</StudioButton>
     </div> : <span className="ad-publication-toolbar-status" role="status">{publicationStatusLabel(phase, preflight?.isPublishable)}</span> : null}
     {dialogOpen ? <StudioDialog open title="Review & publish" className="ad-publication-dialog"
       description="Studio saves the current draft, then checks its impact and readiness before publication."

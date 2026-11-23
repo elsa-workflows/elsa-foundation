@@ -23,7 +23,8 @@ Terms used here: a **frame** is the native model's record of one live activity (
 | The StateMachine's `MachineState.Version`: a shape marker set when the machine begins. Versions 1 and 2 are upgraded on restore up to 3; 4 to 7 mark feature variants (input inbox, internal execution, outcomes) and are kept as they are | Built, witnessed | `Begin` and `Restore` in [StateMachine.cs](../../prototypes/kernel-model/models/Statecharts.Native/StateMachine.cs) |
 | `ITurn.Rebind(definition)`: the commit writes the new definition into the row; from the next turn on the instance belongs to it (invariant 19) | Built in the kernel and the simulation's counter model, mutation-checked (`RebindForgotten`) | `Rebind` in [Turn.cs](../../prototypes/kernel-model/src/Kernel.Workflows/Turn.cs), [FINDINGS 16](../../prototypes/kernel-model/FINDINGS.md#16-rebind-run) |
 | Commands, the contract's closed `Kinds` (`Suspend`, `Resume`, `Terminate`, `Delete`, `Recover`, `Discard`, `Migrate`), pass `Withholds`, go alone and are never discarded as poison (FC-9) | Built in the prototype for suspend, resume, terminate and delete | The prototype's `Kinds.IsControl` in [Messages.cs](../../prototypes/kernel-model/src/Kernel.Durable/Messages.cs), [Worker.cs](../../prototypes/kernel-model/src/Kernel.Durable/Worker.cs) |
-| Rebind in the native model, any frame or path mapping, a per-activity state version in the frame, a migration command | **Not built** | None. Everything below the "Proposed" headings is design on paper |
+| A public `Migrate` command rebinds a compatible structured Native checkpoint with unchanged declarations through the in-memory Actor Foundation | Built and witnessed for the structured subset | [Native migration application](../../prototypes/kernel-model/README.md#apply-a-compatible-native-migration) |
+| Explicit frame or path mapping and per-activity state versions in the frame | Proposed | See the design below |
 
 The Flowchart's state carries no version of its own in the prototype: the extracted graph engine dropped main's private-state envelope ([Graph README](../../prototypes/kernel-model/models/Graph/README.md), "What was adapted"), so the native model's whole-state version covers it.
 
@@ -159,7 +160,7 @@ The migration's turn ends in one fenced commit, batched with its partition's oth
 
 All of it lands or none of it does (invariant 2). A commit refused by the fence resets the owner as usual. The next owner finds `Migrate` in the inbox and maps the same committed state again, so the result is the same. A refusal is also a commit: the message is consumed and the outcome carries the findings, with the instance unchanged.
 
-**The journal record.** At Full history the migration's journal entry records source, target and plan, and the viewer renders earlier entries against the source definition and later ones against the target. At State history the journal row is `[]`, and at Minimal no row is written (`Journal` in WorkflowInstance.cs). Those levels have no activity entries to render, so the viewer needs no boundary there. As built they keep no record that the migration happened, beyond the row's definition and the plan's outcome. The [data lifecycle](data-lifecycle.md) page's lifecycle entries (created, ended, migrated, deleted) at every history level are adopted (its decision 1), so a migration writes an envelope-only "migrated" entry at State and Minimal too; that is not built.
+**The journal record.** At Full history the migration's journal entry records source, target and plan. The planned viewer renders earlier entries against the source definition and later ones against the target. State and Minimal carry the envelope-only `Migrated` lifecycle entry specified by [data lifecycle decision 1](data-lifecycle.md). The in-memory structured Native witness verifies one successful migration lifecycle entry at each history level.
 
 ### Plans and bulk migration
 
@@ -172,6 +173,7 @@ All of it lands or none of it does (invariant 2). A commit refused by the fence 
 - **Pending.** The plan reports pending = selected - (migrated + refused + not at source), as progress only ("Outcomes" above). An instance withheld on an older node (F14, or a newer activity version) stays pending until the roll-forward; a deleted one stays pending for good.
 - **Closing.** A plan's run ends when the plan-outcomes read model shows every selected instance with an outcome of any kind, "not at source" included: the plan runner, outside any turn, reads the read model and then sends the plan a "complete" message, deduplicated by plan id, since a turn reads no read models. It also ends at the plan's deadline, or when an operator closes it ("close plan"); the plan-outcomes read model lists the instances that never answered as "no answer". Release 1 documents that a plan may stay open until it is closed. An outcome that arrives after the close is still counted and recorded.
 - **Identity.** A selection names an instance by its exact ref, read from the instance-list read model; an exact ref names the actor's life (FC-15). A `Migrate` to a deleted instance is dropped (FC-15), and a later life under a reused caller key has another exact ref, so the old selection never reaches it. The instance stays pending.
+- **Park.** The runner waits while the plan has an active Park or recovery drain. Recovery can re-arm the plan's own deadline at its original due time. Park discard, expiry and termination close the projection and keep outstanding selections as "no answer". The foundation refuses later ordinary input to that life after one of these dispositions completes.
 - **Outcomes name the life that answered.** Each outcome message comes from the instance's own turn, whose sender is its exact ref (FC-3), so the plan-outcomes read model attributes every outcome to one life, and a later life under a reused caller key never answers for an old selection (FC-15).
 - **Later.** Reconciling unanswered instances automatically (a job of the plan that reads both read models and returns the missing exact refs to a later plan turn, where a decisive outcome arriving afterwards replaces "target missing") is deferred.
 
@@ -204,8 +206,8 @@ Later: explicit node, path and state maps; frame cancellation by map; re-registe
 
 ## Unverified
 
-- **Not built or simulated:** the activity-level versioning and its withholding signal, the `Migrate` command and the command-kind seam, the plan actor, the model and container hooks, and native `Rebind`. The simulation's invariants 18 and 19 cover only model-level versions and `Rebind` of a toy model.
-- **No run checks:** the claim that the simple cases need no subscription, timer or job change rests on reading the native model's wait and job code.
+- **Proposed:** activity-level versioning and its withholding signal, the product plan actor, and the full model and container mapping hooks. The structured Native command runs in memory and still needs the other applicable provider and model cases.
+- **Event wait witnessed:** the Native command resumes the original event wait after rebind. The timer and background job cases still need their own execution evidence.
 - **By inspection only:** the comparison with today's migrate alteration validator.
 - **Checks to add when it is built:**
   - a simulated migration under takeovers: it lands once, a refusal changes nothing, effect keys of replayed activations are unchanged, invariant 8 holds, and an older owner never writes a newer state back;

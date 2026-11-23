@@ -33,7 +33,7 @@ internal sealed class MigrationPlanOperator(IIngress ingress, IActorReads reads,
         JournalMigrationDispatchState state, IIngress ingress)
     {
         private readonly SemaphoreSlim _gate = new(1, 1);
-        private readonly MigrationPlanOutcomes _outcomes = new(reads, scope, plan);
+        private readonly MigrationPlanOutcomes _outcomes = state.Outcomes;
 
         internal async Task<MigrationPlanStep> AdvanceAsync(CancellationToken cancellationToken = default)
         {
@@ -53,10 +53,9 @@ internal sealed class MigrationPlanOperator(IIngress ingress, IActorReads reads,
                     return await SelectAsync(progress, executionModel, cancellationToken) ? MigrationPlanStep.SelectionAdmitted : MigrationPlanStep.Idle;
                 }
 
-                await RefreshOutcomesAsync(cancellationToken);
-                if (!_outcomes.CanComplete(progress.Number)) return MigrationPlanStep.WaitingForOutcomes;
-                await state.SendAsync(MigrationPlanControl.Complete, "complete", new(progress.Number), cancellationToken);
-                return MigrationPlanStep.CompletionAdmitted;
+                return await state.TryCompleteAsync(cancellationToken)
+                    ? MigrationPlanStep.CompletionAdmitted
+                    : MigrationPlanStep.WaitingForOutcomes;
             }
             finally { _gate.Release(); }
         }
@@ -66,7 +65,7 @@ internal sealed class MigrationPlanOperator(IIngress ingress, IActorReads reads,
             var query = new ActorQuery(WorkflowActor.ActorType, ActorStatus.Running,
                 new Dictionary<string, string> { ["definition"] = progress.From });
             var page = await reads.ListAsync(scope, query, progress.Cursor, cancellationToken);
-            if (page.Next is { } next && (next == progress.Cursor || next.Value.Length > 1_024))
+            if (page.Next is { } next && (next == progress.Cursor || next.Value is not { Length: > 0 and <= 1_024 }))
                 throw new InvalidOperationException("The instance list must return an advancing, bounded cursor.");
             var candidates = page.Items.Where(view => view.Header.Tenant == scope.Tenant &&
                     WorkflowActor.CanSelectForMigration(view, executionModel, progress.From))

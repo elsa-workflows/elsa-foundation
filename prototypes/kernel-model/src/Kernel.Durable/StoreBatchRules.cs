@@ -7,11 +7,15 @@ namespace Kernel.Durable;
 public static class StoreBatchRules
 {
     public static void Validate(CommitBatch batch,bool deferUpdateAliases=false,bool deferInsertAliases=false,bool ownedSets=false,
-        bool supportsJobTrialClear=false,bool supportsFoundationParkResolution=false,bool supportsFoundationValues=false,bool supportsDueBacklog=false)
+        bool supportsJobTrialClear=false,bool supportsFoundationParkResolution=false,bool supportsFoundationValues=false,bool supportsDueBacklog=false,bool supportsFoundationSelfRecalls=false)
     {
         if (batch.ClearJobTrials.Count > 0 && (!supportsJobTrialClear || batch.HandOver || batch.Turns.Count > 0 ||
             batch.Seen.Count > 0 || batch.Trial.Count > 0 || batch.ClearJobTrials.Distinct().Count() != batch.ClearJobTrials.Count))
             throw new StoreException(Failure.Definite, "A job trial clear requires supported, distinct keys in a separate fenced batch.");
+        // A ticket scope is its origin's string length plus one. Physical key encodings
+        // and other issued key domains cannot appear in a logical trial clear.
+        if (batch.ClearJobTrials.Any(key => key is not { Scope: > 0 and <= (long)int.MaxValue + 1, Match: null }))
+            throw new StoreException(Failure.Definite, "A job trial clear requires logical ticket keys.");
         if (batch.PublicationReservation is { } publication && (!supportsFoundationParkResolution ||
             batch.Trial is not [var key] || key != publication.Key || batch.Seen.Count != 0 || batch.Turns.Count != 0 ||
             batch.ClearJobTrials.Count != 0))
@@ -51,6 +55,8 @@ public static class StoreBatchRules
         }
         foreach (var turn in batch.Turns)
         {
+            if (!supportsFoundationSelfRecalls && turn.FoundationSelfRecalls is not null)
+                throw new StoreException(Failure.Definite, "Scoped self recalls require the qualified root writer.");
             if (turn.FoundationValues is { Count: > 0 } &&
                 (!supportsFoundationValues || turn.Delete || turn.Row is not { Retired: false, Creation: > 0 } valueOwner ||
                     valueOwner.Id != turn.Instance))
@@ -237,6 +243,8 @@ public static class StoreBatchRules
 
     public static void ValidateIdentity(InstanceRow row)
     {
+        if (row.FoundationNullState && (row.State != "null" || row.Retired || row.IdentityOnly))
+            throw new StoreException(Failure.Definite, "An absent actor state requires the null placeholder on an actor checkpoint.");
         if (row.IdentityMetadataRequired && !row.IdentityOnly)
             throw new StoreException(Failure.Definite,"A terminal metadata protocol requires an identity-only row.");
         if (row is { IdentityOnly:true } identity && (identity.Retired || identity.Status==InstanceStatus.Running || identity.Creation!=0 || identity.Parent is not null ||

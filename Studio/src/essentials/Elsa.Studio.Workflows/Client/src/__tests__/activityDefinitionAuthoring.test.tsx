@@ -2616,9 +2616,97 @@ describe("Activity Definition publication", () => {
     }));
     expect(activityDefinitionBackLink(rendered.container).getAttribute("aria-disabled")).toBeNull();
     expect((buttonByText(rendered.container, "Edit implementation 1") as HTMLButtonElement).disabled).toBe(true);
-    expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(false);
+    expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).title).toBe("Test published version 3.2.1");
     expect((buttonByText(rendered.container, "Validate saved revision") as HTMLButtonElement).disabled).toBe(true);
     expect((buttonByText(rendered.container, "Save now") as HTMLButtonElement).disabled).toBe(true);
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Continue editing"))).toBe(false);
+    await rendered.unmount();
+  });
+
+  it("keeps the designer immediately editable after publication and starts a new draft on the next edit", async () => {
+    const publishedVersionId = publicationReceipt().outcome!.definitionVersionId;
+    const followUpDraft = {
+      ...fullDraft({
+        draftId: "activity-draft-2",
+        revision: 1,
+        payload: { edit: 1 }
+      }),
+      sourceVersionId: publishedVersionId
+    };
+    const mounted = vi.fn();
+    const contribution = editingContribution();
+    const Editor = contribution.component;
+    contribution.component = function TrackedEditor(props) { React.useEffect(() => { mounted(); }, []); return <Editor {...props} />; };
+    const putJson = vi.fn(async (url: string, body: unknown) => {
+      const payload = (body as { provider: { payload: unknown } }).provider.payload;
+      if (url === "/design/activities/drafts/activity-draft-2") return { ...followUpDraft, revision: 2, provider: { ...followUpDraft.provider, payload } };
+      return fullDraft({ revision: 4, payload });
+    });
+    const postJson = vi.fn(async (url: string, body: unknown) => {
+      if (url.endsWith("/publication-preflight")) return publicationPreflight({
+        draftRevision: (body as { expectedDraftRevision: number }).expectedDraftRevision,
+        definitionHeadVersionId: "version-head",
+        hasBaseline: true,
+        minimumVersion: "2.0.0"
+      });
+      if (url.endsWith("/publish")) {
+        const request = body as { version: string; idempotencyKey: string; expectedDraftRevision: number; expectedDefinitionHeadVersionId?: string | null; reviewToken: string };
+        return publicationReceipt({
+          idempotencyKey: request.idempotencyKey,
+          expectedDraftRevision: request.expectedDraftRevision,
+          expectedDefinitionHeadVersionId: request.expectedDefinitionHeadVersionId ?? null,
+          reviewToken: request.reviewToken,
+          requestedVersion: request.version,
+          outcome: {
+            ...publicationReceipt().outcome!,
+            version: request.version
+          }
+        });
+      }
+      if (url === "/design/activities/definitions/activity-def-1/drafts") return followUpDraft;
+      throw new Error(`Unexpected POST ${url}`);
+    });
+    const detail: ActivityDefinitionManagementView = editableDefinition();
+    detail.definition.headVersionId = "version-head";
+    detail.lifecycle.head = { versionId: "version-head", version: "1.4.0", lifecycle: "Active", providerKey: "elsa.activity-graph", providerSchemaVersion: "1" };
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [contribution],
+      putJson,
+      postJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3, payload: { edit: 0 } });
+        if (url === "/design/activities/definitions/activity-def-1") return detail;
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Edit implementation 0"));
+    click(buttonByText(rendered.container, "Review & publish"));
+    await waitForText(rendered.container, "Compared with latest published version");
+    click(buttonByText(rendered.container, "Publish 2.0.0"));
+    await waitForText(rendered.container, "Version 2.0.0");
+    expect(rendered.container.querySelector(".wf-editor-title .wf-chip")?.textContent).toBe("Published");
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Continue editing"))).toBe(false);
+    expect((buttonByText(rendered.container, "Edit implementation 1") as HTMLButtonElement).disabled).toBe(false);
+    expect(mounted).toHaveBeenCalledTimes(1);
+
+    click(buttonByText(rendered.container, "Edit implementation 1"));
+    await waitForText(rendered.container, "Saved revision 2");
+    expect(postJson).toHaveBeenCalledWith("/design/activities/definitions/activity-def-1/drafts", {
+      sourceVersionId: publishedVersionId,
+      presentationLabel: null
+    });
+    expect(putJson).toHaveBeenLastCalledWith("/design/activities/drafts/activity-draft-2", expect.objectContaining({
+      expectedRevision: 1,
+      provider: expect.objectContaining({ payload: { edit: 2 } })
+    }));
+    expect(rendered.container.querySelector(".wf-editor-title .wf-chip")?.textContent).toBe("Draft");
+    expect(new URLSearchParams(window.location.search).get("draft")).toBe("activity-draft-2");
+    expect(mounted).toHaveBeenCalledTimes(1);
     await rendered.unmount();
   });
 

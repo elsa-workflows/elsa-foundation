@@ -12,12 +12,99 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["pg-root-operators", "admit"])
+    return await PostgresRootOperatorChecks.RunAsync(null);
+if (args is ["pg-root-operators", "read", var operatorA, var operatorB, var operatorC])
+    return await PostgresRootOperatorChecks.RunAsync([operatorA, operatorB, operatorC]);
+if (args is ["pg-root-operators", var operatorWriter and ("owned" or "ef"), var operatorFence and ("in-batch" or "checked"), .. var operatorArgs])
+{
+    if (operatorArgs is ["admit"]) return await PostgresRootOperatorChecks.RunAsync(null, operatorWriter == "owned", operatorFence == "in-batch");
+    if (operatorArgs is ["read", var a, var b, var c]) return await PostgresRootOperatorChecks.RunAsync([a, b, c], operatorWriter == "owned", operatorFence == "in-batch");
+}
+if (args is ["sqlite-plan-projection", "inspect-neighbor", var neighborFile, var neighborPlan, var neighborActor])
+    return await SqlitePlanProjectionChecks.InspectNeighborAsync(neighborFile, neighborPlan, neighborActor);
+if (args is ["sqlite-plan-projection", "build", var planFile]) return await SqlitePlanProjectionChecks.BuildAsync(planFile);
+if (args is ["sqlite-plan-projection", "inspect", var existingPlanFile, var issuedPlan, var expectedDigest])
+    return await SqlitePlanProjectionChecks.InspectAsync(existingPlanFile, issuedPlan, expectedDigest);
+if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flowchart-peer"), var flowSize] && int.TryParse(flowSize, out var flowPartitions))
+    return await PostgresClusterChecks.RunAsync(flowPartitions, flowClusterMode == "pg-cluster-flowchart-peer", flowchart: true);
+if (args is [var clusterMode and ("pg-cluster-roots" or "pg-cluster-peer" or "pg-cluster-crash"), var size] && int.TryParse(size, out var clusterPartitions))
+    return await PostgresClusterChecks.RunAsync(clusterPartitions, clusterMode == "pg-cluster-peer", clusterMode == "pg-cluster-crash");
+if (args is ["pg-discover-roots", var discoveryPhase and ("birth" or "restart"), var discoveryScope, .. var modes] &&
+    int.TryParse(discoveryScope, out var selectedPartition))
+{
+    if (modes is []) return await PostgresDiscoveryChecks.RunAsync(selectedPartition, discoveryPhase == "birth");
+    if (modes is [var sql and ("owned" or "ef"), var check and ("in-batch" or "checked")])
+        return await PostgresDiscoveryChecks.RunAsync(selectedPartition, discoveryPhase == "birth",
+            sql == "owned" ? CommitSql.Owned : CommitSql.EntityFramework, check == "in-batch");
+}
+if (args is ["pg-multi-root-secondary", .. var clientArgs]) return await PostgresMultiRootClient.SecondaryAsync(clientArgs);
+if (args is ["pg-multi-root", var writer and ("owned" or "ef"), var fence and ("in-batch" or "checked"), .. var phaseArgs])
+{
+    if (phaseArgs is ["birth"]) return await PostgresMultiRootChecks.RunAsync([], writer == "owned", fence == "in-batch");
+    if (phaseArgs is ["restart", var a, var b, var outside]) return await PostgresMultiRootChecks.RunAsync([a, b, outside], writer == "owned", fence == "in-batch");
+}
+if (args is ["pg-runtime-cluster"]) return await PostgresRuntimeCluster.RunAsync();
+if (args is ["pg-runtime-cluster", "wake"]) return await PostgresRuntimeCluster.RunAsync(wake: true);
+if (args is ["pg-runtime-cluster-member"]) return await PostgresRuntimeCluster.MemberAsync();
+if (args is ["pg-runtime-cluster-member", "wake"]) return await PostgresRuntimeCluster.MemberAsync(wake: true);
+if (args is ["pg-root-history", var historyWriter and ("owned" or "ef"), var historyFence and ("checked" or "in-batch")])
+    return await PostgresRootHistoryChecks.RunAsync(historyWriter == "owned", historyFence == "in-batch");
+if (args is ["pg-core-preview", var birthPhase and ("birth" or "hold-owner")]) return await PostgresPublicPreview.RunAsync(birthPhase);
+if (args is ["pg-core-preview", "standby", var standbyRoot, var standbyBookmark, var priorEpoch, var priorPid, var initialLease] &&
+    long.TryParse(priorEpoch, out var epoch) && epoch > 0 && int.TryParse(priorPid, out var peerPid) && peerPid > 0 &&
+    long.TryParse(initialLease, out var originalUntil) && originalUntil > 0)
+    return await PostgresPublicPreview.RunAsync("standby", standbyRoot, standbyBookmark, epoch, peerPid, originalUntil);
+if (args is ["pg-core-preview", "tenant-probe", var probeReference]) return await PostgresPublicPreview.RunAsync("tenant-probe", probeReference);
+if (args is ["pg-core-preview", var replayPhase and ("restart" or "terminal"), var actorReference, var journalBookmark])
+    return await PostgresPublicPreview.RunAsync(replayPhase, actorReference, journalBookmark);
+if (args is ["pg-flowchart-preview", "birth"]) return await PostgresPublicPreview.RunAsync("birth", flowchart: true);
+if (args is ["pg-flowchart-preview", "restart", var flowchartActor, var flowchartBookmark])
+    return await PostgresPublicPreview.RunAsync("restart", flowchartActor, flowchartBookmark, flowchart: true);
+if (args is ["pg-root-worker", "birth"]) return await PostgresRootWorkerChecks.RunAsync("birth", null);
+if (args is ["pg-root-worker", var phase and ("restart" or "bounds"), var reference]) return await PostgresRootWorkerChecks.RunAsync(phase, reference);
 if (args is ["deadlines"]) return await Deadlines.RunAsync();
 if (args is ["smoke"]) return await Smoke.RunAsync();
 if (args is ["variants", var variantMode]) return await VariantChecks.RunAsync(variantMode);
 if (args is ["replay-variants"]) return await ReplayVariantChecks.RunAsync();
 if (args is ["join-variants", var joinMode]) return await JoinVariantChecks.RunAsync(joinMode);
 if (args is ["join-replay-variants"]) return await JoinReplayVariantChecks.RunAsync();
+if (args is [var birthMode and ("pg-flowchart-preview" or "pg-durable-flowchart-preview"), "birth", var birthRoute and ("manual" or "automatic")])
+    return await PostgresFlowchartPreview.RunAsync(birthRoute, durable: birthMode == "pg-durable-flowchart-preview");
+if (args is ["pg-durable-flowchart-preview", "wait", var waitRoute and ("manual" or "automatic"), var seededRef, var seededEpoch] &&
+    long.TryParse(seededEpoch, out var priorFlowEpoch) && priorFlowEpoch > 0)
+    return await PostgresFlowchartPreview.RunAsync(waitRoute, seededRef, previousEpoch: priorFlowEpoch, durable: true, reachWait: true);
+if (args is ["pg-flowchart-preview", "restart", var resumedRoute and ("manual" or "automatic"), var flowRef, var flowBookmark, var flowEpoch] &&
+    long.TryParse(flowEpoch, out var previousEpoch) && previousEpoch > 0)
+    return await PostgresFlowchartPreview.RunAsync(resumedRoute, flowRef, flowBookmark, previousEpoch);
+if (args is ["pg-durable-flowchart-preview", "restart", var durableRoute and ("manual" or "automatic"), var durableRef, var durableBookmark, var durableEpoch, var revision] &&
+    long.TryParse(durableEpoch, out var heldEpoch) && heldEpoch > 0 && long.TryParse(revision, out var waitRevision) && waitRevision > 0)
+    return await PostgresFlowchartPreview.RunAsync(durableRoute, durableRef, durableBookmark, heldEpoch, durable: true, waitingRevision: waitRevision);
+if (args is ["pg-durable-flowchart-preview", "restart", ..])
+{
+    Console.Error.WriteLine("Durable restart requires a route, actor, bookmark, positive previous epoch and positive waiting revision.");
+    return 2;
+}
+if (args is [var timerPreview and ("pg-delay-preview" or "pg-durable-delay-preview" or "pg-delay-recall-preview"), var timerWriter and ("owned" or "ef"), var timerFence and ("checked" or "in-batch"), .. var timerArgs])
+{
+    var persistence = timerPreview == "pg-durable-delay-preview" ? Modes.Durable : Modes.Balanced;
+    var recall = timerPreview == "pg-delay-recall-preview";
+    if (timerArgs is ["birth"]) return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", persistence, null, recall);
+    if (timerArgs is ["restart", var timerRef, var timerEpoch, var timerDue, var timerHandle, var timerCursor] &&
+        long.TryParse(timerEpoch, out var oldTimerEpoch) && oldTimerEpoch > 0 && long.TryParse(timerDue, out var savedDue))
+        return await PostgresDelayPreview.RunAsync(timerWriter == "owned", timerFence == "in-batch", persistence, new(timerRef, oldTimerEpoch, savedDue, timerHandle, timerCursor), recall);
+    Console.Error.WriteLine("Use birth or restart <actor> <positive previous epoch> <due> <handle> <cursor>.");
+    return 2;
+}
+if (args is [var selfMode and ("pg-root-self" or "pg-root-timer"), var selfWriter and ("ef" or "owned"), var selfFence and ("checked" or "in-batch")])
+    return await PostgresRootSelfChecks.RunAsync(selfWriter == "owned", selfFence == "in-batch", selfMode == "pg-root-timer");
+if (args is ["pg-root-self-set", var setWriter and ("ef" or "owned"), var setFence and ("checked" or "in-batch")])
+    return await PostgresSelfSetChecks.RunAsync(setWriter == "owned", setFence == "in-batch");
+if (args is ["pg-flowchart-preview", "merge-early"])
+{
+    try { return await PostgresFlowchartPreview.RunAsync("automatic", mergeEarly: true); }
+    catch (InvalidOperationException error) { Console.Error.WriteLine(error.Message); return 1; }
+}
 if (args is ["park"]) return await ParkChecks.RunAsync();
 if (args is ["expr", var text, .. var vars])
 {
@@ -40,7 +127,7 @@ if (args is ["cost", "postgres", var connection])
     return failures;
 }
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
-Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | memory [runs]");
+Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | memory [runs] | pg-runtime-cluster [wake]");
 return 2;
 
 static class Cost

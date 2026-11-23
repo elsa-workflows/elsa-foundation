@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using Kernel.Runtime;
 
 namespace Kernel.Durable;
@@ -19,7 +18,7 @@ public sealed partial class InMemoryStore
         FoundationMetadataLimits.RequireContent(spec.Input, nameof(spec), FoundationMetadataLimits.StartContentBytes);
         var partition = inlineOwner?.Fences.FirstOrDefault()?.Partition;
         var window = FoundationIngressWindow(keepFor);
-        var operation = Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
+        var operation = FoundationRootCreator.OperationDigest(id);
         lock (_gate)
         {
             var now = clock();
@@ -28,12 +27,7 @@ public sealed partial class InMemoryStore
 
             var name = tenant + "_" + Guid.NewGuid().ToString("N");
             var address = InstanceRef.In(InstanceRef.Spread(name, partitions), name);
-            var exact = spec with { Creation = new CreationStart(1, 0, operation) };
-            var creator = new Message(id, address, Kinds.Start, spec.Input, Start: exact, Due: due, ReplyTo: replyTo, TargetCreation: 1)
-            {
-                StorageId = "root:" + address.Id,
-                StoreStartInputOnce = true
-            };
+            var creator = FoundationRootCreator.Create(address, id, operation, spec, due, replyTo);
             var until = checked(now + (long)window.TotalMilliseconds);
             var reference = partition is { } local
                 ? TryInlineRoot(inlineOwner!, local, name, tenant, creator)

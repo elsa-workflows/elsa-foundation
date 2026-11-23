@@ -23,6 +23,16 @@ for (const width of [320, 360, 1280]) {
     const grouping = page.getByRole("group", { name: "Group by", exact: true });
     const status = grouping.getByRole("checkbox", { name: "Current status", exact: true });
     const runKind = grouping.getByRole("checkbox", { name: "Run kind", exact: true });
+    const inlineCheckLabels = await grouping.locator(".named-checks label").evaluateAll(labels => labels.every(label => {
+      const box = label.querySelector<HTMLInputElement>('input[type="checkbox"]')?.getBoundingClientRect();
+      const range = document.createRange();
+      const textNode = [...label.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      if (!box || !textNode) return false;
+      range.selectNodeContents(textNode);
+      const textRect = range.getBoundingClientRect();
+      return textRect.left >= box.right && Math.abs((textRect.top + textRect.height / 2) - (box.top + box.height / 2)) <= 6;
+    }));
+    expect(inlineCheckLabels).toBe(true);
     await status.check();
     await toggleWithPointer(page, runKind);
     await expect(page.getByLabel("Selected grouping fields")).toHaveText("status, runKind");
@@ -33,15 +43,14 @@ for (const width of [320, 360, 1280]) {
     const controls = page.locator(".named-query-controls");
     const sectionNavigation = page.getByRole("navigation", { name: "Question sections" });
     const filters = controls.locator('[data-query-path="query.filters"]');
-    const trigger = filters.getByRole("button", { name: "Source filters", exact: true });
     const filtersButton = sectionNavigation.getByRole("link", { name: "Filters", exact: true });
     const sortButton = sectionNavigation.getByRole("link", { name: "Sort", exact: true });
     await sortButton.focus(); await page.keyboard.press("Enter");
     await expect(sortButton).toHaveAttribute("aria-current", "page");
+    await expect(filters).toBeHidden();
     await filtersButton.focus(); await page.keyboard.press("Enter");
     await expect(filtersButton).toHaveAttribute("aria-current", "page");
     await expect(filters).toBeVisible();
-    await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await expect(filters.getByRole("button", { name: "Add condition", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Open tile settings", exact: true }).click();

@@ -106,9 +106,9 @@ internal static class MigrationPlanRunnerChecks
         var emptySelected = await emptyDriver.AdvanceAsync();
         await Pump(successor);
         var behind = new MigrationPlanOutcomes(reads, scope, empty);
-        var caughtUp = behind.CanComplete(1);
+        var caughtUp = behind.Completion() is not null;
         while (await behind.ProjectNextAsync()) { }
-        check(!caughtUp && behind.CanComplete(1),
+        check(!caughtUp && behind.Completion() is { Batch: 1 },
             "an empty result projection cannot complete until it reads the plan's actual final selection");
         var emptyCompleted = await emptyDriver.AdvanceAsync();
         await Pump(successor);

@@ -17,6 +17,7 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
     private PageToken? _cursor;
     private bool _allSelected;
     private bool _closed;
+    internal MigrationPlanOutcomes Outcomes { get; } = new(reads, bound, plan);
 
     public async ValueTask<MigrationDispatchBatch?> ReadPendingAsync(BoundScope scope, ActorRef target,
         CancellationToken cancellationToken) => (await ReadProgressAsync(scope, target, cancellationToken))?.Pending;
@@ -28,7 +29,7 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            if (_closed || !await IsRunning(cancellationToken)) return null;
+            if (_closed || !await IsDispatchable(_created?.Deadline, cancellationToken)) return null;
             while (!_closed)
             {
                 var page = await reads.TailAsync(scope, plan, _bookmark, cancellationToken);
@@ -40,7 +41,7 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
                     Apply(record);
                 _bookmark = page.Next;
             }
-            if (_closed || _created is null || !await IsRunning(cancellationToken)) return null;
+            if (_closed || _created is null || !await IsDispatchable(_created.Deadline, cancellationToken)) return null;
             var pending = _pending is { } batch ? batch with { Actors = batch.Actors.ToArray() } : null;
             return new(_created.From, _created.Model, _number, _cursor, _allSelected, pending);
         }
@@ -54,7 +55,22 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
         await SendAsync(MigrationPlanControl.Acknowledge, operationId, new(batch), cancellationToken);
     }
 
-    internal async ValueTask SendAsync(string kind, string operationId, MigrationPlanControl control,
+    internal async ValueTask<bool> TryCompleteAsync(CancellationToken cancellationToken = default)
+    {
+        if (!await IsDispatchable(null, cancellationToken)) return false;
+        while (await Outcomes.ProjectNextAsync(cancellationToken)) { }
+        if (Outcomes.Completion() is not { } ready || !await IsDispatchable(ready.Deadline, cancellationToken))
+            return false;
+        await SendControlAsync(MigrationPlanControl.Complete, "complete", new(ready.Batch), cancellationToken);
+        return true;
+    }
+
+    internal ValueTask SendAsync(string kind, string operationId, MigrationPlanControl control,
+        CancellationToken cancellationToken = default) =>
+        kind == MigrationPlanControl.Complete ? throw new ArgumentException("Completion requires the outcome projection.", nameof(kind))
+            : SendControlAsync(kind, operationId, control, cancellationToken);
+
+    private async ValueTask SendControlAsync(string kind, string operationId, MigrationPlanControl control,
         CancellationToken cancellationToken = default)
     {
         var id = authority.OperationId(bound.Tenant, plan, kind, operationId);
@@ -71,8 +87,12 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
             throw new ArgumentException("This reader belongs to one tenant and exact plan.");
     }
 
-    private async ValueTask<bool> IsRunning(CancellationToken cancellationToken) =>
-        WorkflowActor.IsRunningMigrationPlan(await reads.GetAsync(bound, plan, cancellationToken), plan);
+    private async ValueTask<bool> IsDispatchable(long? deadline, CancellationToken cancellationToken)
+    {
+        var view = await reads.GetAsync(bound, plan, cancellationToken);
+        return view is { Park: null } && WorkflowActor.IsRunningMigrationPlan(view, plan) &&
+            (deadline is null || view.AsOf < deadline);
+    }
 
     private void Apply(MigrationPlanJournal? entry)
     {

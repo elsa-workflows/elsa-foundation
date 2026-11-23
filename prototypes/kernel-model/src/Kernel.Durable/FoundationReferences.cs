@@ -30,9 +30,7 @@ public sealed partial class InMemoryStore
     // A turn may form the ref for a prospective child before commit. Until the creator is stored, it has no binding.
     internal string ReferenceFor(string tenant, CreationAddress address)
     {
-        var id = Convert.ToBase64String(DurableKeyJson.CodeUnits(address.Id));
-        var encoded = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { Tenant = tenant, Id = id, address.Creation });
-        return Convert.ToHexString(HMACSHA256.HashData(_referenceKey.Value, encoded));
+        return FoundationRootCreator.ReferenceFor(_referenceKey.Value, tenant, address);
     }
 
     internal bool HasFoundationTimer(InboxKey key, string actor, long creation)
@@ -222,7 +220,7 @@ public sealed partial class InMemoryStore
     }
 
     internal string MessageHandle(string id) =>
-        "~" + Convert.ToHexString(HMACSHA256.HashData(_referenceKey.Value, DurableKeyJson.CodeUnits(id)));
+        FoundationSelfSend.Handle(_referenceKey.Value, id);
 
     internal string DeliveryHandle(string reference, long seq, InboxKey key) =>
         MessageHandle("delivery:" + Json.Write(new
@@ -325,9 +323,8 @@ public sealed partial class InMemoryStore
         _foundationParkExpiries.Remove(address);
     }
 
-    internal static bool IsOutsideMessageId(string id) => !ReservedMessageId(id) && FoundationMetadataLimits.FitsName(id);
+    internal static bool IsOutsideMessageId(string id) => FoundationMetadataLimits.IsOutsideMessageId(id);
 
-    private static bool ReservedMessageId(string id) => id.StartsWith('~') || id.StartsWith("key/", StringComparison.Ordinal);
 
     private static string FoundationSendReceipt(string reference, string id) =>
         reference + "/" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
@@ -338,7 +335,7 @@ public sealed partial class InMemoryStore
         long? dueAt = null, TimeSpan? keepFor = null, bool keyed = false, string? replyTo = null, FoundationOperatorCommand? @operator = null)
     {
         Kinds.RequireApplicationSend(kind);
-        if (!keyed && ReservedMessageId(id))
+        if (!keyed && FoundationMetadataLimits.ReservedMessageId(id))
             throw new ArgumentException("The foundation reserves the issued ID namespace.", nameof(id));
         if ((!keyed && !FoundationMetadataLimits.FitsName(id)) || !FoundationMetadataLimits.FitsKind(kind) || !FoundationMetadataLimits.FitsContent(payload))
             return null;
@@ -357,7 +354,7 @@ public sealed partial class InMemoryStore
             if (!live && !starting) return null;
 
             // The receipt expires independently of delivery. A delayed input can still be pending when the id is reused.
-            var operatorKey = @operator is not null ? FoundationOperatorKey(tenant, id) : null;
+            var operatorKey = @operator is not null ? FoundationIngressAddress.Operation(tenant, id) : null;
             var receipt = operatorKey is null ? FoundationSendReceipt(binding.Reference, id) : "operator/" + operatorKey;
             var now = clock();
             if (operatorKey is null && _foundationSendReceipts.TryGetValue(receipt, out var previousUntil) && previousUntil >= now)
@@ -365,10 +362,8 @@ public sealed partial class InMemoryStore
 
             var occurrence = checked(_seq + 1);
             var until = checked(now + (long)window.TotalMilliseconds);
-            var message = new Message(id, new InstanceRef(address.Id), kind, payload, Due: dueAt,
-                KeepUntil: until, ReplyTo: replyTo, TargetCreation: address.Creation)
-                { StorageId = FormattableString.Invariant($"{receipt}/{occurrence}"), Operator = @operator }
-                .WithInboxScope(InboxKey.FoundationOccurrenceScope);
+            var message = FoundationIngressAddress.Occurrence(id, receipt, occurrence.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                new InstanceRef(address.Id), address.Creation, kind, payload, dueAt, until, replyTo, @operator);
             if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
             Messages.Add(message.InboxKey, StoreMessage(message, occurrence, 0));
             _seq = occurrence;
