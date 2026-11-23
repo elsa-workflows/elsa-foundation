@@ -116,9 +116,9 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
     expect(retained.payload.preview).toBe(expected);
     return runId;
   }
-  await run("2026-01-15T09:30", "2026-01-15T09:30:00+01:00", "run-winter");
-  await run("2026-07-15T09:30", "2026-07-15T09:30:00+02:00", "run-summer");
-  const amsterdamRun = await run("2026-10-25T02:30", "2026-10-25T02:30:00+02:00", "run-fold");
+  await run("2026-01-15T09:30", "2026-01-15T09:30+01:00", "run-winter");
+  await run("2026-07-15T09:30", "2026-07-15T09:30+02:00", "run-summer");
+  const amsterdamRun = await run("2026-10-25T02:30", "2026-10-25T02:30+02:00", "run-fold");
   async function inspectCreated(runId: string, offset: RegExp, name: string) {
     await page.goto(`/workflows/instances/${runId}`);
     const panel = page.getByRole("complementary", { name: "Run details panel", exact: true });

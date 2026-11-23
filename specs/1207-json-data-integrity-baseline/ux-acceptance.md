@@ -8,6 +8,8 @@ The [composed timezone journey](../../Studio/tests/acceptance/timeZoneJourney.ts
 
 Required states and journeys, all on a composed host from the final reviewed commit:
 
+The focus repair is verified in the composed retry at `2d85fef264b3dc1450a4e0aff167e1662b85af90`; all four projects then reached the first real run request. That attempt failed because its oracle required added `:00` seconds while the valid explicit-offset request preserved the entered minute precision. The oracle is corrected to require the exact minute-precision wire value and offset; retained input evidence remains an exact equality check. This failed attempt is retained alongside the earlier failures.
+
 | Journey | Required evidence | State |
 |---|---|---|
 | Settings | Browser default; UTC and Europe/Amsterdam selection; saved preference after reload; Reset restores browser; invalid stored zone falls back visibly | Not run |
