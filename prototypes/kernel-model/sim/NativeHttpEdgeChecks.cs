@@ -14,7 +14,7 @@ using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Kernel.Sim;
 
-internal static class NativeHttpEdgeChecks
+internal static partial class NativeHttpEdgeChecks
 {
     internal static async Task<int> RunAsync(Flaw flaws)
     {

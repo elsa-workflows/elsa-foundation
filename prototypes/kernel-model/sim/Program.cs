@@ -170,6 +170,15 @@ if (args.Contains("--public-http-edge-check"))
         return 1;
     }
 }
+if (args.Contains("--public-http-remote-check"))
+{
+    try { return await NativeHttpEdgeChecks.RunRemoteAsync(flaws); }
+    catch (InvalidOperationException error)
+    {
+        Console.Error.WriteLine(error.Message);
+        return 1;
+    }
+}
 if (args.Contains("--native-detached-handles-check"))
 {
     var failed = false;
