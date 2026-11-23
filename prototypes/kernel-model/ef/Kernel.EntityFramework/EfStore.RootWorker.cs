@@ -181,7 +181,7 @@ public sealed partial class EfStore
         }
     }
 
-    private sealed record FinishedRootInputs(WorkerRoot Root, IReadOnlyList<InboxKey> Keys, FoundationSelfIssuer? Issue) : QualifiedRootCheckpoint(0)
+    private sealed record TerminalRootInputs(WorkerRoot Root, IReadOnlyList<InboxKey> Keys, FoundationSelfIssuer? Issue) : QualifiedRootCheckpoint(0)
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -191,8 +191,10 @@ public sealed partial class EfStore
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
                 WHERE b."Tenant" = {Root.Tenant} AND b."Reference" = {Root.Reference} AND b."Actor" = {Root.Actor}
                     AND b."Creation" = 1 AND i."Partition" = {Root.Partition} AND NOT i."Retired"
-                    AND i."Status" = {(int)InstanceStatus.Finished} AND i."FoundationTerminalAt" IS NOT NULL
-                    AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
+                    AND (i."Status" = {(int)InstanceStatus.Finished} OR
+                        ({db.UsesRootTimedJobSettlement} AND i."Status" = {(int)InstanceStatus.Faulted}
+                            AND starts_with(i."State", {TimedRootStateFamily})))
+                    AND i."FoundationTerminalAt" IS NOT NULL AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
                 """).ToListAsync(cancellationToken);
             return terminal.Count == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys, null, Issue, false, cancellationToken);
         }
@@ -305,7 +307,7 @@ public sealed partial class EfStore
             if (turn != ended || turn.Done.Count + turn.Consumed.Count == 0 || turn.Sent.Count != 0 ||
                 turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
                 !InputsMatch(root, turn)) throw RootShape();
-            return new(null, new FinishedRootInputs(root, [.. turn.Done, .. turn.Consumed], RootSelfIssuer));
+            return new(null, new TerminalRootInputs(root, [.. turn.Done, .. turn.Consumed], RootSelfIssuer));
         }
         var row = turn.Row;
         var recalls = turn.FoundationSelfRecalls;
