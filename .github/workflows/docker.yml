@@ -195,6 +195,7 @@ jobs:
       id-token: write
     with:
       output: image
+      sbom: true
       push: true
       context: .
       file: apps/Elsa.Workbench/Dockerfile
@@ -231,6 +232,7 @@ jobs:
       id-token: write
     with:
       output: image
+      sbom: true
       push: true
       context: .
       file: apps/Elsa.Foundation.Host/Dockerfile
@@ -254,3 +256,31 @@ jobs:
         - registry: docker.io
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+
+  verify-image-evidence:
+    needs: [build-and-push, build-and-push-foundation-host]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install pinned OCI reader
+        run: bash tools/ci/install_image_evidence_oras.sh
+      - name: Verify signed builder outputs and per-platform inventories
+        env:
+          WORKBENCH_SIGNED: ${{ needs.build-and-push.outputs.signed }}
+          HOST_SIGNED: ${{ needs.build-and-push-foundation-host.outputs.signed }}
+          WORKBENCH_DIGEST: ${{ needs.build-and-push.outputs.digest }}
+          HOST_DIGEST: ${{ needs.build-and-push-foundation-host.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test "$WORKBENCH_SIGNED" = true
+          test "$HOST_SIGNED" = true
+          for image in elsa-workbench elsa-foundation-host; do
+            digest="$HOST_DIGEST"
+            if [[ "$image" == elsa-workbench ]]; then digest="$WORKBENCH_DIGEST"; fi
+            echo "docker.io/elsaworkflows/$image@$digest" >> "$GITHUB_STEP_SUMMARY"
+            python3 tools/ci/verify_image_evidence.py "docker.io/elsaworkflows/$image@$digest" >> "$GITHUB_STEP_SUMMARY"
+          done

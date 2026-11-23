@@ -72,6 +72,42 @@ The diagnostic unit tests run with Node's built-in test runner before the browse
 node --test tools/contributor-pair-proof/diagnostics.test.mjs
 ```
 
+## Verify an image SBOM
+
+Use the immutable **index** digest from the Foundation publisher run or release record.
+Workbench, Foundation Host and consolidated Studio builds that enable SBOM generation
+carry SPDX documents for each Linux platform in Docker Hub. The historical pair below
+predates this feature. With Python 3 and [ORAS 1.4](https://github.com/oras-project/oras/releases/tag/v1.4.0),
+run the following from the repository root, substituting the published digest:
+
+```bash
+image=docker.io/elsaworkflows/elsa-foundation-host
+python3 tools/ci/verify_image_evidence.py "$image@$INDEX_DIGEST" --output host-sboms
+```
+
+The command reads the index, both runnable child descriptors, their attestation manifests
+and in-toto statements by digest. It checks the subject bindings, SLSA builder metadata
+and presence of operating-system and Elsa components, then saves
+`linux-amd64.spdx.json` and `linux-arm64.spdx.json`. Use the file for your deployment platform.
+
+For **Workbench and Foundation Host**, independently verify **each printed attestation
+manifest digest** with Cosign. Substitute the expected Foundation workflow commit from
+the producer run. This example is for the current v1.16.0 reusable builder:
+
+```bash
+cosign verify --experimental-oci11 --new-bundle-format \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity 'https://github.com/docker/github-builder/.github/workflows/build.yml@refs/tags/v1.16.0' \
+  --certificate-github-workflow-repository elsa-workflows/elsa-foundation \
+  --certificate-github-workflow-sha "$PRODUCER_SHA" \
+  "$image@$ATTESTATION_DIGEST"
+```
+
+The signature covers the attestation manifest whose layers contain the checked predicates.
+The consolidated Studio publisher uses its own workflow identity. Its BuildKit readback
+checks content and digest relationships. Independent signer verification for Studio requires
+a signing receipt from that publisher.
+
 ## Recorded image provenance and hosted result
 
 The index digest is the immutable Compose pin. The child digest records the selected Linux/amd64 manifest. Preview numbers are CI run counters, not library or package versions.
