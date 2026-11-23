@@ -663,6 +663,27 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Select the release package evidence fixture
+        id: package-evidence
+        run: |
+          if ! git diff --quiet HEAD^1 HEAD -- .github/workflows/{ci,packages}.yml tools/versioning/package-evidence tools/versioning/Elsa.Versioning.Publisher essentials/src/Caching/{Core,Memory}; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install the inventory toolchain
+        if: steps.package-evidence.outputs.run == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Rehearse source and binary inventory boundaries
+        if: steps.package-evidence.outputs.run == 'true'
+        run: |
+          npm ci --prefix tools/versioning/package-evidence --ignore-scripts --no-audit --no-fund
+          node --test tools/versioning/package-evidence/test-generation.mjs
+          python3 tools/versioning/package-evidence/rehearse.py
+
+
   # Issue #1815 separates required modules from optional ones. This leg is what makes that
   # separation mean something: it builds and tests ONLY the core, so a dependency from core into
   # an optional module fails here even when the full solution is perfectly happy.
@@ -676,6 +697,7 @@ jobs:
   # because it lives under tests/ and references no Testcontainers, so it is already covered by a
   # required check. This job adds the thing that guard cannot prove on its own: that the core
   # actually compiles and passes its tests with every optional module absent.
+
   core-only:
     name: Core-only build & test
     needs: plan-tiers

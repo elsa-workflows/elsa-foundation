@@ -50,30 +50,54 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
         Edit("src/Tasks/Scheduler.cs");
         CommitAndPush();
         var run = PlanAndPack();
-        var verified = new List<string>();
-        var publisher = new PackagePublisher(Feed, State, TextWriter.Null, (package, _, _) =>
+        var input = new DirectoryInfo(AppContext.BaseDirectory);
+        while (input is not null && !File.Exists(Path.Join(input.FullName, "Elsa.Server.slnx")))
+            input = input.Parent;
+        const string verifier = "tools/versioning/package-evidence/verify.py";
+        Repo.Write(verifier, File.ReadAllText(Path.Join(input!.FullName, verifier)));
+        var feedDirectory = Path.Join(Repo.Root, ".git", "public-content");
+        Directory.CreateDirectory(feedDirectory);
+        var index = Path.Join(feedDirectory, "index.json");
+        var address = new Uri(feedDirectory + Path.DirectorySeparatorChar).AbsoluteUri;
+        File.WriteAllText(index, $$"""{"resources":[{"@type":"PackageBaseAddress/3.0.0","@id":"{{address}}"}]}""");
+
+        string Stage(WorkflowRun planned, bool retain)
         {
-            if (package.PackageId == "Elsa.Tasks")
-                throw new FeedException("Destination digest mismatch.");
-            verified.Add(package.PackageId);
-            return Task.CompletedTask;
-        });
-        var partial = await publisher.PublishAsync(run.Plan, run.Computation, OriginRecord!, Path.Join(run.Directory, PlanFiles.Packages));
+            string last = "";
+            foreach (var path in Directory.GetFiles(Path.Join(planned.Directory, PlanFiles.Packages), "*.nupkg"))
+            {
+                var package = PackedPackage.Read(path);
+                var id = package.PackageId.ToLowerInvariant();
+                var version = package.Version.ToLowerInvariant();
+                var directory = Path.Join(feedDirectory, id, version);
+                Directory.CreateDirectory(directory);
+                var remote = Path.Join(directory, $"{id}.{version}.nupkg");
+                if (retain && Feed.Package(package.PackageId, package.Version) is { } earlier)
+                    File.WriteAllBytes(path, earlier);
+                File.Copy(path, remote, overwrite: true);
+                if (id == "elsa.tasks")
+                    last = remote;
+            }
+            return last;
+        }
+
+        Task<PublishReport> PublishWithReadback(WorkflowRun planned) => PublishCommand.RunAsync(
+            new PublishOptions(Repo.Root, PublishPlan.MainRef, planned.Plan.Commit, planned.Directory, null, new Uri(index).AbsoluteUri),
+            Feed, State, TextWriter.Null);
+
+        var lagging = Stage(run, retain: false);
+        using (var bytes = File.Open(lagging, FileMode.Append))
+            bytes.WriteByte(1); // Valid ZIP, wrong public digest.
+        var partial = await PublishWithReadback(run);
         Assert.False(partial.Succeeded);
-        Assert.Contains("Elsa.Http", verified);
         Assert.Equal("4.0.1-preview", RecordedVersions["Elsa.Http"]);
         Assert.Equal("4.0.0-preview", RecordedVersions["Elsa.Tasks"]);
 
         var retry = PlanAndPack();
-        var outcomes = new List<PackageOutcomeKind>();
-        var recovering = new PackagePublisher(Feed, State, TextWriter.Null, (_, kind, _) =>
-        {
-            outcomes.Add(kind);
-            return Task.CompletedTask;
-        });
-        var recovered = await recovering.PublishAsync(retry.Plan, retry.Computation, OriginRecord!, Path.Join(retry.Directory, PlanFiles.Packages));
+        Stage(retry, retain: true);
+        var recovered = await PublishWithReadback(retry);
         Assert.True(recovered.Succeeded, recovered.Failure);
-        Assert.Contains(PackageOutcomeKind.AlreadyPublished, outcomes);
+        Assert.Contains(recovered.Packages, outcome => outcome is { PackageId: "Elsa.Tasks", Kind: PackageOutcomeKind.AlreadyPublished });
         Assert.Equal("4.0.1-preview", RecordedVersions["Elsa.Tasks"]);
     }
 

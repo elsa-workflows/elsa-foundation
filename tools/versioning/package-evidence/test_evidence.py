@@ -49,22 +49,68 @@ class DestinationTests(unittest.TestCase):
         def missing(remote):
             self.assertEqual(verify.sha256(remote), verify.sha256(self.remote))
             raise ValueError('no previous signature')
-        with self.assertRaisesRegex(ValueError, 'signature'):
+        with self.assertRaisesRegex(ValueError, 'manual repair'):
             verify.verify_destination(self.file, True, self.service, verify=missing)
 
-    def test_reader_requires_both_predicates_and_exact_producer(self):
-        bom = {'metadata': {'component': {'name': 'Example', 'version': '1.2.3-preview',
-                                          'hashes': [{'alg': 'SHA-256', 'content': verify.sha256(self.file)}]},
-                            'properties': [{'name': 'elsa:commit', 'value': 'a' * 40}]}}
-        output = json.dumps([{'verificationResult': {'statement': {'predicate': bom}}}])
-        with patch.object(verify.subprocess, 'run') as provenance, patch.object(verify.subprocess, 'check_output', return_value=output) as sbom:
-            self.assertEqual(bom, verify.signed_inventory(self.file))
-            for command in (provenance.call_args.args[0], sbom.call_args.args[0]):
-                self.assertIn(verify.WORKFLOW, command)
-                self.assertIn('refs/heads/main', command)
-                self.assertIn('a' * 40, command)
-            self.assertIn('https://slsa.dev/provenance/v1', provenance.call_args.args[0])
-            self.assertIn('https://cyclonedx.org/bom', sbom.call_args.args[0])
+    def test_reader_pairs_the_original_run_and_attempt(self):
+        from copy import deepcopy
+        def inventory(run, attempt):
+            return {'bomFormat': 'CycloneDX', 'specVersion': '1.6',
+                    'metadata': {'component': {'name': 'Example', 'version': '1.2.3-preview',
+                                                'hashes': [{'alg': 'SHA-256', 'content': verify.sha256(self.file)}]},
+                                 'properties': [{'name': 'elsa:commit', 'value': 'a' * 40},
+                                                {'name': 'elsa:producer-run', 'value': str(run)},
+                                                {'name': 'elsa:producer-attempt', 'value': str(attempt)}]}}
+        original, later = inventory(12, 1), inventory(19, 2)
+        records = [later, inventory(2, 3), original]
+        invocations = [f"https://github.com/{verify.REPO}/actions/runs/{r}/attempts/{a}" for r, a in [(12, 1), (19, 2), (2, 1)]]
+        def result(command, **kwargs):
+            self.assertIn(verify.WORKFLOW, command)
+            self.assertIn('refs/heads/main', command)
+            self.assertIn('a' * 40, command)
+            if 'https://slsa.dev/provenance/v1' in command:
+                predicates = [{'runDetails': {'metadata': {'invocationId': invocation}}} for invocation in invocations]
+            else:
+                self.assertIn('https://cyclonedx.org/bom', command)
+                predicates = records
+            results = []
+            for predicate in predicates:
+                if 'runDetails' in predicate:
+                    invocation = predicate['runDetails']['metadata']['invocationId']
+                else:
+                    values = {p['name']: p['value'] for p in predicate['metadata']['properties']}
+                    invocation = f"https://github.com/{verify.REPO}/actions/runs/{values['elsa:producer-run']}/attempts/{values['elsa:producer-attempt']}"
+                results.append({'verificationResult': {'statement': {'predicate': predicate},
+                                                       'signature': {'certificate': {'runInvocationURI': invocation}}}})
+            return json.dumps(results)
+        with patch.object(verify.subprocess, 'check_output', side_effect=result):
+            self.assertEqual(original, verify.signed_inventory(self.file))
+            for changed in (inventory(99, 1), deepcopy(original)):
+                if changed == original:
+                    changed['specVersion'] = '9.9'
+                records[:] = [changed]
+                with self.assertRaisesRegex(ValueError, 'expected package'):
+                    verify.signed_inventory(self.file)
+            records[:] = [original]
             package(self.file, 'changed')
             with self.assertRaisesRegex(ValueError, 'expected package'):
                 verify.signed_inventory(self.file)
+
+    def test_sealed_subjects_require_the_exact_set_and_bytes(self):
+        plan = self.file.parent
+        (plan / 'nuget').mkdir()
+        (plan / 'sboms').mkdir()
+        packed = plan / 'nuget' / self.file.name
+        packed.write_bytes(self.file.read_bytes())
+        manifest = plan / 'sboms' / 'subjects.json'
+        manifest.write_text(json.dumps([{'name': packed.name, 'sha256': verify.sha256(packed)}]))
+        seal = verify.sha256(manifest)
+        verify.verify_subjects(plan, seal)
+        with self.assertRaisesRegex(ValueError, 'manifest digest'):
+            verify.verify_subjects(plan, '0' * 64)
+        packed.write_bytes(b'swapped')
+        with self.assertRaisesRegex(ValueError, 'signed subject'):
+            verify.verify_subjects(plan, seal)
+        packed.unlink()
+        with self.assertRaisesRegex(ValueError, 'subject set'):
+            verify.verify_subjects(plan, seal)

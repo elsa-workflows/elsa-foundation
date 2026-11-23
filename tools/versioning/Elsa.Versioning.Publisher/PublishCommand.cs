@@ -50,8 +50,10 @@ public static class PublishCommand
             throw new InvalidOperationException(
                 $"Recomputing {commit} against {GitPublishState.DefaultBranch} {tip ?? "(none)"} gives other versions than the pack job's {PlanFiles.Computation}. Nothing was pushed.");
 
+        // The job has a sixty-minute limit. Leave time for the record write-back after slow read-backs.
+        var deadline = DateTimeOffset.UtcNow.AddMinutes(38);
         var report = await new PackagePublisher(feed, state, log,
-            options.EvidenceFeed is { } feedUrl ? (packed, kind, token) => VerifyDestinationAsync(options.Repository, feedUrl, packed, kind, token) : null).PublishAsync(
+            options.EvidenceFeed is { } feedUrl ? (packed, kind, token) => VerifyDestinationAsync(options.Repository, feedUrl, packed, kind, deadline, token) : null).PublishAsync(
             plan, computation, record, Path.Join(options.PlanDirectory, PlanFiles.Packages), cancellationToken);
 
         if (options.Summary is { } summary)
@@ -61,8 +63,13 @@ public static class PublishCommand
     }
 
     private static async Task VerifyDestinationAsync(string repository, string feedUrl, PackedPackage package,
-        PackageOutcomeKind kind, CancellationToken cancellationToken)
+        PackageOutcomeKind kind, DateTimeOffset deadline, CancellationToken cancellationToken)
     {
+        var remaining = deadline - DateTimeOffset.UtcNow;
+        if (remaining <= TimeSpan.Zero)
+            throw new FeedException("Public verification reached its time budget. Earlier verified packages will be recorded.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(remaining < TimeSpan.FromMinutes(3) ? remaining : TimeSpan.FromMinutes(3));
         var start = new System.Diagnostics.ProcessStartInfo("python3") { UseShellExecute = false };
         start.ArgumentList.Add(Path.Combine(repository, "tools", "versioning", "package-evidence", "verify.py"));
         start.ArgumentList.Add(package.Path);
@@ -73,7 +80,16 @@ public static class PublishCommand
         try
         {
             using var process = System.Diagnostics.Process.Start(start) ?? throw new FeedException("Could not start public package verification.");
-            await process.WaitForExitAsync(cancellationToken);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+                throw new FeedException("Public verification timed out. Earlier verified packages will be recorded.");
+            }
             if (process.ExitCode != 0)
                 throw new FeedException("The public package failed digest or original-producer verification; it was not recorded.");
         }

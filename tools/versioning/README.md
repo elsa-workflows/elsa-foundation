@@ -344,17 +344,26 @@ python3 tools/versioning/package-evidence/verify.py "$PACKAGE" --output package.
 The verifier checks SLSA build provenance and the CycloneDX predicate for the downloaded SHA-256. Both must originate
 from this repository’s `.github/workflows/packages.yml` on `refs/heads/main`, at the commit in the package’s nuspec.
 The inventory root binds the same file hash, ID and version. Its metadata names the original Actions run and build
-attempt. GitHub indexes attestations by digest, independently of the lifetime of the Actions artifact. The inventory
+attempt. The reader pairs the two signed predicates by the exact producer invocation and chooses the earliest verified pair. GitHub indexes attestations by digest, independently of the lifetime of the Actions artifact. The inventory
 contains one component per packed file with its SHA-256. Under each restore target it distinguishes declared dependency
 ranges, the producer’s resolved transitive graph and excluded producer-only inputs. A tool also lists its shipped
 `.deps.json` runtime closure. Template project declarations retain their original ranges. Generate a separate SBOM
 from the final restored/published application to capture a consumer’s runtime choices.
 
 Only affected packages generate new evidence. The build validates inventory schemas and the original locked restore.
-A main publish or authorized bootstrap signs the package bytes and inventory before the first push. The existing state
+A main publish or authorized bootstrap reuses a verified pair for an identical digest, or signs the package bytes and inventory in the original producing attempt before the first push. If the signer failed before signing a new digest, choose **Re-run all jobs** to rebuild and sign together. The publisher pins the upload ID and rehashes every package against the signing job’s manifest before the first push. The existing state
 and CI gates still determine whether a package can be published. A feed acknowledgment is followed by an anonymous
 download and digest check before write-back. On a duplicate with the expected input fingerprint, identical bytes use the
 same evidence. If a previous producer published different ZIP bytes for those inputs, its own signatures must verify.
 A failed verification stops the publish and preserves earlier verified successes. Previously recorded versions keep
-their existing evidence status; an older version without signatures will fail the verifier. Stable release composition
+their existing evidence status; an older version without signatures will fail the verifier.
+
+Before rollout, compare the most recent Packages publish summary with the feed and the matching record. If an earlier
+unsigned push landed without write-back, verify its original artifact and feed identity, then use the existing
+[operator repair procedure](#repair) to settle that historical entry. The verifier explicitly identifies this case.
+The one-off bootstrap keeps its empty-feed precondition. If the first PUT was accepted and verification failed before
+any record existed, recover the original Packages run and retry its public byte/attestation verification. A new
+bootstrap will refuse the existing equal version. Have the owner apply the existing bootstrap feed-cleanup procedure
+for that exact unrecorded version before authorizing a new bootstrap. The current Elsa 4 preview feed is already
+bootstrapped. Stable release composition
 and promotion are tracked in [#2085](https://github.com/elsa-workflows/elsa-foundation/issues/2085).

@@ -35,6 +35,11 @@ def read_package(path):
                 # These ranges belong to the project a consumer can generate.
                 entry["template_references"] = [item.attrib for item in ET.fromstring(data).iter()
                                                 if item.tag.split("}")[-1] in ("PackageReference", "PackageVersion")]
+            if "DotnetTool" in types and name.endswith(".runtimeconfig.json"):
+                options = json.loads(data)["runtimeOptions"]
+                entry["runtime_frameworks"] = options.get("frameworks", []) + ([options["framework"]] if "framework" in options else [])
+                if "rollForward" in options:
+                    entry["roll_forward"] = options["rollForward"]
             if "DotnetTool" in types and name.endswith(".deps.json"):
                 runtime = json.loads(data)
                 target = runtime["runtimeTarget"]["name"]
@@ -80,7 +85,17 @@ def collect(source, plan, run, attempt):
                 raise ValueError(f"{row['id']}: package, plan and original restore disagree")
             # Use only inventories and fingerprints. Absolute runner paths never enter a public SBOM.
             lock = project.parent / "packages.lock.json"
-            row.update(targets=assets["targets"], frameworks=list(assets["project"]["frameworks"]),
+            project_ids = {(project.parent / props["msbuildProject"]).resolve(): key.split("/")[0]
+                           for key, props in assets["libraries"].items() if props.get("msbuildProject")}
+            requested = {}
+            for tfm, info in assets["project"]["frameworks"].items():
+                refs = dict(info.get("dependencies", {}))
+                for ref in restore["frameworks"][tfm].get("projectReferences", {}).values():
+                    key = project_ids.get(Path(ref["projectPath"]).resolve())
+                    if key is not None:
+                        refs[key] = {"target": "Project"}
+                requested[tfm.lower()] = refs
+            row.update(targets=assets["targets"], frameworks=list(assets["project"]["frameworks"]), requested=requested,
                        lock_sha256=sha256(lock.read_bytes()), assets_sha256=sha256(assets_bytes),
                        producer_run=run, producer_attempt=attempt, package_ids=sorted(package_ids))
             (inputs / f"{index}.json").write_text(json.dumps(row))

@@ -29,6 +29,23 @@ public sealed class BootstrapTests : PublishingHistory
         Assert.Null(OriginStateTip);
     }
 
+    [Fact]
+    public async Task An_unverified_first_bootstrap_push_keeps_automatic_publication_disabled()
+    {
+        var run = PlanAndPack(bootstrap: true);
+        var publisher = new PackagePublisher(Feed, State, TextWriter.Null, (_, _, _) => throw new FeedException("Public read-back failed."));
+        var report = await publisher.PublishAsync(run.Plan, run.Computation, PlanCommand.RecordFor(run.Plan, State),
+            Path.Join(run.Directory, PlanFiles.Packages));
+
+        Assert.False(report.Succeeded);
+        Assert.Null(OriginStateTip);
+        Assert.Single(Feed.Taken);
+        Assert.Equal(PublishMode.DryRun, PlanAndPack().Plan.Mode);
+        var blocked = await Assert.ThrowsAsync<PublishRefusedException>(() => PublishAsync(PlanAndPack(bootstrap: true)));
+        Assert.Contains("feed still holds", blocked.Message, StringComparison.Ordinal);
+        Assert.Single(Feed.Taken);
+    }
+
     /// <summary>
     /// #2081's acceptance: <c>publish-state</c> exists as an orphan branch holding only <c>published-versions.json</c>, with an
     /// entry for every packable package id at its computed version, naming the main commit it was built from.

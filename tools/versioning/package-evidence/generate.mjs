@@ -18,7 +18,7 @@ function property(component, name, value) {
   component.properties.add(new Models.Property('elsa:' + name, String(value)));
 }
 
-function graph(bom, root, name, libraries, direct, role, packageIds) {
+function graph(bom, root, name, libraries, direct, role, packageIds, requested = {}) {
   const context = role + ':' + name + ':';
   const group = new Models.Component('data', name, { bomRef: context });
   property(group, 'inventory-scope', role);
@@ -42,6 +42,15 @@ function graph(bom, root, name, libraries, direct, role, packageIds) {
     const component = byId.get(id.toLowerCase());
     assert.ok(component, 'Missing ' + id + ' from ' + name);
     return component;
+  }
+  for (const [id, requirement] of Object.entries(requested)) {
+    // This is a producer-declared input, which may be private or bundled and absent from the nuspec.
+    const resolved = byId.get(id.toLowerCase());
+    if (resolved) {
+      property(resolved, 'producer-declared', requirement.target);
+      if (requirement.version) property(resolved, 'restore-requested-version', requirement.version);
+    }
+    property(group, 'restore-request', JSON.stringify({ id, ...requirement }));
   }
   for (const [key, definition] of Object.entries(libraries)) {
     const component = find(key.split('/')[0]);
@@ -88,7 +97,7 @@ async function generate(row) {
     assert.ok(row.frameworks.some(f => f.toLowerCase() === framework), 'Unknown restore framework: ' + target);
     handled.add(framework);
     const declared = [...row.ungrouped, ...(row.groups[framework] ?? row.groups[''] ?? [])];
-    graph(bom, root, target, libraries, new Map(declared.map(d => [d.id, d])), 'producer-restore', packageIds);
+    graph(bom, root, target, libraries, new Map(declared.map(d => [d.id, d])), 'producer-restore', packageIds, row.requested[framework]);
     for (const shared of row.shared[framework] ?? []) property(root, 'shared-framework:' + framework, shared);
   }
   assert.ok(handled.size && row.frameworks.every(f => handled.has(f.toLowerCase())), 'Missing restore framework');
@@ -101,6 +110,10 @@ async function generate(row) {
   for (const item of row.payload) {
     const file = new Models.Component('file', item.path, { bomRef: 'file:' + item.path });
     file.hashes.set('SHA-256', item.sha256);
+    for (const framework of item.runtime_frameworks ?? []) {
+      property(file, 'required-shared-framework', JSON.stringify(framework));
+    }
+    if (item.roll_forward) property(file, 'roll-forward', item.roll_forward);
     for (const declaration of item.template_references ?? []) {
       property(file, 'template-project-declaration', JSON.stringify(declaration));
     }

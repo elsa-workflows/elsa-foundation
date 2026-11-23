@@ -83,6 +83,7 @@ jobs:
     outputs:
       mode: ${{ steps.plan.outputs.mode }}
       affected: ${{ steps.plan.outputs.affected }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -169,6 +170,7 @@ jobs:
           node tools/versioning/package-evidence/attest.mjs "$RUNNER_TEMP/versions" validate
 
       - name: Upload artifact
+        id: upload
         # The packages under nuget/, with the plan and computation the publish job checks them against.
         uses: actions/upload-artifact@v4
         with:
@@ -187,6 +189,8 @@ jobs:
       && needs.pack.outputs.affected != '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    outputs:
+      subjects_digest: ${{ steps.sign.outputs.subjects_digest }}
     permissions:
       contents: read
       id-token: write
@@ -200,18 +204,16 @@ jobs:
           node-version: 24
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: elsa-foundation-nuget-packages
+          artifact-ids: ${{ needs.pack.outputs.artifact_id }}
+          merge-multiple: true
           path: ${{ runner.temp }}/versions
-      - name: Store signed per-package inventories
+      - name: Store build provenance and signed per-package inventories
+        id: sign
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           npm ci --prefix tools/versioning/package-evidence --ignore-scripts --no-audit --no-fund
           node tools/versioning/package-evidence/attest.mjs "$RUNNER_TEMP/versions" sign
-      - name: Store build provenance for the same bytes
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        with:
-          subject-path: ${{ runner.temp }}/versions/nuget/*.nupkg
 
   publish:
     name: Publish to feedz.io
@@ -223,7 +225,7 @@ jobs:
       && (needs.pack.outputs.mode == 'publish' || needs.pack.outputs.mode == 'bootstrap')
       && needs.pack.outputs.affected != '0' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       # FR-017: the write-back to publish-state is pushed with this job's GITHUB_TOKEN, which actions/checkout persists
       # for origin. Pushes made with it start no workflow run.
@@ -246,8 +248,14 @@ jobs:
       - name: Download packages
         uses: actions/download-artifact@v4
         with:
-          name: elsa-foundation-nuget-packages
+          artifact-ids: ${{ needs.pack.outputs.artifact_id }}
+          merge-multiple: true
           path: ${{ runner.temp }}/versions
+
+      - name: Check all package bytes against the signed subjects before pushing
+        env:
+          SUBJECTS_SHA256: ${{ needs.attest.outputs.subjects_digest }}
+        run: python3 tools/versioning/package-evidence/verify.py "$RUNNER_TEMP/versions" --manifest-digest "$SUBJECTS_SHA256"
 
       - name: Publish
         # Refuses unless publish-state is where the plan found it (or, for the bootstrap, absent) and the versions
