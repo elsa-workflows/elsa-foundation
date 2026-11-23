@@ -16,6 +16,10 @@ internal static class FormatMigrationChecks
             db.Journal.Add(new JournalEntity { Partition = 0, Position = 1, Instance = "0/migrated", Revision = 1, Entries = "[]" });
             await db.SaveChangesAsync();
         }
+        var compatible = new PartitionRuntime("compatible-runtime", store, 2, lease);
+        await compatible.StartAsync(DurableHost.ForNode("compatible-runtime", store, new WorkflowInstance([]), 2));
+        await compatible.StopAsync();
+        Check(await store.PartitionCountAsync() == 2, "a counted runtime starts on the supported marker");
         Check(await store.TakeAsync(0, "original", lease) is { Epoch: 1 }, "current reader owns a partition");
         await VersionTakeChecks.Refuses(() => store.AdvanceStoreFormatAsync(current, next, UnexpectedMigration), "Live node 'original'",
             "migration with a live incompatible node");
@@ -63,6 +67,11 @@ internal static class FormatMigrationChecks
         await VersionTakeChecks.Refuses(() => previousFormatReader.NodeHeartbeatAsync("original", lease, lease).AsTask(), "journal codec=2",
             "a lock-aware owner renewing after the format advanced");
         await VersionTakeChecks.Refuses(() => previousFormatReader.SweepAsync().AsTask(), "journal codec=2", "a sweeper that reads the previous format");
+        var runtime = new PartitionRuntime("previous-reader", previousFormatReader, 2, lease);
+        var host = DurableHost.ForNode("previous-reader", previousFormatReader, new WorkflowInstance([]), 2);
+        await VersionTakeChecks.Refuses(() => runtime.StartAsync(host).AsTask(), "journal codec=2",
+            "a counted runtime that reads the previous format");
+        Check(!await runtime.HeartbeatAsync(), "the refused counted runtime cannot publish a heartbeat");
         Check(await ReadLease() == 0, "the previous-format reader cannot renew a lease or acquire a partition");
 
         await SetNode(node =>
