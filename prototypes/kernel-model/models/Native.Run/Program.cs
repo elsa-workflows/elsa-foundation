@@ -13,8 +13,8 @@ using Microsoft.EntityFrameworkCore;
 
 WriteLine.Out = null;
 if (args is ["pg-core-preview", "birth"]) return await PostgresPublicPreview.RunAsync("birth");
-if (args is ["pg-core-preview", "restart", var actorReference, var journalBookmark])
-    return await PostgresPublicPreview.RunAsync("restart", actorReference, journalBookmark);
+if (args is ["pg-core-preview", var replayPhase and ("restart" or "terminal"), var actorReference, var journalBookmark])
+    return await PostgresPublicPreview.RunAsync(replayPhase, actorReference, journalBookmark);
 if (args is ["pg-root-worker", "birth"]) return await PostgresRootWorkerChecks.RunAsync("birth", null);
 if (args is ["pg-root-worker", var phase and ("restart" or "bounds"), var reference]) return await PostgresRootWorkerChecks.RunAsync(phase, reference);
 if (args is ["deadlines"]) return await Deadlines.RunAsync();

@@ -41,13 +41,14 @@ internal sealed partial class PostgresRootAdmission
             SELECT "Actor" AS "Id", "Creation" FROM "FoundationRootBirths"
             WHERE "Tenant" = {tenant} AND "Reference" = {reference}
             """).SingleOrDefaultAsync(cancellationToken);
-        if (address is null) return null;
+        if (address is null) return await RefuseAsync();
         var escapedKind = kind.Contains('\0') ? kind : null;
         var header = DirectPrefix + DurableKeyJson.Write(new StoredDirect(id, address.Creation, escaped, due == 0, escapedKind));
         if (Encoding.UTF8.GetByteCount(header) + (body is null ? 0L : Encoding.UTF8.GetByteCount(body)) >
-            16 * 1024 * 1024 - 24 * 1024) return null;
+            16 * 1024 * 1024 - 24 * 1024) return await RefuseAsync();
 
-        if (!await LockLiveAsync())
+        var status = await LockStatusAsync();
+        if (status is null)
         {
             var pending = await db.Database.SqlQuery<string>($"""
                 SELECT m."Id" AS "Value" FROM "Messages" m
@@ -57,7 +58,25 @@ internal sealed partial class PostgresRootAdmission
                 FOR SHARE OF m
                 """).ToListAsync(cancellationToken);
             // If the creator disappeared while the SELECT waited on its lock, the first checkpoint may now be live.
-            if (pending.Count == 0 && !await LockLiveAsync()) return null;
+            if (pending.Count == 0)
+            {
+                status = await LockStatusAsync();
+                if (status is null) return await RefuseAsync();
+            }
+        }
+
+        if (status is not (null or InstanceStatus.Running))
+        {
+            if (status == InstanceStatus.Finished && await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "FoundationDirectReceipts"
+                    WHERE "Reference" = {reference} AND "Operation" = {digest}
+                        AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
+                """).SingleAsync(cancellationToken))
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return false;
+            }
+            return await RefuseAsync();
         }
 
         var receipt = await db.Database.SqlQuery<long>($"""
@@ -68,7 +87,11 @@ internal sealed partial class PostgresRootAdmission
             WHERE r."Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
             RETURNING "Until" AS "Value"
             """).ToListAsync(cancellationToken);
-        if (receipt.Count == 0) return false;
+        if (receipt.Count == 0)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return false;
+        }
 
         var target = new InstanceRef(address.Id);
         db.Messages.Add(new MessageEntity
@@ -80,12 +103,18 @@ internal sealed partial class PostgresRootAdmission
         await transaction.CommitAsync(cancellationToken);
         return true;
 
-        async Task<bool> LockLiveAsync() =>
-            (await db.Database.SqlQuery<string>($"""
-                SELECT "Id" AS "Value" FROM "Instances"
+        async Task<bool?> RefuseAsync()
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return null;
+        }
+
+        Task<InstanceStatus?> LockStatusAsync() =>
+            db.Database.SqlQuery<InstanceStatus?>($"""
+                SELECT "Status" AS "Value" FROM "Instances"
                 WHERE "Id" = {address.Id} AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
                 FOR SHARE
-                """).ToListAsync(cancellationToken)).Count == 1;
+                """).SingleOrDefaultAsync(cancellationToken);
     }
 
     internal async Task<IReadOnlyList<Message>> ReadPendingDirectAsync(string tenant, string reference,

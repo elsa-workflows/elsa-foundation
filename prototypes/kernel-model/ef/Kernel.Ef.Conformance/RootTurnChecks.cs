@@ -11,9 +11,17 @@ internal static class RootTurnChecks
         var timeout = TimeSpan.FromSeconds(30);
         var roots = new PostgresRootAdmission(create, TimeSpan.FromMinutes(10));
         await roots.InstallAsync();
-        var reference = (await roots.AdmitAsync(tenant, "start", new("native", "wait"))).Reference;
+        // SubscribeAsync stores an actor subscription in partition zero. Exercise a different actor partition.
+        string reference;
+        Message creator;
+        for (var candidate = 0; ; candidate++)
+        {
+            if (candidate == 100) throw new InvalidOperationException("Could not qualify a nonzero-partition root.");
+            reference = (await roots.AdmitAsync(tenant, $"start-{candidate}", new("native", "wait"))).Reference;
+            creator = (await roots.ReadPendingCreatorAsync(tenant, reference))!;
+            if (creator.Target.Partition != 0) break;
+        }
         var other = (await roots.AdmitAsync(tenant, "other", new("native", "wait"))).Reference;
-        var creator = (await roots.ReadPendingCreatorAsync(tenant, reference))!;
         var id = creator.Target.Id;
         var home = creator.Target.Partition;
         var lease = (await store.TakeAsync(home, "turns", timeout))!;
@@ -79,18 +87,76 @@ internal static class RootTurnChecks
         var finish = (await roots.ReadPendingDirectAsync(tenant, reference)).Single(m => m.Id == "finish");
         var legacyRow = new InstanceRow(id, "", "", InstanceStatus.Running, "overwritten", 3, null);
         await Refused(() => store.CommitAsync(Legacy(bare with { Row = legacyRow, Expected = 2 })), "legacy overwrite after a qualified revision");
+        await roots.AdmitDirectAsync(tenant, reference, "queued-1", "step");
+        await roots.AdmitDirectAsync(tenant, reference, "queued-2", "step");
+        var pending = await roots.ReadPendingDirectAsync(tenant, reference);
+        var queued1 = pending.Single(input => input.Id == "queued-1").InboxKey;
+        var queued2 = pending.Single(input => input.Id == "queued-2").InboxKey;
+        var future = pending.Single(input => input.Id == "later").InboxKey;
+        var otherActor = (await roots.ReadPendingCreatorAsync(tenant, other))!.Target.Id;
+        await store.SubscribeAsync(new("terminal-check", id, "guard"));
+        await store.SubscribeAsync(new("terminal-check", otherActor, "independent"));
+        await using (var db = create())
+        {
+            Check(home != 0 && await db.Subscriptions.AnyAsync(s => s.Instance == id && s.Partition == 0),
+                "ordinary subscription registration stored the nonzero-home actor's wait in partition zero");
+            await Refused(() => Next(running, [finish], fence, status: InstanceStatus.Finished),
+                "a terminal commit while its exact actor still has a wait in another storage partition");
+            Check((await cold.ReadFirstRootAsync(tenant, reference)) is { Revision: 2, Status: InstanceStatus.Running } &&
+                (await roots.ReadPendingDirectAsync(tenant, reference)).Contains(finish) &&
+                await db.Subscriptions.CountAsync(s => s.Key == "terminal-check") == 2 &&
+                (await cold.ReadJournalOfAsync(home, id, 0)).Count == 2,
+                "refusing completion preserves the input, actor, journal and both registrations");
+            await db.Subscriptions.Where(s => s.Instance == id && s.Key == "terminal-check").ExecuteDeleteAsync();
+        }
         Check((await Next(running, [finish], fence, status: InstanceStatus.Finished, state: "null")).Landed, "the final input and terminal checkpoint commit");
         fence = fence with { Position = fence.Position + 1 };
+        Check((await store.FindSubscriptionsAsync("terminal-check")).Single().Instance == otherActor,
+            "terminal commit preserves the registration of the unrelated actor");
         var terminal = (await cold.ReadFirstRootAsync(tenant, reference))!;
         var journal = await cold.ReadJournalOfAsync(home, id, 0);
         Check(terminal is { Status: InstanceStatus.Finished, State: "null", Revision: 3, TerminalRevision: 3, TerminalAt: > 0 } &&
             journal.Select(entry => entry.Revision).SequenceEqual([1L, 2L, 3L]) &&
             journal.Select(entry => entry.Entries).SequenceEqual(["""["start"]""", """["step"]""", """["step"]"""]) &&
             journal.Select(entry => entry.Position).SequenceEqual([1L, 2L, 3L]), "a cold read returns one database-time terminal mark and all three journal positions and revisions");
+        var oldFence = fence;
         var successor = (await cold.TakeAsync(home, "turns", timeout))!;
         fence = new(home, successor.Epoch, successor.Position);
         await Refused(() => Next(terminal, [finish], fence), "turn after Finished");
         await Refused(() => Next(running, [finish], fence), "repeat after losing the final answer");
+
+        await cold.BindWorkerRootAsync(tenant, reference);
+        ValueTask<Committed> Ended(PartitionFence f, params InboxKey[] keys)
+        {
+            var settled = new TurnCommit(id, null, null, [], keys, [], [], [], null);
+            return cold.CommitAsync(new(f.Partition, f.Epoch, f.Position, timeout, false, [settled], [], []));
+        }
+        await Refused(() => Ended(oldFence, queued1), "old owner clearing the terminal suffix after a take");
+        await Refused(() => Ended(fence, queued2), "terminal cleanup skipping an earlier due input");
+        Check((await roots.ReadPendingDirectAsync(tenant, reference)).Count == 3 &&
+              (await Ended(fence, queued1, queued2)).Landed, "the successor settles both due suffix inputs in FIFO order");
+        await Refused(() => Ended(fence, future), "terminal cleanup before the remaining input is due");
+        var after = (await cold.ReadFirstRootAsync(tenant, reference))!;
+        Check(after.Revision == terminal.Revision && after.State == terminal.State && after.TerminalAt == terminal.TerminalAt &&
+            (await cold.ReadJournalOfAsync(home, id, 0)).SequenceEqual(journal) &&
+            (await roots.ReadPendingDirectAsync(tenant, reference)).Single().InboxKey == future,
+            "cold terminal cleanup preserves checkpoint, terminal mark, journal and future input");
+        Check(await roots.AdmitDirectAsync(tenant, reference, "queued-1", "step") == false &&
+            await roots.AdmitDirectAsync("foreign", reference, "queued-1", "step") is null,
+            "a live finished-root receipt stays private to its tenant");
+        await using (var db = create())
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "FoundationDirectReceipts" SET "Until" = 0 WHERE "Reference" = {reference}
+                """);
+            Check(await roots.AdmitDirectAsync(tenant, reference, "queued-1", "step") is null &&
+                await roots.AdmitDirectAsync(tenant, reference, "after-finish", "step") is null &&
+                await db.Database.SqlQuery<long>($"""
+                    SELECT count(*) AS "Value" FROM "FoundationDirectReceipts" WHERE "Reference" = {reference}
+                        AND "Until" <> 0
+                    """).SingleAsync() == 0,
+                "finished-root refusal creates no receipt and never refreshes an expired receipt");
+        }
     }
 
     private static async Task Refused(Func<ValueTask<Committed>> call, string what)

@@ -24,24 +24,8 @@ public sealed partial class EfStore
             var old = DurableKeyJson.Read<RootHeader>(headers[0]);
             if (old.Model != Current.Model || old.Definition != Current.Definition) return false;
 
-            var keys = Inputs.Select(message => message.InboxKey.Id).ToArray();
-            var rows = await db.Messages.FromSqlInterpolated($"""
-                SELECT * FROM "Messages" WHERE "Target" = {Current.Actor.Id} AND "Partition" = {home}
-                    AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
-                    AND NOT "Done" AND "Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
-                ORDER BY "Seq" LIMIT {Inputs.Length} FOR UPDATE
-                """).AsNoTracking().ToListAsync(cancellationToken);
-            if (rows.Count != Inputs.Length || !rows.Select(PostgresRootAdmission.DecodeDirect).SequenceEqual(Inputs))
+            if (!await SettleDirectInputsAsync(db, Current.Actor, Inputs.Select(input => input.InboxKey).ToArray(), Inputs, cancellationToken))
                 return false;
-
-            // Direct admission keeps a receipt and every accepted occurrence has a finite KeepUntil.
-            // Settle the pending rows under their full physical keys and drop the completed payloads.
-            var settled = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Messages" SET "Done" = true, "Payload" = NULL, "Start" = NULL
-                WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({keys}) AND NOT "Done"
-                    AND "Target" = {Current.Actor.Id} AND "Partition" = {home} AND "KeepUntil" IS NOT NULL
-                """, cancellationToken);
-            if (settled != Inputs.Length) return false;
             var finished = Status == InstanceStatus.Finished;
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
             // UnsubscribeAll here only when the exact root has no physical subscriptions.
@@ -53,10 +37,34 @@ public sealed partial class EfStore
                 WHERE "Id" = {Current.Actor.Id} AND "Partition" = {home} AND "FoundationTenant" = {Tenant}
                     AND "FoundationReference" = {Reference} AND "Revision" = {Current.Revision}
                     AND (NOT {finished} OR NOT EXISTS (SELECT 1 FROM "Subscriptions"
-                        WHERE "Partition" = {home} AND "Instance" = {Current.Actor.Id}))
+                        WHERE "Instance" = {Current.Actor.Id}))
                 """, cancellationToken);
             return updated == 1;
         }
+    }
+
+    // Both a model turn and a terminal no-turn disposition settle the same due FIFO prefix.
+    private static async Task<bool> SettleDirectInputsAsync(KernelDb db, CreationAddress actor, IReadOnlyList<InboxKey> expected,
+        Message[]? expectedEnvelopes, CancellationToken cancellationToken)
+    {
+        var home = new InstanceRef(actor.Id).Partition;
+        var rows = await db.Messages.FromSqlInterpolated($"""
+            SELECT * FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
+                AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL
+                AND NOT "Done" AND "Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+            ORDER BY "Seq" LIMIT {expected.Count} FOR UPDATE
+            """).AsNoTracking().ToListAsync(cancellationToken);
+        var messages = rows.Select(PostgresRootAdmission.DecodeDirect).ToArray();
+        if (!messages.Select(m => m.InboxKey).SequenceEqual(expected) || messages.Any(m => m.TargetCreation != actor.Creation) ||
+            expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
+
+        var ids = expected.Select(key => key.Id).ToArray();
+        var settled = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Messages" SET "Done" = true, "Payload" = NULL, "Start" = NULL
+            WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({ids}) AND "EventMatch" IS NULL
+                AND NOT "Done" AND "Target" = {actor.Id} AND "Partition" = {home} AND "KeepUntil" IS NOT NULL
+            """, cancellationToken);
+        return settled == expected.Count;
     }
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,

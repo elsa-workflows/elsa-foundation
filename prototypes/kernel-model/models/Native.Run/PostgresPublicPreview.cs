@@ -13,7 +13,7 @@ internal static class PostgresPublicPreview
     internal static async Task<int> RunAsync(string phase, string? suppliedReference = null, string? suppliedBookmark = null)
     {
         var birth = phase == "birth";
-        if (!birth && (phase != "restart" || suppliedReference is null || suppliedBookmark is null))
+        if (!birth && (phase is not ("restart" or "terminal") || suppliedReference is null || suppliedBookmark is null))
             throw new ArgumentException("Supply birth or restart with its reference and bookmark.");
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -112,12 +112,27 @@ internal static class PostgresPublicPreview
 
             counter.Reset();
             Check(await Approve("approval-2", "Grace", frame) == Contract.AdmissionOutcome.Accepted, "second approval admitted");
+            Message? queued = null;
+            if (phase == "terminal")
+            {
+                var extra = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "already-queued", CompositeSignal.Kind,
+                    Json.Write(new CompositeSignal(frame, "approve", "third")), cancellationToken: stop);
+                Check(extra.Outcome == Contract.AdmissionOutcome.Accepted, "third input was admitted while the actor was still running");
+                var pending = await admission.ReadPendingDirectAsync(scope.Tenant, actor.Id, stop);
+                queued = pending.Single(input => input.Id == "already-queued");
+                var currentFence = ((Worker)owner).Fences.Single();
+                var leading = pending.Single(input => input.Id == "approval-2");
+                var invalid = new TurnCommit(leading.Target.Id, null, null, [], [leading.InboxKey], [], [], [], null);
+                Check(!(await store.CommitAsync(new(currentFence.Partition, currentFence.Epoch, currentFence.Position,
+                    TimeSpan.FromSeconds(10), false, [invalid], [], []), stop)).Landed,
+                    "a rowless terminal disposition cannot consume the running root's approval");
+            }
             var finished = await Drive(3);
             Check(finished is { Status: InstanceStatus.Finished, TerminalRevision: 3, TerminalAt: not null } &&
                 Json.Read<NativeState>(finished.State!).Results["approve"]!.AsArray()
                     .Select(n => n!.GetValue<string>()).SequenceEqual(["Ada", "Grace"]),
                 "persisted Native result is Ada, Grace exactly once");
-            Report("second approval including admission");
+            Report(queued is null ? "second approval including admission" : "finish with two queued inputs and running-root disposition check");
 
             counter.Reset();
             var (entries, _) = await ReadJournal(bookmark);
@@ -133,6 +148,34 @@ internal static class PostgresPublicPreview
                 (await foundation.TailAsync(other, actor, cancellationToken: stop)).Items.Count == 0,
                 "public reads stay within the bound tenant");
             Report("verify read scoping");
+            if (queued is not null)
+            {
+                var lastBookmark = (await ReadJournal()).Last!.Value;
+                var home = new InstanceRef(finished.Actor.Id).Partition;
+                await using var db = new KernelDb(data);
+                var position = await db.Partitions.Where(p => p.Id == home).Select(p => p.Position).SingleAsync(stop);
+                counter.Reset();
+                Check(await Approve("after-finish", "late", frame) == Contract.AdmissionOutcome.Refused &&
+                    await Approve("approval-2", "changed", frame) == Contract.AdmissionOutcome.Duplicate,
+                    "finished root refuses a new send and recognizes its earlier admission");
+                Check(counter.Transactions is { Begun: 2, Ended: 2 }, "terminal refusal and duplicate both end their measured transactions");
+                Check((await admission.ReadPendingDirectAsync(scope.Tenant, actor.Id, stop)).Single().InboxKey == queued.InboxKey,
+                    "the new send installed no inbox occurrence and the terminal suffix is still pending");
+                await owner.WokenAsync(null, stop);
+                for (var pass = 0; pass < 8 && (await admission.ReadPendingDirectAsync(scope.Tenant, actor.Id, stop)).Count != 0; pass++)
+                    await owner.RunAsync(stop);
+                var receipt = await db.Messages.AsNoTracking().SingleAsync(m => m.Id == queued.InboxKey.Id &&
+                    m.InboxScope == InboxKey.FoundationOccurrenceScope, stop);
+                var after = await ReadCheckpoint();
+                Check(receipt is { Done: true, Payload: null, Start: null } && after.Revision == finished.Revision &&
+                    after.State == finished.State && after.TerminalAt == finished.TerminalAt && after.TerminalRevision == finished.TerminalRevision &&
+                    (await foundation.TailAsync(scope, actor, lastBookmark, stop)).Items.Count == 0 &&
+                    await db.Partitions.Where(p => p.Id == home).Select(p => p.Position).SingleAsync(stop) == position,
+                    "fenced terminal cleanup settled the queued occurrence without changing state, mark, journal or position");
+                Check(await Approve("already-queued", "replayed", frame) == Contract.AdmissionOutcome.Duplicate &&
+                    (await admission.ReadPendingDirectAsync(scope.Tenant, actor.Id, stop)).Count == 0,
+                    "replay of the settled third input remains a duplicate");
+            }
             Console.WriteLine("completed Ada, Grace once");
         }
         return 0;

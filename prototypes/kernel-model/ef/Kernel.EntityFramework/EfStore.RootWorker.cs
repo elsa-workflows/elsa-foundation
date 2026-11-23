@@ -58,6 +58,23 @@ public sealed partial class EfStore
         }
     }
 
+    private sealed record FinishedRootInputs(WorkerRoot Root, IReadOnlyList<InboxKey> Done) : QualifiedRootCheckpoint(0)
+    {
+        internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
+        {
+            var terminal = await db.Database.SqlQuery<long>($"""
+                SELECT i."FoundationTerminalRevision" AS "Value" FROM "Instances" i
+                JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
+                    AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
+                WHERE b."Tenant" = {Root.Tenant} AND b."Reference" = {Root.Reference} AND b."Actor" = {Root.Actor}
+                    AND b."Creation" = 1 AND i."Partition" = {Root.Partition} AND NOT i."Retired"
+                    AND i."Status" = {(int)InstanceStatus.Finished} AND i."FoundationTerminalAt" IS NOT NULL
+                    AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
+                """).ToListAsync(cancellationToken);
+            return terminal.Count == 1 && await SettleDirectInputsAsync(db, new(Root.Actor, 1), Done, null, cancellationToken);
+        }
+    }
+
     private ValueTask<Committed> CommitRootBatchAsync(CommitBatch batch, QualifiedRootCheckpoint? checkpoint, CancellationToken token)
     {
         if (batch.Seen.Count == 0 && batch.Trial.Count == 0) return CommitAsync(batch, checkpoint, token);
@@ -75,7 +92,18 @@ public sealed partial class EfStore
             !batch.Seen.All(root.Owns) || !batch.Trial.All(root.Owns)) throw RootShape();
 
         if (batch.Turns.Count == 0) return await CommitRootBatchAsync(batch, null, cancellationToken);
-        if (batch.Turns is not [var turn] || turn.Row is not { } row || turn.Instance != root.Actor || row.Id != root.Actor ||
+        if (batch.Turns is not [var turn] || turn.Instance != root.Actor) throw RootShape();
+        if (turn.Row is null)
+        {
+            var ended = new TurnCommit(root.Actor, null, null, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed,
+                turn.Unsubscribed, null, Held: turn.Held);
+            if (turn != ended || turn.Done.Count == 0 || turn.Consumed.Count != 0 || turn.Sent.Count != 0 ||
+                turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
+                !turn.Done.All(key => root.Owns(key) && key.Scope == InboxKey.FoundationOccurrenceScope)) throw RootShape();
+            return await CommitRootBatchAsync(batch with { Turns = [] }, new FinishedRootInputs(root, turn.Done), cancellationToken);
+        }
+        var row = turn.Row;
+        if (row.Id != root.Actor ||
             row.Creation != 1 || row.NextJobGeneration is not (null or 0) || row.StartIntent != root.Fingerprint || row.Revision != checked((turn.Expected ?? 0) + 1) ||
             row.Status is not (InstanceStatus.Running or InstanceStatus.Finished) ||
             row.FoundationDispatchHeader is not { } header || header.Tenant != root.Tenant || header.Reference != root.Reference ||
