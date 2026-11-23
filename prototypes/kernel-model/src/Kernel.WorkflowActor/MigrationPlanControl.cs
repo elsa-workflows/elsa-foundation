@@ -1,11 +1,13 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Kernel.Foundation.Contracts;
 
 namespace Kernel.WorkflowActor;
 
 internal sealed record MigrationPlanControl(long Number, ActorRef[]? Actors = null, PageToken? Before = null,
-    PageToken? After = null, bool AllSelected = false)
+    PageToken? After = null, bool AllSelected = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool KeepCursor = false)
 {
     internal const string Select = "migration-plan.select";
     internal const string Acknowledge = "migration-plan.acknowledge";

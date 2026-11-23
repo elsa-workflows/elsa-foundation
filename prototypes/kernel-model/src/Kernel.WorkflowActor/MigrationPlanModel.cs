@@ -1,21 +1,23 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Kernel.Foundation.Contracts;
 using Kernel.Model.Contracts;
 
 namespace Kernel.WorkflowActor;
 
-internal sealed record MigrationPlanStart(string From, string To, long Deadline);
+internal sealed record MigrationPlanStart(string From, string To, long Deadline,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Model = null);
 
 /// <summary>A bounded durable plan hosted as a separate model of the workflow actor.</summary>
-internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<string, string, bool> canPlan)
+internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<string?, string, string, bool> canPlan)
     : IExecutionModel, IModelMetadata
 {
     internal const string ModelKey = "migration-plan";
     internal const int BatchLimit = 128;
     public string Key => ModelKey;
     public Type StateType => typeof(PlanState);
-    internal const int PlanVersion = 1;
+    internal const int PlanVersion = 2;
     public int StateVersion => PlanVersion;
 
     internal WorkflowStart Start(MigrationPlanStart plan) => new(ModelKey, ModelKey, JsonSerializer.Serialize(Validate(plan)));
@@ -32,7 +34,8 @@ internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<
         if (plan is not { From.Length: > 0, To.Length: > 0, Deadline: > 0 } ||
             Encoding.UTF8.GetByteCount(plan.From) > WorkflowActor.DefinitionLimit ||
             Encoding.UTF8.GetByteCount(plan.To) > WorkflowActor.DefinitionLimit ||
-            plan.From == plan.To || !canPlan(plan.From, plan.To))
+            plan.Model is { } model && (model.Length == 0 || model == ModelKey || Encoding.UTF8.GetByteCount(model) > WorkflowActor.DefinitionLimit) ||
+            plan.From == plan.To || !canPlan(plan.Model, plan.From, plan.To))
             throw new ArgumentException("Choose two compatible definitions and a deadline.", nameof(plan));
         return plan;
     }
@@ -45,7 +48,7 @@ internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<
             cancellationToken.ThrowIfCancellationRequested();
             if (message.Kind == Kinds.Start)
             {
-                turn.Record(new MigrationPlanJournal.Created(state.Request.From, state.Request.To, state.Request.Deadline));
+                turn.Record(new MigrationPlanJournal.Created(state.Request.From, state.Request.To, state.Request.Deadline, state.Request.Model));
                 if (turn.Now < state.Request.Deadline)
                     state.DeadlineTimer = turn.Send(turn.Instance.Ref, MigrationPlanControl.Deadline, dueAt: state.Request.Deadline);
             }
@@ -88,11 +91,15 @@ internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<
     {
         if (state.AllSelected || state.Pending is not null || state.Number == long.MaxValue ||
             control.Number != state.Number + 1 || control.Before != state.Cursor ||
-            control.AllSelected != (control.After is null) || !control.AllSelected && control.After == control.Before ||
             control.After is { } after && after.Value is not { Length: > 0 and <= 1_024 } ||
             control.Actors is not { Length: <= BatchLimit } actors ||
             actors.Any(actor => actor == turn.Instance.Ref || actor.Id is not { Length: > 0 and <= 1_024 }) ||
             actors.Distinct().Count() != actors.Length) return;
+
+        var cursorAdvances = control.AllSelected ? control.After is null : control.After is not null && control.After != control.Before;
+        if (control.KeepCursor
+            ? control.AllSelected || control.After != control.Before || actors.Length != BatchLimit
+            : !cursorAdvances) return;
 
         state.Number = control.Number;
         state.Cursor = control.After;
@@ -152,7 +159,9 @@ internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<
         plan.Pending = null;
     }
     public bool ProtectsDeletion(object state, long? endedAt, long now) => false;
-    public object UpgradeState(string state, int fromVersion) => throw new NotSupportedException();
+    public object UpgradeState(string state, int fromVersion) => fromVersion == 1
+        ? JsonSerializer.Deserialize<PlanState>(state) ?? throw new InvalidOperationException("The migration plan state is absent.")
+        : throw new NotSupportedException();
     public ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
     public RestorePlan RestoreWaits(InstanceInfo instance, object state) =>
         state is PlanState { Closed: false, DeadlineTimer: { } timer } plan

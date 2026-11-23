@@ -4,8 +4,8 @@ using Kernel.Foundation.Contracts;
 
 namespace Kernel.WorkflowActor;
 
-internal sealed record MigrationDispatchBatch(long Number, string From, string To, ActorRef[] Actors);
-internal sealed record MigrationRequest(string From, string To, ActorRef Plan);
+internal sealed record MigrationDispatchBatch(long Number, string From, string To, ActorRef[] Actors, string? Model = null);
+internal sealed record MigrationRequest(string From, string To, ActorRef Plan, string? Model = null);
 internal sealed record MigrationDispatchReceipt(int Accepted, int Duplicate, int Unavailable);
 
 /// <summary>Reads committed plan state and acknowledges dispatch through a host-provided control path.</summary>
@@ -25,7 +25,7 @@ internal sealed class MigrationPlanDispatch(IIngress ingress, IMigrationDispatch
         if (batch is null) return null;
         if (batch.Actors is not { Length: > 0 } || batch.Actors.Any(actor => string.IsNullOrEmpty(actor.Id)))
             throw new InvalidOperationException("A committed migration batch requires nonempty exact actor references.");
-        var payload = JsonSerializer.Serialize(new MigrationRequest(batch.From, batch.To, plan));
+        var payload = JsonSerializer.Serialize(new MigrationRequest(batch.From, batch.To, plan, batch.Model));
         var accepted = 0;
         var duplicate = 0;
         var unavailable = 0;

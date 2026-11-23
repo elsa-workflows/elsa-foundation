@@ -2,6 +2,9 @@ using Kernel.Foundation.Contracts;
 
 namespace Kernel.WorkflowActor;
 
+internal sealed record MigrationPlanProgress(string From, string? Model, long Number, PageToken? Cursor, bool AllSelected,
+    MigrationDispatchBatch? Pending);
+
 /// <summary>Replays committed plan transitions and retains the bookmark and at most one pending batch.</summary>
 internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorReads reads, MigrationPlanAuthority authority,
     BoundScope bound, ActorRef plan) : IMigrationDispatchState
@@ -10,10 +13,16 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
     private PageToken? _bookmark;
     private MigrationPlanJournal.Created? _created;
     private MigrationDispatchBatch? _pending;
+    private long _number;
+    private PageToken? _cursor;
+    private bool _allSelected;
     private bool _closed;
-    private readonly MigrationPlanOutcomes _outcomes = new(reads, bound, plan);
+    internal MigrationPlanOutcomes Outcomes { get; } = new(reads, bound, plan);
 
     public async ValueTask<MigrationDispatchBatch?> ReadPendingAsync(BoundScope scope, ActorRef target,
+        CancellationToken cancellationToken) => (await ReadProgressAsync(scope, target, cancellationToken))?.Pending;
+
+    internal async ValueTask<MigrationPlanProgress?> ReadProgressAsync(BoundScope scope, ActorRef target,
         CancellationToken cancellationToken)
     {
         CheckScope(scope, target);
@@ -32,8 +41,9 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
                     Apply(record);
                 _bookmark = page.Next;
             }
-            return _pending is { } batch && await IsDispatchable(_created?.Deadline, cancellationToken)
-                ? batch with { Actors = batch.Actors.ToArray() } : null;
+            if (_closed || _created is null || !await IsDispatchable(_created.Deadline, cancellationToken)) return null;
+            var pending = _pending is { } batch ? batch with { Actors = batch.Actors.ToArray() } : null;
+            return new(_created.From, _created.Model, _number, _cursor, _allSelected, pending);
         }
         finally { _gate.Release(); }
     }
@@ -48,8 +58,8 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
     internal async ValueTask<bool> TryCompleteAsync(CancellationToken cancellationToken = default)
     {
         if (!await IsDispatchable(null, cancellationToken)) return false;
-        while (await _outcomes.ProjectNextAsync(cancellationToken)) { }
-        if (_outcomes.Completion() is not { } ready || !await IsDispatchable(ready.Deadline, cancellationToken))
+        while (await Outcomes.ProjectNextAsync(cancellationToken)) { }
+        if (Outcomes.Completion() is not { } ready || !await IsDispatchable(ready.Deadline, cancellationToken))
             return false;
         await SendControlAsync(MigrationPlanControl.Complete, "complete", new(ready.Batch), cancellationToken);
         return true;
@@ -92,8 +102,11 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
             case MigrationPlanJournal.Created created:
                 _created = created;
                 break;
-            case MigrationPlanJournal.Selected { Number: > 0, Actors.Length: > 0 } selected when _created is { } created:
-                _pending = new(selected.Number, created.From, created.To, selected.Actors);
+            case MigrationPlanJournal.Selected { Number: > 0 } selected when _created is { } created:
+                _number = selected.Number;
+                _cursor = selected.After;
+                _allSelected = selected.AllSelected;
+                _pending = selected.Actors.Length > 0 ? new(selected.Number, created.From, created.To, selected.Actors, created.Model) : null;
                 break;
             case MigrationPlanJournal.Dispatched dispatched when _pending?.Number == dispatched.Number:
                 _pending = null;

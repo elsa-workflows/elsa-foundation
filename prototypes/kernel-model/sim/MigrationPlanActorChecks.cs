@@ -27,7 +27,9 @@ internal static class MigrationPlanActorChecks
         var tooWide = new string('é', 600);
         var registry = new WorkflowRegistry().Add(Definition("source", "old")).Add(Definition("target", "new"))
             .Add(Definition(tooWide, "too wide"));
-        var plans = new MigrationPlanModel(authority, (from, to) => registry.TryGet(from, out _) && registry.TryGet(to, out _));
+        var plans = new MigrationPlanModel(authority, (executionModel, from, to) =>
+            (executionModel is null || executionModel == NativeExecutionModel.ModelKey) &&
+            registry.TryGet(from, out _) && registry.TryGet(to, out _));
         var actorType = new PublicWorkflow([new NativeExecutionModel(registry), plans, new ReadOnlyJournalModel()]);
         var deadline = now + 600_000;
         var invalid = false;
@@ -276,7 +278,8 @@ internal static class MigrationPlanActorChecks
         Contract.IActorReads reads = new ActorList(store, 8);
         var runtime = new PublicRuntime(ingress, reads);
         var registry = new WorkflowRegistry().Add(Definition("source", "old")).Add(Definition("target", "new"));
-        var plans = new MigrationPlanModel(authority, (from, to) => registry.TryGet(from, out _) && registry.TryGet(to, out _));
+        var plans = new MigrationPlanModel(authority, (executionModel, from, to) =>
+            executionModel is null or NativeExecutionModel.ModelKey && registry.TryGet(from, out _) && registry.TryGet(to, out _));
         var wrapper = new ParkPlanActor(new PublicWorkflow([new NativeExecutionModel(registry), plans]));
         var worker = new Worker("plan-park", 0, store, new ActorAdapter(store, wrapper), new WorkerOptions { Monotonic = () => now - initial });
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;

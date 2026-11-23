@@ -18,7 +18,7 @@ internal abstract record MigrationPlanJournal(string Kind)
     private const string AnsweredKind = "migration-plan.answered.v1";
     private const string ClosedKind = "migration-plan.closed.v1";
 
-    internal sealed record Created(string From, string To, long Deadline) : MigrationPlanJournal(CreatedKind);
+    internal sealed record Created(string From, string To, long Deadline, string? Model = null) : MigrationPlanJournal(CreatedKind);
     internal sealed record Selected(ActorRef[] Actors, long Number = 0, PageToken? After = null, bool AllSelected = false)
         : MigrationPlanJournal(SelectedKind);
     internal sealed record Dispatched(long Number) : MigrationPlanJournal(DispatchedKind);
@@ -72,6 +72,8 @@ internal sealed class MigrationPlanOutcomes(IActorReads reads, BoundScope scope,
     private PageToken? _bookmark;
     private bool _closed;
     private long _asOf;
+    private long _lastSelection;
+    private int _unanswered;
     private long? _deadline;
     private long? _finalBatch;
     private bool _finalDispatched;
@@ -82,11 +84,18 @@ internal sealed class MigrationPlanOutcomes(IActorReads reads, BoundScope scope,
             return new(_closed, _asOf, new Dictionary<ActorRef, MigrationPlanOutcome?>(_outcomes));
     }
 
+    internal ActorRef[]? Unselected(long selection, IEnumerable<ActorRef> candidates, int take)
+    {
+        lock (_gate)
+            return _closed || _lastSelection != selection ? null
+                : candidates.Where(actor => !_outcomes.ContainsKey(actor)).Distinct().Take(take).ToArray();
+    }
+
     internal (long Batch, long Deadline)? Completion()
     {
         lock (_gate)
             return !_closed && _deadline is { } deadline && _finalBatch is { } batch && _finalDispatched &&
-                _outcomes.Values.All(result => result is not null) ? (batch, deadline) : null;
+                _unanswered == 0 ? (batch, deadline) : null;
     }
 
     internal async Task<bool> ProjectNextAsync(CancellationToken cancellationToken = default)
@@ -119,7 +128,9 @@ internal sealed class MigrationPlanOutcomes(IActorReads reads, BoundScope scope,
                 _deadline = created.Deadline;
                 break;
             case MigrationPlanJournal.Selected batch when !_closed:
-                foreach (var actor in batch.Actors) _outcomes.TryAdd(actor, null);
+                _lastSelection = Math.Max(_lastSelection, batch.Number);
+                foreach (var actor in batch.Actors)
+                    if (_outcomes.TryAdd(actor, null)) _unanswered++;
                 if (batch is { AllSelected: true, Number: > 0 })
                 {
                     _finalBatch = batch.Number;
@@ -132,6 +143,7 @@ internal sealed class MigrationPlanOutcomes(IActorReads reads, BoundScope scope,
             case MigrationPlanJournal.Answered answer when
                 _outcomes.TryGetValue(answer.Actor, out var prior) && prior is null or MigrationPlanOutcome.NotAtSource:
                 // The first decisive answer wins. A repeated batch and a later receipt cannot erase it.
+                if (prior is null) _unanswered--;
                 _outcomes[answer.Actor] = answer.Outcome;
                 break;
             case MigrationPlanJournal.Closed:
