@@ -1,7 +1,9 @@
+using System.Data.Common;
 using Kernel.EntityFramework;
 using Kernel.Foundation.InMemory;
 using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
@@ -17,12 +19,14 @@ internal static class PostgresRootValueChecks
     }
     private const string ActorType = "root-value-qualification";
     private const string RollbackFailure = "value qualification rolled back at commit";
+    private const int ValueSize = 4096;
 
     internal static async Task<int> RunAsync(bool inBatch, Restart? restart)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Supply a disposable PostgreSQL database.");
-        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        var payloadProbe = new PayloadProbe();
+        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).AddInterceptors(payloadProbe).Options;
         KernelDb Open() => KernelDb.ForPostgresRootValues(options);
         var store = new EfStore(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
@@ -60,6 +64,7 @@ internal static class PostgresRootValueChecks
                 stored.State!.Length < 256 && await AtomicValue(stored, expected.Reference),
                 "The compact reference, journal and same-database value must share the fenced transaction.");
             await VerifyOldReaders();
+            Check(payloadProbe.SentOnePayloadPerWrite, "Each value statement must bind one 4 KiB binary parameter.");
             Console.WriteLine($"value-ready {Environment.ProcessId} {actor.Id} {worker.Epoch}");
             return 0;
         }
@@ -150,25 +155,47 @@ internal static class PostgresRootValueChecks
         Check(await CountValues() == 2 && (await Read(await Image(), candidate.Reference))?.SequenceEqual(Payload(2)) == true &&
             restored.SameImage(await ReadPhysicalValue(advanced.Actor, candidate.Reference)),
             "An equal-byte retry must settle its checkpoint while leaving the value bytes, xmin and ctid unchanged.");
+        await VerifyExactActorAndReference();
+        Check(payloadProbe.SentOnePayloadPerWrite, "Each value statement must bind one 4 KiB binary parameter.");
         Console.WriteLine($"value-verified {Environment.ProcessId} {actor.Id} {worker.Epoch}");
         return 0;
 
-        async Task<Contract.ActorRef> Start()
+        async Task VerifyExactActorAndReference()
         {
-            var start = await api.SendAsync(scope, new Contract.Target.Start(new(ActorType, "values")), "start", Contract.Kinds.Start, cancellationToken: token);
+            var neighbor = await Start("neighbor-start");
+            await Drive(1, neighbor);
+            await Send("write", "neighbor-write", "2", neighbor);
+            await Drive(2, neighbor);
+            var first = await Image();
+            var second = await Image(neighbor);
+            var firstHeader = Header(first);
+            var secondHeader = Header(second, neighbor);
+            var bytes = candidate.Read();
+            Check(first.Actor != second.Actor && actor != neighbor && await CountValues() == 3 &&
+                (await store.ReadRootValueAsync(firstHeader, first.Actor, candidate.Reference, token))?.AsSpan().SequenceEqual(bytes) == true &&
+                (await store.ReadRootValueAsync(secondHeader, second.Actor, candidate.Reference, token))?.AsSpan().SequenceEqual(bytes) == true,
+                "Both same-tenant roots must resolve the same digest through their own exact reference and actor creation.");
+            Check(await store.ReadRootValueAsync(firstHeader, second.Actor, candidate.Reference, token) is null &&
+                await store.ReadRootValueAsync(secondHeader, first.Actor, candidate.Reference, token) is null,
+                "Crossing either same-tenant reference with the other physical actor must miss.");
+        }
+
+        async Task<Contract.ActorRef> Start(string operation = "start")
+        {
+            var start = await api.SendAsync(scope, new Contract.Target.Start(new(ActorType, "values")), operation, Contract.Kinds.Start, cancellationToken: token);
             return start is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } opened } ? opened : throw new InvalidOperationException("The root start was refused.");
         }
 
-        async Task Send(string kind, string operation, string? payload = null) =>
-            Check((await api.SendAsync(scope, new Contract.Target.Ref(actor), operation, kind, payload, cancellationToken: token))
+        async Task Send(string kind, string operation, string? payload = null, Contract.ActorRef? target = null) =>
+            Check((await api.SendAsync(scope, new Contract.Target.Ref(target ?? actor), operation, kind, payload, cancellationToken: token))
                 .Outcome == Contract.AdmissionOutcome.Accepted, "The exact generated root must admit the named input.");
 
-        async Task<EfStore.RootImage> Image() => await store.ReadFirstRootAsync(scope.Tenant, actor.Id, token)
+        async Task<EfStore.RootImage> Image(Contract.ActorRef? target = null) => await store.ReadFirstRootAsync(scope.Tenant, (target ?? actor).Id, token)
             ?? throw new InvalidOperationException("The actor has no persisted checkpoint.");
 
-        async Task Drive(long revision)
+        async Task Drive(long revision, Contract.ActorRef? target = null)
         {
-            while ((await store.ReadFirstRootAsync(scope.Tenant, actor.Id, token))?.Revision != revision)
+            while ((await store.ReadFirstRootAsync(scope.Tenant, (target ?? actor).Id, token))?.Revision != revision)
             {
                 await owner.WokenAsync(null, token);
                 await owner.RunAsync(token);
@@ -225,7 +252,8 @@ internal static class PostgresRootValueChecks
                 """).SingleAsync(token);
         }
 
-        FoundationDispatchHeader Header(EfStore.RootImage image) => new(scope.Tenant, actor.Id, new(image.TypeData, image.Labels));
+        FoundationDispatchHeader Header(EfStore.RootImage image, Contract.ActorRef? target = null) =>
+            new(scope.Tenant, (target ?? actor).Id, new(image.TypeData, image.Labels));
         ValueTask<byte[]?> Read(EfStore.RootImage image, FoundationValueReference value) => store.ReadRootValueAsync(Header(image), image.Actor, value, token);
 
         async Task AssertNoAdvance()
@@ -283,7 +311,7 @@ internal static class PostgresRootValueChecks
 
     private static byte[] Payload(int seed)
     {
-        var payload = new byte[4096];
+        var payload = new byte[ValueSize];
         new Random(seed).NextBytes(payload);
         return payload;
     }
@@ -299,6 +327,25 @@ internal static class PostgresRootValueChecks
         try { await operation(); }
         catch (StoreException error) when (error.Failure == Failure.Definite && error.Message == reason) { return; }
         throw new InvalidOperationException("The expected refusal was absent: " + reason);
+    }
+
+    private sealed class PayloadProbe : DbCommandInterceptor
+    {
+        private int _writes;
+        private bool _singlePayload = true;
+        internal bool SentOnePayloadPerWrite => _writes > 0 && _singlePayload;
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("INSERT INTO \"FoundationRootValues\"", StringComparison.Ordinal))
+            {
+                _writes++;
+                var blobs = command.Parameters.Cast<DbParameter>().Select(parameter => parameter.Value).OfType<byte[]>().ToArray();
+                _singlePayload &= blobs is [{ Length: ValueSize }];
+            }
+            return ValueTask.FromResult(result);
+        }
     }
 
     private sealed class ValueActor : Contract.IActorType

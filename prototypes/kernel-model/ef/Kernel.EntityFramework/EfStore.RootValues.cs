@@ -67,14 +67,17 @@ public sealed partial class EfStore
             var payload = value.Read();
             var digest = value.Reference.Sha256;
             var matches = await db.Database.SqlQuery<bool>($"""
-                WITH inserted AS (
+                WITH proposed AS (
+                    SELECT {actor.Id}::text AS "Actor", {actor.Creation}::bigint AS "Creation",
+                        {digest}::text AS "Digest", {payload}::bytea AS "Payload"
+                ), inserted AS (
                     INSERT INTO "FoundationRootValues" ("Actor", "Creation", "Digest", "Payload")
-                    VALUES ({actor.Id}, {actor.Creation}, {digest}, {payload})
+                    SELECT "Actor", "Creation", "Digest", "Payload" FROM proposed
                     ON CONFLICT ("Actor", "Creation", "Digest") DO NOTHING RETURNING 1
                 )
                 SELECT EXISTS (SELECT 1 FROM inserted) OR EXISTS (
-                    SELECT 1 FROM "FoundationRootValues" WHERE "Actor" = {actor.Id} AND "Creation" = {actor.Creation}
-                        AND "Digest" = {digest} AND "Payload" = {payload}) AS "Value"
+                    SELECT 1 FROM "FoundationRootValues" v JOIN proposed p ON v."Actor" = p."Actor"
+                        AND v."Creation" = p."Creation" AND v."Digest" = p."Digest" AND v."Payload" = p."Payload") AS "Value"
                 """).ToListAsync(token);
             if (!matches.Single()) throw new StoreException(Failure.Definite, "A stored digest must describe an immutable value.");
         }
