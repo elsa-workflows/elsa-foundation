@@ -256,7 +256,7 @@ internal sealed class HttpTestRunIngressMiddleware(
             testRunId,
             workflowExecutionId = dispatchResult.Dispatch.WorkflowExecutionId,
             alreadyDispatched = dispatchResult.AlreadyDispatched
-        }), context.RequestAborted);
+        }, Elsa.Serialization.Core.JsonBaseline.Options), context.RequestAborted);
     }
 
     private static async ValueTask<bool> EnsureAuthenticatedAsync(HttpContext context)

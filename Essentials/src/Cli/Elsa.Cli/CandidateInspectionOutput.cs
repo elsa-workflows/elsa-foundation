@@ -62,7 +62,7 @@ public sealed class CandidateInspectionOutput
     private static JsonObject CopyFields(JsonElement source, IReadOnlyList<string> fields)
     {
         var result = new JsonObject();
-        foreach (var name in fields) result[name] = JsonSerializer.SerializeToNode(source.GetProperty(name));
+        foreach (var name in fields) result[name] = JsonSerializer.SerializeToNode(source.GetProperty(name), Elsa.Serialization.Core.JsonBaseline.Options);
         return result;
     }
 

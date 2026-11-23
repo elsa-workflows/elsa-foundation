@@ -356,8 +356,8 @@ public sealed class ActivityDraftTestRunService(
         // Hashes exclude node inspection metadata and do not cover every wrapper contract field.
         // Check the actual winner's complete payload, including template provenance and resume targets.
         // Only first-writer producer attribution and creation time are independent publication facts.
-        var winner = JsonSerializer.SerializeToNode(stored)!.AsObject();
-        var candidate = JsonSerializer.SerializeToNode(proposed)!.AsObject();
+        var winner = JsonSerializer.SerializeToNode(stored, Elsa.Serialization.Core.JsonBaseline.Options)!.AsObject();
+        var candidate = JsonSerializer.SerializeToNode(proposed, Elsa.Serialization.Core.JsonBaseline.Options)!.AsObject();
         winner.Remove(nameof(WorkflowExecutable.Identity)); candidate.Remove(nameof(WorkflowExecutable.Identity));
         winner.Remove(nameof(WorkflowExecutable.CreatedAt)); candidate.Remove(nameof(WorkflowExecutable.CreatedAt));
         if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(winner, candidate))

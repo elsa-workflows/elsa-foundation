@@ -149,7 +149,7 @@ public sealed partial class CombinedChildOutcomeEfTests
             var delivered = Assert.IsType<RuntimePostCommitOutboxItem>(await FindOutboxItemAsync(third, failedSource.OutboxItemId));
             Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
             Assert.Equal(3, delivered.DeliveryAttemptCount);
-            Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(ReadParentOutcomeWorkItem(delivered))));
+            Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(ReadParentOutcomeWorkItem(delivered), Elsa.Serialization.Core.JsonBaseline.Options)));
             var attempts = _outboxProbe.Attempts.Where(attempt => attempt.CompletionKind == SchedulerCompletionKind.ParentOutcomeEvaluation).ToArray();
             Assert.Equal(3, attempts.Length);
             Assert.All(attempts, attempt => Assert.Equal(work.WorkItemId, attempt.WorkItemId));

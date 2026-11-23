@@ -499,7 +499,7 @@ internal sealed class VariableLifecycleInspectionService(
 
     private static JsonElement? InlineValue(ValueEnvelope? envelope) => envelope?.Presence switch
     {
-        ValuePresence.ExplicitNull => JsonSerializer.SerializeToElement<object?>(null),
+        ValuePresence.ExplicitNull => JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options),
         ValuePresence.Present when envelope.InlineValue is { } value => value,
         _ => null
     };

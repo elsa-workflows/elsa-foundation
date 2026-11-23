@@ -159,7 +159,26 @@ public sealed class HostingConfigurationLifetimeTests
     }
 
     private static void AssertDisposed(PhysicalFileProvider provider) =>
-        Assert.Throws<ObjectDisposedException>(() => provider.Watch("lifetime-probe.json"));
+        // PhysicalFileProvider.Watch has no disposed guard in .NET 10; polling can create
+        // a token after disposal. Inspect the actual disposal state without creating a watcher.
+        Assert.True((bool)typeof(PhysicalFileProvider).GetField("_disposed", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(provider)!);
+
+    [Fact]
+    public void Watcher_disposal_control_distinguishes_a_live_provider_in_both_modes()
+    {
+        var root = Directory.CreateTempSubdirectory("studio-disposal-control-").FullName;
+        try
+        {
+            foreach (var polling in new[] { false, true })
+            {
+                using var files = new PhysicalFileProvider(root) { UsePollingFileWatcher = polling, UseActivePolling = polling };
+                Assert.Throws<Xunit.Sdk.TrueException>(() => AssertDisposed(files));
+                files.Dispose();
+                AssertDisposed(files);
+            }
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
 
     private sealed class ConfigurationHost : IAsyncDisposable
     {

@@ -17,7 +17,7 @@ namespace Elsa.Activities.Scripting.Services;
 /// </summary>
 internal sealed class StepScriptVariables : IScriptVariableSession
 {
-    private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null);
+    private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly IStepVariableSession _session;
     private readonly List<string> _missing = [];
     private readonly bool _protectedInputs;

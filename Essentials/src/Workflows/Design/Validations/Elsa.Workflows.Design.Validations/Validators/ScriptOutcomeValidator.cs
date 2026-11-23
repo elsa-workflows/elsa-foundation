@@ -188,7 +188,7 @@ public sealed class ScriptOutcomeValidator(
                 JsonElement { ValueKind: JsonValueKind.String } text => JsonDocument.Parse(text.GetString()!).RootElement,
                 JsonElement element => element,
                 string text => JsonDocument.Parse(text).RootElement,
-                _ => JsonSerializer.SerializeToElement(value.Value)
+                _ => Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value.Value)
             };
         }
         catch (JsonException)
