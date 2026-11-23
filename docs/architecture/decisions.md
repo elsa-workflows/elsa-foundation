@@ -101,6 +101,7 @@ Decisions are by Sipke Schoorstra, the owner, for [program #4229](https://github
 | 17 Nov | Kernel schema changes that a running version cannot read use a coordinated stop, and each release's notes state its rollback floor. | Owner card ([plan, schema compatibility](../program-goals/clean-slate-kernel.md#kernel-schema-and-protocol-compatibility-proposed)) |
 | 16 Nov | The BPMN prototype stream is parked until after release 1. | [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229) program state |
 | 16 Nov | #2531's M5 qualification and the budgets of 32 SQLite commands and 16 PostgreSQL round trips (ten WriteLines, Balanced) move to gate 3. | [#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6917342686) |
+| 23 Nov | MongoDB-specific implementation and qualification are on hold, including the MongoDB part of K4. Keep the prototype and its evidence, and continue relational K4 work behind the provider-neutral storage contract. | [Owner direction on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7108927599) |
 
 ## The seven design-now answers (16–17 November)
 
