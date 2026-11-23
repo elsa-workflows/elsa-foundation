@@ -57,7 +57,7 @@ internal static class PostgresPublicPreview
             await admission.InstallAsync(stop);
         }
         var cursor = await admission.OpenJournalCursorAsync(stop);
-        var tail = new PostgresRootJournalReader(store, cursor, 1);
+        var tail = new PostgresRootReads(store, cursor, 1);
         var foundation = new PostgresPreviewFoundation(admission, store, tail, PublicActor.ActorType);
         if (tenantProbe)
         {

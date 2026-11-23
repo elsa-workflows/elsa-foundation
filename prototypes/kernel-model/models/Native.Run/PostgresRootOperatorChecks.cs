@@ -29,7 +29,7 @@ internal static class PostgresRootOperatorChecks
             await store.CreateAsync(1);
             await admission.InstallAsync(ct);
         }
-        var journal = new PostgresRootJournalReader(store, await admission.OpenJournalCursorAsync(ct), 8);
+        var journal = new PostgresRootReads(store, await admission.OpenJournalCursorAsync(ct), 8);
         var blue = FixedTenantScope.Bind("blue");
         var basic = new PostgresPreviewFoundation(admission, store, journal, WorkflowActor.WorkflowActor.ActorType);
         var operatorApi = new PostgresPreviewFoundation(admission, store, journal, WorkflowActor.WorkflowActor.ActorType,

@@ -55,7 +55,7 @@ internal static class PostgresMultiRootClient
     internal static async Task<int> SecondaryAsync(string[] args)
     {
         var scope = FixedTenantScope.Bind(Secondary);
-        var open = Database(durable: args is ["missing-durable", _], operators: args is ["operator-start"] or ["operator-resume", _]);
+        var open = Database(durable: args is ["missing-durable", _], operators: args is ["operator-start"] or ["operator-resume", _] or ["operator-list", _, _]);
         var store = new EfStore(open, postgres: true);
         var ingress = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -69,6 +69,14 @@ internal static class PostgresMultiRootClient
             case ["operator-start"]:
                 Console.WriteLine((await Start(foundation, scope, "charlie", token)).Id);
                 break;
+            case ["operator-list", var neighbor, var saved]:
+                var query = PostgresRootListChecks.ApprovalQuery();
+                var list = await foundation.ListAsync(scope, query, cancellationToken: token);
+                if (list.Items is not [var row] || row.Header.Ref.Id != neighbor || row.Header.Tenant != scope.Tenant || list.Next is not null)
+                    throw new InvalidOperationException("The second tenant did not see exactly its own projected actor.");
+                try { await foundation.ListAsync(scope, query, new(saved), token); }
+                catch (ArgumentException) { break; }
+                throw new InvalidOperationException("The second tenant used another tenant's list token.");
             case ["operator-resume", var actorRef]:
                 var operatorApi = new PostgresPreviewFoundation(ingress, store,
                     new(store, await ingress.OpenJournalCursorAsync(token), 64), WorkflowActor.WorkflowActor.ActorType,
