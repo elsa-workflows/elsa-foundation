@@ -593,7 +593,7 @@ static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.operator
 static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.Resolve(string! profile) -> Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities!
 static Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? right) -> bool
 static Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? right) -> bool
-static Elsa.Expressions.Core.Models.ArgumentValue.FromClr(object? value, string? expressionType = null, System.Type? declaredType = null) -> Elsa.Expressions.Core.Models.ArgumentValue!
+static Elsa.Expressions.Core.Models.ArgumentValue.FromClr(object? value, string? expressionType = null, System.Type? declaredType = null, System.Reflection.MemberInfo? inputMember = null) -> Elsa.Expressions.Core.Models.ArgumentValue!
 static Elsa.Expressions.Core.Models.ArgumentValue.operator !=(Elsa.Expressions.Core.Models.ArgumentValue? left, Elsa.Expressions.Core.Models.ArgumentValue? right) -> bool
 static Elsa.Expressions.Core.Models.ArgumentValue.operator ==(Elsa.Expressions.Core.Models.ArgumentValue? left, Elsa.Expressions.Core.Models.ArgumentValue? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionAuthoringContext.operator !=(Elsa.Expressions.Core.Models.ExpressionAuthoringContext? left, Elsa.Expressions.Core.Models.ExpressionAuthoringContext? right) -> bool

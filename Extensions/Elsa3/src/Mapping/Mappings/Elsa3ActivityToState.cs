@@ -83,7 +83,8 @@ public sealed class Elsa3ActivityToState
     private static ArgumentState WithJsonListLiteral(ArgumentState argument)
     {
         if (!string.Equals(argument.Value.ExpressionType, Elsa3TypedValues.Literal, StringComparison.OrdinalIgnoreCase) ||
-            argument.Value.Value is not string text ||
+            argument.Value.Value is not JsonElement { ValueKind: JsonValueKind.String } literal ||
+            literal.GetString() is not { } text ||
             !text.TrimStart().StartsWith('['))
             return argument;
         try

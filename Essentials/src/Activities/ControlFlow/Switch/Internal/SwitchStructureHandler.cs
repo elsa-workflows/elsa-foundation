@@ -46,7 +46,7 @@ internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivi
             // the Boolean default without mutating the authored payload or its storage policy.
             var state = item.Condition!;
             if (IsUnboundPredicate(state))
-                state = state with { Value = new(false, "Literal"), Conversion = null };
+                state = state with { Value = Elsa.Expressions.Core.Models.ArgumentValue.FromClr(false, "Literal"), Conversion = null };
             inputs.Add(new(key, definition, state));
         }
         if (structure.Cases.Any(item => item.Condition is null))

@@ -1,5 +1,7 @@
 using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Text.Json;
+using System.Reflection;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
@@ -443,7 +445,10 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
                     return this;
                 if (argument.Kind == ActivityArgumentKind.Source)
                     sequence.EnsureVisible(argument.Source!.Scope);
-                _inputs[inputKey] = new ArgumentState(inputKey, argument.Lower(inputKey), null, null, null, null, argument.Conversion);
+                var member = typeof(TActivity).GetProperties(BindingFlags.Public | BindingFlags.Instance).FirstOrDefault(property =>
+                    property.GetCustomAttribute<ActivityInputAttribute>(inherit: true) is { } attribute &&
+                    (attribute.Key ?? property.Name) == inputKey);
+                _inputs[inputKey] = new ArgumentState(inputKey, argument.Lower(inputKey, member), null, null, null, null, argument.Conversion);
                 return this;
             }
 

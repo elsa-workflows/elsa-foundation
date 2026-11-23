@@ -1053,9 +1053,6 @@ public sealed class RuntimeInputBindingCompiler(
         if (string.IsNullOrWhiteSpace(value.ExpressionType))
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not declare an expression type.");
 
-        if (value.Value is not null and not string and not JsonElement and not ExpressionDefinition)
-            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' has an unsupported CLR expression payload. Supply plain text, ExpressionDefinition or JsonElement.");
-
         if (TryReadPortableExpressionDefinition(value.Value, out var definition))
             return CompilePortableExpressionInput(nodeId, inputDefinition, value.ExpressionType, definition, effectivePolicy);
 

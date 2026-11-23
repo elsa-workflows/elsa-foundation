@@ -45,6 +45,25 @@ public sealed class ArgumentValueJsonIntegrityTests
         Assert.Equal(JsonValueKind.Null, new ArgumentValue(document.RootElement).Value!.Value.ValueKind);
     }
 
+    [Fact]
+    public void An_input_member_contract_overrides_the_type_contract_and_raw_data_stays_verbatim()
+    {
+        var member = typeof(MemberOwner).GetProperty(nameof(MemberOwner.Input))!;
+        var argument = ArgumentValue.FromClr(new ScopedLiteral { Name = "member value" }, "Literal", typeof(ScopedLiteral), member);
+        Assert.Equal("member value", argument.Value!.Value.GetProperty("member_name").GetString());
+        Assert.False(argument.Value.Value.TryGetProperty("EXTERNAL_NAME", out _));
+        Assert.Equal("member value", ((ScopedLiteral)JsonConversionContract.For(typeof(ScopedLiteral), member).Read(argument.Value.Value, typeof(ScopedLiteral))!).Name);
+        const string raw = "{ \"unchanged\":1.00 }";
+        using var document = JsonDocument.Parse(raw);
+        Assert.Equal(raw, ArgumentValue.FromClr(document.RootElement, "Literal", typeof(ScopedLiteral), member).Value!.Value.GetRawText());
+    }
+
+    public sealed class MemberOwner
+    {
+        [JsonConversion(MemberMappings = ["member_name=Name"], RefuseUnmatchedMembers = true)]
+        public ScopedLiteral Input { get; set; } = new();
+    }
+
     [JsonConversion(MemberMappings = ["EXTERNAL_NAME=Name"])]
     public sealed class ScopedLiteral
     {

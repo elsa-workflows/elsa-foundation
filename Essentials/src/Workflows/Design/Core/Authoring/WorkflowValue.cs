@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Reflection;
 using Elsa.Expressions.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Authoring;
@@ -9,7 +10,7 @@ namespace Elsa.Workflows.Design.Core.Authoring;
 /// </summary>
 public abstract class WorkflowValue<T>
 {
-    internal abstract ArgumentValue Lower();
+    internal abstract ArgumentValue Lower(MemberInfo? inputMember = null);
     internal virtual WorkflowValueScope Scope => WorkflowValueScope.Unscoped;
 }
 
@@ -37,7 +38,7 @@ public sealed class WorkflowRequestMember<T> : WorkflowValue<T>
     public string MemberKey { get; }
     public string? Path { get; }
 
-    internal override ArgumentValue Lower() => new(
+    internal override ArgumentValue Lower(MemberInfo? inputMember = null) => new(
         JsonSerializer.SerializeToElement(new { memberKey = MemberKey, path = Path }),
         AuthoringExpressionTypes.WorkflowRequest);
 }
@@ -55,7 +56,7 @@ public sealed class VariableRead<T> : WorkflowValue<T>
 
     internal override WorkflowValueScope Scope => new(WorkflowValueScopeKind.Variable, DeclaringScopeId);
 
-    internal override ArgumentValue Lower() => new(
+    internal override ArgumentValue Lower(MemberInfo? inputMember = null) => new(
         JsonSerializer.SerializeToElement(new { referenceKey = ReferenceKey, declaringScopeId = DeclaringScopeId }),
         AuthoringExpressionTypes.Variable);
 }
@@ -75,7 +76,7 @@ public sealed class ActivityResultSource<T> : WorkflowValue<T>
 
     internal override WorkflowValueScope Scope => new(WorkflowValueScopeKind.ActivityResult, ProducerScopeId);
 
-    internal override ArgumentValue Lower() => new(
+    internal override ArgumentValue Lower(MemberInfo? inputMember = null) => new(
         JsonSerializer.SerializeToElement(new
         {
             producerNodeId = ProducerNodeId,
@@ -98,12 +99,12 @@ public sealed class ExpressionSource<T> : WorkflowValue<T>
     public string Language { get; }
     public string Source { get; }
 
-    internal override ArgumentValue Lower() => ArgumentValue.FromClr(Source, Language);
+    internal override ArgumentValue Lower(MemberInfo? inputMember = null) => ArgumentValue.FromClr(Source, Language);
 }
 
 internal sealed class LiteralWorkflowValue<T>(T? value) : WorkflowValue<T>
 {
-    internal override ArgumentValue Lower() => ArgumentValue.FromClr(value, AuthoringExpressionTypes.Literal, typeof(T));
+    internal override ArgumentValue Lower(MemberInfo? inputMember = null) => ArgumentValue.FromClr(value, AuthoringExpressionTypes.Literal, typeof(T), inputMember);
 }
 
 internal static class AuthoringExpressionTypes

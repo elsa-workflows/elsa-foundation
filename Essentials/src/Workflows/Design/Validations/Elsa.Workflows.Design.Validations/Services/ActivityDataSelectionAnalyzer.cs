@@ -267,7 +267,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
             var authoredScope = AuthoredScope(context.Document, scope);
             ArgumentValue read = binding.Role == "VariableMember"
                 ? new(JsonSerializer.SerializeToElement(new { referenceKey = variable.ReferenceKey, declaringScopeId = authoredScope, memberPath = binding.MemberPath }), "VariableMember")
-                : new(new VariableReference(variable.ReferenceKey, authoredScope), "Variable");
+                : ArgumentValue.FromClr(new VariableReference(variable.ReferenceKey, authoredScope), "Variable");
             return new($"variable:{authoredScope}:{variable.ReferenceKey}", variable.Name, scope,
                 read, ActivityChildResultAvailability.Definite, variable.Type, null, null, null, null, null);
         }

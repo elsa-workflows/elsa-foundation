@@ -66,8 +66,6 @@ internal sealed class LoopStructureHandler(LoopKind loop) : IActivityStructureHa
 
         return value.Value switch
         {
-            bool flag => !flag,
-            string text => bool.TryParse(text.Trim(), out var parsed) && !parsed,
             JsonElement { ValueKind: JsonValueKind.False } => true,
             JsonElement { ValueKind: JsonValueKind.String } element => bool.TryParse(element.GetString()?.Trim(), out var parsed) && !parsed,
             _ => false

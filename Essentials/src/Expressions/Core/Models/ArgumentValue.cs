@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Reflection;
 using Elsa.Serialization.Core;
 
 namespace Elsa.Expressions.Core.Models;
@@ -18,13 +19,13 @@ public sealed record ArgumentValue(
     }
 
     /// <summary>Converts a producer's CLR literal through its declared type contract before it enters an authored document.</summary>
-    public static ArgumentValue FromClr(object? value, string? expressionType = null, Type? declaredType = null) =>
+    public static ArgumentValue FromClr(object? value, string? expressionType = null, Type? declaredType = null, MemberInfo? inputMember = null) =>
         value switch
         {
             null => new(null, expressionType),
             JsonElement raw => new(raw, expressionType),
             JsonDocument document => new(document.RootElement, expressionType),
-            _ => new(JsonConversionContract.SerializeToElement(value, declaredType), expressionType)
+            _ => new(JsonConversionContract.For(declaredType ?? value.GetType(), inputMember).Write(value, declaredType ?? value.GetType()), expressionType)
         };
 
     // Retain the existing null/Undefined binding states. The serializer still refuses an undefined JSON value.

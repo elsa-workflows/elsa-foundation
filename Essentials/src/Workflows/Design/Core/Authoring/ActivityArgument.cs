@@ -1,4 +1,5 @@
 using Elsa.Expressions.Core.Models;
+using System.Reflection;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Authoring;
@@ -53,10 +54,10 @@ public readonly struct ActivityArgument<T>
     public static implicit operator ActivityArgument<T>(T? value) => Value(value);
     public static implicit operator ActivityArgument<T>(WorkflowValue<T> source) => From(source);
 
-    internal ArgumentValue Lower(string inputKey) => Kind switch
+    internal ArgumentValue Lower(string inputKey, MemberInfo? inputMember = null) => Kind switch
     {
-        ActivityArgumentKind.Literal => ArgumentValue.FromClr(_isExplicitNull ? null : Literal, AuthoringExpressionTypes.Literal, typeof(T)),
-        ActivityArgumentKind.Source => Source!.Lower(),
+        ActivityArgumentKind.Literal => ArgumentValue.FromClr(_isExplicitNull ? null : Literal, AuthoringExpressionTypes.Literal, typeof(T), inputMember),
+        ActivityArgumentKind.Source => Source!.Lower(inputMember),
         ActivityArgumentKind.Default => ArgumentValue.FromClr(null, AuthoringExpressionTypes.Default),
         _ => throw new InvalidOperationException($"Input '{inputKey}' was omitted and cannot be lowered without its published contract default.")
     };
