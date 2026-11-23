@@ -54,6 +54,7 @@ export function stubApi(): ElsaStudioModuleApi {
     routes: makeRegistry(),
     dashboardWidgets: widgets,
     homeWidgets: widgets,
+    dashboardRecordLinks: makeRegistry(),
     settingEditors: makeRegistry()
   } as unknown as ElsaStudioModuleApi;
 }

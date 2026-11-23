@@ -134,6 +134,23 @@ describe("dashboard collection deletion", () => {
   });
 });
 
+describe("questions and dashboards collection guidance", () => {
+  it("explains standalone querying and dashboard reuse on the Questions collection and empty states", async () => {
+    window.history.replaceState({}, "", "/questions");
+    const module = stubApi();
+    vi.spyOn(DashboardApi.prototype, "list").mockResolvedValue({ items: [] });
+    const view = mount(<AnonymousAuthProvider><NamedDashboardsRoute api={module} kind="question" view="list" navigate={vi.fn()} /></AnonymousAuthProvider>);
+
+    await waitUntil(() => view.textContent?.includes("No questions yet") === true);
+    expect(view.textContent).toContain("Save reusable queries and visualizations over your data. Run them standalone or place them on dashboards.");
+    expect(view.textContent).toContain("Build a query and visualization using controls or Weaver. Run it directly, share it, or reuse it across dashboards.");
+
+    click(view, "Shared with me");
+    await waitUntil(() => view.textContent?.includes("Nothing has been shared with you") === true);
+    expect(view.textContent).toContain("Questions shared with you appear here and always run with your current data access.");
+  });
+});
+
 function savedQuestionEditor() {
   window.history.replaceState({}, "", "/questions/q1"); const module = stubApi(); let current = question();
   module.backend.http.getJson = vi.fn(async (url: string) => url.endsWith("dashboard-datasets") ? { items: [dataset] } : current) as typeof module.backend.http.getJson;
