@@ -10,6 +10,11 @@ internal static class PostgresRootValueChecks
 {
     internal sealed record Restart(string Actor, long Epoch);
     private sealed record State(FoundationValueReference? Value, string? ReadDigest = null);
+    private sealed record PhysicalValue(byte[] Payload, string Transaction, string Tuple)
+    {
+        internal bool SameImage(PhysicalValue other) =>
+            Transaction == other.Transaction && Tuple == other.Tuple && Payload.AsSpan().SequenceEqual(other.Payload);
+    }
     private const string ActorType = "root-value-qualification";
     private const string RollbackFailure = "value qualification rolled back at commit";
 
@@ -79,13 +84,7 @@ internal static class PostgresRootValueChecks
 
         await Send("write", "second-write", "2");
         var candidate = new FoundationValue(Payload(2));
-        var pending = (await admission.ReadPendingDirectAsync(scope.Tenant, actor.Id, token)).Single();
-        var physical = (await store.LoadAsync([read.Actor.Id], token)).Single();
-        var turn = new TurnCommit(physical.Id, physical.WithFoundationState(Json.Write(new State(candidate.Reference))) with
-            { Revision = physical.Revision + 1 }, physical.Revision, [], [pending.InboxKey], [], [], [], """["stored"]""")
-            { FoundationValues = [candidate] };
-        var fence = worker.Fences.Single();
-        var batch = new CommitBatch(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [turn], [], []);
+        var (batch, pending) = await PrepareWrite(read, candidate);
         Check(!(await store.CommitAsync(batch with { Epoch = restart.Epoch }, token)).Landed, "The prior owner's stale fence must reject the exact prepared value turn.");
         await AssertNoAdvance();
 
@@ -125,9 +124,32 @@ internal static class PostgresRootValueChecks
             await AtomicValue(advanced, candidate.Reference),
             "The current worker must retry the same pending input and land the new value and checkpoint.");
         await Send("write", "same-value", "2");
+        var advancedJournal = await api.TailAsync(scope, actor, cancellationToken: token);
+        var (duplicateBatch, duplicateInput) = await PrepareWrite(advanced, candidate);
+        var changedBytes = Payload(3);
+        Check(changedBytes.Length == candidate.Reference.Length && new FoundationValue(changedBytes).Reference != candidate.Reference,
+            "The physical corruption must keep the byte length and change the digest.");
+        await ReplacePhysicalValue(advanced.Actor, candidate.Reference, changedBytes);
+        var corrupt = await ReadPhysicalValue(advanced.Actor, candidate.Reference);
+        Check(corrupt.Payload.AsSpan().SequenceEqual(changedBytes), "The fixture must corrupt the exact actor creation and digest.");
+
+        var coldReader = new EfStore(Open, postgres: true);
+        await coldReader.EnableRootValuesAsync(token);
+        await Refused(async () => { await coldReader.ReadRootValueAsync(Header(advanced), advanced.Actor, candidate.Reference, token); },
+            "The persisted value does not match its digest.");
+        Console.Error.WriteLine("ok The cold value read refused wrong bytes of the expected length.");
+        await Refused(async () => { await store.CommitAsync(duplicateBatch, token); },
+            "A stored digest must describe an immutable value.");
+        await AssertTurnUnchanged(advanced, advancedJournal.Items, duplicateBatch, duplicateInput);
+        Check(corrupt.SameImage(await ReadPhysicalValue(advanced.Actor, candidate.Reference)) && await CountValues() == 2,
+            "The refused duplicate must leave the exact corrupt value bytes and tuple version intact.");
+
+        await ReplacePhysicalValue(advanced.Actor, candidate.Reference, candidate.Read());
+        var restored = await ReadPhysicalValue(advanced.Actor, candidate.Reference);
         await Drive(5);
-        Check(await CountValues() == 2 && (await Read(await Image(), candidate.Reference))?.SequenceEqual(Payload(2)) == true,
-            "A second insertion of the same digest must retain one immutable row per creation.");
+        Check(await CountValues() == 2 && (await Read(await Image(), candidate.Reference))?.SequenceEqual(Payload(2)) == true &&
+            restored.SameImage(await ReadPhysicalValue(advanced.Actor, candidate.Reference)),
+            "An equal-byte retry must settle its checkpoint while leaving the value bytes, xmin and ctid unchanged.");
         Console.WriteLine($"value-verified {Environment.ProcessId} {actor.Id} {worker.Epoch}");
         return 0;
 
@@ -160,6 +182,37 @@ internal static class PostgresRootValueChecks
             return await db.Database.SqlQueryRaw<int>("""SELECT count(*)::int AS "Value" FROM "FoundationRootValues" """).SingleAsync(token);
         }
 
+        async Task<(CommitBatch Batch, Message Input)> PrepareWrite(EfStore.RootImage image, FoundationValue value)
+        {
+            var input = (await admission.ReadPendingDirectAsync(scope.Tenant, actor.Id, token)).Single();
+            var row = (await store.LoadAsync([image.Actor.Id], token)).Single();
+            var turn = new TurnCommit(row.Id, row.WithFoundationState(Json.Write(new State(value.Reference))) with
+                { Revision = row.Revision + 1 }, row.Revision, [], [input.InboxKey], [], [], [], """["stored"]""")
+                { FoundationValues = [value] };
+            var fence = worker.Fences.Single();
+            return (new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [turn], [], []), input);
+        }
+
+        async Task<PhysicalValue> ReadPhysicalValue(CreationAddress address, FoundationValueReference value)
+        {
+            await using var db = Open();
+            return await db.Database.SqlQuery<PhysicalValue>($"""
+                SELECT "Payload", xmin::text AS "Transaction", ctid::text AS "Tuple"
+                FROM "FoundationRootValues" WHERE "Actor" = {address.Id} AND "Creation" = {address.Creation}
+                    AND "Digest" = {value.Sha256}
+                """).SingleAsync(token);
+        }
+
+        async Task ReplacePhysicalValue(CreationAddress address, FoundationValueReference value, byte[] bytes)
+        {
+            await using var db = Open();
+            var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "FoundationRootValues" SET "Payload" = {bytes}
+                WHERE "Actor" = {address.Id} AND "Creation" = {address.Creation} AND "Digest" = {value.Sha256}
+                """, token);
+            Check(affected == 1, "The fixture must replace exactly one physical value row.");
+        }
+
         async Task<bool> AtomicValue(EfStore.RootImage image, FoundationValueReference value)
         {
             await using var db = Open();
@@ -177,15 +230,23 @@ internal static class PostgresRootValueChecks
 
         async Task AssertNoAdvance()
         {
+            await AssertTurnUnchanged(read, readJournal.Items, batch, pending);
+            Check(await Read(read, candidate.Reference) is null && await CountValues() == 1 &&
+                (await Read(read, expected.Reference))?.SequenceEqual(Payload(1)) == true,
+                "The refused transaction must preserve the prior value rows.");
+        }
+
+        async Task AssertTurnUnchanged(EfStore.RootImage prior, IReadOnlyList<Contract.JournalEntry> journal,
+            CommitBatch attempted, Message input)
+        {
             var checkpoint = await Image();
             await using var db = Open();
-            var position = await db.Partitions.Select(partition => partition.Position).SingleAsync(token);
-            Check(checkpoint.Revision == read.Revision && checkpoint.State == read.State && position == fence.Position &&
+            var partition = await db.Partitions.SingleAsync(partition => partition.Id == attempted.Partition, token);
+            Check(checkpoint.Actor == prior.Actor && checkpoint.Revision == prior.Revision && checkpoint.State == prior.State &&
+                partition.Owner == node && partition.Epoch == attempted.Epoch && partition.Position == attempted.Position &&
                 (await admission.ReadPendingDirectAsync(scope.Tenant, actor.Id, token)) is [var remaining] &&
-                remaining.InboxKey == pending.InboxKey && await Read(checkpoint, candidate.Reference) is null && await CountValues() == 1 &&
-                (await Read(checkpoint, expected.Reference))?.SequenceEqual(Payload(1)) == true &&
-                (await api.TailAsync(scope, actor, cancellationToken: token)).Items.SequenceEqual(readJournal.Items),
-                "The refused transaction must preserve the prior checkpoint, journal, fence, pending input and value rows.");
+                remaining == input && (await api.TailAsync(scope, actor, cancellationToken: token)).Items.SequenceEqual(journal),
+                "The refused transaction must preserve the exact checkpoint, journal, fence and pending input.");
         }
 
         async Task VerifyOldReaders()
@@ -231,6 +292,13 @@ internal static class PostgresRootValueChecks
     {
         if (!condition) throw new InvalidOperationException(description);
         Console.Error.WriteLine("ok " + description);
+    }
+
+    private static async Task Refused(Func<Task> operation, string reason)
+    {
+        try { await operation(); }
+        catch (StoreException error) when (error.Failure == Failure.Definite && error.Message == reason) { return; }
+        throw new InvalidOperationException("The expected refusal was absent: " + reason);
     }
 
     private sealed class ValueActor : Contract.IActorType
