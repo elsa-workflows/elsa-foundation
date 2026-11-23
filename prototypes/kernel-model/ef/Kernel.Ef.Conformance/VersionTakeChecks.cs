@@ -79,16 +79,16 @@ internal static class VersionTakeChecks
         }
     }
 
-    private static async Task Refuses(Func<Task> action, string reason)
+    internal static async Task Refuses(Func<Task> action, string reason, string operation = "operation")
     {
         try { await action(); }
         catch (StoreException error) when (error.Failure == Failure.Definite &&
             error.Message.Contains(reason, StringComparison.Ordinal))
         {
-            Check(true, $"refused with {reason}");
+            Check(true, $"{operation} refused with {reason}");
             return;
         }
-        throw new InvalidOperationException($"Expected a definite refusal with {reason}.");
+        throw new InvalidOperationException($"Expected {operation} to refuse with {reason}.");
     }
 
     private static void Check(bool valid, string title)

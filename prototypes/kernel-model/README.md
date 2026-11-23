@@ -106,6 +106,11 @@ In two before-and-after runs on PostgreSQL 17, schema setup on an empty database
 the format check and 37 with the marker table, seed and read. Both the first and restarted process took 13 TCP
 turns for ownership, up from 12. The five workflow operations above kept their measured counts.
 
+The general relational projector checks the format before reading the cursor, reading a journal page and
+writing a projection. A PostgreSQL 17 round that advanced the cursor measured six TCP turns with those
+checks, up from three. The general journal reader, view reader and sweeper each check the marker on entry.
+The public preview uses separate tenant-scoped checkpoint and journal queries.
+
 To run two tenants' Native approvals on the same Embedded worker, use a fresh dedicated database. After building
 `models/Native.Run` in Release, run the following commands from `prototypes/kernel-model`. Supply the three
 references printed by the first process to the second. The third identifies a root outside the owner's set.
