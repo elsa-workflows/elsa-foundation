@@ -533,7 +533,8 @@ MySQL connection-loss qualification stays open despite the successful retry. The
 cancellation callback. The stack cannot distinguish the application deadline from the driver's connection-timeout
 timer. Before acceptance, qualify a driver fix with TLS and finite timeouts. The application can contain its own
 cancellation callbacks while keeping the node-lease deadlines. Retain the provider failure separately from the
-store's successful end-state runs. [Run receipt](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7114915253)
+store's successful end-state runs. [Completed run receipt](https://github.com/elsa-workflows/elsa-foundation/pull/5586#issuecomment-7115032721)
+· [Initial failure](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7114915253)
 · [Connector/NET report](https://bugs.mysql.com/bug.php?id=115572)
 
 K4 remains open for the remaining physical K3 cases, upgrade-family compatibility and provider-path coverage.
