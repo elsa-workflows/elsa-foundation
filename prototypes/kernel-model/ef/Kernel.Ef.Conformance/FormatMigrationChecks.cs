@@ -62,6 +62,9 @@ internal static class FormatMigrationChecks
         await VersionTakeChecks.Refuses(() => oldBuild.NodeHeartbeatAsync("original", lease, lease).AsTask(), "journal codec=2",
             "an old owner renewing after the format advanced");
         await VersionTakeChecks.Refuses(() => oldBuild.SweepAsync().AsTask(), "journal codec=2", "an old sweeper");
+        var runtime = new PartitionRuntime("old-runtime", oldBuild, 2, lease);
+        var host = DurableHost.ForNode("old-runtime", oldBuild, new WorkflowInstance([]), 2);
+        await VersionTakeChecks.Refuses(() => runtime.StartAsync(host).AsTask(), "journal codec=2", "an old counted runtime starting");
         Check(await ReadLease() == 0, "the old process cannot renew a lease or acquire a partition");
 
         await SetNode(node =>
