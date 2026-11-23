@@ -90,11 +90,13 @@ internal sealed class MigrationPlanOperator(IIngress ingress, IActorReads reads,
             return _outcomes.Read();
         }
 
-        internal async Task CloseAsync(CancellationToken cancellationToken = default)
+        internal async Task<bool> CloseAsync(CancellationToken cancellationToken = default)
         {
             owner.Demand(scope);
-            if (WorkflowActor.IsMigrationPlan(await reads.GetAsync(scope, plan, cancellationToken), plan))
-                await state.SendAsync(MigrationPlanControl.Close, "close", new(0), cancellationToken);
+            if (!WorkflowActor.IsMigrationPlan(await reads.GetAsync(scope, plan, cancellationToken), plan))
+                return false;
+            await state.SendAsync(MigrationPlanControl.Close, "close", new(0), cancellationToken);
+            return true;
         }
 
         private async Task RefreshOutcomesAsync(CancellationToken cancellationToken)

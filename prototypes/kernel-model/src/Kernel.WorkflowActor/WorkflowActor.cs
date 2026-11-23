@@ -136,7 +136,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
 
     internal static bool CanSelectForMigration(ActorView view, string model, string definition) =>
         view.Header.Status == ActorStatus.Running && TryReadWorkflow(view.Header) is
-            { Definition: var current, Model: var currentModel, Version: > 0, Ephemeral: false } &&
+            { Definition: var current, Model: var currentModel, Version: not null, Ephemeral: false } &&
         current == definition && currentModel == model;
 
     private static WorkflowHeader? TryReadWorkflow(ActorHeader header)

@@ -178,8 +178,8 @@ batch, and requests completion once the result projection has reached the final 
 and every selected life has answered. Each automatic plan binds one execution model.
 A provider page can span several 128-actor batches. The runner keeps the read cursor until
 it has recorded a selection for every eligible life on the page. Step results report admission.
-The plan actor records
-the resulting transition in its own commit. The host grants tenant operator permission
+Close reports whether it admitted a command. A caller can retry after the creator turn becomes visible.
+The plan actor records the resulting transition in its own commit. The host grants tenant operator permission
 and invokes the runner as work becomes available.
 
 The example restarts after a lost selection admission answer, completes a plan over two actual

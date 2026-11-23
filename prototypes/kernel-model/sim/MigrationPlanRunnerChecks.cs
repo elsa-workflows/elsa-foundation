@@ -32,7 +32,8 @@ internal static class MigrationPlanRunnerChecks
             .Add(Definition("absent", "empty")).Add(Definition("selected-for-delete", "gone"))
             .Add(Definition("large-source", "old")).Add(Definition("large-target", "new", "different-event"));
         var model = new MigrationPlanModel(authority, (executionModel, from, to) =>
-            executionModel == NativeExecutionModel.ModelKey && registry.TryGet(from, out _) && registry.TryGet(to, out _));
+            executionModel is NativeExecutionModel.ModelKey or OtherExecutionModel.ModelKey &&
+            registry.TryGet(from, out _) && registry.TryGet(to, out _));
         var actorType = new PublicWorkflow([new NativeExecutionModel(registry), model, new OtherExecutionModel()]);
         var allowed = true;
         var creatorsReady = false;
@@ -101,6 +102,28 @@ internal static class MigrationPlanRunnerChecks
         check(FinishedUnderTarget(first) && FinishedUnderTarget(second),
             "both original Native waits resume under the target definition after automatic migration");
 
+        var customPlan = (await service.StartAsync(scope, "custom-model", new(source, target, expires, OtherExecutionModel.ModelKey))).Actor!.Value;
+        var customDriver = service.Open(scope, customPlan);
+        await Pump(successor);
+        for (var step = 0; step < 10 && (await reads.GetAsync(scope, customPlan))?.Header.Status == Contract.ActorStatus.Running; step++)
+        {
+            await customDriver.AdvanceAsync();
+            await Pump(successor);
+        }
+        check((await customDriver.ReadOutcomesAsync()) is { Closed: true, Results.Count: 1 } custom &&
+            custom.Results.GetValueOrDefault(collidingModel) == MigrationPlanOutcome.Migrated &&
+            (await reads.GetAsync(scope, collidingModel))?.Header.Labels.GetValueOrDefault("version") == "0",
+            "automatic selection includes a registered model with stored state version zero");
+
+        var closing = await StartPlan(service, "close-after-birth", "absent");
+        var closeDriver = service.Open(scope, closing);
+        var premature = await closeDriver.CloseAsync();
+        await Pump(successor);
+        var admittedClose = await closeDriver.CloseAsync();
+        await Pump(successor);
+        check(!premature && admittedClose && (await closeDriver.ReadOutcomesAsync()) is { Closed: true },
+            "an operator close reports no admission before birth and succeeds after a retry");
+
         var empty = await StartPlan(service, "empty", "absent");
         var emptyDriver = service.Open(scope, empty);
         await Pump(successor);
@@ -137,9 +160,9 @@ internal static class MigrationPlanRunnerChecks
         check(dispatched == MigrationPlanStep.DispatchAdmitted && awaiting == MigrationPlanStep.WaitingForOutcomes &&
             (await waiting.ReadOutcomesAsync()) is { Closed: false } open && open.Pending.SequenceEqual([missing]),
             "a deleted selected life leaves the plan open after its last dispatch has been acknowledged");
-        await waiting.CloseAsync();
+        var closedOnRequest = await waiting.CloseAsync();
         await Pump(successor);
-        check((await waiting.ReadOutcomesAsync()) is { Closed: true } closed && closed.NoAnswer.SequenceEqual([missing]),
+        check(closedOnRequest && (await waiting.ReadOutcomesAsync()) is { Closed: true } closed && closed.NoAnswer.SequenceEqual([missing]),
             "an operator close reports the exact missing life with no answer");
 
         var wideReads = new ActorList(store, 256);
@@ -259,7 +282,7 @@ internal static class MigrationPlanRunnerChecks
         internal const string ModelKey = "other-model";
         public string Key => ModelKey;
         public Type StateType => typeof(int);
-        public int StateVersion => 1;
+        public int StateVersion => 0;
         public object CreateState(Models.WorkflowStart start) => 0;
         public object UpgradeState(string state, int fromVersion) => throw new NotSupportedException();
         public string? ValidateMigration(Models.InstanceInfo source, object state, string target) => null;
