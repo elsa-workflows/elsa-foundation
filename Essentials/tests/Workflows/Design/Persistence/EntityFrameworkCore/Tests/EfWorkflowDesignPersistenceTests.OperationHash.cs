@@ -1,10 +1,11 @@
 using System.Text;
 using System.Text.Json;
-using Elsa.Persistence.Core;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Xunit;

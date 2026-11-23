@@ -42,7 +42,7 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         }
         await using var fresh = Create(connection);
         var stored = await fresh.Drafts.AsNoTracking().SingleAsync(row => row.Id == id);
-        using (var wire = JsonDocument.Parse(stored.StateSource))
+        using (var wire = JsonDocument.Parse(Assert.IsType<string>(stored.StateSource)))
             Assert.Equal(raw, wire.RootElement.GetProperty("rootActivity").GetProperty("inputs")[0].GetProperty("value").GetProperty("value").GetRawText());
         var loaded = (await new EfWorkflowDefinitionDraftStore(fresh, serializer, access).FindByIdAsync(id))!.State;
         var data = Assert.Single(loaded.RootActivity!.Inputs).Value.Value!.Value;

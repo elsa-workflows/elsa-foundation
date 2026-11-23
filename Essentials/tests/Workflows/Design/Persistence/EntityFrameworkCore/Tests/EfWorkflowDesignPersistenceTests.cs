@@ -3237,7 +3237,7 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     private static string PortableFingerprint(string operationKind, string json)
     {
         using var document = JsonDocument.Parse(json);
-        var canonical = Encoding.UTF8.GetString(JsonCanonicalForm.GetBytes(document.RootElement));
+        var canonical = Encoding.UTF8.GetString(JsonHashInput.CanonicalBytes(document.RootElement));
         var identity = "elsa-design-material:v1";
         var material = $"{Encoding.UTF8.GetByteCount(identity)}:{identity}{Encoding.UTF8.GetByteCount(operationKind)}:{operationKind}1:1{Encoding.UTF8.GetByteCount(canonical)}:{canonical}";
         return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material)))}";
