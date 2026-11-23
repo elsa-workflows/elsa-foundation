@@ -368,3 +368,20 @@ bootstrap will refuse the existing equal version. Have the owner apply the exist
 only for the confirmed unrecorded bootstrap versions before authorizing a new bootstrap. The current Elsa 4 preview feed is already
 bootstrapped. Stable release composition
 and promotion are tracked in [#2085](https://github.com/elsa-workflows/elsa-foundation/issues/2085).
+
+## Verify Studio package inventories
+
+The manual [Studio package workflow](../../.github/workflows/studio-packages.yml) embeds a CycloneDX 1.6 JSON inventory in each of its four npm tarballs at `package/dist/sbom.cdx.json`. Each Studio NuGet with browser assets carries `sbom/frontend.cdx.json`. The latter covers that package’s static web assets. Build-only dispatches produce the inventories and package receipts. The protected preview and stable jobs sign and publish candidates after the existing repository opt-in and ref checks.
+
+For an official release, download the exact package version, set `PACKAGE` to its path, and set `REF` and `COMMIT` from your trusted release record. Use the stable release tag or the preview branch/tag that produced that version. GitHub CLI 2.102 or later and Python 3 can check the public evidence.
+
+```bash
+gh attestation verify "$PACKAGE" --repo elsa-workflows/elsa-foundation \
+  --signer-workflow elsa-workflows/elsa-foundation/.github/workflows/studio-packages.yml \
+  --source-ref "$REF" --source-digest "$COMMIT"
+python3 tools/versioning/package-evidence/studio_archives.py "$PACKAGE"
+```
+
+The Python command checks file hashes against the embedded inventory, checks npm dependency declarations, and prints the package SHA-256 and npm SHA-512 integrity when applicable. Compare the latter with `npm view "$NAME@$VERSION" dist.integrity --registry "$REGISTRY"`. Extract the inventory with `tar -xOzf "$PACKAGE" package/dist/sbom.cdx.json` or `unzip -p "$PACKAGE" sbom/frontend.cdx.json`. Each release candidate, standalone SBOM and receipt receives GitHub SLSA provenance. The signed subject list binds their digests. The NuGet readback also attests the SHA-256 served by the registry after verifying its payload and, on nuget.org, its repository signature. The Actions artifacts include `npm-subjects.json`, `nuget-subjects.json` and, after publication, `nuget-feed-receipt.json`. The embedded inventories and GitHub attestation records remain usable after Actions artifact retention expires.
+
+In the npm inventory, `elsa:bundled` marks a package represented in emitted bundle inputs. `elsa:external-import` lists imports supplied by the consuming host. The root’s dependency, optional dependency and peer dependency properties give the ranges in the published manifest. The dependency graph also records the producer’s frozen pnpm resolution. A consuming app can resolve other allowed versions and should produce a separate inventory after its own production build. NuGet frontend inventories include their bundled inputs and hashes for all packed static web assets, including lazy chunks, CSS and fonts. The repository and commit identify first-party workspace inputs.
