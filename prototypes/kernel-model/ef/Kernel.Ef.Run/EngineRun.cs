@@ -28,11 +28,12 @@ static class EngineRun
         if (args is ["size-check"]) return await StateSizeChecks.RunAsync();
         if (args.Length < 3) return 2;
         var referenceCost = args[0] == "reference-cost";
+        var referenceEndpoint = referenceCost && args[1] != "sqlite" ? Wire.ReferenceEndpoint(args[1], args[2]) : null;
         if (referenceCost && (args[1] is not ("postgres" or "sqlserver" or "mysql" or "sqlite") ||
-            args.Length != 4 || args[3] != "disposable=1" || args[1] != "sqlite" && !Wire.HasLocalEndpoint(args[1], args[2])))
+            args.Length != 4 || args[3] != "disposable=1" || args[1] != "sqlite" && referenceEndpoint is null))
         {
             Console.Error.WriteLine("Usage: x reference-cost postgres|sqlserver|mysql|sqlite <disposable connection> disposable=1");
-            Console.Error.WriteLine("Network engines require 127.0.0.1 or localhost and an explicit port for the wire meter.");
+            Console.Error.WriteLine("Network engines require 127.0.0.1 or localhost and an explicit TCP port, with no alternate routing.");
             Console.Error.WriteLine("Use a disposable database and an isolated MySQL server. The MySQL fixture provisions a server-wide worker account.");
             return 2;
         }
@@ -73,7 +74,7 @@ static class EngineRun
             Console.Error.WriteLine("Watchdog resets its database. Run it on a disposable database server and pass disposable=1.");
             return 2;
         }
-        var target = new Target(args[1], args[2], options, referenceCost);
+        var target = new Target(args[1], args[2], options, referenceEndpoint);
         return args[0] switch
         {
             "stress" => await Stress(target),
@@ -795,7 +796,7 @@ static class EngineRun
 }
 
 /// <summary>One engine in one configuration: connections, session settings, how to kill a session, what its errors are called.</summary>
-sealed class Target(string engine, string connection, Dictionary<string, string> options, bool referenceCost = false)
+sealed class Target(string engine, string connection, Dictionary<string, string> options, (string Host, int Port)? referenceEndpoint = null)
 {
     public string Engine => engine;
     public string Get(string key, string fallback) => options.GetValueOrDefault(key, fallback);
@@ -818,7 +819,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     public string Quote(string sql) => engine == "mysql" ? sql.Replace('"', '`') : sql;
 
     /// <summary>With proxy=1 the workers connect through <see cref="Wire"/>, which counts round trips on the TCP stream.</summary>
-    public Wire? Proxy { get; } = options.ContainsKey("proxy") && engine != "sqlite" ? Wire.Start(engine, connection, referenceCost) : null;
+    public Wire? Proxy { get; } = options.ContainsKey("proxy") && engine != "sqlite" ? Wire.Start(engine, connection, referenceEndpoint) : null;
 
     /// <summary>With writes=1 on PostgreSQL: the WAL and bloat measurement of WRITES.md.</summary>
     public PgWrites? Writes { get; } = engine == "postgres" && options.ContainsKey("writes") ? new PgWrites(connection) : null;

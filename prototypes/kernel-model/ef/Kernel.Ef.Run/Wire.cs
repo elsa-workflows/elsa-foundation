@@ -41,36 +41,48 @@ sealed class Wire
 
     public int LocalPort => ((System.Net.IPEndPoint)_listener.LocalEndpoint).Port;
 
-    public static Wire Start(string engine, string connection, bool referenceCost = false)
+    public static Wire Start(string engine, string connection, (string Host, int Port)? referenceEndpoint = null)
     {
+        if (referenceEndpoint is { } endpoint)
+        {
+            var referenceMeter = Start(endpoint.Host, endpoint.Port);
+            referenceMeter._referenceEngine = engine;
+            return referenceMeter;
+        }
         var match = Endpoint(engine, connection);
         var wire=Start(match.Groups[1].Value, int.Parse(match.Groups[2].Value));
-        wire._postgres = engine == "postgres" && !referenceCost;
-        if (referenceCost) wire._referenceEngine = engine;
+        wire._postgres = engine == "postgres";
         return wire;
     }
 
-    public static bool HasLocalEndpoint(string engine, string connection)
+    public static (string Host, int Port)? ReferenceEndpoint(string engine, string connection)
     {
-        var match = Endpoint(engine, connection);
-        var host = match.Groups[1].Value;
-        if (host is not ("127.0.0.1" or "localhost") ||
-            !ushort.TryParse(match.Groups[2].Value, out var port) || port == 0) return false;
-
-        // The driver must use the same endpoint the wire meter found, including when aliases repeat.
         try
         {
-            return engine switch
+            (string Host, int Port)? endpoint = engine switch
             {
-                "postgres" => new NpgsqlConnectionStringBuilder(connection) is { Host: var actualHost, Port: var actualPort }
-                    && actualHost == host && actualPort == port,
-                "mysql" => new MySqlConnectionStringBuilder(connection) is { Server: var actualHost, Port: var actualPort }
-                    && actualHost == host && actualPort == port,
-                "sqlserver" => new SqlConnectionStringBuilder(connection).DataSource == $"{host},{port}",
-                _ => false,
+                "postgres" when new NpgsqlConnectionStringBuilder(connection) is { Host: { } host } pg && pg.ShouldSerialize("Port")
+                    => (host, pg.Port),
+                "mysql" when new MySqlConnectionStringBuilder(connection) is
+                    { ConnectionProtocol: MySqlConnectionProtocol.Tcp, DnsSrv: false, Replication: false } my && my.ShouldSerialize("Port")
+                    => (my.Server, checked((int)my.Port)),
+                "sqlserver" => SqlServerReferenceEndpoint(new SqlConnectionStringBuilder(connection)),
+                _ => null,
             };
+            return endpoint is { Host: "127.0.0.1" or "localhost", Port: > 0 and <= ushort.MaxValue } ? endpoint : null;
         }
-        catch (ArgumentException) { return false; }
+        catch (ArgumentException) { return null; }
+        catch (OverflowException) { return null; }
+    }
+
+    private static (string Host, int Port)? SqlServerReferenceEndpoint(SqlConnectionStringBuilder settings)
+    {
+        if (!string.IsNullOrEmpty(settings.FailoverPartner)) return null;
+        var address = settings.DataSource;
+        if (address.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase)) address = address[4..];
+        return address.Split(',') is [string host, string port] && ushort.TryParse(port, out var parsed)
+            ? (host, parsed)
+            : null;
     }
 
     private static System.Text.RegularExpressions.Match Endpoint(string engine, string connection) =>
@@ -84,7 +96,7 @@ sealed class Wire
         {
             "postgres" => new NpgsqlConnectionStringBuilder(connection) { Host = _host, Port = LocalPort }.ConnectionString,
             "mysql" => new MySqlConnectionStringBuilder(connection) { Server = _host, Port = (uint)LocalPort }.ConnectionString,
-            "sqlserver" => new SqlConnectionStringBuilder(connection) { DataSource = $"{_host},{LocalPort}" }.ConnectionString,
+            "sqlserver" => new SqlConnectionStringBuilder(connection) { DataSource = $"tcp:{_host},{LocalPort}" }.ConnectionString,
             _ => System.Text.RegularExpressions.Regex.Replace(connection, @"(Server=[^,;]+,)\d+|(Port=)\d+", m => (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value) + LocalPort, System.Text.RegularExpressions.RegexOptions.IgnoreCase),
         };
     }

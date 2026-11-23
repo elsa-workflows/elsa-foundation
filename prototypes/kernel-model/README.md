@@ -742,7 +742,7 @@ $EFR x stress|cost postgres "<connection>" writes=1 [history=state|minimal] [pad
 ```
 
 The K4 reference command resets its disposable database. For network engines, give the wire meter a
-loopback host (`127.0.0.1` or `localhost`) and an explicit port. Use an isolated disposable MySQL server because
+loopback host (`127.0.0.1` or `localhost`) and an explicit TCP port without alternate routing. Use an isolated disposable MySQL server because
 the fixture provisions a server-wide worker account. The command runs ten Balanced no-ops on the owning worker,
 checks that they persisted in order in one finished revision and one journal row, and enforces the tuned
 budgets of two PostgreSQL and three SQL Server wire round trips or three SQLite engine calls. It records
