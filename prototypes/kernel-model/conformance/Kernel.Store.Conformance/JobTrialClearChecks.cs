@@ -60,13 +60,8 @@ internal static class JobTrialClearChecks
             Context.Equal(lease.Epoch, retained.Trial, "a failed group rolled back its valid member");
         }
         var outsideTicketScope = new InboxKey("outside-ticket-domain", (long)int.MaxValue + 2);
-        try
-        {
-            await Clear(c, lease, first.InboxKey, outsideTicketScope);
-            throw new ConformanceException("an out-of-domain ticket key must be refused before storage access");
-        }
-        catch (StoreException error) when (error.Failure == Failure.Definite &&
-                                           error.Message == "A job trial clear requires logical ticket keys.") { }
+        var refusal = await c.Refused(() => Clear(c, lease, first.InboxKey, outsideTicketScope), "out-of-domain ticket key");
+        Context.Equal("definite", refusal, "invalid ticket scope is a definite refusal");
         var stillPending = (await c.All(0)).Single(row => row.Message.InboxKey == first.InboxKey);
         Context.Equal(lease.Epoch, stillPending.Trial, "invalid key validation leaves the valid trial intact");
         await c.Lands(() => Clear(c, lease, first.InboxKey, other.InboxKey));
@@ -85,26 +80,25 @@ internal static class JobTrialClearChecks
         Supported(c);
         if (!c.S.OwnedSetsAvailable) throw new SkipException("the store fences one partition per commit");
         var left = await c.Take(0);
-        var firstRight = await c.Take(1);
+        var previousRight = await c.Take(1);
+        Context.Equal(left.Epoch, previousRight.Epoch, "the right ticket starts at the current left epoch");
         var a = Job("left");
         var b = Job("right", 1);
-        var stale = Job("older-right", 1);
-        await c.Lands(() => Send(c, left, a, b, stale));
-        await c.Lands(() => c.Commit(firstRight, 1, [], trial: [stale.InboxKey]));
-        var right = await c.Take(1);
+        await c.Lands(() => Send(c, left, a, b));
         await c.Lands(() => c.Commit(left, 0, [], trial: [a.InboxKey]));
-        await c.Lands(() => c.Commit(right, 1, [], trial: [b.InboxKey]));
+        await c.Lands(() => c.Commit(previousRight, 1, [], trial: [b.InboxKey]));
+        var right = await c.Take(1);
+        Context.That(right.Epoch > previousRight.Epoch, "the right takeover advances its epoch");
         var batch = CommitBatch.Owned([new(0, left.Epoch, left.Position), new(1, right.Epoch, right.Position)],
             Context.Long, false, [], [], []) with { ClearJobTrials = [a.InboxKey, b.InboxKey] };
-        Context.That(firstRight.Epoch == left.Epoch && firstRight.Epoch != right.Epoch, "fixture requires an epoch shared with the other partition");
-        var crossed = batch with { ClearJobTrials = [a.InboxKey, stale.InboxKey] };
-        await c.Refused(() => c.S.CommitAsync(crossed).AsTask(), "a ticket whose trial matches a different partition's epoch");
-        Context.Equal(left.Epoch, (await c.All(0)).Single().Trial, "the valid member survives the refused set");
+        await c.Refused(() => c.S.CommitAsync(batch).AsTask(), "clear with the right ticket still at the left epoch");
+        Context.Equal(left.Epoch, (await c.All(0)).Single().Trial, "the refused clear preserves the valid left trial");
+        Context.Equal(previousRight.Epoch, (await c.All(1)).Single().Trial, "the refused clear preserves the stale right trial");
 
+        await c.Lands(() => c.Commit(right, 1, [], trial: [b.InboxKey]));
         await c.Lands(() => c.S.CommitAsync(batch).AsTask());
-        var rightRows = (await c.All(1)).ToDictionary(row => row.Message.InboxKey);
-        Context.That((await c.All(0)).Single().Trial == 0 && rightRows[b.InboxKey].Trial == 0 &&
-            rightRows[stale.InboxKey].Trial == firstRight.Epoch, "both selected trials clear under their own epoch and the older one stays marked");
+        Context.That((await c.All(0)).Single().Trial == 0 && (await c.All(1)).Single().Trial == 0,
+            "both trials cleared under their distinct epochs");
     }
 
     private static async Task LostAnswer(Context c)
