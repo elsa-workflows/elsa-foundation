@@ -554,36 +554,38 @@ export function SubscriptionsSection({
                       ) : null}
                     </th>
                     <td>
-                      <div className="wf-trigger-chip-group">
-                        <StatusChip tone={subscription.enabled ? "success" : "neutral"}>
-                          {subscription.enabled ? "Enabled" : "Paused"}
-                        </StatusChip>
-                        <StatusChip tone={restricted ? "warning" : subscriptionCompatibilityTone(subscription.compatibility)}>
-                          {restricted ? "Workflow details restricted" : label(subscription.compatibility)}
-                        </StatusChip>
-                        <StatusChip tone={invocationGrantTone(subscription.invocationGrant.state)}>
-                          Invocation: {label(subscription.invocationGrant.state)}
-                        </StatusChip>
-                      </div>
-                      <Findings items={subscription.findings} />
-                      {subscription.origin.configurationReadOnly ? (
-                        <small className="wf-trigger-muted">Managed by {subscription.origin.sourceId || "source"}</small>
-                      ) : null}
-                      <div className="wf-trigger-row-actions wf-trigger-inspector-actions">
-                        {!restricted ? (
-                          <StudioButton
-                            size="sm"
-                            disabled={!allowed(subscription.actions, "SaveSubscription")}
-                            title={actionReason(subscription.actions, "SaveSubscription")}
-                            onClick={() => void choose(subscription)}
-                          >
-                            Edit
-                          </StudioButton>
+                      <div className="wf-trigger-cell-stack">
+                        <div className="wf-trigger-chip-group">
+                          <StatusChip tone={subscription.enabled ? "success" : "neutral"}>
+                            {subscription.enabled ? "Enabled" : "Paused"}
+                          </StatusChip>
+                          <StatusChip tone={restricted ? "warning" : subscriptionCompatibilityTone(subscription.compatibility)}>
+                            {restricted ? "Workflow details restricted" : label(subscription.compatibility)}
+                          </StatusChip>
+                          <StatusChip tone={invocationGrantTone(subscription.invocationGrant.state)}>
+                            Invocation: {label(subscription.invocationGrant.state)}
+                          </StatusChip>
+                        </div>
+                        <Findings items={subscription.findings} variant="inline" />
+                        {subscription.origin.configurationReadOnly ? (
+                          <small className="wf-trigger-muted">Managed by {subscription.origin.sourceId || "source"}</small>
                         ) : null}
-                        <OverflowMenu
-                          items={buildOverflowItems(subscription, restricted)}
-                          ariaLabel={`Actions for ${triggerLabel}`}
-                        />
+                        <div className="wf-trigger-row-actions wf-trigger-inspector-actions">
+                          {!restricted ? (
+                            <StudioButton
+                              size="sm"
+                              disabled={!allowed(subscription.actions, "SaveSubscription")}
+                              title={actionReason(subscription.actions, "SaveSubscription")}
+                              onClick={() => void choose(subscription)}
+                            >
+                              Edit
+                            </StudioButton>
+                          ) : null}
+                          <OverflowMenu
+                            items={buildOverflowItems(subscription, restricted)}
+                            ariaLabel={`Actions for ${triggerLabel}`}
+                          />
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -628,18 +630,20 @@ export function SubscriptionsSection({
                       )}
                     </th>
                     <td>
-                      <div className="wf-trigger-chip-group">
-                        <StatusChip tone={subscription.enabled ? "success" : "neutral"}>
-                          {subscription.enabled ? "Enabled" : "Paused"}
-                        </StatusChip>
-                        <StatusChip tone={restricted ? "warning" : subscriptionCompatibilityTone(subscription.compatibility)}>
-                          {restricted ? "Workflow details restricted" : label(subscription.compatibility)}
-                        </StatusChip>
+                      <div className="wf-trigger-cell-stack">
+                        <div className="wf-trigger-chip-group">
+                          <StatusChip tone={subscription.enabled ? "success" : "neutral"}>
+                            {subscription.enabled ? "Enabled" : "Paused"}
+                          </StatusChip>
+                          <StatusChip tone={restricted ? "warning" : subscriptionCompatibilityTone(subscription.compatibility)}>
+                            {restricted ? "Workflow details restricted" : label(subscription.compatibility)}
+                          </StatusChip>
+                        </div>
+                        <Findings items={subscription.findings} variant="inline" />
+                        {subscription.origin.configurationReadOnly ? (
+                          <small className="wf-trigger-muted">Managed by {subscription.origin.sourceId || "source"}</small>
+                        ) : null}
                       </div>
-                      <Findings items={subscription.findings} />
-                      {subscription.origin.configurationReadOnly ? (
-                        <small className="wf-trigger-muted">Managed by {subscription.origin.sourceId || "source"}</small>
-                      ) : null}
                     </td>
                     <td>
                       <StatusChip tone={invocationGrantTone(subscription.invocationGrant.state)}>

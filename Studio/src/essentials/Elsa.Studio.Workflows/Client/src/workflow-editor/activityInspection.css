@@ -391,15 +391,16 @@
 
 .wf-activity-detail-list {
   display: grid;
-  border-top: 1px solid var(--studio-border);
+  grid-template-columns: fit-content(45%) minmax(0, 1fr);
+  column-gap: var(--studio-space-3);
 }
 
 .wf-activity-detail-list .wf-activity-meta-item {
   display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   min-width: 0;
   align-items: start;
-  gap: var(--studio-space-2);
-  grid-template-columns: minmax(110px, max-content) minmax(0, 1fr);
   padding: var(--studio-space-2) var(--studio-space-3);
 }
 
@@ -438,6 +439,7 @@
 .wf-activity-inspection-tab-panel > .wf-instance-section.wf-activity-outcomes {
   display: flex;
   min-width: 0;
+  min-height: 2.5rem;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
@@ -542,6 +544,10 @@
 }
 
 @container workflow-activity-inspection (max-width: 24rem) {
+  .wf-activity-detail-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .wf-activity-detail-list .wf-activity-meta-item {
     grid-template-columns: minmax(0, 1fr);
     gap: 3px;
