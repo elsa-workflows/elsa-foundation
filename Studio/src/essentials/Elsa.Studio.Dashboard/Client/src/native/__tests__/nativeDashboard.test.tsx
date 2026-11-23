@@ -41,21 +41,22 @@ describe("question query authoring hierarchy", () => {
     expect(view.textContent).not.toContain("Query form");
     expect(view.textContent).not.toContain("Group by");
     expect(view.textContent).not.toContain("Metrics");
-    expect(view.querySelector(".named-query-controls .studio-advanced-section")).toBeNull();
+    expect(view.querySelector(".named-query-section-nav")).toBeNull();
+    expect(view.querySelector(".named-query-section-panel")).toBeNull();
   });
 
   it("keeps core controls visible and exposes advanced query sections through a configured section navigator", () => {
     const definition = initialDefinition(dataset);
     definition.query.filters = { field: "category", operator: "eq", value: { type: "string", literal: "retail" } };
     const view = render(<QueryControls definition={definition} datasets={[dataset]} disabled={false} onChange={vi.fn()} />);
-    const filterSection = view.querySelector('[data-query-path="query.filters"]');
+    const filterSection = view.querySelector<HTMLElement>('[data-query-path="query.filters"]');
 
     expect(view.textContent).toContain("Query form");
     expect(view.textContent).toContain("Group by");
     expect(view.textContent).toContain("Metrics");
-    expect(filterSection).toBeDefined();
-    expect(filterSection?.querySelector("[aria-expanded]")?.getAttribute("aria-expanded")).toBe("true");
-    expect(filterSection?.querySelector("button")?.textContent).toContain("1 condition");
+    expect(filterSection).not.toBeNull();
+    expect(filterSection?.hidden).toBe(false);
+    expect(filterSection?.querySelector(".studio-advanced-section")).toBeNull();
     expect(view.querySelector('.named-query-section-nav a[aria-current="page"]')?.textContent).toBe("Filters · 1");
     expect(filterSection?.querySelector<HTMLInputElement>('input[value="retail"]')).not.toBeNull();
   });
@@ -78,11 +79,12 @@ describe("question query authoring hierarchy", () => {
     const definition = initialDefinition(timedDataset);
     definition.query.time = { field: "createdAt", from: "", to: "", timeZone: "UTC", weekStart: "monday" };
     const view = render(<QueryControls definition={definition} datasets={[timedDataset]} disabled={false} onChange={vi.fn()} problems={[{ code: "required", path: "query.time.from", message: "Choose a start time." }]} validationAttempt={1} />);
-    const timeSection = view.querySelector('[data-query-path="query.time"]');
+    const timeSection = view.querySelector<HTMLElement>('[data-query-path="query.time"]');
     const start = ([...view.querySelectorAll("label")].find(item => item.textContent === "Start time (UTC, inclusive)")?.control as HTMLInputElement | null);
 
-    await waitUntil(() => timeSection?.querySelector("button")?.getAttribute("aria-expanded") === "true" && document.activeElement === start);
-    expect(timeSection?.querySelector("button")?.getAttribute("aria-expanded")).toBe("true");
+    await waitUntil(() => timeSection?.hidden === false && document.activeElement === start);
+    expect(timeSection?.hidden).toBe(false);
+    expect(view.querySelector('.named-query-section-nav a[aria-current="page"]')?.textContent).toContain("Time");
   });
 });
 
@@ -403,15 +405,19 @@ describe("ordinary query editing and truthful results", () => {
 
   it("distinguishes exact zero, no denominator, unknown coverage and an empty result", () => {
     const populated = render(<ResultView result={result()} visualization={{ kind: "table", y: [] }} />);
-    expect(populated.querySelector(".named-result-details")).toBeNull(); expect(populated.querySelectorAll("tbody tr")).toHaveLength(2); expect(populated.textContent).toContain("No eligible denominator"); expect(populated.textContent).toContain("Coverage: unknown"); expect(populated.querySelector("tbody td:nth-child(2)")?.textContent).toBe("0");
+    expect(populated.querySelector(".named-result-details")).not.toBeNull();
+    expect(populated.querySelector(".named-result-details button")?.getAttribute("aria-expanded")).toBe("false");
+    expect(populated.querySelectorAll("tbody tr")).toHaveLength(2); expect(populated.textContent).toContain("No eligible denominator"); expect(populated.textContent).toContain("Coverage: unknown"); expect(populated.querySelector("tbody td:nth-child(2)")?.textContent).toBe("0");
+    const expanded = render(<ResultView result={result()} visualization={{ kind: "table", y: [] }} compactProvenance={false} />);
+    expect(expanded.querySelector(".named-result-details")).toBeNull();
     const empty = render(<ResultView result={{ ...result(), rows: [] }} visualization={{ kind: "table", y: [] }} />);
     expect(empty.textContent).toContain("empty result, not an observed zero");
   });
 
-  it("keeps compact dashboard provenance collapsed while showing coverage and freshness warnings", () => {
+  it("keeps compact provenance collapsed by default while showing coverage and freshness warnings", () => {
     const interpretation = "Current outcomes for the selected cohort.";
     const detailed = { ...result(), interpretation, generatedAt: "2026-11-06T12:00:00Z", periods: [{ role: "current", from: "2026-11-01T00:00:00Z", to: "2026-11-07T00:00:00Z", timeZone: "UTC" }] };
-    const compact = render(<ResultView result={detailed} visualization={{ kind: "table", y: [] }} compactProvenance stale outdated />);
+    const compact = render(<ResultView result={detailed} visualization={{ kind: "table", y: [] }} stale outdated />);
     const details = compact.querySelector<HTMLDetailsElement>(".named-result-details")!;
     const visible = [...compact.querySelector(".named-result-provenance")!.children].filter(child => child !== details).map(child => child.textContent).join(" ");
     expect(details.querySelector("button")?.getAttribute("aria-expanded")).toBe("false"); expect(details.querySelector("button")?.textContent).toBe("Result details");

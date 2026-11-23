@@ -168,7 +168,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private Answered? _answered;     // K1b: the last answer's stand-down side, for the next pass
     private long _judgedAt = long.MinValue;     // CR-4: the send time of the last answer judged; anything older is refused
     private sealed record Answered(HeartbeatSent Sent, NodeBeat Answer, Func<int, bool>? Sibling);
-    private int _gaining = -1;
+    private int[] _gaining = [];
+    private bool _coldGain;     // an initial take gets its lease window for the pass gate
     private bool _retaking, _retakeStoodDown;      // a stand-down during a retake (RetakeAsync) cancels it
     private readonly HashSet<int> _retakeLost = [];     // partitions given up during a retake: it does not take them back
     private readonly HashSet<int> _retakeSet = [];      // what a retake after a reset takes back: the Worker's still, for ClaimedPartitions
@@ -623,12 +624,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     /// <summary>What the host records just before it sends the node's heartbeat, to judge its answer by (K1b).</summary>
-    public sealed record HeartbeatSent(long At, long Generation, IReadOnlyList<PartitionFence> Held, long Takes = 0, bool Taking = false);
+    public sealed record HeartbeatSent(long At, long Generation, IReadOnlyList<PartitionFence> Held, long Takes = 0, bool Taking = false)
+    {
+        internal IReadOnlyDictionary<int, long>? PendingAtSend { get; init; }
+    }
 
     /// <summary>Taken by the host just before it sends the heartbeat: the monotonic time, this generation, what is held and the takes so far.</summary>
     public HeartbeatSent BeforeHeartbeat()
     {
-        lock (_turnSync) return new(_options.Monotonic(), _generation, Fences, Interlocked.Read(ref _takesStarted), _taking);
+        lock (_turnSync) return new(_options.Monotonic(), _generation, Fences, Interlocked.Read(ref _takesStarted), _taking)
+        {
+            PendingAtSend = _pending.Count == 0 ? null : new Dictionary<int, long>(_pending)
+        };
     }
 
     /// <summary>
@@ -677,7 +684,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// The other way: a partition the answer lists as this process's, at an epoch the Worker does not hold, is released at
     /// that epoch, unless a take of this Worker ran since the send, it is pending, or <c>sibling</c> (another Worker of the
     /// host) claims it; a release that fails is retried at the next answer. A pending partition listed at its epoch is
-    /// retaken, counting the death; one listed otherwise, or not at all, is no longer pending.
+    /// retaken, counting the death. An omitted or different epoch retires only a claim already pending at the send.
+    /// A later take may have established a new pending epoch while the heartbeat or its pass was waiting.
     /// </summary>
     private async Task AnsweredAsync(CancellationToken cancellationToken)
     {
@@ -697,7 +705,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var listed = answer.Owned.ToDictionary(o => o.Partition, o => o.Epoch);
             foreach (var (partition, epoch) in _pending.ToList())
                 if (listed.GetValueOrDefault(partition, -1) == epoch) retake.Add(partition);
-                else _pending.Remove(partition);
+                else if (sent.PendingAtSend?.GetValueOrDefault(partition, -1) == epoch) _pending.Remove(partition);
             if (!Has(Flaw.KeepUnheldRows) && (Has(Flaw.ReleaseDuringTake) || !sent.Taking && !_taking && sent.Takes == Interlocked.Read(ref _takesStarted)))
                 release = [.. listed.Where(l => !(_held.TryGetValue(l.Key, out var held) && held.Epoch == l.Value) && !_pending.ContainsKey(l.Key))
                     .Select(l => new PartitionFence(l.Key, l.Value, 0))];
@@ -744,14 +752,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (_taking || _releasing || _retaking || TakesClosed) break;
             var (started, generation) = (_options.Monotonic(), _generation);
             Lease? lease;
-            (_taking, _gaining) = (true, partition);
+            lock (_turnSync) (_taking, _gaining) = (true, [partition]);
             Interlocked.Increment(ref _takesStarted);
             try { lease = await _store.RetakeAsync(partition, Node, epoch, _options.Lease, countDeaths: true, cancellationToken); }
             catch (Exception)
             {
                 lock (_turnSync)
                 {
-                    (_taking, _gaining) = (false, -1);
+                    (_taking, _gaining) = (false, []);
                     // Not known to have landed: it stays pending (and given up, if it was), for the next answer to judge.
                 }
                 continue;       // not known: the next answer judges it
@@ -764,8 +772,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (lease is not null && generation == _generation && !_releasing && !_retaking && !given)
                 {
                     var fresh = !Owns;
-                    if (fresh) Volatile.Write(ref _lastPass, _options.Monotonic());
-                    else RenewGuard(started);       // before the partition joins: a retake sent past the deadline extends nothing
+                    var received = _options.Monotonic();
+                    if (!TakeReplyInTime(started, received))
+                    {
+                        _pending[partition] = lease.Epoch;
+                        (_taking, _gaining) = (false, []);
+                        continue;       // a later answer must confirm this new epoch before the partition can come back
+                    }
+                    if (fresh) Volatile.Write(ref _lastPass, received);
+                    if (!fresh) RenewGuard(started);       // before the partition joins: a retake sent past the deadline extends nothing
                     _held[partition] = new(lease.Epoch, lease.Position);
                     _mine.Add((partition, lease.Epoch));
                     Observe(lease.Now);
@@ -774,7 +789,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     (_woken, installed) = (true, true);
                     if (byItself) _broughtBack.Add(partition);
                 }
-                (_taking, _gaining) = (false, -1);      // after the install: ClaimedPartitions never sees neither
+                (_taking, _gaining) = (false, []);      // after the install: ClaimedPartitions never sees neither
             }
             if (installed)
             {
@@ -824,7 +839,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 var (now, lease) = (_options.Monotonic(), (long)_options.Lease.TotalMilliseconds);
                 var retakeHangs = _retaking && _retakeSet.Count > 0 && now - Volatile.Read(ref _retakeAt) >= lease;
                 var takeHangs = _taking && now - Volatile.Read(ref _takeAt) >= lease;
-                return (!Owns && _pending.Count == 0 && !retakeHangs && _gaining < 0 && !takeHangs) || now - Volatile.Read(ref _lastPass) < lease
+                return (!Owns && _pending.Count == 0 && !retakeHangs && (_gaining.Length == 0 || _coldGain) && !takeHangs) || now - Volatile.Read(ref _lastPass) < lease
                     || Has(Flaw.RenewRegardlessOfPasses);       // MUTATION: renewal regardless of passes
             }
         }
@@ -847,7 +862,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             ClaimedLookups++;
             HashSet<int> claimed = [.. _held.Keys, .. _pending.Keys];
-            if (_gaining >= 0) claimed.Add(_gaining);
+            claimed.UnionWith(_gaining);
             if (_taking) claimed.UnionWith(Assigned);
             if (_retaking) claimed.UnionWith(_retakeSet);
             return [.. claimed];
@@ -889,18 +904,24 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         var started = _options.Monotonic();
         OwnedLease? lease = null;
-        try
-        {
-            if (partitions.Count > 1) lease = await _store.TakeAsync(partitions, Node, _options.Lease, cancellationToken);
-            else if (await _store.TakeAsync(partitions[0], Node, _options.Lease, cancellationToken) is { } one) lease = new([one.For(partitions[0])], one.Now);
-        }
+        try { lease = await TakeFencesAsync(partitions, cancellationToken); }
         catch (Exception) { /* not taken, or taken without knowing: the next take bumps the epoch again */ }
         lock (_turnSync)
         {
-            if (lease is { Taken.Count: > 0 }) Install(lease, started);    // a take of a set keeps what it got
+            if (lease is { Taken.Count: > 0 } && !Install(lease, started)) lease = null;
             _taking = false;        // after the install: ClaimedPartitions never sees neither
         }
         if (lease is { Taken.Count: > 0 }) Installed(lease);
+    }
+
+    // A heartbeat may have renewed the node while another owner took these rows. Each take's reply has its own deadline.
+    private bool TakeReplyInTime(long started, long received) => received - started < (long)_options.Lease.TotalMilliseconds;
+
+    private async ValueTask<OwnedLease?> TakeFencesAsync(IReadOnlyList<int> partitions, CancellationToken cancellationToken)
+    {
+        if (partitions.Count > 1) return await _store.TakeAsync(partitions, Node, _options.Lease, cancellationToken);
+        var lease = await _store.TakeAsync(partitions[0], Node, _options.Lease, cancellationToken);
+        return lease is null ? null : new([lease.For(partitions[0])], lease.Now);
     }
 
     /// <summary>
@@ -960,7 +981,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _retakeSet.Clear();     // in the same critical section as the install: ClaimedPartitions sees the retake's set, or the held one
             if (!stoodDown && taken.Count > 0)
             {
-                Install(new(taken, now), started);
+                if (!Install(new(taken, now), started)) taken.Clear();
                 _woken = true;      // memory went with the reset: the next pass reads the inbox at the new epochs
             }
         }
@@ -985,11 +1006,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
-    private void Install(OwnedLease lease, long started)
+    private bool Install(OwnedLease lease, long started)
     {
         lock (_turnSync)
         {
             Reset();    // a take starts from empty memory
+            var received = _options.Monotonic();
+            if (!TakeReplyInTime(started, received))
+            {
+                foreach (var fence in lease.Taken) _pending[fence.Partition] = fence.Epoch;
+                return false;
+            }
+            Volatile.Write(ref _lastPass, received);     // the first pass of a newly installed owner is due within a lease
             Observe(lease.Now);
             foreach (var taken in lease.Taken)
             {
@@ -997,7 +1025,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 _mine.Add((taken.Partition, taken.Epoch));
             }
             RenewGuard(started, fresh: true);
-            Volatile.Write(ref _lastPass, _options.Monotonic());     // a fresh take: its first pass is due within the lease
+            return true;
         }
     }
 
@@ -1035,7 +1063,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             // K1b: the host gives everything up. A pending partition is given up through its counting retake (above); a
             // gain or counting retake in flight releases what its reply returns instead of installing it.
-            if (_gaining >= 0) _givenUp.Add(_gaining);
+            _givenUp.UnionWith(_gaining);
             _givenUp.UnionWith(_pending.Keys);
             if (_retaking) { _retakeStoodDown = true; return; }     // the retake in flight gives up what it gets
             if (!Owns || _releasing) return;
@@ -1105,54 +1133,87 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>A wake, a job result or a deferred job came since the last pass: the next call must run a pass.</summary>
     internal bool PassWanted => _woken || AnswerWaiting || !_inlineStarts.IsEmpty || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _schedulerRetries.Count > 0;
 
-    /// <summary>
-    /// Add one partition to the set while running, between passes: take its fence row alone, at a new epoch, and keep
-    /// every other partition with its epoch, position and memory. The next pass polls the set with it. False when the
-    /// take is refused, or when the set changed while it was in flight (a reset): the host asks again at its next round.
-    /// </summary>
     internal async Task<bool> GainAsync(int partition, CancellationToken cancellationToken = default)
     {
-        if (Holds(partition)) return true;
-        lock (_turnSync) _givenUp.Remove(partition);        // the host asks for it again
-        if (_taking || _releasing || _retaking || TakesClosed) return false;
-        bool pending;
-        lock (_turnSync) pending = _pending.ContainsKey(partition);
-        if (pending) return await RetakePendingAsync([partition], cancellationToken) && Holds(partition);     // its retake counts the death
-        if (!Owns)
-        {
-            await TakeAsync([partition], cancellationToken);     // from empty memory, as a take always is
-            return Holds(partition);
-        }
-        var (started, generation) = (_options.Monotonic(), _generation);
-        Lease? lease = null;
-        (_taking, _gaining) = (true, partition);
-        Interlocked.Increment(ref _takesStarted);
-        try { lease = await _store.TakeAsync(partition, Node, _options.Lease, cancellationToken); }
-        catch (Exception) { /* not taken, or taken without knowing: the next take bumps the epoch again */ }
-        var installed = false;
+        await GainSetAsync([partition], cancellationToken);
+        return Holds(partition);
+    }
+
+    /// <summary>Add the fresh partitions in one take. Pending partitions still require their own counting retake.</summary>
+    internal async Task GainSetAsync(IReadOnlyList<int> requested, CancellationToken cancellationToken)
+    {
+        int[] fresh, pending;
+        long started, generation;
         lock (_turnSync)
         {
-            var given = _givenUp.Remove(partition);     // CR-5: the host gave it up meanwhile: released, not installed
-            if (lease is not null && generation == _generation && Owns && !_releasing && !_retaking && !given)
+            if (Owns) LeaseUsable();
+            if (_taking || _releasing || _retaking || TakesClosed) return;
+            _givenUp.ExceptWith(requested);
+            pending = [.. requested.Where(_pending.ContainsKey)];
+            fresh = [.. requested.Where(p => !_held.ContainsKey(p) && !_pending.ContainsKey(p))];
+            started = _options.Monotonic();
+            generation = _generation;
+            if (fresh.Length > 0)
             {
-                _held[partition] = new(lease.Epoch, lease.Position);
-                _mine.Add((partition, lease.Epoch));
-                Observe(lease.Now);
-                RenewGuard(started);
-                _caughtUp = false;      // F1: until a short poll has read the new partition's inbox, nothing is handed over in memory
-                (_woken, installed) = (true, true);
+                _taking = true;
+                _gaining = fresh;
+                _coldGain = !Owns && _pending.Count == 0;
+                Interlocked.Increment(ref _takesStarted);
+                Volatile.Write(ref _takeAt, started);
             }
-            (_taking, _gaining) = (false, -1);      // after the install: ClaimedPartitions never sees neither
         }
-        if (lease is null) return false;
-        if (installed)
+        if (fresh.Length > 0)
         {
-            _options.OnJournal?.Invoke([partition]);       // a take may find a journal not projected yet
-            return LeaseUsable() && Holds(partition);      // an answer delayed past the safe deadline cannot authorize work, as in Install
+            OwnedLease? lease = null;
+            try { lease = await TakeFencesAsync(fresh, cancellationToken); }
+            catch (Exception) { /* An unknown answer installs nothing. The next heartbeat reconciles what the store owns. */ }
+            List<PartitionFence> installed = [], returning = [];
+            lock (_turnSync)
+            {
+                if (lease is not null)
+                {
+                    var current = generation == _generation && !_releasing && !_retaking;
+                    var timely = TakeReplyInTime(started, _options.Monotonic());
+                    foreach (var fence in lease.Taken)
+                    {
+                        if (!current || _givenUp.Contains(fence.Partition)) returning.Add(fence);
+                        else if (timely) installed.Add(fence);
+                        else _pending[fence.Partition] = fence.Epoch;     // a later heartbeat can confirm or discard it
+                    }
+                    if (installed.Count > 0)
+                    {
+                        if (!Owns)
+                        {
+                            if (!Install(new(installed, lease.Now), started)) installed.Clear();
+                        }
+                        else
+                        {
+                            RenewGuard(started);
+                            Observe(lease.Now);
+                            foreach (var fence in installed)
+                            {
+                                _held[fence.Partition] = new(fence.Epoch, fence.Position);
+                                _mine.Add((fence.Partition, fence.Epoch));
+                            }
+                            _caughtUp = false;
+                            _woken = true;
+                        }
+                    }
+                }
+                _coldGain = false;
+                _givenUp.ExceptWith(fresh);
+                (_taking, _gaining) = (false, []);
+            }
+            if (installed.Count > 0) Installed(new(installed, lease!.Now));
+            try
+            {
+                if (returning.Count == 1) await _store.ReleaseAsync(returning[0].Partition, returning[0].Epoch, cancellationToken);
+                else if (returning.Count > 1) await _store.ReleaseAsync(returning, cancellationToken);
+            }
+            catch (Exception) { /* the heartbeat reconciles the epoch or the lease expires */ }
         }
-        try { await _store.ReleaseAsync(partition, lease.Epoch, cancellationToken); }      // the set changed meanwhile: give it back
-        catch (Exception) { /* then the lease runs out instead */ }
-        return false;
+        if (pending.Length > 0) await RetakePendingAsync(pending, cancellationToken);
+        if (Owns) LeaseUsable();
     }
 
     /// <summary>
@@ -1168,7 +1229,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         // K1b: a guard expiry during the hand-over keeps nothing of these partitions pending: the host gave them up.
         lock (_turnSync) _handingOver.UnionWith(partitions);
-        try { await HandOverAsync(partitions, cancellationToken); }
+        try
+        {
+            LeaseUsable();      // an idle worker may have expired since the host planned its hand-over
+            await HandOverAsync(partitions, cancellationToken);
+        }
         finally
         {
             lock (_turnSync) _handingOver.ExceptWith(partitions);
@@ -1191,7 +1256,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             // its counting retake (at the next answer, or the one in flight) counts the death and releases at the epoch it
             // returns, instead of installing. The coordinator's rule for a host's give-up of a pending partition.
             foreach (var partition in partitions)
-                if (_gaining == partition || _pending.ContainsKey(partition)) _givenUp.Add(partition);
+                if (_gaining.Contains(partition) || _pending.ContainsKey(partition)) _givenUp.Add(partition);
         }
         if (_releasing || _retaking || !partitions.Any(Holds)) return;
         if (Fences.All(f => partitions.Contains(f.Partition)))
@@ -1202,6 +1267,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var captured = Fences.Where(f => partitions.Contains(f.Partition)).ToList();
         ReceiveJobPublications(cancellationToken);
         await DrainAsync(HandedOver, cancellationToken);
+        LeaseUsable();
         List<PartitionFence> leaving, kept = [];
         var quiet = false;
         lock (_turnSync)
@@ -1219,6 +1285,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             // The fallback resets everything, so what the kept partitions hold in memory only is written first too, as a
             // stand-down writes it.
             await DrainAsync(_ => true, cancellationToken);
+            LeaseUsable();
             lock (_turnSync)
             {
                 var held = Fences;

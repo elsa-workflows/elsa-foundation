@@ -23,7 +23,11 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
   };
   const captureValues = async (name: string) => {
     const result = page.locator(".named-preview > .named-result");
-    await captureTarget(`${name}-periods`, result.locator(".named-result-provenance > p").last());
+    const details = result.locator(".named-result-details");
+    const compact = await details.count() > 0;
+    if (compact) await details.getByRole("button", { name: "Result details" }).click();
+    await captureTarget(`${name}-periods`, (compact ? result.locator(".named-result-details-content > p") : result.locator(".named-result-provenance > p")).last());
+    if (compact) await details.getByRole("button", { name: "Result details" }).click();
     const values = result.getByRole("region", { name: "Exact result values", exact: true });
     await values.evaluate(element => { element.scrollLeft = 0; });
     await captureTarget(`${name}-values`, values);

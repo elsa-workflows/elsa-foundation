@@ -275,7 +275,7 @@ export function WorkflowInputArgumentBindings({
               value=""
               disabled={disabled || inputs.length === 0}
               onChange={event => {
-                const selected = inputs.find(workflowInput => workflowInput[inputBindingTarget] === event.currentTarget.value);
+                const selected = inputs.find(workflowInput => workflowInput.name === event.currentTarget.value);
                 if (!selected) return;
                 const definition = withWorkflowInputExpressionArgument(value, syntax, activityInput, selected, inputBindingTarget);
                 if (definition) onChange(withLiteralValue(wrapped, definition));

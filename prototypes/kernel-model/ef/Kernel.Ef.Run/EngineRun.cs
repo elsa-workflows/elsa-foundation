@@ -12,7 +12,7 @@ using Npgsql;
 
 /// <summary>
 /// The runs of ENGINES.md: the stress test, the cost count and the probes of Program.cs, on any of the four engines.
-///   x stress|cost|probe|block|definite|deadlock|fence|lockorder|nodelease|locktimeout|setcost|setidle postgres|sqlserver|mysql|sqlite "connection" [key=value ...]   (setcost, setidle: SetCost.cs)
+///   x stress|cost|probe|block|definite|deadlock|fence|lockorder|nodelease|locktimeout|watchdog|setcost|setidle postgres|sqlserver|mysql|sqlite "connection" [key=value ...]   (setcost, setidle: SetCost.cs)
 /// Options: fence=checked|batch (default: the engine's, batch on every engine since 16 November for the owned commit; checked is SQL Server's 13 November fallback and its default with commit=ef, E9)  commit=ef|owned (default: the engine's; COMMIT-SQL.md)  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  fencecount=0 (the owned fence ignores its matched count)  unordered=1 (lockorder: the k fence rows locked in the batch's order, the negative)  case=heartbeat|mutual|heartbeats mutation=subquery|rr|membership|rr-subquery|share expect=none|deadlock (nodelease: NL-9, NodeLeaseRun.cs)  stalelease=1 (the Worker commits past its local lease deadline: stale owners reach the fence; a pin's harness)  seconds=40  messages=5000  partitions=2  nodes=3
 ///          kill=0 (no sessions killed)   rcsi=0 (locking; default on) readpast=1 xactabort=1 (SQL Server)   isolation=rc takerr=1 (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
 ///          role=workers name=b signal=path (a second process on the same database)   locks=1 (cost)
@@ -57,6 +57,12 @@ static class EngineRun
             }
         }
         if (args[0] == "locktimeout") options["pool"] = "1";     // one pooled session: LockTimeout.cs
+        if (args[0] == "watchdog-worker") return await ProviderWatchdog.RunWorkerAsync(args[1], options);
+        if (args[0] == "watchdog" && options.GetValueOrDefault("disposable") != "1")
+        {
+            Console.Error.WriteLine("Watchdog resets its database. Run it on a disposable database server and pass disposable=1.");
+            return 2;
+        }
         var target = new Target(args[1], args[2], options);
         return args[0] switch
         {
@@ -70,6 +76,7 @@ static class EngineRun
             "lockorder" => await LockOrder(target),
             "nodelease" => await NodeLeaseRun.RunAsync(target),
             "locktimeout" => await LockTimeout.RunAsync(target),
+            "watchdog" => await ProviderWatchdog.RunAsync(target, args[2], args[3..]),
             "setcost" => await SetCost.RunAsync(target),
             "setidle" => await SetCost.IdleAsync(target),
             _ => 2,
@@ -1068,6 +1075,8 @@ sealed class Tally(IKernelStore inner) : IKernelStore
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
     public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) =>
+        Call("retake", () => inner.RetakeAsync(partition, node, epoch, lease, countDeaths, cancellationToken));
     public ValueTask<NodeBeat> NodeHeartbeatAsync(string node, TimeSpan lease, TimeSpan window, CancellationToken ct = default) =>
         Call("heartbeat", () => inner.NodeHeartbeatAsync(node, lease, window, ct));
 
@@ -1098,6 +1107,8 @@ sealed class Tally(IKernelStore inner) : IKernelStore
     private long _units;
 
     public int Sum(params string[] parts) => _counts.Where(c => parts.All(c.Key.Contains)).Sum(c => c.Value);
+
+    public bool HasCompletedCall(string op) => _times.TryGetValue(op, out var times) && !times.IsEmpty;
 
     private async ValueTask<T> Call<T>(string op, Func<ValueTask<T>> call)
     {

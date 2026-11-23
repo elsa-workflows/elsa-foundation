@@ -38,12 +38,46 @@ dotnet build ef/Kernel.Ef.Conformance -c Release
 dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite|postgres|sqlserver|mysql ["<server>"] [--fence-in-batch|--checked-fence] [--m5] [--rcsi-off] [--rc] <suite command>   # "<server>" for the server engines only; no fence flag: the engine's default (FINDINGS 25.1); suite command: semantic, semantic-broken, stress, stress-broken, cost
 ```
 
+### Watchdog cancellation under a database lock
+
+Run from `prototypes/kernel-model` against a disposable database server.
+
+```bash
+dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x watchdog <postgres|sqlserver|mysql> "<connection>" commit=owned fence=batch disposable=1
+```
+
+The fixture drops and recreates its database, and the
+MySQL setup also creates and grants privileges to its fixture account at server scope.
+The server reports the blocked worker commit. The fixture advances the watchdog's local clock to
+its cancellation threshold while the competing transaction still holds the lock. PostgreSQL and
+SQL Server must return an interrupted or unknown outcome within the grace period. The MySQL worker
+runs in a disposable process. Its result distinguishes a call that ended without escalation from a
+process exit triggered by the watchdog while the call was still blocked.
+The fixture records the operation's outcome and subsequent store state. It does not inspect sockets.
+A later owner starts at the unchanged journal position and commits one checkpoint and journal row.
+Repeat with `commit=ef` or `fence=checked` to exercise the other paths.
+
 `EngineRun.cs` lists the options. The stress test is the one of FINDINGS section 4: three nodes, two partitions (four
 in the runs marked "no kills"), six workers on 150 ms leases, stalls of 150 to 500 ms, a busy worker session killed
 every 20 to 60 ms (`pg_terminate_backend`, `KILL`, `KILL CONNECTION`; SQLite has no sessions), an outside producer
 that retries. Its end-state properties are the ones FINDINGS section 4 lists. Do not run the conformance suite on an
 engine while a stress test runs there: the stress test kills the suite's `kernel-worker` sessions too (two suite runs
 were discarded for that).
+
+### SQLite owner process loss
+
+From `prototypes/kernel-model`, run these commands on a POSIX host:
+
+```bash
+ef/Kernel.Ef.Run/run-sqlite-process-loss.py checked /tmp/kernel-sqlite-loss-checked
+ef/Kernel.Ef.Run/run-sqlite-process-loss.py batch /tmp/kernel-sqlite-loss-batch
+```
+
+Each run creates a temporary WAL database and starts the 5,000-input producer in a separate process.
+The fixture waits for the first worker process to advance both partition journals, ends that worker
+abruptly, and verifies that a new process takes both partitions at later epochs and advances both
+journals again. It checks the regular stress invariants and runs SQLite's integrity check after all
+workers exit. The output directory keeps each process's log.
 
 ## Results on the merged kernel (`a4f7c49b65` merged, fixes applied). Run
 
