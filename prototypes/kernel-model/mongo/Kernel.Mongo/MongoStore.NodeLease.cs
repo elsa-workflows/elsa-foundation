@@ -128,8 +128,20 @@ public sealed partial class MongoStore
         var set = new BsonDocument { { "epoch", new BsonDocument("$add", new BsonArray { "$epoch", 1L }) }, { "now", NowMs } };
         var doc = await RetriedAsync(async session =>
         {
-            await RequireVersionsAsync(session, cancellationToken);
-            await _nodes.UpdateOneAsync(session, new BsonDocument("_id", node), NodeRenewal(lease), new UpdateOptions { IsUpsert = true }, cancellationToken);
+            using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                var budget = lease / 3;
+                deadline.CancelAfter(budget);
+                try
+                {
+                    await RequireVersionsAsync(session, deadline.Token, new FindOptions { MaxTime = budget });
+                    await _nodes.UpdateOneAsync(session, new BsonDocument("_id", node), NodeRenewal(lease), new UpdateOptions { IsUpsert = true }, deadline.Token);
+                }
+                catch (Exception e) when (Deadline(e, deadline, cancellationToken))
+                {
+                    throw new StoreException(Failure.Transient, "The retake's format check and node renewal outlasted a third of the lease.", e);
+                }
+            }
             var taken = await _partitions.FindOneAndUpdateAsync(session, new BsonDocument { { "_id", partition }, { "owner", node }, { "epoch", epoch } },
                 Builders<BsonDocument>.Update.Pipeline(new BsonDocument[] { new("$set", set) }), new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken);
             if (taken is not null && countDeaths)
