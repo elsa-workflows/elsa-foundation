@@ -22,10 +22,12 @@ internal static class LeaseCancellationChecks
         await CheckFailureAsync(heartbeat, Failure.Unknown, beforeOpen, heartbeatStarted);
 
         var beforeTake = new ThrowingCallback();
-        var takeStarted = Stopwatch.GetTimestamp();
-        var take = withInterceptor(new HoldRenewal(beforeTake)).TakeAsync([0], "timed-take", Lease).AsTask();
+        var renewal = new HoldRenewal(beforeTake);
+        var take = withInterceptor(renewal).TakeAsync([0], "timed-take", Lease).AsTask();
         await beforeTake.Armed.Task.WaitAsync(Limit);
-        await CheckFailureAsync(take, Failure.Transient, beforeTake, takeStarted);
+        if (renewal.OpenedAt == 0)
+            throw new InvalidOperationException("The take renewal must follow the session lock timeout setup.");
+        await CheckFailureAsync(take, Failure.Transient, beforeTake, renewal.OpenedAt);
 
         await CheckCallerAsync("heartbeat open", (s, token) => s.NodeHeartbeatAsync("caller-heartbeat", Lease, Lease, token).AsTask());
         await CheckCallerAsync("take open", (s, token) => s.TakeAsync([0], "caller-take", Lease, token).AsTask(), registerLate: true);
@@ -163,6 +165,17 @@ internal static class LeaseCancellationChecks
 
     private sealed class HoldRenewal(ThrowingCallback callback) : DbCommandInterceptor
     {
+        internal long OpenedAt { get; private set; }
+
+        public override ValueTask<int> NonQueryExecutedAsync(DbCommand command, CommandExecutedEventData eventData,
+            int result, CancellationToken cancellationToken = default)
+        {
+            // The renewal budget starts after BeginNodeTakeAsync opens the transaction and sets this timeout.
+            if (OpenedAt == 0 && command.CommandText.StartsWith("SET SESSION innodb_lock_wait_timeout = ", StringComparison.Ordinal))
+                OpenedAt = Stopwatch.GetTimestamp();
+            return new(result);
+        }
+
         public override async ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command, CommandExecutedEventData eventData,
             DbDataReader result, CancellationToken cancellationToken = default)
         {
