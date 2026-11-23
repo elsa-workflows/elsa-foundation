@@ -7,7 +7,7 @@ namespace Kernel.Mongo.Run;
 internal static class JobResultChecks
 {
     internal static async Task RunAsync(string connection, string name, MongoStoreOptions options, MongoStore v3, BoundScope scope,
-        string reference)
+        string reference, bool orderedResult)
     {
         using var client = MongoProvider.Client(connection, "settlement");
         var staged = options with { ScopedJobResults = true };
@@ -138,6 +138,22 @@ internal static class JobResultChecks
         var retry = (await store.ReadJobRootCheckpointAsync(scope, reference))!;
         Check(retry.Suspended && retry.Tickets.Count == 2 && retry.Results.Count == 0 && retry.Journal.Position == fence.Position,
             "the failed result insertion leaves both source tickets and the exact parent checkpoint durable");
+        if (orderedResult)
+        {
+            staged = staged with { ScopedJobResume = true };
+            store = new MongoStore(client, name, staged);
+            await nodes.UpdateOneAsync(new BsonDocument("_id", "result-owner"), Builders<BsonDocument>.Update.Set("leaseUntil", 0L));
+            Check(await store.UpgradeRootResumeAsync(), "a homogeneous pending legacy-control prefix upgrades before result settlement");
+            var ingress = store.JobRootControls((_, _) => true, lease);
+            var target = new Kernel.Foundation.Contracts.Target.Ref(new(reference));
+            await ingress.SendAsync(scope, target, "unlock", Kinds.Resume);
+            await ingress.SendAsync(scope, target, "before-result", Kinds.Resume);
+            // Make the fenced writer's sequence clock far ahead of server time before the new owner takes it.
+            await store.Database.GetCollection<BsonDocument>("partitions").UpdateOneAsync(new BsonDocument("_id", 0),
+                Builders<BsonDocument>.Update.Set("clock", 4000000000000000L));
+            var orderedOwner = (await store.TakeAsync(0, "result-owner", lease))!;
+            fence = new(0, orderedOwner.Epoch, orderedOwner.Position);
+        }
         Check((await store.SettleSuspendedJobAsync(scope, reference, projected.Revision, result, fence, lease)).Landed &&
             !(await store.SettleSuspendedJobAsync(scope, reference, projected.Revision, result, fence, lease)).Landed,
             "settlement consumes the exact ticket once and a repeated callback cannot create a second result");
@@ -159,6 +175,10 @@ internal static class JobResultChecks
             (await cold.PollAsync(0, successor!.Epoch, TimeSpan.Zero, 10)).Messages is [var single] &&
             single.Message.Id == ordinary.Id && new Delivery(single.Message, single.Seq).SuppliedCompletion,
             "ordinary polling sees only the outside completion and the foreign scope cannot read the result");
+        if (orderedResult)
+            await RootInputOrderChecks.RunAsync(connection, name, staged, scope, reference, after, lease);
+        else
+            await RootResumeChecks.RunAsync(connection, name, staged, cold, scope, reference, after, lease);
     }
 
     private sealed class ExecutingJob : IActorType

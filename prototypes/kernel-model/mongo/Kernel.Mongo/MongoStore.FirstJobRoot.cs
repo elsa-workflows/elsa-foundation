@@ -93,6 +93,19 @@ public sealed partial class MongoStore
         return doc?.GetValue("rootEnvelope", BsonNull.Value) is BsonString body && body.Value == scope.Envelope;
     }
 
+    private static JobRootImage BoundJobRootImage(BsonDocument row, BsonDocument birth)
+    {
+        var image = DurableKeyJson.Read<JobRootImage>(row["rootImage"].AsString);
+        if (image.Actor != birth["actor"].AsString || image.Creation != birth["creation"].AsInt64 ||
+            image.Revision != row["revision"].AsInt64 || image.StartIntent != birth["intent"].AsString)
+            throw new StoreException(Failure.Definite, "The scoped checkpoint conflicts with its birth.");
+        return image;
+    }
+
+    private static Kernel.Foundation.Contracts.ActorHeader PublicRootHeader(string tenant, string reference, JobRootImage image) =>
+        new(new(reference), image.Model, tenant, Kernel.Foundation.Contracts.ActorStatus.Running,
+            null, null, null, image.TypeData, image.Labels);
+
     internal async Task<JobRootCheckpoint?> ReadJobRootCheckpointAsync(BoundScope scope, string reference, CancellationToken cancellationToken = default)
     {
         if (!_options.ScopedJobRoots) throw new NotSupportedException("Qualified job roots require the staged provider.");
@@ -105,10 +118,7 @@ public sealed partial class MongoStore
             var bound = new BsonDocument { { "_id", birth["actor"] }, { "tenant", scope.Tenant }, { "rootRef", reference } };
             var row = await _instances.Find(tx, bound).FirstOrDefaultAsync(token);
             if (row is null) return null;
-            var image = DurableKeyJson.Read<JobRootImage>(row["rootImage"].AsString);
-            if (image.Actor != birth["actor"].AsString || image.Creation != birth["creation"].AsInt64 ||
-                image.Revision != row["revision"].AsInt64 || image.StartIntent != birth["intent"].AsString)
-                throw new StoreException(Failure.Definite, "The scoped checkpoint conflicts with its birth.");
+            var image = BoundJobRootImage(row, birth);
             var jobs = JobRegistry.Read(image.Jobs);
             var expected = jobs.ToDictionary(e => InboxKey.Ticket(image.Actor, e.Key, image.Creation, e.Generation));
             var docs = await _messages.Find(tx, new BsonDocument { { "partition", birth["partition"] },

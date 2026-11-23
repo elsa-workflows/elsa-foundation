@@ -6,7 +6,7 @@ namespace Kernel.Mongo.Run;
 
 internal static class FirstJobRootChecks
 {
-    internal static async Task RunAsync(string connection, MongoStoreOptions options, bool settle = false, bool suspend = false)
+    internal static async Task RunAsync(string connection, MongoStoreOptions options, bool settle = false, bool suspend = false, bool orderedResult = false)
     {
         var name = "kstartjob_" + Guid.NewGuid().ToString("N");
         var staged = options with { JobGenerations = true, ScopedJobRoots = true };
@@ -116,7 +116,7 @@ internal static class FirstJobRootChecks
             if (suspend)
                 await RootSuspendChecks.RunAsync(connection, name, staged, scope, receipt.Reference, outcome.Sent);
             if (settle)
-                await JobResultChecks.RunAsync(connection, name, staged, cold, scope, receipt.Reference);
+                await JobResultChecks.RunAsync(connection, name, staged, cold, scope, receipt.Reference, orderedResult);
         }
         finally { await client.DropDatabaseAsync(name); }
     }
