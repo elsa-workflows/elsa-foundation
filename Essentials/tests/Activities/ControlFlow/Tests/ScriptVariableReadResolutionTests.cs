@@ -103,7 +103,7 @@ public sealed class ScriptVariableReadResolutionTests : IDisposable
     {
         var inputs = exposeIndex is null
             ? Array.Empty<ArgumentState>()
-            : [new ArgumentState(nameof(ForEachActivity.ExposeIndex), new ArgumentValue(JsonSerializer.SerializeToElement(bool.Parse(exposeIndex)), "Literal"), null, null, null, null)];
+            : [new ArgumentState(nameof(ForEachActivity.ExposeIndex), ArgumentValue.FromClr(JsonSerializer.SerializeToElement(bool.Parse(exposeIndex)), "Literal"), null, null, null, null)];
 
         var plan = Resolve("variables.currentIndex", ForEach(Body(), inputs), "script");
 
@@ -114,7 +114,7 @@ public sealed class ScriptVariableReadResolutionTests : IDisposable
     public void An_expose_index_expression_still_declares_current_index()
     {
         // Resolved only at run time; a pass without an index faults the pinned read there (FR-004a).
-        var input = new ArgumentState(nameof(ForEachActivity.ExposeIndex), new ArgumentValue("args.flag", "JavaScript"), null, null, null, null);
+        var input = new ArgumentState(nameof(ForEachActivity.ExposeIndex), ArgumentValue.FromClr("args.flag", "JavaScript"), null, null, null, null);
 
         var plan = Resolve("variables.currentIndex", ForEach(Body(), [input]), "script");
 

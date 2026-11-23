@@ -568,7 +568,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
             [],
             Node("write-one", new WorkflowArgumentState(
                 "Text",
-                new ArgumentValue(document.RootElement.Clone(), "JavaScript"),
+                ArgumentValue.FromClr(document.RootElement.Clone(), "JavaScript"),
                 null,
                 null,
                 null,
@@ -721,7 +721,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     [Fact]
     public async Task DispatchesNonLiteralExpressionInput()
     {
-        var handler = Handler(WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("\"Hello \" + \"World\"", "JavaScript"), null, null, null, null))));
+        var handler = Handler(WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", ArgumentValue.FromClr("\"Hello \" + \"World\"", "JavaScript"), null, null, null, null))));
 
         var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
 
@@ -734,7 +734,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     [Fact]
     public async Task RejectsExpressionInputWithoutExpressionTextWithoutDispatchingExecution()
     {
-        var handler = Handler(WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("", "JavaScript"), null, null, null, null))));
+        var handler = Handler(WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", ArgumentValue.FromClr("", "JavaScript"), null, null, null, null))));
 
         var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
 
@@ -1199,7 +1199,7 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         new(nodeId, "activity-write-line", inputs, Outputs: []);
 
     private static WorkflowArgumentState Text(string value) =>
-        new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
+        new("Text", ArgumentValue.FromClr(value, "Literal"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
         new("1.0.0", "activity-definition-1")

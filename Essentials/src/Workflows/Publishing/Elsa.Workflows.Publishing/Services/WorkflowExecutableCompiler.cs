@@ -387,7 +387,7 @@ public sealed class WorkflowExecutableCompiler(
             ArgumentState? inputState = authoredByKey.TryGetValue(input.ReferenceKey, out var state)
                 ? state
                 : input.Default is not null
-                    ? new(input.ReferenceKey, new ArgumentValue(input.Default.Value, input.Default.Syntax), null, null, null, null)
+                    ? new(input.ReferenceKey, ArgumentValue.FromClr(input.Default.Value, input.Default.Syntax), null, null, null, null)
                     : null;
             if (inputState is null)
             {

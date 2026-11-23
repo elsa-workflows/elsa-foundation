@@ -249,7 +249,7 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
                 name,
                 TypeReferenceFactory.FromClrType(typeof(T), TypeAliasConvention.CanonicalAlias),
                 StorageDriverType: null,
-                Default: new ArgumentValue(initialValue, AuthoringExpressionTypes.Literal)));
+                Default: ArgumentValue.FromClr(initialValue, AuthoringExpressionTypes.Literal, typeof(T))));
             return new Variable<T>(referenceKey, name, VariableScopeId);
         }
 
@@ -279,7 +279,7 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
                     AuthoredWorkflowIntrinsicKind.SetOutput,
                     TypeReferenceFactory.FromClrType(typeof(T), TypeAliasConvention.CanonicalAlias)),
                 [
-                    new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Name, new ArgumentValue(outputKey, AuthoringExpressionTypes.Literal), null, null, null, null),
+                    new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Name, ArgumentValue.FromClr(outputKey, AuthoringExpressionTypes.Literal), null, null, null, null),
                     new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Value, value.Lower(), null, null, null, null)
                 ]);
         }
@@ -290,7 +290,7 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
             AddIntrinsic(
                 WorkflowIntrinsicAuthoringIds.Finish,
                 new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Finish),
-                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Outcome, new ArgumentValue(outcomeKey, AuthoringExpressionTypes.Literal), null, null, null, null)]);
+                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Outcome, ArgumentValue.FromClr(outcomeKey, AuthoringExpressionTypes.Literal), null, null, null, null)]);
         }
 
         public void Return<T>(WorkflowValue<T> result)
@@ -311,7 +311,7 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
             AddIntrinsic(
                 WorkflowIntrinsicAuthoringIds.Control,
                 new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Control),
-                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Outcome, new ArgumentValue(outcomeKey, AuthoringExpressionTypes.Literal), null, null, null, null)]);
+                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Outcome, ArgumentValue.FromClr(outcomeKey, AuthoringExpressionTypes.Literal), null, null, null, null)]);
         }
 
         public ActivityCall<TActivityResult> Add<TActivity, TActivityResult>(

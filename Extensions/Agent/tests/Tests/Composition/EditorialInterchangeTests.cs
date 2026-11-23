@@ -136,7 +136,7 @@ public sealed class EditorialInterchangeTests
     }
 
     private static ArgumentState Literal(string key, string value) =>
-        new(key, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
+        new(key, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
 
     private static ActivityNode Process(BpmnAuthoredStructure structure) =>
         new("editorial-flowchart", BpmnDocumentImporter.DefaultBpmnProcessActivityVersionId, [], [],

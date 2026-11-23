@@ -243,10 +243,10 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                 ReusableActivityImportIdentity.Create("wrapper-output", $"{item.SourceVersionId}:{output.ReferenceKey}"),
                 "elsa.intrinsic.set-output@1",
                 [
-                    new ArgumentState("name", new ArgumentValue(output.ReferenceKey, "Literal"), null, null, null, null),
+                    new ArgumentState("name", ArgumentValue.FromClr(output.ReferenceKey, "Literal"), null, null, null, null),
                     new ArgumentState(
                         "value",
-                        new ArgumentValue(JsonSerializer.SerializeToElement(new
+                        ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new
                         {
                             producerNodeId = graphNode.NodeId,
                             projectionKey = output.ReferenceKey,
@@ -297,7 +297,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             inputs.Select(x => new ArgumentState(
                 x.ReferenceKey,
                 // The wrapper's own workflow request member: Elsa 4 JavaScript has no getInput.
-                new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey = x.Name }), "WorkflowRequest"),
+                ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { memberKey = x.Name }), "WorkflowRequest"),
                 null,
                 null,
                 x.StorageDriverType,

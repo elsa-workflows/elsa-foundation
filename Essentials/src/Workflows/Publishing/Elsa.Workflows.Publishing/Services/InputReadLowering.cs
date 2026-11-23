@@ -31,7 +31,7 @@ internal static class InputReadLowering
             memberKeyOf(referenceKey) is not { } memberKey)
             return value!;
 
-        return new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey }), WorkflowRequestExpressionType);
+        return ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { memberKey }), WorkflowRequestExpressionType);
     }
 
     // The stored form is { referenceKey } JSON; an in-process caller may hand over the reference itself.

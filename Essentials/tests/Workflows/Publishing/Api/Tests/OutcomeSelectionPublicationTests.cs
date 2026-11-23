@@ -216,7 +216,7 @@ public sealed class OutcomeSelectionPublicationTests
                 new SwitchAuthoredStructure([new("a") { CaseId = "case-a" }, new("b") { CaseId = "case-b" }], mode: mode), Web)));
 
     private static ArgumentState Literal(string key, object value) =>
-        new(key, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
+        new(key, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
 
     private static IActivityStructureService StructureService()
     {

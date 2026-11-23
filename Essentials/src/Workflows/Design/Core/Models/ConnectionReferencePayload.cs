@@ -75,6 +75,7 @@ public sealed class ConnectionReferenceMembers
         Type = type;
     }
 
+    [System.Text.Json.Serialization.JsonPropertyName(ConnectionReferencePayload.ConnectionMember)]
     public string Name { get; }
     public string? Type { get; }
 }

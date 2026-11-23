@@ -161,7 +161,7 @@ public sealed class CodeFirstDynamicConformanceTests
         new(nodeId, activityVersionId, inputs, Outputs: []);
 
     private static ArgumentState Input(string key, object? value, string expressionType) =>
-        new(key, new ArgumentValue(value, expressionType), null, null, null, null);
+        new(key, ArgumentValue.FromClr(value, expressionType), null, null, null, null);
 
     private static VariableDefinition RetryVariable() =>
         new(
@@ -169,7 +169,7 @@ public sealed class CodeFirstDynamicConformanceTests
             "RetryCount",
             TypeReferenceFactory.FromClrType(typeof(int), TypeAliasConvention.CanonicalAlias),
             StorageDriverType: null,
-            Default: new ArgumentValue(3, "Literal"));
+            Default: ArgumentValue.FromClr(3, "Literal"));
 
     private static IReadOnlyCollection<ActivityDefinitionVersion> ActivityVersions() =>
     [

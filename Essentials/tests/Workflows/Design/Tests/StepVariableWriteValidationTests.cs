@@ -41,7 +41,7 @@ public sealed class StepVariableWriteValidationTests
     [Fact]
     public async Task A_variable_reference_bound_to_another_expression_is_refused()
     {
-        var node = new ActivityNode("writer", WriterVersion, [new ArgumentState("Balance", new ArgumentValue(5, "Literal"), null, null, null, null)], []);
+        var node = new ActivityNode("writer", WriterVersion, [new ArgumentState("Balance", ArgumentValue.FromClr(5, "Literal"), null, null, null, null)], []);
 
         var error = Assert.Single(await Validate(Sequence("root", node)), item => item.Type == "ValueFlow/VariableReference");
         Assert.Contains("not to a 'Literal' expression", error.Message, StringComparison.Ordinal);
@@ -205,7 +205,7 @@ public sealed class StepVariableWriteValidationTests
     }
 
     private static ActivityNode Script(string nodeId, string script) =>
-        new(nodeId, ScriptVersion, [new ArgumentState("script", new ArgumentValue(script, "Literal"), null, null, null, null)], []);
+        new(nodeId, ScriptVersion, [new ArgumentState("script", ArgumentValue.FromClr(script, "Literal"), null, null, null, null)], []);
 
     private static ActivityNode Writer(string nodeId, string variableKey, string scopeId = VariableReference.WorkflowScopeId) =>
         Reference(nodeId, WriterVersion, "Balance", variableKey, scopeId);

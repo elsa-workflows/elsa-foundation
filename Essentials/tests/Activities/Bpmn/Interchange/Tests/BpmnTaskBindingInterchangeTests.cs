@@ -85,12 +85,12 @@ public sealed class BpmnTaskBindingInterchangeTests
         var input = reason switch
         {
             "sensitive-binding" => Literal("brief", Brief) with { IsSensitive = true },
-            "non-literal" => new ArgumentState("brief", new ArgumentValue("briefVariable", "Variable"), null, null, null, null),
+            "non-literal" => new ArgumentState("brief", ArgumentValue.FromClr("briefVariable", "Variable"), null, null, null, null),
             "storage-setting" => Literal("brief", Brief) with { StorageDriverType = "acme.blob" },
             _ => Literal("brief", Brief)
         };
         IReadOnlyList<ArgumentState> outputs = reason == "output-capture"
-            ? [new ArgumentState("Result", new ArgumentValue("summary", "Variable"), null, null, null, null)]
+            ? [new ArgumentState("Result", ArgumentValue.FromClr("summary", "Variable"), null, null, null, null)]
             : [];
         var structure = reason == "structured-child"
             ? new ActivityNodeStructure("acme.flow", "1", JsonSerializer.SerializeToElement(new { }))
@@ -364,7 +364,7 @@ public sealed class BpmnTaskBindingInterchangeTests
         new(referenceKey, referenceKey, new TypeReference("String"), "Json", referenceKey, null, IsNullable: true);
 
     private static ArgumentState Literal(string key, string value) =>
-        new(key, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
+        new(key, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
 
     /// <summary>start → summarize (a service task bound to <see cref="VersionId"/>) → end.</summary>
     private static ActivityNode Process(ArgumentState input, IReadOnlyList<ArgumentState>? outputs = null, ActivityNodeStructure? childStructure = null)

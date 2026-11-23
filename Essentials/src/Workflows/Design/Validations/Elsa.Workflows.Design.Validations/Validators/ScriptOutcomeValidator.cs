@@ -134,7 +134,6 @@ public sealed class ScriptOutcomeValidator(
             return null;
         return value.Value switch
         {
-            string text => text,
             JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
             _ => null
         };
@@ -187,7 +186,6 @@ public sealed class ScriptOutcomeValidator(
             {
                 JsonElement { ValueKind: JsonValueKind.String } text => JsonDocument.Parse(text.GetString()!).RootElement,
                 JsonElement element => element,
-                string text => JsonDocument.Parse(text).RootElement,
                 _ => Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value.Value)
             };
         }

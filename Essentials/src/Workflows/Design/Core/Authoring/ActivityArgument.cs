@@ -55,9 +55,9 @@ public readonly struct ActivityArgument<T>
 
     internal ArgumentValue Lower(string inputKey) => Kind switch
     {
-        ActivityArgumentKind.Literal => new ArgumentValue(_isExplicitNull ? null : Literal, AuthoringExpressionTypes.Literal),
+        ActivityArgumentKind.Literal => ArgumentValue.FromClr(_isExplicitNull ? null : Literal, AuthoringExpressionTypes.Literal, typeof(T)),
         ActivityArgumentKind.Source => Source!.Lower(),
-        ActivityArgumentKind.Default => new ArgumentValue(null, AuthoringExpressionTypes.Default),
+        ActivityArgumentKind.Default => ArgumentValue.FromClr(null, AuthoringExpressionTypes.Default),
         _ => throw new InvalidOperationException($"Input '{inputKey}' was omitted and cannot be lowered without its published contract default.")
     };
 }

@@ -290,15 +290,15 @@ internal static class RulesCompiledPublicationFixture
             RulesNodeId,
             rulesVersion.Id,
             [
-                new ArgumentState(nameof(RunRules.Program), new ArgumentValue(ProgramLiteral, "Literal"), null, null, null, null),
-                new ArgumentState(nameof(RunRules.InitialFacts), new ArgumentValue(initialFacts?.ToArray() ?? ["seed"], "Literal"), null, null, null, null),
-                new ArgumentState(nameof(RunRules.MaxRounds), new ArgumentValue(maxRounds, "Literal"), null, null, null, null)
+                new ArgumentState(nameof(RunRules.Program), ArgumentValue.FromClr(ProgramLiteral, "Literal"), null, null, null, null),
+                new ArgumentState(nameof(RunRules.InitialFacts), ArgumentValue.FromClr(initialFacts?.ToArray() ?? ["seed"], "Literal"), null, null, null, null),
+                new ArgumentState(nameof(RunRules.MaxRounds), ArgumentValue.FromClr(maxRounds, "Literal"), null, null, null, null)
             ],
             []);
         var afterRules = new ActivityNode(
             "after-rules",
             writeLineVersion.Id,
-            [new ArgumentState("text", new ArgumentValue("after-rules", "Literal"), null, null, null, null)],
+            [new ArgumentState("text", ArgumentValue.FromClr("after-rules", "Literal"), null, null, null, null)],
             []);
         var sequence = new ActivityNode(
             SequenceNodeId,

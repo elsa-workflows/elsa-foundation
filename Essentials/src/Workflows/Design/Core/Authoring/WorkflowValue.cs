@@ -98,12 +98,12 @@ public sealed class ExpressionSource<T> : WorkflowValue<T>
     public string Language { get; }
     public string Source { get; }
 
-    internal override ArgumentValue Lower() => new(Source, Language);
+    internal override ArgumentValue Lower() => ArgumentValue.FromClr(Source, Language);
 }
 
 internal sealed class LiteralWorkflowValue<T>(T? value) : WorkflowValue<T>
 {
-    internal override ArgumentValue Lower() => new(value, AuthoringExpressionTypes.Literal);
+    internal override ArgumentValue Lower() => ArgumentValue.FromClr(value, AuthoringExpressionTypes.Literal, typeof(T));
 }
 
 internal static class AuthoringExpressionTypes

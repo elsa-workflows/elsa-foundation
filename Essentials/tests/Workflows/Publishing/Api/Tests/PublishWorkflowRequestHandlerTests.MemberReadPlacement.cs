@@ -68,11 +68,11 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task A_variable_member_read_in_a_placed_reusable_body_is_published_with_its_scope_remapped()
     {
-        var read = new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement(new
+        var read = new WorkflowArgumentState("Text", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new
         {
             referenceKey = "total", declaringScopeId = "activity-graph", memberPath = new[] { "customerId" }
         }), "VariableMember"), null, null, null, null);
-        var whole = new WorkflowArgumentState("Text", new ArgumentValue(new Elsa.Expressions.Core.Models.VariableReference("total", "activity-graph"), "Variable"),
+        var whole = new WorkflowArgumentState("Text", ArgumentValue.FromClr(new Elsa.Expressions.Core.Models.VariableReference("total", "activity-graph"), "Variable"),
             null, null, null, null);
         object[] variables = [new { referenceKey = "total", name = "Total", type = new { alias = "String", collectionKind = "Single" }, storageDriverKey = "elsa.json" }];
 
@@ -93,7 +93,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     }
 
     private static WorkflowArgumentState BodyRead(AuthoredValueConversionRequest? conversion) =>
-        new("Text", new ArgumentValue(JsonSerializer.SerializeToElement(new
+        new("Text", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new
         {
             producerNodeId = "producer", projectionKey = "$result", isOptional = false, memberPath = new[] { "customerId" }
         }), "ActivityResultMember"), null, null, null, null, conversion);

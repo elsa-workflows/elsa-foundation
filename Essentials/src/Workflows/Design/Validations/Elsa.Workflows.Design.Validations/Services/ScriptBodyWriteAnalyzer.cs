@@ -58,7 +58,6 @@ public sealed class ScriptBodyWriteAnalyzer(ScriptVariableReadResolver resolver,
             return null;
         return value.Value switch
         {
-            string text => text,
             JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
             _ => null
         };

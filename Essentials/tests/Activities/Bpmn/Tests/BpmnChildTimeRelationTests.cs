@@ -587,7 +587,7 @@ public sealed class BpmnChildTimeRelationTests : IDisposable
             .SelectMany(element => new[] { element.ChildNodeId, element.ListenerNodeId })
             .OfType<string>()
             .Select(id => new ActivityNode(id, "test@1", [], [new ArgumentState("result",
-                new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "total", declaringScopeId = "workflow" }), "Variable"),
+                ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = "total", declaringScopeId = "workflow" }), "Variable"),
                 null, null, null, null)]))
             .ToArray();
         var structure = new BpmnAuthoredStructure(children, elements, flows);

@@ -91,7 +91,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         var node = new Elsa.Workflows.Design.Core.Models.ActivityNode(
             "script",
             "activity-script-probe",
-            [new WorkflowArgumentState("script", new ArgumentValue(script, "Literal"), null, null, null, null)],
+            [new WorkflowArgumentState("script", ArgumentValue.FromClr(script, "Literal"), null, null, null, null)],
             Outputs: []);
         return TestCompiler.Create(
                 new FakeVersionStore(WorkflowVersion(node, variables: [Greeting])),

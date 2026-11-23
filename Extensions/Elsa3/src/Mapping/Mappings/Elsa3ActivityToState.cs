@@ -90,7 +90,7 @@ public sealed class Elsa3ActivityToState
         {
             using var document = JsonDocument.Parse(text);
             return document.RootElement.ValueKind == JsonValueKind.Array
-                ? argument with { Value = new ArgumentValue(document.RootElement.Clone(), argument.Value.ExpressionType) }
+                ? argument with { Value = ArgumentValue.FromClr(document.RootElement.Clone(), argument.Value.ExpressionType) }
                 : argument;
         }
         catch (JsonException)
@@ -105,7 +105,7 @@ public sealed class Elsa3ActivityToState
         // A typed null: the conversion of a null member whose Elsa 4 input accepts null (spec 267).
         if (Elsa3TypedValues.IsNullLiteral(jsonElement))
         {
-            argument = new ArgumentState(key, new ArgumentValue(null, Elsa3TypedValues.Literal), null, null, null, null);
+            argument = new ArgumentState(key, ArgumentValue.FromClr(null, Elsa3TypedValues.Literal), null, null, null, null);
             return true;
         }
 
@@ -115,7 +115,7 @@ public sealed class Elsa3ActivityToState
         object value = expressionValue.ValueKind == JsonValueKind.String
             ? expressionValue.GetString()!
             : expressionValue.Clone();
-        argument = new ArgumentState(key, new ArgumentValue(value, expressionType), null, null, null, null);
+        argument = new ArgumentState(key, ArgumentValue.FromClr(value, expressionType), null, null, null, null);
         return true;
     }
 }

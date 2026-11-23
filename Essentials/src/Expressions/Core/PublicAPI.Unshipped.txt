@@ -72,12 +72,12 @@ Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.ProducerNo
 Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.ProjectionKey.get -> string!
 Elsa.Expressions.Core.Models.ArgumentValue
 Elsa.Expressions.Core.Models.ArgumentValue.<Clone>$() -> Elsa.Expressions.Core.Models.ArgumentValue!
-Elsa.Expressions.Core.Models.ArgumentValue.ArgumentValue(object? Value, string? ExpressionType = null) -> void
-Elsa.Expressions.Core.Models.ArgumentValue.Deconstruct(out object? Value, out string? ExpressionType) -> void
+Elsa.Expressions.Core.Models.ArgumentValue.ArgumentValue(System.Text.Json.JsonElement? Value, string? ExpressionType = null) -> void
+Elsa.Expressions.Core.Models.ArgumentValue.Deconstruct(out System.Text.Json.JsonElement? Value, out string? ExpressionType) -> void
 Elsa.Expressions.Core.Models.ArgumentValue.Equals(Elsa.Expressions.Core.Models.ArgumentValue? other) -> bool
 Elsa.Expressions.Core.Models.ArgumentValue.ExpressionType.get -> string?
 Elsa.Expressions.Core.Models.ArgumentValue.ExpressionType.init -> void
-Elsa.Expressions.Core.Models.ArgumentValue.Value.get -> object?
+Elsa.Expressions.Core.Models.ArgumentValue.Value.get -> System.Text.Json.JsonElement?
 Elsa.Expressions.Core.Models.ArgumentValue.Value.init -> void
 Elsa.Expressions.Core.Models.ExpressionAuthoringContext
 Elsa.Expressions.Core.Models.ExpressionAuthoringContext.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionAuthoringContext!
@@ -593,6 +593,7 @@ static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.operator
 static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.Resolve(string! profile) -> Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities!
 static Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? right) -> bool
 static Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.ArgumentValue.FromClr(object? value, string? expressionType = null, System.Type? declaredType = null) -> Elsa.Expressions.Core.Models.ArgumentValue!
 static Elsa.Expressions.Core.Models.ArgumentValue.operator !=(Elsa.Expressions.Core.Models.ArgumentValue? left, Elsa.Expressions.Core.Models.ArgumentValue? right) -> bool
 static Elsa.Expressions.Core.Models.ArgumentValue.operator ==(Elsa.Expressions.Core.Models.ArgumentValue? left, Elsa.Expressions.Core.Models.ArgumentValue? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionAuthoringContext.operator !=(Elsa.Expressions.Core.Models.ExpressionAuthoringContext? left, Elsa.Expressions.Core.Models.ExpressionAuthoringContext? right) -> bool

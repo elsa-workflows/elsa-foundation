@@ -124,7 +124,7 @@ public sealed class GraphActivityProvider(
                 UiHint: x.UiHint, UISpecifications: x.UiSpecifications, IsRequired: x.IsRequired,
                 DefaultValue: x.Default?.Value, DefaultSyntax: x.Default?.Syntax)).ToImmutableArray(),
             graph.Variables.Select(x => new VariableDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
-                x.InitialValue is null ? null : new ArgumentValue(x.InitialValue.Value, x.InitialValue.Syntax))).ToImmutableArray(),
+                x.InitialValue is null ? null : ArgumentValue.FromClr(x.InitialValue.Value, x.InitialValue.Syntax))).ToImmutableArray(),
             contract.Outputs.Select(x => new OutputDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
                 x.DisplayName ?? x.Name, x.Category, x.IsNullable, Description: x.Description, Order: x.Order,
                 UiHint: x.UiHint, UISpecifications: x.UiSpecifications, IsRequired: x.IsRequired,

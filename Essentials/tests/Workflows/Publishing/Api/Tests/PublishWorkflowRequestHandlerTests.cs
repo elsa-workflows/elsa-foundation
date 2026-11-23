@@ -118,7 +118,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             "json" => JsonSerializer.SerializeToElement(definition, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
             _ => definition
         };
-        var input = new WorkflowArgumentState(descendant ? "Condition" : "Text", new ArgumentValue(payload, "JavaScript"), null, null, null, null);
+        var input = new WorkflowArgumentState(descendant ? "Condition" : "Text", ArgumentValue.FromClr(payload, "JavaScript"), null, null, null, null);
         var root = descendant
             ? new ActivityNode("consumer", "activity-if", [input], [], new(IfActivity.StructureKind, IfActivity.StructureSchemaVersion,
                 Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new Elsa.Activities.If.Models.IfAuthoredStructure(Node("producer", Text("value"))))))
@@ -143,7 +143,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     public async Task Refusing_an_uninspectable_root_expression_never_reads_its_business_getter()
     {
         var payload = new ExpressionGetterTrap();
-        var version = WorkflowVersion(Node("consumer", new WorkflowArgumentState("Text", new ArgumentValue(payload, "JavaScript"), null, null, null, null)));
+        var version = WorkflowVersion(Node("consumer", new WorkflowArgumentState("Text", ArgumentValue.FromClr(payload, "JavaScript"), null, null, null, null)));
         var before = await CountPublishWritesAsync();
         var failure = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
             Handler(version, _writeLineActivity).Handle(new PublishWorkflow(version.Id), CancellationToken.None));
@@ -163,10 +163,10 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             new Dictionary<string, ExpressionParameterBinding>(), JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         var value = form switch
         {
-            "typed" => new ArgumentValue(definition, "JavaScript"),
-            "json" => new ArgumentValue(JsonSerializer.SerializeToElement(definition, new JsonSerializerOptions(JsonSerializerDefaults.Web)), "JavaScript"),
-            "plain-text" => new ArgumentValue("'value'", "JavaScript"),
-            _ => new ArgumentValue("value", "Literal")
+            "typed" => ArgumentValue.FromClr(definition, "JavaScript"),
+            "json" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(definition, new JsonSerializerOptions(JsonSerializerDefaults.Web)), "JavaScript"),
+            "plain-text" => ArgumentValue.FromClr("'value'", "JavaScript"),
+            _ => ArgumentValue.FromClr("value", "Literal")
         };
         var version = WorkflowVersion(Node("consumer", new WorkflowArgumentState("Text", value, null, null, null, null)));
         var publication = await Handler(version, _writeLineActivity).Handle(new PublishWorkflow(version.Id), CancellationToken.None);
@@ -193,10 +193,10 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             }, JsonSerializer.SerializeToElement(new { }), Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingReadonlyV1);
         var value = form switch
         {
-            "direct" => new ArgumentValue(JsonSerializer.SerializeToElement(new
+            "direct" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new
                 { producerNodeId = "missing-producer", projectionKey = "$result", producerScopeId = "workflow", isOptional = true }), "ActivityResult"),
-            "typed-portable" => new ArgumentValue(expression, "JavaScript"),
-            _ => new ArgumentValue(JsonSerializer.SerializeToElement(expression, new JsonSerializerOptions(JsonSerializerDefaults.Web)), "JavaScript")
+            "typed-portable" => ArgumentValue.FromClr(expression, "JavaScript"),
+            _ => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(expression, new JsonSerializerOptions(JsonSerializerDefaults.Web)), "JavaScript")
         };
         var version = WorkflowVersion(Node("consumer", new WorkflowArgumentState("Text", value, null, null, null, null)));
         var before = await CountPublishWritesAsync();
@@ -219,7 +219,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [InlineData(true, true)]
     public async Task A_scope_free_result_binding_publishes_only_where_no_earlier_producer_run_can_reach_its_reader(bool cycle, bool declaresScope)
     {
-        var read = new WorkflowArgumentState("Text", new ArgumentValue(declaresScope
+        var read = new WorkflowArgumentState("Text", ArgumentValue.FromClr(declaresScope
             ? JsonSerializer.SerializeToElement(new { producerNodeId = "producer", projectionKey = "$result", producerScopeId = "scope:root" })
             : JsonSerializer.SerializeToElement(new { producerNodeId = "producer", projectionKey = "$result" }), "ActivityResult"), null, null, null, null);
         List<FlowchartConnection> connections =
@@ -271,7 +271,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [InlineData("compensation-handler")]
     public async Task A_scope_free_result_binding_publishes_only_where_no_enclosing_structure_can_run_its_reader_again(string shape)
     {
-        var read = new WorkflowArgumentState("Text", new ArgumentValue(
+        var read = new WorkflowArgumentState("Text", ArgumentValue.FromClr(
             JsonSerializer.SerializeToElement(new { producerNodeId = "producer", projectionKey = "$result" }), "ActivityResult"), null, null, null, null);
         var registry = TestWellKnownTypeRegistry.Create();
         foreach (var type in new[] { typeof(DefaultResultProducer), typeof(BpmnProcess), typeof(BpmnDecision), typeof(CompensationScope) })
@@ -287,7 +287,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         {
             // start -> task -> gateway, gateway -(again)-> task, gateway -> end; the task runs Sequence(producer, consumer).
             var decision = new ActivityNode("decision", decisionVersion.Id,
-                [new WorkflowArgumentState("Outcome", new ArgumentValue("again", "Literal"), null, null, null, null)], []);
+                [new WorkflowArgumentState("Outcome", ArgumentValue.FromClr("again", "Literal"), null, null, null, null)], []);
             var process = new ActivityNode("process", processVersion.Id, [], [], new ActivityNodeStructure("elsa.bpmn.structure", "1.0.0",
                 JsonSerializer.SerializeToElement(new BpmnAuthoredStructure(
                     [SequenceNode("steps", [producer, consumer]), decision],
@@ -385,7 +385,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             _ => Parameters("parameters", parameter)
         };
         using var json = JsonDocument.Parse("""{"language":"JavaScript","source":"customer","resultType":{"alias":"String"},"options":{},"capabilityProfile":"binding-readonly-v1",""" + properties + "}");
-        var value = new ArgumentValue(json.RootElement.Clone(), "JavaScript");
+        var value = ArgumentValue.FromClr(json.RootElement.Clone(), "JavaScript");
         var version = WorkflowVersion(SequenceNode("sequence", [Node("earlier", Text("one")),
             Node("consumer", new WorkflowArgumentState("Text", value, null, null, null, null)), Node("later", Text("two"))]));
         var before = await CountPublishWritesAsync();
@@ -429,7 +429,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     {
         var legacy = LegacyWorkflowHashFixture.Load();
         var root = new ActivityNode("set-counter", "elsa.intrinsic.set@1",
-            [new WorkflowArgumentState("value", new ArgumentValue(JsonSerializer.SerializeToElement("7"), "JavaScript"), null, null, null, null)], [])
+            [new WorkflowArgumentState("value", ArgumentValue.FromClr(JsonSerializer.SerializeToElement("7"), "JavaScript"), null, null, null, null)], [])
         {
             Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Set, new TypeReference("Elsa.Any"),
                 new Elsa.Expressions.Core.Models.VariableReference("counter", "workflow"))
@@ -438,7 +438,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         version.State = version.State with
         {
             Variables = [new Elsa.Expressions.Core.Models.VariableDefinition("counter", "Counter", new TypeReference("Int32"), null,
-                new ArgumentValue(JsonSerializer.SerializeToElement(0), "Literal"))]
+                ArgumentValue.FromClr(JsonSerializer.SerializeToElement(0), "Literal"))]
         };
         var legacyPublication = await Handler(null, new CapturedLegacyCompiler(legacy), new FakeVersionStore(version))
             .Handle(new PublishWorkflow(version.Id), CancellationToken.None);
@@ -552,7 +552,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     public async Task A_literal_or_expression_on_a_credential_input_is_refused_and_nothing_is_published(string expressionType)
     {
         // The credential rule refuses the binding, ahead of VF-ACT-011.
-        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("typed-in", expressionType), null, null, null, null)));
+        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", ArgumentValue.FromClr("typed-in", expressionType), null, null, null, null)));
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
             Handler(workflowVersion, CredentialWriteLineActivity()).Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
@@ -568,7 +568,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     {
         // The publish route's 400 for the refusal rests on the translator's ArgumentException arm.
         var literal = $"literal-value-{Guid.NewGuid():N}";
-        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue(literal, "Literal"), null, null, null, null)));
+        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", ArgumentValue.FromClr(literal, "Literal"), null, null, null, null)));
         var handler = Handler(workflowVersion, CredentialWriteLineActivity());
         await using var host = await PublishingMinimalApiHost.StartAsync(_ => new HandlerSender(handler));
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/publishing/workflows/{workflowVersion.Id}/publish")
@@ -591,7 +591,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     {
         // The residual case: the version holds a literal on the input the activity
         // declares a credential once installed, stored as add-version stores it, where nothing could judge the node.
-        var workflowVersion = WorkflowVersion(SequenceNode("sequence", [Node("send", new WorkflowArgumentState("Text", new ArgumentValue("typed-in", "Literal"), null, null, null, null))]));
+        var workflowVersion = WorkflowVersion(SequenceNode("sequence", [Node("send", new WorkflowArgumentState("Text", ArgumentValue.FromClr("typed-in", "Literal"), null, null, null, null))]));
 
         var uninstalled = await Record.ExceptionAsync(() =>
             Handler(workflowVersion, _sequenceActivity).Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
@@ -1029,7 +1029,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     private PublishWorkflowRequestHandler ReadsGreetingHandler(string versionId, string version, string greetingKey)
     {
         var workflowVersion = WorkflowVersion(
-            Node("consumer", new WorkflowArgumentState("Text", new ArgumentValue("variables.greeting + '!'", "JavaScript"), null, null, null, null)),
+            Node("consumer", new WorkflowArgumentState("Text", ArgumentValue.FromClr("variables.greeting + '!'", "JavaScript"), null, null, null, null)),
             "definition-1",
             versionId,
             version);
@@ -1221,7 +1221,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         using var document = JsonDocument.Parse(authoredJson);
         var input = new WorkflowArgumentState(
             "Text",
-            new ArgumentValue(document.RootElement.Clone(), "JavaScript"),
+            ArgumentValue.FromClr(document.RootElement.Clone(), "JavaScript"),
             null,
             null,
             null,
@@ -1257,7 +1257,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
                 new ActivityNode(
                     "note-one",
                     typeof(DeclaredInputsActivity).FullName!,
-                    [new WorkflowArgumentState(nameof(DeclaredInputsActivity.Note), new ArgumentValue("classified", "Literal"), null, null, null, null)],
+                    [new WorkflowArgumentState(nameof(DeclaredInputsActivity.Note), ArgumentValue.FromClr("classified", "Literal"), null, null, null, null)],
                     Outputs: [])
             ]);
         var published = await Handler(
@@ -1414,7 +1414,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     {
         var input = new WorkflowArgumentState(
             "Text",
-            new ArgumentValue("classified", "Literal"),
+            ArgumentValue.FromClr("classified", "Literal"),
             null,
             null,
             null,
@@ -1562,7 +1562,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task PublishesNonLiteralInputAsExpressionBinding()
     {
-        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("\"Hello \" + \"World\"", "JavaScript"), null, null, null, null)));
+        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", ArgumentValue.FromClr("\"Hello \" + \"World\"", "JavaScript"), null, null, null, null)));
         var handler = Handler(workflowVersion);
 
         var view = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
@@ -1578,7 +1578,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task RejectsExpressionInputWithoutExpressionText()
     {
-        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("", "JavaScript"), null, null, null, null)));
+        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", ArgumentValue.FromClr("", "JavaScript"), null, null, null, null)));
         var handler = Handler(workflowVersion);
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
@@ -1641,7 +1641,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task ComputesDifferentArtifactIdWhenLiteralInputTypeMetadataChanges()
     {
-        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement(1), "Literal"), null, null, null, null)));
+        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(1), "Literal"), null, null, null, null)));
         var integerView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", new TypeReference("Int32")))
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var longView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", new TypeReference("Int64")))
@@ -1973,7 +1973,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
                 Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new FlowchartAuthoredStructure(activities, connections, startNodeId))));
 
     private static WorkflowArgumentState Text(string value) =>
-        new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
+        new("Text", ArgumentValue.FromClr(value, "Literal"), null, null, null, null);
 
     /// <summary>Sends every publish request of the HTTP host to <paramref name="handler"/>.</summary>
     private sealed class HandlerSender(PublishWorkflowRequestHandler handler) : IRequestSender

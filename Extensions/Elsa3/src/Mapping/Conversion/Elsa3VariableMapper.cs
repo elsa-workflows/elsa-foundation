@@ -94,7 +94,7 @@ internal static class Elsa3VariableMapper
         if (!TryStart(shape, source, typeName, options ?? new(), report ?? (_ => { }), out var json, out refusal))
             return false;
 
-        variable = variable with { Default = new ArgumentValue(json, Elsa3TypedValues.Literal) };
+        variable = variable with { Default = ArgumentValue.FromClr(json, Elsa3TypedValues.Literal) };
         return true;
     }
 

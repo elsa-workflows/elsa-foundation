@@ -92,7 +92,7 @@ public sealed class CompensationHandlerVariableValidatorTests : IDisposable
         };
         var refund = Leaf("refund") with
         {
-            Outputs = [new ArgumentState("result", new ArgumentValue(new VariableReference(VariableKey, "box"), "Variable"), null, null, null, null)]
+            Outputs = [new ArgumentState("result", ArgumentValue.FromClr(new VariableReference(VariableKey, "box"), "Variable"), null, null, null, null)]
         };
         var root = Scope("outer", ("Order",
             Container(SequenceActivity.StructureKind, "box", [Total],
@@ -124,7 +124,7 @@ public sealed class CompensationHandlerVariableValidatorTests : IDisposable
     public async Task A_confirmOnComplete_given_as_an_expression_may_hand_over()
     {
         var inner = Scope("inner", ("Reserve", Leaf("reserve"), Leaf("release", input: Variable(VariableKey, "box"))))
-            with { Inputs = [new ArgumentState("confirmOnComplete", new ArgumentValue("return true;", "JavaScript"), null, null, null, null)] };
+            with { Inputs = [new ArgumentState("confirmOnComplete", ArgumentValue.FromClr("return true;", "JavaScript"), null, null, null, null)] };
         var root = Scope("outer", ("Order", Container(SequenceActivity.StructureKind, "box", [Total], inner), null));
 
         Assert.Single(await ValidateAsync(root));
@@ -144,7 +144,7 @@ public sealed class CompensationHandlerVariableValidatorTests : IDisposable
     [Fact]
     public async Task A_step_result_is_valid()
     {
-        var result = new ArgumentValue(
+        var result = ArgumentValue.FromClr(
             JsonSerializer.SerializeToElement(new { producerNodeId = "reserve", projectionKey = "result", producerScopeId = "box" }, WebOptions),
             "ActivityResult");
         var root = Scope("outer", ("Order",
@@ -168,7 +168,7 @@ public sealed class CompensationHandlerVariableValidatorTests : IDisposable
     public async Task A_scope_that_confirms_on_complete_keeps_its_entries()
     {
         var inner = Scope("inner", ("Reserve", Leaf("reserve"), Leaf("release", input: Variable(VariableKey, "box"))))
-            with { Inputs = [new ArgumentState("confirmOnComplete", new ArgumentValue(true, "Literal"), null, null, null, null)] };
+            with { Inputs = [new ArgumentState("confirmOnComplete", ArgumentValue.FromClr(true, "Literal"), null, null, null, null)] };
         var root = Scope("outer", ("Order", Container(SequenceActivity.StructureKind, "box", [Total], inner), null));
 
         Assert.Empty(await ValidateAsync(root));
@@ -209,7 +209,7 @@ public sealed class CompensationHandlerVariableValidatorTests : IDisposable
         var middle = Scope("middle", ("Reserve", Leaf("reserve"),
             Scope("inner", ("Release", Leaf("release"), Leaf("undo-release", input: Variable(VariableKey, "box"))))));
         if (middleConfirmsOnComplete)
-            middle = middle with { Inputs = [new ArgumentState("confirmOnComplete", new ArgumentValue("true", "Literal"), null, null, null, null)] };
+            middle = middle with { Inputs = [new ArgumentState("confirmOnComplete", ArgumentValue.FromClr("true", "Literal"), null, null, null, null)] };
         var root = Scope("outer", ("Order", Container(SequenceActivity.StructureKind, "box", [Total], middle), null));
 
         var errors = await ValidateAsync(root);

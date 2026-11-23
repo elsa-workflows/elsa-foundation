@@ -539,10 +539,10 @@ public sealed class PublishWorkflowTriggerIndexingTests
         };
 
     private static WorkflowArgumentState Input(string name, string value) =>
-        new(name, new ArgumentValue(value, "Literal"), null, null, null, null);
+        new(name, ArgumentValue.FromClr(value, "Literal"), null, null, null, null);
 
     private static WorkflowArgumentState ObjectInput(string name, object value) =>
-        new(name, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Object"), null, null, null, null);
+        new(name, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(value), "Object"), null, null, null, null);
 
     private static InputDefinition Definition(string name, string type) =>
         new(name, name, new TypeReference(type), null, name, null, false);

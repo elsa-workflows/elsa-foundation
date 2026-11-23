@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Models;
@@ -33,7 +33,6 @@ public sealed record ArgumentState(
         null => false,
         JsonElement { ValueKind: JsonValueKind.Undefined } => false,
         JsonElement { ValueKind: JsonValueKind.Null } => false,
-        string value => !string.IsNullOrEmpty(value),
         JsonElement { ValueKind: JsonValueKind.String } value => !string.IsNullOrEmpty(value.GetString()),
         _ => true
     };

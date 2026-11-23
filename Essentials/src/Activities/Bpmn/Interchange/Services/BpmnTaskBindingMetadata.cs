@@ -94,7 +94,7 @@ internal static class BpmnTaskBindingMetadata
             inputs = root.TryGetProperty("inputs", out var values)
                 ? values.EnumerateObject()
                     .Where(input => !string.IsNullOrWhiteSpace(input.Name))
-                    .Select(input => new ArgumentState(input.Name, new ArgumentValue(input.Value.Clone(), "Literal"), null, null, null, null))
+                    .Select(input => new ArgumentState(input.Name, ArgumentValue.FromClr(input.Value.Clone(), "Literal"), null, null, null, null))
                     .ToArray()
                 : [];
             return true;

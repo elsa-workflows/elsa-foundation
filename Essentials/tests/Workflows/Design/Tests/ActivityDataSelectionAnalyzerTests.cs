@@ -418,7 +418,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     public async Task Focus_returns_only_canonical_identity_fields_and_never_echoes_ignored_business_data()
     {
         using var provider = Provider();
-        var binding = new ArgumentValue(JsonSerializer.SerializeToElement(new {
+        var binding = ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new {
             producerNodeId = "producer", projectionKey = "$result", producerScopeId = "scope:root", isOptional = false,
             privateBusinessData = "must-not-be-returned"
         }), "ActivityResult");
@@ -572,18 +572,11 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [Theory]
     [InlineData("Secret")]
     [InlineData("Connection")]
-    public async Task Reference_rules_never_serialize_an_unknown_CLR_business_instance(string syntax)
+    public void A_reference_producer_cannot_admit_a_CLR_value_whose_conversion_fails(string syntax)
     {
         var business = new ReferenceGetterTrap();
-        var definition = Definition("CustomerId") with { IsCredential = syntax == "Secret" ? true : null,
-            ConnectionType = syntax == "Connection" ? "test-connection" : null };
-        using var provider = ActivityDataSelectionTestSupport.Provider(Catalog(definition));
-        // Keep the original CLR instance: the JSON-backed Sequence fixture serializes its children.
-        var document = Document(Node("consumer", Input(new(business, syntax))));
-        var result = await Analyzer(provider).AnalyzeAsync(document);
-        Assert.Contains(result.Findings, finding => finding.Type == (syntax == "Secret" ? CredentialInputBinding.RuleId : ConnectionInputBinding.RuleId));
-        await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
-        Assert.Equal(0, business.Reads);
+        Assert.Throws<InvalidOperationException>(() => ArgumentValue.FromClr(business, syntax));
+        Assert.Equal(1, business.Reads);
     }
 
     [Theory]
@@ -597,39 +590,34 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
             ? SecretReferencePayload.Read(JsonSerializer.SerializeToElement(new { name = "test-secret" })).Reference!
             : ConnectionReferencePayload.Read(JsonSerializer.SerializeToElement(new { connection = "test-connection" })).Reference!;
         using var provider = ActivityDataSelectionTestSupport.Provider(Catalog(definition));
-        // A typed ConnectionReferenceMembers has Name, whereas its canonical JSON payload has connection.
-        // Test the actual admitted record before any structure fixture turns it into a different JSON shape.
-        Assert.Empty((await Analyzer(provider).AnalyzeAsync(Document(Node("consumer", Input(new(reference, syntax)))))).Findings);
+        var argument = ArgumentValue.FromClr(reference, syntax);
+        Assert.True(argument.Value!.Value.TryGetProperty(syntax == "Secret" ? "name" : "connection", out _));
+        Assert.Empty((await Analyzer(provider).AnalyzeAsync(Document(Node("consumer", Input(argument))))).Findings);
     }
 
     [Theory]
     [InlineData("literal")]
     [InlineData("Object")]
     [InlineData("Default")]
-    public async Task Literal_business_objects_are_not_serialized_or_interpreted_as_portable_expressions(string syntax)
+    public async Task Carried_literal_business_data_is_not_interpreted_as_a_portable_expression(string syntax)
     {
         using var provider = Provider();
-        var business = new ThrowingBusinessValue();
-        var document = Document(Node("consumer", Input(new(business, syntax))));
+        var argument = ArgumentValue.FromClr(new { value = "business data" }, syntax);
+        var document = Document(Node("consumer", Input(argument)));
         var result = await Analyzer(provider).AnalyzeAsync(document);
         Assert.Empty(result.Findings);
         await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
-        Assert.Equal(0, business.Reads);
+        Assert.Equal("business data", argument.Value!.Value.GetProperty("value").GetString());
     }
 
     [Theory]
     [InlineData("JavaScript")]
     [InlineData("CustomProvider")]
-    public async Task Uninspectable_CLR_expression_values_are_refused_without_reading_business_getters(string syntax)
+    public void A_failing_CLR_expression_producer_is_refused_before_document_admission(string syntax)
     {
-        using var provider = Provider();
         var business = new ThrowingBusinessValue();
-        var document = Document(Node("consumer", Input(new(business, syntax))));
-        var result = await Analyzer(provider).AnalyzeAsync(document);
-        Assert.Equal("consumer/inputs/CustomerId", Assert.Single(result.Findings,
-            finding => finding.Type == "ActivityData/UnsupportedClrExpressionPayload").Path);
-        await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
-        Assert.Equal(0, business.Reads);
+        Assert.Throws<InvalidOperationException>(() => ArgumentValue.FromClr(business, syntax));
+        Assert.Equal(1, business.Reads);
     }
 
     [Theory]

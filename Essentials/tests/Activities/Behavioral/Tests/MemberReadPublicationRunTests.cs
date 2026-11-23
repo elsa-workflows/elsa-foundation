@@ -126,15 +126,15 @@ public sealed class MemberReadPublicationRunTests
         Assert.Contains(refusal.Findings, finding => finding.Path == "reader/inputs/Value" && finding.Type == "ActivityData/UnsupportedMemberBinding");
     }
 
-    private static ArgumentState VariableRead(string[] path) => new(nameof(MemberReader.Value), new ArgumentValue(JsonSerializer.SerializeToElement(new
+    private static ArgumentState VariableRead(string[] path) => new(nameof(MemberReader.Value), ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new
     {
         referenceKey = "customer", declaringScopeId = "workflow", memberPath = path
     }), "VariableMember"), null, null, null, null);
 
     private static VariableDefinition Customer() => new("customer", "Customer", new TypeReference("Object"), null,
-        new ArgumentValue(JsonSerializer.SerializeToElement(new { customerId = "c-1", address = new { street = "Main" } }), "Object"));
+        ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { customerId = "c-1", address = new { street = "Main" } }), "Object"));
 
-    private static ArgumentState Read(string[] path) => new(nameof(MemberReader.Value), new ArgumentValue(JsonSerializer.SerializeToElement(new
+    private static ArgumentState Read(string[] path) => new(nameof(MemberReader.Value), ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new
     {
         producerNodeId = "producer", projectionKey = "$result", isOptional = false, memberPath = path
     }), "ActivityResultMember"), null, null, null, null);

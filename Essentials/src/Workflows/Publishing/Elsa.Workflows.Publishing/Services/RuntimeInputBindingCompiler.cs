@@ -323,7 +323,7 @@ public sealed class RuntimeInputBindingCompiler(
     /// </summary>
     private RuntimeInputBinding CompileUnbound(string nodeId, InputDefinition inputDefinition, ActivityValuePolicy declaredPolicy) =>
         inputDefinition.DefaultValue.HasValue
-            ? CompileDefault(nodeId, inputDefinition, declaredPolicy, new ArgumentValue(null, DefaultExpressionType))
+            ? CompileDefault(nodeId, inputDefinition, declaredPolicy, ArgumentValue.FromClr(null, DefaultExpressionType))
             : !inputDefinition.IsRequired
                 ? CompileOmitted(inputDefinition, ValuePolicyCombiner.ToProtectionPolicy(declaredPolicy))
                 : throw MissingRequiredInput(nodeId, inputDefinition.ReferenceKey);
@@ -875,10 +875,10 @@ public sealed class RuntimeInputBindingCompiler(
         var defaultSyntax = inputDefinition.DefaultSyntax;
         if (string.IsNullOrWhiteSpace(defaultSyntax) ||
             string.Equals(defaultSyntax, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileLiteralInput(nodeId, inputDefinition, new ArgumentValue(inputDefinition.DefaultValue.Value, LiteralExpressionType), effectivePolicy, conversion: null);
+            return CompileLiteralInput(nodeId, inputDefinition, ArgumentValue.FromClr(inputDefinition.DefaultValue.Value, LiteralExpressionType), effectivePolicy, conversion: null);
 
         if (string.Equals(defaultSyntax, ObjectExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileObjectInput(nodeId, inputDefinition, new ArgumentValue(inputDefinition.DefaultValue.Value, ObjectExpressionType), effectivePolicy, conversion: null);
+            return CompileObjectInput(nodeId, inputDefinition, ArgumentValue.FromClr(inputDefinition.DefaultValue.Value, ObjectExpressionType), effectivePolicy, conversion: null);
 
         throw new ArgumentException(
             $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' default syntax '{defaultSyntax}' is executable. Canonical activity defaults must be pinned literals.");

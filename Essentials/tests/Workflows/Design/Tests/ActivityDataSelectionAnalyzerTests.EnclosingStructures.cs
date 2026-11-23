@@ -82,7 +82,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.False(binding.TryGetProperty("producerScopeId", out _));
 
         var stored = await Analyzer(provider).AnalyzeAsync(Of(Root(Node("consumer",
-            Input(new ArgumentValue(binding, "ActivityResult"))))));
+            Input(ArgumentValue.FromClr(binding, "ActivityResult"))))));
         Assert.Empty(stored.Findings);
     }
 

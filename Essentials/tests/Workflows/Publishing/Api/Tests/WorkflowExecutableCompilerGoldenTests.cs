@@ -376,7 +376,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
             Name: "Counter",
             Type: new TypeReference("String"),
             StorageDriverType: null,
-            Default: new ArgumentValue("0", "Literal"));
+            Default: ArgumentValue.FromClr("0", "Literal"));
 
         var variableReference = JsonSerializer.SerializeToElement(new { referenceKey = "var-counter", declaringScopeId = "node-sequence" });
 
@@ -550,13 +550,13 @@ public sealed class WorkflowExecutableCompilerGoldenTests
                 Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
 
     private static WorkflowArgumentState Text(string value) =>
-        new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
+        new("Text", ArgumentValue.FromClr(value, "Literal"), null, null, null, null);
 
     private static WorkflowArgumentState JavaScriptText(string expression) =>
-        new("Text", new ArgumentValue(expression, "JavaScript"), null, null, null, null);
+        new("Text", ArgumentValue.FromClr(expression, "JavaScript"), null, null, null, null);
 
     private static WorkflowArgumentState VariableText(JsonElement reference) =>
-        new("Text", new ArgumentValue(reference, "Variable"), null, null, null, null);
+        new("Text", ArgumentValue.FromClr(reference, "Variable"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
         ActivityVersion(

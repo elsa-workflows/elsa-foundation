@@ -182,7 +182,7 @@ public sealed class RoleOwnedInputBindingContractTests
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = new InputDefinition("message", "Text", new TypeReference("String"), null, "Text", null, IsNullable: false);
         using var json = JsonDocument.Parse(payload);
-        var value = new ArgumentValue(json.RootElement.Clone(), "ActivityResult");
+        var value = ArgumentValue.FromClr(json.RootElement.Clone(), "ActivityResult");
 
         if (expectedScope == "refused")
         {
@@ -208,7 +208,7 @@ public sealed class RoleOwnedInputBindingContractTests
             Category: null,
             IsNullable: false);
 
-        var binding = compiler.Compile("node-write", input, new ArgumentValue("hello", "Literal"));
+        var binding = compiler.Compile("node-write", input, ArgumentValue.FromClr("hello", "Literal"));
 
         Assert.Equal("message", binding.InputKey);
         Assert.Equal("String", binding.TargetType.Alias);
@@ -231,7 +231,7 @@ public sealed class RoleOwnedInputBindingContractTests
             IsNullable: false);
         var state = new ArgumentState(
             "message",
-            new ArgumentValue("secret", "Literal"),
+            ArgumentValue.FromClr("secret", "Literal"),
             AutoEvaluate: null,
             EvaluatorType: null,
             StorageDriverType: "encrypted-payloads",
@@ -272,7 +272,7 @@ public sealed class RoleOwnedInputBindingContractTests
         var binding = compiler.Compile(
             "node-write",
             input,
-            new ArgumentValue(Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(definition), "JavaScript"));
+            ArgumentValue.FromClr(Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(definition), "JavaScript"));
 
         Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
         var expression = Assert.IsType<RuntimeExpressionBinding>(binding.Expression);
@@ -303,7 +303,7 @@ public sealed class RoleOwnedInputBindingContractTests
         var payload = SerializationServices.PayloadSerializer().SerializeToElement(definition);
 
         var binding = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create())
-            .Compile("node-calculate", input, new ArgumentValue(payload, "JavaScript"));
+            .Compile("node-calculate", input, ArgumentValue.FromClr(payload, "JavaScript"));
 
         Assert.Equal("alias", binding.Expression!.ResultType!.Kind);
         Assert.Equal("Int32", binding.Expression.ResultType.Id);
@@ -315,8 +315,8 @@ public sealed class RoleOwnedInputBindingContractTests
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = CollectionInput("SupportedMethods", "String");
 
-        Assert.Throws<ValueConversionPublicationException>(() => compiler.Compile("node-endpoint", input, new ArgumentValue("GET", "Literal")));
-        var binding = compiler.Compile("node-endpoint", input, new ArgumentValue(JsonSerializer.SerializeToElement(new[] { "GET" }), "Literal"));
+        Assert.Throws<ValueConversionPublicationException>(() => compiler.Compile("node-endpoint", input, ArgumentValue.FromClr("GET", "Literal")));
+        var binding = compiler.Compile("node-endpoint", input, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new[] { "GET" }), "Literal"));
 
         var array = binding.Literal!.InlineValue!.Value;
         Assert.Equal(JsonValueKind.Array, array.ValueKind);
@@ -329,8 +329,8 @@ public sealed class RoleOwnedInputBindingContractTests
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = CollectionInput("ExpectedStatusCodes", "Int32");
 
-        Assert.Throws<ValueConversionPublicationException>(() => compiler.Compile("node-send", input, new ArgumentValue("200, 404", "Literal")));
-        var binding = compiler.Compile("node-send", input, new ArgumentValue(JsonSerializer.SerializeToElement(new[] { 200, 404 }), "Literal"));
+        Assert.Throws<ValueConversionPublicationException>(() => compiler.Compile("node-send", input, ArgumentValue.FromClr("200, 404", "Literal")));
+        var binding = compiler.Compile("node-send", input, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new[] { 200, 404 }), "Literal"));
 
         var array = binding.Literal!.InlineValue!.Value;
         Assert.Equal(JsonValueKind.Array, array.ValueKind);
@@ -353,7 +353,7 @@ public sealed class RoleOwnedInputBindingContractTests
             IsNullable: false);
 
         var exception = Assert.Throws<ValueConversionPublicationException>(() =>
-            compiler.Compile("node-send", input, new ArgumentValue("not-a-number", "Literal")));
+            compiler.Compile("node-send", input, ArgumentValue.FromClr("not-a-number", "Literal")));
 
         Assert.Equal(ValueConversionRejectionReason.LiteralCoercionFailed, exception.ReasonCode);
         Assert.StartsWith("VF-COER-001", exception.Message, StringComparison.Ordinal);
@@ -370,8 +370,8 @@ public sealed class RoleOwnedInputBindingContractTests
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = CollectionInput("SupportedMethods", "String");
 
-        var literal = compiler.Compile("node-endpoint", input, new ArgumentValue(JsonSerializer.SerializeToElement(new[] { "GET", "POST" }), "Literal"));
-        var promoted = compiler.Compile("node-endpoint", input, new ArgumentValue("[\"GET\",\"POST\"]", "Object"));
+        var literal = compiler.Compile("node-endpoint", input, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new[] { "GET", "POST" }), "Literal"));
+        var promoted = compiler.Compile("node-endpoint", input, ArgumentValue.FromClr("[\"GET\",\"POST\"]", "Object"));
 
         Assert.Equal(RuntimeInputBindingSource.Literal, literal.Source);
         var array = literal.Literal!.InlineValue!.Value;
@@ -395,7 +395,7 @@ public sealed class RoleOwnedInputBindingContractTests
             Category: null,
             IsNullable: true);
 
-        var binding = compiler.Compile("node-send", input, new ArgumentValue(JsonSerializer.SerializeToElement(new { a = 1 }), "Literal"));
+        var binding = compiler.Compile("node-send", input, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { a = 1 }), "Literal"));
 
         Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
         var value = binding.Literal!.InlineValue!.Value;
@@ -409,7 +409,7 @@ public sealed class RoleOwnedInputBindingContractTests
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = CollectionInput("SupportedMethods", "String");
 
-        Assert.Throws<ValueConversionPublicationException>(() => compiler.Compile("node-endpoint", input, new ArgumentValue("[\"GET\",\"POST\"]", "Literal")));
+        Assert.Throws<ValueConversionPublicationException>(() => compiler.Compile("node-endpoint", input, ArgumentValue.FromClr("[\"GET\",\"POST\"]", "Literal")));
     }
 
     [Fact]

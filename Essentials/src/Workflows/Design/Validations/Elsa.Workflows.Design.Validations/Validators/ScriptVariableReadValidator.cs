@@ -139,7 +139,6 @@ public sealed class ScriptVariableReadValidator(
             return null;
         return value.Value switch
         {
-            string text => text,
             JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
             _ => null
         };

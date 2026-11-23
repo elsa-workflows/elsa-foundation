@@ -90,7 +90,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             },
             JsonSerializer.SerializeToElement(new { }),
             ExpressionCapabilityProfiles.BindingReadonlyV1);
-        var input = new WorkflowArgumentState("Text", new ArgumentValue(Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(definition), "JavaScript"), null, null, null, null);
+        var input = new WorkflowArgumentState("Text", ArgumentValue.FromClr(Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(definition), "JavaScript"), null, null, null, null);
 
         var executable = await CompileReadsAsync(Node("consumer", input), [Greeting]);
 
@@ -105,7 +105,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     {
         // Boundary inputs compile before the node tree; their script reads get pinned all the same.
         var executable = await PlacedReusableCompiler(
-            new WorkflowArgumentState("value", new ArgumentValue("variables.CallerResult + 1", "JavaScript"), null, null, null, null),
+            new WorkflowArgumentState("value", ArgumentValue.FromClr("variables.CallerResult + 1", "JavaScript"), null, null, null, null),
             readResolver: ReadResolver).CompileAsync(NewRequest(DateTimeOffset.UtcNow));
 
         var parameter = (VariableExpressionParameterBinding)executable.RootActivity.InputBindings["value"].Expression!.Parameters["variables.CallerResult"];
@@ -123,7 +123,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         var node = new Elsa.Workflows.Design.Core.Models.ActivityNode(
             "script",
             "activity-script-probe",
-            [new WorkflowArgumentState("script", new ArgumentValue("const g = variables.greeting; return g + variables[k];", "Literal"), null, null, null, null)],
+            [new WorkflowArgumentState("script", ArgumentValue.FromClr("const g = variables.greeting; return g + variables[k];", "Literal"), null, null, null, null)],
             Outputs: []);
         var compiler = TestCompiler.Create(
             new FakeVersionStore(WorkflowVersion(node, variables: [Greeting])),
