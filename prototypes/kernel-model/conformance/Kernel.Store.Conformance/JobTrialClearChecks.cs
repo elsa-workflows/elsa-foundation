@@ -40,14 +40,15 @@ internal static class JobTrialClearChecks
         var old = Job("old");
         var foreign = Job("foreign", 1);
         var ordinary = Make.M(first.Id, 0);
-        var nonjob = Job("nonjob") with { Kind = "ordinary-work" };
+        var nonjob = Job("nonjob") with { Kind = "Kernel.Job" }; // Similar spelling still belongs to a different handler.
+        var differentCase = Job("FIRST");
         var second = await c.Take(1);
-        await c.Lands(() => Send(c, lease, first, other, settled, old, foreign, ordinary, nonjob));
+        await c.Lands(() => Send(c, lease, first, other, settled, old, foreign, ordinary, nonjob, differentCase));
         await c.Lands(() => c.Commit(lease, 0, [], trial: [old.InboxKey]));
         var predecessor = lease;
         lease = await c.Take(0);
         await c.Refused(() => Clear(c, predecessor, old.InboxKey), "stale owner clearing its previous epoch's ticket");
-        await c.Lands(() => c.Commit(lease, 0, [], trial: [first.InboxKey, other.InboxKey, settled.InboxKey, ordinary.InboxKey, nonjob.InboxKey]));
+        await c.Lands(() => c.Commit(lease, 0, [], trial: [first.InboxKey, other.InboxKey, settled.InboxKey, ordinary.InboxKey, nonjob.InboxKey, differentCase.InboxKey]));
         await c.Lands(() => c.Commit(second, 1, [], trial: [foreign.InboxKey]));
         await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/worker", done: [settled.InboxKey], journal: null)]));
 
@@ -70,6 +71,7 @@ internal static class JobTrialClearChecks
         Context.Equal(lease.Epoch, rows[first.InboxKey].Seen, "selected ticket remains seen at the fenced epoch");
         Context.Equal(lease.Epoch, rows[ordinary.InboxKey].Trial, "ordinary input with the same wire id retains its trial");
         Context.Equal(lease.Epoch, rows[nonjob.InboxKey].Trial, "other work retains its trial");
+        Context.Equal(lease.Epoch, rows[differentCase.InboxKey].Trial, "other case-sensitive ticket retains its trial");
         Context.Equal(second.Epoch, (await c.All(1)).Single().Trial, "other partition retains its trial");
     }
 
