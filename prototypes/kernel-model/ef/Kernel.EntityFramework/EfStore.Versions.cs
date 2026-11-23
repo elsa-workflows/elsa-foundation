@@ -10,7 +10,7 @@ internal sealed class StoreVersionEntity
 {
     internal const string Table = "KernelStoreVersions";
     internal const int MarkerId = 1;
-    internal const int StoreSchemaVersion = 1;
+    internal const int StoreSchemaVersion = 2;
     internal const int MessageProtocolVersion = 1;
     internal const int JournalCodecVersion = 1;
 
@@ -52,8 +52,11 @@ public sealed partial class EfStore
 {
     private enum FormatLock { None, Shared, Exclusive }
 
+    internal static Task RequireStoreVersionsAsync(KernelDb db, CancellationToken cancellationToken)
+        => RequireStoreVersionsAsync(db, cancellationToken, FormatLock.None);
+
     private static async Task RequireStoreVersionsAsync(KernelDb db, CancellationToken cancellationToken,
-        FormatLock formatLock = FormatLock.None)
+        FormatLock formatLock)
     {
         var stored = await ReadStoreFormatAsync(db, formatLock, cancellationToken);
         if (stored != StoreFormat.Current)
