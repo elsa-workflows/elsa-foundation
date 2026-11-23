@@ -75,6 +75,11 @@ if (args.Contains("--park-control-identity-check"))
     await ParkHandoffCreditChecks.CheckControlIdentities((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--park-rotating-waits-check"))
+{
+    await ParkRotatingWaitChecks.Run();
+    return 0;
+}
 if (args.Contains("--park-coverage-budget-check"))
 {
     var failed = false;
