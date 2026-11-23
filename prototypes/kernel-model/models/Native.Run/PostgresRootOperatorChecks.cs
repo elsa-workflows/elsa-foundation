@@ -145,8 +145,9 @@ internal static class PostgresRootOperatorChecks
             {
                 await exact.ExecuteUpdateAsync(change => change.SetProperty(m => m.JobGeneration, 0L), ct);
             }
-            var header = await exact.Select(m => m.Start).SingleAsync(ct);
-            var prefix = header![..(header.IndexOf(':') + 1)];
+            var header = await exact.Select(m => m.Start).SingleAsync(ct)
+                ?? throw new InvalidOperationException("The exact stored operator header is absent.");
+            var prefix = header[..(header.IndexOf(':') + 1)];
             try
             {
                 foreach (var invalid in new[] { "null", "{" })
