@@ -117,6 +117,8 @@ internal static class PostgresWorkflowHistoryChecks
         await CheckRollback(newer[0], physical);
         await CheckFormats(newer[0], physical);
         await CheckTrigger();
+        await CheckActorListDependency();
+        await CheckSourceReplacement();
         await CheckRetirementGuard(finished, terminal);
 
         // Seed two groups from observed times so the first cursor lands inside a tie and must also reach older rows.
@@ -234,14 +236,39 @@ internal static class PostgresWorkflowHistoryChecks
                 WHERE tgrelid = to_regclass('"Instances"') AND tgname = 'kernel_project_root_workflow_history_v1'
                 """).SingleAsync(ct);
             await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_project_root_workflow_history_v1 """, ct);
-            await RequireFormatRefusal(() => api.ListRunsAsync(scope, query, cancellationToken: ct).AsTask());
-            await RequireFormatRefusal(() => store.InstallRootWorkflowHistoryAsync(ct));
+            await RequireSourceRefusal();
             await db.Database.ExecuteSqlRawAsync("""DROP TRIGGER kernel_project_root_workflow_history_v1 ON "Instances" """, ct);
-            await RequireFormatRefusal(() => api.ListRunsAsync(scope, query, cancellationToken: ct).AsTask());
-            await RequireFormatRefusal(() => store.InstallRootWorkflowHistoryAsync(ct));
+            await RequireSourceRefusal();
             await db.Database.ExecuteSqlRawAsync(trigger, ct);
             Check((await api.ListRunsAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
                 "reads and installation refuse a disabled or absent trigger and reopen when it is restored");
+        }
+        async Task CheckActorListDependency()
+        {
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_project_root_actor_list """, ct);
+            await RequireSourceRefusal();
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" ENABLE REPLICA TRIGGER kernel_project_root_actor_list """, ct);
+            await RequireSourceRefusal();
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" ENABLE TRIGGER kernel_project_root_actor_list """, ct);
+            Check((await api.ListRunsAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
+                "the history route requires its actor-list trigger in an origin-enabled mode");
+        }
+        async Task CheckSourceReplacement()
+        {
+            await db.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "Instances" RENAME TO "FixtureArchivedOwner";
+                CREATE TABLE "Instances" (LIKE "FixtureArchivedOwner" INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+                """, ct);
+            await RequireSourceRefusal();
+            await db.Database.ExecuteSqlRawAsync("""DROP TABLE "Instances" """, ct);
+            Check((await api.ListRunsAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
+                "the history route refuses a canonical replacement and accepts a renamed-only source");
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FixtureArchivedOwner" RENAME TO "Instances" """, ct);
+        }
+        async Task RequireSourceRefusal()
+        {
+            await RequireFormatRefusal(() => api.ListRunsAsync(scope, query, cancellationToken: ct).AsTask());
+            await RequireFormatRefusal(() => store.InstallRootWorkflowHistoryAsync(ct));
         }
         async Task CheckRetirementGuard(Contract.ActorRef actor, EfStore.RootImage image)
         {

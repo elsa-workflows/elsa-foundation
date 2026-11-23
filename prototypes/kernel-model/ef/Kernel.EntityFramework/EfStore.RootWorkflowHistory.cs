@@ -6,6 +6,9 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     private const int WorkflowHistoryVersion = 1;
+    private static readonly string[] RootListSourceTriggers = ["kernel_require_root_checkpoint_writer", "kernel_project_root_actor_list"];
+    private static readonly string[] WorkflowHistorySourceTriggers = [..RootListSourceTriggers, "kernel_project_root_workflow_history_v1"];
+
     internal sealed record RootWorkflowHistoryItem(string Reference, InstanceStatus Status, string? Definition, long UpdatedAt);
     internal sealed record RootWorkflowHistoryPage(IReadOnlyList<RootWorkflowHistoryItem> Items, long AsOf);
     private sealed record RootWorkflowHistoryRow(string? Reference, int? Status, string? Header, long? UpdatedAt,
@@ -25,25 +28,23 @@ public sealed partial class EfStore
         var versions = await db.Database.SqlQueryRaw<int>("""
             SELECT "Version" AS "Value" FROM "FoundationWorkflowHistoryFormat" WHERE "Singleton"
             """).ToListAsync(token);
-        if (versions.Count == 1)
-        {
-            RequireHistoryVersion(versions[0]);
-            if (!await db.Database.SqlQueryRaw<bool>("""
-                SELECT to_regclass('"FoundationWorkflowHistory"') IS NOT NULL AND EXISTS (
-                    SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid = to_regclass('"Instances"')
-                        AND tgname = 'kernel_project_root_workflow_history_v1' AND tgenabled IN ('O', 'A')
-                        AND tgfoid = to_regprocedure('kernel_project_root_workflow_history_v1()')
+        var installed = versions.Count == 1;
+        if (installed) RequireHistoryVersion(versions[0]);
+        var required = installed ? WorkflowHistorySourceTriggers : RootListSourceTriggers;
+        if (!await db.Database.SqlQuery<bool>($"""
+            SELECT to_regclass('"FoundationActorList"') IS NOT NULL
+                AND (NOT {installed} OR to_regclass('"FoundationWorkflowHistory"') IS NOT NULL)
+                AND EXISTS (
+                    SELECT 1 FROM pg_catalog.pg_trigger source
+                    WHERE source.tgrelid = to_regclass('"Instances"')
+                        AND source.tgname::text = ANY({required}) AND source.tgenabled IN ('O', 'A')
+                        AND source.tgfoid = to_regprocedure(source.tgname::text || '()')
+                    GROUP BY source.tgrelid HAVING count(*) = {required.Length}
                 ) AS "Value"
-                """).SingleAsync(token))
-                throw new StoreFormatException("The installed workflow history projection is incomplete.");
-        }
-        else
+            """).SingleAsync(token))
+            throw new StoreFormatException("The installed workflow history source or one of its projection triggers is incomplete.");
+        if (!installed)
         {
-            if (!await db.Database.SqlQueryRaw<bool>("""
-                SELECT to_regclass('"FoundationActorList"') IS NOT NULL AS "Value"
-                """).SingleAsync(token))
-                throw new StoreFormatException("Install qualified root admission before workflow history.");
-
             // Hold the same root installation lock and publish the format, table and trigger together.
             // Legacy roots have no update time until a qualified checkpoint is observed.
             await db.Database.ExecuteSqlRawAsync("""
@@ -106,14 +107,13 @@ public sealed partial class EfStore
                 ), format AS (
                     SELECT "Version" FROM "FoundationWorkflowHistoryFormat" WHERE "Singleton"
                 ), readiness AS (
-                    -- The qualified writer identifies the relation even after a table rename.
+                    -- A renamed source can still serve its projection until a canonical source replaces it.
                     SELECT EXISTS (
-                        SELECT 1 FROM pg_catalog.pg_trigger projection JOIN pg_catalog.pg_trigger writer
-                            ON writer.tgrelid = projection.tgrelid
-                        WHERE projection.tgname = 'kernel_project_root_workflow_history_v1' AND projection.tgenabled IN ('O', 'A')
-                            AND projection.tgfoid = to_regprocedure('kernel_project_root_workflow_history_v1()')
-                            AND writer.tgname = 'kernel_require_root_checkpoint_writer'
-                            AND writer.tgfoid = to_regprocedure('kernel_require_root_checkpoint_writer()')
+                        SELECT 1 FROM pg_catalog.pg_trigger source
+                        WHERE (to_regclass('"Instances"') IS NULL OR source.tgrelid = to_regclass('"Instances"'))
+                            AND source.tgname::text = ANY({WorkflowHistorySourceTriggers}) AND source.tgenabled IN ('O', 'A')
+                            AND source.tgfoid = to_regprocedure(source.tgname::text || '()')
+                        GROUP BY source.tgrelid HAVING count(*) = {WorkflowHistorySourceTriggers.Length}
                     ) AS "TriggerEnabled"
                 ), page AS (
                     SELECT l."Reference", l."Status", l."Header", h."UpdatedAt"
@@ -149,7 +149,7 @@ public sealed partial class EfStore
         var stored = new StoreFormat(schema, protocol, codec);
         if (stored != expected) throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {expected}.");
         RequireHistoryVersion(first.Version);
-        if (!first.TriggerEnabled) throw new StoreFormatException("The workflow history projection trigger is missing or disabled.");
+        if (!first.TriggerEnabled) throw new StoreFormatException("The workflow history source or one of its projection triggers is missing or disabled.");
         var items = rows.Where(row => row.Reference is not null).Select(row =>
         {
             var definition = DurableKeyJson.Read<RootHeader>(row.Header!).Labels.FirstOrDefault(label => label.Key == "definition").Value;

@@ -310,9 +310,13 @@ projection upsert with its indexes per qualified checkpoint. The worker sends th
 
 The chronology route uses inclusive UTC bounds at the precision of the caller's dates and orders results by
 timestamp descending and exact reference ascending. It joins the timestamp and actor-list projections. Reads
-check both format markers and the installed trigger in the same statement. The generic actor list still shows prior roots. Such a root
-enters chronological history on its first checkpoint observed after installation. Physical workflow retirement,
-legacy timestamps and product routing remain outside this preview.
+check both format markers and the trigger chain on the current owner relation in the same statement. A canonical
+replacement must have all the required triggers. A rename with no canonical replacement can still serve the
+existing projection. Re-enable a trigger only if owner writes were quiesced throughout the disabled interval or
+after an explicit rebuild from authoritative data. Missed silent checkpoint timestamps cannot be reconstructed
+from a later checkpoint or from the public journal. The generic actor list still shows prior roots, which enter chronological history
+on their first checkpoint observed after installation. Physical workflow retirement, legacy timestamps and
+product routing remain outside this preview.
 
 On a fresh disposable PostgreSQL database, run `pg-root-workflow-history <owned|ef> <checked|in-batch> birth`
 with the Native runner. Run the same command with `restart <projection-bookmark>` and
