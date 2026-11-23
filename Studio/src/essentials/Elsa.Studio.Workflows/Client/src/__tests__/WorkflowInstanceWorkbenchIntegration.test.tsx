@@ -2971,3 +2971,135 @@ it("does not flash scope loading text or singleton occurrence controls in the sc
   expect(api.getActivityExecutionInspection).not.toHaveBeenCalledWith(expect.anything(), "run-1", "exec-nested", expect.anything());
   expect(api.getActivityExecutionInspection).not.toHaveBeenCalledWith(expect.anything(), "run-1", "exec-root", expect.anything());
 });
+
+it("does not flash Child executions or loading execution browsers above the inspector tabs when selecting activities", async () => {
+  observedWidth = 1400;
+  window.localStorage.removeItem("elsa-studio-run-detail-inspector-maximized");
+
+  const pinned = executable();
+  const nested = pinned.rootActivity.childSlots[0]!.activities[0]!;
+  nested.childSlots[0]!.activities.push({
+    ...nested.childSlots[0]!.activities[0]!,
+    executableNodeId: "compiled-second",
+    authoredActivityId: "second-node",
+    activityType: "Elsa.Delay",
+    activityTypeVersion: "1.0.0"
+  });
+  api.getExecutable.mockResolvedValue(pinned);
+  api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
+  api.supportsActivityExecutionInspection.mockResolvedValue(true);
+  api.listActivities.mockResolvedValue({
+    activities: [
+      { activityTypeKey: "Elsa.Sequence", typeName: "Elsa.Sequence", version: 1, displayName: "Sequence", category: "Primitives", inputs: [], outputs: [], outcomes: [] },
+      { activityTypeKey: "Elsa.WriteLine", typeName: "Elsa.WriteLine", version: 1, displayName: "Write Line", category: "Console", inputs: [], outputs: [], outcomes: [] },
+      { activityTypeKey: "Elsa.Delay", typeName: "Elsa.Delay", version: 1, displayName: "Delay", category: "Timers", inputs: [], outputs: [], outcomes: [] }
+    ]
+  });
+
+  const rootExec = {
+    ...activityExecution(),
+    activityExecutionId: "exec-root",
+    executableNodeId: "compiled-root-sequence",
+    authoredActivityId: "root-sequence",
+    activityType: "Elsa.Sequence",
+    parentActivityExecutionId: null,
+    executionSequence: 1,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  const nestedExec = {
+    ...activityExecution(),
+    activityExecutionId: "exec-nested",
+    executableNodeId: "compiled-nested-sequence",
+    authoredActivityId: "nested-sequence",
+    activityType: "Elsa.Sequence",
+    parentActivityExecutionId: "exec-root",
+    executionSequence: 2,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  const firstLeaf = {
+    ...activityExecution(),
+    activityExecutionId: "exec-first",
+    executableNodeId: "compiled-target",
+    authoredActivityId: "target-node",
+    activityType: "Elsa.WriteLine",
+    parentActivityExecutionId: "exec-nested",
+    executionSequence: 3,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  const secondLeaf = {
+    ...activityExecution(),
+    activityExecutionId: "exec-second",
+    executableNodeId: "compiled-second",
+    authoredActivityId: "second-node",
+    activityType: "Elsa.Delay",
+    parentActivityExecutionId: "exec-nested",
+    executionSequence: 4,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  const allExecutions = [rootExec, nestedExec, firstLeaf, secondLeaf];
+  api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: allExecutions, incidents: [] }));
+
+  let holdInspectorReads = false;
+  const pendingChildRead = deferred<ActivityExecutionBrowsePage>();
+  const pendingAnchorRead = deferred<ActivityExecutionBrowsePage>();
+  api.browseActivityExecutions.mockImplementation(async (_context, _run, request) => {
+    if (holdInspectorReads && request.parentActivityExecutionId === "exec-second") return pendingChildRead.promise;
+    if (holdInspectorReads && request.executableNodeId === "compiled-second" && request.anchorActivityExecutionId === "exec-second") return pendingAnchorRead.promise;
+    const matches = allExecutions.filter(item =>
+      (!request.executableNodeId || item.executableNodeId === request.executableNodeId)
+      && (!request.parentActivityExecutionId || item.parentActivityExecutionId === request.parentActivityExecutionId)
+      && (!request.ancestorActivityExecutionId || item.parentActivityExecutionId === request.ancestorActivityExecutionId)
+      && (!request.anchorActivityExecutionId || item.activityExecutionId === request.anchorActivityExecutionId));
+    return { items: matches.map((execution, index) => ({ execution, position: index + 1 })), totalCount: matches.length, previousCursor: null, nextCursor: null };
+  });
+  api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => {
+    const found = allExecutions.find(item => item.activityExecutionId === id) ?? firstLeaf;
+    return activityInspection({
+      ...found,
+      outcomeNames: ["Done"],
+      incidents: [],
+      provenance: { parentActivityExecutionId: found.parentActivityExecutionId ?? null } as ActivityExecutionInspection["provenance"]
+    });
+  });
+
+  renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelector("[data-activity-execution-id='exec-first']")).toBeTruthy());
+  click(container.querySelector<HTMLButtonElement>("[data-activity-execution-id='exec-first']")!);
+  await vi.waitFor(() => expect(container.querySelector(".wf-sequence-step[data-id='second-node']")).toBeTruthy());
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")?.textContent).toContain("Write Line"));
+  expect(container.querySelector(".wf-execution-children")).toBeNull();
+
+  // Wait for scoped canvas singletons to finish loading before clicking the sibling on the diagram.
+  await vi.waitFor(() => expect(
+    container.querySelector(".wf-sequence-step[data-id='second-node']")?.closest(".wf-sequence-item")?.classList.contains("wf-sequence-runtime")
+  ).toBe(true));
+
+  holdInspectorReads = true;
+  click(container.querySelector<HTMLButtonElement>(".wf-sequence-step[data-id='second-node']")!);
+
+  // Immediately after clicking the diagram activity, details render without flashing Child executions or a loading occurrence browser.
+  const inspector = container.querySelector(".wf-instance-inspector")!;
+  expect(inspector.querySelector(".wf-activity-overview")?.textContent).toContain("Delay");
+  expect(inspector.querySelector(".wf-execution-children")).toBeNull();
+  expect(inspector.querySelector(".wf-execution-browser")).toBeNull();
+  expect(inspector.textContent).not.toContain("Child executions");
+  expect(inspector.textContent).not.toContain("Loading recorded executions");
+
+  pendingAnchorRead.resolve({ items: [{ execution: secondLeaf, position: 1, previousActivityExecutionId: null, nextActivityExecutionId: null }], totalCount: 1, previousCursor: null, nextCursor: null });
+  pendingChildRead.resolve({ items: [], totalCount: 0, previousCursor: null, nextCursor: null });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(inspector.querySelector(".wf-execution-children")).toBeNull();
+  expect(inspector.querySelector(".wf-execution-browser")).toBeNull();
+});
