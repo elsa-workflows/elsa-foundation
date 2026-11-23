@@ -59,28 +59,50 @@ public sealed class JsonHostEntrypointTests
         catch (Exception error) { failure = error; throw; }
         finally
         {
-            try
+            var cleanupErrors = new List<Exception>();
+            await CleanupAsync(async () =>
             {
-                if (process is { HasExited: false }) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); }
-                if (Environment.GetEnvironmentVariable("ELSA_JSON_HOST_EVIDENCE") is { Length: > 0 } evidence)
+                if (process is { HasExited: false })
                 {
-                    Directory.CreateDirectory(evidence);
-                    var retained = Directory.CreateDirectory(Path.Combine(evidence, name + "-" + Guid.NewGuid().ToString("N"))).FullName;
-                    await File.WriteAllTextAsync(Path.Combine(retained, "host.log"),
-                        (stdout is null ? string.Empty : await stdout) + (stderr is null ? string.Empty : await stderr));
-                    if (File.Exists(receipt)) File.Copy(receipt, Path.Combine(retained, "receipt.json"));
-                    else await File.WriteAllTextAsync(Path.Combine(retained, "missing-receipt.txt"), "HostBuilt did not produce a receipt.");
-                    if (failure is not null) await File.WriteAllTextAsync(Path.Combine(retained, "failure.txt"), failure.ToString());
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
+                }
+            });
+            string capturedOut = string.Empty, capturedError = string.Empty;
+            await CleanupAsync(async () => { if (stdout is not null) capturedOut = await stdout.WaitAsync(TimeSpan.FromSeconds(10)); });
+            await CleanupAsync(async () => { if (stderr is not null) capturedError = await stderr.WaitAsync(TimeSpan.FromSeconds(10)); });
+            if (Environment.GetEnvironmentVariable("ELSA_JSON_HOST_EVIDENCE") is { Length: > 0 } evidence)
+            {
+                string? retained = null;
+                await CleanupAsync(() =>
+                {
+                    retained = Directory.CreateDirectory(Path.Combine(evidence, name + "-" + Guid.NewGuid().ToString("N"))).FullName;
+                    return Task.CompletedTask;
+                });
+                if (retained is not null)
+                {
+                    await CleanupAsync(() => File.WriteAllTextAsync(Path.Combine(retained, "host.log"), capturedOut + capturedError));
+                    await CleanupAsync(async () =>
+                    {
+                        if (File.Exists(receipt)) File.Copy(receipt, Path.Combine(retained, "receipt.json"));
+                        else await File.WriteAllTextAsync(Path.Combine(retained, "missing-receipt.txt"), "HostBuilt did not produce a receipt.");
+                    });
+                    if (failure is not null) await CleanupAsync(() => File.WriteAllTextAsync(Path.Combine(retained, "failure.txt"), failure.ToString()));
                 }
             }
-            catch (Exception retentionError) when (failure is not null)
+            await CleanupAsync(() => { process?.Dispose(); return Task.CompletedTask; });
+            await CleanupAsync(() => { Directory.Delete(directory, recursive: true); return Task.CompletedTask; });
+            if (cleanupErrors.Count > 0)
             {
-                Console.Error.WriteLine("Host probe cleanup/evidence error in addition to the test failure: " + retentionError);
+                var error = new AggregateException("Host probe cleanup/evidence failed.", cleanupErrors);
+                if (failure is null) throw error;
+                Console.Error.WriteLine("In addition to the original host probe failure: " + error);
             }
-            finally
+
+            async Task CleanupAsync(Func<Task> action)
             {
-                process?.Dispose();
-                Directory.Delete(directory, recursive: true);
+                try { await action(); }
+                catch (Exception error) { cleanupErrors.Add(error); }
             }
         }
     }
