@@ -232,6 +232,9 @@ jobs:
       contents: write
       attestations: read
     steps:
+      - name: Reserve time for publish-state write-back
+        id: budget
+        run: echo "deadline=$(date -u -d '+45 minutes' +%s)" >> "$GITHUB_OUTPUT"
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -264,10 +267,11 @@ jobs:
         env:
           FEEDZ_API_KEY: ${{ secrets.FEEDZ_API_KEY }}
           GH_TOKEN: ${{ github.token }}
+          EVIDENCE_DEADLINE: ${{ steps.budget.outputs.deadline }}
         run: >-
           dotnet run --project tools/versioning/Elsa.Versioning.Publisher -c Release --no-build --
           publish --ref "$GITHUB_REF" --commit "$GITHUB_SHA" --plan-dir "$RUNNER_TEMP/versions"
-          --verify-evidence true --feed "$feedz_feed_source" --api-key-env FEEDZ_API_KEY --summary "$GITHUB_STEP_SUMMARY"
+          --verify-evidence true --evidence-deadline "$EVIDENCE_DEADLINE" --feed "$feedz_feed_source" --api-key-env FEEDZ_API_KEY --summary "$GITHUB_STEP_SUMMARY"
 
   release:
     name: Release packages

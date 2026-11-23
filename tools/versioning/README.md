@@ -251,8 +251,9 @@ A run that dies between its pushes and its write-back, or whose write-back is re
 the record does not name. The next run from `main` computes the same versions for them, the feed rejects them, and
 the equal fingerprints record them, with nobody intervening. The next run must see the same inputs for those
 packages; if a later commit changed one of them before any run recorded it, the feed's copy no longer matches and
-the publish fails as a collision for the repair workflow (FR-019, #2083). A bootstrap that stops part way records what
-it pushed, so `publish-state` exists and the next push to `main` publishes the rest at their first versions.
+the publish fails as a collision for the repair workflow (FR-019, #2083). A bootstrap that stops part way **after a successful write-back**
+leaves `publish-state` in place, and the next push to `main` publishes the remainder at their first versions.
+If the first PUT was accepted but its read-back failed before any write-back, follow the [first-bootstrap recovery procedure](#verify-a-foundation-preview-package).
 
 The workflow serializes every run from `main`, from its plan to its write-back, on the concurrency group
 `publish-state`, and never cancels one in progress (FR-020); anything else that writes `publish-state` joins that
@@ -335,7 +336,7 @@ closed: its workflow, `publish-exact20-recovery.yml`, was deleted with the lean 
 
 Download the exact ID and version from the [Foundation Feedz service index](https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json).
 Starting with versions produced by the evidence-enabled Packages workflow, a GitHub-authenticated reader with public read access,
-Python 3 and the GitHub CLI can obtain the signed CycloneDX 1.6 inventory from a checkout of this repository:
+Python 3 and GitHub CLI 2.102.0 or later can obtain the signed CycloneDX 1.6 inventory from a checkout of this repository:
 
 ```sh
 python3 tools/versioning/package-evidence/verify.py "$PACKAGE" --output package.cdx.json

@@ -48,9 +48,16 @@ class DestinationTests(unittest.TestCase):
             reader.assert_called_once()
         def missing(remote):
             self.assertEqual(verify.sha256(remote), verify.sha256(self.remote))
-            raise ValueError('no previous signature')
+            raise verify.NoAttestations('no previous signature')
         with self.assertRaisesRegex(ValueError, 'manual repair'):
             verify.verify_destination(self.file, True, self.service, verify=missing)
+
+    def test_lookup_timeout_requests_a_retry(self):
+        package(self.remote, 'prior build')
+        def timeout(_):
+            raise verify.subprocess.TimeoutExpired('gh', 55)
+        with self.assertRaisesRegex(ValueError, 'timed out; retry'):
+            verify.verify_destination(self.file, True, self.service, verify=timeout)
 
     def test_reader_pairs_the_original_run_and_attempt(self):
         from copy import deepcopy
@@ -65,6 +72,8 @@ class DestinationTests(unittest.TestCase):
         records = [later, inventory(2, 3), original]
         invocations = [f"https://github.com/{verify.REPO}/actions/runs/{r}/attempts/{a}" for r, a in [(12, 1), (19, 2), (2, 1)]]
         def result(command, **kwargs):
+            if command == ['gh', '--version']:
+                return 'gh version 2.103.2 (2026-10-23)\n'
             self.assertIn(verify.WORKFLOW, command)
             self.assertIn('refs/heads/main', command)
             self.assertIn('a' * 40, command)
@@ -95,6 +104,12 @@ class DestinationTests(unittest.TestCase):
             package(self.file, 'changed')
             with self.assertRaisesRegex(ValueError, 'expected package'):
                 verify.signed_inventory(self.file)
+
+    def test_reader_requires_exact_workflow_matching_support(self):
+        with patch.object(verify.subprocess, 'check_output', return_value='gh version 2.101.0 (2026-09-01)') as gh:
+            with self.assertRaisesRegex(ValueError, '2.102.0'):
+                verify.signed_inventory(self.file)
+            gh.assert_called_once_with(['gh', '--version'], text=True, timeout=15)
 
     def test_sealed_subjects_require_the_exact_set_and_bytes(self):
         plan = self.file.parent

@@ -40,6 +40,15 @@ test('target-specific ranges and build-only inputs stay distinct from packed fil
     assert.equal(edge.dependsOn.length, 1);
     assert.ok(select('Child').some(child => child['bom-ref'] === edge.dependsOn[0] && child.version === c.version));
   }
+  for (const [target, version] of [['net8.0', '8.0.1'], ['net10.0', '10.0.1']]) {
+    const group = select(target)[0];
+    const direct = select('Direct').find(component => component.version === version);
+    const child = select('Child').find(component => component.version === version);
+    assert.deepEqual(bom.dependencies.find(edge => edge.ref === group['bom-ref']).dependsOn, [direct['bom-ref']]);
+    assert.deepEqual(bom.dependencies.find(edge => edge.ref === direct['bom-ref']).dependsOn, [child['bom-ref']]);
+    assert.ok(direct.properties.some(p => p.name === 'elsa:target' && p.value === target));
+    assert.ok(direct.properties.some(p => p.name === 'elsa:nuspec-version' && p.value === '[' + version + ',20)'));
+  }
   assert.ok(select('BuildOnly').every(c => c.scope === 'excluded'));
   assert.equal(bom.metadata.component.components[0].hashes[0].content, hash);
 

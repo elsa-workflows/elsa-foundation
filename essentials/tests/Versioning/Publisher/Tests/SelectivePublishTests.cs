@@ -81,9 +81,10 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
             return last;
         }
 
+        using var log = new StringWriter();
         Task<PublishReport> PublishWithReadback(WorkflowRun planned) => PublishCommand.RunAsync(
-            new PublishOptions(Repo.Root, PublishPlan.MainRef, planned.Plan.Commit, planned.Directory, null, new Uri(index).AbsoluteUri),
-            Feed, State, TextWriter.Null);
+            new PublishOptions(Path.Join(Repo.Root, "src"), PublishPlan.MainRef, planned.Plan.Commit, planned.Directory, null, new Uri(index).AbsoluteUri),
+            Feed, State, log);
 
         var lagging = Stage(run, retain: false);
         using (var bytes = File.Open(lagging, FileMode.Append))
@@ -98,7 +99,24 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
         var recovered = await PublishWithReadback(retry);
         Assert.True(recovered.Succeeded, recovered.Failure);
         Assert.Contains(recovered.Packages, outcome => outcome is { PackageId: "Elsa.Tasks", Kind: PackageOutcomeKind.AlreadyPublished });
+        Assert.Contains("Verified recovered public package Elsa.Tasks 4.0.1-preview sha256:", log.ToString(), StringComparison.Ordinal);
         Assert.Equal("4.0.1-preview", RecordedVersions["Elsa.Tasks"]);
+    }
+
+    [Fact]
+    public async Task Expired_job_budget_stops_before_a_feed_write()
+    {
+        Edit("src/Tasks/Scheduler.cs");
+        CommitAndPush();
+        var run = PlanAndPack();
+        var pushes = Feed.Pushes.Count;
+        var record = OriginStateTip;
+        var publisher = new PackagePublisher(Feed, State, TextWriter.Null, deadline: DateTimeOffset.UtcNow.AddSeconds(-1));
+        var report = await publisher.PublishAsync(run.Plan, run.Computation, OriginRecord!, Path.Join(run.Directory, PlanFiles.Packages));
+        Assert.False(report.Succeeded);
+        Assert.All(report.Packages, outcome => Assert.Equal(PackageOutcomeKind.NotAttempted, outcome.Kind));
+        Assert.Equal(pushes, Feed.Pushes.Count);
+        Assert.Equal(record, OriginStateTip);
     }
 
     /// <summary>A commit that changes no package pushes nothing and writes no record revision.</summary>

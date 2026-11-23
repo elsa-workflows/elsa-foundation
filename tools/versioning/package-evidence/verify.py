@@ -39,12 +39,30 @@ def sha256(path):
     return result.hexdigest()
 
 
+class NoAttestations(ValueError):
+    """The lookup completed with no attestations of the requested type."""
+
+
 def signed_inventory(path):
+    release = subprocess.check_output(["gh", "--version"], text=True, timeout=15)
+    parsed = re.match(r"gh version (\d+)\.(\d+)\.(\d+)\b", release)
+    if not parsed or tuple(map(int, parsed.groups())) < (2, 102, 0):
+        raise ValueError("GitHub CLI 2.102.0 or later is required for exact workflow and ref matching.")
     package_id, version, commit = identity(path)
     common = ["gh", "attestation", "verify", str(path), "--repo", REPO, "--signer-workflow", WORKFLOW,
               "--source-ref", "refs/heads/main", "--source-digest", commit]
     def statements(predicate):
-        records = json.loads(subprocess.check_output([*common, "--predicate-type", predicate, "--limit", "100", "--format", "json"], timeout=55))
+        try:
+            raw = subprocess.check_output([*common, "--predicate-type", predicate, "--limit", "100", "--format", "json"],
+                                          stderr=subprocess.PIPE, timeout=55)
+        except subprocess.CalledProcessError as error:
+            detail = (error.stderr or b"").decode(errors="replace").strip()
+            if detail == "Error: no attestations found":
+                raise NoAttestations(f"No {predicate} records were found for these bytes.") from error
+            raise ValueError(f"GitHub could not verify {predicate}: {detail}") from error
+        records = json.loads(raw)
+        if not records:
+            raise NoAttestations(f"No {predicate} records were found for these bytes.")
         return [(result["statement"]["predicate"], result["signature"]["certificate"].get("runInvocationURI"))
                 for result in (match["verificationResult"] for match in records)]
 
@@ -109,10 +127,13 @@ def verify_destination(candidate, recovered, service, verify=signed_inventory):
                     raise ValueError("Public retry bytes have a different input fingerprint")
             try:
                 verify(remote)
-            except (ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-                raise ValueError("The earlier feed bytes lack verifiable original evidence. For an unsigned pre-cutover "
-                                 "push, follow the manual repair procedure in tools/versioning/README.md.") from error
-        print(f"Verified public package {package_id} {version} sha256:{remote_digest}")
+            except subprocess.TimeoutExpired as error:
+                raise ValueError("GitHub verification timed out; retry public verification before taking further action.") from error
+            except NoAttestations as error:
+                raise ValueError("No original attestations were found. For a confirmed unsigned pre-cutover push, "
+                                 "follow the manual repair procedure in tools/versioning/README.md.") from error
+        mode = "recovered" if recovered else "pushed"
+        print(f"Verified {mode} public package {package_id} {version} sha256:{remote_digest}")
 
 
 def verify_subjects(plan, expected):
