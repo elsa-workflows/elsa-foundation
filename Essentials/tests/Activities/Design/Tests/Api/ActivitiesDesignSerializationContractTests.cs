@@ -24,6 +24,21 @@ namespace Elsa.Activities.Design.Tests.Api;
 public sealed class ActivitiesDesignSerializationContractTests
 {
     [Fact]
+    public void Catalog_argument_data_is_detached_JSON_through_the_actual_owner_context()
+    {
+        const string raw = """{ "OrderID":9007199254740993, "amount":1.00, "nil":null, "text":"\u0061 <+>" }""";
+        ActivityArgumentValue value;
+        using (var source = JsonDocument.Parse(raw)) value = new(source.RootElement, "Literal");
+        Assert.Equal(typeof(JsonElement?), typeof(ActivityArgumentValue).GetProperty(nameof(ActivityArgumentValue.Value))!.PropertyType);
+        var restored = Deserialize<ActivityArgumentValue>(Serialize(value));
+        Assert.Equal(raw, restored.Value!.Value.GetRawText());
+        using (var replacement = JsonDocument.Parse("{ \"next\":2.00 }")) value = value with { Value = replacement.RootElement };
+        Assert.Equal("{ \"next\":2.00 }", value.Value!.Value.GetRawText());
+        using var nil = JsonDocument.Parse(Serialize(new ActivityArgumentValue(null, "Literal")));
+        Assert.Equal(JsonValueKind.Null, nil.RootElement.GetProperty("value").ValueKind);
+    }
+
+    [Fact]
     public void Node_presentation_wire_array_preserves_omitted_versus_empty_and_rejects_duplicates()
     {
         const string body = """{"expectedRevision":1,"contract":{"contractSchemaVersion":"1","inputs":[],"outputs":[],"outcomes":[]},"provider":{"providerKey":"test","schemaVersion":"1","payload":{}},"layout":[]}""";
