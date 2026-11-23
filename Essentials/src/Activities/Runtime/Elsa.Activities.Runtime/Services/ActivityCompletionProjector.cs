@@ -51,6 +51,14 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
         return ProjectCoreAsync(workflowExecutionId, invocationId, attempt, contract, transition, completedAt, cancellationToken, readProtection);
     }
 
+    // Read protection is sampled after JSON serialization: result getters can read workflow state too.
+    internal ValueTask<ActivityCompletionProjection> ProjectWithReadProtectionAsync(
+        string workflowExecutionId, string invocationId, ActivityAttempt attempt, ActivityContract contract,
+        ActivityTransition transition, DateTimeOffset completedAt, Func<ActivityValuePolicy?> readProtection,
+        CancellationToken cancellationToken = default) =>
+        ProjectCoreAsync(workflowExecutionId, invocationId, attempt, contract, transition, completedAt,
+            cancellationToken, null, readProtection);
+
     private async ValueTask<ActivityCompletionProjection> ProjectCoreAsync(
         string? workflowExecutionId,
         string invocationId,
@@ -59,7 +67,8 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
         ActivityTransition transition,
         DateTimeOffset completedAt,
         CancellationToken cancellationToken,
-        ActivityValuePolicy? readProtection)
+        ActivityValuePolicy? readProtection,
+        Func<ActivityValuePolicy?>? lateReadProtection = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
         ArgumentNullException.ThrowIfNull(attempt);
@@ -75,6 +84,7 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
             return ProjectTransient(invocationId, attempt, contract, completion, completedAt);
 
         var resultJson = Elsa.Serialization.Core.JsonConversionContract.For(completion.ResultType).Write(completion.Result, completion.ResultType);
+        if (lateReadProtection is not null) readProtection = lateReadProtection();
         var resultPolicy = contract.Result.Projections.Values.Aggregate(
             readProtection is null
                 ? contract.Result.Policy

@@ -537,6 +537,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         // IRuntimeRematerializeInputsOnChildCompletion composite (While) re-reads live frames per pass.
         services.TryAddScoped<RuntimeActivityInputSnapshotMaterializer>();
         services.TryAddScoped<WorkflowIntrinsicExecutor>();
+        StatePreparationStartupTask.Validate(services);
+        services.TryAddScoped<IWorkflowStateChangePreparer>(provider => provider.GetRequiredService<WorkflowIntrinsicExecutor>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(new StatePreparationStartupTask(services)));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, IntrinsicActivityConsumerCapability>());
         // Member selection (#4078) is advertised beside the materializer that implements it, and only while it is the one
         // composed. The capability reads the final registrations (this collection, which the container is built from)

@@ -294,6 +294,25 @@ public sealed class BackgroundEligibilityTests
         Assert.Equal("VF-BG-001 (C9): Background execution is not eligible for activity node 'n1': the activity reads variables by name.", refusal.Message);
     }
 
+    [Theory]
+    [MemberData(nameof(EntryPoints))]
+    public void C9_refuses_identity_only_state_access_independently_of_variable_markers(string entryPoint)
+    {
+        var pinned = Subject<SafeLeaf>(Contract<SafeLeaf>(accessesWorkflowState: true));
+        AssertRefused(entryPoint, BackgroundEligibilityCriterion.C9, pinned, "workflow outputs or identity");
+        if (entryPoint == "publication")
+            AssertRefused(entryPoint, BackgroundEligibilityCriterion.C9,
+                pinned with { ActivityType = null, TypeCheckedAtRunTime = true }, "workflow outputs or identity");
+        AssertRefused(entryPoint, BackgroundEligibilityCriterion.C9, Subject<StateIdentityLeaf>(), "workflow outputs or identity");
+    }
+
+    [AccessesWorkflowState, BackgroundExecutionSafe]
+    private sealed class StateIdentityLeaf : Activity<int>
+    {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(1));
+    }
+
     private static BackgroundEligibilityRefusal? Check(string entryPoint, BackgroundEligibilitySubject subject) => entryPoint switch
     {
         "publication" => BackgroundEligibility.CheckPublication(subject),
@@ -316,13 +335,14 @@ public sealed class BackgroundEligibilityTests
         IEnumerable<ActivityInputContract>? inputs = null,
         ActivityResultContract? result = null,
         bool supportsBackgroundExecution = true,
-        bool accessesUndeclaredVariables = false)
+        bool accessesUndeclaredVariables = false,
+        bool accessesWorkflowState = false)
     {
         var alias = typeof(TActivity).Name;
         return new ActivityContract(
             alias, "1.0.0", "clr", JsonSerializer.SerializeToElement(new { typeAlias = alias }),
             inputs ?? [], result ?? Result("Int32"), ["Done"],
-            new ActivityActivationRequirement("clr", alias), SideEffectProfile.External, supportsBackgroundExecution, accessesUndeclaredVariables);
+            new ActivityActivationRequirement("clr", alias), SideEffectProfile.External, supportsBackgroundExecution, accessesUndeclaredVariables, accessesWorkflowState);
     }
 
     private static ActivityResultContract Result(string alias, ActivityValuePolicy? policy = null, ActivityResultProjectionContract? projection = null) =>

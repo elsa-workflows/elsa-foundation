@@ -37,6 +37,7 @@ CAPTURES = {
     'variable rename updates script reads and lists the rest': ['reference', 'rename-notice', 'flagged-reference'],
     'script variable may-write analysis survives editing and reopening': ['reference', 'literal-writes', 'computed-writes', 'reopened-computed', 'no-writes', 'nearest-scope'],
     'timezone preferences preserve run instants and date filters': ['reference', 'settings-browser', 'settings-amsterdam', 'settings-persisted', 'run-gap-error', 'run-winter', 'run-summer', 'run-fold', 'run-utc', 'run-busy', 'run-result-amsterdam', 'run-result', 'date-filters', 'reset-browser', 'invalid-zone-fallback'],
+    'workflow state native and imported authoring and inspection': ['reference', 'native-effects', 'known-effects', 'computed-effects', 'empty-effects', 'native-completed', 'current-state', 'current-outputs', 'accepted-timeline', 'cleared-state', 'imported-effects', 'imported-completed', 'faulted', 'cancelled', 'protected'],
 }
 JOURNEYS = set(CAPTURES)
 
@@ -177,7 +178,11 @@ def run(output, journey=None):
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         backend_project = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
         studio_project = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
-        command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'backend-build.log')
+        backend_command = ['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false']
+        step_state = journey == 'workflow state native and imported authoring and inspection' or journey is None
+        if step_state:
+            backend_command.append('-p:ElsaStepStateAcceptanceProbe=true')
+        command(backend_command, output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'Studio')
         command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-acceptance-') as temporary:
@@ -194,6 +199,14 @@ def run(output, journey=None):
             shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))
             identity = shells['CShells']['Shells']['default']['Features']['FoundationIdentityAspNetCoreIdentity']
             identity['AllowedReturnUrlOrigins'] = [studio_url]
+            if step_state:
+                # The real import owns a transaction shared with both design modules. Only the private QA shell opts in;
+                # native cancellation/protected bodies above are compiled explicitly, never added to standard hosts.
+                features = shells['CShells']['Shells']['default']['Features']
+                for name in ['ActivitiesDesignEntityFrameworkCore', 'WorkflowsDesignEntityFrameworkCore', 'Elsa3ImportActivitiesEntityFrameworkCore']:
+                    features[name] = {'ConnectionString': 'Data Source=step-state-design.db'}
+                for name in ['Elsa3Mapping', 'Elsa3ImportJsonActivities', 'Elsa3ImportActivitiesPublishing']:
+                    features[name] = {}
             (backend / 'shells.json').write_text(json.dumps(shells))
             env = dict(clean_environment(), HOME=str(data / "home"), DOTNET_CLI_HOME=str(data / "home"),
                        **{"Logging__LogLevel__Microsoft.Hosting.Lifetime": "Information"})

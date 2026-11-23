@@ -96,7 +96,8 @@ public static class ClrActivityContractTestBuilder
             activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
                 ?? SideEffectProfile.External,
             supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true),
-            accessesUndeclaredVariables: VariableReferenceTypes.AccessesUndeclaredVariables(activityType));
+            accessesUndeclaredVariables: VariableReferenceTypes.AccessesUndeclaredVariables(activityType),
+            accessesWorkflowState: AccessesWorkflowStateAttribute.IsAccessedBy(activityType));
     }
 
     public static IReadOnlyDictionary<string, RuntimeInputBinding> CompleteInputBindings(

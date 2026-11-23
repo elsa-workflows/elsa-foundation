@@ -51,7 +51,7 @@ public sealed class ScriptVariableReadResolver(IEnumerable<IScriptVariableReadAn
         if (!_analyzers.TryGetValue(language, out var analyzer) || analyzer.Analyze(source, scriptBody) is not { } analysis)
             return null;
         if (!analysis.ReadsVariables)
-            return ScriptVariableReadPlan.Empty with { Writes = analysis.Writes, HasComputedWrite = analysis.HasComputedWrite };
+            return ScriptVariableReadPlan.Empty with { Writes = analysis.Writes, HasComputedWrite = analysis.HasComputedWrite, WorkflowState = analysis.WorkflowState };
 
         var reachable = Reachable(visibleScopes);
         var pinned = new List<ResolvedScriptVariableRead>();
@@ -66,6 +66,7 @@ public sealed class ScriptVariableReadResolver(IEnumerable<IScriptVariableReadAn
 
         return new ScriptVariableReadPlan(pinned, unresolved, analysis.HasComputedRead ? reachable : null)
         {
+            WorkflowState = analysis.WorkflowState,
             Writes = analysis.Writes,
             Escapes = analysis.Escapes,
             HasComputedWrite = analysis.HasComputedWrite

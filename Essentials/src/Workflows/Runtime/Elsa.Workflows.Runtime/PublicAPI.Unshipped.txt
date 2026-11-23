@@ -1949,3 +1949,5 @@ Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector.Report(Elsa.Exp
 Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector.Warnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>!
 Elsa.Workflows.Runtime.Services.ActivityExecutions.SimpleActivityExecutionContext.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
 Elsa.Workflows.Runtime.Services.ActivityExecutions.SimpleActivityExecutionContext.WithWarnings(Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings) -> Elsa.Workflows.Runtime.Services.ActivityExecutions.SimpleActivityExecutionContext!
+
+Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector.ProtectWorkflowStateReads(System.Func<bool>! reads) -> void

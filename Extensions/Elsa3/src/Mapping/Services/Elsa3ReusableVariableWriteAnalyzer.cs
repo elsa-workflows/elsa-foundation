@@ -186,13 +186,15 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         return value;
     }
 
-    private Flow Execute(Node node)
+    private Flow Execute(Node node) => Execute(node, null);
+
+    private Flow Execute(Node node, IReadOnlyDictionary<string, Value>? initialValues)
     {
         if (_writes) return Flow.Next;
         // A definition is a value; its body runs only at a call site with that call's actual parameters.
         if (node is IFunction) return Flow.Next;
         var scope = scopeOf(node);
-        if (scope is not null) EnterScope(node, scope);
+        if (scope is not null) EnterScope(node, scope, initialValues);
         try { return ExecuteCore(node); }
         finally
         {
@@ -201,10 +203,12 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         }
     }
 
-    private void EnterScope(Node node, HashSet<string> scope)
+    private void EnterScope(Node node, HashSet<string> scope, IReadOnlyDictionary<string, Value>? initialValues = null)
     {
         _scopes.Add(scope);
-        foreach (var name in scope) _state.Bindings[new Binding(scope, name)] = Value.Primitive;
+        foreach (var name in scope)
+            _state.Bindings[new Binding(scope, name)] = initialValues is not null && initialValues.TryGetValue(name, out var value)
+                ? value : Value.Primitive;
         IEnumerable<Node> statements = node switch
         {
             Script script => script.Body,
@@ -236,7 +240,9 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             case BlockStatement block: return Sequence(block.Body);
             case ExpressionStatement expression: Evaluate(expression.Expression); return Flow.Next;
             case VariableDeclaration declaration:
-                foreach (var item in declaration.Declarations) Bind(item.Id, Evaluate(item.Init));
+                foreach (var item in declaration.Declarations)
+                    if (item.Init is not null || declaration.Kind != VariableDeclarationKind.Var)
+                        Bind(item.Id, Evaluate(item.Init));
                 return Flow.Next;
             case ClassDeclaration type:
                 ClassValue(type, type.Id, type.Body, type.SuperClass);
@@ -277,20 +283,29 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 return Loop(loop, () => Value.Local, () => { BindLoop(loop.Left, Value.Local); return Execute(loop.Body); }, () => Value.Local);
             case SwitchStatement choice:
                 Evaluate(choice.Discriminant);
-                var entry = _state.Copy();
-                State? exits = choice.Cases.Any(item => item.Test is null) ? null : entry.Copy();
-                var flow = new Flow(false, Value.Local);
-                for (var index = 0; index < choice.Cases.Count; index++)
+                var caseScope = choice.Cases.Count > 0 ? scopeOf(choice.Cases[0]) : null;
+                if (caseScope is not null) EnterScope(choice, caseScope);
+                try
                 {
-                    _state = entry.Copy();
-                    Evaluate(choice.Cases[index].Test);
-                    var path = Sequence(choice.Cases.Skip(index).SelectMany(item => item.Consequent));
-                    exits = Join(exits, path.Normal ? _state : null);
-                    exits = Join(exits, path.Breaks);
-                    flow = flow.Union(path with { Normal = path.Normal || path.Breaks is not null, Breaks = null });
+                    var entry = _state.Copy();
+                    State? exits = choice.Cases.Any(item => item.Test is null) ? null : entry.Copy();
+                    var flow = new Flow(false, Value.Local);
+                    for (var index = 0; index < choice.Cases.Count; index++)
+                    {
+                        _state = entry.Copy();
+                        Evaluate(choice.Cases[index].Test);
+                        var path = Sequence(choice.Cases.Skip(index).SelectMany(item => item.Consequent));
+                        exits = Join(exits, path.Normal ? _state : null);
+                        exits = Join(exits, path.Breaks);
+                        flow = flow.Union(path with { Normal = path.Normal || path.Breaks is not null, Breaks = null });
+                    }
+                    _state = exits ?? entry;
+                    return flow with { Normal = exits is not null };
                 }
-                _state = exits ?? entry;
-                return flow with { Normal = exits is not null };
+                finally
+                {
+                    if (caseScope is not null) _scopes.RemoveAt(_scopes.Count - 1);
+                }
             case TryStatement attempt:
                 var exceptions = _state.Copy();
                 _exceptionStates.Add(exceptions);
@@ -629,6 +644,23 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         if (_opaqueDepth > 0 && result.Session) _writes = true;
         foreach (var exceptional in _exceptionStates) exceptional.Join(_state);
         return result;
+    }
+
+    private void CaptureParameterValues(Node pattern, Dictionary<string, Value> values)
+    {
+        switch (pattern)
+        {
+            case Identifier name: values[name.Name] = Read(name.Name); break;
+            case AssignmentPattern assignment: CaptureParameterValues(assignment.Left, values); break;
+            case RestElement rest: CaptureParameterValues(rest.Argument, values); break;
+            case ArrayPattern array:
+                foreach (var item in array.Elements.OfType<Node>()) CaptureParameterValues(item, values);
+                break;
+            case ObjectPattern obj:
+                foreach (var property in obj.Properties)
+                    CaptureParameterValues(property is Property item ? item.Value : property, values);
+                break;
+        }
     }
 
     private void Bind(Node pattern, Value value)
@@ -1094,7 +1126,11 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 }
                 Bind(function.Params[index], index < arguments.Count ? arguments[index] : Value.Local);
             }
-            var flow = function.Body is BlockStatement ? Execute(function.Body) : new Flow(false, Evaluate(function.Body), Returns: _state.Copy());
+            // Body var bindings start with the matching parameter's value, including owned objects
+            // and effectful callables. Keep separate cells for parameter-initializer closures.
+            var parameterValues = new Dictionary<string, Value>(StringComparer.Ordinal);
+            foreach (var parameter in function.Params) CaptureParameterValues(parameter, parameterValues);
+            var flow = function.Body is BlockStatement ? Execute(function.Body, parameterValues) : new Flow(false, Evaluate(function.Body), Returns: _state.Copy());
             var exits = Join(flow.Normal ? _state : null, flow.Returns);
             if (exits is not null) _state = exits;
             if (flow.Throws is not null) foreach (var exceptional in _exceptionStates) exceptional.Join(flow.Throws);

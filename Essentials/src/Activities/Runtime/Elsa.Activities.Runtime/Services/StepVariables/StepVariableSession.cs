@@ -41,6 +41,8 @@ internal sealed class StepVariableSession : IStepVariableSession
     private readonly Elsa.Expressions.Core.Contracts.IExecutionWarningSink? _warnings;
     private readonly Dictionary<(string ScopeId, string Key), VariableSessionRead> _reads = new();
     private readonly List<VariableSessionRead> _readOrder = [];
+    private readonly HashSet<ValueProtectionPolicy> _pendingReadPolicies = [];
+    internal IEnumerable<ValueProtectionPolicy> ReadPolicies => _readOrder.Select(read => read.Policy).Concat(_pendingReadPolicies);
     private readonly Dictionary<(string ScopeId, string Key), StepVariableWriteIntent> _intents = new();
     private readonly List<(string ScopeId, string Key)> _intentOrder = [];
     private readonly Dictionary<(string ScopeId, string Key), object?> _transient = new();
@@ -104,8 +106,15 @@ internal sealed class StepVariableSession : IStepVariableSession
         return ResolvePinned(target.ScopeId, target.VariableKey, target.Name).Frame.Kind == VariableFrameKind.Iteration;
     }
 
-    public bool HasReadProtectedValue => _readOrder.Any(read =>
-        read.Policy.IsSensitive || read.Policy.RequiresEncryption || !string.IsNullOrWhiteSpace(read.Policy.RedactionMode));
+    public bool HasReadProtectedValue => ReadPolicies.Any(policy =>
+        policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode));
+
+    public void ObservePendingRead(StepVariableTarget target)
+    {
+        EnsureEngineSurface();
+        var variable = ResolvePinned(target.ScopeId, target.VariableKey, target.Name);
+        _pendingReadPolicies.Add(_intents.TryGetValue(variable.Address, out var intent) ? intent.Value.Policy : variable.Committed.Policy);
+    }
 
     // The plan pins each literal body read to its declaring scope at publish, keyed variables.<name>; a name the step can
     // no longer see faults when it is read, as a pinned input read does.
@@ -291,9 +300,12 @@ internal sealed class StepVariableSession : IStepVariableSession
 
     private ValueEnvelope Read(ResolvedVariable variable)
     {
-        // Read-your-writes: this step's own pending write wins, and reading it records nothing.
+        // Pending reads do not establish or advance a concurrency base, but still carry protection.
         if (_intents.TryGetValue(variable.Address, out var intent))
+        {
+            _pendingReadPolicies.Add(intent.Value.Policy);
             return intent.Value;
+        }
 
         var envelope = variable.Committed;
         if (envelope.Presence == ValuePresence.Withheld)

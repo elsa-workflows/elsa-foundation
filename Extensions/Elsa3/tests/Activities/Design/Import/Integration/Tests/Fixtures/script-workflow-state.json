@@ -1,0 +1,85 @@
+{
+  "id": "script-workflow-state-v1",
+  "definitionId": "script-workflow-state",
+  "name": "script-workflow-state",
+  "description": "S-13 import, publish and run workflow-state body effects.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    {
+      "id": "total",
+      "name": "total",
+      "typeName": "Int32",
+      "value": "10"
+    }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "script-sets-variable-root",
+    "nodeId": "script-sets-variable-root",
+    "name": "script-sets-variable-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "seed",
+        "nodeId": "seed",
+        "name": "seed",
+        "type": "Elsa.RunJavaScript",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "script": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "setVariable('total', 15); setOutput('Total', {Amount: getVariable('total')}); setCorrelationId('new'); setWorkflowInstanceName('Ready'); return [getCorrelationId(), getWorkflowInstanceName()];"
+          }
+        }
+      }
+    ],
+    "connections": [],
+    "variables": []
+  }
+}

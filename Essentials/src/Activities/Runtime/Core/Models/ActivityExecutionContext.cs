@@ -106,6 +106,22 @@ public sealed record ActivityExecutionContext
 
     private IStepVariables? _variables;
 
+    /// <summary>The running workflow's state within this inline leaf evaluation.</summary>
+    public IStepWorkflowState WorkflowState => _workflowState ?? throw NoWorkflowStateSession();
+    private IStepWorkflowState? _workflowState;
+    internal IStepWorkflowState? WorkflowStateOrNull => _workflowState;
+    internal static InvalidOperationException NoWorkflowStateSession() => new(
+        "VF-STATE-002: Workflow state requires a declared inline leaf body. Inputs, structural and background evaluations have no capability.");
+
+    /// <summary>Returns the evaluation context carrying its bounded workflow-state capability.</summary>
+    public ActivityExecutionContext WithWorkflowState(IStepWorkflowState workflowState)
+    {
+        ArgumentNullException.ThrowIfNull(workflowState);
+        var copy = this with { };
+        copy._workflowState = workflowState;
+        return copy;
+    }
+
     /// <summary>The session as handed to this context, or <c>null</c> when it has none; copied into the start and resume contexts.</summary>
     internal IStepVariables? VariablesOrNull => _variables;
 
@@ -176,6 +192,7 @@ public sealed record ActivityExecutionContext
             logicalInvocationId ?? LogicalInvocationId)
         {
             _variables = _variables,
+            _workflowState = _workflowState,
             _warnings = _warnings,
             _hasProtectedInputs = _hasProtectedInputs
         };

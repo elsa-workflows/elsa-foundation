@@ -7,13 +7,15 @@ import { clearApiCapabilityCache } from "../api/capabilities";
 import { getWorkflowInstance } from "../api/runtime";
 import {
   mapWorkflowInstanceDetails,
+  workflowStateEffectLabels,
   readWorkflowInstanceInspectionGranularity,
   readWorkflowInstancePersistenceMode
 } from "../workflowInstanceInspection";
 import {
   formatInspectionGranularity,
   WorkflowInstanceInspectionFacts,
-  WorkflowInstanceInspectionNote
+  WorkflowInstanceInspectionNote,
+  WorkflowInstanceIdentityFacts
 } from "../workflow-editor/WorkflowInstanceInspectionFacts";
 import type { WorkflowInstanceDetails } from "../workflowTypes";
 
@@ -276,3 +278,27 @@ const instanceCapabilities = {
     links: [{ rel: "workflow-instance", href: "runtime/workflows/instances/{workflowExecutionId}", templated: true }]
   }]
 };
+
+describe("workflow-state inspection", () => {
+  it("shows current committed identity and preserves cleared values", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container); mounted = { root, container };
+    flushSync(() => root.render(<dl><WorkflowInstanceIdentityFacts instance={{ ...details().instance, instanceName: "Ready", correlationId: "new" }} /></dl>));
+    expect(container.textContent).toContain("Instance nameReadyCorrelationnew");
+    flushSync(() => root.render(<dl><WorkflowInstanceIdentityFacts instance={{ ...details().instance, instanceName: null, correlationId: null }} /></dl>));
+    expect(container.textContent).toContain("Instance nameNoneCorrelationNone");
+  });
+  it("keeps denied identity visibly hidden without rendering values", () => {
+    const container = document.createElement("div"); document.body.appendChild(container);
+    const root = createRoot(container); mounted = { root, container };
+    flushSync(() => root.render(<dl><WorkflowInstanceIdentityFacts canInspectValues={false} instance={{ ...details().instance, instanceName: "sentinel", correlationId: "sentinel" }} /></dl>));
+    expect(container.textContent).toContain("Hidden by access policy");
+    expect(container.textContent).not.toContain("sentinel");
+  });
+  it("attributes recognized accepted kinds without exposing arbitrary metadata", () => {
+    expect(workflowStateEffectLabels(["outputs", "correlationId", "instanceName", "outputs", "sentinel", "__proto__", "toString"]))
+      .toEqual(["workflow outputs", "correlation", "instance name"]);
+    expect(workflowStateEffectLabels()).toEqual([]);
+  });
+});

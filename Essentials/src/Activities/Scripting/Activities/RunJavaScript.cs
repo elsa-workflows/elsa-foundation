@@ -19,8 +19,16 @@ namespace Elsa.Activities.Scripting.Activities;
 /// session (spec 1222 FR-033, spec 1231, ADR 0090):
 /// a read returns the committed value plus the step's own changes and is recorded; a change it makes, by assigning the
 /// variable or a member of a value it read, is written with the step, and a change made without assigning the
-/// variable is written too, with a warning (ADR 0090 C2). It cannot reach inputs, outputs, services, configuration or the
-/// ambient activity context.
+/// variable is written too, with a warning (ADR 0090 C2). The body also receives the bounded
+/// <c>workflowState</c> capability for explicit workflow output and identity assignments (spec 1234). It cannot reach
+/// services, configuration or the ambient activity context.
+/// </para>
+/// <para>
+/// <c>workflowState.getOutput/setOutput</c>, <c>getCorrelationId/setCorrelationId</c> and
+/// <c>getInstanceName/setInstanceName</c> read pending state and stage changes in this evaluation's checkpoint.
+/// Output reads are JSON copies; setters return undefined. Faults, cancellation and caught host refusals discard the
+/// evaluation's successful effects. Existing waits retain their captured correlation keys. This capability is unavailable
+/// to input expressions, background workers and closed reusable graph bodies.
 /// </para>
 /// <para>
 /// Constructor parameters are services; workflow data is hydrated into the ordinary properties below before
@@ -45,7 +53,7 @@ namespace Elsa.Activities.Scripting.Activities;
 // writes them (ADR 0090 decision 3), and a background worker has no access to variables. Marking it needs that access first.
 [ActivityValueOutcomes(RunJavaScript.PossibleOutcomesInputKey, UnmatchedOutcome = null, SelectsOnEveryCompletion = false)]
 [ActivityScriptOutcomes("script")]
-public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activity<RunJavaScriptResult>, IStepVariableSessionConsumer
+public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activity<RunJavaScriptResult>, IStepVariableSessionConsumer, IStepWorkflowStateConsumer
 {
     /// <summary>
     /// The contract key of <see cref="PossibleOutcomes"/>. <c>ActivityValueOutcomes</c> resolves its source by
@@ -90,6 +98,12 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
         }
 
         var variables = session is null ? null : new StepScriptVariables(session, context.HasProtectedInputs);
+        StepScriptWorkflowState? workflowState = null;
+        try
+        {
+            workflowState = new StepScriptWorkflowState(context.WorkflowState, () => context.HasProtectedInputs || session?.HasReadProtectedValue == true);
+        }
+        catch (InvalidOperationException) { }
         JavaScriptScriptEvaluationResult evaluation;
         try
         {
@@ -99,24 +113,28 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
                 context.CancellationToken)
             {
                 Warnings = context.Warnings,
-                Variables = variables
+                Variables = variables,
+                WorkflowState = workflowState
             });
         }
         catch (JavaScriptCompletionException exception)
         {
+            workflowState?.ThrowIfRefused();
             ThrowIfRefused(variables);
             return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(exception.Code, exception.Message));
         }
         catch (JavaScriptPrecisionException exception)
         {
+            workflowState?.ThrowIfRefused();
             ThrowIfRefused(variables);
             // Spec 1228 FR-013: the precision policy refused the result; the step faults and nothing of it is written. With
             // a protected input the fault names no number and no path from it (spec 1229 FR-006).
             return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(exception.Code,
-                context.HasProtectedInputs || session?.HasReadProtectedValue == true ? exception.ValueFreeMessage : exception.Message));
+                context.HasProtectedInputs || session?.HasReadProtectedValue == true || workflowState?.HasReadProtectedValue == true ? exception.ValueFreeMessage : exception.Message));
         }
         catch (ScriptVariableWriteRefusedException)
         {
+            workflowState?.ThrowIfRefused();
             ThrowIfRefused(variables);
             throw;
         }
@@ -124,17 +142,20 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
         {
             // A read the session refused is the cause, even when the script caught the error and failed otherwise
             // (FR-017a); its message is the session's own and names no value.
+            workflowState?.ThrowIfRefused();
             ThrowIfRefused(variables);
             // Spec 1229 FR-006: a script error's text can quote what the script read (`throw new Error(variables.ssn)`,
             // a JSON.parse error). With a protected input or read it is not recorded; the type still says what failed. A
             // script that does not parse (Jint's ScriptPreparationException) has read nothing, but its text can quote the
             // script, which a protected input can supply, so it keeps its text only when no input is protected.
             var isParseError = exception.GetType().Name is "ScriptPreparationException" or "ParseErrorException";
-            if (context.HasProtectedInputs || (session?.HasReadProtectedValue == true && !isParseError))
+            if (context.HasProtectedInputs || ((session?.HasReadProtectedValue == true || workflowState?.HasReadProtectedValue == true) && !isParseError))
                 throw new InvalidOperationException(
                     $"The script failed ({exception.GetType().Name}). Its message is withheld because a value it read is protected.");
             throw;
         }
+
+        workflowState?.ThrowIfRefused();
 
         // Spec 1222 FR-011: a name no visible variable has read undefined; the warning names it unless a value the script
         // read is protected, since a computed name can come from that value.
@@ -157,7 +178,7 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
         // (`complete(x, variables.customer.tier)`). The projection's refusal of a name outside the outcome set quotes it, so
         // under protection the selection is checked here, against the same set (Done plus PossibleOutcomes), and refused
         // without naming it.
-        if ((context.HasProtectedInputs || session?.HasReadProtectedValue == true) && !IsValidSelection(evaluation))
+        if ((context.HasProtectedInputs || session?.HasReadProtectedValue == true || workflowState?.HasReadProtectedValue == true) && !IsValidSelection(evaluation))
             return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(JavaScriptCompletionException.FaultCode,
                 "The script selected an outcome that is not in this node's outcome set, or Done together with another outcome. " +
                 "The names are withheld because a value it read is protected."));

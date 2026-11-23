@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Design.Tests;
 /// writers in the concurrent-write rule (FR-028, User Story 4 scenario 4) and the overlap with the node's own capture
 /// (FR-029, User Story 3 scenario 7).
 /// </summary>
-public sealed class StepVariableWriteValidationTests
+public sealed partial class StepVariableWriteValidationTests
 {
     private const string WriterVersion = "test.writer@1";
     private const string ReaderVersion = "test.reader@1";
@@ -235,6 +235,7 @@ public sealed class StepVariableWriteValidationTests
             ])
             .Add(ScriptVersion, designFacets:
             [
+                new ActivityDesignFacet(WorkflowStateDesignFacet.Kind, WorkflowStateDesignFacet.SchemaVersion, JsonSerializer.SerializeToElement(new { declared = false })),
                 // An engine script activity carries the type-level marker too, as Run JavaScript does; its body decides.
                 new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(new { ports = Array.Empty<object>(), scriptInput = "script" })),
                 new ActivityDesignFacet(VariableAccessDesignFacet.Kind, VariableAccessDesignFacet.SchemaVersion,

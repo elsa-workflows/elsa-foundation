@@ -50,6 +50,11 @@ internal sealed class StepScriptVariables : IScriptVariableSession
 
     public bool IsReadOnly(string name) => TryTarget(name, out var target) && _session.IsReadOnly(target);
 
+    public void ObservePendingRead(string name)
+    {
+        if (TryTarget(name, out var target)) _session.ObservePendingRead(target);
+    }
+
     public ExpressionVariableRead Read(string name)
     {
         ArgumentNullException.ThrowIfNull(name);

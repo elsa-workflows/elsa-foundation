@@ -573,3 +573,27 @@ describe("catalog descriptor", () => {
     expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write any visible variable");
   });
 });
+
+describe("workflow-state effect authoring", () => {
+  it("shows literal state targets independently of variable writes", () => {
+    const container = renderPanel({ accessesWorkflowState: true }, { scriptWrites: {
+      variables: [], mayWriteEveryVisibleVariable: false,
+      workflowState: { accessesState: true, outputNames: ["Total"], writesCorrelationId: true, writesInstanceName: true, conservative: false }
+    } });
+    expect(container.textContent).toContain("May change: output Total, correlation, instance name");
+  });
+  it("keeps explicit native declarations conservative despite a read-only script analysis", () => {
+    const container = renderPanel({ accessesWorkflowState: true, declaresAccessesWorkflowState: true }, { scriptWrites: {
+      variables: [], mayWriteEveryVisibleVariable: false,
+      workflowState: { accessesState: false, outputNames: [], writesCorrelationId: false, writesInstanceName: false, conservative: false }
+    } });
+    expect(container.textContent).toContain("May change workflow outputs, correlation and instance name");
+  });
+  it("shows conservative computed access and a read-only body without invented changes", () => {
+    const container = renderPanel({ accessesWorkflowState: true }, { scriptWrites: {
+      variables: [], mayWriteEveryVisibleVariable: false,
+      workflowState: { accessesState: true, outputNames: [], writesCorrelationId: false, writesInstanceName: false, conservative: true }
+    } });
+    expect(container.textContent).toContain("computed or indirect access");
+  });
+});

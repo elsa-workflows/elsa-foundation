@@ -454,7 +454,12 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             // Test-host execution evidence: puts the WorkflowsExecutionEvidence feature in the catalog so an automated
             // test suite can query what a workflow actually did over HTTP. Process-local and non-durable by design.
-            typeof(WorkflowsExecutionEvidenceFeature).Assembly
+            typeof(WorkflowsExecutionEvidenceFeature).Assembly,
+            // Optional real migration services; the default shell does not enable these features.
+            typeof(Elsa3.Mapping.Elsa3MappingFeature).Assembly,
+            typeof(Elsa3.Activities.Design.Import.Elsa3ImportActivitiesFeature).Assembly,
+            typeof(Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Elsa3ImportActivitiesEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa3.Activities.Design.Import.Publishing.Elsa3ImportActivitiesPublishingFeature).Assembly
         )
 
         .WithConfigurationProvider(configuration)

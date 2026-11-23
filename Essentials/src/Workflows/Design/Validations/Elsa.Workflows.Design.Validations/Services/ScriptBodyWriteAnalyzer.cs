@@ -31,7 +31,7 @@ public sealed class ScriptBodyWriteAnalyzer(ScriptVariableReadResolver resolver,
             return null;
         return new ScriptBodyWriteSet(
             plan.MayWrite().Select(write => new ScriptBodyWriteTarget(write.Name, write.ScopeId, write.Variable.ReferenceKey)).ToArray(),
-            plan.HasComputedWrite);
+            plan.HasComputedWrite) { WorkflowState = plan.WorkflowState };
     }
 
     private ActivityNode? Find(ActivityNode root, string nodeId)

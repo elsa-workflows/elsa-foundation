@@ -359,6 +359,9 @@ public sealed class HostFunctionArgumentTests
         public bool HasReadProtectedValue { get; init; }
         public bool IsReadOnly(string name) => false;
 
+        // This fixture supplies protection explicitly, independently of concurrency reads, as the runtime session does.
+        public void ObservePendingRead(string name) { }
+
         public List<string> ReadNames { get; } = [];
 
         public ExpressionVariableRead Read(string name)

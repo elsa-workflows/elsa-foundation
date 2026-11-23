@@ -12,6 +12,7 @@ import { variableRenameJourney } from "./variableRenameJourney";
 import { variableLifecycleJourney } from "./variableLifecycleJourney";
 import { scriptVariableWritesJourney } from "./scriptVariableWritesJourney";
 import { timeZoneJourney } from "./timeZoneJourney";
+import { stepWorkflowStateJourney } from "./stepWorkflowStateJourney";
 import { switchMatchAnyJourney } from "./switchMatchAnyJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
@@ -556,6 +557,10 @@ test("script variable may-write analysis survives editing and reopening", async 
 
 test("timezone preferences preserve run instants and date filters", async ({ page }, info) => {
   await timeZoneJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("workflow state native and imported authoring and inspection", async ({ page }, info) => {
+  await stepWorkflowStateJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
 test("Switch MatchAny case activities survive authoring publication and execution", async ({ page }, info) => {

@@ -21,7 +21,7 @@ namespace Elsa.Activities.Runtime.Tests;
 /// What each persistence mode commits, observed on the durable store the harness wraps: which checkpoints reach it and
 /// how often. The runs use real activities through the production runtime over in-memory stores.
 /// </summary>
-public sealed class PersistenceModeFlushTests
+public sealed partial class PersistenceModeFlushTests
 {
     private const int StraightLineLength = 7;
     private const string CountingNodeId = "node-counting";

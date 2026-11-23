@@ -45,7 +45,7 @@ import { WorkflowExecutionTimeline } from "../WorkflowInstanceTimeline";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { PanelTabList } from "./PanelTabList";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
-import { WorkflowInstanceInspectionFacts, WorkflowInstanceInspectionNote } from "./WorkflowInstanceInspectionFacts";
+import { WorkflowInstanceInspectionFacts, WorkflowInstanceInspectionNote, WorkflowInstanceIdentityFacts } from "./WorkflowInstanceInspectionFacts";
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ReadOnlyWorkflowSequence } from "./ReadOnlyWorkflowSequence";
@@ -2629,8 +2629,7 @@ function WorkflowInstanceInspector({
                     <dd>{formatDate(summary.startedAt)}</dd>
                     <dt>Completed</dt>
                     <dd>{formatDate(summary.completedAt)}</dd>
-                    <dt>Correlation</dt>
-                    <dd>{summary.correlationId || "None"}</dd>
+                    <WorkflowInstanceIdentityFacts instance={summary} canInspectValues={details.permissions?.canInspectValues} />
                     <WorkflowInstanceInspectionFacts
                       persistenceMode={details.persistenceMode}
                       inspectionGranularity={details.inspectionGranularity}

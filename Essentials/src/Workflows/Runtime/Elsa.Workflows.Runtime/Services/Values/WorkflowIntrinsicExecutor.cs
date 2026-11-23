@@ -24,7 +24,7 @@ public sealed class WorkflowIntrinsicExecutor(
     IPortableExpressionEvaluator? portableExpressionEvaluator = null,
     IRuntimeValueConversionExecutor? valueConversionExecutor = null,
     IWorkflowExecutableInputValidator? inputValidator = null,
-    IRuntimePayloadCapturePolicy? payloadCapturePolicy = null)
+    IRuntimePayloadCapturePolicy? payloadCapturePolicy = null) : IWorkflowStateChangePreparer
 {
     private readonly IRuntimePayloadCapturePolicy _payloadCapturePolicy = payloadCapturePolicy ?? new Elsa.Workflows.Runtime.Services.ActivityExecutions.DefaultRuntimePayloadCapturePolicy();
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
@@ -278,6 +278,20 @@ public sealed class WorkflowIntrinsicExecutor(
             metadataAdditions: null,
             cancellationToken,
             durableChanges);
+    }
+
+    /// <inheritdoc />
+    async ValueTask<RuntimeStateChange<DurableValueState>> IWorkflowStateChangePreparer.PrepareOutputAsync(
+        string workflowExecutionId, string invocationId, string name, ValueEnvelope value,
+        DateTimeOffset occurredAt, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (value.Policy.Storage == DurableValueStorage.Custom)
+            throw new InvalidOperationException("VF-ACT-005: Workflow output requires unavailable custom storage.");
+        var encoded = await _externalEnvelopeStorage.RewriteAsync(new RuntimeExternalEnvelopeRewriteRequest(
+            workflowExecutionId, $"step-output:{invocationId}:{Guid.NewGuid():N}", "Workflow output", value,
+            ValueProtectionPolicy.InstanceInline, value.Policy), cancellationToken);
+        return NewWorkflowOutputChange(workflowExecutionId, invocationId, name, encoded, occurredAt);
     }
 
     private async ValueTask<RuntimeCheckpointCommit> ExecuteSetOutputAsync(

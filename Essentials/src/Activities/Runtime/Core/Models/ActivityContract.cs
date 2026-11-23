@@ -26,8 +26,9 @@ public sealed class ActivityContract
         ActivityActivationRequirement activation,
         SideEffectProfile sideEffectProfile = SideEffectProfile.External,
         bool supportsBackgroundExecution = false,
-        bool accessesUndeclaredVariables = false)
-        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile, supportsBackgroundExecution, accessesUndeclaredVariables)
+        bool accessesUndeclaredVariables = false,
+        bool accessesWorkflowState = false)
+        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs.Values, result, outcomes, activation, sideEffectProfile, supportsBackgroundExecution, accessesUndeclaredVariables, accessesWorkflowState)
     {
         if (!StringComparer.Ordinal.Equals(schemaFingerprint, SchemaFingerprint))
             throw new JsonException($"Activity contract fingerprint '{schemaFingerprint}' does not match computed fingerprint '{SchemaFingerprint}'.");
@@ -84,6 +85,17 @@ public sealed class ActivityContract
         SideEffectProfile sideEffectProfile,
         bool supportsBackgroundExecution,
         bool accessesUndeclaredVariables)
+        : this(activityTypeKey, contractVersion, descriptorKind, descriptorPayload, inputs, result, outcomes, activation,
+            sideEffectProfile, supportsBackgroundExecution, accessesUndeclaredVariables, accessesWorkflowState: false)
+    {
+    }
+
+    /// <summary>Creates a contract with an independent, fingerprinted workflow-state capability declaration.</summary>
+    public ActivityContract(
+        string activityTypeKey, string contractVersion, string descriptorKind, JsonElement descriptorPayload,
+        IEnumerable<ActivityInputContract> inputs, ActivityResultContract result, IEnumerable<string> outcomes,
+        ActivityActivationRequirement activation, SideEffectProfile sideEffectProfile, bool supportsBackgroundExecution,
+        bool accessesUndeclaredVariables, bool accessesWorkflowState)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activityTypeKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(contractVersion);
@@ -115,6 +127,7 @@ public sealed class ActivityContract
         SideEffectProfile = sideEffectProfile;
         SupportsBackgroundExecution = supportsBackgroundExecution;
         AccessesUndeclaredVariables = accessesUndeclaredVariables;
+        AccessesWorkflowState = accessesWorkflowState;
         SchemaFingerprint = ComputeFingerprint();
     }
 
@@ -155,6 +168,10 @@ public sealed class ActivityContract
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool AccessesUndeclaredVariables { get; }
 
+    /// <summary>Whether the native activity or engine script consumer accesses workflow outputs or identity.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AccessesWorkflowState { get; }
+
     /// <summary>Whether any input is a variable reference (<see cref="VariableReference{T}"/> or <see cref="ReadOnlyVariableReference{T}"/>).</summary>
     [JsonIgnore]
     public bool HasVariableReferenceInputs => Inputs.Values.Any(input => input.VariableReference is not null);
@@ -192,6 +209,9 @@ public sealed class ActivityContract
 
         if (AccessesUndeclaredVariables)
             node[nameof(AccessesUndeclaredVariables)] = true;
+
+        if (AccessesWorkflowState)
+            node[nameof(AccessesWorkflowState)] = true;
 
         return "sha256:" + Elsa.Serialization.Core.JsonHashInput.Hash(Elsa.Serialization.Core.JsonHashInput.SerializeToElement(node));
     }

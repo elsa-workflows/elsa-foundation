@@ -1595,7 +1595,7 @@
   gap: 10px;
   border-bottom: 1px solid var(--wf-border);
   background: var(--wf-panel-muted);
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   padding: 12px;
 }
 
@@ -1626,15 +1626,15 @@
 }
 
 .wf-instance-section .wf-activity-overview-title h4 {
-  overflow: hidden;
+  overflow: visible;
   margin: 0;
   color: var(--wf-text);
   font-size: 15px;
   letter-spacing: 0;
   line-height: 1.25;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   text-transform: none;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .wf-activity-overview-description {
@@ -1670,7 +1670,14 @@
 }
 
 .wf-activity-overview-status {
-  justify-content: flex-end;
+  grid-column: 2;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.wf-activity-overview-status .wf-status-badge {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .wf-activity-summary-grid,
@@ -2865,7 +2872,7 @@
 .wf-timeline-entry {
   display: grid;
   width: 100%;
-  align-items: center;
+  align-items: start;
   gap: 10px;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   border: 1px solid transparent;
@@ -2930,6 +2937,16 @@
   align-items: center;
   gap: 3px;
   font-family: inherit;
+}
+
+.wf-timeline-body .wf-timeline-effect {
+  overflow: visible;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .wf-activity-compensates {

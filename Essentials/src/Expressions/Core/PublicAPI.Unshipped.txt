@@ -834,3 +834,29 @@ Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.HasComputedWrite.get 
 Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.HasComputedWrite.init -> void
 Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.MayWriteNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
 static Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(string! code, string! path, System.Type! targetType, string? converter, string! root) -> Elsa.Expressions.Core.Models.ExecutionWarning!
+
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.WorkflowState.get -> Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects!
+Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis.WorkflowState.init -> void
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.<Clone>$() -> Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects!
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.AccessesState.get -> bool
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.AccessesState.init -> void
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.Conservative.get -> bool
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.Conservative.init -> void
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.Equals(Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects? other) -> bool
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.OutputNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.OutputNames.init -> void
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.ScriptWorkflowStateEffects() -> void
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.WritesCorrelationId.get -> bool
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.WritesCorrelationId.init -> void
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.WritesInstanceName.get -> bool
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.WritesInstanceName.init -> void
+override Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.ToString() -> string!
+static Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.None.get -> Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects!
+static Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.operator !=(Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects? left, Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects? right) -> bool
+static Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.operator ==(Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects? left, Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects? right) -> bool
+
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.HasInvalidLiteralCall.get -> bool
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.HasInvalidLiteralCall.init -> void
