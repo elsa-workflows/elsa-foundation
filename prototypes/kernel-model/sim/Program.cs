@@ -283,6 +283,12 @@ if (args.Contains("--foundation-migration-dispatch-check"))
     await FoundationMigrationDispatchChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--native-direct-preview-check"))
+{
+    var failed = false;
+    await DirectApprovalPreviewChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--public-owner-check"))
 {
     var failed = false;

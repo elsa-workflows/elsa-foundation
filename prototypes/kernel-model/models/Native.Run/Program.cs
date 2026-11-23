@@ -14,6 +14,18 @@ using Microsoft.EntityFrameworkCore;
 WriteLine.Out = null;
 if (args is ["pg-runtime-cluster"]) return await PostgresRuntimeCluster.RunAsync();
 if (args is ["pg-runtime-cluster-member"]) return await PostgresRuntimeCluster.MemberAsync();
+if (args is ["pg-root-history", var historyWriter and ("owned" or "ef"), var historyFence and ("checked" or "in-batch")])
+    return await PostgresRootHistoryChecks.RunAsync(historyWriter == "owned", historyFence == "in-batch");
+if (args is ["pg-core-preview", var birthPhase and ("birth" or "hold-owner")]) return await PostgresPublicPreview.RunAsync(birthPhase);
+if (args is ["pg-core-preview", "standby", var standbyRoot, var standbyBookmark, var priorEpoch, var priorPid, var initialLease] &&
+    long.TryParse(priorEpoch, out var epoch) && epoch > 0 && int.TryParse(priorPid, out var peerPid) && peerPid > 0 &&
+    long.TryParse(initialLease, out var originalUntil) && originalUntil > 0)
+    return await PostgresPublicPreview.RunAsync("standby", standbyRoot, standbyBookmark, epoch, peerPid, originalUntil);
+if (args is ["pg-core-preview", "tenant-probe", var probeReference]) return await PostgresPublicPreview.RunAsync("tenant-probe", probeReference);
+if (args is ["pg-core-preview", var replayPhase and ("restart" or "terminal"), var actorReference, var journalBookmark])
+    return await PostgresPublicPreview.RunAsync(replayPhase, actorReference, journalBookmark);
+if (args is ["pg-root-worker", "birth"]) return await PostgresRootWorkerChecks.RunAsync("birth", null);
+if (args is ["pg-root-worker", var phase and ("restart" or "bounds"), var reference]) return await PostgresRootWorkerChecks.RunAsync(phase, reference);
 if (args is ["deadlines"]) return await Deadlines.RunAsync();
 if (args is ["smoke"]) return await Smoke.RunAsync();
 if (args is ["variants", var variantMode]) return await VariantChecks.RunAsync(variantMode);
@@ -42,7 +54,7 @@ if (args is ["cost", "postgres", var connection])
     return failures;
 }
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
-Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | memory [runs] | pg-runtime-cluster");
+Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | memory [runs]");
 return 2;
 
 static class Cost
