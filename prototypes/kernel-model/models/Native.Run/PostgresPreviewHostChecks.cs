@@ -42,6 +42,9 @@ internal static class PostgresPreviewHostChecks
         }
 
         var data = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        await using (var db = new KernelDb(data))
+            if (!await PostgresFixtureDatabase.IsEmptyAsync(db, stop))
+                throw new InvalidOperationException("The watchdog fixture requires an empty PostgreSQL database.");
         var store = new EfStore(() => new(data), postgres: true);
         await store.CreateAsync(1);
         await store.InstallPreviewRootSchemaAsync(stop);
