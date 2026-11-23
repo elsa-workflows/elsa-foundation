@@ -68,6 +68,8 @@ public sealed record Message(
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public long InboxScope { get; private init; }
+    // Qualified identity returned with a generated creator by its PostgreSQL poll. Never accepted from external ingress.
+    internal (string Actor, string Tenant, string Reference)? FoundationRootBinding { get; init; }
     internal bool BindFoundationChild { get; init; }
     internal bool StoreStartInputOnce { get; init; }
     internal Message? StoredEnvelope { get; init; }
