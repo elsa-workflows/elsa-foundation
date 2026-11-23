@@ -1,5 +1,6 @@
 using Kernel.EntityFramework;
 using Kernel.Native.Preview;
+using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -8,7 +9,7 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootOperatorChecks
 {
-    private const string SuspendId = "pause/\0once";
+    internal const string SuspendId = "pause/\0once";
 
     internal static async Task<int> RunAsync(string[]? previous, bool owned = true, bool inBatch = false)
     {
@@ -27,17 +28,16 @@ internal static class PostgresRootOperatorChecks
             await admission.InstallAsync(ct);
         }
         var journal = new PostgresRootJournalReader(store, await admission.OpenJournalCursorAsync(ct), 8);
-        var blue = new Contract.BoundScope("blue");
-        var red = new Contract.BoundScope("red");
+        var blue = FixedTenantScope.Bind("blue");
         var basic = new PostgresPreviewFoundation(admission, store, journal, WorkflowActor.WorkflowActor.ActorType);
         var operatorApi = new PostgresPreviewFoundation(admission, store, journal, WorkflowActor.WorkflowActor.ActorType,
-            (scope, kind) => scope.Tenant is "blue" or "red" && kind is Contract.Kinds.Suspend or Contract.Kinds.Resume);
+            (scope, kind) => ReferenceEquals(scope, blue) && kind is Contract.Kinds.Suspend or Contract.Kinds.Resume);
         var runtime = new WorkflowRuntime(basic, basic);
         if (previous is null)
         {
             var a = await Start(blue, "alpha");
             var b = await Start(blue, "bravo");
-            var c = await Start(red, "charlie");
+            var c = new Contract.ActorRef(await PostgresMultiRootClient.CallSecondaryAsync(ct, "operator-start"));
             await using var clock = Open();
             var now = await clock.Database.SqlQueryRaw<long>("""SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value" """).SingleAsync(ct);
             Check((await Send(blue, b, "pending-root", Contract.Kinds.Suspend, new(DueAt: now + 3_600_000))).Outcome == Contract.AdmissionOutcome.Accepted &&
@@ -47,7 +47,7 @@ internal static class PostgresRootOperatorChecks
                 new WorkflowRegistry().Add(DirectApprovalWorkflow.Build()).Add(Wf.Workflow("terminal", Wf.Node<PostgresFlowchartPreview.Approval>("approval"))), 8, ct);
             await using (var owner = await host.TryActivateAsync(ct) ?? throw new InvalidOperationException("Expected a new partition owner."))
             {
-                while (await basic.GetAsync(blue, a, ct) is null || await basic.GetAsync(blue, b, ct) is null || await basic.GetAsync(red, c, ct) is null ||
+                while (await basic.GetAsync(blue, a, ct) is null || await basic.GetAsync(blue, b, ct) is null || await store.ReadFirstRootAsync(PostgresMultiRootClient.Secondary, c.Id, ct) is null ||
                     await basic.GetAsync(blue, completed, ct) is null) await RunPass();
                 var ending = (await store.ReadFirstRootAsync("blue", completed.Id, ct))!;
                 var frame = Json.Read<NativeState>(ending.State!).Frames.Values.Single().Id;
@@ -86,8 +86,8 @@ internal static class PostgresRootOperatorChecks
                 "changed target and kind replay the original bound receipt");
             Check((await basic.SendAsync(blue, new Contract.Target.Ref(b), "independent", "input", "next", cancellationToken: ct)).Outcome ==
                 Contract.AdmissionOutcome.Accepted, "an ordinary input on another root follows its own future command");
-            Check((await Send(blue, b, "resume", Contract.Kinds.Resume)).Outcome == Contract.AdmissionOutcome.Accepted &&
-                (await Send(red, c, SuspendId, Contract.Kinds.Resume)).Outcome == Contract.AdmissionOutcome.Accepted,
+            await PostgresMultiRootClient.CallSecondaryAsync(ct, "operator-resume", c.Id);
+            Check((await Send(blue, b, "resume", Contract.Kinds.Resume)).Outcome == Contract.AdmissionOutcome.Accepted,
                 "an independent resume and a second tenant's operation are admitted");
             Check((await Send(blue, a, "future", Contract.Kinds.Resume, new(DueAt: long.MaxValue, KeepFor: TimeSpan.Zero))).Outcome ==
                 Contract.AdmissionOutcome.Accepted, "a future command may outlive its receipt");
@@ -105,7 +105,7 @@ internal static class PostgresRootOperatorChecks
         var refs = previous.Select(id => new Contract.ActorRef(id)).ToArray();
         var first = await admission.ReadDueRootOperatorAsync("blue", refs[0].Id, ct);
         var second = await admission.ReadDueRootOperatorAsync("blue", refs[1].Id, ct);
-        var third = await admission.ReadDueRootOperatorAsync("red", refs[2].Id, ct);
+        var third = await admission.ReadDueRootOperatorAsync(PostgresMultiRootClient.Secondary, refs[2].Id, ct);
         var image = (await store.ReadFirstRootAsync("blue", refs[0].Id, ct))!;
         Check(first is { Id: SuspendId, Kind: Contract.Kinds.Suspend, Due: 0, Sender: null, Operator.Selection: null, TargetCreation: 1 } &&
             first.Operator is not null && first.Target.Id == image.Actor.Id && first.InboxKey.Scope == InboxKey.FoundationOccurrenceScope &&

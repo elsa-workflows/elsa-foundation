@@ -65,6 +65,18 @@ internal static class PostgresMultiRootClient
             case ["start"]:
                 Console.WriteLine((await Start(foundation, scope, "start", token)).Id);
                 break;
+            case ["operator-start"]:
+                Console.WriteLine((await Start(foundation, scope, "charlie", token)).Id);
+                break;
+            case ["operator-resume", var actorRef]:
+                var operatorApi = new PostgresPreviewFoundation(ingress, store,
+                    new(store, await ingress.OpenJournalCursorAsync(token), 64), WorkflowActor.WorkflowActor.ActorType,
+                    (request, kind) => ReferenceEquals(request, scope) && kind == Contract.Kinds.Resume);
+                var reply = await operatorApi.SendAsync(scope, new Contract.Target.Ref(new(actorRef)),
+                    PostgresRootOperatorChecks.SuspendId, Contract.Kinds.Resume, cancellationToken: token);
+                if (reply.Outcome != Contract.AdmissionOutcome.Accepted || reply.Actor?.Id != actorRef)
+                    throw new InvalidOperationException("The second tenant's Resume was not admitted against its actor.");
+                break;
             case ["start-receipt", var operation, var result] when Enum.TryParse<Contract.AdmissionOutcome>(result, out var required):
                 Console.WriteLine((await Start(foundation, scope, operation, token, required)).Id);
                 break;
