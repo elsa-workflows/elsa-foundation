@@ -126,10 +126,16 @@ public sealed partial class EfStore
     private static (string? State, string Header) EncodeRootContent(string model, string definition, string? state,
         int stateVersion, string typeData, IReadOnlyDictionary<string, string> labels, string journal)
     {
-        if (stateVersion < 1 || labels.Count > 4 || labels.Any(pair => Encoding.UTF8.GetByteCount(pair.Key) > 1024 ||
-            Encoding.UTF8.GetByteCount(pair.Value) > 1024) ||
-            !FoundationMetadataLimits.FitsContent(typeData, FoundationMetadataLimits.TypeDataBytes))
+        if (stateVersion < 1 || !FoundationMetadataLimits.FitsContent(typeData, FoundationMetadataLimits.TypeDataBytes))
             throw new ArgumentException("Invalid qualified root checkpoint header.");
+
+        var captured = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in labels)
+        {
+            if (captured.Count == 4 || key is null || value is null || Encoding.UTF8.GetByteCount(key) > 1024 ||
+                Encoding.UTF8.GetByteCount(value) > 1024 || !captured.TryAdd(key, value))
+                throw new ArgumentException("A root checkpoint accepts four ordinally distinct labels of at most 1,024 UTF-8 bytes per key and value.", nameof(labels));
+        }
 
         using var entries = JsonDocument.Parse(journal);
         if (entries.RootElement.ValueKind != JsonValueKind.Array)
@@ -137,7 +143,7 @@ public sealed partial class EfStore
 
         var escaped = state is not null && (state.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(state));
         var storedState = escaped ? DurableKeyJson.Write(state) : state;
-        var header = DurableKeyJson.Write(new RootHeader(model, definition, typeData, labels.ToArray(), escaped));
+        var header = DurableKeyJson.Write(new RootHeader(model, definition, typeData, captured.ToArray(), escaped));
         if (Encoding.UTF8.GetByteCount(header) + (storedState is null ? 0L : Encoding.UTF8.GetByteCount(storedState)) >
             16 * 1024 * 1024 - 24 * 1024)
             throw new ArgumentException("The encoded PostgreSQL checkpoint exceeds its storage budget.");

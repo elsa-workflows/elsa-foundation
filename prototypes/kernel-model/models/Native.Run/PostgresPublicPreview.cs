@@ -107,8 +107,18 @@ internal static class PostgresPublicPreview
             await owner.RunAsync(stop);
             Report("replay including admission");
             var same = await ReadCheckpoint();
-            Check(same.Revision == before.Revision && same.State == before.State, "replay left the checkpoint byte for byte");
+            Check(same.Revision == before.Revision && same.State == before.State, "replay preserved the serialized workflow state and checkpoint revision");
             Check((await foundation.TailAsync(scope, actor, bookmark, stop)).Items.Count == 0, "replay added no journal entries");
+            if (phase == "terminal")
+            {
+                var overflow = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "oversized", "notice",
+                    new string('\0', 3 * 1024 * 1024), cancellationToken: stop);
+                var missing = await foundation.SendAsync(new Contract.BoundScope("preview-other"), new Contract.Target.Ref(actor),
+                    "missing", "notice", cancellationToken: stop);
+                Check(overflow is { Outcome: Contract.AdmissionOutcome.Refused, Reason: null, Actor: null } &&
+                    missing is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch, Actor: null },
+                    "a valid root's physical size refusal and an unavailable tenant-bound target have distinct receipts");
+            }
 
             counter.Reset();
             Check(await Approve("approval-2", "Grace", frame) == Contract.AdmissionOutcome.Accepted, "second approval admitted");
@@ -117,7 +127,7 @@ internal static class PostgresPublicPreview
             {
                 var extra = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), "already-queued", CompositeSignal.Kind,
                     Json.Write(new CompositeSignal(frame, "approve", "third")), cancellationToken: stop);
-                Check(extra.Outcome == Contract.AdmissionOutcome.Accepted, "third input was admitted while the actor was still running");
+                Check(extra.Outcome == Contract.AdmissionOutcome.Accepted && extra.Actor == actor, "third input was admitted while the actor was still running");
                 var diagnosticAdmission = new PostgresRootAdmission(() => new(data), TimeSpan.Zero);
                 var pending = await diagnosticAdmission.ReadPendingDirectAsync(scope.Tenant, actor.Id, stop);
                 queued = pending.Single(input => input.Id == "already-queued");
@@ -182,9 +192,14 @@ internal static class PostgresPublicPreview
         }
         return 0;
 
-        async Task<Contract.AdmissionOutcome> Approve(string id, string name, string frame) =>
-            (await foundation.SendAsync(scope, new Contract.Target.Ref(actor), id, CompositeSignal.Kind,
-                Json.Write(new CompositeSignal(frame, "approve", name)), cancellationToken: stop)).Outcome;
+        async Task<Contract.AdmissionOutcome> Approve(string id, string name, string frame)
+        {
+            var receipt = await foundation.SendAsync(scope, new Contract.Target.Ref(actor), id, CompositeSignal.Kind,
+                Json.Write(new CompositeSignal(frame, "approve", name)), cancellationToken: stop);
+            if (receipt.Outcome is Contract.AdmissionOutcome.Accepted or Contract.AdmissionOutcome.Duplicate)
+                Check(receipt.Actor == actor, $"the {id} receipt names the original workflow");
+            return receipt.Outcome;
+        }
 
         async Task<string> ReadFrame()
         {

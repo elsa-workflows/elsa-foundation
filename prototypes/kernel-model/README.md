@@ -65,7 +65,7 @@ models/Native.Run/run-core-preview.sh
 The first Embedded host starts a Native approval workflow through the public Foundation contract, records Ada's approval,
 and exits at the second wait. The next process opens the same database and reads from the first process's journal bookmark.
 It sends Ada's operation ID again with a different payload, then sends Grace's approval with a new ID. The stored
-checkpoint stays byte for byte through replay. The journal and final result verify that each approval applied once.
+serialized workflow state and checkpoint revision stay unchanged through replay. The journal and final result verify that each approval applied once.
 
 The receipt counts EF commands and explicit transaction completions by phase. Their sum is the round-trip count at
 the provider command boundary, excluding connection setup. Setup, ownership and journal reads have their own rows.

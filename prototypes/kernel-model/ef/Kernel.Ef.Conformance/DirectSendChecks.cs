@@ -25,6 +25,18 @@ internal static class DirectSendChecks
         Check(await roots.AdmitDirectAsync(tenant, reference, "requires-qualification", Kinds.Delete) is null,
             "the ordinary route leaves qualified commands to their operator path");
 
+        foreach (var unknown in new[] { reference[..63] + '\0', reference[..63] + '\ud800', reference[..63] })
+        {
+            Check(await roots.AdmitDirectAsync(tenant, unknown, "first", "input") is null &&
+                (await roots.ReadPendingDirectAsync(tenant, unknown)).Count == 0,
+                "an invalid generated reference is unavailable for both admission and pending reads");
+        }
+        var another = await roots.AdmitAsync(tenant, "start-another", new StartSpec("workflow", "definition"));
+        Check(await roots.AdmitDirectAsync(tenant, another.Reference, "first", "input", "another root") == true &&
+            (await roots.ReadPendingDirectAsync(tenant, another.Reference)) is [{ Id: "first", Payload: "another root" }] &&
+            (await roots.ReadPendingDirectAsync(tenant, reference)) is [{ Id: "first", Payload: var firstBody }] && firstBody == original,
+            "the same operation on two exact roots retains its own receipt and input on each");
+
         var timeout = TimeSpan.FromSeconds(30);
         var acquired = (await store.TakeAsync(creator.Target.Partition, "direct-fence", timeout))!;
         var fence = new PartitionFence(creator.Target.Partition, acquired.Epoch, acquired.Position);
@@ -57,6 +69,18 @@ internal static class DirectSendChecks
               after[2] is { Id: "first", Payload: "new occurrence", Due: 2_000_000_000_000 } &&
               after.Select(message => message.InboxKey).Distinct().Count() == 3,
             "reused operation has a separate physical occurrence and leaves earlier input untouched");
+
+        // In its logical form this is 3 MiB. The stored JSON representation needs six bytes per NUL.
+        var expanded = new string('\0', 3 * 1024 * 1024);
+        Check(await cold.AdmitDirectAsync(tenant, another.Reference, "first", "input", expanded) == false &&
+            (await cold.ReadPendingDirectAsync(tenant, another.Reference)) is [{ Id: "first", Payload: "another root" }],
+            "a live receipt wins over an oversized replacement encoding and preserves its original input");
+        Check(await cold.AdmitDirectAsync(tenant, another.Reference, "smaller-retry", "input", expanded) is null &&
+            (await cold.ReadPendingDirectAsync(tenant, another.Reference)).Count == 1 &&
+            await cold.AdmitDirectAsync(tenant, another.Reference, "smaller-retry", "input", "fits") == true &&
+            (await cold.ReadPendingDirectAsync(tenant, another.Reference)) is
+                [{ Id: "first", Payload: "another root" }, { Id: "smaller-retry", Payload: "fits" }],
+            "a physical size refusal releases its receipt reservation for a smaller retry");
     }
 
     private static void Check(bool valid, string message)

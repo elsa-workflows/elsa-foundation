@@ -43,6 +43,13 @@ internal static class RootTurnChecks
             string? r = null, InstanceStatus status = InstanceStatus.Running, string? state = "opaque\0\ud800") =>
             store.CommitRootTurnAsync(t, r ?? reference, before, selected, f, timeout, status, state, 1, "layout2", labels, """["step"]""");
 
+        var duplicateLabels = new Dictionary<string, string>(ReferenceEqualityComparer.Instance)
+        {
+            [new string('x', 3)] = "first",
+            [new string('x', 3)] = "second"
+        };
+        await Refused(() => store.CommitRootTurnAsync(tenant, reference, current, [inputs[0]], fence, timeout,
+            InstanceStatus.Running, "changed", 1, "layout2", duplicateLabels, "[]"), "duplicate ordinal labels on a subsequent root checkpoint");
         await Refused(() => Next(current, [inputs[0]], fence with { Epoch = lease.Epoch - 1 }), "stale epoch");
         await Refused(() => Next(current, [inputs[0]], fence with { Position = 0 }), "old position");
         await Refused(() => Next(current, [inputs[0]], fence, t: "other"), "other tenant");

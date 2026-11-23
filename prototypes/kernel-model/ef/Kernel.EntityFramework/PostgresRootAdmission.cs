@@ -14,7 +14,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     private const string CreatorPrefix = "!kernel-root/1:";
 
     internal static bool IsIssuedReferenceShape(string? reference) =>
-        reference is { Length: 64 } && reference.All(char.IsAsciiHexDigit);
+        FoundationRootCreator.IsGeneratedReference(reference);
 
     internal async Task<FoundationReadCursor> OpenJournalCursorAsync(CancellationToken cancellationToken)
     {
