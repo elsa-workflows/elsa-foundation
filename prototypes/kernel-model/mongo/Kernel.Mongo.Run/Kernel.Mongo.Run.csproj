@@ -5,6 +5,9 @@
     <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
+    <ProjectReference Include="../../models/Native/Kernel.Native.csproj" />
+    <ProjectReference Include="../../src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
     <ProjectReference Include="../Kernel.Mongo/Kernel.Mongo.csproj" />
     <ProjectReference Include="../../conformance/Kernel.Store.Conformance/Kernel.Store.Conformance.csproj" />
   </ItemGroup>

@@ -132,10 +132,13 @@ public sealed partial class MongoStore
             }
             if (expected.Count != 0)
                 throw new StoreException(Failure.Definite, "The job checkpoint is missing a pending ticket or result.");
+            var journalRevision = _options.ApplyJobSuspend ? row.GetValue("journalRevision", image.Revision).AsInt64 : image.Revision;
+            if (journalRevision < 1 || journalRevision > image.Revision)
+                throw new StoreException(Failure.Definite, "The journal revision exceeds the scoped checkpoint.");
             var journal = await _journal.Find(tx, new BsonDocument { { "partition", birth["partition"] }, { "instance", image.Actor },
-                { "revision", image.Revision }, { "tenant", scope.Tenant }, { "rootRef", reference } }).SingleAsync(token);
+                { "revision", journalRevision }, { "tenant", scope.Tenant }, { "rootRef", reference } }).SingleAsync(token);
             return new JobRootCheckpoint(image, tickets, new JournalRow(birth["partition"].AsInt32, journal["position"].AsInt64,
-                image.Actor, image.Revision, journal["entries"].AsString))
+                image.Actor, journalRevision, journal["entries"].AsString))
                 { Results = results, Suspended = row.GetValue("suspended", false).AsBoolean };
         }, Transaction, cancellationToken);
     }

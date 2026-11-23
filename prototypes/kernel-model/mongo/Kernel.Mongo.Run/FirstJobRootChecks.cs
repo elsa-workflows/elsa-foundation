@@ -20,7 +20,10 @@ internal static class FirstJobRootChecks
         try
         {
             await writer.CreateAsync(1);
-            var spec = new StartSpec("job-model", "job-definition", "root-input");
+            var workflow = Kernel.WorkflowActor.WorkflowActor.Start(new(Kernel.Native.NativeExecutionModel.ModelKey, "job-definition"));
+            var spec = settle ? new StartSpec(workflow.Type, workflow.TypeData, "root-input")
+                : new StartSpec("job-model", "job-definition", "root-input");
+            var typeData = settle ? workflow.TypeData : "job-type";
             var receipt = await writer.AdmitJobRootAsync(scope, "op", spec, lease);
             var creator = (await cold.PendingJobRootAsync(scope, receipt.Reference))!;
             var id = creator.Target.Id;
@@ -34,7 +37,7 @@ internal static class FirstJobRootChecks
                 Jobs: turn.Jobs(), Creation: 1, StartIntent: CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload));
             var outcome = turn.Seal(turn.Outcome(InstanceStatus.Running), row, "waiting", "[]");
             var commit = new TurnCommit(id, outcome.Row, outcome.Expected, outcome.Consumed.Select(d => d.Message.InboxKey).ToArray(),
-                [], outcome.Sent, [], [], outcome.Journal) { FoundationHeader = new("job-type", new Dictionary<string, string> { ["stage"] = "waiting" }) };
+                [], outcome.Sent, [], [], outcome.Journal) { FoundationHeader = new(typeData, new Dictionary<string, string> { ["stage"] = "waiting" }) };
             Check(outcome.Sent.Select(m => m.JobGeneration).SequenceEqual(new long[] { 0, 1 }) &&
                   outcome.Sent.All(m => m.HasIssuedTicket && m.SenderCreation == 1 && m.TargetCreation == 1),
                 "the Foundation turn issued two authentic tickets in creation one with generations zero and one");
@@ -86,7 +89,7 @@ internal static class FirstJobRootChecks
                 Check(await cold.ProjectAsync(0, 0, rows.Single().Position, rows), "the trusted partition projector lands the scoped row");
             });
             var snapshot = (await cold.ReadJobRootCheckpointAsync(scope, receipt.Reference))!;
-            Check(snapshot.Image is { Creation: 1, Revision: 1, State: "waiting", NextJobGeneration: 2, TypeData: "job-type" } &&
+            Check(snapshot.Image is { Creation: 1, Revision: 1, State: "waiting", NextJobGeneration: 2 } && snapshot.Image.TypeData == typeData &&
                   snapshot.Image.Labels["stage"] == "waiting" && snapshot.Image.Jobs == row.Jobs && snapshot.Image.StartIntent == row.StartIntent &&
                   snapshot.Journal is { Revision: 1, Entries: "[]" } && snapshot.Journal.Position == current.Position + 1 &&
                   snapshot.Tickets.Count == 2 && snapshot.Tickets.Zip(outcome.Sent).All(pair =>

@@ -20,6 +20,7 @@ public sealed record MongoStoreOptions
     internal bool JobGenerations { get; init; }
     internal bool ScopedJobRoots { get; init; }
     internal bool ScopedJobResults { get; init; }
+    internal bool ApplyJobSuspend { get; init; }
     internal bool ScopedJobSuspend { get; init; }
 
 }
@@ -59,7 +60,9 @@ public sealed partial class MongoStore : IKernelStore
             throw new ArgumentException("Scoped job results require scoped job roots.", nameof(options));
         if (_options.ScopedJobSuspend && !_options.ScopedJobResults)
             throw new ArgumentException("Scoped suspension requires the result format.", nameof(options));
-        _format = _options.ScopedJobSuspend ? JobSuspendFormat : _options.ScopedJobResults ? JobResultFormat : _options.ScopedJobRoots ? ScopedJobRootFormat : _options.JobGenerations ? JobGenerationFormat : CurrentFormat;
+        if (_options.ApplyJobSuspend && !_options.ScopedJobSuspend)
+            throw new ArgumentException("Suspension application requires the staged operator protocol.", nameof(options));
+        _format = _options.ApplyJobSuspend ? AppliedSuspendFormat : _options.ScopedJobSuspend ? JobSuspendFormat : _options.ScopedJobResults ? JobResultFormat : _options.ScopedJobRoots ? ScopedJobRootFormat : _options.JobGenerations ? JobGenerationFormat : CurrentFormat;
         _grant = new BsonDocument
         {
             { "storeSchema", _format.StoreSchema }, { "messageProtocol", _format.MessageProtocol }, { "journalCodec", _format.JournalCodec }
@@ -194,10 +197,10 @@ public sealed partial class MongoStore : IKernelStore
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
         CommitAsync(batch, null, null, cancellationToken);
 
-    private async ValueTask<Committed> CommitAsync(CommitBatch batch, FirstJobWrite? firstJob, JobResultWrite? settlement, CancellationToken cancellationToken)
+    private async ValueTask<Committed> CommitAsync(CommitBatch batch, FirstJobWrite? firstJob, JobResultWrite? settlement, CancellationToken cancellationToken, RootSuspendWrite? suspend = null)
     {
         StoreBatchRules.Validate(batch, ownedSets: true, supportsJobTrialClear: SupportsJobTrialClear);
-        if (firstJob is null && settlement is null) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
+        if (firstJob is null && settlement is null && suspend is null) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         CommitClockFacts.RejectUnsupported(batch);
         if (!_options.JobGenerations && batch.Turns.Any(t => t.Row?.NextJobGeneration is not null || t.Sent.Any(m => m.JobGeneration != 0)))
             throw new StoreFormatException("Job generations require schema=2, message protocol=2.");
@@ -290,6 +293,11 @@ public sealed partial class MongoStore : IKernelStore
                 return new Committed(false, 0, []);
             }
             if (settlement is not null && !await CanSettleJobAsync(session, settlement, cancellationToken))
+            {
+                await session.AbortTransactionAsync(cancellationToken);
+                return new Committed(false, 0, []);
+            }
+            if (suspend is not null && !await StageRootSuspensionWritesAsync(session, suspend, models, checks, cancellationToken))
             {
                 await session.AbortTransactionAsync(cancellationToken);
                 return new Committed(false, 0, []);

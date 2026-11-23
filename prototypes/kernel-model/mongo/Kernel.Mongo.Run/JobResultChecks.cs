@@ -59,7 +59,7 @@ internal static class JobResultChecks
         var result = await actor.Result.Task;
         Check(actor.Observed is { State: "waiting", StateVersion: 1, Creation: 1, Revision: 1, NextJobGeneration: 2 } observed &&
             observed.Model == image.Model && observed.Definition == image.Definition && observed.Jobs == image.Jobs &&
-            observed.StartIntent == image.StartIntent && observed.FoundationInlineHeader?.TypeData == "job-type" &&
+            observed.StartIntent == image.StartIntent && observed.FoundationInlineHeader?.TypeData == image.TypeData &&
             observed.FoundationInlineHeader.Labels["stage"] == "waiting",
             "the executing Worker sees the fresh-client checkpoint state, creation, registry, generation counter and header");
         Check(actor.Entries == 1 && result.HasIssuedTicket && result.Read<JobFinished>() == new JobFinished("second", "84", null),
@@ -67,29 +67,36 @@ internal static class JobResultChecks
 
         Check(!(await store.SettleSuspendedJobAsync(scope, reference, row.Revision, result, fence, lease)).Landed,
             "a running deliverable root refuses a standalone conversion and keeps its ticket");
-        // Physical prerequisite fixture: the authenticated operator writer is a separate provider slice.
-        // Install its already-committed suspended checkpoint, next revision and journal position together.
-        var projected = before.Image with { Revision = row.Revision + 1 };
-        using (var tx = await client.StartSessionAsync())
+        // Upgrade the active result-only fixture through admission and the silent-header checkpoint.
+        var admissionOptions = staged with { ScopedJobSuspend = true };
+        var admission = new MongoStore(client, name, admissionOptions);
+        await nodes.UpdateOneAsync(new BsonDocument("_id", "result-owner"), Builders<BsonDocument>.Update.Set("leaseUntil", 0L));
+        Check(await admission.UpgradeScopedJobSuspendAsync(), "the stopped result owner permits suspension admission");
+        staged = admissionOptions with { ApplyJobSuspend = true };
+        store = new MongoStore(client, name, staged);
+        await admission.TakeAsync(0, "before-silent", lease);
+        try
         {
-            tx.StartTransaction();
-            var db = store.Database;
-            var suspend = await db.GetCollection<BsonDocument>("instances").UpdateOneAsync(tx,
-                new BsonDocument { { "_id", row.Id }, { "rootRef", reference }, { "revision", row.Revision } },
-                Builders<BsonDocument>.Update.Set("suspended", true).Set("revision", projected.Revision).Set("rootImage", DurableKeyJson.Write(projected)));
-            var moved = await db.GetCollection<BsonDocument>("partitions").UpdateOneAsync(tx,
-                new BsonDocument { { "_id", fence.Partition }, { "epoch", fence.Epoch }, { "position", fence.Position } },
-                Builders<BsonDocument>.Update.Inc("position", 1L));
-            Check(suspend.ModifiedCount == 1 && moved.ModifiedCount == 1, "fixture establishes the suspended checkpoint at its exact revision and fence");
-            await db.GetCollection<BsonDocument>("journal").InsertOneAsync(tx, new BsonDocument
-            {
-                { "_id", new BsonDocument { { "p", fence.Partition }, { "n", fence.Position + 1 } } }, { "partition", fence.Partition },
-                { "position", fence.Position + 1 }, { "instance", row.Id }, { "revision", projected.Revision }, { "entries", "[]" },
-                { "rootRef", reference }, { "tenant", scope.Tenant }
-            });
-            await tx.CommitTransactionAsync();
+            await store.UpgradeAppliedSuspendAsync();
+            throw new InvalidOperationException("A live admission-only reader accepted a silent checkpoint.");
         }
-        fence = fence with { Position = fence.Position + 1 };
+        catch (StoreFormatException e) when (e.Message.Contains("Live node", StringComparison.Ordinal)) { }
+        await nodes.UpdateOneAsync(new BsonDocument("_id", "before-silent"), Builders<BsonDocument>.Update.Set("leaseUntil", 0L));
+        Check(await store.UpgradeAppliedSuspendAsync() && !await store.UpgradeAppliedSuspendAsync(),
+            "the supported silent-checkpoint schema is adopted exactly once after the old reader stops");
+        try
+        {
+            await admission.ReadJobRootCheckpointAsync(scope, reference);
+            throw new InvalidOperationException("An old reader opened the silent-checkpoint schema.");
+        }
+        catch (StoreFormatException e) when (e.Failure == Failure.Definite) { }
+        var held = (await store.TakeAsync(0, "result-owner", lease))!;
+        fence = new(0, held.Epoch, held.Position);
+        await using var physicalOwner = new Worker("result-owner", 0, store, new WorkflowInstance([]));
+        await using var physicalActivation = await new DurableHost([physicalOwner]).ActivateAsync(0)
+            ?? throw new InvalidOperationException("The staged physical owner did not take its partition.");
+        fence = await RootSuspensionApplicationChecks.RunAsync(connection, name, staged, store, scope, reference, before, fence, lease, physicalOwner);
+        var projected = (await store.ReadJobRootCheckpointAsync(scope, reference))!.Image;
         Check(!(await store.SettleSuspendedJobAsync(new BoundScope("b"), reference, projected.Revision, result, fence, lease)).Landed &&
             !(await store.SettleSuspendedJobAsync(scope, reference, row.Revision, result, fence, lease)).Landed &&
             !(await store.SettleSuspendedJobAsync(scope, reference, projected.Revision, result, fence with { Epoch = fence.Epoch - 1 }, lease)).Landed,

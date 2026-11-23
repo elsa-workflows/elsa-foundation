@@ -95,32 +95,37 @@ public sealed partial class MongoStore
         return await session.WithTransactionAsync(async (tx, token) =>
         {
             await RequireVersionsAsync(tx, token);
-            var birth = await _meta.Find(tx, new BsonDocument { { "_id", BirthId(reference) }, { "tenant", scope.Tenant } }).FirstOrDefaultAsync(token);
-            if (birth is null) return null;
-            var doc = await _messages.Find(tx, new BsonDocument
-            {
-                { "tenant", scope.Tenant }, { "rootRef", reference }, { "target", birth["actor"] }, { "targetCreation", birth["creation"] },
-                { "partition", birth["partition"] }, { "kind", Kinds.Suspend }, { "done", false }, { "operatorId", new BsonDocument("$exists", true) },
-                { "$expr", new BsonDocument("$lte", new BsonArray { "$due", NowMs }) }
-            }).Sort(new BsonDocument("seq", 1)).FirstOrDefaultAsync(token);
-            if (doc is null) return null;
-            bool Empty(string field) => doc.TryGetValue(field, out var value) && value.IsBsonNull;
-            var hasDue = doc.TryGetValue("dueSpecified", out var specified);
-            if (!Empty("payload") || !Empty("sender") || !Empty("replyTo") || !Empty("start") ||
-                doc.Contains("senderCreation") || doc.Contains("jobGeneration") || doc.Contains("resultOf") || doc.Contains("rootEnvelope") ||
-                !doc["operatorId"].IsString || !FoundationMetadataLimits.IsOutsideMessageId(doc["operatorId"].AsString) ||
-                !doc.TryGetValue("due", out var due) || !due.IsInt64 || (hasDue ? !specified.Equals(BsonBoolean.True) : due.AsInt64 != 0) ||
-                !doc.TryGetValue("keepUntil", out var keep) || !keep.IsInt64)
-                throw new StoreException(Failure.Definite, "The stored suspension envelope is inconsistent with one-way outside admission.");
-            var operation = doc["operatorId"].AsString;
-            var actor = new InstanceRef(birth["actor"].AsString);
-            var seq = doc["seq"].AsInt64;
-            var command = FoundationIngressAddress.Occurrence(operation, "operator/" + FoundationIngressAddress.Operation(scope.Tenant, operation),
-                FormattableString.Invariant($"{actor.Partition}:{seq}"), actor, birth["creation"].AsInt64,
-                Kinds.Suspend, null, hasDue ? due.AsInt64 : null, keep.AsInt64, null, new(null));
-            if (!doc["_id"].Equals(InboxId(command.InboxKey)))
-                throw new StoreException(Failure.Definite, "The stored suspension occurrence conflicts with its bound operation.");
-            return command;
+            return await NextRootSuspensionAsync(tx, scope.Tenant, reference, token);
         }, Transaction, cancellationToken);
+    }
+
+    private async Task<Message?> NextRootSuspensionAsync(IClientSessionHandle tx, string tenant, string reference, CancellationToken token)
+    {
+        var birth = await _meta.Find(tx, new BsonDocument { { "_id", BirthId(reference) }, { "tenant", tenant } }).FirstOrDefaultAsync(token);
+        if (birth is null) return null;
+        var doc = await _messages.Find(tx, new BsonDocument
+        {
+            { "tenant", tenant }, { "rootRef", reference }, { "target", birth["actor"] }, { "targetCreation", birth["creation"] },
+            { "partition", birth["partition"] }, { "kind", Kinds.Suspend }, { "done", false }, { "operatorId", new BsonDocument("$exists", true) },
+            { "$expr", new BsonDocument("$lte", new BsonArray { "$due", NowMs }) }
+        }).Sort(new BsonDocument("seq", 1)).FirstOrDefaultAsync(token);
+        if (doc is null) return null;
+        bool Empty(string field) => doc.TryGetValue(field, out var value) && value.IsBsonNull;
+        var hasDue = doc.TryGetValue("dueSpecified", out var specified);
+        if (!Empty("payload") || !Empty("sender") || !Empty("replyTo") || !Empty("start") ||
+            doc.Contains("senderCreation") || doc.Contains("jobGeneration") || doc.Contains("resultOf") || doc.Contains("rootEnvelope") ||
+            !doc["operatorId"].IsString || !FoundationMetadataLimits.IsOutsideMessageId(doc["operatorId"].AsString) ||
+            !doc.TryGetValue("due", out var due) || !due.IsInt64 || (hasDue ? !specified.Equals(BsonBoolean.True) : due.AsInt64 != 0) ||
+            !doc.TryGetValue("keepUntil", out var keep) || !keep.IsInt64)
+            throw new StoreException(Failure.Definite, "The stored suspension envelope is inconsistent with one-way outside admission.");
+        var operation = doc["operatorId"].AsString;
+        var actor = new InstanceRef(birth["actor"].AsString);
+        var seq = doc["seq"].AsInt64;
+        var command = FoundationIngressAddress.Occurrence(operation, "operator/" + FoundationIngressAddress.Operation(tenant, operation),
+            FormattableString.Invariant($"{actor.Partition}:{seq}"), actor, birth["creation"].AsInt64,
+            Kinds.Suspend, null, hasDue ? due.AsInt64 : null, keep.AsInt64, null, new(null));
+        if (!doc["_id"].Equals(InboxId(command.InboxKey)))
+            throw new StoreException(Failure.Definite, "The stored suspension occurrence conflicts with its bound operation.");
+        return command;
     }
 }
