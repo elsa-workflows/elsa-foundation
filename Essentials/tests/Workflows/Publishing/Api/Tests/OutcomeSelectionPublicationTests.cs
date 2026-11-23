@@ -179,6 +179,30 @@ public sealed class OutcomeSelectionPublicationTests
     private static Task<WorkflowExecutable> Compile(ActivityNode root, params Type[] activityTypes) =>
         CompileAsync(root, [typeof(FlowchartActivity), .. activityTypes], structures: Structures);
 
+    [Theory]
+    [InlineData("Approved", true)]
+    [InlineData("Done", false)]
+    public async Task Populated_MatchAny_publishes_with_remapped_bodies_but_rejects_Done(string label, bool valid)
+    {
+        var root = new ActivityNode("switch", typeof(SwitchActivity).FullName!, [], [],
+            new(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(
+                new SwitchAuthoredStructure([
+                    new(label, Leaf("first-body", typeof(PlainStep))) { CaseId = "a", Condition = Literal("unused", true) },
+                    new("Other", Leaf("second-body", typeof(PlainStep))) { CaseId = "b", Condition = Literal("unused", true) }
+                ], mode: SwitchModes.MatchAny), Web)));
+        if (!valid)
+        {
+            var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => Compile(root, typeof(SwitchActivity), typeof(PlainStep)));
+            Assert.Contains("Done", error.Message, StringComparison.Ordinal);
+            return;
+        }
+        var executable = await Compile(root, typeof(SwitchActivity), typeof(PlainStep));
+        Assert.Equal(2, executable.RootActivity.ChildSlots.Sum(slot => slot.Activities.Count));
+        Assert.Equal(SwitchModes.MatchAny, executable.RootActivity.Structure!.Payload.GetProperty("mode").GetString());
+        Assert.DoesNotContain(ActivityOutcomes.Done, executable.RootActivity.ActivityContract!.Outcomes);
+        Assert.Equal(2, executable.RootActivity.InputBindings.Count);
+    }
+
     private static ActivityNode Leaf(string nodeId, Type activityType) => new(nodeId, activityType.FullName!, [], []);
 
     private static ActivityNode Flowchart(IReadOnlyCollection<ActivityNode> activities, IReadOnlyCollection<FlowchartConnection> connections) =>

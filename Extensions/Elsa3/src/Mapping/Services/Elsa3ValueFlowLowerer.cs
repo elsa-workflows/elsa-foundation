@@ -83,7 +83,14 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         var containerVariables = containerVariableIds ?? new HashSet<string>(StringComparer.Ordinal);
         var accessors = new AccessorScope(isReusable, ActivityAccessorNames(definition.Root))
         {
-            AncestorScopeNames = ancestorScopeNames ?? (_ => [])
+            AncestorScopeNames = ancestorScopeNames ?? (_ => []),
+            ObserveScriptOutcomes = plan is null ? null : (node, names, invalidDone, nativeCompletionAccess) =>
+            {
+                if (plan.Find(node) is not { } script) return;
+                script.EffectiveScriptOutcomes = names;
+                script.EffectiveScriptInvalidDoneSelection = invalidDone;
+                script.EffectiveScriptNativeCompletionAccess = nativeCompletionAccess;
+            }
         };
         var cyclicMemoryIds = FindCycleMemoryIds(inventory, variablesById, outputsByMemory, diagnostics, input);
         var hasScriptWrites = properties.Any(property => TryReadVariableExpression(property.Value, out _)) &&
@@ -917,6 +924,14 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         property.Activity.AdditionalProperties[property.PropertyName] = StripMemoryReference(
             Elsa3Literal(property.Value, definitionResult.Source));
         AddConversionNotes(input, property, rewrite, diagnostics);
+        var effectiveOutcomes = rewrite.ScriptOutcomes is { } selected
+            ? selected.LiteralOutcomes.Concat(selected.CatchAll is null ? []
+                : possibleOutcomes is null ? [] : PossibleOutcomeItems(property.Activity.AdditionalProperties[possibleOutcomes]) ?? [])
+                .Distinct(StringComparer.Ordinal).ToArray()
+            : Array.Empty<string>();
+        var invalidDone = rewrite.ScriptOutcomes is { } selection && (selection.HasInvalidLiteralSelection
+            || selection.HasComputedSelectionSet && effectiveOutcomes.Contains("Done", StringComparer.Ordinal));
+        accessors.ObserveScriptOutcomes?.Invoke(property.Activity, effectiveOutcomes, invalidDone, rewrite.MayAccessNativeCompletion);
         if (rewrite.ScriptOutcomes is { } scriptOutcomes)
             DeclareScriptOutcomes(input, property, possibleOutcomes, scriptOutcomes, diagnostics);
         // The body's variable reads are not arguments: it reads them itself.
@@ -954,7 +969,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         activity.AdditionalProperties.Keys.FirstOrDefault(key => StringComparer.OrdinalIgnoreCase.Equals(key, PossibleOutcomesName));
 
     /// <summary>The literal items of an Elsa 3 PossibleOutcomes value; null when an expression decides them.</summary>
-    private static IReadOnlyList<string>? PossibleOutcomeItems(JsonElement value)
+    internal static IReadOnlyList<string>? PossibleOutcomeItems(JsonElement value)
     {
         if (value.ValueKind == JsonValueKind.Undefined || !Elsa3TypedValues.IsBound(value))
             return [];
@@ -1782,6 +1797,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         /// resolves a script's variable name nearest scope first, so such a name shadows a workflow variable.
         /// </summary>
         public Func<Elsa3Activity, IReadOnlyList<(string Name, string ScopeNodeId)>> AncestorScopeNames { get; init; } = _ => [];
+        public Action<Elsa3Activity, IReadOnlyList<string>?, bool, bool>? ObserveScriptOutcomes { get; init; }
     }
 
 }

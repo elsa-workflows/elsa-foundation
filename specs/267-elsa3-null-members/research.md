@@ -169,6 +169,13 @@ Input, not for a present expression result. Generic Get/conversion then supplies
 value-type result. String blanks remain strings for String targets. Enum parsing precedes the whitespace fallback,
 so blank HTTP-status text is not assumed to become zero.
 
+The tagged loader also ignores a serialized `memoryReference` property: the resolved expression descriptor creates
+the wrapped Input's reference. A typeName/memoryReference wrapper with no expression returns a null Input, rather
+than reading that variable. Corrected built-ins refuse that unsupported binding shape; their valid expressions
+discard this ignored metadata so a JSON Literal cannot be replaced by a memory read. A proper Variable expression
+still uses declaration-ID lowering. Non-string payloads for unknown/script syntaxes are refused before they can
+bypass shared text-expression validation. The generic lowerer and unconfigured custom maps remain unchanged.
+
 Sources: [input converter, 3.6.3](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Workflows.Core/Serialization/Converters/InputJsonConverter.cs),
 [input converter, 3.5.3](https://github.com/elsa-workflows/elsa-core/blob/7646867ac5365af35f0507fde72b2df98790bec9/src/modules/Elsa.Workflows.Core/Serialization/Converters/InputJsonConverter.cs),
 [input evaluation](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Workflows.Core/Extensions/ActivityExecutionContextExtensions.InputEvaluation.cs),
@@ -180,6 +187,15 @@ Both tags attach request Content only when ContentType **and Content are non-nul
 that boundary. Blank ContentType selects the JSON writer/application-json fallback; absent/null ContentType does not.
 Both writers send String content unchanged; 3.6.3 uses RawStringContent and 3.5.3 StringContent. Method also falls back
 to GET for null, while non-null whitespace reaches HttpMethod without the target's normalization.
+
+The implementation recheck follows the 3.6.3 JSON factory into
+[RawStringContent](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Http/ContentWriters/RawStringContent.cs).
+It preserves the media type with no charset parameter. The current target uses StringContent and appends
+`charset=utf-8`. Therefore blank ContentType with potentially non-null Content is refused under FR-012's
+faithful-or-refuse boundary, including nonempty text; emitting application/json alone would not preserve the header.
+The target also omits empty String Content and its headers. A nonliteral/referenced String body has no established
+nonempty guarantee, so that use is refused rather than accepting the same possible omission. Known-null/unbound
+Content retains its no-body path. These are source-inspection findings, not historical runtime executions.
 
 Both FlowSendHttpRequest implementations supply `[200]` for a null wrapped ExpectedStatusCodes Input. A present
 null/empty result selects **Done for every response**, including 404/500; a nonempty list adds numeric/unmatched
@@ -235,7 +251,7 @@ separate from named legacy effective values. Its supported type-default policy d
 defaults; zero Delay is explicit authored conversion data. This proposal changes no policy fields, variable
 initialization, computed-name rule or S-2-owned null-intrinsic behavior.
 
-The established local/Linux validation path and authorized read-only corpus are available. Their availability does
-not establish #3281 runtime acceptance. New production/native/import/runtime/corpus checks remain NOT RUN until the
-approved, merged requirements receive a separate implementation. CI waits are deferred, with no disabled checks or
-inferred CI success.
+At proposal preparation, the established local/Linux path and authorized read-only corpus were available but new
+production/native/import/runtime/corpus checks were NOT RUN. The separate implementation's fresh receipt is now
+recorded in spec.md; it does not relabel these historical source reads as runtime execution. S-2 policy integration
+remains NOT RUN, and CI waits remain deferred with no disabled checks or inferred CI success.

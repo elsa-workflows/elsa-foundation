@@ -25,6 +25,23 @@ public sealed class ChildTimeRelationTests : IDisposable
 
     public void Dispose() => _provider.Dispose();
 
+    [Theory]
+    [InlineData(null, ActivityChildTimeRelation.MutuallyExclusive)]
+    [InlineData("MatchAny", ActivityChildTimeRelation.Unordered)]
+    public void Switch_mode_controls_case_overlap_but_Default_remains_exclusive(string? mode, ActivityChildTimeRelation expected)
+    {
+        var handler = _handlers.Single(item => item.Kind == "elsa.switch.structure" && item.SchemaVersion == "2.0.0");
+        var payload = new Elsa.Activities.Switch.Models.SwitchAuthoredStructure(
+            [new("A", new ActivityNode("a", "test", [], [])) { CaseId = "a" },
+             new("B", new ActivityNode("b", "test", [], [])) { CaseId = "b" }],
+            new ActivityNode("default", "test", [], []), mode);
+        var node = new ActivityNode("switch", "test", [], [], new("elsa.switch.structure", "2.0.0", JsonSerializer.SerializeToElement(payload, Web)));
+        Assert.Equal(expected, handler.RelateChildren(node, "a", "b"));
+        Assert.Equal(ActivityChildTimeRelation.MutuallyExclusive, handler.RelateChildren(node, "a", "default"));
+        Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, handler.RelateChildren(node, "a", "a"));
+        Assert.True(handler.CompletesAfterItsChildren(node));
+    }
+
     [Fact]
     public void Every_control_flow_structure_declares_its_children_and_completes_after_them_by_default()
     {
@@ -43,6 +60,29 @@ public sealed class ChildTimeRelationTests : IDisposable
             Assert.Equal(ActivityChildTimeRelation.FirstBeforeSecond, handler.RelateChildren(node, "body", "body"));
             Assert.True(handler.CompletesAfterItsChildren(node));
         }
+    }
+
+    [Theory]
+    [InlineData(null, false, false)]
+    [InlineData("MatchAny", false, true)]
+    [InlineData("MatchAny", true, false)]
+    public void Real_Switch_facts_warn_only_for_overlapping_case_writers(string? mode, bool secondIsDefault, bool warns)
+    {
+        var services = new ServiceCollection();
+        new ActivitiesControlFlowFeature().ConfigureServices(services);
+        new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
+        services.AddScoped<Elsa.Workflows.Design.Core.Contracts.IActivityStructureService, Elsa.Workflows.Design.Core.Services.DefaultActivityStructureService>();
+        using var provider = services.BuildServiceProvider();
+        ActivityNode Writer(string id) => new(id, "test", [], [new("result",
+            new(JsonSerializer.SerializeToElement(new { referenceKey = "total", declaringScopeId = "workflow" }), "Variable"), null, null, null, null)]);
+        var cases = new List<Elsa.Activities.Switch.Models.SwitchAuthoredCase> { new("A", Writer("a")) { CaseId = "a" } };
+        if (!secondIsDefault) cases.Add(new("B", Writer("b")) { CaseId = "b" });
+        var root = new ActivityNode("switch", "test", [], [], new("elsa.switch.structure", "2.0.0",
+            JsonSerializer.SerializeToElement(new Elsa.Activities.Switch.Models.SwitchAuthoredStructure(cases, secondIsDefault ? Writer("b") : null, mode), Web)));
+        var result = provider.GetRequiredService<Elsa.Workflows.Design.Validations.Core.Contracts.IUnorderedVariableWriteAnalyzer>()
+            .Analyze(root, provider.GetRequiredService<Elsa.Workflows.Design.Core.Contracts.IActivityStructureService>(), includeIntrinsics: true);
+        Assert.Equal(warns, result.UnorderedWrites.Count == 1);
+        if (warns) Assert.Equal(new[] { "a", "b" }, Assert.Single(result.UnorderedWrites).WriterNodeIds);
     }
 
     [Theory]

@@ -61,8 +61,7 @@ public static class Elsa3ActivityDiagnosticCodes
     public const string RequiredInputUnbound = "ELS3-ACTIVITY-REQUIRED-INPUT-UNBOUND";
 
     /// <summary>
-    /// A mode or placement Elsa 4 cannot express: a mode set by an expression, a MatchAny Switch case that holds an
-    /// activity, a misplaced Complete/End, an outcome set by an expression, several outcomes outside a reusable workflow, ….
+    /// A mode or placement Elsa 4 cannot express: a mode set by an expression, a body-containing MatchAny Switch with incompatible control labels/outcomes, a misplaced Complete/End, an outcome set by an expression, several outcomes outside a reusable workflow, ….
     /// </summary>
     public const string UnsupportedMode = "ELS3-ACTIVITY-UNSUPPORTED-MODE";
 

@@ -22,7 +22,7 @@ namespace Elsa3.Mapping;
 [ShellFeature(
     name: "Elsa3Mapping",
     DisplayName = "Elsa 3 Mapping",
-    Description = "Provides converters for Elsa3 workflow models",
+    Description = "Converts Elsa 3 workflows with member-specific legacy values and actionable refusals",
     // The converter checks converted scripts with the JavaScript strategy's .NET-usage analysis (spec 1223 FR-016).
     DependsOn = new object[] { "JavaScriptExpressions" }
 )]

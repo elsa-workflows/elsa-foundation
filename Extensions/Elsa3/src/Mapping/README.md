@@ -116,7 +116,8 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     cannot be published: #3280).
 
   A null output is captured by nothing, and a null member of an activity resolved by name gets no binding. An input
-  holding a literal null converts as a JSON null does. Nothing above reports a warning, except one case (#3293). On an
+  holding a literal null follows that table except for the named declared-default corrections below. Nothing above
+  reports a warning, except one case (#3293). On an
   alias or a verbatim catalog key, Elsa 3 ran a null with its own activity's default, which the conversion cannot see.
   Where the Elsa 4 input declares a default, the member converts with `ELS3-BEHAVIOUR-NULL-TAKES-ELSA4-DEFAULT`, which
   names that default and says what to set to keep Elsa 3's value: the member in the Elsa 3 workflow, or the input on the
@@ -185,9 +186,17 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   - A Switch or FlowSwitch in `MatchFirst` mode (the default) gets a synthesized `Value` that returns the first true
     case's label. In `MatchAny` mode (`MatchAny`, `matchAny` or `1`) it becomes the Elsa 4 Switch's `MatchAny` mode,
     each case keeping its own condition (read with JavaScript truthiness, as in `MatchFirst`), so every true case's
-    connection runs, or `Default` when none is true (spec 1208 FR-028). Elsa 4 cannot run case activities in `MatchAny`
-    mode, so a `MatchAny` Switch case that holds an activity is `ELS3-ACTIVITY-UNSUPPORTED-MODE` (use a FlowSwitch and
-    connect the cases); so is a mode set by an expression or an unknown mode. Every case carries a case identity.
+    connection runs, or `Default` when none is true (spec 1208 FR-028). S-12 also recursively converts structured
+    MatchAny case activities, waiting for every selected body before completion. Empty selected cases suppress Default.
+    A newly enabled body-containing MatchAny Switch refuses owning labels `Break`/`Done` and effective or unproven
+    native Break escaping a body with localized `ELS3-ACTIVITY-UNSUPPORTED-MODE` guidance. Rename control labels or
+    restructure the body. Safe unused declared ports and supported case-local consuming loops remain convertible;
+    a script-selected Break can change internal container behavior even if an outer container consumes it. Expression
+    modes and unknown modes remain refused. A newly enabled body also refuses invalid Done co-selections and
+    unproven native-completion flow through helper aliases, eval/Function compilation, prototype constructors or
+    unresolved computed prototype/callable access. Numeric literal indexes, named data properties, protected variable
+    reads and proved ordinary scripts remain eligible. These scoped proof limits do not change standalone modes.
+    Every case carries a stable identity.
     A SendHttpRequest with expected status codes has no `Done` in Elsa 4, so its `Done` connection becomes one per
     code and one for the unmatched status code: Elsa 3 fired `Done` with every response, but not on "Failed to
     connect" or "Timeout". `ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE` warns only that, without expected codes, a non-2xx
@@ -319,6 +328,28 @@ Known differences that convert without a diagnostic, because they depend on how 
 - A `null` result bound to a non-nullable input (`Int32`, `Boolean`, an enum) became the type's default in Elsa 3
   (`0`, `false`); Elsa 4 refuses it at run time with `VF-ACT-004` (#3172).
 - Elsa 3 handed scripts mutable .NET values; Elsa 4 hands them frozen JSON values.
+
+## Missing, blank and deliberately null members (spec 267 follow-up)
+
+The built-in map distinguishes missing/defaulted Input wrappers (`{}`, typeName-only and typed `expression:{}`)
+from a resolved typed Literal with a null or omitted value. Malformed expression metadata and memory-only input
+wrappers are refused. A valid expression takes precedence over serialized memory-reference metadata, which the
+legacy loader ignores; valid Variable expressions retain declaration-ID lowering. Explicit
+collections and the String text `"null"` cannot acquire a declared default by being classified as unbound.
+
+| Member | Conversion |
+|---|---|
+| Both HTTP request ContentTypes | Missing/defaulted or null with potentially non-null Content refuses the legacy no-body mismatch. Blank ContentType with potentially non-null Content refuses the selected 3.6 JSON writer's header difference: Elsa 4 appends a charset parameter. Empty or unproven computed/referenced String Content refuses the target's body/header omission. Known-null Content retains no body. |
+| FlowSendHttpRequest.ExpectedStatusCodes | Missing/defaulted and bare JSON null emit `[200]`. Literal null, blank, `[]` and JSON-list text `[]` refuse: legacy Done on 404/500 differs from target Failed. Supported nonempty literal lists keep the existing outcome mapping. |
+| For.OuterBoundInclusive / Delay.TimeSpan | Missing/defaulted and bare JSON null retain true/one minute. Literal null/omitted Literal value and blank literals emit false/explicit zero duration. |
+| Timer.Interval | Missing/defaulted and bare JSON null retain one minute; authored intervals must be positive literals. Null, blank, zero, negative and invalid intervals refuse. |
+| Both HTTP Methods / WriteHttpResponse.StatusCode | Missing/defaulted retain GET/200. Method literal null retains GET; authored whitespace refuses. Response status literal null, nonpositive/invalid literals and unproven computed ranges refuse; positive literal statuses remain raw. |
+| Cron.CronExpression / RunJavaScript.Script | Missing/defaulted and blank uses refuse with guidance about disabled/no-work source behavior and the converted authoring contract. Fault.Message retains its accepted silent text difference. |
+
+Refusals name the original member and an edit in Elsa 3 terms. Null refusals use `ELS3-ACTIVITY-NULL-UNCONVERTIBLE`;
+other source shapes use the existing value-contract family, without a duplicate required-input refusal. Custom maps
+without these optional corrections keep their existing contracts. Runtime defaults, outcome selection and S-2's
+portable null/missing/undefined policies are unchanged.
 
 ## Nesting budget
 

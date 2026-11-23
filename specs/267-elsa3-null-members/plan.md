@@ -125,8 +125,9 @@ None.
 
 ## #3281 follow-up plan
 
-This S-0 amendment implements FR-011–FR-015 without reopening the original bare-null delivery. It uses the existing
-proposal branch `agent/codex/3281-elsa3-default-parity` and spec directory. The proposal remains documentation only.
+This S-0 amendment implements FR-011–FR-015 without reopening the original bare-null delivery. The requirements
+proposal used `agent/codex/3281-elsa3-default-parity` and remains documentation only. Its separate implementation
+uses `agent/codex/3281-legacy-member-values`; the fresh validation receipt is in spec.md.
 
 ### Approval and delivery route
 
