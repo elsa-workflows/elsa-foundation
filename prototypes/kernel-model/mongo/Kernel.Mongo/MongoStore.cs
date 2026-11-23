@@ -74,14 +74,15 @@ public sealed partial class MongoStore : IKernelStore
     public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
     {
         var count = await RequireVersionsAsync(cancellationToken);
-        await RequireRows(_partitions);
-        await RequireRows(_clocks);
-        await RequireRows(_projections);
+        var required = Builders<BsonDocument>.Filter.Gte("_id", 0) & Builders<BsonDocument>.Filter.Lt("_id", count);
+        await RequireRows(_partitions, FilterDefinition<BsonDocument>.Empty);
+        await RequireRows(_clocks, required);
+        await RequireRows(_projections, required);
         return count;
 
-        async Task RequireRows(IMongoCollection<BsonDocument> collection)
+        async Task RequireRows(IMongoCollection<BsonDocument> collection, FilterDefinition<BsonDocument> filter)
         {
-            var rows = await collection.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+            var rows = await collection.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
             if (rows != count)
                 throw new StoreException(Failure.Definite,
                     $"Initialization incomplete: {rows} of {count} {collection.CollectionNamespace.CollectionName} documents exist. Re-run CreateAsync at the same count.");

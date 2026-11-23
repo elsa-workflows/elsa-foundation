@@ -76,9 +76,11 @@ internal static class VersionServiceChecks
             await meta.InsertOneAsync(stored);
             await SetCodec(1);
             var lastPartition = new BsonDocument("_id", 1);
-            foreach (var name in new[] { "clocks", "projections" })
+            foreach (var (name, field) in new[] { ("clocks", "clock"), ("projections", "position") })
             {
-                await db.GetCollection<BsonDocument>(name).DeleteOneAsync(lastPartition);
+                var rows = db.GetCollection<BsonDocument>(name);
+                await rows.DeleteOneAsync(lastPartition);
+                await rows.InsertOneAsync(new BsonDocument { { "_id", 2 }, { field, 0L } });
                 var incomplete = new PartitionRuntime("cold", cold, 2, TimeSpan.FromSeconds(30));
                 try
                 {
