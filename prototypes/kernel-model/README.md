@@ -547,6 +547,29 @@ approval. The journal records the cancelled frame once. This Embedded preview su
 self inputs on a generated root. Same-turn retraction, whole-workflow operator termination, Park and Cluster timer
 recovery fall outside this case.
 
+### PostgreSQL Native background job preview
+
+Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated PostgreSQL database and run from `prototypes/kernel-model`:
+
+```sh
+models/Native.Run/run-root-job-preview.sh checked
+```
+
+Use `in-batch` on another fresh database to exercise the other owned SQL fence. The first Embedded process starts
+two public Native workflows. Each start commits the waiting checkpoint, issued job ticket and journal together.
+A replacement process recovers each job at a higher epoch. Each callback receives and returns its own opaque
+public actor reference. The Worker commits the first result, consumes its exact ticket and issues the next
+generation's ticket in the same transaction. A third process reloads and completes both successor jobs.
+For each job root, the public journal shows one success for each background activity and one end marker.
+A job-free Native approval also reloads across both ownership changes and keeps its job generation at zero.
+
+The profile uses schema 3, message protocol 6 and journal codec 1. Owners initialize the job capability before
+binding a scope. The fixture checks that a missing initialization cannot consume a pending creator. Readers of the
+ordinary protocol refuse ownership. The fixture checks refusal of cross-root, stale and unproven completions, including a physical
+argument change between preparation and the locked read. Only the qualified Worker can write these checkpoints.
+This opt-in uses Embedded, Balanced persistence and one active untimed job per generated root.
+Timed and held results, job cancellation, inline promotion and job fault recovery require separate qualification.
+
 ### PostgreSQL Suspend and Resume preview
 
 On a fresh dedicated PostgreSQL database, set `KERNEL_PREVIEW_POSTGRES` and run `models/Native.Run/run-root-operator-preview.sh [owned|ef] [checked|in-batch]`.

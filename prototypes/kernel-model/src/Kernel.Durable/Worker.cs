@@ -2376,6 +2376,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         var generation = _generation;
         var job = ticket.Message.Read<JobTicket>();
+        if (loadedSlot.Row is { FoundationDispatchHeader: not null } bound &&
+            RootUntimedJob.Read(ticket.Message, bound.Id, bound.Model) is null)
+            throw new StoreException(Failure.Definite, "The job ticket does not belong to its generated root.");
         if (!HasPhysicalTrial(ticket))
         {
             ticket.Cancel = new CancellationTokenSource();
@@ -2423,6 +2426,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             int attemptNumber;
             string? inlineTenant;
+            string? rootReference;
             lock (slot)
             {
                 if (!JobMayRun(generation) || _releasing || PoisonPending(slot) || slot.PendingJobRestrictions != 0 ||
@@ -2436,9 +2440,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (ticket.JobEntries < int.MaxValue) ticket.JobEntries++;
                 attemptNumber = ticket.JobEntries;
                 inlineTenant = slot.CurrentRow?.FoundationInlineBirth?.Tenant;
+                rootReference = slot.CurrentRow?.FoundationDispatchHeader?.Reference;
             }
             var context = new JobContext(original.Target, job.Key, job.Arguments, creation, attemptNumber, job.Deadline)
-                { FoundationInlineTenant = inlineTenant };
+                { FoundationInlineTenant = inlineTenant, FoundationRootReference = rootReference };
             return _type.ExecuteJobAsync(job.Model, context, token);
         }
         async Task ExecuteAndPublish(bool scheduled)
@@ -3175,6 +3180,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationHeader = unit.FoundationHeader,
             FoundationRootOperator = unit.Row?.FoundationDispatchHeader is not null && unit.Consumed is [var qualified] &&
                 qualified.Message.Operator is not null ? qualified.Message : null,
+            FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
+                unit.Consumed is [{ IsWorkerJobCompletion: true, JobDeadline: null, Original: { } original } completed]
+                    ? new((original with { }).AsKernelTicket(), (completed.Message with { }).AsKernelTicket()) : null,
             FoundationSelfRecalls = unit.FoundationSelfRecalls,
             FoundationHeldPromotions = promotions,
             FoundationReleasedHolds = releases,
@@ -3731,6 +3739,7 @@ internal sealed record JobDeadline([property: System.Text.Json.Serialization.Jso
 internal sealed class JobContext(InstanceRef instance, string key, string? arguments, long creation, int attemptNumber, long? deadline) : IJob
 {
     internal string? FoundationInlineTenant { get; init; }
+    internal string? FoundationRootReference { get; init; }
     public InstanceRef Instance { get; } = instance;
     public string Key { get; } = key;
     public string? Arguments { get; } = arguments;

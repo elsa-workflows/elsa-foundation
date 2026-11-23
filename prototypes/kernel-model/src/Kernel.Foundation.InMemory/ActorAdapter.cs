@@ -14,6 +14,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     private readonly Func<Contract.ActorHeader, TimeSpan?>? retentionWindow;
     private readonly IRootDispatchHeaders? roots;
     private readonly Durable.FoundationSelfIssuer? issueSelf;
+    private readonly Func<string, string>? rootJobHandle;
     private Durable.InMemoryStore store => inMemory ?? throw new NotSupportedException("This provider does not implement this foundation operation.");
 
     internal ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
@@ -25,8 +26,9 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         this.retentionWindow = retentionWindow;
     }
 
-    internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Durable.FoundationSelfIssuer? issueSelf = null) =>
-        (this.roots, this.actor, this.issueSelf) = (roots, actor, issueSelf);
+    internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Durable.FoundationSelfIssuer? issueSelf = null,
+        Func<string, string>? rootJobHandle = null) =>
+        (this.roots, this.actor, this.issueSelf, this.rootJobHandle) = (roots, actor, issueSelf, rootJobHandle);
 
     private const int TerminalEnvelopeLimit = 16_457_728;
     private const int TerminalHeaderReserve = 16_384;
@@ -92,7 +94,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
         SettlesEndedChildNotice(row, delivery.Message) ||
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||
-            delivery.IsWorkerJobCompletion && (delivery.JobDeadline is not null || IsParked(row)));
+            delivery.IsWorkerJobCompletion && (rootJobHandle is not null || delivery.JobDeadline is not null || IsParked(row)));
 
     private bool IsParked(Durable.InstanceRow? row) => roots is null && row is { Status: Durable.InstanceStatus.Faulted, ParkRecovery: null } &&
         store.FoundationTurnHeader(row).Park is not null;
@@ -325,7 +327,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var ambient = local is { } host && input.Taken.Count - input.From == 1 && delivery.Message.ReplyTo is { } address
             ? host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message))
             : null;
-        var turn = new ActorTurn(inMemory, input, header, ambient, issueSelf);
+        var turn = new ActorTurn(inMemory, input, header, ambient, issueSelf, rootJobHandle);
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray());
         await actor.TurnAsync(turn, CancellationToken.None);
         var thenDelete = delivery.Message.Operator?.DeleteTarget is not null;
@@ -415,6 +417,13 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public ValueTask<object?> ExecuteJobAsync(string type, Durable.IJob job, CancellationToken cancellationToken)
     {
+        if (roots is not null)
+        {
+            if (rootJobHandle is null || type != actor.Type ||
+                job is not Durable.JobContext { FoundationRootReference: { } bound, Creation: 1, Deadline: null })
+                throw new NotSupportedException("This root job needs a bound PostgreSQL actor reference.");
+            return actor.ExecuteJobAsync(new Job(new(bound), job), cancellationToken);
+        }
         var reference = job is Durable.JobContext { FoundationInlineTenant: { } tenant }
             ? store.ReferenceFor(tenant, new(job.Instance.Id, job.Creation))
             : store.FoundationIdentity(job.Instance.Id, job.Creation).Reference;

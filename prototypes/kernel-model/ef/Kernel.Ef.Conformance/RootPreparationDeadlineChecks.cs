@@ -7,6 +7,67 @@ namespace Kernel.Ef.Conformance;
 
 internal static class RootPreparationDeadlineChecks
 {
+    internal static async Task RunManual(Func<KernelDb> open, Func<IInterceptor, EfStore> intercepted, EfStore store)
+    {
+        const string tenant = "demo";
+        var lease = TimeSpan.FromSeconds(30);
+        var budget = TimeSpan.FromMilliseconds(500);
+        var pause = new PausePreparation("KernelStoreVersions");
+        var writer = intercepted(pause);
+        var roots = new PostgresRootAdmission(open, TimeSpan.FromMinutes(2));
+        await roots.InstallAsync();
+        var reference = (await roots.AdmitAsync(tenant, "manual-deadline", new("native", "approval"))).Reference;
+        var creator = (await roots.ReadPendingCreatorAsync(tenant, reference))!;
+        var partition = creator.Target.Partition;
+        var taken = (await store.TakeAsync(partition, "manual-deadline", lease))!;
+        var fence = new PartitionFence(partition, taken.Epoch, taken.Position);
+        var labels = new Dictionary<string, string> { ["step"] = "waiting" };
+        await using var db = open();
+        Task<long> Position() => db.Partitions.Where(p => p.Id == partition).Select(p => p.Position).SingleAsync();
+        ValueTask<Committed> First(TimeSpan time) => writer.CommitFirstRootAsync(tenant, reference, creator, fence, time,
+            "waiting", 1, "layout", labels, """["started"]""");
+
+        pause.Next = budget + TimeSpan.FromMilliseconds(150);
+        if ((await First(budget)).Landed || pause.Next != TimeSpan.Zero ||
+            await roots.ReadPendingCreatorAsync(tenant, reference) != creator ||
+            await db.Instances.AnyAsync(i => i.Id == creator.Target.Id) ||
+            (await store.ReadJournalOfAsync(partition, creator.Target.Id, 0)).Count != 0 ||
+            await Position() != fence.Position)
+            throw new InvalidOperationException("An expired manual first checkpoint must preserve the creator, empty checkpoint and journal, and fence position.");
+        var first = await First(lease);
+        fence = fence with { Position = fence.Position + 1 };
+        var current = await store.ReadFirstRootAsync(tenant, reference);
+        var journal = await store.ReadJournalOfAsync(partition, creator.Target.Id, 0);
+        if (!first.Landed || current is not { Status: InstanceStatus.Running, Revision: 1, State: "waiting" } ||
+            await roots.ReadPendingCreatorAsync(tenant, reference) is not null || journal.Count != 1 || await Position() != fence.Position)
+            throw new InvalidOperationException("The same manual first checkpoint must settle exactly once with time remaining.");
+        Console.WriteLine("ok the delayed manual first checkpoint preserved the creator, checkpoint, journal and fence position, and the timely retry landed");
+
+        if (await roots.AdmitDirectAsync(tenant, reference, "approve", "approval", "Ada") != true)
+            throw new InvalidOperationException("Expected a fresh direct input.");
+        var input = (await roots.ReadPendingDirectAsync(tenant, reference)).Single();
+        ValueTask<Committed> Next(TimeSpan time) => writer.CommitRootTurnAsync(tenant, reference, current, [input], fence, time,
+            InstanceStatus.Finished, "approved", 1, "layout", labels, """["approved"]""");
+
+        pause.Next = budget + TimeSpan.FromMilliseconds(150);
+        var late = await Next(budget);
+        var unchanged = (await store.ReadFirstRootAsync(tenant, reference))!;
+        var comparableCheckpoint = unchanged with { AsOf = current.AsOf, Labels = current.Labels };
+        if (late.Landed || pause.Next != TimeSpan.Zero || comparableCheckpoint != current ||
+            !unchanged.Labels.SequenceEqual(current.Labels) ||
+            !(await roots.ReadPendingDirectAsync(tenant, reference)).SequenceEqual([input]) ||
+            !(await store.ReadJournalOfAsync(partition, creator.Target.Id, 0)).SequenceEqual(journal) ||
+            await Position() != fence.Position)
+            throw new InvalidOperationException("An expired manual continuation must preserve the exact input, checkpoint, journal and fence position.");
+        if (!(await Next(lease)).Landed ||
+            await store.ReadFirstRootAsync(tenant, reference) is not { Status: InstanceStatus.Finished, Revision: 2, State: "approved" } ||
+            (await roots.ReadPendingDirectAsync(tenant, reference)).Count != 0 ||
+            (await store.ReadJournalOfAsync(partition, creator.Target.Id, 0)).Count != 2 ||
+            await Position() != fence.Position + 1)
+            throw new InvalidOperationException("The same manual continuation must settle exactly once with time remaining.");
+        Console.WriteLine("ok the delayed manual continuation preserved the exact input, checkpoint, journal and fence position, and the timely retry landed");
+    }
+
     internal static async Task Run(Func<KernelDb> open, Func<IInterceptor, EfStore> intercepted, EfStore store, bool grouped)
     {
         var admission = new PostgresRootAdmission(open, TimeSpan.FromMinutes(2));
@@ -60,14 +121,15 @@ internal static class RootPreparationDeadlineChecks
         Console.WriteLine($"ok {(grouped ? "grouped" : "single")} root preparation counts toward the commit-step deadline and the timely retry lands");
     }
 
-    private sealed class PausePreparation : DbCommandInterceptor
+    private sealed class PausePreparation(string? source = null) : DbCommandInterceptor
     {
         internal TimeSpan Next { get; set; }
 
         public override async ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command, CommandExecutedEventData eventData,
             DbDataReader result, CancellationToken cancellationToken = default)
         {
-            if (Next > TimeSpan.Zero && command.Transaction is null)
+            if (Next > TimeSpan.Zero && command.Transaction is null &&
+                (source is null || command.CommandText.Contains(source, StringComparison.Ordinal)))
             {
                 var duration = Next;
                 Next = TimeSpan.Zero;
