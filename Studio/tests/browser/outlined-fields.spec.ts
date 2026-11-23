@@ -85,7 +85,49 @@ test("Outlined forced colours preserve field and keyboard focus", async ({ page 
 });
 
 async function capture(page: Page, info: TestInfo, name: string) {
+  const note = page.getByRole("region", { name: "Completed response", exact: true }).getByLabel("Note", { exact: true });
+  await expect(note).toHaveValue("Reviewed purchase request");
+  await expect(note).toBeDisabled();
+  const before = await page.evaluate(async () => {
+    await document.fonts.ready;
+    const finite = document.getAnimations().filter(animation => {
+      const end = animation.effect?.getComputedTiming().endTime;
+      return (animation.playState === "running" || animation.pending) && typeof end === "number" && Number.isFinite(end);
+    });
+    await Promise.allSettled(finite.map(animation => animation.finished));
+    const note = document.querySelector<HTMLTextAreaElement>('[aria-label="Completed response"] textarea')!;
+    const measure = () => ({
+      width: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+      height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
+      noteBottom: Math.ceil(note.getBoundingClientRect().bottom + scrollY),
+      noteFits: note.scrollHeight <= note.clientHeight + 1,
+      pixelRatio: devicePixelRatio,
+    });
+    let previous = measure(), stable = 0;
+    // Font-size transitions and the textarea's ResizeObserver can change the full-page extent.
+    while (stable < 3) {
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      const current = measure();
+      stable = JSON.stringify(current) === JSON.stringify(previous) ? stable + 1 : 0;
+      previous = current;
+    }
+    return previous;
+  });
   const path = info.outputPath(`${name.replace(/[^a-zA-Z0-9_-]/g, "-")}.png`);
-  await page.screenshot({ path, fullPage: true });
+  const png = await page.screenshot({ path, fullPage: true });
   await info.attach(name, { path, contentType: "image/png" });
+  const after = await note.evaluate(note => ({
+    width: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+    height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
+    noteBottom: Math.ceil(note.getBoundingClientRect().bottom + scrollY),
+    noteFits: note.scrollHeight <= note.clientHeight + 1,
+    pixelRatio: devicePixelRatio,
+  }));
+  const header = new DataView(png.buffer, png.byteOffset, png.byteLength);
+  const dimensions = { width: header.getUint32(16), height: header.getUint32(20) };
+  await info.attach(`${name}-extent`, { body: JSON.stringify({ before, after, dimensions }), contentType: "application/json" });
+  expect(after).toEqual(before);
+  expect(after.noteFits).toBe(true);
+  expect(dimensions.width).toBeGreaterThanOrEqual(Math.ceil(after.width * after.pixelRatio));
+  expect(dimensions.height).toBeGreaterThanOrEqual(Math.ceil(Math.max(after.height, after.noteBottom) * after.pixelRatio));
 }
