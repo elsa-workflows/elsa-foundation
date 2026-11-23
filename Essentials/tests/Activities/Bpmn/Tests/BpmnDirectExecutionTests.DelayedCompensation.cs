@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Diagnostics;
+using System.Reflection;
 using Bpmn.Model;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Internal;
@@ -76,6 +78,19 @@ public sealed partial class BpmnDirectExecutionTests
         await using (var output = File.Create(database)) await gzip.CopyToAsync(output);
         Assert.Equal("dedc7041baf31ad6d0b3de251049de7d55ff421dbe7e65e3059b6e35f9bf9e63",
             Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(database))));
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT ContentJson FROM elsa_runtime_workflow_executable WHERE IsModelMaterial=1";
+            using var material = JsonDocument.Parse((string)(await command.ExecuteScalarAsync())!);
+            var identity = material.RootElement.GetProperty("material").GetProperty("identity");
+            var id = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Decode(identity.GetProperty("artifactId").GetString()!);
+            var hash = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Decode(identity.GetProperty("artifactHash").GetString()!);
+            Assert.InRange(id.Length, 1, Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeArtifactEfModule.IdentityMaximumLength);
+            Assert.InRange(hash.Length, 1, Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimeArtifactEfModule.HashMaximumLength);
+            Assert.Equal("sha256:8f4c88b9ad0dd93267b5ec40e827f154e84cdae040834823006e863cf029e5c1", hash);
+        }
         var before = await RetainedDocumentsAsync();
         await using (var host = await OpenAsync(admitNewExecutions: false))
         await using (var scope = await ScopeAsync(host))
@@ -84,7 +99,9 @@ public sealed partial class BpmnDirectExecutionTests
                 await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindMaterialAsync(
                     "sha256:8f4c88b9ad0dd93267b5ec40e827f154e84cdae040834823006e863cf029e5c1"));
             Assert.Equal("The persisted model material payload is corrupt.", error.Message);
-            Assert.IsType<ArgumentException>(error.InnerException);
+            var cause = Assert.IsType<ArgumentException>(error.InnerException);
+            Assert.Equal("material", cause.ParamName);
+            Assert.StartsWith("Model material requires its complete behavioral content hash and a supported artifact ID.", cause.Message);
         }
         Assert.Equal(before, await RetainedDocumentsAsync());
 
@@ -180,18 +197,53 @@ public sealed partial class BpmnDirectExecutionTests
         {
             if (Environment.GetEnvironmentVariable("ELSA_BPMN_DELAYED_COMPENSATION_EVIDENCE") is not { Length: > 0 } root) return;
             Directory.CreateDirectory(root);
-            await using var source = new SqliteConnection($"Data Source={database};Pooling=False");
-            await source.OpenAsync();
-            await using var destination = new SqliteConnection($"Data Source={Path.Combine(root, phase + ".sqlite")};Pooling=False");
-            await destination.OpenAsync();
-            source.BackupDatabase(destination);
+            var repository = new DirectoryInfo(AppContext.BaseDirectory);
+            while (repository is not null && !File.Exists(Path.Combine(repository.FullName, "Elsa.Server.slnx"))) repository = repository.Parent;
+            Assert.NotNull(repository);
+            var sourceSha = await GitAsync("rev-parse", "HEAD");
+            Assert.Equal(string.Empty, await GitAsync("status", "--porcelain"));
+            var names = new HashSet<string>(["Elsa.Activities.Bpmn.Tests", "Elsa.Activities.Bpmn", "Elsa.Workflows.Runtime.Core",
+                "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "Bpmn.Model", "Bpmn.Semantics"], StringComparer.Ordinal);
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies().Where(assembly => names.Contains(assembly.GetName().Name!)).ToArray();
+            Assert.Equal(names.Count, assemblies.Length);
+            var binaryHashes = assemblies.ToDictionary(assembly => Path.GetFileName(assembly.Location),
+                assembly => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(assembly.Location))));
+            var binaryVersions = assemblies.ToDictionary(assembly => Path.GetFileName(assembly.Location),
+                assembly => assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? string.Empty);
+            Assert.EndsWith("+" + sourceSha, binaryVersions["Elsa.Activities.Bpmn.Tests.dll"]);
+            var snapshot = Path.Combine(root, phase + ".sqlite");
+            Assert.False(File.Exists(snapshot), "Use a new capture evidence directory.");
+            await using (var source = new SqliteConnection($"Data Source={database};Pooling=False"))
+            await using (var destination = new SqliteConnection($"Data Source={snapshot};Pooling=False"))
+            {
+                await source.OpenAsync();
+                await destination.OpenAsync();
+                source.BackupDatabase(destination);
+            }
+            var snapshotBytes = await File.ReadAllBytesAsync(snapshot);
             await File.WriteAllTextAsync(Path.Combine(root, phase + ".json"), JsonSerializer.Serialize(new
             {
+                captureProvenance = new { version = 1, sourceSha, sourceDirty = false,
+                    databaseSha256 = Convert.ToHexStringLower(SHA256.HashData(snapshotBytes)), databaseByteLength = snapshotBytes.Length,
+                    binaryHashes, binaryVersions },
                 capturedAt = DateTimeOffset.UtcNow, model = before.ExecutionId, origin, delayed,
                 state = await reader.FindAsync(before.ExecutionId),
                 native = await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(origin.WorkerExecutionId),
                 modelQueue = (await queue.ListAsync(new(before.ExecutionId))).Items
             }, Web));
+
+            async Task<string> GitAsync(params string[] arguments)
+            {
+                var start = new ProcessStartInfo("git") { WorkingDirectory = repository.FullName, UseShellExecute = false,
+                    RedirectStandardOutput = true, RedirectStandardError = true };
+                foreach (var argument in arguments) start.ArgumentList.Add(argument);
+                using var gitProcess = Process.Start(start)!;
+                var output = gitProcess.StandardOutput.ReadToEndAsync();
+                var error = gitProcess.StandardError.ReadToEndAsync();
+                await gitProcess.WaitForExitAsync();
+                Assert.True(gitProcess.ExitCode == 0, await error);
+                return (await output).Trim();
+            }
         }
     }
 
