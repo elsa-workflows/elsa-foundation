@@ -226,6 +226,9 @@ internal static class PostgresPublicPreview
             var (entries, _) = await ReadJournal(bookmark);
             Check(entries.Count(e => e.Revision == 3 && Decode(e) == "approved:approval-2") == 1 &&
                 entries.All(e => e.Revision == 3), "the saved bookmark shows only revision 3");
+            if (flowchart)
+                Check(entries.Count(e => Decode(e) == "end") == 1 && Decode(entries[^1]) == "end",
+                    "the public Flowchart tail ends with one lifecycle entry");
             Check((await foundation.GetAsync(scope, actor, stop)) is { Header.Status: Contract.ActorStatus.Finished, Header.EndedAt: > 0 },
                 "public actor read sees the terminal checkpoint");
             Report("inspect final checkpoint and journal");
