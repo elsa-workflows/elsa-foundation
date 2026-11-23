@@ -176,7 +176,7 @@ internal static class JsonBoundaryContractGraph
             type == typeof(TimeSpan) || type == typeof(Guid) || type == typeof(Uri) || type == typeof(byte[]);
     }
 
-    internal static string Name(Type type) => type.IsArray ? Name(type.GetElementType()!) + "[]" :
+    internal static string Name(Type type) => type.IsArray ? Name(type.GetElementType()!) + "[" + new string(',', type.GetArrayRank() - 1) + "]" :
         type.IsGenericType ? type.GetGenericTypeDefinition().FullName! + "[" + string.Join(',', type.GetGenericArguments().Select(Name)) + "]" : type.FullName ?? type.Name;
 
     internal static IReadOnlySet<string> DeclaredContexts(IEnumerable<string> sources)

@@ -179,6 +179,12 @@ public sealed class JsonDataBoundaryArchitectureTests
     }
 
     [Fact]
+    public void Array_rank_and_jagged_nesting_have_distinct_contract_identities()
+    {
+        Assert.Equal(3, new[] { typeof(int[]), typeof(int[,]), typeof(int[][]) }.Select(JsonBoundaryContractGraph.Name).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
     public void Effective_enum_wire_names_are_pinned_even_with_the_same_CLR_enum_and_converter_type()
     {
         JsonSerializerOptions Options(JsonNamingPolicy naming)
