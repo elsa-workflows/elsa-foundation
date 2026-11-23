@@ -36,3 +36,18 @@
 - All decisions were settled with the maintainer before specification (see Clarifications).
 - 2026-10-23: reframed after Frans van Ek's review (PR #3264). The rule is now stated per member from the Elsa 3
   runtime, the absent-member changes moved to #3281, and the null intrinsic gap is #3280. Re-validated: all items pass.
+
+## #3281 amendment quality
+
+- [x] Source shapes/effective values include supported empty wrappers versus Literal-without-value.
+- [x] Exact source revisions/differences are recorded without claiming historical runtime execution.
+- [x] Cleared status lists account for non-2xx routing and refuse with current target semantics.
+- [x] Timer/status zero, negative and invalid values cannot silently choose target defaults.
+- [x] Delivered bare-null and spec1232 policy/null-intrinsic ownership have explicit boundaries.
+- [x] Existing proposal/separate implementation stages and current local/CI workflow are concrete.
+- [x] Requirements, plan, tasks, model, diagnostic contract and verification route share one scope.
+- [x] Coordinator agreement on the final pushed proposal head and initiative proposal gate/merge.
+- [x] Separate implementation with actual runtime/corpus/local review evidence.
+
+The separate implementation receipt is in spec.md. Conditional S-2 policy integration is NOT RUN; formal review
+and coordinator acceptance/merge remain external gates.

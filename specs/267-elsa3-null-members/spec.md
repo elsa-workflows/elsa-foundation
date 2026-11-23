@@ -6,6 +6,9 @@
 
 **Status**: Implemented
 
+**Status scope:** the original bare-JSON-null delivery and the separate #3281 follow-up are implemented. The
+follow-up's local evidence and remaining external integration/formal merge gates are recorded below.
+
 **Issue**: [#3200](https://github.com/elsa-workflows/elsa-foundation/issues/3200), part of epic
 [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052)
 
@@ -251,7 +254,7 @@ to set, or that the activity can be removed.
 
 ### Edge Cases
 
-- An input holding a literal null (the deliberate-null shape) converts by the same table as a JSON `null` (FR-005).
+- An input holding a literal null follows FR-005, including the named declared-default exceptions in the follow-up.
 - An empty string or an empty JSON array or object is not `null`. It converts by the existing rules; blank strings are
   #3281.
 - A member that is absent converts by the existing rules; absent members whose value differs from Elsa 3's are #3281.
@@ -281,8 +284,10 @@ to set, or that the activity can be removed.
   value as a literal (the table's "emit" rows). The activity map is the one record of those values; it gains
   FlowSendHttpRequest `[200]` and the Correlate / SetName empty string.
 - **FR-004**: A `null` output MUST get no binding (nothing is captured).
-- **FR-005**: An input holding a literal null MUST convert as a JSON `null` member does, by the same table. (Corrected
-  in planning: the converter already reads it as unbound; research R-5.)
+- **FR-005**: An input holding a literal null MUST convert by the original JSON-null table except for the named
+  declared-default cases amended by FR-014 below. Those cases use their deliberate-null effective value or refusal,
+  rather than acquiring the bare-null declared default. Research R-5 records the original delivered conflation;
+  the #3281 follow-up corrects only those named exceptions.
 - **FR-006**: A `null` member whose Elsa 3 behaviour Elsa 4 cannot reproduce or represent MUST be refused with one new
   stable diagnostic code (the table's "refuse" rows). The message names the member and the reason; the guidance says
   to set a value in the Elsa 3 workflow, or to remove the activity.
@@ -291,8 +296,8 @@ to set, or that the activity can be removed.
   conversion, or an Elsa 3 default it emits. A test fails when one has neither.
 - **FR-009**: The spec 236 member map document MUST record each member's `null` conversion, in one section of its own
   that names every member.
-- **FR-010**: Elsa 4 activity defaults, publication and the runtime MUST NOT change. Absent and blank members do not
-  change in this spec (#3281).
+- **FR-010**: Elsa 4 activity defaults, publication and the runtime MUST NOT change. The original delivered unit
+  covered bare JSON-null members; the #3281 amendment below adds only the named converter corrections.
 
 ### Key Entities
 
@@ -319,9 +324,180 @@ to set, or that the activity can be removed.
 
 ## Assumptions
 
-- Elsa 3's behaviour is taken from the release/3.6.3 source, checked against the 3.5.3 tag. They differ only for
-  `For.OuterBoundInclusive`, settled above.
+- Elsa 3's selected baseline is release/3.6.3, checked against the 3.5.3 tag. The original For default choice is settled
+  above; follow-up research also records Cron and source-layout differences rather than claiming identical runtimes.
 - The JTest corpus's tool version is 3.5. No corpus definition has a `null` `For.OuterBoundInclusive`.
 - The measurement method matches specs 247, 248, 262 and 264: throwaway tests, deleted before the commit.
-- Out of scope: Elsa 4 changes (#3280), absent and blank members (#3281), #3195 (RunJavaScript `arguments`), #3201,
-  #3202, ExecuteWorkflow's mapping (spec 236), engine-start reconciliation (spec 235).
+- Original delivery exclusions: Elsa 4 changes (#3280), absent and blank members (#3281), #3195 (RunJavaScript
+  `arguments`), #3201, #3202, ExecuteWorkflow's mapping (spec 236), engine-start reconciliation (spec 235).
+  The #3281 amendment below brings only its named converter cases into the new follow-up scope.
+
+## Converter default follow-up — #3281
+
+**Follow-up status:** Implemented separately after the requirements proposal merged. The implementation does not
+claim S-2 policy integration or completion of formal review/coordinator merge.
+
+The selected legacy baseline is 3.6.3, checked against 3.5.3. This follow-up applies the existing faithful-or-refuse
+rule to absent, blank and deliberately null members. The source evidence and current-target constraints are in
+[research R-12](research.md#r-12-3281-source-audit-and-shape-boundary) and
+[research R-13](research.md#r-13-current-source-recheck-and-initiative-integration).
+Source inspection is not historical runtime execution.
+
+### User Story 4 — Defaults do not change during migration (Priority: P1)
+
+An author imports a workflow that omits an input, deliberately clears it, supplies a blank value, or clears a status
+list. The converted workflow uses the effective legacy value, or import names the member that cannot be reproduced.
+It never silently substitutes a different Elsa 4 default.
+
+**Independent test:** import, publish and execute representative For/Delay/HTTP workflows; compare concrete values,
+requests and selected paths. Refused variants leave no imported versions or publications.
+
+**Acceptance scenarios:**
+
+1. An absent ContentType with potentially non-null Content is refused because Elsa 3 sent no body. An explicit blank
+   string ContentType retains JSON-writer behavior. Empty string Content is non-null and is included in this boundary.
+2. Absent/defaulted FlowSendHttpRequest.ExpectedStatusCodes emits `[200]`. A deliberate null or explicit empty list
+   must not become omission or `[200]`. With the current target's different non-2xx routing, those cleared-list uses
+   are refused, naming ExpectedStatusCodes.
+3. Deliberate-null For.OuterBoundInclusive uses false and Delay.TimeSpan uses zero duration; bare JSON null retains
+   the delivered true/one-minute behavior.
+4. Zero, negative or invalid Timer intervals, and HTTP response statuses that Elsa 4 would normalize to 200, are
+   refused rather than omitted or replaced by defaults.
+5. Blank Cron/Script uses receive member-specific guidance for legacy disabled/no-work behavior. Valid supported
+   nonblank inputs, custom maps without the new corrections, caller JSON and duplicate-binding checks retain their
+   contracts.
+
+### Requirements
+
+- **FR-011**: For the named built-in members, conversion MUST distinguish absence, bare JSON null, a supported empty
+  input wrapper, a resolved Literal expression whose value is null or omitted, literal blank strings, and explicit
+  empty collections. It MUST inspect source shape before normalization erases that distinction. Text such as
+  `"null"`, explicit arrays/objects and arbitrary expressions MUST NOT become absence through a general `!IsBound`
+  test. Bare JSON-null handling from the delivered table remains unchanged by this follow-up.
+- **FR-012**: Missing or supported-empty ContentType on SendHttpRequest/FlowSendHttpRequest MUST be refused when
+  Content is or may be non-null: Elsa 3 skipped the body, whereas the target can send it. The legacy guard is
+  **non-null**, not nonempty/nonwhitespace. A present blank literal ContentType MUST retain JSON-writer behavior
+  within the existing Content contract, or receive a member-specific refusal if that use cannot be reproduced.
+- **FR-013**: Missing or supported-empty FlowSendHttpRequest.ExpectedStatusCodes MUST emit `[200]`. Literal null,
+  blank values that evaluate to a null collection, and explicit empty lists MUST remain distinct from that default.
+  Faithfulness includes **every selected path on 200, 404 and 500**, not only absence of numeric branches. Elsa 3
+  selects Done for every response when cleared; the current target selects Done for 2xx and Failed otherwise.
+  Therefore these cleared-list forms MUST currently be refused with member-specific guidance. The merged outcome
+  contract MUST NOT change to hide the mismatch. Nonempty supported lists retain their existing mapping.
+- **FR-014**: The named declared-default exceptions MUST use the legacy effective value or be refused according to
+  the matrix. Timer literals that are zero, negative or invalid MUST NOT select one minute. Response status literals
+  `0`, negative values, literal-null-to-zero and invalid blank enum text MUST NOT become 200. A computed status whose
+  compatible range cannot be established MUST be refused rather than evaluated or defaulted during import.
+  Blank Cron/Script refusals MUST describe the conversion/catalog constraint accurately; the target RunJavaScript
+  runtime already has a blank-script path. Fault.Message retains its accepted silent message-text difference.
+- **FR-015**: Corrections MUST be data of the existing built-in member map and use existing diagnostics/mapper paths.
+  Custom maps without corrections, the public member-rule constructor, by-name/replacement handling and caller JSON
+  MUST retain their contracts. Refusals name the original member path and corrective guidance, with no duplicate
+  required-input diagnostic on a refused node. Elsa 4 runtime, defaults and outcome behavior MUST NOT change.
+
+| Member/use | Missing/supported empty input | Deliberate literal-null | Literal blank / other boundary |
+|---|---|---|---|
+| SendHttpRequest/FlowSendHttpRequest.ContentType, Content potentially non-null | Refuse legacy no-body mismatch | Retain delivered no-body refusal | Blank string selects JSON writer; it is not absence |
+| Same ContentType, Content known null/unbound | Retain existing no-body behavior | Retain typed null | Retain compatible behavior within existing Content contract |
+| FlowSendHttpRequest.ExpectedStatusCodes | Emit `[200]` | Refuse incompatible cleared-list routing | Blank-to-null and explicit `[]` also refuse; never substitute `[200]` |
+| Cron.CronExpression | Refuse disabled/no-trigger conversion | Retain refusal | Refuse blank disabled/no-trigger conversion |
+| RunJavaScript.Script | Refuse through current required converted-input contract | Retain refusal | Refuse blank/no-work conversion; do not claim the runtime cannot execute blank script |
+| Fault.Message | Retain accepted silent conversion | Retain typed null | Retain accepted message-text treatment |
+| For.OuterBoundInclusive | Retain true | Emit false | Emit false when the typed blank evaluates null |
+| Delay.TimeSpan | Retain one minute | Emit explicit zero duration | Emit zero when the typed blank evaluates null |
+| Timer.Interval | Retain one minute | Refuse zero recurrence | Refuse blank/zero/negative/invalid authored interval |
+| SendHttpRequest/FlowSendHttpRequest.Method | Retain GET | Retain effective GET fallback | Refuse invalid blank method rather than target whitespace-to-GET normalization |
+| WriteHttpResponse.StatusCode | Retain 200 | Refuse raw zero versus target 200 | Refuse zero/negative literals and invalid blank enum text; preserve supported positive status values |
+
+Supported empty wrappers established by the tagged loader are `{}`, `{"typeName":"…"}` and
+`{"typeName":"…","expression":{}}`. A resolved Literal wrapper with omitted `value` is deliberate literal-null,
+not a defaulted empty wrapper. An `expression:null` or primitive expression is not that empty-wrapper path;
+unsupported metadata must be refused or handled by an independently evidenced existing rule, never silently repaired
+into a default. The 3.5.3 For-default and Cron differences remain recorded in research; the runtimes are not described
+as identical.
+
+### Boundary with S-2
+
+The [active spec1232 proposal](https://github.com/elsa-workflows/elsa-foundation/pull/3726) owns general missing/null/
+undefined representation, requiredness, native omitted-input defaults, intrinsic nullability, default-on-null and
+workflow policy recording/pinning. This follow-up introduces no policy, marker, coalescing rewrite or policy precedence.
+
+A converter-authored zero TimeSpan preserves a legacy CLR zero value; it is **not** a claim that TimeSpan has an S-2
+supported runtime type default. Nullable null and `[]` remain different values; their refusal here is about HTTP
+outcome fidelity, not a license for a null policy to replace them. Delivered bare-JSON-null rows are unchanged by this
+follow-up; this does not prevent S-2's separately owned SetVariable/SetOutput null amendment. Variable initialization
+and missing computed-name rules remain owned by ADR0089/S-2/S-4.
+
+### Acceptance
+
+- **SC-008**: Real-converter/catalog tests cover each changed row and meaningful shape, including supported empty
+  wrappers versus Literal-without-value, explicit empty arrays/JSON-list text, literal `"null"`, malformed metadata,
+  zero/negative/invalid literals, supported values, original paths, duplicate bindings and caller immutability.
+  Delivered bare-null controls remain passing.
+- **SC-009**: Actual import/publication/execution proves the corrected For boundary, zero Delay, effective GET,
+  ContentType/body distinctions and default `[200]` routing with a local HTTP receiver. Use 200/404/500 controls.
+  Cleared-list and other refused uses leave no imported definition/version/publication writes and make no HTTP call.
+- **SC-010**: Removing the relevant correction reaches an intended failing assertion; restoration passes. Whole
+  touched projects reconcile discovery/execution and preserve every failed/skipped/not-run receipt. Independent
+  implementation review continues until a fresh round has no remaining verified findings.
+- **SC-011**: Production changes stay in `Extensions/Elsa3`; no runtime/default/outcome/policy contract changes.
+  Local affected builds/tests, architecture/maps and fresh current-corpus measurements carry exact-source evidence.
+  CI waits are deferred to initiative integration under the dispatch; CI success is never inferred. Formal Code
+  Review and coordinator merge remain gates. When S-2 implementation is available, recheck these corrected member
+  values with its converter policy option on/off; unavailable S-2 integration is explicitly qualified.
+
+Final follow-up acceptance is recorded by the separate implementation PR; pending checks remain explicitly qualified. Historical spec267 receipts and #3201's distinct receipts do not prove this follow-up.
+
+### Follow-up local validation receipt
+
+Implementation PR [#5440](https://github.com/elsa-workflows/elsa-foundation/pull/5440) targets the initiative. Renewed
+local review uses exact code/test source `da977d2e0e3b2c0cbe8afd57db97379fe1c5979f` against baseline
+`694debeb44176f3fd61f9059b94f6a6931c162e8`, containing merged #3930 and #3945. The integration run uses
+`a720bc3a3c70e4445393a3d1709ad9a6ac6694db`; its production/integration tree is identical at `da977d2e0e`.
+Only Mapping test data changed between those heads. Final bookkeeping receives its own exact-head review.
+
+| Gate | Fresh result |
+|---|---|
+| Complete Mapping project | 1,776 listed/executed/passed; zero failures/skips |
+| Complete HTTP/SQLite import integration project | 167 listed/executed/passed; zero failures/skips |
+| Architecture | 606 discovered definitions, 621 executed/passed cases; two deferred theories expand to 6 and 11 cases; zero failures/skips |
+| Evaluated Release/isolated Debug graphs and generated filters | Both restores and the canonical maps check pass; no solution-filter change |
+| Causal controls | Original baseline matrix 50 failures/23 passes; expanded correction removal 52/30; original review regressions 10/81 and 2/1. Renewed prior-source controls: Mapping 10/94, real-import/For 2/1, duplicate-key controls 3/0; deliberate first-wins mutation 1/2. Each pair is failures/passes; restored whole projects pass |
+| Independent local review | Round 9 at `da977d2e0e`: correctness, standards/constitution and issue acceptance each return zero remaining verified findings, including minor findings. Original and renewed surviving findings are fixed in normal commits |
+
+Owned real hosts prove For counts, explicit zero Delay due time, default GET/no-body behavior, and `[200]` response
+paths on 200/404/500. Refused variants leave design/publication rows unchanged and make no HTTP request. The selected
+3.6 JSON writer's no-charset header cannot be retained by emitting application/json alone, so a blank ContentType
+with potentially non-null Content is refused. Unproven computed/referenced String bodies are refused because they
+may be empty and lose body headers on the target.
+
+Renewed review verified memory-only/default-wrapper handling, non-string expression syntax validation, and valid
+expression precedence over ignored serialized memory metadata. Opposing false/true inputs now distinguish the
+For default from real Variable-expression lowering. Removing ignored metadata retains last-property semantics
+for duplicate JSON keys; the true-first/false-last control rejects a deliberate first-wins mutation. The generic
+lowerer, custom-map contracts and S-7 setters remain unchanged. A preexisting dynamic ContentType range concern
+lies outside the agreed literal/source-shape matrix; it is retained as a scope limitation, not claimed as passed
+or changed through an S-0/S-2 generic policy.
+
+The fresh, clean, read-only 36-definition corpus at `9c01aa4b53ccbd47e09922d7cc49a694e5f3d2b0` measures **16 imports,
+15 publications and 5 observed completions before and after**. All 36 import/publication/completion flags match.
+Twenty import refusals, one publication HTTP400 and ten non-completions with incidents remain visible. One
+first-incident observation differs (Running/1 incident versus Faulted/2), in both the original and renewed full
+measurements. Original observations and focused repeats remain separately identified. These stage counts are not
+general corpus execution/value parity. Private payloads and definition IDs are not committed or uploaded.
+
+The initial scratch compile/fixture and dual-diagnostic expectation attempts are retained. The first architecture
+run had 619 passes/two checkout setup failures; its maps check reported two filter differences. Reconstructing the
+owned native checkout with Linux line endings and the complete tracked inventory, including ignored-but-tracked
+files, makes both gates pass without changing repository snapshots or filters. The
+[original local gate](https://github.com/elsa-workflows/elsa-foundation/pull/5440#issuecomment-7086113646) and
+[original corpus receipt](https://github.com/elsa-workflows/elsa-foundation/pull/5440#issuecomment-7086123495) retain
+their exact commands, results and source boundaries; those older counts belong to `c6a2fc021f`, not the renewed
+candidate. The [renewed review receipt](https://github.com/elsa-workflows/elsa-foundation/pull/5440#issuecomment-7087168843)
+records the later source and fixes. Fresh discovery/TRX, graph/maps, causal and redacted corpus artifacts are
+retained separately for the renewed measurement.
+
+T032/spec1232 policy-on/off integration is **NOT RUN**: that implementation is unavailable and separately owned.
+Its proposal #3726 is agreed and ready, unmerged at `15799ee0ae`; implementation has not started.
+Historical Elsa 3 evidence remains exact-tag source inspection, not historical runtime execution. CI is deferred to
+initiative integration and no CI pass is claimed. Formal Code Review and coordinator acceptance/merge remain.

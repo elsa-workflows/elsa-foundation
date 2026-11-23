@@ -13,6 +13,9 @@ internal static class SwitchCaseRules
 {
     public static IEnumerable<string> StructureErrors(ActivityNode activity, SwitchAuthoredStructure structure)
     {
+        if (structure.MatchesAny && structure.Cases.Any(item => item.Activity is not null)
+            && structure.Cases.Any(item => item.Match == "Done"))
+            yield return "A MatchAny Switch with case activities cannot use the reserved case label 'Done'. Choose another label.";
         if (activity.Structure?.SchemaVersion == SwitchActivity.LegacyStructureSchemaVersion)
         {
             if (structure.Cases.Any(item => item.Condition is not null))

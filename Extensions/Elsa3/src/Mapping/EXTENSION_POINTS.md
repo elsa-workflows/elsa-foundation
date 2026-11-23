@@ -66,6 +66,10 @@ Replace both: implement both contracts on one class, or register a node converte
 - **Purpose:** The Elsa 3 → Elsa 4 activity map: one entry per Elsa 3 type, giving its target and the rule for every
   member.
 - **Default implementation:** `Elsa3BuiltInActivityMap` (singleton; the decision record `member-map.md` as data).
+- **Member corrections:** optional `Elsa3MemberRule.OnAbsent`, `OnBlank` and `OnLiteralNull` init properties apply
+  before source-shape normalization. The positional constructor and unconfigured custom rules retain their contract.
+  Built-in HTTP status-list, positive response-status/Timer and request-content contracts are separate from the
+  generic enum, time-span and String contracts a custom map can choose.
 - **When to override:** to map additional Elsa 3 types centrally. For a single rebuilt custom activity, prefer
   `[ReplacesActivityType]` on the Elsa 4 activity. Any change alters converter output (spec 235's converter revision
   rule).

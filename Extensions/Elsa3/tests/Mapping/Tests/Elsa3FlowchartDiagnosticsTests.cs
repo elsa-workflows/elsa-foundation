@@ -21,7 +21,6 @@ public sealed class Elsa3FlowchartDiagnosticsTests
         { "unknown-target", Elsa3ActivityDiagnosticCodes.GraphConnectionInvalid, "$.root.connections[0]", "a" },
         { "unsupported-port", Elsa3ActivityDiagnosticCodes.NoCounterpart, "$.root.connections[0]", "endpoint" },
         { "unmapped-port", Elsa3ActivityDiagnosticCodes.GraphOutcomeUnmapped, "$.root.connections[0]", "a" },
-        { "expression-status-codes", Elsa3ActivityDiagnosticCodes.GraphOutcomeUnmapped, "$.root.connections[0]", "call" },
         { "loop-into-entered-node", Elsa3ActivityDiagnosticCodes.GraphLoopUnsupported, "$.root.connections[2]", "b" },
         { "fork-branches-expression", Elsa3ActivityDiagnosticCodes.UnsupportedMode, "$.root.activities[0].branches", "fork" },
         { "start-into-two", Elsa3ActivityDiagnosticCodes.GraphStartAmbiguous, "$.root.activities[0]", "start" },
@@ -45,6 +44,19 @@ public sealed class Elsa3FlowchartDiagnosticsTests
         Assert.Equal(path, error.Path);
         Assert.Equal(nodeId, error.Metadata["ActivityNodeId"]);
         Assert.False(string.IsNullOrWhiteSpace(error.Guidance));
+    }
+
+    [Fact]
+    public async Task Computed_status_codes_keep_the_graph_refusal_and_name_the_unproven_member()
+    {
+        // #3281 adds a member refusal: a computed list may be cleared and change non-2xx Done routing. The existing
+        // unmapped numeric connection remains a separate graph error rather than hiding either source location.
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), Definition("expression-status-codes"));
+        Assert.False(result.Succeeded);
+        var errors = result.Diagnostics.Where(d => d.IsError).ToArray();
+        Assert.Equal(2, errors.Length);
+        Assert.Contains(errors, d => d.Code == Elsa3ActivityDiagnosticCodes.ValueOutsideContract && d.Path == "$.root.activities[0].expectedStatusCodes");
+        Assert.Contains(errors, d => d.Code == Elsa3ActivityDiagnosticCodes.GraphOutcomeUnmapped && d.Path == "$.root.connections[0]");
     }
 
     [Fact]

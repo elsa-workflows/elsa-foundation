@@ -37,6 +37,9 @@ internal sealed class Elsa3ConversionPlan(Elsa3ConversionRequest request, Elsa3W
     /// <summary>A reusable workflow's declared outputs and the synthesized graph variables that hold them.</summary>
     public List<Elsa3GraphOutputMapping> OutputMappings { get; } = [];
 
+    /// <summary>The resolved authored workflow-variable types, retained from validation for reference lowering.</summary>
+    public Dictionary<Elsa3Variable, Elsa.Primitives.Models.TypeReference> WorkflowVariableTypes { get; } = new(ReferenceEqualityComparer.Instance);
+
     public bool HasErrors => Diagnostics.Any(diagnostic => diagnostic.IsError);
 
     public Elsa3NodePlan? Find(Elsa3Activity node) => Nodes.GetValueOrDefault(node);
@@ -87,7 +90,7 @@ internal sealed class Elsa3NodePlan(Elsa3Activity node, string jsonPath, Elsa3Ac
     public Dictionary<string, string> SourceNames { get; } = new(StringComparer.Ordinal);
 
     /// <summary>The Elsa 4 keys a null member was bound to Elsa 3's value for (spec 267), which count as bound when blank.</summary>
-    public HashSet<string> NullEmits { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> NullEmits { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Properties a rewrite strategy wrote under an Elsa 4 key. Removing the consumed Elsa 3 structure members keeps
@@ -97,6 +100,11 @@ internal sealed class Elsa3NodePlan(Elsa3Activity node, string jsonPath, Elsa3Ac
 
     /// <summary>The Elsa 4 key of the node's script body, rewritten in script mode, when the node runs a script.</summary>
     public string? ScriptProperty { get; set; }
+
+    /// <summary>Selections found by the script rewriter; null means not proven, empty means no outcome setter.</summary>
+    public IReadOnlyList<string>? EffectiveScriptOutcomes { get; set; }
+    public bool EffectiveScriptInvalidDoneSelection { get; set; }
+    public bool EffectiveScriptNativeCompletionAccess { get; set; }
 
     /// <summary>Whether normalization reported an error on this node.</summary>
     public bool Failed { get; set; }
