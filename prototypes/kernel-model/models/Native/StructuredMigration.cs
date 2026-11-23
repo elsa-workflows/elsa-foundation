@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Kernel.Native;
@@ -54,12 +55,18 @@ internal static class StructuredMigration
         }
 
         var framesByNode = state.Frames.Values.ToLookup(frame => frame.Node, StringComparer.Ordinal);
+        var starts = state.Agenda.Where(work => !work.Resume && !work.Gone && work.Node is not null)
+            .Select(work => work.Node!).ToHashSet(StringComparer.Ordinal);
         var children = state.Frames.Values.Select(frame => (frame.Parent, Node: (string?)frame.Node))
             .Concat(state.Agenda.Where(work => work.Node is not null).Select(work => (work.Parent, work.Node)))
             .ToLookup(child => child.Parent, child => child.Node!, StringComparer.Ordinal);
         foreach (var (before, after) in comparisons)
         {
             if (!typeof(CompositeActivity).IsAssignableFrom(before.Type)) continue;
+            // A scheduled start has no Sequence cursor or chosen If branch until its frame executes.
+            // Another activation of the same node may already have a frame and must still be checked.
+            if ((before.Type == typeof(Sequence) || before.Type == typeof(If)) &&
+                !framesByNode.Contains(before.Id) && starts.Contains(before.Id)) continue;
             var selected = framesByNode[before.Id].Select(frame => children[frame.Id].ToArray());
             if (before.Type == typeof(Sequence))
             {
@@ -142,8 +149,37 @@ internal static class StructuredMigration
             _ => false,
         };
 
-    // Native expressions can stringify a JSON value, including its property order and numeric representation.
-    private static bool SameJson(JsonNode? before, JsonNode? after) => before?.ToJsonString() == after?.ToJsonString();
+    // Native copies each root literal before hydration. An activity can inspect the options and typed
+    // values of that copy, including options inherited by children and raw tokens in parsed JSON.
+    private static bool SameJson(JsonNode? before, JsonNode? after) =>
+        SameClonedNode(before?.DeepClone(), after?.DeepClone());
+
+    private static bool SameClonedNode(JsonNode? before, JsonNode? after)
+    {
+        if (before?.Options?.PropertyNameCaseInsensitive != after?.Options?.PropertyNameCaseInsensitive)
+            return false;
+        return (before, after) switch
+        {
+            (null, null) => true,
+            (JsonObject left, JsonObject right) =>
+                left.Count == right.Count && left.Zip(right).All(pair =>
+                    pair.First.Key == pair.Second.Key && SameClonedNode(pair.First.Value, pair.Second.Value)),
+            (JsonArray left, JsonArray right) =>
+                left.Count == right.Count && left.Zip(right).All(pair => SameClonedNode(pair.First, pair.Second)),
+            (JsonValue left, JsonValue right) => SameScalar(left, right),
+            _ => false,
+        };
+    }
+
+    private static bool SameScalar(JsonValue before, JsonValue after)
+    {
+        if (before.GetType() != after.GetType() || before.ToJsonString() != after.ToJsonString()) return false;
+        var left = before.GetValue<object>();
+        var right = after.GetValue<object>();
+        if (left is JsonElement element)
+            return right is JsonElement other && element.GetRawText() == other.GetRawText();
+        return left.GetType() == right.GetType() && left.Equals(right);
+    }
 
     private static bool SameEntries<T>(IReadOnlyDictionary<string, T> before, IReadOnlyDictionary<string, T> after, Func<T, T, bool> equals)
     {

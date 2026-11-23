@@ -33,14 +33,18 @@ internal static class NativeMigrationApplyChecks
         Contract.IActorReads reads = new ActorList(store, 32);
         var runtime = new PublicRuntime(edge, reads);
         var native = new NativeExecutionModel(new WorkflowRegistry()
-            .Add(Definition("source", "ready", "source tail")).Add(Definition("target", "ready", "target tail")));
+            .Add(Definition("source", "ready", "source tail")).Add(Definition("target", "ready", "target tail"))
+            .Add(Wf.Workflow("done", Wf.Set("tail", "output", "complete"), ("output", null))));
         var current = new PublicWorkflow([native, new PlanSink()]);
         var actor = (await runtime.StartAsync(scope, "version-start", NativeExecutionModel.Start("source"))).Actor!.Value;
+        var ended = (await runtime.StartAsync(scope, "ended-start", NativeExecutionModel.Start("done"))).Actor!.Value;
         var plan = (await runtime.StartAsync(scope, "hold-plan", new(PlanSink.Key, "hold-plan"))).Actor!.Value;
         var stalePlan = (await runtime.StartAsync(scope, "hold-stale-plan", new(PlanSink.Key, "hold-stale-plan"))).Actor!.Value;
+        var endedPlan = (await runtime.StartAsync(scope, "hold-ended-plan", new(PlanSink.Key, "hold-ended-plan"))).Actor!.Value;
         await using var first = await ActivateAsync("version-first", current);
         await PumpAsync(first);
         var state = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.State;
+        var endedBefore = (await reads.GetAsync(scope, ended))!.Header;
 
         now += 20_000;
         var oldModel = new OldNative(native.StateVersion - 1);
@@ -50,6 +54,8 @@ internal static class NativeMigrationApplyChecks
             Json.Write(new MigrationRequest("different source", "target", stalePlan)));
         await edge.SendAsync(scope, target, "wait-for-version", Contract.Kinds.Migrate,
             Json.Write(new MigrationRequest("source", "target", plan)));
+        await edge.SendAsync(scope, new Contract.Target.Ref(ended), "wait-for-ended-version", Contract.Kinds.Migrate,
+            Json.Write(new MigrationRequest("done", "target", endedPlan)));
         await PumpAsync(older);
         var held = await reads.InboxAsync(scope, actor);
         check(held.Items is [{ Id: "wait-for-stale", State: Contract.DeliveryState.Held },
@@ -59,11 +65,18 @@ internal static class NativeMigrationApplyChecks
             (await reads.InboxAsync(scope, stalePlan)).Items.Count == 0 &&
             (await reads.TailAsync(scope, actor)).Items.All(row => row.Entry != "\"migrate\""),
             "an older owner holds the stale-source migration ahead of the next command, without a result or marker");
+        var endedHeld = (await reads.GetAsync(scope, ended))!.Header;
+        check(endedBefore.Status == Contract.ActorStatus.Finished &&
+            (await reads.InboxAsync(scope, ended)).Items is [{ Id: "wait-for-ended-version", State: Contract.DeliveryState.Held }] &&
+            (await reads.InboxAsync(scope, endedPlan)).Items.Count == 0 &&
+            endedHeld.TypeData == endedBefore.TypeData && endedHeld.Labels.GetValueOrDefault("migration-plan") is null,
+            "an older owner holds the migration of an unreadable finished checkpoint without answering");
 
         now += 20_000;
         await using var latest = await ActivateAsync("version-latest", current);
         // A fresh input can release a durable Hold. It does not change the Native wait.
         await edge.SendAsync(scope, new Contract.Target.Ref(actor), "model-available", "wake");
+        await edge.SendAsync(scope, new Contract.Target.Ref(ended), "ended-model-available", "wake");
         await PumpAsync(latest);
         var answers = Json.Read<PlanAnswer[]>(store.ReadFoundationActor(scope.Tenant, plan.Id).Actor!.Row.State);
         var staleAnswers = Json.Read<PlanAnswer[]>(store.ReadFoundationActor(scope.Tenant, stalePlan.Id).Actor!.Row.State);
@@ -71,6 +84,10 @@ internal static class NativeMigrationApplyChecks
             answers is [{ Actor: var sender, Result.Outcome: MigrationPlanOutcome.Migrated }] && sender == actor &&
             staleAnswers is [{ Actor: var staleSender, Result.Outcome: MigrationPlanOutcome.NotAtSource }] && staleSender == actor,
             "a newer owner replays both original commands and classifies their source definitions");
+        var endedAnswers = Json.Read<PlanAnswer[]>(store.ReadFoundationActor(scope.Tenant, endedPlan.Id).Actor!.Row.State);
+        check(endedAnswers is [{ Actor: var endedSender, Result: { Outcome: MigrationPlanOutcome.Refused, Finding: "Ended" } }] &&
+            endedSender == ended && (await reads.GetAsync(scope, ended))!.Header.TypeData == endedBefore.TypeData,
+            "a newer owner refuses the held command from the original finished life");
 
         async Task<IScopeActivation> ActivateAsync(string node, PublicWorkflow model)
         {
@@ -114,6 +131,7 @@ internal static class NativeMigrationApplyChecks
         var refuse = await StartPlanAsync("refuse");
         var apply = await StartPlanAsync("apply");
         var wrong = await StartPlanAsync("wrong");
+        var invalid = await StartPlanAsync("invalid");
         var ended = await StartPlanAsync("ended");
         var foreign = (await runtime.StartAsync(otherScope, "other-plan", new(PlanSink.Key, "other-plan"))).Actor!.Value;
         await using var owner = await ActivateAsync("migration-first");
@@ -128,6 +146,14 @@ internal static class NativeMigrationApplyChecks
         check(await BoundDefinition() == "source" && Checkpoint(actor) == source &&
             Json.Read<PlanAnswer[]>(Checkpoint(foreign)).Length == 0,
             "a plan reference outside the tenant changes neither the checkpoint nor the other plan");
+
+        await MigrateAsync("empty-source", "", "target", invalid);
+        await PumpAsync(owner);
+        await MigrateAsync("empty-source-replay", "", "target", invalid);
+        await PumpAsync(owner);
+        check(await BoundDefinition() == "source" && Checkpoint(actor) == source &&
+            Answers(invalid) is [{ Actor: var invalidSender, Result: { Outcome: MigrationPlanOutcome.Refused, Finding: "InvalidRequest" } }]
+            && invalidSender == actor, "an addressable invalid request records one refusal across fresh operation IDs");
 
         await MigrateAsync("incompatible", "source", "bad-wait", refuse);
         await PumpAsync(owner);

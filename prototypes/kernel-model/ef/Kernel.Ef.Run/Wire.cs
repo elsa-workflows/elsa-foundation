@@ -9,12 +9,14 @@ sealed class Wire
     private readonly string _host;
     private readonly int _port;
     private long _trips;
+    private long _connections;
     private long _protocolRequests;
     private long _flushes, _executes, _limitedExecutes, _namedExecutes;
     private bool _postgres;
 
     private Wire(string host, int port) => (_host, _port) = (host, port);
 
+    public long Connections => Interlocked.Read(ref _connections);
     public long Trips => Interlocked.Read(ref _trips);
     // PostgreSQL framing is independent of TCP segmentation. Sync and simple Query each end
     // a protocol group, including a BEGIN pipelined ahead of another group; this is not RTT.
@@ -62,6 +64,7 @@ sealed class Wire
                 client.NoDelay = true;
                 server.NoDelay = true;
                 await server.ConnectAsync(_host, _port);
+                Interlocked.Increment(ref _connections);
                 var serverSpoke = 1;     // so the client's first send is a round trip
                 var frames = _postgres ? new PgFrames((kind,limit,named)=>
                 {

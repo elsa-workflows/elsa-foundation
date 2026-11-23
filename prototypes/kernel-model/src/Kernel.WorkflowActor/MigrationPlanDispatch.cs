@@ -8,7 +8,7 @@ internal sealed record MigrationDispatchBatch(long Number, string From, string T
 internal sealed record MigrationRequest(string From, string To, ActorRef Plan);
 internal sealed record MigrationDispatchReceipt(int Accepted, int Duplicate, int Unavailable);
 
-/// <summary>The committed plan read and the authorized acknowledgment path.</summary>
+/// <summary>Reads committed plan state and acknowledges dispatch through a host-provided control path.</summary>
 internal interface IMigrationDispatchState
 {
     ValueTask<MigrationDispatchBatch?> ReadPendingAsync(BoundScope scope, ActorRef plan, CancellationToken cancellationToken);
@@ -23,6 +23,8 @@ internal sealed class MigrationPlanDispatch(IIngress ingress, IMigrationDispatch
         ArgumentNullException.ThrowIfNull(scope);
         var batch = await state.ReadPendingAsync(scope, plan, cancellationToken);
         if (batch is null) return null;
+        if (batch.Actors is not { Length: > 0 } || batch.Actors.Any(actor => string.IsNullOrEmpty(actor.Id)))
+            throw new InvalidOperationException("A committed migration batch requires nonempty exact actor references.");
         var payload = JsonSerializer.Serialize(new MigrationRequest(batch.From, batch.To, plan));
         var accepted = 0;
         var duplicate = 0;
