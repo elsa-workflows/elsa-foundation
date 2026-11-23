@@ -202,13 +202,32 @@ internal static class DirectSendChecks
         await using var transaction = await blocker.Database.BeginTransactionAsync();
         await blocker.Database.ExecuteSqlRawAsync("""LOCK TABLE "Instances" IN ACCESS EXCLUSIVE MODE""");
         Check(!(await Commit(stale)).Landed, "a preparation lock timeout with a stale position refuses the batch");
-        try { await Commit(held); }
-        catch (StoreException error) when (error.Failure == Failure.Transient && error.GetBaseException() is PostgresException { SqlState: "55P03" })
+        await RequireTimeout(() => Commit(held));
+        if (store.OwnedSetsAvailable)
         {
-            Console.WriteLine("ok a preparation lock timeout with the held fence retains its PostgreSQL transient classification");
-            return;
+            var other = 1 - held.Partition;
+            var taken = (await store.TakeAsync(other, "direct-other", lease))!;
+            var previous = new PartitionFence(other, taken.Epoch, taken.Position);
+            var retaken = (await store.RetakeAsync(other, "direct-other", taken.Epoch, lease))!;
+            var latest = new PartitionFence(other, retaken.Epoch, retaken.Position);
+            var group = new EfStore(() => new KernelDb(options), postgres: true, fenceInBatch: store.FenceInBatch) { CommitSql = store.CommitSql };
+            group.BindWorkerNode();
+            ValueTask<Committed> Both(PartitionFence sibling) =>
+                group.CommitAsync(CommitBatch.Owned([held, sibling], lease, false, [turn], [], []));
+            Check(!(await Both(previous)).Landed, "a stale sibling refuses the whole prepared batch while the input root's fence is current");
+            await RequireTimeout(() => Both(latest));
         }
-        throw new InvalidOperationException("The held fence must surface the preparation lock timeout.");
+
+        static async Task RequireTimeout(Func<ValueTask<Committed>> commit)
+        {
+            try { await commit(); }
+            catch (StoreException error) when (error.Failure == Failure.Transient && error.GetBaseException() is PostgresException { SqlState: "55P03" })
+            {
+                Console.WriteLine("ok the preparation lock timeout retains its PostgreSQL transient classification when every fence is current");
+                return;
+            }
+            throw new InvalidOperationException("The held fence must surface the preparation lock timeout.");
+        }
     }
 
     private static void Check(bool valid, string message)
