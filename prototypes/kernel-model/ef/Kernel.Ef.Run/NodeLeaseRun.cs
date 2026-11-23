@@ -16,7 +16,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 ///   is sent: it writes p's record, and its read of the partition rows waits at row 0 where reads take locks. Then q's
 ///   take of {1, 2} is sent; on release, p's commit in 3 and p's gain take of 5 are sent too.
 /// case=mutual: a owns {1, 2} and b owns {3, 4}, both past their leases. The hold is on both records. a's take of {3, 4}
-///   and b's take of {1, 2} are sent, then the hold is released.
+///   and b's take of {1, 2} are sent, then the hold is released. The ordered locking-read SQL Server hold uses update locks.
 /// case=heartbeats: the hold is on partition row 0; p's and r's heartbeats both write their records and queue at it.
 /// mutation=subquery (EfStore.NodeReadInUpdate) reads the node records inside the take's update, after it locked rows;
 /// mutation=rr (EfStore.RepeatableReadTake) runs the take at REPEATABLE READ; mutation=membership
@@ -54,7 +54,12 @@ static class NodeLeaseRun
         if (verifyExchange) await SeedJournalAsync(target.Store(target.Workers()));
         var held = new Dictionary<string, OwnedLease>();
         foreach (var (node, set) in kind == "mutual" ? new[] { ("a", new[] { 1, 2 }), ("b", [3, 4]) } : [("r", [1]), ("p", [2, 3])])     // heartbeats: as heartbeat
-            if ((held[node] = await store.TakeAsync(set, node, Brief)).Taken.Count != set.Length) { Console.WriteLine($"the probe could not set up {node}"); return 2; }
+        {
+            held[node] = await store.TakeAsync(set, node, Brief);
+            if (held[node].Taken.Select(fence => fence.Partition).SequenceEqual(set)) continue;
+            Console.WriteLine($"the probe could not set up {node}");
+            return 2;
+        }
         await Task.Delay(Brief + TimeSpan.FromMilliseconds(500));     // every node lease above has expired
         var deadlocks = await target.DeadlocksAsync(admin);
         var clock = Stopwatch.StartNew();
@@ -135,9 +140,8 @@ static class NodeLeaseRun
 
         bool ValidExchange(IReadOnlyList<PartitionFence> before, OwnedLease? taken, string owner)
         {
-            if (taken is null || taken.Taken.Count != before.Count) return false;
+            if (taken is null || !taken.Taken.SequenceEqual(before.Select(old => old with { Epoch = old.Epoch + 1 }))) return false;
             return before.All(old => old.Position == old.Partition &&
-                taken.Taken.Contains(old with { Epoch = old.Epoch + 1 }) &&
                 owners.Any(row => row.Id == old.Partition && row.Owner == owner &&
                     row.Epoch == old.Epoch + 1 && row.Position == old.Position));
         }

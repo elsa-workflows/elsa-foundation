@@ -25,7 +25,8 @@ until the engine reports the sessions waiting, then releases the hold.
   - On release, p's commit in 3 and p's gain take of 5 are sent as well.
 - **`case=mutual`:** two processes past their leases whose set takes cover each other's partitions.
   - Setup: a owns {1, 2} and b owns {3, 4}.
-  - The hold writes both node records.
+  - The hold writes both node records in the deadlock controls and the versioned-read controls.
+    The ordered locking-read SQL Server run uses update locks compatible with the peer reads.
   - a's take of {3, 4} and b's take of {1, 2} are sent, then the hold is released.
 - **`case=heartbeats`:** two heartbeats and the membership reads.
   - Setup: as `heartbeat`. The hold writes partition row 0.
