@@ -16,16 +16,16 @@ public sealed partial class MongoStore
 
     /// <summary>A heartbeat records the issuing binary's readable kernel formats alongside primary time.
     /// A membership-only heartbeat keeps the existing lease unchanged.</summary>
-    private static UpdateDefinition<BsonDocument> NodeRenewal(TimeSpan? lease, bool register = false)
+    private UpdateDefinition<BsonDocument> NodeRenewal(TimeSpan? lease, bool register = false)
     {
         var fields = new BsonDocument
         {
             { "seenAt", NowMs },
-            { "readableStoreSchema", new BsonArray { StoreSchema } },
-            { "readableMessageProtocol", new BsonArray { MessageProtocol } },
-            { "readableJournalCodec", new BsonArray { JournalCodec } }
+            { "readableStoreSchema", new BsonArray { _format.StoreSchema } },
+            { "readableMessageProtocol", new BsonArray { _format.MessageProtocol } },
+            { "readableJournalCodec", new BsonArray { _format.JournalCodec } }
         };
-        if (register) fields.Add("formatGrant", CurrentGrant);
+        if (register) fields.Add("formatGrant", _grant);
         if (lease is { } duration)
             fields.Add("leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, (long)duration.TotalMilliseconds }));
         return Builders<BsonDocument>.Update.Pipeline(new BsonDocument[] { new("$set", fields) });

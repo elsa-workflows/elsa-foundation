@@ -6,7 +6,8 @@ namespace Kernel.Mongo;
 public sealed partial class MongoStore
 {
     private static readonly BsonDocument PartitionMarker = new("_id", "partitions");
-    private const int StoreSchema = 1, MessageProtocol = 1, JournalCodec = 1;
+    private readonly MongoStoreFormat _format;
+    private static MongoStoreFormat JobGenerationFormat => new(2, 2, 1);
 
     private async Task OpenVersionsAsync(IReadOnlyCollection<string> collections, int partitions)
     {
@@ -26,37 +27,44 @@ public sealed partial class MongoStore
                 // creating collections and rows, and a racing open never overwrites an existing marker.
                 var initial = new BsonDocument
                 {
-                    { "count", partitions }, { "storeSchema", StoreSchema },
-                    { "messageProtocol", MessageProtocol }, { "journalCodec", JournalCodec }
+                    { "count", partitions }, { "storeSchema", _format.StoreSchema },
+                    { "messageProtocol", _format.MessageProtocol }, { "journalCodec", _format.JournalCodec }
                 };
                 marker = await _meta.FindOneAndUpdateAsync(PartitionMarker, new BsonDocument("$setOnInsert", initial),
                     new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After });
             }
         }
 
-        var recorded = RequireVersions(marker);
+        var recorded = RequireVersions(marker, _format);
         if (recorded != partitions)
             throw new StoreException(Failure.Definite, $"The database has {recorded} partitions and was opened with {partitions}. The count is fixed at creation: recreate the database.");
     }
 
     private async Task<int> RequireVersionsAsync(CancellationToken cancellationToken) =>
-        RequireVersions(await _meta.Find(PartitionMarker).FirstOrDefaultAsync(cancellationToken));
+        RequireVersions(await _meta.Find(PartitionMarker).FirstOrDefaultAsync(cancellationToken), _format);
 
     private async Task RequireVersionsAsync(IClientSessionHandle session, CancellationToken cancellationToken) =>
-        RequireVersions(await _meta.Find(session, PartitionMarker).FirstOrDefaultAsync(cancellationToken));
+        RequireVersions(await _meta.Find(session, PartitionMarker).FirstOrDefaultAsync(cancellationToken), _format);
 
-    private static int RequireVersions(BsonDocument? marker)
+    private async Task RequireReadOnlyVersionsAsync(CancellationToken token)
+    {
+        var marker = await _meta.Find(PartitionMarker).FirstOrDefaultAsync(token);
+        // The staged reader understands the earlier checkpoint and inbox representation.
+        var readable = _options.JobGenerations && CurrentFormat.Matches(marker) ? CurrentFormat : _format;
+        RequireVersions(marker, readable);
+    }
+
+    private static int RequireVersions(BsonDocument? marker, MongoStoreFormat expected)
     {
         if (marker is null)
             throw new StoreFormatException("The kernel store version marker is missing.");
-        if (!Reads("storeSchema", StoreSchema) || !Reads("messageProtocol", MessageProtocol) || !Reads("journalCodec", JournalCodec))
-            throw new StoreFormatException($"Unsupported kernel store versions. Stored schema={Value("storeSchema")}, message protocol={Value("messageProtocol")}, journal codec={Value("journalCodec")}. This build reads schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}.");
+        if (!expected.Matches(marker))
+            throw new StoreFormatException($"Unsupported kernel store versions. Stored schema={Value("storeSchema")}, message protocol={Value("messageProtocol")}, journal codec={Value("journalCodec")}. This build reads {expected}.");
 
         if (!marker.TryGetValue("count", out var count) || !count.IsInt32)
             throw new StoreFormatException("The kernel store partition count is missing or malformed.");
         return count.AsInt32;
 
-        bool Reads(string field, int version) => marker.TryGetValue(field, out var value) && value.IsInt32 && value.AsInt32 == version;
         string Value(string field) => marker.TryGetValue(field, out var value) && value.IsInt32 ? value.AsInt32.ToString(System.Globalization.CultureInfo.InvariantCulture) : "missing or malformed";
     }
 }

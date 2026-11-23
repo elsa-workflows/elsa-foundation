@@ -5,17 +5,14 @@ namespace Kernel.Mongo;
 
 public sealed partial class MongoStore
 {
-    private static readonly BsonDocument CurrentGrant = new()
-    {
-        { "storeSchema", StoreSchema }, { "messageProtocol", MessageProtocol }, { "journalCodec", JournalCodec }
-    };
+    private readonly BsonDocument _grant;
 
     // The recurring heartbeat needs only this node document. The first registration, an expired
     // lease, or a revoked grant must contend with a format advance before renewing ownership.
     private async Task<BsonDocument> RenewRegisteredNodeAsync(IClientSessionHandle? session, string node,
         TimeSpan? lease, CancellationToken token)
     {
-        var active = new BsonDocument { { "_id", node }, { "formatGrant", CurrentGrant } };
+        var active = new BsonDocument { { "_id", node }, { "formatGrant", _grant } };
         if (lease.HasValue)
             active.Add("$expr", new BsonDocument("$gte", new BsonArray { "$leaseUntil", NowMs }));
         var options = new FindOneAndUpdateOptions<BsonDocument>

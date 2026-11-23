@@ -16,6 +16,9 @@ public sealed record MongoStoreOptions
     /// </summary>
     public bool FenceInBatch { get; init; }
 
+    // Release default stays at format 1. Only the staged provider qualification selects format 2.
+    internal bool JobGenerations { get; init; }
+
 }
 
 /// <summary>
@@ -47,6 +50,11 @@ public sealed partial class MongoStore : IKernelStore
     {
         _client = client;
         _options = options ?? new MongoStoreOptions();
+        _format = _options.JobGenerations ? JobGenerationFormat : CurrentFormat;
+        _grant = new BsonDocument
+        {
+            { "storeSchema", _format.StoreSchema }, { "messageProtocol", _format.MessageProtocol }, { "journalCodec", _format.JournalCodec }
+        };
         // Reads use majority by default. The take reads leases from the primary, where a rolled-back renewal can only delay a take.
         var db = client.GetDatabase(database, new MongoDatabaseSettings { ReadConcern = ReadConcern.Majority, WriteConcern = WriteConcern.WMajority, ReadPreference = ReadPreference.Primary });
         Database = db;
@@ -172,19 +180,22 @@ public sealed partial class MongoStore : IKernelStore
     /// the store reads whether a key is outside the set. A mark that is short for any other reason is a message gone, as before.
     /// </summary>
     private enum CheckKind { Fence, Count, Bound, Mark }
-    private readonly record struct Check(int Index, bool Delete, long Expected, CheckKind Kind);
+    private readonly record struct Check(int Index, bool Delete, long Expected, CheckKind Kind, BsonDocument? Rewind = null);
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         StoreBatchRules.Validate(batch, ownedSets: true, supportsJobTrialClear: SupportsJobTrialClear);
         CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         CommitClockFacts.RejectUnsupported(batch);
+        if (!_options.JobGenerations && batch.Turns.Any(t => t.Row?.NextJobGeneration is not null || t.Sent.Any(m => m.JobGeneration != 0)))
+            throw new StoreFormatException("Job generations require schema=2, message protocol=2.");
         if (batch.Window is not null) throw new NotSupportedException("MongoDB cannot enforce the requested commit window.");
         var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
         using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
         try
         {
             session.StartTransaction(Transaction);
+            if (_options.JobGenerations) await RequireVersionsAsync(session, cancellationToken);
             // Every fenced partition, in ascending id, with the sends whose order keys its clock cuts: the sends of the turns
             // in that partition. The one-partition form is the batch's partition and every send, as before.
             var (fences, owned) = (batch.Fenced, batch.Fences is not null);
@@ -280,9 +291,16 @@ public sealed partial class MongoStore : IKernelStore
                     if (turn.Expected is not { } expected) models.Add(new BulkWriteInsertOneModel<BsonDocument>(_instances.CollectionNamespace, doc));
                     else
                     {
-                        checks.Add(new(models.Count, false, 1, CheckKind.Count));
                         var match = new BsonDocument { { "_id", row.Id }, { "revision", expected }, { "retired", false } };
                         if (row.Retired) match["status"] = (int)row.Status; // ended status was checked by the marker shape
+                        BsonDocument? rewind = null;
+                        if (_options.JobGenerations && !row.Retired)
+                        {
+                            var regresses = row.NextJobGeneration is { } next ? new BsonDocument("$gt", next) : new BsonDocument("$type", "long");
+                            rewind = new BsonDocument(match) { { "nextJobGeneration", regresses } };
+                            match.Add("nextJobGeneration", new BsonDocument("$not", regresses));
+                        }
+                        checks.Add(new(models.Count, false, 1, CheckKind.Count, rewind));
                         models.Add(new BulkWriteReplaceOneModel<BsonDocument>(_instances.CollectionNamespace, match, doc));
                     }
                 }
@@ -364,6 +382,14 @@ public sealed partial class MongoStore : IKernelStore
                     return new Committed(false, 0, []);
                 }
                 bool Matches(Check check) => (check.Delete ? result.DeleteResults[check.Index].DeletedCount : result.UpdateResults[check.Index].MatchedCount) == check.Expected;
+                if (_options.JobGenerations && checks.All(c => c.Kind != CheckKind.Fence || Matches(c)))
+                {
+                    // A batch can touch a row once. A missed replacement leaves its prior image
+                    // in this transaction, so a single read distinguishes rewinds from stale revisions.
+                    var rewinds = new BsonArray(checks.Where(c => c.Rewind is not null && !Matches(c)).Select(c => c.Rewind!));
+                    if (rewinds.Count > 0 && await _instances.Find(session, new BsonDocument("$or", rewinds)).AnyAsync(cancellationToken))
+                        throw new StoreException(Failure.Definite, "A job generation counter cannot move backwards within its creation.");
+                }
                 // Only after every fence held: a bound statement that touched fewer messages than it named may name one outside
                 // the fenced set, which is refused as definite, as the in-memory store refuses it.
                 if (checks.All(c => c.Kind != CheckKind.Fence || Matches(c)) && checks.Any(c => c.Kind is CheckKind.Bound or CheckKind.Mark && !Matches(c)) &&
@@ -505,6 +531,7 @@ public sealed partial class MongoStore : IKernelStore
     public async ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default)
     {
         CreationProtocol.RejectUnsupported(delivery.Message);
+        await CheckAdmissionFormatAsync(delivery.Message, cancellationToken);
         // The existing per-partition outside-add clock is persistent, increasing and outside caller control.
         var seq = await NextOutsideSeq(delivery.Message.Target.Partition, cancellationToken);
         var message = delivery.At(seq);
@@ -518,6 +545,7 @@ public sealed partial class MongoStore : IKernelStore
 
     private async ValueTask<bool> InsertAsync(Message message, CancellationToken cancellationToken)
     {
+        await CheckAdmissionFormatAsync(message, cancellationToken);
         var seq = await NextOutsideSeq(message.Target.Partition, cancellationToken);
         try
         {
@@ -528,6 +556,13 @@ public sealed partial class MongoStore : IKernelStore
         {
             return false;
         }
+    }
+
+    private async ValueTask CheckAdmissionFormatAsync(Message message, CancellationToken cancellationToken)
+    {
+        await RequireVersionsAsync(cancellationToken);
+        if (!_options.JobGenerations && message.JobGeneration != 0)
+            throw new StoreFormatException("Job generations require schema=2, message protocol=2.");
     }
 
     private async ValueTask<long> NextOutsideSeq(int partition, CancellationToken cancellationToken)
@@ -546,7 +581,8 @@ public sealed partial class MongoStore : IKernelStore
         var docs = await _instances.Find(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(ids))), new FindOptions { BatchSize = ids.Count + 1 }).ToListAsync(cancellationToken);
         return docs.Select(d => StoredState.Restore(new InstanceRow(d["_id"].AsString, d["model"].AsString, d["definition"].AsString, (InstanceStatus)d["status"].AsInt32, d["state"].AsString,
             d["revision"].AsInt64, Str(d["parent"]), Str(d["fault"]), Str(d["jobs"]), (History)d.GetValue("history", 0).AsInt32, d.GetValue("suspended", false).AsBoolean,
-            Str(d.GetValue("children", BsonNull.Value)), d.GetValue("stateVersion", 1).AsInt32, Retired: d["retired"].AsBoolean, CustomHandles: Str(d.GetValue("customHandles", BsonNull.Value)), IdentityOnly: false))).ToList();
+            Str(d.GetValue("children", BsonNull.Value)), d.GetValue("stateVersion", 1).AsInt32, Retired: d["retired"].AsBoolean, CustomHandles: Str(d.GetValue("customHandles", BsonNull.Value)), IdentityOnly: false)
+            { NextJobGeneration = d.TryGetValue("nextJobGeneration", out var next) ? next.AsInt64 : null })).ToList();
     }
 
     public async ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
@@ -614,7 +650,7 @@ public sealed partial class MongoStore : IKernelStore
 
     public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default)
     {
-        await RequireVersionsAsync(cancellationToken);
+        await RequireReadOnlyVersionsAsync(cancellationToken);
         var docs = await _journal.Find(new BsonDocument { { "partition", partition }, { "position", new BsonDocument("$gt", after) } }, new FindOptions { BatchSize = Math.Min(take, 10_000) + 1 })
             .Sort(new BsonDocument("position", 1)).Limit(take).ToListAsync(cancellationToken);
         return docs.Select(d => new JournalRow(d["partition"].AsInt32, d["position"].AsInt64, d["instance"].AsString, d["revision"].AsInt64, d["entries"].AsString)).ToList();
@@ -622,7 +658,7 @@ public sealed partial class MongoStore : IKernelStore
 
     public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
     {
-        await RequireVersionsAsync(cancellationToken);
+        await RequireReadOnlyVersionsAsync(cancellationToken);
         // A find may span multiple cursor batches. Keep them on the same committed snapshot.
         var docs = await _journal.WithReadConcern(ReadConcern.Snapshot).Find(new BsonDocument { { "partition", partition }, { "instance", instance }, { "position", new BsonDocument("$gt", after) } })
             .Sort(new BsonDocument("position", 1)).ToListAsync(cancellationToken);
@@ -711,7 +747,7 @@ public sealed partial class MongoStore : IKernelStore
 
     public async ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default)
     {
-        await RequireVersionsAsync(cancellationToken);
+        await RequireReadOnlyVersionsAsync(cancellationToken);
         if (instances.Count == 0) return [];
         var docs = await _views.Find(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(instances)))).ToListAsync(cancellationToken);
         return docs.Select(d => new ViewRow(d["_id"].AsString, d["revision"].AsInt64, d["commits"].AsInt32)).ToList();
@@ -723,7 +759,7 @@ public sealed partial class MongoStore : IKernelStore
 
     private static BsonDocument ToDocument(InstanceRow row, int partition) => new()
     {
-        { "_id", row.Id }, { "partition", partition }, { "model", row.Model }, { "definition", row.Definition }, { "status", (int)row.Status },
+        { "_id", row.Id }, { "nextJobGeneration", row.NextJobGeneration.GetValueOrDefault(), row.NextJobGeneration.HasValue }, { "partition", partition }, { "model", row.Model }, { "definition", row.Definition }, { "status", (int)row.Status },
         { "state", StoredState.Encode(row) }, { "jobs", (BsonValue?)row.Jobs ?? BsonNull.Value }, { "customHandles", (BsonValue?)row.CustomHandles ?? BsonNull.Value }, { "revision", row.Revision },
         { "parent", (BsonValue?)row.Parent ?? BsonNull.Value }, { "fault", (BsonValue?)row.Fault ?? BsonNull.Value },
         { "retired", row.Retired }, { "history", (int)row.History }, { "suspended", row.Suspended }, { "children", (BsonValue?)row.Children ?? BsonNull.Value }, { "stateVersion", row.StateVersion },
@@ -740,7 +776,7 @@ public sealed partial class MongoStore : IKernelStore
 
     private static BsonDocument ToDocument(Message m, long seq, long seen) => new()
     {
-        { "_id", InboxId(m.InboxKey) }, { "partition", m.Target.Partition }, { "seq", seq }, { "target", m.Target.Id }, { "kind", m.Kind },
+        { "_id", InboxId(m.InboxKey) }, { "jobGeneration", m.JobGeneration, m.JobGeneration != 0 }, { "partition", m.Target.Partition }, { "seq", seq }, { "target", m.Target.Id }, { "kind", m.Kind },
         { "payload", (BsonValue?)m.Payload ?? BsonNull.Value }, { "sender", (BsonValue?)m.Sender ?? BsonNull.Value },
         { "start", m.Start is null ? BsonNull.Value : Json.Write(m.Start) }, { "due", m.Due ?? 0L }, { "seen", seen }, { "attempts", 0 }, { "trial", 0L },
         { "keepUntil", m.KeepUntil is { } keep ? keep : BsonNull.Value }, { "done", false }, { "replyTo", (BsonValue?)m.ReplyTo ?? BsonNull.Value },
@@ -753,7 +789,7 @@ public sealed partial class MongoStore : IKernelStore
         var wire = key["id"];
         var message = new Message(wire.IsBsonBinaryData ? DurableKeyJson.FromCodeUnits(wire.AsBsonBinaryData.Bytes) : wire.AsString, new InstanceRef(d["target"].AsString), d["kind"].AsString, Str(d["payload"]), Str(d["sender"]),
             d["start"].IsBsonNull ? null : Json.Read<StartSpec>(d["start"].AsString), due == 0 ? null : due, d["keepUntil"].IsBsonNull ? null : d["keepUntil"].AsInt64,
-            Str(d.GetValue("replyTo", BsonNull.Value)));
+            Str(d.GetValue("replyTo", BsonNull.Value))) { JobGeneration = d.GetValue("jobGeneration", 0L).AsInt64 };
         return new Stored(message.WithInboxScope(key["scope"].ToInt64(), Str(key.GetValue("match", BsonNull.Value))), d["seq"].AsInt64, d["seen"].AsInt64, d["attempts"].AsInt32, d["trial"].AsInt64);
     }
 
