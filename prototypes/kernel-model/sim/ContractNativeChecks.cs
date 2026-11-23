@@ -24,6 +24,7 @@ internal static class ContractNativeChecks
             await ReceiptLifetime((ok, label) => check(ok, $"{mode}: {label}"), mode);
         }
         await CompletedJobRestore(check);
+        await NativeDetachedHandleChecks.Run(check);
     }
 
     private static async Task Run(Action<bool, string> check, string mode)
