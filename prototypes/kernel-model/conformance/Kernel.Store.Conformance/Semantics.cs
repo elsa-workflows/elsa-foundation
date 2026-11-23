@@ -148,6 +148,7 @@ public static class Semantics
     [
         RetirementJournalChecks.Case,
         PhysicalRetirementChecks.Case,
+        .. JobTrialClearChecks.Cases,
         MarkerInsertChecks.Case,
         BatchIntegrityChecks.Atomic,
         DeleteShapeChecks.Case,
@@ -158,6 +159,7 @@ public static class Semantics
         IdentityClockChecks.Case,
         IdentityTerminalJobsChecks.Case,
         StoredStateChecks.Case,
+        StoredStateChecks.AbsentState,
         .. OwnedSetChecks.Cases,
         .. NodeLeaseChecks.Cases,
         new("actor addressing: an unwritten workflow retains its identity, state and owed job on alias delivery", Level.Required, VirtualActorAliases.Run),

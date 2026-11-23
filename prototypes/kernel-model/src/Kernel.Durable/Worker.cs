@@ -1168,7 +1168,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         // K1b: a guard expiry during the hand-over keeps nothing of these partitions pending: the host gave them up.
         lock (_turnSync) _handingOver.UnionWith(partitions);
-        try { await HandOverAsync(partitions, cancellationToken); }
+        try
+        {
+            LeaseUsable();      // an idle worker may have expired since the host planned its hand-over
+            await HandOverAsync(partitions, cancellationToken);
+        }
         finally
         {
             lock (_turnSync) _handingOver.ExceptWith(partitions);
@@ -1202,6 +1206,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var captured = Fences.Where(f => partitions.Contains(f.Partition)).ToList();
         ReceiveJobPublications(cancellationToken);
         await DrainAsync(HandedOver, cancellationToken);
+        LeaseUsable();
         List<PartitionFence> leaving, kept = [];
         var quiet = false;
         lock (_turnSync)
@@ -1219,6 +1224,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             // The fallback resets everything, so what the kept partitions hold in memory only is written first too, as a
             // stand-down writes it.
             await DrainAsync(_ => true, cancellationToken);
+            LeaseUsable();
             lock (_turnSync)
             {
                 var held = Fences;
