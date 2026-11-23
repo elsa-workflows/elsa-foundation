@@ -8,15 +8,15 @@ namespace Kernel.Durable;
 /// of them write. Two shapes:
 /// <list type="bullet">
 /// <item>Per node (<see cref="ForNode"/>, K1 D1): one worker serves every scope the node activates, as one owned set.
-/// Activating a scope adds its partition to the set (a take of that one fence row); giving it up removes it (a release of
-/// that one row). The set may be scattered. The worker polls the set in one query and flushes its partitions in one
+/// Activating a scope adds its partition to the set (a take of that one fence row). A balance round can give up several
+/// of the set's partitions together. The set may be scattered. The worker polls the set in one query and flushes its partitions in one
 /// batch. The node's passes, activations and give-ups run one at a time, so the set changes only between passes, and
 /// one pass serves every scope: a scope that another scope's pass served since its own last call gets that answer.</item>
 /// <item>Fixed (the constructor): one worker per scope, given up front and activated by its lowest partition. The models
 /// and the simulation use it, and so does a node on a store without owned sets (<c>commit=ef</c>: one partition per worker).</item>
 /// </list>
 /// </summary>
-public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
+public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScopeSetRelease
 {
     private NodeHeartbeat? _beat;       // K1b: the node's heartbeat over this host's Workers, made at the first heartbeat
     private (IKernelStore Store, int Placed, bool Part)? _counted;     // a node's host (ForNode): what its start checks
@@ -209,10 +209,23 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
         finally { _turn.Release(); }
     }
 
-    private async ValueTask LoseAsync(int scope)
+    bool IScopeSetRelease.SupportsSetRelease => _node is not null;
+
+    ValueTask IScopeSetRelease.ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken)
     {
-        await _turn.WaitAsync(CancellationToken.None);
-        try { await _node!.LoseAsync([scope]); }
+        if (activations.Any(activation => activation is not NodeScope scope || scope.Host != this))
+            throw new ArgumentException("Release requires activations of this host.", nameof(activations));
+        return LoseAsync(activations.Select(activation => activation.Scope).ToArray(), cancellationToken);
+    }
+
+    private async ValueTask LoseAsync(IReadOnlyCollection<int> scopes, CancellationToken cancellationToken = default)
+    {
+        await _turn.WaitAsync(cancellationToken);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await _node!.LoseAsync(scopes);
+        }
         finally { _turn.Release(); }
     }
 
@@ -220,12 +233,13 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
     private sealed class NodeScope(DurableHost host, int scope) : IScopeActivation
     {
         public long Seen = -1;
+        public DurableHost Host => host;
         public int Scope => scope;
         public bool Active => host._node!.Holds(scope);
         public ValueTask WokenAsync(InstanceRef? actor, CancellationToken cancellationToken = default) => host._node!.WokenAsync(actor, cancellationToken);
         public async ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default) =>
             (await host.PassAsync(this, cancellationToken)).Delay;
         public ValueTask<ScopePass> RunWithAgeAsync(CancellationToken cancellationToken = default) => host.PassAsync(this, cancellationToken);
-        public ValueTask DisposeAsync() => host.LoseAsync(scope);
+        public ValueTask DisposeAsync() => host.LoseAsync([scope]);
     }
 }

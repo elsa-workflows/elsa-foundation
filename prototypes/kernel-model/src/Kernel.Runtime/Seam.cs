@@ -25,6 +25,15 @@ public interface IScopeHost
     ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default);
 }
 
+/// <summary>A host whose worker can drain and give up several of its active scopes together.</summary>
+public interface IScopeSetRelease
+{
+    bool SupportsSetRelease { get; }
+
+    /// <summary>Cancellation stops the handover before it starts. Once it starts, the host drains the group.</summary>
+    ValueTask ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// K1 slice 7: a host that checks, when the runtime starts it, that the runtime's scopes, its workers' placement count
 /// and its store's partitions agree. The count is fixed when the database is created; a runtime or a worker at another
