@@ -179,6 +179,54 @@ public sealed class RuntimeCheckpointCommitTests
             RuntimeCheckpointCommitFingerprint.Compute(second));
     }
 
+    [Theory]
+    [InlineData("workflowStateEffects", "[\"outputs\",\"instanceName\"]", "[ \"outputs\", \"instanceName\" ]", true)]
+    [InlineData("workflowStateEffects", "[\"outputs\",\"instanceName\"]", "[\"instanceName\",\"outputs\"]", false)]
+    [InlineData("workflowStateEffects", "[]", "null", false)]
+    [InlineData("workflowStateEffectReceipts", "[{\"Transition\":\"Completion\",\"AttemptId\":\"Ren\\u00e9\"}]", "[ {\"AttemptId\":\"René\",\"Transition\":\"Completion\"} ]", true)]
+    [InlineData("workflowStateEffectReceipts", "[{\"AttemptId\":null}]", "[{}]", false)]
+    [InlineData("workflowStateEffectReceipts", "[{\"future\":9007199254740993}]", "[{\"future\":9007199254740992}]", false)]
+    [InlineData("ordinary", "{}", "{ }", false)]
+    public void Checkpoint_and_actual_alteration_revision_interpret_only_owned_json_metadata(string key, string first, string second, bool equal)
+    {
+        var originalMetadata = new Dictionary<string, string> { [key] = first, ["opaque\ud800"] = "value\ud801" };
+        var before = _activityState with { Metadata = originalMetadata };
+        var after = before with { Metadata = new Dictionary<string, string>(originalMetadata) { [key] = second } };
+        string Hash(ActivityExecutionState state) => RuntimeCheckpointCommitFingerprint.Compute(
+            NewCommit(RuntimeCheckpointNames.ActivityCompleted) with { StateChanges = NewStateChanges(activityState: state) });
+        Assert.Equal(equal, Hash(before) == Hash(after));
+        Assert.Equal(equal, AlterationRevision(before) == AlterationRevision(after));
+        Assert.Equal(first, originalMetadata[key]);
+        Assert.Equal("value\ud801", originalMetadata["opaque\ud800"]);
+        if (key != "ordinary")
+        {
+            var missing = before with { Metadata = new Dictionary<string, string>() };
+            Assert.NotEqual(Hash(missing), Hash(before));
+            Assert.NotEqual(AlterationRevision(missing), AlterationRevision(before));
+        }
+    }
+
+    [Theory]
+    [InlineData("workflowStateEffects", "sensitive-broken-json")]
+    [InlineData("workflowStateEffectReceipts", "{\"sensitive\":")]
+    [InlineData("workflowStateEffectReceipts", "{\"sensitive\":\"\\ud800\"}")]
+    public void Known_metadata_canonical_failures_refuse_both_hash_consumers_without_disclosing_or_mutating_text(string key, string raw)
+    {
+        var state = _activityState with { Metadata = new Dictionary<string, string> { [key] = raw } };
+        var commit = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with { StateChanges = NewStateChanges(activityState: state) };
+        var failure = Assert.Throws<JsonException>(() => RuntimeCheckpointCommitFingerprint.Compute(commit));
+        Assert.DoesNotContain("sensitive", failure.ToString(), StringComparison.Ordinal);
+        Assert.Throws<JsonException>(() => AlterationRevision(state));
+        Assert.Equal(raw, state.Metadata[key]);
+    }
+
+    private static string AlterationRevision(ActivityExecutionState state)
+    {
+        var type = typeof(WorkflowExecutableHasher).Assembly.GetType("Elsa.Workflows.Runtime.Services.Alterations.WorkflowAlterationCapturedConcurrencyValidator", throwOnError: true)!;
+        var capture = type.GetMethod("CaptureActivities")!.CreateDelegate<Func<IReadOnlyCollection<ActivityExecutionState>, IReadOnlyDictionary<string, string>>>();
+        return capture([state])[state.Execution.ActivityExecutionId];
+    }
+
     [Fact]
     public void Cleanup_only_changes_participate_in_the_checkpoint_identity()
     {

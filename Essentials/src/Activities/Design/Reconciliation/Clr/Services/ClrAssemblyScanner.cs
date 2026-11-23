@@ -317,7 +317,7 @@ public sealed class ClrAssemblyScanner(
 
         if (Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.IsAccessedBy(type))
             facets.Add(new ActivityDesignFacet(WorkflowStateDesignFacet.Kind, WorkflowStateDesignFacet.SchemaVersion,
-                JsonSerializer.SerializeToElement(new { declared = Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.IsDeclaredBy(type) })));
+                JsonSerializer.SerializeToElement(new { declared = Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.IsDeclaredBy(type) }, Elsa.Serialization.Core.JsonBaseline.Options)));
 
         var iconFacet = BuildIconFacet(type);
         if (iconFacet is not null)

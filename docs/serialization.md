@@ -95,6 +95,10 @@ wire-format differences need the specific register entries and round-trip eviden
 
 ## Baseline deviations
 
+The retained activity workflow-state receipt metadata uses a private, baseline-derived PascalCase profile.
+Its original writer and reader remain bidirectionally compatible, including null attempt IDs and date offsets;
+append-on-write preserves prior receipts. This closed, value-free durability protocol does not configure API JSON.
+
 Every ordinary option set derives from `JsonBaseline`. Scoped user conversion is selected by code on the type or
 input member through `JsonConversionContract`; it is not a baseline deviation or an executable stamp. See
 [spec 1207](../specs/1207-json-data-integrity-baseline/contracts/json-baseline.md) for its diagnostics and date rules.
@@ -107,6 +111,7 @@ for Elsa-owned contracts only. Workflow-data conversions never enter that list.
 
 | File | Setting | Reason | Approved by |
 |---|---|---|---|
+| `Essentials/src/Workflows/Runtime/Core/Models/StepWorkflowStateEffects.cs` | `PropertyNamingPolicy@3619e834e6e8` | The closed, value-free retained receipt protocol keeps its PascalCase field names. Bidirectional original/current reader and writer controls and append controls cover null attribution, escaped text and explicit offsets; API contexts retain camelCase. | ADR 0091 decision 7; spec 1207 FR-023 |
 | `Essentials/apps/Elsa.Workbench/ElsaModuleManagementApi.cs` | `WriteIndented@bae9e4e922a3, json-method:ToJson@4f6ff7edd851, json-method:ToJson@ddc5d46f705a` | The exact local ToJson calls construct feed configuration JsonObject values, not EF owned-JSON mappings. The owner retains indentation for operator configuration and raw JsonElement subtrees remain unchanged. | ADR 0091 decision 7; spec 1207 |
 | `Essentials/src/Activities/Bpmn/Core/Internal/BpmnEmbeddingJson.cs` | `UnmappedMemberHandling@a4fc9453ddd9, converter:TextConverter@30ec2f1086d9` | The closed BPMN embedding union retains its text converter and refuses unknown structural fields; embedded data values remain raw JSON. | ADR 0091 decision 7; spec 1207 |
 | `Essentials/src/Activities/Bpmn/Design/Internal/BpmnStructureHandler.cs` | `converter:JsonStringEnumConverter@aca668889826` | The BpmnStructureHandler owner retains its established enum vocabulary for matching typed readers; raw JsonElement members and dictionary keys retain the baseline behavior. | ADR 0091 decision 7; spec 1207 |

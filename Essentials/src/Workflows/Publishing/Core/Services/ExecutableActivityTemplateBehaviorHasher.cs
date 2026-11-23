@@ -21,7 +21,7 @@ public static class ExecutableActivityTemplateBehaviorHasher
         var behavior = Elsa.Serialization.Core.JsonHashInput.SerializeToElement(new
         {
             schemaVersion = "1",
-            root,
+            root = RuntimeJsonHashProjection.ProjectExecutable(root),
             resumeTargets = resumeTargets.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray(),
             directDependencies = directDependencies.OrderBy(x => x.OccurrenceId, StringComparer.Ordinal).ThenBy(x => x.DefinitionVersionId, StringComparer.Ordinal).ToArray(),
             closedTemplates = closedTemplates.OrderBy(x => x.TemplateHash, StringComparer.Ordinal).ThenBy(x => x.TemplateId, StringComparer.Ordinal).ToArray(),

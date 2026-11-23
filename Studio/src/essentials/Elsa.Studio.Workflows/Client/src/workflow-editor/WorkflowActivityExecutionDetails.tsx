@@ -293,7 +293,7 @@ export function WorkflowActivityExecutionDetails({
             <p>{workflowStateEffectLabels(currentInspectionState.inspection?.workflowStateEffects).join(", ")}</p>
             <small>Later failed or cancelled work adds no committed changes.</small>
             <ul>{currentInspectionState.inspection?.workflowStateEffectReceipts?.map((receipt, index) => (
-              <li key={index}>{receipt.transition === "Suspension" ? "Suspension" : "Completion"} accepted <time dateTime={receipt.acceptedAt}>{new Date(receipt.acceptedAt).toLocaleString()}</time>: {workflowStateEffectLabels(receipt.kinds).join(", ")}{receipt.attemptId ? <small> · Attempt {receipt.attemptId}</small> : null}</li>
+              <li key={index}>{receipt.transition === "Suspension" ? "Suspension" : "Completion"} accepted <time dateTime={receipt.acceptedAt}>{formatDate(receipt.acceptedAt)}</time>: {workflowStateEffectLabels(receipt.kinds).join(", ")}{receipt.attemptId ? <small> · Attempt {receipt.attemptId}</small> : null}</li>
             ))}</ul>
           </section>
         ) : null}

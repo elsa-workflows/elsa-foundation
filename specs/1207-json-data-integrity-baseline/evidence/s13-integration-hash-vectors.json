@@ -1,0 +1,189 @@
+[
+  {
+    "family": "capability",
+    "mask": 0,
+    "contract": {
+      "canonical": "{\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":[],\"outcomes\":[],\"result\":{\"IsRequired\":false,\"Policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"Type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"projections\":[]}}",
+      "sha256": "df61383dae06c3a47743012fd6808ec99ae314d03f8ab3b54264f3da84dec0cf"
+    },
+    "nodeFrame": "node\nnode:test.activity:1:test:1:{\"x\":1e0}::::contract:sha256:df61383dae06c3a47743012fd6808ec99ae314d03f8ab3b54264f3da84dec0cf",
+    "nodeSha256": "702e82acb91c078f4c6ee849c9d1d6417672c85f6d536eee5500b22df4f45831",
+    "canonical": "{\"dependencies\":[],\"incidentStrategy\":{\"alias\":\"Fault\",\"version\":\"1\"},\"inputContract\":{\"inputs\":[],\"version\":1e0},\"nodes\":[{\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"childSlots\":[],\"descriptor\":{\"consumerKey\":\"test\",\"payload\":{\"x\":1e0},\"schemaVersion\":\"1\"},\"inputBindings\":[],\"nodeId\":\"node\",\"sideEffectProfile\":\"External\",\"structure\":null}],\"rootNodeId\":\"node\",\"schemaVersion\":2e0}",
+    "sha256": "1034b1cd31844f6da0c1ea6806854a559689fd158548953b4c18d19c0b9b332a"
+  },
+  {
+    "family": "capability",
+    "mask": 1,
+    "contract": {
+      "canonical": "{\"SupportsBackgroundExecution\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":[],\"outcomes\":[],\"result\":{\"IsRequired\":false,\"Policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"Type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"projections\":[]}}",
+      "sha256": "b62fdd3e75b479ec69fe50f7c5c2afaedfd53066f445d691601cfbb28a8682af"
+    },
+    "nodeFrame": "node\nnode:test.activity:1:test:1:{\"x\":1e0}::::contract:sha256:b62fdd3e75b479ec69fe50f7c5c2afaedfd53066f445d691601cfbb28a8682af",
+    "nodeSha256": "43c56b7c6931fbaf260499524d5247a4b8e26d66ba4aafee622184bbcf2b1ec6",
+    "canonical": "{\"dependencies\":[],\"incidentStrategy\":{\"alias\":\"Fault\",\"version\":\"1\"},\"inputContract\":{\"inputs\":[],\"version\":1e0},\"nodes\":[{\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"childSlots\":[],\"descriptor\":{\"consumerKey\":\"test\",\"payload\":{\"x\":1e0},\"schemaVersion\":\"1\"},\"inputBindings\":[],\"nodeId\":\"node\",\"sideEffectProfile\":\"External\",\"structure\":null,\"supportsBackgroundExecution\":true}],\"rootNodeId\":\"node\",\"schemaVersion\":2e0}",
+    "sha256": "e7620023da16af6a4f977606f56c0fb57164752f90b20b63170853b2cd9a5cd4"
+  },
+  {
+    "family": "capability",
+    "mask": 2,
+    "contract": {
+      "canonical": "{\"AccessesUndeclaredVariables\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":[],\"outcomes\":[],\"result\":{\"IsRequired\":false,\"Policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"Type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"projections\":[]}}",
+      "sha256": "545c149dfc868e4f38b4226999c327f6e316c87cc491dce074099711c8449650"
+    },
+    "nodeFrame": "node\nnode:test.activity:1:test:1:{\"x\":1e0}::::contract:sha256:545c149dfc868e4f38b4226999c327f6e316c87cc491dce074099711c8449650",
+    "nodeSha256": "fa8044fde4023cbf8c5c6d3b9fcc505a1a2d96baca9718c2478b52a4f36162f1",
+    "canonical": "{\"dependencies\":[],\"incidentStrategy\":{\"alias\":\"Fault\",\"version\":\"1\"},\"inputContract\":{\"inputs\":[],\"version\":1e0},\"nodes\":[{\"accessesUndeclaredVariables\":true,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"childSlots\":[],\"descriptor\":{\"consumerKey\":\"test\",\"payload\":{\"x\":1e0},\"schemaVersion\":\"1\"},\"inputBindings\":[],\"nodeId\":\"node\",\"sideEffectProfile\":\"External\",\"structure\":null}],\"rootNodeId\":\"node\",\"schemaVersion\":2e0}",
+    "sha256": "dc10e71ee42422a62cc7238ce9d826b9373b5474d02075a2549b6df158def80a"
+  },
+  {
+    "family": "capability",
+    "mask": 3,
+    "contract": {
+      "canonical": "{\"AccessesUndeclaredVariables\":true,\"SupportsBackgroundExecution\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":[],\"outcomes\":[],\"result\":{\"IsRequired\":false,\"Policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"Type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"projections\":[]}}",
+      "sha256": "d9bc8b6b6001582f9f56a3a3c7c6e3b10ae970f72c5e4446c920c038ec3ad885"
+    },
+    "nodeFrame": "node\nnode:test.activity:1:test:1:{\"x\":1e0}::::contract:sha256:d9bc8b6b6001582f9f56a3a3c7c6e3b10ae970f72c5e4446c920c038ec3ad885",
+    "nodeSha256": "82a19d21bbd02148ba7a791ca413de775e549b612a675af29e18fa4f0ea6eb01",
+    "canonical": "{\"dependencies\":[],\"incidentStrategy\":{\"alias\":\"Fault\",\"version\":\"1\"},\"inputContract\":{\"inputs\":[],\"version\":1e0},\"nodes\":[{\"accessesUndeclaredVariables\":true,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"childSlots\":[],\"descriptor\":{\"consumerKey\":\"test\",\"payload\":{\"x\":1e0},\"schemaVersion\":\"1\"},\"inputBindings\":[],\"nodeId\":\"node\",\"sideEffectProfile\":\"External\",\"structure\":null,\"supportsBackgroundExecution\":true}],\"rootNodeId\":\"node\",\"schemaVersion\":2e0}",
+    "sha256": "fa56dc36c9909c96f0980585ba7e53aeba01e578ecfed6ee11af336455da0fa1"
+  },
+  {
+    "family": "capability",
+    "mask": 4,
+    "contract": {
+      "canonical": "{\"AccessesWorkflowState\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":[],\"outcomes\":[],\"result\":{\"IsRequired\":false,\"Policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"Type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"projections\":[]}}",
+      "sha256": "6ee085ab0e96b65739f69aa468d475a97f7d3edb20a70d12b96b7521d051249e"
+    },
+    "nodeFrame": "node\nnode:test.activity:1:test:1:{\"x\":1e0}::::contract:sha256:6ee085ab0e96b65739f69aa468d475a97f7d3edb20a70d12b96b7521d051249e",
+    "nodeSha256": "44fd4553f88219b03c1531559b3bbeb203d3017861462b6c35148f4aa01b1e9a",
+    "canonical": "{\"dependencies\":[],\"incidentStrategy\":{\"alias\":\"Fault\",\"version\":\"1\"},\"inputContract\":{\"inputs\":[],\"version\":1e0},\"nodes\":[{\"accessesWorkflowState\":true,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"childSlots\":[],\"descriptor\":{\"consumerKey\":\"test\",\"payload\":{\"x\":1e0},\"schemaVersion\":\"1\"},\"inputBindings\":[],\"nodeId\":\"node\",\"sideEffectProfile\":\"External\",\"structure\":null}],\"rootNodeId\":\"node\",\"schemaVersion\":2e0}",
+    "sha256": "dfff0055d049b9f2f8a970f63c063a4c6fb9662f29eac42459a26ce9f7106c83"
+  },
+  {
+    "family": "capability",
+    "mask": 5,
+    "contract": {
+      "canonical": "{\"AccessesWorkflowState\":true,\"SupportsBackgroundExecution\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":[],\"outcomes\":[],\"result\":{\"IsRequired\":false,\"Policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"Type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"projections\":[]}}",
+      "sha256": "e0b8305fa2808ec6340d092714561898db6cf326036ff23b0693555a6d9d734f"
+    },
+    "nodeFrame": "node\nnode:test.activity:1:test:1:{\"x\":1e0}::::contract:sha256:e0b8305fa2808ec6340d092714561898db6cf326036ff23b0693555a6d9d734f",
+    "nodeSha256": "94f99acb92166486c0fd4dff918d1f94668c8af6ff738d54ad5f3802ab26547d",
+    "canonical": "{\"dependencies\":[],\"incidentStrategy\":{\"alias\":\"Fault\",\"version\":\"1\"},\"inputContract\":{\"inputs\":[],\"version\":1e0},\"nodes\":[{\"accessesWorkflowState\":true,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"childSlots\":[],\"descriptor\":{\"consumerKey\":\"test\",\"payload\":{\"x\":1e0},\"schemaVersion\":\"1\"},\"inputBindings\":[],\"nodeId\":\"node\",\"sideEffectProfile\":\"External\",\"structure\":null,\"supportsBackgroundExecution\":true}],\"rootNodeId\":\"node\",\"schemaVersion\":2e0}",
+    "sha256": "01e1b806832428fa3cc94eb2acae8a6072ed108b80df117158fab8477c12cea9"
+  },
+  {
+    "family": "capability",
+    "mask": 6,
+    "contract": {
+      "canonical": "{\"AccessesUndeclaredVariables\":true,\"AccessesWorkflowState\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":[],\"outcomes\":[],\"result\":{\"IsRequired\":false,\"Policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"Type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"projections\":[]}}",
+      "sha256": "9afb55fe47bd7b1ecb495552dfcd1d7ddfca244ca741568ef47d7f0b46d0eaee"
+    },
+    "nodeFrame": "node\nnode:test.activity:1:test:1:{\"x\":1e0}::::contract:sha256:9afb55fe47bd7b1ecb495552dfcd1d7ddfca244ca741568ef47d7f0b46d0eaee",
+    "nodeSha256": "28b1bc9acdf20578d15557217c74d5d7d500c91785c09a47abdcf65252dcc37e",
+    "canonical": "{\"dependencies\":[],\"incidentStrategy\":{\"alias\":\"Fault\",\"version\":\"1\"},\"inputContract\":{\"inputs\":[],\"version\":1e0},\"nodes\":[{\"accessesUndeclaredVariables\":true,\"accessesWorkflowState\":true,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"childSlots\":[],\"descriptor\":{\"consumerKey\":\"test\",\"payload\":{\"x\":1e0},\"schemaVersion\":\"1\"},\"inputBindings\":[],\"nodeId\":\"node\",\"sideEffectProfile\":\"External\",\"structure\":null}],\"rootNodeId\":\"node\",\"schemaVersion\":2e0}",
+    "sha256": "4d93173239d12c28b59702a4738a5f89579ff7e3ee130459deb0534661a048f1"
+  },
+  {
+    "family": "capability",
+    "mask": 7,
+    "contract": {
+      "canonical": "{\"AccessesUndeclaredVariables\":true,\"AccessesWorkflowState\":true,\"SupportsBackgroundExecution\":true,\"activation\":{\"capability\":\"execute\",\"descriptorKind\":\"test\"},\"activityTypeKey\":\"test.activity\",\"contractVersion\":\"1\",\"descriptorKind\":\"test\",\"descriptorPayload\":{\"x\":1e0},\"inputs\":[],\"outcomes\":[],\"result\":{\"IsRequired\":false,\"Policy\":{\"isPersistable\":true,\"isSensitive\":false,\"lifecycle\":\"Instance\",\"redactionMode\":null,\"requiresEncryption\":false,\"retentionPolicy\":null,\"storage\":\"Inline\",\"storageProfile\":null},\"Type\":{\"alias\":\"Int32\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"projections\":[]}}",
+      "sha256": "76dcfd8570ef483fd1f49bc0e8339898e63ef5ab5b07dce250a162512ca8503e"
+    },
+    "nodeFrame": "node\nnode:test.activity:1:test:1:{\"x\":1e0}::::contract:sha256:76dcfd8570ef483fd1f49bc0e8339898e63ef5ab5b07dce250a162512ca8503e",
+    "nodeSha256": "4691ca594d3edeed923e57984583c700278293a30b27923b0d0fcb0bb392e972",
+    "canonical": "{\"dependencies\":[],\"incidentStrategy\":{\"alias\":\"Fault\",\"version\":\"1\"},\"inputContract\":{\"inputs\":[],\"version\":1e0},\"nodes\":[{\"accessesUndeclaredVariables\":true,\"accessesWorkflowState\":true,\"activityType\":\"test.activity\",\"activityTypeVersion\":\"1\",\"childSlots\":[],\"descriptor\":{\"consumerKey\":\"test\",\"payload\":{\"x\":1e0},\"schemaVersion\":\"1\"},\"inputBindings\":[],\"nodeId\":\"node\",\"sideEffectProfile\":\"External\",\"structure\":null,\"supportsBackgroundExecution\":true}],\"rootNodeId\":\"node\",\"schemaVersion\":2e0}",
+    "sha256": "20134e821ce984f5758e48b95dc4a251d6d0dfedc4859d1933fb9d24f894cdc2"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "spelling-a",
+    "payload": "{ \"total\":1.0,\"name\":\"Ren\\u00e9\" }",
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":null,\"inlineValue\":{\"name\":\"Ren\\u00E9\",\"total\":1e0},\"lifecycle\":\"Instance\",\"metadata\":{},\"sourceActivityExecutionId\":null,\"storage\":\"Inline\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "41ab0052e3598f886628810737bd05d53823a3ca825ab991ac60a2ca05a4829b"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "spelling-b",
+    "payload": "{\"name\":\"René\",\"total\":1e0}",
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":null,\"inlineValue\":{\"name\":\"Ren\\u00E9\",\"total\":1e0},\"lifecycle\":\"Instance\",\"metadata\":{},\"sourceActivityExecutionId\":null,\"storage\":\"Inline\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "41ab0052e3598f886628810737bd05d53823a3ca825ab991ac60a2ca05a4829b"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "empty",
+    "payload": "{}",
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":null,\"inlineValue\":{},\"lifecycle\":\"Instance\",\"metadata\":{},\"sourceActivityExecutionId\":null,\"storage\":\"Inline\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "e3909f11e92a769821c375f98e2b7d2835a00929899114c0190e11f775ddb46a"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "present-null",
+    "payload": "{\"x\":null}",
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":null,\"inlineValue\":{\"x\":null},\"lifecycle\":\"Instance\",\"metadata\":{},\"sourceActivityExecutionId\":null,\"storage\":\"Inline\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "049d88c46c77b6d6de58eafd58049f90bd3589ea6a8f91bc4d76215608bf567d"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "array-forward",
+    "payload": "{\"x\":[1,2]}",
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":null,\"inlineValue\":{\"x\":[1e0,2e0]},\"lifecycle\":\"Instance\",\"metadata\":{},\"sourceActivityExecutionId\":null,\"storage\":\"Inline\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "808dd902d9625eba925032658e94403893b03fb0ad8608ceef48b6a6c7cce0a5"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "array-reverse",
+    "payload": "{\"x\":[2,1]}",
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":null,\"inlineValue\":{\"x\":[2e0,1e0]},\"lifecycle\":\"Instance\",\"metadata\":{},\"sourceActivityExecutionId\":null,\"storage\":\"Inline\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "0c31c361a2e4b9e60eebba8e6edc61bc3d5dd562fb751cd5b3cf2ec377a2bdf5"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "large-a",
+    "payload": "{\"x\":9007199254740993}",
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":null,\"inlineValue\":{\"x\":9007199254740993e0},\"lifecycle\":\"Instance\",\"metadata\":{},\"sourceActivityExecutionId\":null,\"storage\":\"Inline\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "e8b53d8e1a3add7c64626791af7c8ac8b9f5a364e5b654101e5033430ed78647"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "large-b",
+    "payload": "{\"x\":9007199254740992}",
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":null,\"inlineValue\":{\"x\":9007199254740992e0},\"lifecycle\":\"Instance\",\"metadata\":{},\"sourceActivityExecutionId\":null,\"storage\":\"Inline\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "85827080da9d8880dbcf3825471a1e38658838977b08e4020be40dac96b3a595"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "inline-null",
+    "payload": "null",
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":null,\"inlineValue\":null,\"lifecycle\":\"Instance\",\"metadata\":{},\"sourceActivityExecutionId\":null,\"storage\":\"Inline\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "b0b57d22714ab173d3fcb987bb79c800195b66e9ba9476256cac2d3eb9458901"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "none",
+    "payload": null,
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":null,\"inlineValue\":null,\"lifecycle\":\"None\",\"metadata\":{},\"sourceActivityExecutionId\":null,\"storage\":\"None\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "84fb75c0678bb0138640ecd8d3327cc732a0aef693f5042f7ebd9f5d3433466c"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "external",
+    "payload": null,
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":{\"locator\":\"bABvAGMAYQB0AG8AcgA=\",\"metadata\":{\"cgBlAGcAaQBvAG4A\":\"dwBlAHMAdAA=\"},\"storageProfile\":\"cwB0AG8AcgBlAA==\"},\"inlineValue\":null,\"lifecycle\":\"Instance\",\"metadata\":{},\"sourceActivityExecutionId\":null,\"storage\":\"External\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "ff091730780e8ca761dd1ccb3d8c7e2a804dfae069ac67308bd3d2f1861dc161"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "opaque-a",
+    "payload": "null",
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":null,\"inlineValue\":null,\"lifecycle\":\"Instance\",\"metadata\":{\"dABlAG4AYQBuAHQAANg=\":\"dgBhAGwAdQBlAADY\"},\"sourceActivityExecutionId\":null,\"storage\":\"Inline\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "795beeafdc763d2e4d876bead0dfff9b66fd4cbce5a7c683443b7e31dbc82735"
+  },
+  {
+    "family": "durable-checkpoint",
+    "name": "opaque-b",
+    "payload": "null",
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"dABlAHMAdAA=\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[{\"metadata\":{},\"operation\":\"Upsert\",\"state\":{\"capturedAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"durableValueId\":\"ZAB1AHIAYQBiAGwAZQA=\",\"externalReference\":null,\"inlineValue\":null,\"lifecycle\":\"Instance\",\"metadata\":{\"dABlAG4AYQBuAHQAANg=\":\"dgBhAGwAdQBlAAHY\"},\"sourceActivityExecutionId\":null,\"storage\":\"Inline\",\"type\":{\"id\":\"UwBpAG4AZwBsAGUA\",\"kind\":\"QQBuAHkA\",\"schema\":null},\"valueId\":\"bwB1AHQAcAB1AHQAOgBWAGEAbAB1AGUA\",\"workflowExecutionId\":\"dwBvAHIAawBmAGwAbwB3AA==\"},\"stateId\":\"ZAB1AHIAYQBiAGwAZQA=\"}],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "074a0feba43e685f0aa55cc95eb4404a7349a5a2cbfde30ddb68f1d166469296"
+  }
+]

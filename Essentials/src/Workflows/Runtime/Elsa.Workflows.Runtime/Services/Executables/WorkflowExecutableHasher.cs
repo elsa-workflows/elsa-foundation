@@ -249,7 +249,9 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             ? string.Empty
             : $":executionPlacement={node.ExecutionPlacement}";
         var legacyShape = $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.Descriptor.ConsumerKey}:{node.Descriptor.SchemaVersion}:{CanonicalJson(node.Descriptor.Payload)}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}{outputCapturePayload}{executionPlacement}";
-        var nodeShape = intrinsic.Length == 0 ? legacyShape : $"{legacyShape}:{intrinsic}";
+        var behaviorMetadata = RuntimeJsonHashProjection.ProjectExecutableMetadata(node.Metadata);
+        var metadataPayload = behaviorMetadata.EnumerateObject().Any() ? $":behaviorMetadata:{CanonicalJson(behaviorMetadata)}" : string.Empty;
+        var nodeShape = (intrinsic.Length == 0 ? legacyShape : $"{legacyShape}:{intrinsic}") + metadataPayload;
         return node.ActivityContract is null
             ? nodeShape
             : $"{nodeShape}:contract:{node.ActivityContract.SchemaFingerprint}";
@@ -354,7 +356,21 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         if (node.ExecutionPlacement != ActivityExecutionPlacement.Inline)
             writer.WriteString("executionPlacement", node.ExecutionPlacement.ToString());
         if (node.ActivityContract is { } activityContract)
+        {
             writer.WriteString("sideEffectProfile", activityContract.SideEffectProfile.ToString());
+            if (activityContract.SupportsBackgroundExecution)
+                writer.WriteBoolean("supportsBackgroundExecution", true);
+            if (activityContract.AccessesUndeclaredVariables)
+                writer.WriteBoolean("accessesUndeclaredVariables", true);
+            if (activityContract.AccessesWorkflowState)
+                writer.WriteBoolean("accessesWorkflowState", true);
+        }
+        var behaviorMetadata = RuntimeJsonHashProjection.ProjectExecutableMetadata(node.Metadata);
+        if (behaviorMetadata.EnumerateObject().Any())
+        {
+            writer.WritePropertyName("behaviorMetadata");
+            WriteCanonicalJson(writer, behaviorMetadata);
+        }
         writer.WriteStartObject("descriptor");
         writer.WriteString("consumerKey", node.Descriptor.ConsumerKey);
         writer.WriteString("schemaVersion", node.Descriptor.SchemaVersion);

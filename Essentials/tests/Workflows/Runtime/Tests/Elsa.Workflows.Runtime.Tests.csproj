@@ -26,6 +26,7 @@
     <EmbeddedResource Include="../../../../../specs/1207-json-data-integrity-baseline/evidence/variable-value-hash-vectors.json" LogicalName="variable-value-hash-vectors.json" />
     <EmbeddedResource Include="../../../../../specs/1207-json-data-integrity-baseline/evidence/model-material-hash-vectors.json" LogicalName="model-material-hash-vectors.json" />
     <EmbeddedResource Include="../../../../../specs/1207-json-data-integrity-baseline/evidence/checkpoint-hash-vectors.json" LogicalName="checkpoint-hash-vectors.json" />
+    <EmbeddedResource Include="../../../../../specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json" LogicalName="s13-integration-hash-vectors.json" />
   </ItemGroup>
 
 </Project>
