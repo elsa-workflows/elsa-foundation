@@ -35,6 +35,7 @@ CAPTURES = {
     'variable lifecycle warnings and refusals': ['reference', 'lost-update-warning', 'fault-refusal', 'run-lost-update-badge', 'write-history-lost-updates', 'commit-journal', 'compare-refused', 'diagnostics-variable-writes'],
     'variable rename updates script reads and lists the rest': ['reference', 'rename-notice', 'flagged-reference'],
     'script variable may-write analysis survives editing and reopening': ['reference', 'literal-writes', 'computed-writes', 'reopened-computed', 'no-writes', 'nearest-scope'],
+    'timezone preferences preserve run instants and date filters': ['reference', 'settings-browser', 'settings-amsterdam', 'settings-persisted', 'run-gap-error', 'run-winter', 'run-summer', 'run-fold', 'run-utc', 'run-busy', 'run-result-amsterdam', 'run-result', 'date-filters', 'reset-browser', 'invalid-zone-fallback'],
 }
 JOURNEYS = set(CAPTURES)
 

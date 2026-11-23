@@ -4,6 +4,8 @@ User goal: read and enter workflow times in a chosen time zone without silently 
 
 Reference: the existing Settings › Appearance cards, standard Run workflow dialog, instance From/To controls and timestamp typography. Preserve their keyboard, validation, busy, read-only and responsive behavior.
 
+The [composed timezone journey](../../Studio/tests/acceptance/timeZoneJourney.ts) uses real publication/runtime APIs, retained consumer input evidence and a transparent request gate for the busy state. Its 15 required captures run in all four viewport/theme projects. It has not yet executed; both backend hosts and independent visual inspection remain required.
+
 Required states and journeys, all on a composed host from the final reviewed commit:
 
 | Journey | Required evidence | State |
