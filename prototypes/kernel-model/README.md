@@ -437,6 +437,30 @@ continuations commit together. A stale sibling's fence rolls back a mixed consum
 only the home that writes a journal entry. With `ef` the fixture checks that the store declines grouped
 ownership before changing any lease or inbox row.
 
+### PostgreSQL public-start round-trip budget
+
+The public PostgreSQL writer can finish a Balanced Native root in its first fenced checkpoint. The creator,
+checkpoint, terminal time and journal share one transaction. The fixture runs three workflows of ten WriteLine
+activities each, checks their output and journal in authored order, and repeats each public start against the same
+reference.
+
+From this directory, set `KERNEL_PREVIEW_POSTGRES` to a fresh disposable PostgreSQL database on plaintext
+loopback (`Host=127.0.0.1`, `SSL Mode=Disable`). Use a fresh database for each writer and fence combination.
+
+```sh
+dotnet run -c Release --project models/Native.Run -- pg-write-budget owned in-batch
+```
+
+Use `ef` for the EF writer, or `checked` for a separate fence statement. The measured interval starts at public
+admission and ends at the fenced terminal checkpoint, on an already-bound Embedded owner with warmed connections.
+The report lists bind, heartbeat and take separately. Schema setup, replay and verification reads are outside
+the measured interval. The meter reports wire direction turns (round trips), PostgreSQL Sync/Query groups, EF
+commands and transaction completions separately.
+
+PostgreSQL 17 measured **22 round trips in-batch and 23 checked** with both writers. Each public admission cost
+7 trips. Polling and the terminal commit used 15 in-batch or 16 checked. K12's 16-trip target remains open.
+Add `--require-budget` to make an over-budget result fail the command.
+
 ### Flowchart restart on the public PostgreSQL preview
 
 Set `KERNEL_PREVIEW_POSTGRES` to a fresh PostgreSQL database and run from `prototypes/kernel-model`:
