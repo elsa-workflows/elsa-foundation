@@ -1,18 +1,16 @@
-using System.Buffers.Binary;
 using System.Text;
 using Kernel.Foundation.Contracts;
-using Kernel.EntityFramework;
-using Kernel.Foundation.InMemory;
+using Microsoft.EntityFrameworkCore;
 using Bookmark = Kernel.Durable.FoundationJournalPaging.Bookmark;
 
-namespace Kernel.Native.Run;
+namespace Kernel.EntityFramework;
 
-internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor cursor, int pageSize)
+internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor cursor, int pageSize) : IActorReads
 {
     private readonly int _pageSize = pageSize is > 0 and < int.MaxValue
         ? pageSize : throw new ArgumentOutOfRangeException(nameof(pageSize));
 
-    internal async ValueTask<ActorView?> GetAsync(BoundScope scope, ActorRef actor, CancellationToken cancellationToken)
+    public async ValueTask<ActorView?> GetAsync(BoundScope scope, ActorRef actor, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
@@ -21,8 +19,8 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
         return read is { } found ? View(scope, found.Item, found.AsOf) : null;
     }
 
-    internal async ValueTask<Page<ActorView>> ListAsync(BoundScope scope, ActorQuery query, PageToken? from,
-        CancellationToken cancellationToken)
+    public async ValueTask<Page<ActorView>> ListAsync(BoundScope scope, ActorQuery query, PageToken? from = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(query);
@@ -49,37 +47,7 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
         new(new(new(row.Reference), row.Type, scope.Tenant, (ActorStatus)row.Status, null, null, row.EndedAt, row.TypeData,
             row.Labels), null, null, asOf);
 
-    internal async ValueTask<Page<WorkflowRunView>> ListRunsAsync(BoundScope scope, string actorType, WorkflowRunQuery query,
-        PageToken? from, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var context = WorkflowRunList.Context("postgres-workflow-run-history/1", scope, actorType, query);
-        Span<byte> bookmark = stackalloc byte[sizeof(long) + 64];
-        if (from is { } token && !cursor.TryOpen(context, token.Value, bookmark))
-            throw new ArgumentException("The continuation does not match this workflow run list.", nameof(from));
-        long? afterTime = from is null ? null : BinaryPrimitives.ReadInt64BigEndian(bookmark);
-        var afterRef = from is null ? null : Encoding.ASCII.GetString(bookmark[sizeof(long)..]);
-        var lower = WorkflowRunList.UnixMilliseconds(query.From);
-        var upper = WorkflowRunList.UnixMilliseconds(query.To);
-        // Round inward to representable clock values. Truncating either endpoint changes an inclusive bound.
-        var page = await store.ReadRootWorkflowHistoryAsync(scope.Tenant, actorType, query.Definition, (int?)query.Status,
-            lower is { } min ? (long)decimal.Ceiling(min) : null, upper is { } max ? (long)decimal.Floor(max) : null,
-            afterTime, afterRef, _pageSize + 1, cancellationToken);
-        var items = page.Items.Take(_pageSize).Select(row => new WorkflowRunView(new(row.Reference), row.Definition,
-            (ActorStatus)row.Status, DateTimeOffset.FromUnixTimeMilliseconds(row.UpdatedAt))).ToArray();
-        PageToken? next = null;
-        if (page.Items.Count > _pageSize)
-        {
-            var last = page.Items[_pageSize - 1];
-            Span<byte> landing = stackalloc byte[sizeof(long) + 64];
-            BinaryPrimitives.WriteInt64BigEndian(landing, last.UpdatedAt);
-            Encoding.ASCII.GetBytes(last.Reference, landing[sizeof(long)..]);
-            next = new(cursor.Seal(context, landing));
-        }
-        return new(items, next, page.AsOf);
-    }
-
-    internal async ValueTask<Page<JournalEntry>> TailAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
+    public async ValueTask<Page<JournalEntry>> TailAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(scope);
@@ -104,5 +72,30 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
             next = new(cursor.Seal(context, landing));
         }
         return new(entries.Select(entry => new JournalEntry(entry.Revision, entry.Entry)).ToArray(), next, snapshot.AsOf);
+    }
+
+    public ValueTask<Page<DeliveryView>> InboxAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Inbox inspection is outside the generated-root preview.");
+}
+
+public sealed partial class EfStore
+{
+    /// <summary>
+    /// Opens the public point, list and journal reads for a PostgreSQL generated-root preview.
+    /// The ordinary preview uses the public KernelDb context on an already installed database.
+    /// The trusted host supplies each BoundScope. Inbox and operator reads belong to the full provider.
+    /// </summary>
+    public async ValueTask<IActorReads> OpenPreviewRootReadsAsync(int pageSize = 100, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
+        ArgumentOutOfRangeException.ThrowIfEqual(pageSize, int.MaxValue);
+        if (!postgres || Engine is not null)
+            throw new NotSupportedException("Generated-root preview reads require PostgreSQL.");
+        await using var db = create();
+        if (!db.Database.IsNpgsql())
+            throw new NotSupportedException("Generated-root preview reads require PostgreSQL.");
+        var cursor = await PostgresRootAdmission.OpenJournalCursorAsync(db, cancellationToken);
+        return new PostgresRootReads(this, cursor, pageSize);
     }
 }

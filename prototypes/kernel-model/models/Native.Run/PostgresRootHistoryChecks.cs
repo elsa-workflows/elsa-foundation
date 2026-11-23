@@ -13,22 +13,29 @@ internal static class PostgresRootHistoryChecks
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("This check needs a fresh dedicated PostgreSQL database.");
-        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        var counts = new Counting();
+        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).AddInterceptors(counts).Options;
         KernelDb Open() => new(options);
         EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var ct = timeout.Token;
         var reader = Store();
+        await using var db = Open();
+        Check(await PostgresFixtureDatabase.IsEmptyAsync(db, ct), "the journal fixture requires a fresh database");
         await reader.CreateAsync(1);
         var admissions = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         await admissions.InstallAsync(ct);
         var journal = new PostgresRootReads(reader, await admissions.OpenJournalCursorAsync(ct), 128);
         var api = new PostgresPreviewFoundation(admissions, journal, PublicActor.ActorType);
+        var reads = await reader.OpenPreviewRootReadsAsync(pageSize: 128, cancellationToken: ct);
         var scope = FixedTenantScope.Bind("preview-history");
         var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
-        await using var db = Open();
         Task<long> Position() => db.Partitions.Select(p => p.Position).SingleAsync(ct);
         Task<long> Clock() => db.Database.SqlQueryRaw<long>("""SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value" """).SingleAsync(ct);
+
+        static Task<int> SetCodecAsync(KernelDb database, int from, int to, CancellationToken token) =>
+            database.StoreVersions.Where(row => row.Id == StoreVersionEntity.MarkerId && row.JournalCodec == from)
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.JournalCodec, to), token);
 
         foreach (var history in new[] { Contract.History.Minimal, Contract.History.Full })
         {
@@ -88,7 +95,44 @@ internal static class PostgresRootHistoryChecks
             }
             var check = await Drive(delayed ? 2 : 1);
             var frame = Json.Read<NativeState>(check.State!).Frames.Single().Key;
-            var startPage = await api.TailAsync(scope, actor, cancellationToken: ct);
+            var startPage = await reads.TailAsync(scope, actor, cancellationToken: ct);
+            if (!delayed)
+            {
+                var before = counts.Commands;
+                var page = await reads.ListAsync(scope, new Contract.ActorQuery(), cancellationToken: ct);
+                Check(page.Items is [var listed] && listed.Header.Ref == actor && counts.Commands - before == 1,
+                    "the public ordinary-profile list reads its marker and actor in one command");
+                var codec = db.RequiredFormat.JournalCodec;
+                var changed = codec + 1;
+                try
+                {
+                    Check(await SetCodecAsync(db, codec, changed, ct) == 1, "the fixture advances only the expected codec marker");
+                    await RefusesCodecAsync(() => reads.TailAsync(scope, actor, cancellationToken: ct).AsTask(), "journal");
+                    await RefusesCodecAsync(() => reads.ListAsync(scope, new Contract.ActorQuery(), cancellationToken: ct).AsTask(), "list");
+                    await RefusesCodecAsync(() => reads.ListAsync(scope, new Contract.ActorQuery(Type: "absent"), cancellationToken: ct).AsTask(),
+                        "empty list");
+                }
+                finally
+                {
+                    using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await using var restoration = Open();
+                    var affected = await SetCodecAsync(restoration, changed, codec, cleanup.Token);
+                    Check(affected == 1 || await restoration.StoreVersions.AnyAsync(
+                        row => row.Id == StoreVersionEntity.MarkerId && row.JournalCodec == codec, cleanup.Token),
+                        "cleanup restores the changed codec or observes the original marker");
+                }
+
+                async Task RefusesCodecAsync(Func<Task> read, string operation)
+                {
+                    try { await read(); }
+                    catch (StoreFormatException error) when (error.Message.Contains($"journal codec={changed}.", StringComparison.Ordinal))
+                    {
+                        Check(true, $"an already-open reader refuses a changed codec for {operation}");
+                        return;
+                    }
+                    throw new InvalidOperationException($"An already-open reader accepted a changed codec for {operation}.");
+                }
+            }
             Check(startPage.Items.Count > 0 && startPage.Items.All(e => e.Revision == 1) && startPage.Next is not null &&
                 await Position() == originalPosition + 1, $"{history} journal contains only the start revision");
             if (!delayed)
@@ -98,12 +142,12 @@ internal static class PostgresRootHistoryChecks
             Check(silent.Revision == 2 && silent.Status == InstanceStatus.Running && silent.History == (History)history &&
                 approvals.Count == (delayed ? 0 : 1) && (delayed || approvals[0]!.GetValue<string>() == "Ada") &&
                 (await admissions.ReadPendingDirectAsync(scope.Tenant, actor.Id, ct)).Count == 0 &&
-                (await api.TailAsync(scope, actor, startPage.Next, ct)).Items.Count == 0 && await Position() == originalPosition + 1,
+                (await reads.TailAsync(scope, actor, startPage.Next, ct)).Items.Count == 0 && await Position() == originalPosition + 1,
                 $"{history} no-record turn consumes its input, advances the revision and preserves the journal position and tail");
             await Send("next", CompositeSignal.Kind, Json.Write(new CompositeSignal(frame, "approve", "Grace")));
             var next = await Drive(3);
             var physical = await reader.ReadRootJournalAsync(scope.Tenant, actor.Id, 0, 10, ct);
-            var suffix = await api.TailAsync(scope, actor, startPage.Next, ct);
+            var suffix = await reads.TailAsync(scope, actor, startPage.Next, ct);
             Check(next.Revision == 3 && next.Status == (delayed ? InstanceStatus.Running : InstanceStatus.Finished) &&
                 physical.Rows.Select(r => r.Revision).SequenceEqual([1L, 3L]) &&
                 physical.Rows.Select(r => r.Position).SequenceEqual([originalPosition + 1, originalPosition + 2]) &&

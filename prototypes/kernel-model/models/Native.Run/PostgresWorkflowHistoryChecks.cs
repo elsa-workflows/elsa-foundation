@@ -37,22 +37,24 @@ internal static class PostgresWorkflowHistoryChecks
             await store.CreateAsync(1);
             await admission.InstallAsync(ct);
         }
-        var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(ct), 2), Actor.ActorType);
+        var cursor = await admission.OpenJournalCursorAsync(ct);
+        var api = new PostgresPreviewFoundation(admission, new(store, cursor, 2), Actor.ActorType);
+        var runs = new PostgresWorkflowRunReads(store, cursor, Actor.ActorType, 2);
 
         if (phase == "tenant")
         {
-            var ownPage = await api.ListRunsAsync(scope, query, cancellationToken: ct);
+            var ownPage = await runs.ListAsync(scope, query, cancellationToken: ct);
             Check(ownPage is { Items: [var own], Next: null } && admittedReference is not null &&
                 own.Ref.Id == admittedReference && own.Definition == query.Definition,
                 "another tenant sees its own exact admitted reference and no continuation");
-            await Refused(() => api.ListRunsAsync(scope, query, saved, ct).AsTask(), "from");
+            await Refused(() => runs.ListAsync(scope, query, saved, ct).AsTask(), "from");
             return 0;
         }
         if (phase == "restart")
         {
-            var first = await api.ListRunsAsync(scope, query, cancellationToken: ct);
-            var next = await api.ListRunsAsync(scope, query, saved, ct);
-            var last = await api.ListRunsAsync(scope, query, next.Next, ct);
+            var first = await runs.ListAsync(scope, query, cancellationToken: ct);
+            var next = await runs.ListAsync(scope, query, saved, ct);
+            var last = await runs.ListAsync(scope, query, next.Next, ct);
             var ordered = first.Items.Concat(next.Items).Concat(last.Items).ToArray();
             var times = ordered.Select(row => row.UpdatedAt).ToArray();
             Check(first is { Items.Count: 2, Next: not null } && next is { Items.Count: 2, Next: not null } &&
@@ -60,16 +62,16 @@ internal static class PostgresWorkflowHistoryChecks
                 times[0] == times[1] && times[1] == times[2] && times[2] > times[3] && times[3] == times[4] &&
                 ordered.SequenceEqual(ordered.OrderByDescending(row => row.UpdatedAt).ThenBy(row => row.Ref.Id, StringComparer.Ordinal)),
                 "a new process resumes a tied boundary and reaches older rows with checkpoint and journal tables unavailable");
-            await Refused(() => api.ListRunsAsync(scope, query with { To = DateTimeOffset.UtcNow }, saved, ct).AsTask(), "from");
-            await Refused(() => api.ListRunsAsync(scope, query with { Definition = null }, saved, ct).AsTask(), "from");
-            await Refused(() => api.ListRunsAsync(scope, query with { Status = null }, saved, ct).AsTask(), "from");
+            await Refused(() => runs.ListAsync(scope, query with { To = DateTimeOffset.UtcNow }, saved, ct).AsTask(), "from");
+            await Refused(() => runs.ListAsync(scope, query with { Definition = null }, saved, ct).AsTask(), "from");
+            await Refused(() => runs.ListAsync(scope, query with { Status = null }, saved, ct).AsTask(), "from");
             try { await api.TailAsync(scope, first.Items[0].Ref, saved, ct); throw new InvalidOperationException("Accepted a history bookmark on the journal."); }
             catch (ArgumentException error) when (error.ParamName == "from") { }
             Check(true, "history bookmarks bind filters and read kind");
             return 0;
         }
 
-        await RequireFormatRefusal(() => api.ListRunsAsync(scope, query, cancellationToken: ct).AsTask());
+        await RequireFormatRefusal(() => runs.ListAsync(scope, query, cancellationToken: ct).AsTask());
         var legacy = await Start("legacy", TimeSpan.Zero);
         var baseline = await Start("baseline");
         var neighbor = new Contract.ActorRef(await PostgresMultiRootClient.CallSecondaryAsync(ct, "start"));
@@ -83,18 +85,18 @@ internal static class PostgresWorkflowHistoryChecks
         var without = await CountCheckpoint(baseline);
         await store.InstallRootWorkflowHistoryAsync(ct);
         await store.InstallRootWorkflowHistoryAsync(ct);
-        Check((await api.ListRunsAsync(scope, query, cancellationToken: ct)).Items.Count == 0 &&
+        Check((await runs.ListAsync(scope, query, cancellationToken: ct)).Items.Count == 0 &&
             (await api.ListAsync(scope, new Contract.ActorQuery(), cancellationToken: ct)).Items.Count == 2,
             "installation leaves prior roots visible on the actor list and adds no invented history times");
         var with = await CountCheckpoint(legacy);
         Check(with == without, $"one added projection upsert leaves client counts unchanged ({with.Commands} commands, {with.Begun} transaction begins, {with.Ended} completions)");
-        var legacyRow = (await api.ListRunsAsync(scope, query, cancellationToken: ct)).Items.Single();
+        var legacyRow = (await runs.ListAsync(scope, query, cancellationToken: ct)).Items.Single();
         Check(legacyRow.Ref == legacy, "a prior root enters history at its first observed checkpoint");
 
         var completedAtBirth = await Start("completed-at-birth", definition: immediate.Id);
         var birthImage = await Drive(completedAtBirth, 1);
         var birthQuery = new WorkflowRunQuery(immediate.Id, Contract.ActorStatus.Finished);
-        var birthPage = await api.ListRunsAsync(scope, birthQuery, cancellationToken: ct);
+        var birthPage = await runs.ListAsync(scope, birthQuery, cancellationToken: ct);
         Check(birthImage is { Status: InstanceStatus.Finished, TerminalRevision: 1, TerminalAt: > 0 } &&
             birthPage is { Items: [var birth], Next: null } && birth.Ref == completedAtBirth &&
             birth.UpdatedAt.ToUnixTimeMilliseconds() == birthImage.TerminalAt &&
@@ -132,7 +134,7 @@ internal static class PostgresWorkflowHistoryChecks
         await Drive(finished, 2);
         await Approve(finished, await Image(finished), "second", "Grace");
         var terminal = await Drive(finished, 3);
-        var terminalView = (await api.ListRunsAsync(scope, query with { Status = Contract.ActorStatus.Finished }, cancellationToken: ct)).Items.Single();
+        var terminalView = (await runs.ListAsync(scope, query with { Status = Contract.ActorStatus.Finished }, cancellationToken: ct)).Items.Single();
         Check(terminalView.Ref == finished && terminalView.UpdatedAt.ToUnixTimeMilliseconds() == terminal.TerminalAt &&
             (await ReadPhysical(finished)).SameTransaction, "the finished projection reuses the qualified terminal clock");
         await CheckRollback(newer[0], physical);
@@ -152,14 +154,14 @@ internal static class PostgresWorkflowHistoryChecks
             """, ct);
         var tie = DateTimeOffset.FromUnixTimeMilliseconds(physical.UpdatedAt);
         var exact = query with { From = tie.ToOffset(TimeSpan.FromHours(2)), To = tie };
-        var firstPage = await api.ListRunsAsync(scope, exact, cancellationToken: ct);
+        var firstPage = await runs.ListAsync(scope, exact, cancellationToken: ct);
         Check(firstPage is { Items.Count: 2, Next: not null } && firstPage.Items.All(item => item.UpdatedAt == tie) &&
-            (await api.ListRunsAsync(scope, query with { From = tie.AddTicks(1) }, cancellationToken: ct)).Items.Count == 0 &&
-            (await api.ListRunsAsync(scope, query with { To = tie.AddTicks(-1) }, cancellationToken: ct)).Items is [var olderA, var olderB] &&
+            (await runs.ListAsync(scope, query with { From = tie.AddTicks(1) }, cancellationToken: ct)).Items.Count == 0 &&
+            (await runs.ListAsync(scope, query with { To = tie.AddTicks(-1) }, cancellationToken: ct)).Items is [var olderA, var olderB] &&
             olderA.UpdatedAt == legacyRow.UpdatedAt && olderB.UpdatedAt == legacyRow.UpdatedAt,
             "inclusive date bounds match the exact clock and exclude ticks immediately outside it");
-        await Refused(() => api.ListRunsAsync(scope, query with { From = tie, To = tie.AddTicks(-1) }, cancellationToken: ct).AsTask(), "query");
-        var savedPage = await api.ListRunsAsync(scope, query, cancellationToken: ct);
+        await Refused(() => runs.ListAsync(scope, query with { From = tie, To = tie.AddTicks(-1) }, cancellationToken: ct).AsTask(), "query");
+        var savedPage = await runs.ListAsync(scope, query, cancellationToken: ct);
         // The second tenant starts a tracked root and receives its exact reference for the cold read.
         var other = new Contract.ActorRef(await PostgresMultiRootClient.CallSecondaryAsync(ct, "start-receipt", "chronology", "Accepted"));
         await Drive(other, 1, PostgresMultiRootClient.Secondary);
@@ -229,7 +231,7 @@ internal static class PostgresWorkflowHistoryChecks
                 WHERE "FoundationTenant" = {scope.Tenant} AND "FoundationReference" = {actor.Id}
                 """, ct);
             var staged = await ReadPhysical(actor);
-            var publicPage = await api.ListRunsAsync(scope, query, cancellationToken: ct);
+            var publicPage = await runs.ListAsync(scope, query, cancellationToken: ct);
             Check(staged.Revision == prior.Revision + 1 && staged.SameTransaction &&
                 publicPage.Items.Any(row => row.Ref == actor && row.UpdatedAt.ToUnixTimeMilliseconds() == prior.UpdatedAt),
                 "another connection sees only the committed time while both revision writes are staged");
@@ -239,7 +241,7 @@ internal static class PostgresWorkflowHistoryChecks
         async Task CheckFormats(Contract.ActorRef actor, PhysicalRun prior)
         {
             await db.Database.ExecuteSqlRawAsync("""UPDATE "FoundationWorkflowHistoryFormat" SET "Version" = 2 """, ct);
-            await RequireFormatRefusal(() => api.ListRunsAsync(scope, query, cancellationToken: ct).AsTask());
+            await RequireFormatRefusal(() => runs.ListAsync(scope, query, cancellationToken: ct).AsTask());
             await RequireFormatRefusal(() => store.InstallRootWorkflowHistoryAsync(ct));
             await RefuseStorage(() => db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "Revision" = "Revision" + 1, "FoundationWriteRevision" = "Revision" + 1
@@ -247,7 +249,7 @@ internal static class PostgresWorkflowHistoryChecks
                 """, ct), "55000");
             await db.Database.ExecuteSqlRawAsync("""UPDATE "FoundationWorkflowHistoryFormat" SET "Version" = 1 """, ct);
             await db.Database.ExecuteSqlRawAsync("""UPDATE "KernelStoreVersions" SET "StoreSchema" = "StoreSchema" + 1 """, ct);
-            await RequireFormatRefusal(() => api.ListRunsAsync(scope, query, cancellationToken: ct).AsTask());
+            await RequireFormatRefusal(() => runs.ListAsync(scope, query, cancellationToken: ct).AsTask());
             await db.Database.ExecuteSqlRawAsync("""UPDATE "KernelStoreVersions" SET "StoreSchema" = "StoreSchema" - 1 """, ct);
             Check(await ReadPhysical(actor) == prior, "an incompatible projection format refuses reads, setup and writes");
         }
@@ -262,7 +264,7 @@ internal static class PostgresWorkflowHistoryChecks
             await db.Database.ExecuteSqlRawAsync("""DROP TRIGGER kernel_project_root_workflow_history_v1 ON "Instances" """, ct);
             await RequireSourceRefusal();
             await db.Database.ExecuteSqlRawAsync(trigger, ct);
-            Check((await api.ListRunsAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
+            Check((await runs.ListAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
                 "reads and installation refuse a disabled or absent trigger and reopen when it is restored");
         }
         async Task CheckActorListDependency()
@@ -272,7 +274,7 @@ internal static class PostgresWorkflowHistoryChecks
             await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" ENABLE REPLICA TRIGGER kernel_project_root_actor_list """, ct);
             await RequireSourceRefusal();
             await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" ENABLE TRIGGER kernel_project_root_actor_list """, ct);
-            Check((await api.ListRunsAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
+            Check((await runs.ListAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
                 "the history route requires its actor-list trigger in an origin-enabled mode");
         }
         async Task CheckSourceReplacement()
@@ -283,13 +285,13 @@ internal static class PostgresWorkflowHistoryChecks
                 """, ct);
             await RequireSourceRefusal();
             await db.Database.ExecuteSqlRawAsync("""DROP TABLE "Instances" """, ct);
-            Check((await api.ListRunsAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
+            Check((await runs.ListAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
                 "the history route refuses a canonical replacement and accepts a renamed-only source");
             await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FixtureArchivedOwner" RENAME TO "Instances" """, ct);
         }
         async Task RequireSourceRefusal()
         {
-            await RequireFormatRefusal(() => api.ListRunsAsync(scope, query, cancellationToken: ct).AsTask());
+            await RequireFormatRefusal(() => runs.ListAsync(scope, query, cancellationToken: ct).AsTask());
             await RequireFormatRefusal(() => store.InstallRootWorkflowHistoryAsync(ct));
         }
         async Task CheckRetirementGuard(Contract.ActorRef actor, EfStore.RootImage image)
