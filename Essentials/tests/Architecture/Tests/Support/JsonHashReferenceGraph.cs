@@ -11,7 +11,12 @@ internal sealed class JsonHashReferenceGraph
     internal sealed record Reference(string Owner, string Target, string Operation, int Occurrence, int Offset,
         string Role, IReadOnlyList<string> GenericArguments, string DeclaringTypeContext);
 
-    internal sealed record Definition(string Identity, string Assembly, string Type, string Name, string Kind, bool HasDelegateParameter = false);
+    internal sealed record Definition(string Identity, string Assembly, string Type, string Name, string Kind, bool HasDelegateParameter = false,
+        int MetadataToken = 0, Guid ModuleMvid = default, string? RuntimeType = null);
+    internal sealed record Binding(string Kind, string Source, string Target);
+    internal sealed record Closure(IReadOnlyList<string> InternalDefinitions, IReadOnlyList<string> ExternalLeaves,
+        IReadOnlyList<string> Boundaries, IReadOnlyList<Reference> References, IReadOnlyList<Binding> Bindings);
+    internal sealed record Incoming(IReadOnlyList<Reference> References, IReadOnlyList<Binding> Bindings);
 
     internal IReadOnlyList<Reference> References { get; }
     internal IReadOnlyDictionary<string, Definition> Definitions { get; }
@@ -19,7 +24,8 @@ internal sealed class JsonHashReferenceGraph
     private readonly IReadOnlyDictionary<string, string[]> dispatch;
     private readonly IReadOnlyDictionary<string, string[]> fieldWriters;
     private readonly IReadOnlyDictionary<string, Reference[]> outgoing;
-    private readonly IReadOnlyDictionary<string, string[]> callers;
+    private readonly IReadOnlyDictionary<string, Reference[]> incoming;
+    private readonly IReadOnlyDictionary<string, string[]> reverseDispatch;
 
     private JsonHashReferenceGraph(List<Reference> references, Dictionary<string, Definition> definitions,
         List<string> errors, Dictionary<string, string[]> dispatch)
@@ -28,17 +34,19 @@ internal sealed class JsonHashReferenceGraph
         Definitions = definitions;
         Errors = errors;
         this.dispatch = dispatch;
+        reverseDispatch = dispatch.SelectMany(pair => pair.Value.Select(target => (Source: pair.Key, Target: target)))
+            .GroupBy(pair => pair.Target, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Select(pair => pair.Source).ToArray(), StringComparer.Ordinal);
         outgoing = references.GroupBy(item => item.Owner, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
-        callers = references.GroupBy(item => item.Target, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Select(item => item.Owner).Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+        incoming = references.GroupBy(item => item.Target, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         fieldWriters = references.Where(item => item.Operation is "stfld" or "stsfld" or "ldflda" or "ldsflda")
             .GroupBy(item => item.Target, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Select(item => item.Owner).Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
     }
 
     /// <summary>Closes methods, dispatch and delegate-field initializers without claiming to infer arbitrary JSON dataflow.</summary>
-    internal IReadOnlySet<string> ReachableDefinitions(string entry)
+    internal IReadOnlySet<string> ReachableDefinitions(string entry, IReadOnlySet<string>? boundaries = null)
     {
         var found = new HashSet<string>(StringComparer.Ordinal);
         var pending = new Stack<string>();
@@ -46,6 +54,7 @@ internal sealed class JsonHashReferenceGraph
         while (pending.TryPop(out var identity))
         {
             if (!found.Add(identity)) continue;
+            if (identity != entry && boundaries?.Contains(identity) == true) continue;
             if (dispatch.TryGetValue(identity, out var implementations))
                 foreach (var implementation in implementations) pending.Push(implementation);
             if (fieldWriters.TryGetValue(identity, out var writers))
@@ -55,16 +64,16 @@ internal sealed class JsonHashReferenceGraph
                     // An injected delegate is assigned by the constructor/setter's caller. Retain all
                     // observed callers so a new producer cannot borrow an existing helper's receipt.
                     if (Definitions.TryGetValue(identity, out var field) && field.Kind == "delegate-field" &&
-                        Definitions.TryGetValue(writer, out var writerDefinition) && writerDefinition.HasDelegateParameter && callers.TryGetValue(writer, out var producers))
+                        Definitions.TryGetValue(writer, out var writerDefinition) && writerDefinition.HasDelegateParameter)
                     {
-                        var producerQueue = new Stack<string>(producers);
+                        var producerQueue = new Stack<string>(CallerOwners(writer));
                         var seenProducers = new HashSet<string>(StringComparer.Ordinal);
                         while (producerQueue.TryPop(out var producer))
                         {
                             if (!seenProducers.Add(producer)) continue;
                             pending.Push(producer);
-                            if (Definitions.TryGetValue(producer, out var definition) && definition.HasDelegateParameter && callers.TryGetValue(producer, out var upstream))
-                                foreach (var parent in upstream) producerQueue.Push(parent);
+                            if (Definitions.TryGetValue(producer, out var definition) && definition.HasDelegateParameter)
+                                foreach (var parent in CallerOwners(producer)) producerQueue.Push(parent);
                         }
                     }
                 }
@@ -76,6 +85,53 @@ internal sealed class JsonHashReferenceGraph
 
     internal IReadOnlySet<string> ObservedCallers(string target) => References.Where(reference => reference.Target == target)
         .Select(reference => reference.Owner).ToHashSet(StringComparer.Ordinal);
+
+    internal Incoming IncomingReferences(string target)
+    {
+        var aliases = new HashSet<string>(StringComparer.Ordinal);
+        var bindings = new List<Binding>();
+        var pending = new Stack<string>(); pending.Push(target);
+        while (pending.TryPop(out var current))
+        {
+            if (!aliases.Add(current) || !reverseDispatch.TryGetValue(current, out var parents)) continue;
+            foreach (var parent in parents) { bindings.Add(new("dispatch", parent, current)); pending.Push(parent); }
+        }
+        return new(aliases.SelectMany(alias => incoming.GetValueOrDefault(alias) ?? []).Distinct()
+            .OrderBy(reference => reference.Owner, StringComparer.Ordinal).ThenBy(reference => reference.Offset).ToArray(), bindings.Distinct().ToArray());
+    }
+
+    private IEnumerable<string> CallerOwners(string target) => IncomingReferences(target).References.Select(reference => reference.Owner).Distinct(StringComparer.Ordinal);
+
+    internal Closure InspectClosure(string entry, IReadOnlySet<string>? boundaries = null)
+    {
+        var reached = ReachableDefinitions(entry, boundaries);
+        var stopped = reached.Where(identity => identity != entry && boundaries?.Contains(identity) == true).ToHashSet(StringComparer.Ordinal);
+        var owners = reached.Where(identity => Definitions.ContainsKey(identity) && !stopped.Contains(identity)).ToHashSet(StringComparer.Ordinal);
+        var bindings = new List<Binding>();
+        foreach (var source in reached.Where(identity => !stopped.Contains(identity)))
+        {
+            if (dispatch.TryGetValue(source, out var implementations)) bindings.AddRange(implementations.Select(target => new Binding("dispatch", source, target)));
+            if (fieldWriters.TryGetValue(source, out var writers))
+                foreach (var writer in writers)
+                {
+                    bindings.Add(new("field-writer", source, writer));
+                    if (Definitions.TryGetValue(source, out var field) && field.Kind == "delegate-field" && Definitions[writer].HasDelegateParameter)
+                    {
+                        var pending = new Stack<(string Callee, string Producer)>(CallerOwners(writer).Select(producer => (writer, producer)));
+                        var seen = new HashSet<(string, string)>();
+                        while (pending.TryPop(out var edge))
+                        {
+                            if (!seen.Add(edge)) continue;
+                            bindings.Add(new("delegate-producer", edge.Callee, edge.Producer));
+                            if (Definitions.TryGetValue(edge.Producer, out var definition) && definition.HasDelegateParameter)
+                                foreach (var parent in CallerOwners(edge.Producer)) pending.Push((edge.Producer, parent));
+                        }
+                    }
+                }
+        }
+        return new(owners.Order(StringComparer.Ordinal).ToArray(), reached.Where(identity => !Definitions.ContainsKey(identity) && !stopped.Contains(identity)).Order(StringComparer.Ordinal).ToArray(),
+            stopped.Order(StringComparer.Ordinal).ToArray(), owners.SelectMany(owner => outgoing.GetValueOrDefault(owner) ?? []).ToArray(), bindings.Distinct().ToArray());
+    }
 
     internal static JsonHashReferenceGraph Scan(IEnumerable<Assembly> input)
     {
@@ -98,11 +154,14 @@ internal sealed class JsonHashReferenceGraph
         const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
         foreach (var type in types)
         {
+            Add(new(TypeIdentity(type), type.Assembly.GetName().Name!, TypeName(type), type.Name, "type", MetadataToken: type.MetadataToken,
+                ModuleMvid: type.Module.ModuleVersionId, RuntimeType: type.FullName));
             foreach (var field in type.GetFields(flags))
             {
                 var identity = FieldIdentity(field);
                 Add(new(identity, type.Assembly.GetName().Name!, TypeName(type), field.Name,
-                    typeof(Delegate).IsAssignableFrom(field.FieldType) ? "delegate-field" : "field"));
+                    typeof(Delegate).IsAssignableFrom(field.FieldType) ? "delegate-field" : "field", MetadataToken: field.MetadataToken,
+                    ModuleMvid: field.Module.ModuleVersionId, RuntimeType: type.FullName));
                 runtimeFields[(field.Module, field.MetadataToken)] = identity;
             }
             foreach (var method in type.GetMethods(flags).Cast<MethodBase>().Concat(type.GetConstructors(flags))
@@ -110,7 +169,7 @@ internal sealed class JsonHashReferenceGraph
             {
                 var identity = MethodIdentity(method);
                 Add(new(identity, type.Assembly.GetName().Name!, TypeName(type), method.Name, "method",
-                    method.GetParameters().Any(parameter => CarriesDelegate(parameter.ParameterType))));
+                    method.GetParameters().Any(parameter => CarriesDelegate(parameter.ParameterType)), method.MetadataToken, method.Module.ModuleVersionId, type.FullName));
                 methods[identity] = method;
                 runtimeMethods[(method.Module, method.MetadataToken)] = identity;
             }
@@ -137,7 +196,7 @@ internal sealed class JsonHashReferenceGraph
                     {
                         MethodBase called => runtimeMethods.GetValueOrDefault((called.Module, called.MetadataToken)) ?? DefinitionIdentity(called),
                         FieldInfo field => runtimeFields.GetValueOrDefault((field.Module, field.MetadataToken)) ?? FieldIdentity(field),
-                        Type referenced => TypeIdentity(referenced),
+                        Type referenced => TypeIdentity(referenced.IsConstructedGenericType ? referenced.GetGenericTypeDefinition() : referenced),
                         _ => throw new InvalidOperationException($"Unsupported metadata member {member.MemberType}.")
                     };
                     var key = (target, operation);
@@ -174,7 +233,17 @@ internal sealed class JsonHashReferenceGraph
             foreach (var method in type.GetMethods(flags).Where(method => method.IsVirtual))
             {
                 var root = method.GetBaseDefinition();
-                Edge(runtimeMethods.GetValueOrDefault((root.Module, root.MetadataToken)) ?? DefinitionIdentity(root), MethodIdentity(method));
+                var target = MethodIdentity(method);
+                Edge(runtimeMethods.GetValueOrDefault((root.Module, root.MetadataToken)) ?? DefinitionIdentity(root), target);
+                // A resolved reference or closure entry can name an intermediate override. Its
+                // slot still dispatches to deeper overrides; a newslot method has a different root.
+                for (var ancestor = type.BaseType; ancestor is not null; ancestor = ancestor.BaseType)
+                    foreach (var candidate in ancestor.GetMethods(flags).Where(candidate => candidate.IsVirtual))
+                    {
+                        var candidateRoot = candidate.GetBaseDefinition();
+                        if (candidateRoot.Module == root.Module && candidateRoot.MetadataToken == root.MetadataToken)
+                            Edge(runtimeMethods.GetValueOrDefault((candidate.Module, candidate.MetadataToken)) ?? DefinitionIdentity(candidate), target);
+                    }
             }
         }
         return new(references, definitions, errors,
@@ -186,6 +255,7 @@ internal sealed class JsonHashReferenceGraph
         }
         void Edge(string source, string target)
         {
+            if (source == target) return;
             if (!dispatch.TryGetValue(source, out var values)) dispatch[source] = values = new(StringComparer.Ordinal);
             values.Add(target);
         }
@@ -260,6 +330,10 @@ internal sealed class JsonHashReferenceGraph
         if (type.IsByRef) return TypeName(type.GetElementType()!) + "&";
         if (type.IsPointer) return TypeName(type.GetElementType()!) + "*";
         if (type.IsArray) return TypeName(type.GetElementType()!) + "[" + new string(',', type.GetArrayRank() - 1) + "]";
+        if (type.Name.StartsWith("<>f__AnonymousType", StringComparison.Ordinal) &&
+            type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), inherit: false))
+            return "anonymous{" + string.Join(';', type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .OrderBy(property => property.Name, StringComparer.Ordinal).Select(property => property.Name + ":" + TypeName(property.PropertyType))) + "}";
         return type.IsGenericType ? (type.GetGenericTypeDefinition().FullName ?? type.Name) + "[" + string.Join(',', type.GetGenericArguments().Select(TypeName)) + "]" : type.FullName ?? type.Name;
     }
 }

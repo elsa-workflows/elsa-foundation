@@ -18,10 +18,21 @@ public sealed class JsonHashReferenceGraphTests
         public class ActualDigest : IDigest { public byte[] Compute(byte[] value) => SHA256.HashData(value); }
         public abstract class DigestBase { public abstract byte[] Compute(byte[] value); }
         public class DerivedDigest : DigestBase { public override byte[] Compute(byte[] value) => SHA256.HashData(value); }
+        public class RootSlot { public virtual byte[] Compute(byte[] value) => value; }
+        public class MiddleSlot : RootSlot { public override byte[] Compute(byte[] value) => value; }
+        public class BottomSlot : MiddleSlot { public override byte[] Compute(byte[] value) => SHA256.HashData(value); }
+        public class SeparateSlot : MiddleSlot { public new virtual byte[] Compute(byte[] value) => SHA256.HashData(value); }
         public class InjectedRecipe
         {
             private readonly Func<byte[], byte[]> algorithm;
             public InjectedRecipe(Func<byte[], byte[]> algorithm) { this.algorithm = algorithm; }
+            public byte[] Run(byte[] value) => algorithm(value);
+        }
+        public interface IConfiguredRecipe { void Set(Func<byte[], byte[]> algorithm); }
+        public class ConfiguredRecipe : IConfiguredRecipe
+        {
+            private Func<byte[], byte[]> algorithm = null!;
+            public void Set(Func<byte[], byte[]> value) { algorithm = value; }
             public byte[] Run(byte[] value) => algorithm(value);
         }
         public class ExternalDigest : ICryptoTransform
@@ -62,10 +73,12 @@ public sealed class JsonHashReferenceGraphTests
             public static byte[] Property(byte[] value) => AlgorithmProperty(value);
             public static byte[] Dispatch(IDigest algorithm, byte[] value) => algorithm.Compute(value);
             public static byte[] VirtualDispatch(DigestBase algorithm, byte[] value) => algorithm.Compute(value);
+            public static byte[] ThreeLevelDispatch(MiddleSlot algorithm, byte[] value) => algorithm.Compute(value);
             public static InjectedRecipe Factory() => new(SHA256.HashData);
             public static InjectedRecipe TwoStageFactory() => Build(SHA256.HashData);
             private static InjectedRecipe Build(Func<byte[], byte[]> algorithm) => new(algorithm);
             public static InjectedRecipe UnrelatedCallerOfFactory() => TwoStageFactory();
+            public static void ConfigureViaInterface(IConfiguredRecipe recipe) => recipe.Set(SHA256.HashData);
             public static byte[] ExternalInterface(ICryptoTransform algorithm, byte[] value) => algorithm.TransformFinalBlock(value, 0, value.Length);
             public static void ExternalVirtual(System.IO.Stream algorithm, byte[] value) => algorithm.Write(value, 0, value.Length);
             public static int ExternalGeneric(System.Collections.Generic.IEqualityComparer<string> algorithm) => algorithm.GetHashCode("value");
@@ -257,6 +270,75 @@ public sealed class JsonHashReferenceGraphTests
             Assert.Contains(graph.References, reference => Owner(reference, "Run") && reference.Role == "digest-primitive" && reference.Target.Contains("System.IO.Hashing.Crc32::Hash", StringComparison.Ordinal));
         }
         finally { context.Unload(); }
+    }
+
+    [Fact]
+    public void An_unrelated_anonymous_type_does_not_renumber_a_hash_site_contract()
+    {
+        const string consumer = "public static class Consumer { public static string Run() => Elsa.Serialization.Core.JsonHashInput.Hash(new { Name = \"René\", Count = 1 }); }";
+        const string unrelated = "public static class Unrelated { public static object Other() => new { Different = true }; }";
+        var before = JsonHashReferenceGraph.Scan([Assembly.Load(FixtureCompiler.Compile("S9.AnonymousReceipts", consumer, [typeof(JsonHashInput).Assembly]))]);
+        var after = JsonHashReferenceGraph.Scan([Assembly.Load(FixtureCompiler.Compile("S9.AnonymousReceipts", unrelated + consumer, [typeof(JsonHashInput).Assembly]))]);
+        Assert.Empty(before.Errors); Assert.Empty(after.Errors);
+        var original = Assert.Single(before.References, reference => Owner(reference, "Run") && reference.Role == "json-hash-input");
+        var changed = Assert.Single(after.References, reference => Owner(reference, "Run") && reference.Role == "json-hash-input");
+        Assert.Equal(original.GenericArguments, changed.GenericArguments);
+        Assert.DoesNotContain(original.GenericArguments, argument => argument.Contains("<>f__AnonymousType", StringComparison.Ordinal));
+        var altered = JsonHashReferenceGraph.Scan([Assembly.Load(FixtureCompiler.Compile("S9.AnonymousReceipts", consumer.Replace("Count = 1", "Count = 1L", StringComparison.Ordinal), [typeof(JsonHashInput).Assembly]))]);
+        var alteredSite = Assert.Single(altered.References, reference => Owner(reference, "Run") && reference.Role == "json-hash-input");
+        Assert.NotEqual(original.GenericArguments, alteredSite.GenericArguments);
+    }
+
+    [Fact]
+    public void Incoming_receipts_retain_interface_call_sites_and_context()
+    {
+        var graph = Fixture.Value;
+        var implementation = Assert.Single(graph.Definitions.Values, item => item.Type == "HashFixture.ActualDigest" && item.Name == "Compute");
+        var incoming = graph.IncomingReferences(implementation.Identity);
+        Assert.Contains(incoming.References, reference => Owner(reference, "Dispatch") && reference.Operation == "callvirt" && reference.Occurrence == 1);
+        Assert.Contains(incoming.Bindings, binding => binding.Kind == "dispatch" && binding.Target == implementation.Identity && binding.Source.Contains("HashFixture.IDigest::Compute", StringComparison.Ordinal));
+        Assert.NotEqual(Guid.Empty, implementation.ModuleMvid);
+        Assert.Equal(0x06000000, implementation.MetadataToken & unchecked((int)0xff000000));
+    }
+
+    [Fact]
+    public void Structured_closures_distinguish_internal_sources_external_leaves_and_authority_boundaries()
+    {
+        var graph = Fixture.Value;
+        var entry = Assert.Single(graph.Definitions.Values, item => item.Type == "HashFixture.Recipes" && item.Name == "Gateway");
+        var gateways = graph.References.Where(reference => reference.Role == "json-hash-input").Select(reference => reference.Target).ToHashSet(StringComparer.Ordinal);
+        var closure = graph.InspectClosure(entry.Identity, gateways);
+        Assert.Contains(entry.Identity, closure.InternalDefinitions);
+        Assert.NotEmpty(closure.Boundaries);
+        Assert.DoesNotContain(closure.References, reference => closure.Boundaries.Contains(reference.Owner));
+        Assert.All(closure.InternalDefinitions, identity => Assert.Contains(identity, graph.Definitions.Keys));
+        Assert.All(closure.ExternalLeaves, identity => Assert.DoesNotContain(identity, graph.Definitions.Keys));
+        var dispatched = Assert.Single(graph.Definitions.Values, item => item.Type == "HashFixture.Recipes" && item.Name == "Dispatch");
+        Assert.Contains(graph.InspectClosure(dispatched.Identity).Bindings, binding => binding.Kind == "dispatch");
+    }
+
+    [Fact]
+    public void Delegate_setter_producers_retain_interface_dispatch_callers()
+    {
+        var graph = Fixture.Value;
+        var entry = Assert.Single(graph.Definitions.Values, item => item.Type == "HashFixture.ConfiguredRecipe" && item.Name == "Run");
+        var closure = graph.InspectClosure(entry.Identity);
+        Assert.Contains(closure.References, reference => Owner(reference, "ConfigureViaInterface") && reference.Role == "digest-primitive");
+    }
+
+    [Fact]
+    public void Intermediate_virtual_slots_reach_deeper_overrides_without_crossing_newslot()
+    {
+        var graph = Fixture.Value;
+        var entry = Assert.Single(graph.Definitions.Values, item => item.Type == "HashFixture.Recipes" && item.Name == "ThreeLevelDispatch");
+        var bottom = Assert.Single(graph.Definitions.Values, item => item.Type == "HashFixture.BottomSlot" && item.Name == "Compute");
+        var middle = Assert.Single(graph.Definitions.Values, item => item.Type == "HashFixture.MiddleSlot" && item.Name == "Compute");
+        var separate = Assert.Single(graph.Definitions.Values, item => item.Type == "HashFixture.SeparateSlot" && item.Name == "Compute");
+        var closure = graph.InspectClosure(entry.Identity);
+        Assert.Contains(bottom.Identity, closure.InternalDefinitions);
+        Assert.Contains(bottom.Identity, graph.ReachableDefinitions(middle.Identity));
+        Assert.DoesNotContain(separate.Identity, closure.InternalDefinitions);
+        Assert.Contains(graph.IncomingReferences(bottom.Identity).References, reference => Owner(reference, "ThreeLevelDispatch"));
     }
 
     [Fact]

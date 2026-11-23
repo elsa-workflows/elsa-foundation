@@ -1,6 +1,9 @@
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Emit;
+using Microsoft.CodeAnalysis.Text;
+using System.Text;
 
 namespace Elsa.Architecture.Tests;
 
@@ -10,6 +13,7 @@ namespace Elsa.Architecture.Tests;
 /// </summary>
 internal static class FixtureCompiler
 {
+    internal sealed record PortableImage(byte[] Image, byte[] Symbols);
     private static readonly Lazy<(HashSet<string> Paths, MetadataReference[] References)> Platform = new(() =>
     {
         var paths = (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string trusted
@@ -58,5 +62,24 @@ internal static class FixtureCompiler
         }
 
         return output.ToArray();
+    }
+
+    internal static PortableImage CompilePortable(string assemblyName, params string[] sources)
+    {
+        var trees = sources.Select(path =>
+        {
+            using var stream = File.OpenRead(path);
+            return CSharpSyntaxTree.ParseText(SourceText.From(stream, Encoding.UTF8, SourceHashAlgorithm.Sha256),
+                new CSharpParseOptions(LanguageVersion.Latest), path);
+        });
+        var compilation = CSharpCompilation.Create(assemblyName, trees, Platform.Value.References,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Debug));
+        using var image = new MemoryStream();
+        using var symbols = new MemoryStream();
+        var result = compilation.Emit(image, pdbStream: symbols,
+            options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb, pdbFilePath: assemblyName + ".pdb",
+                pdbChecksumAlgorithm: System.Security.Cryptography.HashAlgorithmName.SHA256));
+        if (!result.Success) throw new InvalidOperationException(string.Join(Environment.NewLine, result.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
+        return new(image.ToArray(), symbols.ToArray());
     }
 }

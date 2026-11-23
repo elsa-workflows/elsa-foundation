@@ -70,7 +70,24 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
             graph.References.Where(reference => reference.Role != "ordinary"));
         WriteLines(Path.Join(evidence, "definitions.jsonl.gz"), graph.Definitions.Values);
         WriteLines(Path.Join(evidence, "references.jsonl.gz"), graph.References);
+        var sourceErrors = new List<string>();
+        WriteLines(Path.Join(evidence, "source-documents.jsonl.gz"), VerifiedDocuments());
+        File.WriteAllLines(Path.Join(evidence, "source-errors.txt"), sourceErrors);
+        Assert.True(sourceErrors.Count == 0, $"Shipping source provenance failed ({sourceErrors.Count} findings). Evidence: {evidence}\n" + string.Join('\n', sourceErrors.Take(50)));
         output.WriteLine($"Inspected {inventory.Projects.Count} shipping projects, {graph.Definitions.Count} definitions and {graph.References.Count} resolved references. Inventory: {evidence}");
+
+        IEnumerable<object> VerifiedDocuments()
+        {
+            var maps = new Dictionary<string, string> { ["/_/"] = RepoPaths.RepoRoot };
+            foreach (var project in inventory.Projects)
+            {
+                var sources = JsonHashSourceDocuments.Read(project.AssemblyPath, RepoPaths.RepoRoot, maps);
+                if (sources.ImageMvid != project.ImageMvid) sourceErrors.Add($"Source/image MVID mismatch: {project.Path}");
+                sourceErrors.AddRange(sources.Errors);
+                foreach (var document in sources.Documents.Values)
+                    yield return new { Project = Path.GetRelativePath(RepoPaths.RepoRoot, project.Path).Replace('\\', '/'), project.ImageMvid, document.Path, document.Sha256 };
+            }
+        }
 
         static void WriteLines<T>(string path, IEnumerable<T> items)
         {
