@@ -6,6 +6,7 @@ using Kernel.Native;
 using Kernel.Runtime.Hosting;
 using Kernel.Statecharts.Native;
 using Kernel.WorkflowActor;
+using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
@@ -98,10 +99,14 @@ internal static class PostgresStatechartPreview
                 ]),
                 "The public journal must contain one evaluated, ordered and handled shipment transition.");
 
+            var target = new InstanceRef(after.Actor.Id);
+            var inbox = await InboxSnapshotAsync(target);
             await SignalAsync(restoredFrame, Shipment, "stock-released", Contract.AdmissionOutcome.Duplicate);
+            Check((await InboxSnapshotAsync(target)).SequenceEqual(inbox),
+                "A duplicate acknowledgement must write no inbox row, including a settled row.");
             await PassAsync();
             Check(await ImageAsync() is { } replayed && replayed.Revision == after.Revision && replayed.State == after.State &&
-                await NoPendingDirectAsync() && (await HistoryAsync(next)).Entries.Count == 0 &&
+                (await InboxSnapshotAsync(target)).SequenceEqual(inbox) && (await HistoryAsync(next)).Entries.Count == 0 &&
                 (await HistoryAsync(bookmark)).Entries.SequenceEqual(tail) && ActivityOutput().SequenceEqual(["release stock"]),
                 "A changed-payload replay must leave the checkpoint, inbox, journal and activity output unchanged.");
             Console.WriteLine($"advanced {Environment.ProcessId} {actor.Id} revision {after.Revision} epoch {epoch} ReleasingShipment -> ReleasingStock transitions 1 replay Duplicate");
@@ -155,6 +160,16 @@ internal static class PostgresStatechartPreview
         }
 
         async Task<bool> NoPendingDirectAsync() => (await admission.ReadPendingDirectAsync(scope.Tenant, actor.Id, stop)).Count == 0;
+
+        async Task<List<string>> InboxSnapshotAsync(InstanceRef target)
+        {
+            await using var db = open();
+            return await db.Database.SqlQuery<string>($"""
+                SELECT to_jsonb(m)::text AS "Value" FROM "Messages" m
+                WHERE m."Target" = {target.Id} AND m."Partition" = {target.Partition}
+                ORDER BY m."Seq", m."InboxScope", m."Id"
+                """).ToListAsync(stop);
+        }
 
         async Task<(List<Contract.JournalEntry> Entries, Contract.PageToken? End)> HistoryAsync(Contract.PageToken? from)
         {

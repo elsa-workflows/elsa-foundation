@@ -518,6 +518,7 @@
           "Kernel.Foundation.InMemory": "[1.0.0, )",
           "Kernel.Native.Legacy": "[1.0.0, )",
           "Kernel.Runtime.Hosting": "[1.0.0, )",
+          "Kernel.Statecharts.Native": "[1.0.0, )",
           "Kernel.WorkflowActor": "[1.0.0, )"
         }
       },
@@ -529,6 +530,19 @@
         "dependencies": {
           "Kernel.Foundation.Contracts": "[1.0.0, )",
           "Kernel.Runtime": "[1.0.0, )"
+        }
+      },
+      "kernel.statecharts": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Model.Contracts": "[1.0.0, )"
+        }
+      },
+      "kernel.statecharts.native": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Native": "[1.0.0, )",
+          "Kernel.Statecharts": "[1.0.0, )"
         }
       },
       "kernel.values": {
