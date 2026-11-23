@@ -97,7 +97,7 @@ public sealed partial class EfStore
         deadline.CancelAfter(lease / 3);
         try
         {
-            await RequireStoreVersionsAsync(db, deadline.Token);
+            await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
             var expired = new List<string>();
             if (ids is not null)
             {
@@ -150,6 +150,7 @@ public sealed partial class EfStore
                 await using var transaction = await BeginReadCommittedAsync(db, deadline.Token);
                 // PostgreSQL bounds the heartbeat on the server too (NL-10's bound rests on it); SET LOCAL ends with the transaction.
                 if (Engine is null && postgres) await db.Database.ExecuteSqlRawAsync(FormattableString.Invariant($"SET LOCAL statement_timeout = {Math.Max(1, (long)(lease / 3).TotalMilliseconds)}"), deadline.Token);
+                await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
                 now = await RenewAsync(db, node, lease, deadline.Token);
                 owned = await db.Partitions.AsNoTracking().Where(p => p.Owner == node).OrderBy(p => p.Id).Select(p => new OwnedEpoch(p.Id, p.Epoch)).ToListAsync(deadline.Token);
                 if (MembershipInHeartbeat) inside = await MembershipAsync(db, now, window, deadline.Token);     // MUTATION
