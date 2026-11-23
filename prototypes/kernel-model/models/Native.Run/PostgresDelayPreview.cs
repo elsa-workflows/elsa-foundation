@@ -33,7 +33,7 @@ internal static class PostgresDelayPreview
             WorkflowActor.WorkflowActor.ActorType);
         var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition,
             Wf.Sequence("sequence", Wf.Delay("wait", DelayMs), Wf.Set("finished-delay", "result", "continued"))));
-        var issued = new List<(Contract.ActorRef Actor, long Now)>();
+        using var trace = new System.Diagnostics.Activity("postgres.delay.preview").Start();
         var applications = new List<(Message Input, long Now)>();
         var ordinary = new List<Message>();
         var host = await PostgresNativeRootOwner.PreparePartitionAsync(store, "timer-" + Environment.ProcessId, 0, registry, 2, stop,
@@ -41,7 +41,7 @@ internal static class PostgresDelayPreview
             {
                 foreach (var input in inputs.Where(m => m.Kind == NativeKinds.Timer))
                     if (input.InboxKey.Scope == -1) applications.Add((input, now)); else ordinary.Add(input);
-            }, new NativeExecutionOptions { TimerClockRead = (actor, now) => issued.Add((actor, now)) });
+            });
         await using var activation = await host.TryActivateAsync(stop) ?? throw new InvalidOperationException("The timer owner could not take its partition.");
         var owner = (Worker)activation;
         var epoch = owner.Fences.Single().Epoch;
@@ -55,8 +55,9 @@ internal static class PostgresDelayPreview
             await DriveUntil(async () => await store.ReadFirstRootAsync(scope.Tenant, reference.Id, stop) is not null);
             var image = (await store.ReadFirstRootAsync(scope.Tenant, reference.Id, stop))!;
             var wait = Json.Read<NativeState>(image.State!).Waits.Values.Single(w => w.Kind == "timer");
-            Check(issued.Count == 1 && issued[0].Actor == reference, "the issuing turn must schedule exactly one timer on this root");
-            var issuedAt = issued[0].Now;
+            var issuance = trace.Events.Single(e => e.Name == "native.timer.issued");
+            Check(Equals(issuance.Tags.Single(t => t.Key == "actor").Value, reference.Id), "the issuing turn must schedule the timer on this root");
+            var issuedAt = (long)issuance.Tags.Single(t => t.Key == "issuedAt").Value!;
             var due = checked(issuedAt + DelayMs);
             Check(wait.Due == due, "the saved deadline must be the issuing turn time plus the authored Delay");
             await using var db = Open();

@@ -216,13 +216,13 @@ internal static class PostgresFlowchartPreview
 
     public sealed class Approval : CompositeActivity, ISignalledComposite
     {
-        protected internal override void Execute(CompositeContext context) { }
+        protected override void Execute(CompositeContext context) { }
         public bool CanAccept(CompositeContext context) => true;
         public void Accept(CompositeContext context, string messageId, CompositeSignal signal)
         {
             if (signal is { Name: "approve", Value: { } value }) context.Complete(result: Values.From(value));
         }
-        protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
+        protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
             throw new InvalidOperationException("An approval has no children.");
     }
 }
