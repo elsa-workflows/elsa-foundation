@@ -65,7 +65,7 @@ jobs:
       publish_target: ${{ steps.version.outputs.publish_target }}
       publisher_gate: ${{ steps.version.outputs.publisher_gate }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
@@ -151,15 +151,15 @@ jobs:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           package_json_file: Studio/package.json
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -179,12 +179,12 @@ jobs:
       - name: Verify generated Studio host and RCL assets
         run: python3 ../tools/ci/verify-studio-assets.py --root ..
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.x
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
@@ -243,10 +243,11 @@ jobs:
           PY
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: elsa-foundation-studio-nuget-packages
           path: Studio/packages/nuget/
+          overwrite: true
 
   publish_preview_feedz:
     name: Publish to feedz.io
@@ -260,7 +261,7 @@ jobs:
       && (github.ref == 'refs/heads/main' || github.ref_type == 'tag') }}
     steps:
       - name: Download Packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: elsa-foundation-studio-nuget-packages
           path: Studio/packages/nuget
@@ -282,7 +283,7 @@ jobs:
       && github.ref_type == 'tag' }}
     steps:
       - name: Download Packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: elsa-foundation-studio-nuget-packages
           path: Studio/packages/nuget
@@ -303,14 +304,14 @@ jobs:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # pnpm must be set up BEFORE setup-node so that `cache: pnpm` can find the pnpm binary.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           package_json_file: Studio/package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -325,9 +326,11 @@ jobs:
         run: |
           npm ci --prefix ../tools/versioning/package-evidence --ignore-scripts --no-audit
           python3 -m unittest discover -s ../tools/versioning/package-evidence -p test_studio_evidence.py
+          mkdir -p "$RUNNER_TEMP/studio-locked"
           pnpm --filter @elsa-workflows/studio-sdk --filter @elsa-workflows/studio-ui \
             --filter @elsa-workflows/studio-code-editor --filter @elsa-workflows/studio-workflows \
-            list --lockfile-only --prod --depth Infinity --json > "$RUNNER_TEMP/studio-locked.json"
+            sbom --lockfile-only --prod --split --sbom-format cyclonedx --sbom-spec-version 1.6 \
+            --out "$RUNNER_TEMP/studio-locked/%s.cdx.json"
 
       - name: Build libraries
         env:
@@ -355,7 +358,7 @@ jobs:
       # Pack each package into packages/npm. `pnpm pack` writes the tarball relative to the
       # package dir by default, so we pin the destination to an absolute path shared by all four.
       - name: Generate library inventories from the release manifests
-        run: node ../tools/versioning/package-evidence/studio.mjs npm "$RUNNER_TEMP/studio-bundles" "$RUNNER_TEMP/studio-locked.json"
+        run: node ../tools/versioning/package-evidence/studio.mjs npm "$RUNNER_TEMP/studio-bundles" "$RUNNER_TEMP/studio-locked"
 
       - name: Pack packages
         run: |
@@ -451,10 +454,11 @@ jobs:
           echo "All tarballs verified."
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: elsa-foundation-studio-npm-packages
           path: Studio/packages/npm/
+          overwrite: true
 
   attest:
     name: Attest official Studio release candidates
@@ -466,18 +470,27 @@ jobs:
       contents: read
       id-token: write
       attestations: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: elsa-foundation-studio-*-packages
           path: release
-      - name: Sign archive, inventory and receipt digests
+      - name: Verify original build attempt and transferred evidence before signing
+        working-directory: .
+        run: |
+          python3 tools/versioning/package-evidence/studio_archives.py release/elsa-foundation-studio-npm-packages --check npm
+          python3 tools/versioning/package-evidence/studio_archives.py release/elsa-foundation-studio-nuget-packages --check nuget
+      - name: Sign archive, inventory, NuGet payload and receipt digests
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: |
             release/**/*.tgz
             release/**/*.nupkg
             release/**/*.cdx.json
+            release/**/*.payload.json
             release/**/*-subjects.json
 
   # Publishes preview npm builds only after an explicit gated manual request.
@@ -492,14 +505,14 @@ jobs:
       && inputs.publish_target == 'feedz-preview'
       && (github.ref == 'refs/heads/main' || github.ref_type == 'tag') }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           registry-url: ${{ env.npm_feed_feedz }}
 
       - name: Download Packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: elsa-foundation-studio-npm-packages
           path: Studio/packages/npm
@@ -521,14 +534,14 @@ jobs:
       && inputs.publish_target == 'public-release'
       && github.ref_type == 'tag' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           registry-url: ${{ env.npm_feed_npm }}
 
       - name: Download Packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: elsa-foundation-studio-npm-packages
           path: Studio/packages/npm
@@ -539,7 +552,7 @@ jobs:
         run: python3 ../tools/versioning/package-evidence/studio_publish_npm.py packages/npm "$npm_feed_npm" --tag latest
 
   verify_nuget_feed:
-    name: Verify and attest registry-served NuGet packages
+    name: Verify registry-served NuGet packages and attest the receipt
     needs: [publish_preview_feedz, publish_nuget]
     if: ${{ !cancelled() && (needs.publish_preview_feedz.result == 'success' || needs.publish_nuget.result == 'success') }}
     runs-on: ubuntu-latest
@@ -549,24 +562,22 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: elsa-foundation-studio-nuget-packages
           path: Studio/packages/nuget
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.x
       - name: Read back the package set and verify payload and registry signatures
         env:
           FEED: ${{ inputs.publish_target == 'public-release' && env.nuget_feed_source || env.feedz_feed_source }}
         run: python3 ../tools/versioning/package-evidence/studio_nuget_feed.py packages/nuget packages/published "$FEED"
-      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: |
-            Studio/packages/published/*.nupkg
-            Studio/packages/published/nuget-feed-receipt.json
-      - uses: actions/upload-artifact@v4
+          subject-path: Studio/packages/published/nuget-feed-receipt.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: elsa-foundation-studio-nuget-feed-receipt
           path: Studio/packages/published/nuget-feed-receipt.json

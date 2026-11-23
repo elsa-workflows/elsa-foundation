@@ -1,31 +1,21 @@
 #!/usr/bin/env python3
 """Read Studio NuGets back from the selected feed and record the publicly served digests."""
 import argparse
-import hashlib
 import json
 import re
 import shutil
 import subprocess
 import time
-import zipfile
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
-from studio_archives import check, inspect
+from studio_archives import check, inspect, nuget_payload, sha256
 
 
 def read_json(url):
     with urlopen(url, timeout=30) as response:
         return json.load(response)
-
-
-def payload(path):
-    with zipfile.ZipFile(path) as archive:
-        entries = archive.namelist()
-        check(len(entries) == len(set(entries)), "Duplicate ZIP entries")
-        return {entry: hashlib.sha256(archive.read(entry)).hexdigest() for entry in entries
-                if entry != ".signature.p7s" and not entry.endswith("/")}
 
 
 def fetch(url, output):
@@ -56,16 +46,19 @@ def collect(source, output, feed):
         filename = candidate["name"]
         check(Path(filename).name == filename, "Invalid package name")
         original = source / filename
-        check(inspect(original)[0] == candidate, "Candidate differs from build receipt")
+        packed, _ = inspect(original)
+        packed["payload_sha256"] = sha256(nuget_payload(original))
+        check(packed == candidate, "Candidate differs from build receipt")
         name, version = candidate["id"].lower(), candidate["version"].lower()
         check(all(re.fullmatch(r"[\w.+-]+", part) for part in (name, version)), "Invalid identity")
         path = output / filename
         fetch(f"{base}/{name}/{version}/{name}.{version}.nupkg", path)
         current, _ = inspect(path)
+        current["payload_sha256"] = sha256(nuget_payload(path))
         if public:
             args = [arg for f in fingerprints for arg in ["--certificate-fingerprint", f]]
             subprocess.run(["dotnet", "nuget", "verify", str(path), "--all", *args], check=True)
-            check(payload(original) == payload(path), "Published NuGet payload differs: " + filename)
+            check(current["payload_sha256"] == candidate["payload_sha256"], "Published NuGet payload differs: " + filename)
         else:
             check(current == candidate, "Feedz returned different candidate bytes: " + filename)
         rows.append(dict(candidate, feed=feed, feed_sha256=current["sha256"]))

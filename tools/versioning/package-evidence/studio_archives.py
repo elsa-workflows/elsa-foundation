@@ -20,6 +20,16 @@ def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def nuget_payload(path):
+    """Canonical content witness, reproducible before and after nuget.org repository signing."""
+    with zipfile.ZipFile(path) as archive:
+        names = archive.namelist()
+        check(len(names) == len(set(names)), "Duplicate NuGet entries")
+        entries = {name: sha256(archive.read(name)) for name in sorted(names)
+                   if name != ".signature.p7s" and not name.endswith("/")}
+        return (json.dumps(entries, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
 def inspect(path):
     files = {}
     seen = set()
@@ -86,14 +96,31 @@ def inspect(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("path", type=Path, help="One package, or the workflow package directory")
-    parser.add_argument("--write", choices=["npm", "nuget"], help="Write the workflow receipt and sidecars")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--write", choices=["npm", "nuget"], help="Write the workflow receipt and sidecars")
+    modes.add_argument("--check", choices=["npm", "nuget"], help="Check transferred archives and original producer attempt before signing")
+    modes.add_argument("--payload", type=Path, help="Write a NuGet payload witness for independent provenance verification")
     args = parser.parse_args()
-    if not args.write:
+    mode = args.write or args.check
+    if not mode:
         row, _ = inspect(args.path)
+        if args.payload:
+            check(args.path.suffix == ".nupkg", "Payload witnesses apply to NuGet packages")
+            args.payload.write_bytes(nuget_payload(args.path))
         print(json.dumps(row, indent=2))
         return
+    expected_files = set()
+
+    def sidecar(name, content):
+        file = args.path / name
+        expected_files.add(name)
+        if args.write:
+            file.write_bytes(content)
+        else:
+            check(file.read_bytes() == content, "Transferred evidence mismatch: " + name)
+
     rows = []
-    for path in sorted(args.path.glob("*.tgz" if args.write == "npm" else "*.nupkg")):
+    for path in sorted(args.path.glob("*.tgz" if mode == "npm" else "*.nupkg")):
         row, raw = inspect(path)
         check(row["version"] == os.environ["VERSION"], "Unexpected release version")
         if raw:
@@ -102,10 +129,16 @@ def main():
             for key, env in [("repository", "GITHUB_REPOSITORY"), ("commit", "GITHUB_SHA"),
                              ("producer-run", "GITHUB_RUN_ID"), ("producer-attempt", "GITHUB_RUN_ATTEMPT")]:
                 check(properties["elsa:" + key] == os.environ[env], "Unexpected producer " + key)
-            (args.path / (path.name + ".cdx.json")).write_bytes(raw)
+            sidecar(path.name + ".cdx.json", raw)
+        if mode == "nuget":
+            witness = nuget_payload(path)
+            row["payload_sha256"] = sha256(witness)
+            sidecar(path.name + ".payload.json", witness)
         rows.append(row)
     check(rows, "No candidate archives")
-    (args.path / (args.write + "-subjects.json")).write_text(json.dumps(rows, indent=2) + "\n")
+    sidecar(mode + "-subjects.json", (json.dumps(rows, indent=2) + "\n").encode())
+    actual = {p.name for pattern in ("*.cdx.json", "*.payload.json", "*-subjects.json") for p in args.path.glob(pattern)}
+    check(actual == expected_files, "Unexpected evidence file set")
 
 
 if __name__ == "__main__":

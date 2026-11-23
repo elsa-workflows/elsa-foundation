@@ -5,9 +5,10 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+import sys
 from unittest.mock import patch
 
-from studio_archives import inspect, sha256
+from studio_archives import inspect, main as inspect_cli, nuget_payload, sha256
 from studio_publish_npm import ORDER, publish
 
 
@@ -16,7 +17,9 @@ def data(body):
 
 
 def library(name, file, declarations=()):
-    return data({"bomFormat": "CycloneDX", "specVersion": "1.6", "metadata": {"component": {
+    return data({"bomFormat": "CycloneDX", "specVersion": "1.6", "metadata": {"properties": [
+        {"name": "elsa:" + key, "value": val} for key, val in (("repository", "owner/repo"), ("commit", "abc"),
+        ("producer-run", "42"), ("producer-attempt", "1"))], "component": {
         "name": name, "version": "4.0.0", "properties": list(declarations),
         "components": [{"type": "file", "name": file, "hashes": [{"alg": "SHA-256", "content": sha256(b"content")}]}]}}})
 
@@ -54,6 +57,17 @@ class StudioEvidence(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "declarations differ"):
                 inspect(npm(path, ORDER[0], peer="^18"))
 
+    def test_signing_rejects_another_attempt(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict("os.environ", VERSION="4.0.0", GITHUB_REPOSITORY="owner/repo",
+                GITHUB_SHA="abc", GITHUB_RUN_ID="42", GITHUB_RUN_ATTEMPT="1"):
+            npm(Path(folder), ORDER[0])
+            for action in ["--write", "--check"]:
+                with patch.object(sys, "argv", ["studio_archives.py", folder, action, "npm"]):
+                    inspect_cli()
+            with patch.dict("os.environ", GITHUB_RUN_ATTEMPT="2"), patch.object(sys, "argv", ["studio_archives.py", folder, "--check", "npm"]):
+                with self.assertRaisesRegex(ValueError, "producer-attempt"):
+                    inspect_cli()
+
     def test_nuget_static_assets(self):
         file = "staticwebassets/studio/index.js"
         with tempfile.TemporaryDirectory() as folder:
@@ -65,6 +79,11 @@ class StudioEvidence(unittest.TestCase):
                     archive.writestr("sbom/frontend.cdx.json", library("Studio", file))
                 if body == b"content":
                     self.assertEqual(inspect(path)[0]["id"], "Studio")
+                    before = nuget_payload(path)
+                    with zipfile.ZipFile(path, "a") as archive:
+                        archive.writestr(".signature.p7s", b"repository signature placeholder")
+                    self.assertEqual(nuget_payload(path), before)
                 else:
+                    self.assertNotEqual(nuget_payload(path), before)
                     with self.assertRaisesRegex(ValueError, "payload mismatch"):
                         inspect(path)

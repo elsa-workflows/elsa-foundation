@@ -1,124 +1,160 @@
-// Generate per-artifact frontend inventories after bundling and before packing.
+// Extend pnpm's standard CycloneDX output with packed workspace links and Vite's bundle facts.
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
-import { Models, Serialize, Spec, Validation } from '@cyclonedx/cyclonedx-library';
+import { createRequire } from 'node:module';
+import { Spec, Validation } from '@cyclonedx/cyclonedx-library';
 import { PackageURL } from 'packageurl-js';
 
 const [mode, recordsDir, dataPath, outputDir] = process.argv.slice(2);
 assert.ok(['npm', 'nuget'].includes(mode));
 const json = path => JSON.parse(readFileSync(path));
 const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
-const version = process.env.VERSION;
 const env = name => { assert.ok(process.env[name], name); return process.env[name]; };
-const property = (item, key, value) => item.properties.add(new Models.Property('elsa:' + key, value));
-const serializer = new Serialize.JsonSerializer(new Serialize.JSON.Normalize.Factory(Spec.Spec1dot6));
+const version = env('VERSION');
 const validator = new Validation.JsonStrictValidator(Spec.Version.v1dot6);
 const records = readdirSync(recordsDir).map(file => json(join(recordsDir, file)));
 const names = ['studio-sdk', 'studio-ui', 'studio-code-editor', 'studio-workflows'].map(name => '@elsa-workflows/' + name);
-const lockHash = hash('pnpm-lock.yaml');
-
-function npmPurl(name, version) {
+const fullName = c => c.group ? c.group + '/' + c.name : c.name;
+const npmPurl = (name, v) => {
   const parts = name.split('/');
-  return new PackageURL('npm', parts.length === 2 ? parts[0] : undefined, parts.at(-1), version, undefined, undefined).toString();
+  return new PackageURL('npm', parts.length === 2 ? parts[0] : undefined, parts.at(-1), v).toString();
+};
+function property(item, key, value) {
+  (item.properties ??= []).push({ name: 'elsa:' + key, value });
 }
 
-async function inventory(name, directory, records, manifest, locked, output) {
-  assert.ok(version && records.length, 'Missing bundle records for ' + name);
-  const root = new Models.Component('library', name, { version, bomRef: 'root', purl: mode === 'npm' ?
-    npmPurl(name, version) : new PackageURL('nuget', undefined, name.toLowerCase(), version).toString() });
-  const bom = new Models.Bom({ serialNumber: 'urn:uuid:' + randomUUID(), metadata: new Models.Metadata({ component: root }) });
+const libraries = new Map();
+if (mode === 'npm') {
+  for (const r of records.filter(r => r.kind === 'npm')) {
+    const manifest = json(join(dirname(r.outDir), 'package.json'));
+    assert.equal(manifest.version, version);
+    const slug = manifest.name.replace('@', '').replace('/', '-');
+    const locked = json(join(dataPath, slug + '.cdx.json'));
+    assert.equal(fullName(locked.metadata.component), manifest.name);
+    libraries.set(manifest.name, { manifest, locked, build: r });
+  }
+  assert.deepEqual([...libraries.keys()].sort(), [...names].sort());
+}
+
+async function inventory(name, directory, builds, output) {
+  const purl = mode === 'npm' ? npmPurl(name, version) : new PackageURL('nuget', undefined, name.toLowerCase(), version).toString();
+  const root = { type: 'library', name, version, purl, 'bom-ref': purl, components: [] };
+  const metadata = { component: root };
   for (const [key, value] of Object.entries({
     scope: mode === 'npm' ? 'npm library' : 'NuGet static web assets',
     repository: env('GITHUB_REPOSITORY'), commit: env('GITHUB_SHA'), 'producer-run': env('GITHUB_RUN_ID'),
-    'producer-attempt': env('GITHUB_RUN_ATTEMPT'), 'pnpm-lock-sha256': lockHash
-  })) property(bom.metadata, key, value);
-
+    'producer-attempt': env('GITHUB_RUN_ATTEMPT'), 'pnpm-lock-sha256': hash('pnpm-lock.yaml')
+  })) property(metadata, key, value);
   const components = new Map();
-  function component(id, installed, workspace) {
-    const published = workspace && names.includes(id) ? version : installed;
-    const key = id + '@' + published;
-    if (!components.has(key)) {
-      const c = new Models.Component('library', id, { version: published, bomRef: key });
-      if (!workspace || names.includes(id)) c.purl = npmPurl(id, published);
-      if (workspace) property(c, 'source', 'producer workspace');
-      components.set(key, c);
-      bom.components.add(c);
-    }
-    return components.get(key);
+  const edges = new Map();
+  function edge(from, to) {
+    if (!edges.has(from)) edges.set(from, new Set());
+    edges.get(from).add(to);
   }
-  const addDependency = (parent, child) => parent.dependencies.add(child.bomRef);
-  const externals = new Set(records.flatMap(r => r.externals));
-  for (const imported of externals) property(root, 'external-import', imported);
-  const bundled = new Map(records.flatMap(r => r.packages).map(p => [p.name + '@' + p.version, p]));
+  const visited = new Set();
+  function addLocked(id) {
+    if (visited.has(id)) return;
+    visited.add(id);
+    const { manifest, locked } = libraries.get(id);
+    const parent = npmPurl(id, version);
+    const oldRoot = locked.metadata.component['bom-ref'];
+    if (id !== name) components.set(parent, { ...locked.metadata.component, version, purl: parent, 'bom-ref': parent });
+    for (const c of locked.components ?? []) components.set(c['bom-ref'], structuredClone(c));
+    for (const row of locked.dependencies ?? []) {
+      for (const child of row.dependsOn ?? []) edge(row.ref === oldRoot ? parent : row.ref, child);
+    }
+    const direct = new Set([...(edges.get(parent) ?? [])].map(ref => fullName(components.get(ref))));
+    for (const kind of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+      for (const [dep, range] of Object.entries(manifest[kind] ?? {})) {
+        if (id === name) property(root, kind + ':' + dep, range);
+        if (direct.has(dep)) continue;
+        // pnpm writes the external graph for each importer. Workspace siblings have their
+        // own graph and acquire the release version when the publish manifests are prepared.
+        if (libraries.has(dep)) {
+          edge(parent, npmPurl(dep, version));
+          addLocked(dep);
+        } else {
+          assert.ok(kind === 'optionalDependencies' || manifest.peerDependenciesMeta?.[dep]?.optional,
+            'Missing locked resolution for ' + id + ' -> ' + dep);
+        }
+      }
+    }
+  }
+  if (mode === 'npm') {
+    metadata.tools = libraries.get(name).locked.metadata.tools;
+    addLocked(name);
+    // pnpm's SBOM emits each package identity once and can omit a dependency edge
+    // when the same target was reached elsewhere. Read the frozen install to retain
+    // those edges, while requiring every resolved component to occur in the lock SBOM.
+    const checked = new Set();
+    function installedEdges(dir, parent) {
+      if (checked.has(dir)) return;
+      checked.add(dir);
+      const pkgPath = join(dir, 'package.json');
+      const pkg = json(pkgPath);
+      const resolver = createRequire(pkgPath);
+      for (const dep of Object.keys({ ...pkg.dependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies })) {
+        const file = resolver.resolve.paths(dep).map(p => join(p, dep, 'package.json')).find(existsSync);
+        const optional = Object.hasOwn(pkg.optionalDependencies ?? {}, dep) || pkg.peerDependenciesMeta?.[dep]?.optional;
+        if (!file && optional) continue;
+        assert.ok(file, 'Missing installed production dependency: ' + dep);
+        const real = realpathSync(file);
+        const resolved = json(real);
+        const ref = npmPurl(resolved.name, resolved.version);
+        if (optional && !components.has(ref)) continue;
+        assert.ok(components.has(ref) || ref === root['bom-ref'], 'Lock SBOM lacks installed ' + ref);
+        edge(parent, ref);
+        installedEdges(dirname(real), ref);
+      }
+    }
+    installedEdges(dirname(directory), root['bom-ref']);
+  }
+  const externals = new Set(builds.flatMap(r => r.externals));
+  for (const imported of [...externals].sort()) property(root, 'external-import', imported);
+  const bundled = new Map(builds.flatMap(r => r.packages).map(p => [p.name + '@' + p.version, p]));
   for (const p of bundled.values()) {
     if (p.name === name) continue;
-    const c = component(p.name, p.version, p.workspace);
+    const shipped = p.workspace && names.includes(p.name) ? version : p.version;
+    const purl = p.workspace && !names.includes(p.name) ? undefined : npmPurl(p.name, shipped);
+    const ref = purl ?? 'workspace:' + p.name;
+    const c = components.get(ref) ?? { type: 'library', name: p.name, version: shipped, purl, 'bom-ref': ref };
+    if (p.workspace) property(c, 'source', 'producer workspace');
     property(c, 'bundled', 'true');
-    addDependency(root, c);
+    components.set(ref, c);
+    edge(root['bom-ref'], ref);
   }
-  if (manifest) {
-    assert.equal(manifest.name, name);
-    assert.equal(manifest.version, version);
-    // pnpm reports its deduplicated graph across paths; combine edges at each occurrence.
-    function descend(parent, children) {
-      for (const [id, d] of Object.entries(children)) {
-        const c = component(id, d.version, d.version.startsWith('link:'));
-        addDependency(parent, c);
-        descend(c, { ...d.dependencies, ...d.optionalDependencies });
-      }
-    }
-    const direct = { ...locked.dependencies, ...locked.optionalDependencies };
-    descend(root, direct);
-    for (const field of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
-      for (const [id, range] of Object.entries(manifest[field] ?? {})) {
-        // An optional dependency can legitimately be absent on the build platform.
-        property(root, field + ':' + id, range);
-        assert.ok(direct[id] || field === 'optionalDependencies' || manifest.peerDependenciesMeta?.[id]?.optional,
-          'Missing locked resolution for ' + id);
-      }
-    }
-  }
-
-  // Hash every distributable frontend file, including copied assets and declarations
-  // produced outside Vite. Fail if bytes captured by Rollup changed before packing.
-  for (const r of records) {
+  for (const r of builds) {
     for (const [file, expected] of Object.entries(r.files)) {
       assert.equal(hash(join(r.outDir, file)), expected, 'Stale bundle output: ' + file);
     }
   }
   const prefix = mode === 'npm' ? 'dist/' : 'staticwebassets/';
   for (const file of readdirSync(directory, { recursive: true }).sort()) {
-    if (file.split('/').includes('.vite') || !statSync(join(directory, file)).isFile()) continue;
-    if (join(directory, file) === output) continue;
-    const c = new Models.Component('file', prefix + file, { bomRef: 'file:' + prefix + file });
-    c.hashes.set('SHA-256', hash(join(directory, file)));
-    root.components.add(c);
+    const path = join(directory, file);
+    if (path === output || file.split('/').includes('.vite') || !statSync(path).isFile()) continue;
+    root.components.push({ type: 'file', name: prefix + file, 'bom-ref': 'file:' + prefix + file,
+      hashes: [{ alg: 'SHA-256', content: hash(path) }] });
   }
-  const result = serializer.serialize(bom, { sortLists: true }) + '\n';
-  assert.equal(await validator.validate(result), null, 'Invalid CycloneDX 1.6 document for ' + name);
+  const bom = { bomFormat: 'CycloneDX', specVersion: '1.6', serialNumber: 'urn:uuid:' + randomUUID(), version: 1,
+    metadata, components: [...components.values()], dependencies: [...edges].map(([ref, deps]) => ({ ref, dependsOn: [...deps].sort() })) };
+  const result = JSON.stringify(bom) + '\n';
+  const errors = await validator.validate(result);
+  assert.equal(errors, null, JSON.stringify(errors));
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, result);
 }
 
 if (mode === 'npm') {
-  const projects = json(dataPath);
-  assert.deepEqual(projects.map(p => p.name).sort(), [...names].sort());
-  for (const p of projects) {
-    const dist = realpathSync(join(p.path, 'dist'));
-    const builds = records.filter(r => r.kind === 'npm' && r.outDir === dist);
-    assert.equal(builds.length, 1, 'Expected one library build for ' + p.name);
-    await inventory(p.name, dist, builds, json(join(p.path, 'package.json')), p, join(dist, 'sbom.cdx.json'));
-  }
+  for (const [name, { build }] of libraries) await inventory(name, build.outDir, [build], join(build.outDir, 'sbom.cdx.json'));
 } else {
   for (const p of json(dataPath).packable_projects) {
     const directory = resolve('..', dirname(p.project), 'wwwroot');
     if (!existsSync(directory) || !readdirSync(directory).length) continue;
     const assets = realpathSync(directory);
     const builds = records.filter(r => r.kind !== 'npm' && !relative(assets, r.outDir).startsWith('..'));
-    // Hosting owns two distinct outputs in one directory, the shell and the vendor shims.
     assert.deepEqual(builds.map(r => r.kind).sort(), p.id === 'Elsa.Studio.Hosting' ? ['shell', 'vendor'] : ['module'], p.id);
-    await inventory(p.id, assets, builds, null, null, join(outputDir, basename(p.project, '.csproj') + '.cdx.json'));
+    await inventory(p.id, assets, builds, join(outputDir, basename(p.project, '.csproj') + '.cdx.json'));
   }
 }
