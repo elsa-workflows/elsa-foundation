@@ -28,6 +28,12 @@ switch (args)
     case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "version-take", .. var options]:
         await new EfProvider(engine, connection, options).CheckTakeVersionsAsync();
         return 0;
+    case ["sqlite", "version-services", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckServiceVersionsAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "version-services", .. var options]:
+        await new EfProvider(engine, connection, options).CheckServiceVersionsAsync();
+        return 0;
     case ["sqlite", .. var rest]:
         return await Cli.RunAsync(new EfProvider("sqlite", null, rest), rest.Where(a => !flags.Contains(a)).ToArray());
     case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, .. var rest]:
@@ -87,6 +93,12 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     {
         await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
         await VersionTakeChecks.Run(fixture.CreateAdmin(), fixture.Store, fixture.NewClient());
+    }
+
+    internal async Task CheckServiceVersionsAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(2, new StoreSetup());
+        await VersionServiceChecks.Run(fixture.CreateAdmin(), fixture.Store);
     }
 
     public async Task<ProvidedStore> CreateAsync(int partitions, StoreSetup setup)

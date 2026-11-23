@@ -786,6 +786,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireStoreVersionsAsync(db, cancellationToken);
         var rows = await db.Journal.AsNoTracking().Where(j => j.Partition == partition && j.Position > after).OrderBy(j => j.Position).Take(take).ToListAsync(cancellationToken);
         return rows.Select(j => new JournalRow(j.Partition, j.Position, j.Instance, j.Revision, j.Entries)).ToList();
     }
@@ -793,6 +794,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
     {
         await using var db = create();      // the index on Journal(Partition, Instance)
+        await RequireStoreVersionsAsync(db, cancellationToken);
         // With RCSI disabled a SQL Server scan needs range locks to hold its committed image for this statement.
         var journal = Engine is SqlServerEngine { ReadCommittedSnapshot: false }
             ? db.Journal.FromSqlRaw("SELECT * FROM [Journal] WITH (HOLDLOCK)")
@@ -810,6 +812,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireStoreVersionsAsync(db, cancellationToken);
         var rows = await db.Database.SqlQueryRaw<ProjectionRow>(
             Q("""SELECT (SELECT "Position" FROM "Projections" WHERE "Partition" = {0}) AS "Position", (SELECT "Position" FROM "Partitions" WHERE "Id" = {0}) AS "Written" """),
             partition).ToListAsync(cancellationToken);
@@ -818,10 +821,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     public async ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default)
     {
+        await using var db = create();
+        await RequireStoreVersionsAsync(db, cancellationToken);
         var changes = ViewChange.From(rows);
         var deleted = changes.Where(v => v.Commits == 0).Select(v => v.Instance).ToArray();
         var views = changes.Where(v => v.Commits > 0).ToList();
-        await using var db = create();
         if (postgres && Engine is null)
         {
             // PostgreSQL: one statement, so one round trip and its own transaction. The view rows are written only if the
@@ -865,6 +869,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireStoreVersionsAsync(db, cancellationToken);
         var rows = await db.Views.AsNoTracking().Where(v => instances.Contains(v.Instance)).ToListAsync(cancellationToken);
         return rows.Select(v => new ViewRow(v.Instance, v.Revision, v.Commits)).ToList();
     }
@@ -872,6 +877,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await RequireStoreVersionsAsync(db, cancellationToken);
         return await db.Database.ExecuteSqlRawAsync(Q($"""DELETE FROM "Messages" WHERE "Done" <> {False} AND "KeepUntil" < {Now}; DELETE FROM "Events" WHERE "KeepUntil" < {Now}"""), cancellationToken);
     }
 
