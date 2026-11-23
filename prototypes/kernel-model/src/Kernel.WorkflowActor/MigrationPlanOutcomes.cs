@@ -3,7 +3,7 @@ using Kernel.Foundation.Contracts;
 
 namespace Kernel.WorkflowActor;
 
-internal enum MigrationPlanOutcome { Migrated = 0, Refused = 1, NotAtSource = 2 }
+public enum MigrationPlanOutcome { Migrated = 0, Refused = 1, NotAtSource = 2 }
 
 internal sealed record MigrationPlanResult(MigrationPlanOutcome Outcome, string? Finding = null)
 {
