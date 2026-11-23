@@ -9,6 +9,7 @@ internal static class SqlitePlanProjectionChecks
 {
     private static readonly Contract.BoundScope Scope = new("migration");
     private const string OtherPlan = "second-plan-read-fixture";
+    private const string OpaqueReferencePlan = "opaque-reference-plan";
 
     internal static async Task<int> BuildAsync(string file)
     {
@@ -84,6 +85,8 @@ internal static class SqlitePlanProjectionChecks
         // The view can be backed by any foundation. Exercise coincident plan refs across tenants in the physical reader.
         await AddNeighborAsync("other", plan.Id, extra);
         await AddNeighborAsync(Scope.Tenant, OtherPlan, extra);
+        await AddNeighborAsync(Scope.Tenant, OpaqueReferencePlan, new("short"));
+        await AddNeighborAsync(Scope.Tenant, OpaqueReferencePlan, new("résumé-店"));
         var results = await VerifyAsync(file, plan, stop);
         await VerifyOperatorAsync(file, plan, results, stop);
         Check(results[migrated] == MigrationPlanOutcome.Migrated && results[refusedActor] == MigrationPlanOutcome.Refused &&
@@ -133,7 +136,7 @@ internal static class SqlitePlanProjectionChecks
             await connection.OpenAsync(stop);
             using var command = connection.CreateCommand();
             command.CommandText = """
-                INSERT INTO plan_cursors VALUES ($tenant, $plan, NULL, 0, $asOf);
+                INSERT INTO plan_cursors VALUES ($tenant, $plan, NULL, 0, $asOf) ON CONFLICT (tenant, plan) DO NOTHING;
                 INSERT INTO plan_outcomes VALUES ($tenant, $plan, $actor, NULL);
                 """;
             command.Parameters.AddWithValue("$tenant", tenant);
@@ -232,6 +235,13 @@ internal static class SqlitePlanProjectionChecks
         await RefusesAsync(Scope, new(OtherPlan), 1, firstToken, "another plan");
         await RefusesAsync(Scope, plan, 2, firstToken, "another page size");
         await RefusesAsync(Scope, plan, 1, new("invalid-page-token"), "an invalid token");
+
+        var opaque = new Contract.ActorRef(OpaqueReferencePlan);
+        var unicodeRef = await reopened.ListAsync(Scope, opaque, 1, cancellationToken: stop);
+        var shortRef = await reopened.ListAsync(Scope, opaque, 1, unicodeRef.Results.Next, stop);
+        Check(unicodeRef.Results.Items is [{ Actor.Id: "résumé-店" }] && unicodeRef.Results.Next is not null &&
+            shortRef.Results.Items is [{ Actor.Id: "short" }] && shortRef.Results.Next is null,
+            "Operator pages must carry short and Unicode references without interpreting their shape.");
 
         async Task RefusesAsync(Contract.BoundScope scope, Contract.ActorRef target, int limit, Contract.PageToken from, string context)
         {

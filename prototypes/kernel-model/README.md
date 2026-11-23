@@ -102,8 +102,12 @@ dotnet "$dll" sqlite-plan-projection list "$scratch/plan.db" <plan-ref> 1
 dotnet "$dll" sqlite-plan-projection list "$scratch/plan.db" <plan-ref> 1 '<Next from previous result>'
 ```
 
+For a projection file created before operator paging was added, run
+`dotnet "$dll" sqlite-plan-projection enable-paging "$scratch/plan.db"` once. It initializes the continuation
+key and the cursor index without rebuilding the view. Repeating it preserves existing continuations.
+
 Each JSON page has `Closed`, `AsOf`, `Items` and `Next`. A continuation is opaque and stays valid across
-a new CLI process. It is tied to the plan, the page size and the trusted host tenant. The CLI binds the demo
+a new CLI process. It is tied to the plan, the page size and the trusted host tenant. It carries a stored row number and supports opaque references of different lengths. The CLI binds the demo
 tenant and reads the view file locally. Application hosting and operator authentication are separate work.
 
 ## The simulation
