@@ -1,5 +1,6 @@
 using Kernel.Foundation.InMemory;
 using Kernel.Native;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Contract = Kernel.Foundation.Contracts;
 using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
@@ -20,6 +21,7 @@ internal static class StructuredMigrationChecks
             await CheckStoredReferences(mode, Check);
             await CheckLiteralLookup(mode, Check);
             await CheckLiteralNumber(mode, Check);
+            await CheckClonedLiteral(mode, Check);
             await CheckFinished(mode, Check);
             var job = Wf.Workflow("pending-job", Wf.Call("service", "migration"));
             await using var withJob = await WaitingActor.StartAsync(job, mode, singleTurn: true);
@@ -245,6 +247,57 @@ internal static class StructuredMigrationChecks
 
         static Workflow WithNumber(JsonNode number) => Wf.Workflow("literal-number",
             Wf.Node<ReadNumberOnResume>("number", (nameof(ReadNumberOnResume.Number), Binding.Literal(number))));
+    }
+
+    private static async Task CheckClonedLiteral(string mode, Action<bool, string> check)
+    {
+        const string plain = "\"a\"", escaped = "\"\\u0061\"";
+        var caseSensitive = new JsonNodeOptions { PropertyNameCaseInsensitive = false };
+        var ignoreCase = new JsonNodeOptions { PropertyNameCaseInsensitive = true };
+        foreach (var (name, arrayOptions, objectOptions, scalarOptions, raw, expected) in new[]
+        {
+            ("default", (JsonNodeOptions?)null, (JsonNodeOptions?)null, (JsonNodeOptions?)null, plain, "unset/unset/unset"),
+            ("explicit array", caseSensitive, null, null, plain, "False/False/False"),
+            ("case-insensitive array", ignoreCase, null, null, plain, "True/True/True"),
+            ("explicit child object", null, caseSensitive, null, plain, "unset/False/False"),
+            ("explicit child scalar", null, null, caseSensitive, plain, "unset/unset/False"),
+            ("escaped token", null, null, null, escaped, "unset/unset/unset"),
+        })
+        {
+            var source = WithLiteral(arrayOptions, objectOptions, scalarOptions, raw);
+            await using var actor = await WaitingActor.StartAsync(source, mode);
+            var checkpoint = Json.Read<NativeState>(actor.Checkpoint());
+            var same = WithLiteral(arrayOptions, objectOptions, scalarOptions, raw);
+            var changed = name == "default" ? WithLiteral(caseSensitive, null, null, plain) : WithLiteral(null, null, null, plain);
+            check(StructuredMigration.Validate(source, same, checkpoint) is null &&
+                StructuredMigration.Validate(source, changed, checkpoint) == StructuredMigrationFinding.AuthoredNode,
+                $"the waiting leaf preserves distinct cloned JSON metadata and accepts equivalent clones ({name})");
+            await actor.PublishAsync();
+            check(actor.Status() == InstanceStatus.Finished &&
+                Json.Read<NativeState>(actor.Checkpoint()).Results["inspect"]?.GetValue<string>() == expected + "/" + raw,
+                $"the resumed leaf observes the cloned lookup options and raw scalar spelling ({name})");
+        }
+
+        static Workflow WithLiteral(JsonNodeOptions? arrayOptions, JsonNodeOptions? objectOptions,
+            JsonNodeOptions? scalarOptions, string raw)
+        {
+            var child = new JsonObject(objectOptions) { ["value"] = JsonValue.Create(1, scalarOptions) };
+            var input = new JsonArray(arrayOptions) { child, JsonNode.Parse(raw) };
+            return Wf.Workflow("cloned-literal", Wf.Node<InspectClonedLiteral>("inspect",
+                (nameof(InspectClonedLiteral.Input), Binding.Literal(input))));
+        }
+    }
+
+    public sealed class InspectClonedLiteral : StatefulActivity<string, int, JsonNode?>
+    {
+        [Input] public JsonArray Input { get; set; } = [];
+        protected override ValueTask<Transition> ExecuteAsync(StartContext<JsonNode?> context) =>
+            new(Suspend(0, new EventTrigger("ready")));
+        protected override ValueTask<Transition> ResumeAsync(ResumeContext<int, JsonNode?> context)
+        {
+            static string Lookup(JsonNode node) => node.Options?.PropertyNameCaseInsensitive.ToString() ?? "unset";
+            return new(Complete($"{Lookup(Input)}/{Lookup(Input[0]!)}/{Lookup(Input[0]!["value"]!)}/{Input[1]!.GetValue<JsonElement>().GetRawText()}"));
+        }
     }
 
     public sealed class ReadNumberOnResume : StatefulActivity<bool, int, JsonNode?>

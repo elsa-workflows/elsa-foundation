@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Kernel.Native;
@@ -148,29 +149,36 @@ internal static class StructuredMigration
             _ => false,
         };
 
-    // Native expressions can stringify a JSON value, including its property order and numeric representation.
-    private static bool SameJson(JsonNode? before, JsonNode? after) => (before, after) switch
+    // Native copies each root literal before hydration. An activity can inspect the options and typed
+    // values of that copy, including options inherited by children and raw tokens in parsed JSON.
+    private static bool SameJson(JsonNode? before, JsonNode? after) =>
+        SameClonedNode(before?.DeepClone(), after?.DeepClone());
+
+    private static bool SameClonedNode(JsonNode? before, JsonNode? after)
     {
-        (null, null) => true,
-        (JsonObject left, JsonObject right) =>
-            (left.Options?.PropertyNameCaseInsensitive ?? false) == (right.Options?.PropertyNameCaseInsensitive ?? false) &&
-            left.Count == right.Count && left.Zip(right).All(pair =>
-                pair.First.Key == pair.Second.Key && SameJson(pair.First.Value, pair.Second.Value)),
-        (JsonArray left, JsonArray right) =>
-            left.Count == right.Count && left.Zip(right).All(pair => SameJson(pair.First, pair.Second)),
-        (JsonValue left, JsonValue right) => SameScalar(left, right),
-        _ => false,
-    };
+        if (before?.Options?.PropertyNameCaseInsensitive != after?.Options?.PropertyNameCaseInsensitive)
+            return false;
+        return (before, after) switch
+        {
+            (null, null) => true,
+            (JsonObject left, JsonObject right) =>
+                left.Count == right.Count && left.Zip(right).All(pair =>
+                    pair.First.Key == pair.Second.Key && SameClonedNode(pair.First.Value, pair.Second.Value)),
+            (JsonArray left, JsonArray right) =>
+                left.Count == right.Count && left.Zip(right).All(pair => SameClonedNode(pair.First, pair.Second)),
+            (JsonValue left, JsonValue right) => SameScalar(left, right),
+            _ => false,
+        };
+    }
 
     private static bool SameScalar(JsonValue before, JsonValue after)
     {
-        if (before.ToJsonString() != after.ToJsonString()) return false;
-        // Literal evaluation deep-clones the node. A hydrated leaf can inspect the clone's typed value.
-        var left = before.DeepClone();
-        var right = after.DeepClone();
-        if (left is JsonValue a && right is JsonValue b)
-            return a.GetType() == b.GetType() && a.GetValue<object>().GetType() == b.GetValue<object>().GetType();
-        return SameJson(left, right);
+        if (before.GetType() != after.GetType() || before.ToJsonString() != after.ToJsonString()) return false;
+        var left = before.GetValue<object>();
+        var right = after.GetValue<object>();
+        if (left is JsonElement element)
+            return right is JsonElement other && element.GetRawText() == other.GetRawText();
+        return left.GetType() == right.GetType() && left.Equals(right);
     }
 
     private static bool SameEntries<T>(IReadOnlyDictionary<string, T> before, IReadOnlyDictionary<string, T> after, Func<T, T, bool> equals)
