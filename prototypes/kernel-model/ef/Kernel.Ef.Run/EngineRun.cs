@@ -58,6 +58,11 @@ static class EngineRun
         }
         if (args[0] == "locktimeout") options["pool"] = "1";     // one pooled session: LockTimeout.cs
         if (args[0] == "watchdog-worker") return await ProviderWatchdog.RunWorkerAsync(args[1], options);
+        if (args[0] == "watchdog" && options.GetValueOrDefault("disposable") != "1")
+        {
+            Console.Error.WriteLine("Watchdog resets its database. Run it on a disposable database server and pass disposable=1.");
+            return 2;
+        }
         var target = new Target(args[1], args[2], options);
         return args[0] switch
         {

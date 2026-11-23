@@ -34,7 +34,7 @@ static class ProviderWatchdog
         };
         if (waiting is null)
         {
-            Console.Error.WriteLine("watchdog requires PostgreSQL, SQL Server, or MySQL on a dedicated test database.");
+            Console.Error.WriteLine("Watchdog requires a disposable PostgreSQL, SQL Server, or MySQL server.");
             return 2;
         }
 
@@ -62,8 +62,8 @@ static class ProviderWatchdog
                 Require(!blocked.IsCompleted && watchdog.Check() == 0, "The physical commit waits before the watchdog deadline.");
                 monotonic = (long)(LeaseTime.TotalMilliseconds * 2);
                 Require(watchdog.Check() == 1, "The watchdog requests cancellation of the blocked commit.");
-                result = await AwaitAbortAsync(blocked, TimeSpan.FromSeconds(8), token);
-                monotonic += (long)LeaseTime.TotalMilliseconds;
+                result = await AwaitAbortAsync(blocked, LeaseTime / 3, token);
+                monotonic += (long)(LeaseTime.TotalMilliseconds / 3);
                 Require(watchdog.Check() == 0 && watchdog.Closed == 1 && ended.Count == 0,
                     "The commit ended before watchdog process escalation.");
             }
