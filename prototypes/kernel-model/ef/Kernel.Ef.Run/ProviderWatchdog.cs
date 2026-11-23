@@ -160,13 +160,9 @@ static class ProviderWatchdog
         {
             monotonic += (long)(LeaseTime.TotalMilliseconds / 3);
             watchdog.Check();
-            // The call can return between the grace timeout and the watchdog check.
-            if (commit.IsCompleted)
-            {
-                await AwaitInterruptedAsync(commit, TimeSpan.Zero, token);
-                return 0;
-            }
-            throw;
+            // A live watched call exits this child. A removed call may still be publishing its task outcome.
+            await AwaitInterruptedAsync(commit, Timeout.InfiniteTimeSpan, token);
+            return 0;
         }
     }
 
