@@ -718,6 +718,7 @@ $SIM --contract-jobs --seed 1 --flaw JobPoisonAsError
 $SIM --contract-jobs --seed 1 --tree-stall           # an uncooperative job keeps the trial gate held
 $SIM --job-trial-check                               # counted withdrawal, cancellation and lost-ack boundaries
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
+$SIM --host-job-drain-check                          # entered job cleanup, persistence, restart and shutdown cancellation
 $SIM --public-owner-check                            # FC-1 per-owner serialization and fenced takeover
 $SIM --public-owner-check --flaw IgnoreLeaseDeadline,CommitDespiteFence
 $SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)

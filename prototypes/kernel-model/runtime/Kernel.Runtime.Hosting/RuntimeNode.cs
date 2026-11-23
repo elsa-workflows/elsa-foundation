@@ -165,8 +165,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     }
 
     /// <summary>
-    /// Leave the loop once the pass under way has ended (it is not cancelled, so its commit lands or is refused), then give
-    /// every scope up: whoever takes them next finds no death.
+    /// Finish the pass under way, end admitted off-turn work, then give every scope up: whoever takes them next finds no death.
     /// </summary>
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {

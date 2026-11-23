@@ -23,6 +23,13 @@ public interface IActorRuntime
 public interface IScopeHost
 {
     ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default);
+
+    /// <summary>After the last pass, end admitted off-turn work before the runtime gives up its scopes.
+    /// Cancellation abandons the wait. This is called only for orderly shutdown of the host.</summary>
+    ValueTask PrepareToStopAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+    /// <summary>All shutdown releases completed. The host can accept a fresh activation.</summary>
+    void Stopped() { }
 }
 
 /// <summary>A host that can take several requested scopes together. It returns an activation only for scopes it holds.</summary>

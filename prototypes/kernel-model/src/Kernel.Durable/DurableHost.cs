@@ -127,6 +127,16 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         }
     }
 
+    async ValueTask IScopeHost.PrepareToStopAsync(CancellationToken cancellationToken)
+    {
+        await Task.WhenAll(Workers.Select(worker => worker.DrainJobsAsync())).WaitAsync(cancellationToken);
+    }
+
+    void IScopeHost.Stopped()
+    {
+        foreach (var worker in Workers) worker.ReopenJobEntry();
+    }
+
     private IKernelStore? Store => _counted?.Store ?? Workers.FirstOrDefault()?.Store;
 
     /// <summary>The node lease when the host has a store.</summary>

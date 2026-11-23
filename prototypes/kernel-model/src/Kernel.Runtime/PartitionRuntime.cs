@@ -63,7 +63,11 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
         // A cancelled token ends it: what is not given up yet runs out by its lease, as after a crash.
+        if (_host is not { } host || cancellationToken.IsCancellationRequested) return;
+        try { await host.PrepareToStopAsync(cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
         for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++) await DeactivateAsync(scope, cancellationToken);
+        if (!cancellationToken.IsCancellationRequested) host.Stopped();
     }
 
     /// <summary>This node holds the scope's fence, as far as layer 2 knows.</summary>

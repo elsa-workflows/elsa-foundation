@@ -108,6 +108,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private sealed record JobPublication(Delivery Ticket, Slot Slot, CancellationToken Attempt, Message? Result, long At, long Order, bool SchedulerRejected = false);
     // Each ownership generation has its own handoff. A callback that outlives reset can only post to its old queue.
     private ConcurrentQueue<JobPublication> _jobPublications = new();
+    private readonly object _jobEntry = new();
+    private readonly HashSet<CancellationTokenSource> _enteredJobs = [];
+    private TaskCompletionSource? _jobsDrained;
+    private long _jobEntryEpoch; // A scheduler callback submitted before shutdown cannot enter after a host restart.
     private readonly HashSet<Delivery> _schedulerRetries = [];
     private readonly ConcurrentQueue<(long Generation, Message Creator)> _inlineStarts = new();
     private int _jobsDeferredByCancellation;
@@ -2307,6 +2311,55 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     // ---- background jobs -------------------------------------------------------------------------------------------
 
+    internal async Task DrainJobsAsync()
+    {
+        CancellationTokenSource[] entered;
+        Task exited;
+        lock (_jobEntry)
+        {
+            if (_jobsDrained is null)
+            {
+                Interlocked.Increment(ref _jobEntryEpoch);
+                _jobsDrained = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+            if (_enteredJobs.Count == 0) _jobsDrained.TrySetResult();
+            entered = [.. _enteredJobs];
+            exited = _jobsDrained.Task;
+        }
+        // Use asynchronous cancellation so cleanup callbacks cannot hold up admission closure or a kill deadline.
+        await Task.WhenAll(entered.Select(CancelAsync).Append(exited));
+
+        static async Task CancelAsync(CancellationTokenSource source)
+        {
+            try { await source.CancelAsync().ConfigureAwait(false); }
+            catch (AggregateException) { } // Activity cleanup cannot interrupt ownership or checkpoint bookkeeping.
+        }
+    }
+
+    internal void ReopenJobEntry()
+    {
+        lock (_jobEntry) _jobsDrained = null;
+    }
+
+    private bool EnterJob(CancellationTokenSource source, long entryEpoch)
+    {
+        lock (_jobEntry)
+        {
+            if (_jobsDrained is not null || entryEpoch != _jobEntryEpoch) return false;
+            _enteredJobs.Add(source);
+            return true;
+        }
+    }
+
+    private void ExitJob(CancellationTokenSource source)
+    {
+        lock (_jobEntry)
+        {
+            _enteredJobs.Remove(source);
+            if (_enteredJobs.Count == 0) _jobsDrained?.TrySetResult();
+        }
+    }
+
     private void PublishJobEligibility(Slot slot)
     {
         var current = slot.CurrentRow;
@@ -2416,11 +2469,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private async Task DriveJob(Delivery ticket, JobTicket job, Slot slot)
     {
         var generation = _generation;
+        var entryEpoch = Volatile.Read(ref _jobEntryEpoch);
         var publications = _jobPublications;
         var original = ticket.Message;
         var creation = original.TargetCreation ?? 0;
         bool MayReturn() => JobMayRun(generation) && Volatile.Read(ref slot.ActiveCreation) == creation;
-        var token = ticket.Cancel!.Token;
+        var source = ticket.Cancel!;
+        var token = source.Token;
         bool entered = false;
         ValueTask<object?> Enter()
         {
@@ -2434,7 +2489,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     ticket.AwaitingJobMark || ticket.DeferredJobTrial || ticket.WithdrawingJob ||
                     job.Deadline is { } deadline && Now >= deadline || !_gate.Allows(this, ticket))
                     return ValueTask.FromResult<object?>(null);
-                // Admission happens on the executing thread. Once admitted, ordinary cancellation signals the body.
+                // This is the last check. The drain can close admission while a callback is paused in any earlier guard.
+                if (!EnterJob(source, entryEpoch)) return ValueTask.FromResult<object?>(null);
                 entered = true;
                 Volatile.Write(ref ticket.JobEntered, true);
                 if (ticket.JobEntries < int.MaxValue) ticket.JobEntries++;
@@ -2448,28 +2504,32 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         async Task ExecuteAndPublish(bool scheduled)
         {
-            var unbounded = Has(Flaw.UnboundedJobResult);
-            string? result = null, error = null;
             try
             {
-                if (scheduled) _options.BeforeScheduledJobCheck?.Invoke();
-                var value = await Enter().ConfigureAwait(false);
-                result = unbounded ? Json.Write(value) : JobResultEncoding.Value(value);
+                var unbounded = Has(Flaw.UnboundedJobResult);
+                string? result = null, error = null;
+                try
+                {
+                    if (scheduled) _options.BeforeScheduledJobCheck?.Invoke();
+                    var value = await Enter().ConfigureAwait(false);
+                    result = unbounded ? Json.Write(value) : JobResultEncoding.Value(value);
+                }
+                catch (JobResultEncoding.LimitExceeded) { error = JobResultEncoding.Error; }
+                catch (Exception e) { error = e.Message; }
+                if (!MayReturn() || token.IsCancellationRequested) return;
+                var outcome = new JobFinished(job.Key, result, error);
+                var completed = entered ? original with { Kind = Kinds.JobFinished,
+                    Payload = unbounded ? Json.Write(outcome) : JobResultEncoding.Payload(outcome) } : null;
+                // Timestamp and enqueue together so simultaneous callbacks retain their observation order. The owner
+                // may receive this after a command matures. Its later clock cannot replace the original readiness time.
+                lock (publications)
+                {
+                    var at = Now;
+                    if (ticket.WithdrawingJob || ticket.JobDeadlineClosed || job.Deadline is { } deadline && at >= deadline) return;
+                    publications.Enqueue(new(ticket, slot, token, completed, at, Interlocked.Increment(ref _observed)));
+                }
             }
-            catch (JobResultEncoding.LimitExceeded) { error = JobResultEncoding.Error; }
-            catch (Exception e) { error = e.Message; }
-            if (!MayReturn() || token.IsCancellationRequested) return;
-            var outcome = new JobFinished(job.Key, result, error);
-            var completed = entered ? original with { Kind = Kinds.JobFinished,
-                Payload = unbounded ? Json.Write(outcome) : JobResultEncoding.Payload(outcome) } : null;
-            // Timestamp and enqueue together so simultaneous callbacks retain their observation order. The owner
-            // may receive this after a command matures. Its later clock cannot replace the original readiness time.
-            lock (publications)
-            {
-                var at = Now;
-                if (ticket.WithdrawingJob || ticket.JobDeadlineClosed || job.Deadline is { } deadline && at >= deadline) return;
-                publications.Enqueue(new(ticket, slot, token, completed, at, Interlocked.Increment(ref _observed)));
-            }
+            finally { if (entered) ExitJob(source); }
         }
         // Publish a synchronous body's outcome before this scheduled callback returns. An asynchronous
         // body completes its publication on its continuation, independently of the owner's next pass.
