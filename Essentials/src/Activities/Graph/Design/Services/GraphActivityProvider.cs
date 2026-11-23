@@ -685,7 +685,6 @@ public sealed class GraphActivityProvider(
                 {
                     JsonElement { ValueKind: JsonValueKind.String } text => JsonDocument.Parse(text.GetString()!).RootElement,
                     JsonElement json => json,
-                    string text => JsonDocument.Parse(text).RootElement,
                     var other => Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(other)
                 };
                 if (element.ValueKind != JsonValueKind.Array)
@@ -753,7 +752,6 @@ public sealed class GraphActivityProvider(
         var value = inputs[0].Value.Value switch
         {
             JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
-            string text => text,
             _ => null
         };
         return string.IsNullOrWhiteSpace(value) ? null : value;
