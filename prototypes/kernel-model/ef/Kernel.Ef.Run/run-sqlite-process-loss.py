@@ -89,7 +89,9 @@ def run(mode, output):
 
             if producer.wait(timeout=300) != 0 or successor.wait(timeout=10) != 0:
                 raise RuntimeError(f"Stress or the surviving worker failed. See logs in {output}.")
-            with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as store:
+            # SQLite may need to recreate the WAL sidecars after the last worker exits.
+            with closing(sqlite3.connect(database.as_uri() + "?mode=rw", uri=True)) as store:
+                store.execute("PRAGMA query_only = ON")
                 integrity = store.execute("PRAGMA integrity_check").fetchall()
             if integrity != [("ok",)]:
                 raise RuntimeError(f"SQLite integrity check failed: {integrity}")
