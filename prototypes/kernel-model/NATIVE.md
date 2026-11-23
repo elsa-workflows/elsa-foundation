@@ -282,8 +282,32 @@ is sent. The first reply carries the original registration and tenant. Its input
 with a new registration returns Duplicate. The ordinary owner, checkpoint reader and pending-input
 reader refuse the new format.
 
-Both owners run in one process, with an orderly handover and an in-process reply link. A held HTTP
-connection, process loss, event-based request admission and public PostgreSQL `RequestAsync` remain open.
+Both owners run in one process, with an orderly handover and an in-process reply link.
+
+### PostgreSQL HTTP approval preview
+
+With `KERNEL_PREVIEW_POSTGRES` pointing to a fresh dedicated database, run from `prototypes/kernel-model`:
+
+```sh
+dotnet run -c Release --project models/Native.Run -- pg-http-preview in-batch timely
+```
+
+The Native runner starts an actual loopback Kestrel host on a dynamic port and holds a real HTTP
+connection through the public `IIngress.RequestAsync` surface. A tenant-bound direct approval
+is stored against the exact actor. A second Worker takes at a higher epoch and commits one
+revision. The connection receives `202 approved`. The other tenant's route returns 404 without
+adding input. An identical operation with a changed body never gets attached to the first
+registration and reaches its own 504 deadline. The approval's state and journal are unchanged.
+
+Use `checked` for the other owned fence mode. Use a fresh database for each run. Replace `timely` with
+`late` to hold the live reply through the deadline and observe HTTP 504 with the approval committed.
+Use `disconnect` to close the actual HTTP connection before the handover and see the admitted
+approval complete. The host uses PostgreSQL time to check deadlines and match incoming replies.
+
+This preview uses fixture-private protocol 10 and two Workers with orderly handover in one process.
+It enables the public request contract for exact actor references inside the opt-in PostgreSQL
+preview. External transport, abrupt owner loss, event requests and HTTP-triggered starts
+remain separate K8 cases.
 
 ## 5. What it costs
 

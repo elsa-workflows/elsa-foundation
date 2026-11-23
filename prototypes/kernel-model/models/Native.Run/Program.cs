@@ -54,6 +54,8 @@ if (args is ["sqlite-plan-projection", ..])
         """);
     return 2;
 }
+if (args is ["pg-http-preview", var httpFence and ("checked" or "in-batch"), var httpSchedule and ("timely" or "late" or "disconnect")])
+    return await PostgresHttpPreview.RunAsync(httpFence == "in-batch", httpSchedule);
 if (args is ["pg-root-held-direct", var replyFence and ("checked" or "in-batch")])
     return await PostgresHeldDirectChecks.RunAsync(replyFence == "in-batch", afterDeadline: false);
 if (args is ["pg-root-held-direct", var delayedReplyFence and ("checked" or "in-batch"), "after-deadline"])
