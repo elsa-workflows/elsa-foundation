@@ -69,13 +69,13 @@ fallback marker.
 
 | Diagnostic | When | Severity |
 |---|---|---|
-| Unresolved literal name | A literal name resolves to no visible declaration (spec 1216 FR-027) | refuse at publish |
+| Unresolved literal name | A literal name resolves to no visible declaration (spec 1232 FR-027) | refuse at publish |
 | Transient literal read | A literal name resolves to a non-durable variable | refuse at publish (retained) |
 | Shadow change | A literal name now resolves to a different declaration than the previously published version | warn at publish |
 | Computed read reported | An expression has computed or opaque reads; lists its candidates | info at publish |
 | Possible protected read | A computed read's candidates include a protected variable | warn at publish |
 | Transient candidate | A computed read's candidates include a transient variable | warn at publish |
-| Missing computed name | A computed name matches no visible variable (spec 1216 FR-025/FR-026) | warn at run time; read marked absent |
+| Missing computed name | A computed name matches no visible variable (spec 1232 FR-025/FR-026) | warn at run time; read marked absent |
 | Withheld read | A read reaches a value the context may not read | fault at run time (value not provided) |
 | Transient computed read | A computed name resolves to a transient variable (ADR 0089 R3) | fault the step, naming the node and the variable |
 | Converter: `args` collision | A script's own `args` would collide with lowered `args` reads (#3296) | refuse at import |

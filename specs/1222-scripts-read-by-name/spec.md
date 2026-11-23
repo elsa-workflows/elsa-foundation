@@ -26,7 +26,7 @@ computed names and opaque host-function reads fall back to a recorded run-time l
 | **ADR 0092** (variable reads and writes share one versioned lifecycle) | Decision 3: pinned reads and the fallback's actual reads enter the read set. The body's variable session | merged as `f52a661df` | accepted 2026-11-12 |
 | **ADR 0090** (activities change variables as a unit of work committed with the step) | Decision 2: a body read returns the committed value plus the step's own pending writes (read-your-writes); loop items and indexes are frozen. Decision 3: the body's read forms and that the runtime provides no generated accessors. Writes themselves are S-7 | merged as `87e55ebc7` | accepted 2026-11-16 |
 
-It also keeps **spec 1216** (S-2) FR-025 to FR-027 (a missing computed name reads `undefined` in JavaScript and nil in
+It also keeps **spec 1232** (S-2) FR-025 to FR-027 (a missing computed name reads `undefined` in JavaScript and nil in
 Liquid with a warning; a missing literal name stays a publish diagnostic), and it changes **spec 095**'s expression
 contract §1 and §6 (the `variables` surface flag and the fallback marker, research R-2).
 
@@ -68,7 +68,7 @@ innermost-first.
 5. **Given** a Liquid template `{{ variables.order }}`, **When** published and run, **Then** it reads `order` from the
    nearest declaring scope.
 6. **Given** a declared variable `order` with no value set, **When** a script reads `variables.order`, **Then** it
-   reads JSON `null` (never `undefined`).
+   reads JSON `null` (never `undefined`); a `Boolean` or number variable reads its type default (spec 1232 FR-001c).
 
 ---
 
@@ -191,11 +191,11 @@ value and confirm it is not provided.
 
 ### Edge Cases
 
-- A literal name that resolves to no visible declaration at publish → publish refusal (US4 #3; spec 1216 FR-027).
+- A literal name that resolves to no visible declaration at publish → publish refusal (US4 #3; spec 1232 FR-027).
 - A literal name that resolves to a *different* declaration than the previously published version → publish warning
   (US4 #4).
 - A computed name that matches no visible variable at run time → `undefined` in JavaScript, nil in Liquid, a warning,
-  and the read marked absent (US2 #3–#4; spec 1216 FR-025/FR-026).
+  and the read marked absent (US2 #3–#4; spec 1232 FR-025/FR-026).
 - A literal read of a **transient** (non-durable) variable → publish diagnostic (retained rule; its value cannot be
   snapshotted). A computed read that resolves at run time to a transient variable faults the step, naming the node
   and the variable (ADR 0089 R3); it never reads `undefined`, which would hide the failure. Publish lists transient
@@ -248,7 +248,8 @@ value and confirm it is not provided.
   pinned read. BPMN multi-instance iteration frames are out of scope (Q1).
 - **FR-005**: Liquid templates MUST read variables through the same `variables` root and the same nearest-scope
   resolution as JavaScript.
-- **FR-006**: A declared variable with no value set MUST read JSON `null`, never `undefined`.
+- **FR-006**: A declared variable with no value set MUST read JSON `null`, never `undefined`. *Amended by spec 1232
+  FR-001c:* a variable whose type has a type default (`Boolean`, numbers, enums) reads that default instead.
 - **FR-007**: For literal reads, loading MUST materialize only the variables the script names (not every visible
   variable).
 
@@ -268,8 +269,8 @@ value and confirm it is not provided.
   (ADR 0092 decision 3; S-10's `InputReadSet`) for an input-binding expression; a `RunJavaScript` body's reads go into
   its session reads instead (FR-033).
 - **FR-011**: A computed name that matches no visible variable MUST read as `undefined` in JavaScript (never `null`)
-  and nil in Liquid, MUST record a warning, and MUST mark the read absent (spec 1216 FR-025/FR-026).
-- **FR-012**: A literal name that matches no visible variable MUST remain a publish diagnostic (spec 1216 FR-027).
+  and nil in Liquid, MUST record a warning, and MUST mark the read absent (spec 1232 FR-025/FR-026).
+- **FR-012**: A literal name that matches no visible variable MUST remain a publish diagnostic (spec 1232 FR-027).
 - **FR-013**: The fallback MUST be confined to expressions that contain a computed or opaque read; an expression with
   only literal reads MUST NOT pay the fallback's loading cost.
 - **FR-014**: Publish MUST parse each script with the language's parser (JavaScript parser for JavaScript, Liquid's

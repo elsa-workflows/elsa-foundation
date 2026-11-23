@@ -20,7 +20,7 @@ shows each new test failing without the change.
 
 - [ ] T001 Confirm the spec is merged with Q9 to Q11 answered, and diff the initiative branch's ADR 0091, ADR 0046
   *Dates* and spec 1223 FR-034 against spec.md. Message the parent session before editing the serializer baseline
-  files S-2 (spec 1216) also touches, and merge the initiative branch in first if S-8 (#4838) or S-1 (#4855) has
+  files S-2 (spec 1232) also touches, and merge the initiative branch in first if S-8 (#4838) or S-1 (#4855) has
   landed
 - [ ] T002 Confirm that the shared-baseline pattern passed the framework §2.24.3 gate with ADR 0091 and is listed in
   §2.24.2 (`.specify/memory/constitution-framework.md`). If not, stop and raise it
