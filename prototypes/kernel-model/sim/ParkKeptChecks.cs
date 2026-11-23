@@ -2485,6 +2485,7 @@ internal static class ParkKeptChecks
         await CheckRestartedJob(timed: true, check, sweepDuringOpen: true);
         await CheckRestartedJob(timed: false, check, crossPark: true);
         await CheckInterruptedPendingRestart(check);
+        await ParkJobGenerationChecks.Run(check);
         await CheckRetryConsumedResult(Contract.RecoverMode.Resume, check);
         await CheckRetryConsumedResult(Contract.RecoverMode.RetryAll, check);
         await CheckRetryConsumedResult(Contract.RecoverMode.Retry, check);
