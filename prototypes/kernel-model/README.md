@@ -1046,6 +1046,9 @@ During the coordinated stop, call `EfStore.UpgradeJobGenerationFormatAsync` befo
 database. The ordinary relational format advances from (2, 1, 1) to (3, 2, 1). The PostgreSQL immediate-continuation
 format advances from (2, 3, 1) to (3, 3, 1). The PostgreSQL Delay format advances from (2, 4, 1) to (3, 4, 1).
 Both keep their existing private inputs and refresh the private inbox view in the schema transaction.
+For PostgreSQL generated roots, the migration installs and backfills a missing actor-list projection before
+publishing the new format. Run the same coordinated-stop command on an already advanced preview database
+to install a projection left out by an older coordinator. Ordinary relational stores do not get a root projection.
 The three numbers identify schema, message protocol and journal codec.
 Checkpoints that predate the creation's next-job counter read as null. Existing messages read as generation zero.
 MySQL prepares the two additive columns on a separate connection while the migration holds the version marker.
