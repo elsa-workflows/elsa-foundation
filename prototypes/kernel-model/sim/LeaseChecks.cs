@@ -827,6 +827,7 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public List<CommitBatch> Batches { get; } = [];
     public Func<CancellationToken, Task>? BeforePoll, AfterLoad;
     public Action<Polled>? BeforePollReply;
+    public Func<Polled, Task>? HoldPollReply;
     public int PollCalls, LoadCalls, CommitCalls;
     public TaskCompletionSource Taken = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource TakeReply = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -881,6 +882,7 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
         if (BeforePoll is not null) await BeforePoll(ct);
         var response = await inner.PollAsync(partition, epoch, horizon, limit, ct);
         BeforePollReply?.Invoke(response);
+        if (HoldPollReply is not null) await HoldPollReply(response);
         return response;
     }
     public ValueTask<bool> AddAsync(Message message, CancellationToken ct = default) => inner.AddAsync(message, ct);
