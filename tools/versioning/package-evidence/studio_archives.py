@@ -100,7 +100,9 @@ def main():
     modes.add_argument("--write", choices=["npm", "nuget"], help="Write the workflow receipt and sidecars")
     modes.add_argument("--check", choices=["npm", "nuget"], help="Check transferred archives and original producer attempt before signing")
     modes.add_argument("--payload", type=Path, help="Write a NuGet payload witness for independent provenance verification")
+    parser.add_argument("--signed-retry", action="store_true", help="Allow an earlier producer attempt when verifying a previously signed receipt")
     args = parser.parse_args()
+    check(not args.signed_retry or args.check, "Signed retry requires a receipt check")
     mode = args.write or args.check
     if not mode:
         row, _ = inspect(args.path)
@@ -128,7 +130,11 @@ def main():
             properties = {p["name"]: p["value"] for p in bom["metadata"]["properties"]}
             for key, env in [("repository", "GITHUB_REPOSITORY"), ("commit", "GITHUB_SHA"),
                              ("producer-run", "GITHUB_RUN_ID"), ("producer-attempt", "GITHUB_RUN_ATTEMPT")]:
-                check(properties["elsa:" + key] == os.environ[env], "Unexpected producer " + key)
+                value = properties["elsa:" + key]
+                if args.signed_retry and key == "producer-attempt":
+                    check(0 < int(value) <= int(os.environ[env]), "Invalid signed producer attempt")
+                else:
+                    check(value == os.environ[env], "Unexpected producer " + key)
             sidecar(path.name + ".cdx.json", raw)
         if mode == "nuget":
             witness = nuget_payload(path)

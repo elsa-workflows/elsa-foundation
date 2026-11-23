@@ -67,6 +67,12 @@ class StudioEvidence(unittest.TestCase):
             with patch.dict("os.environ", GITHUB_RUN_ATTEMPT="2"), patch.object(sys, "argv", ["studio_archives.py", folder, "--check", "npm"]):
                 with self.assertRaisesRegex(ValueError, "producer-attempt"):
                     inspect_cli()
+                with patch.object(sys, "argv", ["studio_archives.py", folder, "--check", "npm", "--signed-retry"]):
+                    inspect_cli()
+            with patch.dict("os.environ", GITHUB_RUN_ATTEMPT="0"), patch.object(sys, "argv", [
+                    "studio_archives.py", folder, "--check", "npm", "--signed-retry"]):
+                with self.assertRaisesRegex(ValueError, "Invalid signed producer attempt"):
+                    inspect_cli()
 
     def test_nuget_static_assets(self):
         file = "staticwebassets/studio/index.js"

@@ -373,29 +373,38 @@ and promotion are tracked in [#2085](https://github.com/elsa-workflows/elsa-foun
 
 The manual [Studio package workflow](../../.github/workflows/studio-packages.yml) embeds a CycloneDX 1.6 JSON inventory in each of its four npm tarballs at `package/dist/sbom.cdx.json`. Each Studio NuGet with browser assets carries `sbom/frontend.cdx.json`. The latter covers that package’s static web assets. Build-only dispatches produce the inventories and package receipts. The protected preview and stable jobs sign and publish candidates after the existing repository opt-in and ref checks.
 
-For an official release, download the exact package version, set `PACKAGE` to its path, and set `REF` and `COMMIT` from your trusted release record. Use the stable release tag or the preview branch/tag that produced that version. GitHub CLI 2.102 or later and Python 3 can check the public evidence.
+Download the exact package version and set `PACKAGE` to its path. Set `REGISTRY` to its npm registry or NuGet v3 service index. Set `REF` and `COMMIT` from your trusted release record. Use the stable release tag or the preview branch/tag that produced that version. Run the following in Bash with Python 3, GitHub CLI 2.102 or later, jq and the appropriate package client.
 
 ```bash
+set -euo pipefail
 repo=elsa-workflows/elsa-foundation
 verify_producer() {
   gh attestation verify "$1" --repo "$repo" --signer-workflow "$repo/.github/workflows/studio-packages.yml" \
     --source-ref "$REF" --source-digest "$COMMIT"
 }
-# npm and Feedz serve the original archive bytes.
-verify_producer "$PACKAGE"
-python3 tools/versioning/package-evidence/studio_archives.py "$PACKAGE"
+reader=tools/versioning/package-evidence/studio_archives.py
+if [[ "$PACKAGE" == *.nupkg && "$REGISTRY" == 'https://api.nuget.org/v3/index.json' ]]; then
+  signature_index=https://api.nuget.org/v3-index/repository-signatures/5.0.0/index.json
+  fingerprints=$(curl -fsSL "$signature_index" | jq -er '[.signingCertificates[].fingerprints["2.16.840.1.101.3.4.2.1"]] | join(" ")')
+  dotnet nuget verify "$PACKAGE" --all --certificate-fingerprint $fingerprints
+  python3 "$reader" "$PACKAGE" --payload "$PACKAGE.payload.json"
+  verify_producer "$PACKAGE.payload.json"
+else
+  verify_producer "$PACKAGE"
+  receipt=$(python3 "$reader" "$PACKAGE")
+  if [[ "$PACKAGE" == *.tgz ]]; then
+    spec=$(jq -er '.id + "@" + .version' <<< "$receipt")
+    expected=$(jq -er .integrity <<< "$receipt")
+    observed=$(npm view "$spec" dist.integrity --registry "$REGISTRY")
+    [[ "$observed" == "$expected" ]]
+  fi
+fi
 ```
 
-The Python command checks file hashes against the embedded inventory, checks npm dependency declarations, and prints the package SHA-256 and npm SHA-512 integrity when applicable. Compare the latter with `npm view "$NAME@$VERSION" dist.integrity --registry "$REGISTRY"`. Extract the inventory with `tar -xOzf "$PACKAGE" package/dist/sbom.cdx.json` or `unzip -p "$PACKAGE" sbom/frontend.cdx.json`. Each release candidate, standalone SBOM and receipt receives GitHub SLSA provenance. The signed subject list binds their digests. For a repository-signed download from nuget.org, verify its NuGet signature against the published repository fingerprints, recreate the canonical payload witness from the archive, then verify that witness against the producer. This works as soon as an individual package appears in a partially published release.
-
-```bash
-signature_index=https://api.nuget.org/v3-index/repository-signatures/5.0.0/index.json
-fingerprints=$(curl -fsSL "$signature_index" | jq -er '[.signingCertificates[].fingerprints["2.16.840.1.101.3.4.2.1"]] | join(" ")')
-dotnet nuget verify "$PACKAGE" --all --certificate-fingerprint $fingerprints
-python3 tools/versioning/package-evidence/studio_archives.py "$PACKAGE" --payload "$PACKAGE.payload.json"
-verify_producer "$PACKAGE.payload.json"
-```
+The reader compares all inventoried files and npm dependency declarations with the embedded SBOM. Extract the inventory with `tar -xOzf "$PACKAGE" package/dist/sbom.cdx.json` or `unzip -p "$PACKAGE" sbom/frontend.cdx.json`. Each release candidate, standalone SBOM and receipt receives GitHub SLSA provenance. The signed subject list binds their digests. Nuget.org consumers can verify the repository signature and the canonical payload witness as soon as an individual package appears in a partially published release.
 
 The witness covers the name and SHA-256 of every package payload file, including the embedded inventory, while allowing nuget.org to add its repository signature. After a successful publish the workflow independently downloads the complete batch, checks the served content and signs a receipt with the feed-specific SHA-256 for each archive. The Actions artifacts include `npm-subjects.json`, `nuget-subjects.json` and, after publication, `nuget-feed-receipt.json`. The embedded inventories and GitHub attestation records remain usable after Actions artifact retention expires.
 
 In the npm inventory, `elsa:bundled` marks a package represented in emitted bundle inputs. `elsa:external-import` lists imports supplied by the consuming host. The root’s dependency, optional dependency and peer dependency properties give the ranges in the published manifest. The dependency graph starts with pnpm’s per-package production CycloneDX output and includes the workspace siblings and the dependency edges from their frozen install. A consuming app can resolve other allowed versions and should produce a separate inventory after its own production build. NuGet frontend inventories include their bundled inputs and hashes for all packed static web assets, including lazy chunks, CSS and fonts. The repository and commit identify first-party workspace inputs.
+
+An interrupted official dispatch can be retried from the same Actions run. After the protected job records `studio-signed-release`, both a failed-job retry and a full rerun use that immutable snapshot. Each publisher verifies its signed receipt and exact archive bytes before the first write. Resume within the 30-day Actions rerun window.
