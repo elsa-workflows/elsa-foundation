@@ -52,11 +52,20 @@ internal static class MigrationPlanDispatchChecks
         Require(replacement != old && await reads.GetAsync(scope, old, stop) is null && await DefinitionAsync(replacement) == "source",
             "The caller key now names a different live actor.");
 
+        var oversized = Json.Write(new MigrationRequest("source",
+            new string('x', FoundationMetadataLimits.MessageContentBytes + 1), plan));
+        var tooLarge = await edge.SendAsync(scope, new Contract.Target.Ref(first), "oversized-migration",
+            Contract.Kinds.Migrate, oversized, cancellationToken: stop);
+        Require(tooLarge is { Outcome: Contract.AdmissionOutcome.Refused, Reason: null } &&
+            (await reads.InboxAsync(scope, first, cancellationToken: stop)).Items.Count == 0 &&
+            (await planState.ReadPendingAsync(scope, plan, stop))?.Number == 1,
+            "A payload above the admission limit is a refusal for a live target and leaves the batch pending.");
+
         permitted = false;
         var denied = false;
         try { await dispatcher.DispatchAsync(scope, plan, stop); }
         catch (InvalidOperationException) { denied = true; }
-        Require(denied && planState.Acknowledgments == 0 && (await planState.ReadPendingAsync(scope, plan, stop))?.Number == 1 &&
+        Require(denied && planState.Acknowledgments.Count == 0 && (await planState.ReadPendingAsync(scope, plan, stop))?.Number == 1 &&
             await DefinitionAsync(first) == "source", "An authorization refusal leaves the whole batch pending.");
         permitted = true;
         ingress.Calls.Clear();
@@ -64,7 +73,7 @@ internal static class MigrationPlanDispatchChecks
         var lost = false;
         try { await dispatcher.DispatchAsync(scope, plan, stop); }
         catch (UnknownAdmissionException) { lost = true; }
-        Require(lost && planState.Acknowledgments == 0 && ingress.Calls.Count == 2 &&
+        Require(lost && planState.Acknowledgments.Count == 0 && ingress.Calls.Count == 2 &&
             ingress.Calls.All(call => call.Outcome == Contract.AdmissionOutcome.Accepted),
             "A lost admission answer does not acknowledge the batch.");
         var attempts = ingress.Calls.ToArray();
@@ -73,11 +82,20 @@ internal static class MigrationPlanDispatchChecks
             await DefinitionAsync(replacement) == "source", "Both admitted exact actors apply the migration after the lost reply.");
 
         ingress.Calls.Clear();
-        var resumed = new MigrationPlanDispatch(ingress, new WitnessPlanState(reads, edge));
+        var resumedState = new WitnessPlanState(reads, edge);
+        var resumed = new MigrationPlanDispatch(ingress, resumedState);
         var dispatch = await resumed.DispatchAsync(scope, plan, stop);
         Require(dispatch is { Accepted: 0, Duplicate: 2, Unavailable: 1 } && ingress.Calls.Count == 3 &&
             ingress.Calls.Take(2).Select(call => (call.Target, call.Id)).SequenceEqual(attempts.Select(call => (call.Target, call.Id))) &&
             ingress.Calls[2].Target == old, "A fresh runner retries the committed exact refs with the same operation IDs.");
+        var repeated = await resumed.DispatchAsync(scope, plan, stop);
+        Require(repeated == dispatch && resumedState.Acknowledgments is
+            [{ Plan: var firstPlan, Id: var firstAck, Outcome: Contract.AdmissionOutcome.Accepted },
+             { Plan: var repeatedPlan, Id: var repeatedAck, Outcome: Contract.AdmissionOutcome.Duplicate }] &&
+            firstPlan == plan && repeatedPlan == plan && firstAck == repeatedAck &&
+            (await resumedState.ReadPendingAsync(scope, plan, stop))?.Number == 1,
+            "An acknowledgment admitted before the plan commits is deduplicated on exact replay.");
+
         await PumpAsync();
         Require(await dispatcher.DispatchAsync(scope, plan, stop) is null && await DefinitionAsync(replacement) == "source",
             "The committed acknowledgment clears the batch and leaves the successor at its source definition.");
@@ -157,7 +175,7 @@ internal static class MigrationPlanDispatchChecks
 
     private sealed class WitnessPlanState(Contract.IActorReads reads, Contract.IIngress ingress) : IMigrationDispatchState
     {
-        public int Acknowledgments { get; private set; }
+        public List<(Contract.ActorRef Plan, string Id, Contract.AdmissionOutcome Outcome)> Acknowledgments { get; } = [];
 
         public async ValueTask<MigrationDispatchBatch?> ReadPendingAsync(Contract.BoundScope scope, Contract.ActorRef plan, CancellationToken stop)
         {
@@ -168,9 +186,9 @@ internal static class MigrationPlanDispatchChecks
         public async ValueTask AcknowledgeAsync(Contract.BoundScope scope, Contract.ActorRef plan, long batch, string operationId, CancellationToken stop)
         {
             var sent = await ingress.SendAsync(scope, new Contract.Target.Ref(plan), operationId, "dispatched", Json.Write(batch), cancellationToken: stop);
-            if (sent.Outcome is not (Contract.AdmissionOutcome.Accepted or Contract.AdmissionOutcome.Duplicate))
-                throw new InvalidOperationException("The fixture did not commit the acknowledgment.");
-            Acknowledgments++;
+            if (sent.Actor != plan || sent.Outcome is not (Contract.AdmissionOutcome.Accepted or Contract.AdmissionOutcome.Duplicate))
+                throw new InvalidOperationException("The fixture did not admit the acknowledgment for the selected plan.");
+            Acknowledgments.Add((plan, operationId, sent.Outcome));
         }
     }
 

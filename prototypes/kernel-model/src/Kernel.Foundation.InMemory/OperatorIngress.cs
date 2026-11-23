@@ -19,6 +19,11 @@ internal sealed class OperatorIngress(Durable.InMemoryStore store, Func<BoundSco
         if (authorize?.Invoke(scope, kind) != true || !Durable.InMemoryStore.IsOutsideMessageId(id))
             return new(refused);
 
+        // A migration dispatcher may skip an unavailable exact life. Admission bounds must refuse separately.
+        if (kind == Kinds.Migrate && (!Durable.FoundationMetadataLimits.FitsName(id) ||
+            !Durable.FoundationMetadataLimits.FitsContent(payload)))
+            return new(refused);
+
         string? selection = null;
         string? deleteTarget = null;
         Durable.ParkRecoveryMode? recoverMode = null;
