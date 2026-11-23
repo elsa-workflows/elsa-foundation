@@ -23,9 +23,9 @@ if (rest.Remove("--no-abort")) MongoStore.AbortOnFailure = false;
 if (rest.Remove("--no-backoff")) MongoStore.BackOffOnTransient = false;
 if (rest.Remove("--labels-only")) MongoStore.LabelsOnly = true;
 if (rest.Remove("--cuts-only")) MongoProvider.CutsOnly = true;
-if (rest is ["first-job-root"])
+if (rest is ["first-job-root"] or ["scoped-job-result"])
 {
-    await FirstJobRootChecks.RunAsync(connection, options);
+    await FirstJobRootChecks.RunAsync(connection, options, settle: rest[0] == "scoped-job-result");
     return 0;
 }
 if (rest is ["job-root-admission"])

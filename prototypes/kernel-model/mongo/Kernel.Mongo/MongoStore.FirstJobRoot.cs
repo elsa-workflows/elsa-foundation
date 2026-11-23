@@ -9,7 +9,11 @@ public sealed partial class MongoStore
 {
     internal sealed record JobRootImage(string Actor, long Creation, long Revision, string Model, string Definition,
         string? State, int StateVersion, string Jobs, long NextJobGeneration, string StartIntent, string TypeData, Dictionary<string, string> Labels);
-    internal sealed record JobRootCheckpoint(JobRootImage Image, IReadOnlyList<Message> Tickets, JournalRow Journal);
+    internal sealed record JobRootCheckpoint(JobRootImage Image, IReadOnlyList<Message> Tickets, JournalRow Journal)
+    {
+        internal IReadOnlyList<Message> Results { get; init; } = [];
+        internal bool Suspended { get; init; }
+    }
     private sealed record FirstJobWrite(string Tenant, string Reference, Message Creator, string Envelope, string Image);
 
     // Closed first-turn shape. The ordinary writer continues to refuse qualified writes.
@@ -67,7 +71,7 @@ public sealed partial class MongoStore
         var scopeWrite = new FirstJobWrite(scope.Tenant, reference, canonical, DurableKeyJson.Write(new RootEnvelope(creator.Id, spec)), DurableKeyJson.Write(image));
         var frozen = turn with { Consumed = [canonical.InboxKey], Done = [], Sent = tickets, Subscribed = [], Unsubscribed = [], Held = null };
         var batch = new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [frozen], [], []);
-        return CommitAsync(batch, scopeWrite, cancellationToken);
+        return CommitAsync(batch, scopeWrite, null, cancellationToken);
     }
 
     private static BsonDocument CreatorFilter(FirstJobWrite scope) => new()
@@ -106,19 +110,33 @@ public sealed partial class MongoStore
                 image.Revision != row["revision"].AsInt64 || image.StartIntent != birth["intent"].AsString)
                 throw new StoreException(Failure.Definite, "The scoped checkpoint conflicts with its birth.");
             var jobs = JobRegistry.Read(image.Jobs);
-            var tickets = await _messages.Find(tx, new BsonDocument { { "partition", birth["partition"] },
-                { "rootRef", reference }, { "tenant", scope.Tenant }, { "target", image.Actor }, { "kind", Kinds.Job }, { "done", false } })
-                .Sort(new BsonDocument("seq", 1)).ToListAsync(token);
-            var decoded = tickets.Select(d => ToStored(d).Message).ToArray();
-            if (decoded.Length != jobs.Count || !decoded.Zip(jobs).All(pair =>
-                pair.First.JobGeneration == pair.Second.Generation && pair.First.Sender == image.Actor &&
-                pair.First.SenderCreation == image.Creation && pair.First.TargetCreation == image.Creation &&
-                pair.First.InboxKey == InboxKey.Ticket(image.Actor, pair.Second.Key, image.Creation, pair.Second.Generation)))
-                throw new StoreException(Failure.Definite, "The pending tickets conflict with the first job checkpoint.");
+            var expected = jobs.ToDictionary(e => InboxKey.Ticket(image.Actor, e.Key, image.Creation, e.Generation));
+            var docs = await _messages.Find(tx, new BsonDocument { { "partition", birth["partition"] },
+                { "rootRef", reference }, { "tenant", scope.Tenant }, { "target", image.Actor },
+                { "kind", _options.ScopedJobResults ? new BsonDocument("$in", new BsonArray { Kinds.Job, Kinds.JobFinished }) : (BsonValue)Kinds.Job },
+                { "done", false } }).Sort(new BsonDocument("seq", 1)).ToListAsync(token);
+            var tickets = new List<Message>();
+            var results = new List<Message>();
+            foreach (var doc in docs)
+            {
+                var msg = ToStored(doc).Message;
+                bool result = msg.Kind == Kinds.JobFinished;
+                var key = result ? msg.Read<JobFinished>().Key : msg.Read<JobTicket>().Key;
+                var ticket = InboxKey.Ticket(image.Actor, key, image.Creation, msg.JobGeneration);
+                if (!expected.Remove(ticket) || msg.Sender != image.Actor || msg.SenderCreation != image.Creation || msg.TargetCreation != image.Creation ||
+                    msg.InboxKey != (result ? InboxKey.JobResult(image.Actor, key, image.Creation, msg.JobGeneration) : ticket) ||
+                    result && !doc.GetValue("resultOf", BsonNull.Value).Equals(InboxId(ticket)))
+                    throw new StoreException(Failure.Definite, "The pending ticket or result conflicts with the job checkpoint.");
+                if (result) results.Add(msg with { FoundationJobResult = true });
+                else tickets.Add(msg);
+            }
+            if (expected.Count != 0)
+                throw new StoreException(Failure.Definite, "The job checkpoint is missing a pending ticket or result.");
             var journal = await _journal.Find(tx, new BsonDocument { { "partition", birth["partition"] }, { "instance", image.Actor },
                 { "revision", image.Revision }, { "tenant", scope.Tenant }, { "rootRef", reference } }).SingleAsync(token);
-            return new JobRootCheckpoint(image, decoded, new JournalRow(birth["partition"].AsInt32, journal["position"].AsInt64,
-                image.Actor, image.Revision, journal["entries"].AsString));
+            return new JobRootCheckpoint(image, tickets, new JournalRow(birth["partition"].AsInt32, journal["position"].AsInt64,
+                image.Actor, image.Revision, journal["entries"].AsString))
+                { Results = results, Suspended = row.GetValue("suspended", false).AsBoolean };
         }, Transaction, cancellationToken);
     }
 }
