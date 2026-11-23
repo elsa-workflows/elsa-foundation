@@ -618,6 +618,10 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };
+            // The legacy Worker cannot commit a positive creation. Leave preview creators pending until
+            // the public foundation adapter and its qualified checkpoint are available on this store.
+            if (PostgresRootAdmission.IsStoredCreator(r.Start))
+                throw new StoreException(Failure.Definite, "PostgreSQL public root creators require a qualified foundation owner.");
             return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo).WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
         }).ToList();
