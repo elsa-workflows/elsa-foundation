@@ -29,6 +29,8 @@ public interface IScopeHost
 public interface IScopeSetRelease
 {
     bool SupportsSetRelease { get; }
+
+    /// <summary>Cancellation stops the handover before it starts. Once it starts, the host drains the group.</summary>
     ValueTask ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken = default);
 }
 

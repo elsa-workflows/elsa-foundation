@@ -126,14 +126,13 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         if (release.Count > 1 && _host is IScopeSetRelease { SupportsSetRelease: true } setHost)
         {
             cancellationToken.ThrowIfCancellationRequested();     // a process that goes away mid-round gives nothing more up
-            var activations = new List<IScopeActivation>(release.Count);
-            foreach (var surplus in release)
+            var activations = release.Select(Activation).OfType<IScopeActivation>().ToArray();
+            if (activations.Length > 0)
             {
-                if (Activation(surplus) is not { } activation) continue;
-                _active[surplus] = null;
-                activations.Add(activation);
+                await setHost.ReleaseAsync(activations, cancellationToken);
+                foreach (var activation in activations)
+                    if (!activation.Active && ReferenceEquals(_active[activation.Scope], activation)) _active[activation.Scope] = null;
             }
-            if (activations.Count > 0) await setHost.ReleaseAsync(activations, cancellationToken);
         }
         else
         {

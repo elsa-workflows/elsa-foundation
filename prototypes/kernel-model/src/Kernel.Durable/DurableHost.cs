@@ -220,8 +220,12 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
 
     private async ValueTask LoseAsync(IReadOnlyCollection<int> scopes, CancellationToken cancellationToken = default)
     {
-        await _turn.WaitAsync(CancellationToken.None);
-        try { await _node!.LoseAsync(scopes, cancellationToken); }
+        await _turn.WaitAsync(cancellationToken);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await _node!.LoseAsync(scopes);
+        }
         finally { _turn.Release(); }
     }
 

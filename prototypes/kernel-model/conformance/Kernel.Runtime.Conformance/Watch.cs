@@ -134,13 +134,19 @@ public sealed class Watcher
         public async ValueTask ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken = default)
         {
             var releasing = activations.Cast<Watched>().Where(activation => activation.BeginRelease()).ToArray();
+            var cancelled = false;
             try
             {
                 await ((IScopeSetRelease)inner).ReleaseAsync(releasing.Select(activation => activation.Inner).ToArray(), cancellationToken);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                cancelled = true;
+                throw;
+            }
             finally
             {
-                foreach (var activation in releasing) activation.EndRelease();
+                foreach (var activation in releasing) activation.EndRelease(cancelled);
             }
         }
 
@@ -240,6 +246,10 @@ public sealed class Watcher
             return true;
         }
 
-        internal void EndRelease() => watcher.Leave(node, scope, "gave up");
+        internal void EndRelease(bool cancelled = false)
+        {
+            if (cancelled) lock (watcher._lock) Disposed = false;
+            watcher.Leave(node, scope, "gave up");
+        }
     }
 }
