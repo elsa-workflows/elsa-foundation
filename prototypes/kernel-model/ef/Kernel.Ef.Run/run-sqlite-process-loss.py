@@ -57,17 +57,26 @@ def run(mode, output):
             producer = start("producer", "nodes=0")
             observe("The producer did not initialize both partitions.", lambda rows: len(rows) == 2, producer)
             owner = start("owner", "role=workers", "nodes=1", "name=owner-")
-            before = observe(
+            initial = observe(
                 "The first process did not advance both partitions.",
                 lambda rows: len(rows) == 2 and all(str(name).startswith("owner-") and position > 0
                                                    for _, name, _, position in rows),
                 producer, owner,
             )
-            print(f"{mode}: owner process {owner.pid} advanced both partitions: {before}", flush=True)
+            print(f"{mode}: owner process {owner.pid} advanced both partitions: {initial}", flush=True)
             owner.kill()
             if owner.wait(timeout=10) != -signal.SIGKILL:
                 raise RuntimeError("The original fixture owner did not exit abruptly.")
 
+            before = observe(
+                "The durable partition rows are missing after the first process exited.",
+                lambda rows: len(rows) == 2 and all(
+                    partition == previous and name == previous_name and epoch >= old_epoch and position >= old_position
+                    for (partition, name, epoch, position), (previous, previous_name, old_epoch, old_position)
+                    in zip(rows, initial)),
+                producer,
+            )
+            print(f"{mode}: durable positions after owner exit: {before}", flush=True)
             successor = start("successor", "role=workers", "nodes=1", "name=successor-")
             after = observe(
                 "The successor did not retake both partitions and advance their journals.",
