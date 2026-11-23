@@ -77,15 +77,19 @@ internal static class NativeHttpEdgeChecks
 
             var begin = PostAsync("begin");
             await enteringCommit.Task.WaitAsync(token);
-            Require(!begin.IsCompleted && transport.Responses == 0,
+            var startRequest = requests.All.Single();
+            Require(!begin.IsCompleted && requests.IsOpen(startRequest) && transport.Responses == 0 &&
+                    (await reads.ListAsync(scope, new(Status: Contract.ActorStatus.Running), cancellationToken: token)).Items.Count == 0,
                 "The HTTP response stays held while the first checkpoint commit is blocked.");
             releaseCommit.SetResult();
             using (var started = await begin)
                 Require(started.StatusCode == HttpStatusCode.Created && await started.Content.ReadAsStringAsync(token) == "created",
                     "The Native start returns its authored HTTP 201.");
             var approval = (await reads.ListAsync(scope, new(Status: Contract.ActorStatus.Running), cancellationToken: token)).Items.Single();
-            Require((await reads.TailAsync(scope, approval.Header.Ref, cancellationToken: token)).Items.Count > 0,
-                "The response arrives after the waiting actor checkpoint and journal.");
+            var birthJournal = await reads.TailAsync(scope, approval.Header.Ref, cancellationToken: token);
+            Require(startRequest.Responses == 1 && birthJournal.Next is not null && birthJournal.Items.Count > 0 &&
+                    birthJournal.Items.All(entry => entry.Revision == 1),
+                "The caller receives one response after the waiting actor's first committed journal revision.");
 
             using (var approvalBody = JsonContent.Create(new { Name = "Ada" }))
             using (var resumed = await client.PostAsync("approve", approvalBody, token))
@@ -94,8 +98,10 @@ internal static class NativeHttpEdgeChecks
                 Require(resumed.StatusCode == HttpStatusCode.OK && answer == "Ada",
                     $"The second HTTP request resumes the Native workflow with its authored input. Observed {(int)resumed.StatusCode} and '{answer}'.");
             }
-            Require(await reads.GetAsync(scope, approval.Header.Ref, token) is { Header.Status: Contract.ActorStatus.Finished },
-                "The resumed workflow finished at the original public reference.");
+            var resumedJournal = await reads.TailAsync(scope, approval.Header.Ref, birthJournal.Next, token);
+            Require(await reads.GetAsync(scope, approval.Header.Ref, token) is { Header.Status: Contract.ActorStatus.Finished } &&
+                    resumedJournal.Items.Count > 0 && resumedJournal.Items.All(entry => entry.Revision == 2),
+                "The resumed workflow finished at the original public reference with its second committed journal revision.");
             using (var noLongerWaiting = await PostAsync("approve"))
                 Require(noLongerWaiting.StatusCode == HttpStatusCode.NotFound,
                     "The completed wait cannot consume a second HTTP request.");
@@ -148,6 +154,10 @@ internal static class NativeHttpEdgeChecks
                     "A parked response turn returns 500 in place of its held 201.");
             Require((await WaitForAsync(Contract.ActorStatus.Faulted)).Park is not null,
                 "The faulted workflow has a durable Park.");
+            Require(startRequest is { Responses: 1 } && expiring is { Responses: 0, Ends: 1, Error: "timeout" } &&
+                    abandoned is { Responses: 0, Ends: 1, Error: "disconnected" },
+                "The start registration accepted one response. Timed-out and disconnected registrations kept their original outcome.");
+            Require(transport.WrongDestination is null, $"Every transport reply must target the receiving node. Unexpected destination '{transport.WrongDestination}'.");
             return 0;
         }
         finally
@@ -229,12 +239,17 @@ internal static class NativeHttpEdgeChecks
     private sealed class LocalTransport(string localNode, Requests requests) : IReplyTransport
     {
         private int _responses;
+        private string? _wrongDestination;
+        internal string? WrongDestination => Volatile.Read(ref _wrongDestination);
         internal int Responses => Volatile.Read(ref _responses);
 
         public void Send(string node, Reply reply)
         {
             if (!string.Equals(node, localNode, StringComparison.Ordinal))
-                throw new InvalidOperationException($"The reply addressed '{node}' instead of '{localNode}'.");
+            {
+                Interlocked.CompareExchange(ref _wrongDestination, node, null);
+                return;
+            }
             if (reply.Channel == "response" && reply.Item is JsonNode) Interlocked.Increment(ref _responses);
             requests.Receive(reply);
         }
