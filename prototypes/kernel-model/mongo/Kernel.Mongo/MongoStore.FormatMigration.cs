@@ -5,12 +5,21 @@ namespace Kernel.Mongo;
 
 internal readonly record struct MongoStoreFormat(int StoreSchema, int MessageProtocol, int JournalCodec)
 {
+    public bool Matches(BsonDocument? marker)
+    {
+        return MatchesField("storeSchema", StoreSchema) && MatchesField("messageProtocol", MessageProtocol) && MatchesField("journalCodec", JournalCodec);
+        bool MatchesField(string field, int version) => marker?.GetValue(field, BsonNull.Value) is BsonInt32 value && value.Value == version;
+    }
+
     public override string ToString() => $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
 }
 
 public sealed partial class MongoStore
 {
-    internal static MongoStoreFormat CurrentFormat => new(StoreSchema, MessageProtocol, JournalCodec);
+    internal static MongoStoreFormat CurrentFormat => new(1, 1, 1);
+
+    internal Task<bool> UpgradeJobGenerationFormatAsync(CancellationToken token = default) =>
+        AdvanceStoreFormatAsync(CurrentFormat, JobGenerationFormat, cancellationToken: token);
 
     // A coordinated migration supplies its database writes through this session. A transaction retry
     // can call migrateData again. Callers must keep all of its effects inside the transaction.
@@ -27,10 +36,9 @@ public sealed partial class MongoStore
         return await session.WithTransactionAsync(async (transaction, token) =>
         {
             var marker = await _meta.Find(transaction, PartitionMarker).FirstOrDefaultAsync(token);
-            if (marker is not null && Matches("storeSchema", next.StoreSchema) && Matches("messageProtocol", next.MessageProtocol)
-                && Matches("journalCodec", next.JournalCodec) && marker.GetValue("count", BsonNull.Value).IsInt32)
+            if (marker is not null && next.Matches(marker) && marker.GetValue("count", BsonNull.Value).IsInt32)
                 return false;
-            RequireVersions(marker);
+            RequireVersions(marker, expected);
 
             var live = new BsonDocument("$expr", new BsonDocument("$gte", new BsonArray { "$leaseUntil", NowMs }));
             using var nodes = await _nodes.Find(transaction, live).Project(new BsonDocument
@@ -54,7 +62,6 @@ public sealed partial class MongoStore
             if (migrateData is not null) await migrateData(transaction, token);
             return true;
 
-            bool Matches(string field, int value) => marker!.GetValue(field, BsonNull.Value) is BsonInt32 stored && stored.Value == value;
         }, Transaction, cancellationToken);
     }
 
