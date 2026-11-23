@@ -71,40 +71,25 @@ internal sealed class ActorList : IActorReads
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        var context = JsonSerializer.SerializeToUtf8Bytes(new { Read = "actor-tail", scope.Tenant, Actor = actor.Id });
-        Span<byte> cursor = stackalloc byte[sizeof(long) + sizeof(int)];
-        (long Position, int Ordinal) after = default;
+        var context = Durable.FoundationJournalPaging.Context(scope.Tenant, actor.Id);
+        Span<byte> cursor = stackalloc byte[Durable.FoundationJournalPaging.Bookmark.Size];
+        Durable.FoundationJournalPaging.Bookmark after = default;
         if (from is { } token)
         {
             if (!_store.TryOpenReadCursor(context, token.Value, cursor))
                 throw new ArgumentException("The continuation does not match this actor journal.", nameof(from));
-            after = (BinaryPrimitives.ReadInt64LittleEndian(cursor), BinaryPrimitives.ReadInt32LittleEndian(cursor[sizeof(long)..]));
+            after = Durable.FoundationJournalPaging.Bookmark.Read(cursor);
         }
 
         // A commit can write several entries. Resume within that commit when a page ends partway through it.
         var snapshot = _store.ReadFoundationJournal(scope.Tenant, actor.Id, after.Position, _pageSize + 1);
-        var added = new List<JournalEntry>();
-        var last = after;
-        foreach (var row in snapshot.Rows)
-        {
-            using var document = JsonDocument.Parse(row.Entries);
-            var entries = document.RootElement;
-            var split = entries.ValueKind == JsonValueKind.Array && entries.GetArrayLength() > 0;
-            var count = split ? entries.GetArrayLength() : 1;
-            var ordinal = row.Position == after.Position ? after.Ordinal + 1 : 0;
-            for (; ordinal < count; ordinal++)
-            {
-                added.Add(new(row.Revision, split ? entries[ordinal].GetRawText() : row.Entries));
-                last = (row.Position, ordinal);
-                if (added.Count == _pageSize) break;
-            }
-            if (added.Count == _pageSize) break;
-        }
+        var (entries, last) = Durable.FoundationJournalPaging.Read(
+            snapshot.Rows.Select(row => (row.Position, row.Revision, row.Entries)), after, _pageSize);
+        var added = entries.Select(entry => new JournalEntry(entry.Revision, entry.Entry)).ToArray();
 
         // The final nonempty page also carries a bookmark so a caller can follow the tail after catching up.
-        if (added.Count == 0) return new(new Page<JournalEntry>(added, null, snapshot.AsOf));
-        BinaryPrimitives.WriteInt64LittleEndian(cursor, last.Position);
-        BinaryPrimitives.WriteInt32LittleEndian(cursor[sizeof(long)..], last.Ordinal);
+        if (added.Length == 0) return new(new Page<JournalEntry>(added, null, snapshot.AsOf));
+        last.Write(cursor);
         return new(new Page<JournalEntry>(added, new PageToken(_store.SealReadCursor(context, cursor)), snapshot.AsOf));
     }
 

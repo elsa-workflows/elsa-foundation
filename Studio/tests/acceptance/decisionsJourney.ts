@@ -127,6 +127,8 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   await expect(button("New decision")).toBeFocused(); await tabTitle("Decisions");
   await button("New decision").click(); await confirmNewResource(page, "decision", `Approval policy ${suffix}`);
   await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible();
+  await expect(surface.getByRole("tab", { name: "Rules", exact: true })).toHaveAttribute("aria-selected", "true");
+  await view("Settings");
   await surface.getByLabel("Description", { exact: true }).fill("Determine purchase approval requirements.");
   await view("Rules");
   await surface.getByRole("textbox", { name: "Output 1 name", exact: true }).fill("approvalLevel");
@@ -161,20 +163,22 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   const publishing = page.waitForResponse(value => value.request().method() === "POST" && new URL(value.url()).pathname.endsWith("/publish"));
   await button("Publish").click(); const publication = await publishing; expect(publication.ok(), await publication.text()).toBe(true);
   const published = await publication.json() as Version;
-  await expect(button("Clone to draft")).toBeVisible(); await expect(surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true })).toBeDisabled();
+  await expect(surface.getByText(`Published · v${published.number}`, { exact: true })).toBeVisible();
+  await expect(surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true })).toBeEnabled();
   await confirmation("decision-published", `Version ${published.number} published`);
   await view("Tests");
+  const evaluateTab = surface.getByRole("tab", { name: "Evaluate", exact: true });
+  if (await evaluateTab.isVisible()) await evaluateTab.click();
   await surface.getByRole("textbox", { name: "Evaluate input amount", exact: true }).fill("9007199254740993");
   await surface.getByRole("textbox", { name: "Evaluate input customerCategory", exact: true }).fill("Standard");
   await button("Evaluate decision").click(); const explanation = surface.getByRole("region", { name: "Decision evaluation explanation" });
   await expect(explanation.getByRole("heading", { name: "Success", exact: true })).toBeVisible(); await expect(explanation.getByRole("cell", { name: "amount: true, customerCategory: true", exact: true })).toBeVisible();
   await part("decision-explanation", explanation.getByRole("heading", { name: "Success", exact: true }));
-  await page.reload(); await expect(button("Clone to draft")).toBeVisible();
+  await page.reload(); await expect(surface.getByText(`Published · v${published.number}`, { exact: true })).toBeVisible();
 
   const downloadWait = page.waitForEvent("download"); await decisionAction("Export DMN"); const download = await downloadWait;
   const sourcePath = info.outputPath("approval.dmn"); await download.saveAs(sourcePath); await info.attach("approval.dmn", { path: sourcePath, contentType: "application/xml" });
-  await button("Clone to draft").click(); await confirm("Clone to draft"); await expect(surface.getByText("Saved draft", { exact: true })).toBeVisible();
-  await expect(surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true })).toBeEnabled(); await confirmation("decision-clone", "Version copied to the draft");
+  await expect(surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true })).toBeEnabled();
 
   const second = await page.context().newPage();
   try {
@@ -248,15 +252,16 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       const shortcut = page.getByRole("button", { name: "New decision", exact: true });
       await part("decision-picker", shortcut);
       await shortcut.focus(); await page.keyboard.press("Enter");
-      await confirmNewResource(page, "decision", `Picker-created policy ${suffix}`);
+      const created = `Picker-created policy ${suffix}`;
+      await confirmNewResource(page, "decision", created);
       const opened = page.getByRole("tablist", { name: "Open screens", exact: true }).getByRole("tab", { selected: true });
       await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
       await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible();
+      await expect(surface.getByRole("tab", { name: "Rules", exact: true })).toHaveAttribute("aria-selected", "true");
       await tabTitle("New decision");
-      await part("decision-picker-new-tab", surface.getByLabel("Name", { exact: true }));
+      await part("decision-picker-new-tab", surface.getByRole("heading", { name: "Rules", exact: true }));
       expect(await opened.getAttribute("aria-label") ?? await opened.textContent()).not.toContain(workflowName);
-      const created = `Picker-created policy ${suffix}`;
-      await surface.getByLabel("Name", { exact: true }).fill(created); await tabTitle("New decision"); const createdAsset = await save();
+      const createdAsset = await save();
       // Saving opens the decision in the same tab, which now carries its name rather than "New decision".
       await tabTitle(`${created} · Draft`); await part("decision-picker-saved-tab", opened);
       // Back on the workflow: the list reloaded and the picker took the decision this New decision flow saved.

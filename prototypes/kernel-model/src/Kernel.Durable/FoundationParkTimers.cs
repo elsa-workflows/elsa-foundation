@@ -17,18 +17,8 @@ public sealed partial class InMemoryStore
     private const byte RearmedTimer = 2;
     private const int TimerDispositionEntryBytes = 33;
 
-    // Keep the existing wire shape. The first half distinguishes sends, and the second proves the
-    // handle belongs to this creation even when there is no delivery row left to inspect.
-    internal string FoundationTimerHandle(string origin, string issued)
-    {
-        var nonce = MessageHandle("timer:" + issued)[1..33];
-        return "~" + nonce + TimerHandleTag(origin, nonce);
-    }
-
-    private string TimerHandleTag(string origin, string nonce) => MessageHandle(origin + "#timer:" + nonce)[1..33];
-
     private bool TimerHandleMatches(string origin, string id) => CryptographicOperations.FixedTimeEquals(
-        Convert.FromHexString(id.AsSpan(33)), Convert.FromHexString(TimerHandleTag(origin, id[1..33])));
+        Convert.FromHexString(id.AsSpan(33)), Convert.FromHexString(FoundationSelfSend.TimerTag(MessageHandle, origin, id[1..33])));
 
     internal ParkTimerOpen? PlanFoundationTimers(InstanceRow row, ParkRecoveryMode mode, IReadOnlyList<ParkTimerRecipe> recipes, ParkRetryOpen? retry = null)
     {

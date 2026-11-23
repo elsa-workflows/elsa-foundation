@@ -13,17 +13,15 @@ for (const width of [320, 1440]) {
     // the documented public host styling contract; its existing SDK data stays unchanged.
     await root.evaluate(element => element.setAttribute("data-workspace-style", "minimal"));
     try {
-      await timeline.getByText("Filter events", { exact: true }).click();
-      const search = timeline.getByRole("searchbox", { name: "Search recorded events", exact: true });
-      const submit = timeline.getByRole("button", { name: "Search", exact: true });
+      await timeline.getByRole("button", { name: "Filter events", exact: true }).click();
+      const filterDialog = page.getByRole("dialog", { name: "Filter events", exact: true });
+      const search = filterDialog.getByRole("searchbox", { name: "Search recorded events", exact: true });
+      const submit = filterDialog.getByRole("button", { name: "Search", exact: true });
       const surfaces: Array<[string, Locator]> = [
         ["Search field", search.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' studio-form-control ')][1]")],
         ["Search surface", search.locator("..")],
-        ...["History scope", "History detail", "History category"].map(name => [name, timeline.getByRole("combobox", { name, exact: true })] as [string, Locator]),
-        ["Search button", submit],
-        ["Refresh button", timeline.getByRole("button", { name: "Refresh run history", exact: true })],
-        ["Live button", timeline.getByRole("button", { name: "Pause live updates", exact: true })],
-        ["Follow button", timeline.getByRole("button", { name: "Follow latest", exact: true })]
+        ...["History scope", "History detail", "History category"].map(name => [name, filterDialog.getByRole("combobox", { name, exact: true })] as [string, Locator]),
+        ["Search button", submit]
       ];
       for (const [name, control] of surfaces) {
         await expect(control).toBeVisible();
@@ -48,9 +46,10 @@ for (const width of [320, 1440]) {
       await page.keyboard.press("Tab");
       await page.keyboard.press("Enter");
       await expect.poll(() => new URL(page.url()).searchParams.get("historySearch")).toBe("bookmark");
-      await timeline.getByRole("button", { name: "Clear filters", exact: true }).press("Enter");
+      await filterDialog.getByRole("button", { name: "Clear filters", exact: true }).press("Enter");
       await expect(search).toHaveValue("");
       await expect.poll(() => new URL(page.url()).searchParams.get("historySearch")).toBeNull();
+      await page.keyboard.press("Escape");
       const live = timeline.getByRole("button", { name: "Pause live updates", exact: true });
       await live.press("Enter");
       await expect(timeline.getByRole("button", { name: "Resume live updates", exact: true })).toHaveAttribute("aria-pressed", "false");
@@ -87,14 +86,14 @@ for (const width of [320, 1440]) {
       document.documentElement.style.setProperty("--studio-focus", "rgb(1, 80, 240)");
       document.documentElement.style.setProperty("--studio-selection-mark", "rgb(230, 50, 0)");
     });
-    const filterSummary = timeline.locator(".wf-history-filters > summary");
-    await filterSummary.focus();
+    const filterButton = timeline.getByRole("button", { name: "Filter events", exact: true });
+    await filterButton.focus();
     await page.keyboard.press("Tab");
     await page.keyboard.press("Shift+Tab");
-    await expect(filterSummary).toBeFocused();
-    await expect(filterSummary).toHaveCSS("outline-color", "rgb(1, 80, 240)");
+    await expect(filterButton).toBeFocused();
+    await expect(filterButton).toHaveCSS("outline-color", "rgb(1, 80, 240)");
     await expect(timeline.locator(".wf-history-heading h3")).toHaveCSS("font-size", "25px");
-    await expect(timeline.locator(".wf-history-heading p").first()).toHaveCSS("font-size", "19px");
+    await expect(timeline.locator(".wf-history-footer .wf-history-count").first()).toHaveCSS("font-size", "19px");
     await expect(timeline.locator(".wf-history-event-body strong").first()).toHaveCSS("font-size", "21px");
     await expect.poll(() => timeline.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: test.info().outputPath("timeline-typography.png"), fullPage: true });

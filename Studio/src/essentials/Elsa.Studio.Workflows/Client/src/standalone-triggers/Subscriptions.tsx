@@ -1,48 +1,81 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Layers, Workflow, Zap } from "lucide-react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { StudioAlert, StudioButton, StudioCollectionFooter, StudioField, StudioResultState, StudioSearchInput, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import {
+  OverflowMenu,
+  StatusChip,
+  StudioAlert,
+  StudioButton,
+  StudioCheckboxField,
+  StudioCollectionEmptyState,
+  StudioCollectionFooter,
+  StudioDialog,
+  StudioDialogFooter,
+  StudioSearchInput,
+  StudioStepper,
+  StudioTableContainer,
+  type OverflowMenuItem
+} from "@elsa-workflows/studio-ui";
 import { StudioLink } from "../StudioLink";
-import { RunWorkflowPicker } from "../workflow-editor/RunWorkflowPicker";
 import { WorkflowIdentity } from "./WorkflowIdentity";
 import type { WorkflowDesignerPanelContext } from "../workflow-editor/editorTypes";
 import { triggerClient, type TriggerClient } from "./api";
-import { ChangeReview } from "./ChangeReview";
+import { ChangeReview, ChangeReviewDialog } from "./ChangeReview";
 import { MappingEditor, mappingDrafts, realizeMappings, type MappingDrafts } from "./MappingEditor";
 import { Findings, Loading, RequestError, actionReason, allowed, label, triggerPath, useTriggerCompletion, useTriggerLoad, useTriggerScope } from "./shared";
-import type { ActorView, InputMapping, SubscriptionView, TargetSelector, TriggerCommand, TriggerView } from "./types";
+import {
+  invocationGrantTone,
+  resolveTriggerTypeSummary,
+  subscriptionCompatibilityTone,
+  targetStateTone,
+  triggerStateTone
+} from "./triggerTypePresentation";
+import type { ActorView, InputMapping, SubscriptionView, TargetSelector, TriggerCommand, TriggerTypeDescriptor, TriggerView } from "./types";
+import { WorkflowTargetPicker } from "./WorkflowTargetPicker";
 import "./styles.css";
 
-const targetRestricted = (subscription: SubscriptionView) => subscription.findings.some(item => item.code === "TargetDetailsRestricted") || !subscription.target.definitionId || !subscription.target.slotName;
+const targetRestricted = (subscription: SubscriptionView) =>
+  subscription.findings.some(item => item.code === "TargetDetailsRestricted")
+  || !subscription.target.definitionId
+  || !subscription.target.slotName;
 
-function TargetPicker({ api, client, value, fixedDefinitionId, onChange }: { api: ElsaStudioModuleApi; client: TriggerClient; value: TargetSelector; fixedDefinitionId?: string; onChange(target: TargetSelector): void }) {
-  const scope = useTriggerScope(api);
-  const [search, setSearch] = useState("");
-  const [term, setTerm] = useState("");
-  const [after, setAfter] = useState<string>();
-  const { result, reload } = useTriggerLoad(signal => fixedDefinitionId ? Promise.resolve({ items: [], next: undefined }) : client.targets({ search: term, after }, signal), JSON.stringify([scope, term, after, fixedDefinitionId]));
-  if (fixedDefinitionId) return <><StudioField label="Workflow"><WorkflowIdentity api={api} scope={scope} definitionId={fixedDefinitionId} /></StudioField><StudioField label="Publication slot" description="The association follows this slot's serving version. An unpublished slot can be saved only disabled."><input aria-label="Publication slot" value={value.slotName} onChange={event => onChange({ definitionId: fixedDefinitionId, slotName: event.currentTarget.value })} /></StudioField></>;
-  return <section aria-label="Choose subscription target">
-    <RunWorkflowPicker key={scope} context={api.backend} definitionId={value.definitionId} onChange={definitionId => onChange({ definitionId, slotName: value.slotName })} />
-    <StudioField label="Publication slot" description="This association follows the slot's serving version. A workflow without a serving publication can be saved disabled."><input aria-label="Publication slot" value={value.slotName} onChange={event => onChange({ ...value, slotName: event.currentTarget.value })} /></StudioField>
-    <details><summary>Browse published Runtime slots</summary>
-    <p>Use Runtime discovery when workflow Design search is unavailable. Search this list by workflow ID.</p>
-    <StudioField label="Find a published workflow by ID"><StudioSearchInput aria-label="Search subscription targets" value={search} onChange={event => setSearch(event.currentTarget.value)} /></StudioField>
-    <StudioButton type="button" onClick={() => { setAfter(undefined); setTerm(search.trim()); }}>Search workflows</StudioButton>
-    {result.state === "loading" ? <Loading label="Loading subscription targets" /> : result.state === "error" ? <RequestError error={result.error} title="Could not load workflow targets" retry={reload} /> : <>
-      <StudioField label="Workflow and publication slot"><select aria-label="Workflow and publication slot" value={JSON.stringify(value)} onChange={event => onChange(JSON.parse(event.currentTarget.value) as TargetSelector)}><option value={JSON.stringify({ definitionId: "", slotName: "default" })}>Choose a workflow…</option>
-        {value.definitionId && !result.value.items.some(item => item.definitionId === value.definitionId && item.slotName === value.slotName) ? <option value={JSON.stringify(value)}>{value.definitionId} · {value.slotName}</option> : null}
-        {result.value.items.map(item => <option key={`${item.definitionId}:${item.slotName}`} value={JSON.stringify({ definitionId: item.definitionId, slotName: item.slotName })}>{item.displayName || item.definitionId} · {item.slotName} · {label(item.state)}</option>)}
-      </select></StudioField>
-      {!result.value.items.length ? <p>No accessible workflow slots match this search.</p> : null}
-      {result.value.next ? <StudioButton type="button" onClick={() => setAfter(result.value.next ?? undefined)}>Next workflow targets</StudioButton> : null}{after ? <StudioButton type="button" onClick={() => setAfter(undefined)}>First workflow targets</StudioButton> : null}
-    </>}
-    </details>
-  </section>;
-}
+type SubscriptionStep = "select" | "configure" | "review";
 
-export function SubscriptionEditor({ api, client, trigger, subscription, fixedDefinitionId, onCancel, onSaved }: {
-  api: ElsaStudioModuleApi; client: TriggerClient; actor: ActorView; trigger: TriggerView; subscription?: SubscriptionView; fixedDefinitionId?: string; onCancel(): void; onSaved(): void;
+const addWorkflowSteps = [
+  { id: "select", label: "Select workflow" },
+  { id: "configure", label: "Inputs & access" },
+  { id: "review", label: "Review & apply" }
+] as const;
+
+const configureSubscriptionSteps = [
+  { id: "configure", label: "Inputs & access" },
+  { id: "review", label: "Review & apply" }
+] as const;
+
+export function SubscriptionEditor({
+  api,
+  client,
+  trigger,
+  subscription,
+  fixedDefinitionId,
+  embedded = false,
+  onCancel,
+  onSaved
+}: {
+  api: ElsaStudioModuleApi;
+  client: TriggerClient;
+  actor: ActorView;
+  trigger: TriggerView;
+  subscription?: SubscriptionView;
+  fixedDefinitionId?: string;
+  embedded?: boolean;
+  onCancel(): void;
+  onSaved(): void;
 }) {
+  const scope = useTriggerScope(api);
+  const canPickTarget = !fixedDefinitionId;
+  const startsWithPicker = !subscription && canPickTarget;
+  const [step, setStep] = useState<SubscriptionStep>(startsWithPicker ? "select" : "configure");
   const [target, setTarget] = useState<TargetSelector>(subscription?.target ?? { definitionId: fixedDefinitionId ?? "", slotName: "default" });
   const [drafts, setDrafts] = useState<MappingDrafts>(() => mappingDrafts(subscription?.mappings ?? []));
   const [enabled, setEnabled] = useState(subscription?.enabled ?? false);
@@ -56,45 +89,295 @@ export function SubscriptionEditor({ api, client, trigger, subscription, fixedDe
     const context = await client.mappingContext(trigger.id, trigger.revision, target, mappings.current, signal);
     return context;
   }, targetKey);
+
+  function continueToConfigure() {
+    if (!target.definitionId || !target.slotName) {
+      setErrors({ target: "Choose a workflow and publication slot." });
+      return;
+    }
+    setErrors({});
+    setStep("configure");
+  }
+
   function review() {
     if (!target.definitionId || !target.slotName) { setErrors({ target: "Choose a workflow and publication slot." }); return; }
     if (result.state !== "loaded" || !result.value) return;
     if (enabled && result.value.target.state !== "Available") { setErrors({ target: "Save this association disabled until its serving target is available." }); return; }
-    const built = result.value.target.inputContract ? realizeMappings(result.value.target.inputContract.inputs, drafts) : { mappings: mappings.current.filter(item => drafts[item.inputName] && drafts[item.inputName].kind !== "Omit"), errors: {} };
+    const built = result.value.target.inputContract
+      ? realizeMappings(result.value.target.inputContract.inputs, drafts)
+      : { mappings: mappings.current.filter(item => drafts[item.inputName] && drafts[item.inputName].kind !== "Omit"), errors: {} };
     setErrors(built.errors);
     if (Object.keys(built.errors).length) return;
     mappings.current = built.mappings;
-    setCommand(subscription ? { kind: "SaveSubscription", subscriptionId: subscription.id, expectedSubscriptionRevision: subscription.revision, target, mappings: built.mappings, enabled, invocationRequest: grant ? "Grant" : "Keep" }
+    setCommand(subscription
+      ? { kind: "SaveSubscription", subscriptionId: subscription.id, expectedSubscriptionRevision: subscription.revision, target, mappings: built.mappings, enabled, invocationRequest: grant ? "Grant" : "Keep" }
       : { kind: "AddSubscription", target, mappings: built.mappings, enabled, invocationRequest: grant ? "Grant" : "None" });
+    setStep("review");
   }
-  if (command) return <ChangeReview api={api} client={client} trigger={trigger} command={command} onCancel={() => setCommand(undefined)} onApplied={onSaved} />;
+
   const actualTarget = result.state === "loaded" ? result.value?.target : undefined;
   const readonly = !!subscription?.origin.configurationReadOnly;
   const retainsTarget = !!subscription && target.definitionId === subscription.target.definitionId && target.slotName === subscription.target.slotName;
-  if (subscription && targetRestricted(subscription)) return <section aria-label="Restricted workflow subscription"><h3>Restricted workflow</h3><StudioAlert>Workflow details and input mappings require workflow read permission. Use the association's available controls to pause or revoke its authority.</StudioAlert><StudioButton onClick={onCancel}>Back to associations</StudioButton></section>;
-  return <section className="wf-trigger-subscription-editor" aria-label={subscription ? "Edit live subscription" : "Add live subscription"}>
-    <h3>{subscription ? "Edit subscription" : "Add subscription"}</h3>
-    <StudioAlert>These associations are live resources. Saving them does not save or publish a workflow draft and does not change its business graph.</StudioAlert>
-    {trigger.http ? <p>{trigger.http.mode === "WorkflowResponse" ? "HTTP · One workflow owns the response" : `HTTP · Acknowledge and start subscribers · ${trigger.http.admissionPolicy === "AcceptAvailable" ? "Accept available subscribers" : "Require all subscribers"}`}</p> : null}
-    {readonly ? <StudioAlert tone="warning">This association is managed by {subscription?.origin.sourceId || "its source"}. Its configuration is read-only.</StudioAlert> : null}
-    <fieldset disabled={readonly} className="wf-trigger-form"><legend>Workflow target and mapping</legend>
-      <TargetPicker api={api} client={client} value={target} fixedDefinitionId={fixedDefinitionId} onChange={setTarget} />
-      {errors.target ? <p role="alert">{errors.target}</p> : null}
-      {result.state === "loading" && target.definitionId ? <Loading label="Loading serving input contract" /> : result.state === "error" ? <RequestError error={result.error} title="Mapping context unavailable" retry={reload} /> : result.state === "loaded" && result.value ? <>
-        <p>Serving version: {result.value.target.serving?.version || result.value.target.serving?.versionId || "Not serving"} · Slot: {target.slotName}</p>
-        {trigger.http?.mode === "WorkflowResponse" && result.value.target.supportsWorkflowOwnedHttpResponse !== true ? <StudioAlert tone="warning">This target cannot own an HTTP response. Select a compatible target or review a trigger mode change.</StudioAlert> : null}
-        <MappingEditor key={targetKey} client={client} triggerId={trigger.id} triggerRevision={trigger.revision} target={result.value.target} context={result.value} drafts={drafts} onChange={setDrafts} disabled={readonly} errors={errors} />
-      </> : null}
-      <label className="wf-trigger-check"><input type="checkbox" checked={grant} disabled={!allowed(trigger.actions, "AuthorizeSubscriptions") || retainsTarget && !allowed(subscription!.actions, "GrantInvocation")} onChange={event => setGrant(event.currentTarget.checked)} />Authorize this shared trigger to invoke the workflow</label>
-      <p className="wf-trigger-muted">An authorized manager grants shared-resource authority. It survives the creator's departure and can be revoked explicitly.</p>
-      <label className="wf-trigger-check"><input type="checkbox" checked={enabled} disabled={!allowed(trigger.actions, "OperateSubscriptions")} onChange={event => setEnabled(event.currentTarget.checked)} />Enable this subscription</label>
-      {actualTarget?.state !== "Available" ? <p>Save disabled while its serving slot or input contract is unavailable.</p> : null}
-    </fieldset>
-    <div className="studio-page-actions"><StudioButton onClick={onCancel}>Cancel</StudioButton><StudioButton variant="primary" disabled={readonly || !allowed(subscription?.actions ?? trigger.actions, subscription ? "SaveSubscription" : "AddSubscription") || result.state !== "loaded" || !result.value} onClick={review}>Review subscription</StudioButton></div>
-  </section>;
+  const footerClassName = embedded ? "studio-dialog-footer" : "studio-page-actions";
+  const steps = startsWithPicker ? addWorkflowSteps : configureSubscriptionSteps;
+  const currentStep = step === "select" && !startsWithPicker ? "configure" : step;
+
+  if (subscription && targetRestricted(subscription)) {
+    return (
+      <section aria-label="Restricted workflow subscription" className="wf-trigger-subscription-editor">
+        {!embedded ? <h3>Restricted workflow</h3> : null}
+        <StudioAlert>Workflow details and input mappings require workflow read permission. Use the association's available controls to pause or revoke its authority.</StudioAlert>
+        <div className={footerClassName}>
+          <StudioButton type="button" onClick={onCancel}>Back to associations</StudioButton>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="wf-trigger-subscription-editor" aria-label={subscription ? "Edit live subscription" : "Add live subscription"}>
+      {!embedded ? <h3>{subscription ? "Edit subscription" : "Add subscription"}</h3> : null}
+      <StudioStepper label="Subscription setup steps" steps={steps} current={currentStep} />
+
+      {step === "review" && command ? (
+        <ChangeReview
+          api={api}
+          client={client}
+          trigger={trigger}
+          command={command}
+          embedded={embedded}
+          onCancel={() => { setCommand(undefined); setStep("configure"); }}
+          onApplied={onSaved}
+        />
+      ) : step === "select" ? (
+        <>
+          <StudioAlert>These associations are live resources. Saving them does not save or publish a workflow draft and does not change its business graph.</StudioAlert>
+          {trigger.http ? (
+            <div className="wf-trigger-inline-banner">
+              <StatusChip tone="accent">HTTP</StatusChip>
+              <span>{trigger.http.mode === "WorkflowResponse" ? "One workflow owns the response" : `Acknowledge and start subscribers · ${trigger.http.admissionPolicy === "AcceptAvailable" ? "Accept available subscribers" : "Require all subscribers"}`}</span>
+            </div>
+          ) : null}
+          <WorkflowTargetPicker
+            api={api}
+            client={client}
+            trigger={trigger}
+            value={target}
+            disabled={readonly}
+            onChange={next => {
+              setTarget(next);
+              setErrors({});
+            }}
+          />
+          {errors.target ? <p role="alert" className="wf-trigger-mapping-error">{errors.target}</p> : null}
+          <div className={footerClassName}>
+            <StudioButton type="button" onClick={onCancel}>Cancel</StudioButton>
+            <StudioButton
+              type="button"
+              variant="primary"
+              disabled={!target.definitionId || !target.slotName}
+              onClick={continueToConfigure}
+            >
+              Continue to inputs &amp; access
+            </StudioButton>
+          </div>
+        </>
+      ) : (
+        <>
+          {!startsWithPicker ? (
+            <StudioAlert>These associations are live resources. Saving them does not save or publish a workflow draft and does not change its business graph.</StudioAlert>
+          ) : null}
+          {trigger.http ? (
+            <div className="wf-trigger-inline-banner">
+              <StatusChip tone="accent">HTTP</StatusChip>
+              <span>{trigger.http.mode === "WorkflowResponse" ? "One workflow owns the response" : `Acknowledge and start subscribers · ${trigger.http.admissionPolicy === "AcceptAvailable" ? "Accept available subscribers" : "Require all subscribers"}`}</span>
+            </div>
+          ) : null}
+          {readonly ? <StudioAlert tone="warning">This association is managed by {subscription?.origin.sourceId || "its source"}. Its configuration is read-only.</StudioAlert> : null}
+
+          <div className="wf-trigger-form wf-trigger-subscription-body">
+            {fixedDefinitionId ? (
+              <WorkflowTargetPicker
+                api={api}
+                client={client}
+                trigger={trigger}
+                value={target}
+                fixedDefinitionId={fixedDefinitionId}
+                disabled={readonly}
+                onChange={next => { setTarget(next); setErrors({}); }}
+              />
+            ) : (
+              <div className="wf-trigger-target-summary">
+                <div className="wf-trigger-target-summary-main">
+                  <span className="wf-trigger-picker-card-icon" aria-hidden="true">
+                    <Workflow size={16} />
+                  </span>
+                  <div className="wf-trigger-target-summary-info">
+                    <WorkflowIdentity api={api} scope={scope} definitionId={target.definitionId} />
+                    <div className="wf-trigger-target-summary-badges">
+                      <span className="wf-trigger-slot-badge">
+                        <Layers size={12} aria-hidden />
+                        <span>Slot: {target.slotName}</span>
+                      </span>
+                      {actualTarget ? (
+                        <StatusChip tone={targetStateTone(actualTarget.state)}>
+                          {actualTarget.serving?.version || actualTarget.serving?.versionId ? `Serving: ${actualTarget.serving.version || actualTarget.serving.versionId}` : label(actualTarget.state)}
+                        </StatusChip>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+                {!readonly ? (
+                  <StudioButton type="button" size="sm" onClick={() => setStep("select")}>
+                    Change workflow
+                  </StudioButton>
+                ) : null}
+              </div>
+            )}
+
+            {errors.target ? <p role="alert" className="wf-trigger-mapping-error">{errors.target}</p> : null}
+
+            {result.state === "loading" && target.definitionId ? (
+              <Loading label="Loading serving input contract" />
+            ) : result.state === "error" ? (
+              <RequestError error={result.error} title="Mapping context unavailable" retry={reload} />
+            ) : result.state === "loaded" && result.value ? (
+              <>
+                <p className="wf-trigger-serving-summary">
+                  Serving version: {result.value.target.serving?.version || result.value.target.serving?.versionId || "Not serving"} · Slot: {target.slotName}
+                </p>
+                {trigger.http?.mode === "WorkflowResponse" && result.value.target.supportsWorkflowOwnedHttpResponse !== true ? (
+                  <StudioAlert tone="warning">This target cannot own an HTTP response. Select a compatible target or review a trigger mode change.</StudioAlert>
+                ) : null}
+                <MappingEditor
+                  key={targetKey}
+                  client={client}
+                  triggerId={trigger.id}
+                  triggerRevision={trigger.revision}
+                  target={result.value.target}
+                  context={result.value}
+                  drafts={drafts}
+                  onChange={setDrafts}
+                  disabled={readonly}
+                  errors={errors}
+                />
+              </>
+            ) : null}
+
+            <div className="wf-trigger-access-section">
+              <h4>Access &amp; activation</h4>
+              <div className="wf-trigger-toggle-cards">
+                <div className="wf-trigger-toggle-card" data-disabled={readonly || !allowed(trigger.actions, "AuthorizeSubscriptions") || (retainsTarget && !allowed(subscription!.actions, "GrantInvocation")) || undefined}>
+                  <StudioCheckboxField
+                    checked={grant}
+                    disabled={readonly || !allowed(trigger.actions, "AuthorizeSubscriptions") || (retainsTarget && !allowed(subscription!.actions, "GrantInvocation"))}
+                    onChange={setGrant}
+                    label="Authorize this shared trigger to invoke the workflow"
+                  />
+                  <p className="wf-trigger-muted">An authorized manager grants shared-resource authority. It survives the creator's departure and can be revoked explicitly.</p>
+                </div>
+                <div className="wf-trigger-toggle-card" data-disabled={readonly || !allowed(trigger.actions, "OperateSubscriptions") || undefined}>
+                  <StudioCheckboxField
+                    checked={enabled}
+                    disabled={readonly || !allowed(trigger.actions, "OperateSubscriptions")}
+                    onChange={setEnabled}
+                    label="Enable this subscription"
+                  />
+                  {actualTarget?.state !== "Available" ? (
+                    <p className="wf-trigger-muted">Save disabled while its serving slot or input contract is unavailable.</p>
+                  ) : (
+                    <p className="wf-trigger-muted">Enabled subscriptions receive work when the trigger fires and is enabled.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className={footerClassName}>
+            {startsWithPicker ? (
+              <StudioButton type="button" onClick={() => setStep("select")}>
+                <ArrowLeft size={14} aria-hidden /> Back
+              </StudioButton>
+            ) : null}
+            <StudioButton type="button" onClick={onCancel}>Cancel</StudioButton>
+            <StudioButton
+              type="button"
+              variant="primary"
+              disabled={readonly || !allowed(subscription?.actions ?? trigger.actions, subscription ? "SaveSubscription" : "AddSubscription") || result.state !== "loaded" || !result.value}
+              onClick={review}
+            >
+              Review subscription
+            </StudioButton>
+          </div>
+        </>
+      )}
+    </section>
+  );
 }
 
-export function SubscriptionsSection({ api, client, actor, trigger, definitionId, onChanged }: { api: ElsaStudioModuleApi; client: TriggerClient; actor: ActorView; trigger?: TriggerView; definitionId?: string; onChanged?(): void }) {
+export function SubscriptionDialog({
+  api,
+  client,
+  actor,
+  trigger,
+  subscription,
+  fixedDefinitionId,
+  onCancel,
+  onSaved
+}: {
+  api: ElsaStudioModuleApi;
+  client: TriggerClient;
+  actor: ActorView;
+  trigger: TriggerView;
+  subscription?: SubscriptionView;
+  fixedDefinitionId?: string;
+  onCancel(): void;
+  onSaved(): void;
+}) {
+  const restricted = Boolean(subscription && targetRestricted(subscription));
+  return (
+    <StudioDialog
+      open
+      title={restricted ? "Restricted workflow" : subscription ? "Edit subscription" : "Add workflow subscription"}
+      description={restricted
+        ? "Workflow details require read permission."
+        : subscription
+          ? `Configure input mappings and invocation authority for ${trigger.name}.`
+          : `Associate a workflow with ${trigger.name}, map declared inputs, and authorize invocation.`}
+      className="wf-trigger-subscription-dialog"
+      dismissOnOutsideClick={false}
+      onClose={onCancel}
+    >
+      <SubscriptionEditor
+        api={api}
+        client={client}
+        actor={actor}
+        trigger={trigger}
+        subscription={subscription}
+        fixedDefinitionId={fixedDefinitionId}
+        embedded
+        onCancel={onCancel}
+        onSaved={onSaved}
+      />
+    </StudioDialog>
+  );
+}
+
+export function SubscriptionsSection({
+  api,
+  client,
+  actor,
+  trigger,
+  definitionId,
+  onChanged
+}: {
+  api: ElsaStudioModuleApi;
+  client: TriggerClient;
+  actor: ActorView;
+  trigger?: TriggerView;
+  definitionId?: string;
+  onChanged?(): void;
+}) {
   const scope = useTriggerScope(api);
   const [generation, setGeneration] = useState(0);
   const [after, setAfter] = useState<string>();
@@ -106,8 +389,15 @@ export function SubscriptionsSection({ api, client, actor, trigger, definitionId
   const { result, reload } = useTriggerLoad(signal => client.subscriptions(trigger ? { triggerId: trigger.id, after } : { definitionId, after }, signal), key);
   const opening = useRef(0);
   const complete = useTriggerCompletion();
-  function completeOpening(request: number, action: () => void) { complete(() => { if (request === opening.current) action(); }); }
-  function closeEditor() { opening.current++; setEditing(undefined); setControl(undefined); }
+
+  function completeOpening(request: number, action: () => void) {
+    complete(() => { if (request === opening.current) action(); });
+  }
+  function closeEditor() {
+    opening.current++;
+    setEditing(undefined);
+    setControl(undefined);
+  }
   async function choose(subscription: SubscriptionView, kind?: "RemoveSubscription" | "EnableSubscription" | "PauseSubscription" | "GrantInvocation" | "RevokeInvocation") {
     const request = ++opening.current;
     setError(undefined);
@@ -115,49 +405,444 @@ export function SubscriptionsSection({ api, client, actor, trigger, definitionId
     try {
       const actualTrigger = await client.read(subscription.triggerId);
       completeOpening(request, () => {
-        if (kind) setControl({ trigger: actualTrigger, command: kind === "GrantInvocation" || kind === "RevokeInvocation" ? { kind, subscriptionId: subscription.id, expectedSubscriptionRevision: subscription.revision, expectedGrantRevision: subscription.invocationGrant.revision ?? null } : { kind, subscriptionId: subscription.id, expectedSubscriptionRevision: subscription.revision } });
-        else setEditing({ trigger: actualTrigger, subscription });
+        if (kind) {
+          setControl({
+            trigger: actualTrigger,
+            command: kind === "GrantInvocation" || kind === "RevokeInvocation"
+              ? { kind, subscriptionId: subscription.id, expectedSubscriptionRevision: subscription.revision, expectedGrantRevision: subscription.invocationGrant.revision ?? null }
+              : { kind, subscriptionId: subscription.id, expectedSubscriptionRevision: subscription.revision }
+          });
+        } else {
+          setEditing({ trigger: actualTrigger, subscription });
+        }
       });
-    } catch (caught) { completeOpening(request, () => setError(caught)); }
+    } catch (caught) {
+      completeOpening(request, () => setError(caught));
+    }
   }
-  const saved = () => { closeEditor(); setAdding(false); setGeneration(value => value + 1); onChanged?.(); };
+  const saved = () => {
+    closeEditor();
+    setAdding(false);
+    setGeneration(value => value + 1);
+    onChanged?.();
+  };
   async function add() {
     const request = ++opening.current;
     if (!trigger) { setAdding(true); return; }
-    try { const actual = await client.read(trigger.id); completeOpening(request, () => setEditing({ trigger: actual })); }
-    catch (caught) { completeOpening(request, () => setError(caught)); }
+    try {
+      const actual = await client.read(trigger.id);
+      completeOpening(request, () => setEditing({ trigger: actual }));
+    } catch (caught) {
+      completeOpening(request, () => setError(caught));
+    }
   }
-  if (editing) return <SubscriptionEditor key={`${editing.trigger.id}:${editing.subscription?.id ?? "new"}`} api={api} client={client} actor={actor} trigger={editing.trigger} subscription={editing.subscription} fixedDefinitionId={definitionId} onCancel={closeEditor} onSaved={saved} />;
-  if (control) return <ChangeReview key={opening.current} api={api} client={client} trigger={control.trigger} command={control.command} onCancel={closeEditor} onApplied={saved} />;
-  return <section className="wf-trigger-subscriptions" aria-label="Live workflow subscriptions">
-    <div className="wf-trigger-section-heading"><h3>{definitionId ? "Live triggers" : "Workflow subscriptions"}</h3><div className="studio-page-actions">{!trigger || allowed(trigger.actions, "AddSubscription") ? <StudioButton disabled={!!trigger && !allowed(trigger.actions, "AddSubscription")} title={trigger ? actionReason(trigger.actions, "AddSubscription") : undefined} onClick={() => void add()}>Add {definitionId ? "trigger" : "workflow"}</StudioButton> : null}<StudioButton onClick={() => { opening.current++; setError(undefined); reload(); }}>Refresh associations</StudioButton></div></div>
-    {definitionId ? <StudioAlert>These entry points target the logical workflow's current serving slots. Changes take effect independently of this draft or historical graph.</StudioAlert> : null}
-    {error ? <RequestError error={error} title="Could not open the association" retry={() => setError(undefined)} /> : null}
-    {adding ? <TriggerPicker client={client} onCancel={() => { opening.current++; setAdding(false); }} onChoose={selected => { opening.current++; setAdding(false); setEditing({ trigger: selected }); }} /> : null}
-    {result.state === "loading" ? <Loading label="Loading live trigger associations" /> : result.state === "error" ? <RequestError error={result.error} title="Could not load live associations" retry={reload} /> : !result.value.items.length ? <StudioResultState headingLevel={3} title="No live associations" description={definitionId ? "This workflow has no standalone trigger subscriptions in the selected scope." : "Associate a workflow, map its declared inputs and authorize its invocation."} /> : <StudioTableContainer role="region" aria-label="Workflow subscriptions" tabIndex={0}><table className="studio-table wf-trigger-table wf-trigger-association-table"><thead><tr><th scope="col">{definitionId ? "Trigger" : "Workflow"}</th><th scope="col">State and actions</th></tr></thead><tbody>{result.value.items.map(subscription => {
-      const restricted = targetRestricted(subscription);
-      return <tr key={subscription.id}>
-      <th scope="row">{definitionId ? <StudioLink href={triggerPath(subscription.triggerId)}>{subscription.triggerSummary?.name || subscription.triggerId}</StudioLink> : restricted ? "Restricted workflow" : <WorkflowIdentity api={api} scope={scope} definitionId={subscription.target.definitionId} />}{!restricted ? <><small className="wf-trigger-muted">Publication slot: {subscription.target.slotName}</small><small className="wf-trigger-muted">{subscription.serving?.version || subscription.serving?.versionId || "Not serving"}</small></> : null}{subscription.triggerSummary?.http ? <small className="wf-trigger-muted">{subscription.triggerSummary.http.mode === "WorkflowResponse" ? "Workflow-owned response" : `Async · ${subscription.triggerSummary.http.admissionPolicy === "AcceptAvailable" ? "Accept available" : "Require all"}`}</small> : null}</th>
-      <td>{subscription.enabled ? "Enabled" : "Paused"} · {restricted ? "Workflow details restricted" : label(subscription.compatibility)}<small className="wf-trigger-muted">Invocation: {label(subscription.invocationGrant.state)}</small><Findings items={subscription.findings} />{subscription.origin.configurationReadOnly ? <small>Managed by {subscription.origin.sourceId || "source"}</small> : null}
-      <div className="studio-page-actions">{([ ["SaveSubscription", "Edit"], [subscription.enabled ? "PauseSubscription" : "EnableSubscription", subscription.enabled ? "Pause" : "Enable"], [subscription.invocationGrant.state === "Granted" ? "RevokeInvocation" : "GrantInvocation", subscription.invocationGrant.state === "Granted" ? "Revoke authority" : "Authorize"], ["RemoveSubscription", "Remove"] ] as const).filter(([action]) => !restricted || action !== "SaveSubscription" && action !== "GrantInvocation").map(([action, text]) => <StudioButton key={action} size="sm" disabled={!allowed(subscription.actions, action)} title={actionReason(subscription.actions, action)} onClick={() => void choose(subscription, action === "SaveSubscription" ? undefined : action)}>{text}</StudioButton>)}</div></td>
-    </tr>; })}</tbody></table></StudioTableContainer>}
-    {result.state === "loaded" ? <StudioCollectionFooter><span>{result.value.items.length} associations shown</span>{result.value.next ? <StudioButton onClick={() => setAfter(result.value.next ?? undefined)}>Next associations</StudioButton> : null}{after ? <StudioButton onClick={() => setAfter(undefined)}>First associations</StudioButton> : null}</StudioCollectionFooter> : null}
-  </section>;
+
+  const canAdd = !trigger || allowed(trigger.actions, "AddSubscription");
+  const isWorkflowDirection = Boolean(definitionId);
+
+  function buildOverflowItems(subscription: SubscriptionView, restricted: boolean): OverflowMenuItem[] {
+    const toggleAction = subscription.enabled ? "PauseSubscription" : "EnableSubscription";
+    const toggleLabel = subscription.enabled ? "Pause" : "Enable";
+    const grantAction = subscription.invocationGrant.state === "Granted" ? "RevokeInvocation" : "GrantInvocation";
+    const grantLabel = subscription.invocationGrant.state === "Granted" ? "Revoke authority" : "Authorize";
+
+    const items: OverflowMenuItem[] = [
+      {
+        id: toggleAction,
+        label: toggleLabel,
+        disabled: !allowed(subscription.actions, toggleAction),
+        title: actionReason(subscription.actions, toggleAction),
+        onSelect: () => void choose(subscription, toggleAction)
+      }
+    ];
+    if (!restricted || grantAction === "RevokeInvocation") {
+      items.push({
+        id: grantAction,
+        label: grantLabel,
+        disabled: !allowed(subscription.actions, grantAction),
+        title: actionReason(subscription.actions, grantAction),
+        onSelect: () => void choose(subscription, grantAction)
+      });
+    }
+    items.push({
+      id: "RemoveSubscription",
+      label: "Remove",
+      destructive: true,
+      disabled: !allowed(subscription.actions, "RemoveSubscription"),
+      title: actionReason(subscription.actions, "RemoveSubscription"),
+      onSelect: () => void choose(subscription, "RemoveSubscription")
+    });
+    return items;
+  }
+
+  return (
+    <section className="wf-trigger-subscriptions" aria-label="Live workflow subscriptions">
+      <div className="wf-trigger-section-heading">
+        <h3>{isWorkflowDirection ? "Live triggers" : "Workflow subscriptions"}</h3>
+        <div className="studio-page-actions">
+          {canAdd ? (
+            <StudioButton
+              variant="primary"
+              size="sm"
+              disabled={!!trigger && !allowed(trigger.actions, "AddSubscription")}
+              title={trigger ? actionReason(trigger.actions, "AddSubscription") : undefined}
+              onClick={() => void add()}
+            >
+              Add {isWorkflowDirection ? "trigger" : "workflow"}
+            </StudioButton>
+          ) : null}
+          <StudioButton size="sm" onClick={() => { opening.current++; setError(undefined); reload(); }}>
+            Refresh associations
+          </StudioButton>
+        </div>
+      </div>
+
+      {isWorkflowDirection ? (
+        <StudioAlert>These entry points target the logical workflow's current serving slots. Changes take effect independently of this draft or historical graph.</StudioAlert>
+      ) : null}
+      {error ? <RequestError error={error} title="Could not open the association" retry={() => setError(undefined)} /> : null}
+
+      {result.state === "loading" ? (
+        <Loading label="Loading live trigger associations" />
+      ) : result.state === "error" ? (
+        <RequestError error={result.error} title="Could not load live associations" retry={reload} />
+      ) : !result.value.items.length ? (
+        <StudioCollectionEmptyState
+          headingLevel={3}
+          icon={isWorkflowDirection ? <Zap size={22} aria-hidden /> : <Workflow size={22} aria-hidden />}
+          title="No live associations"
+          description={isWorkflowDirection
+            ? "This workflow has no standalone trigger subscriptions in the selected scope."
+            : "Associate a workflow, map its declared inputs and authorize its invocation."}
+          actions={canAdd ? (
+            <StudioButton variant="primary" onClick={() => void add()}>
+              Add {isWorkflowDirection ? "trigger" : "workflow"}
+            </StudioButton>
+          ) : undefined}
+        />
+      ) : isWorkflowDirection ? (
+        <StudioTableContainer role="region" aria-label="Workflow subscriptions" tabIndex={0}>
+          <table className="studio-table wf-trigger-table wf-trigger-association-table">
+            <thead>
+              <tr>
+                <th scope="col">Trigger</th>
+                <th scope="col">Status &amp; actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.value.items.map(subscription => {
+                const restricted = targetRestricted(subscription);
+                const triggerLabel = subscription.triggerSummary?.name || subscription.triggerId;
+                return (
+                  <tr key={subscription.id}>
+                    <th scope="row">
+                      <StudioLink className="studio-row-link wf-trigger-row-title" href={triggerPath(subscription.triggerId)}>
+                        {triggerLabel}
+                      </StudioLink>
+                      {!restricted ? (
+                        <>
+                          <small className="wf-trigger-muted">Publication slot: {subscription.target.slotName}</small>
+                          <small className="wf-trigger-muted">{subscription.serving?.version || subscription.serving?.versionId || "Not serving"}</small>
+                        </>
+                      ) : null}
+                      {subscription.triggerSummary?.http ? (
+                        <small className="wf-trigger-muted">
+                          {subscription.triggerSummary.http.mode === "WorkflowResponse"
+                            ? "Workflow-owned response"
+                            : `Async · ${subscription.triggerSummary.http.admissionPolicy === "AcceptAvailable" ? "Accept available" : "Require all"}`}
+                        </small>
+                      ) : null}
+                    </th>
+                    <td>
+                      <div className="wf-trigger-chip-group">
+                        <StatusChip tone={subscription.enabled ? "success" : "neutral"}>
+                          {subscription.enabled ? "Enabled" : "Paused"}
+                        </StatusChip>
+                        <StatusChip tone={restricted ? "warning" : subscriptionCompatibilityTone(subscription.compatibility)}>
+                          {restricted ? "Workflow details restricted" : label(subscription.compatibility)}
+                        </StatusChip>
+                        <StatusChip tone={invocationGrantTone(subscription.invocationGrant.state)}>
+                          Invocation: {label(subscription.invocationGrant.state)}
+                        </StatusChip>
+                      </div>
+                      <Findings items={subscription.findings} />
+                      {subscription.origin.configurationReadOnly ? (
+                        <small className="wf-trigger-muted">Managed by {subscription.origin.sourceId || "source"}</small>
+                      ) : null}
+                      <div className="wf-trigger-row-actions wf-trigger-inspector-actions">
+                        {!restricted ? (
+                          <StudioButton
+                            size="sm"
+                            disabled={!allowed(subscription.actions, "SaveSubscription")}
+                            title={actionReason(subscription.actions, "SaveSubscription")}
+                            onClick={() => void choose(subscription)}
+                          >
+                            Edit
+                          </StudioButton>
+                        ) : null}
+                        <OverflowMenu
+                          items={buildOverflowItems(subscription, restricted)}
+                          ariaLabel={`Actions for ${triggerLabel}`}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </StudioTableContainer>
+      ) : (
+        <StudioTableContainer role="region" aria-label="Workflow subscriptions" tabIndex={0}>
+          <table className="studio-table wf-trigger-table wf-trigger-subscriptions-table">
+            <thead>
+              <tr>
+                <th scope="col">Workflow &amp; slot</th>
+                <th scope="col">Status</th>
+                <th scope="col">Authority</th>
+                <th scope="col" className="wf-trigger-actions-col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.value.items.map(subscription => {
+                const restricted = targetRestricted(subscription);
+                const rowTargetLabel = restricted ? "Restricted workflow" : subscription.target.definitionId;
+                return (
+                  <tr key={subscription.id}>
+                    <th scope="row">
+                      {restricted ? (
+                        <span className="wf-trigger-row-title">Restricted workflow</span>
+                      ) : (
+                        <>
+                          <WorkflowIdentity api={api} scope={scope} definitionId={subscription.target.definitionId} />
+                          <div className="wf-trigger-sub-meta">
+                            <span className="wf-trigger-slot-badge">
+                              <Layers size={12} aria-hidden />
+                              <span>Publication slot: {subscription.target.slotName}</span>
+                            </span>
+                            <small className="wf-trigger-muted">
+                              {subscription.serving?.version || subscription.serving?.versionId || "Not serving"}
+                            </small>
+                          </div>
+                        </>
+                      )}
+                    </th>
+                    <td>
+                      <div className="wf-trigger-chip-group">
+                        <StatusChip tone={subscription.enabled ? "success" : "neutral"}>
+                          {subscription.enabled ? "Enabled" : "Paused"}
+                        </StatusChip>
+                        <StatusChip tone={restricted ? "warning" : subscriptionCompatibilityTone(subscription.compatibility)}>
+                          {restricted ? "Workflow details restricted" : label(subscription.compatibility)}
+                        </StatusChip>
+                      </div>
+                      <Findings items={subscription.findings} />
+                      {subscription.origin.configurationReadOnly ? (
+                        <small className="wf-trigger-muted">Managed by {subscription.origin.sourceId || "source"}</small>
+                      ) : null}
+                    </td>
+                    <td>
+                      <StatusChip tone={invocationGrantTone(subscription.invocationGrant.state)}>
+                        Invocation: {label(subscription.invocationGrant.state)}
+                      </StatusChip>
+                    </td>
+                    <td className="wf-trigger-actions-cell">
+                      <div className="wf-trigger-row-actions">
+                        {!restricted ? (
+                          <StudioButton
+                            size="sm"
+                            disabled={!allowed(subscription.actions, "SaveSubscription")}
+                            title={actionReason(subscription.actions, "SaveSubscription")}
+                            onClick={() => void choose(subscription)}
+                          >
+                            Edit
+                          </StudioButton>
+                        ) : null}
+                        <OverflowMenu
+                          items={buildOverflowItems(subscription, restricted)}
+                          ariaLabel={`Actions for ${rowTargetLabel}`}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </StudioTableContainer>
+      )}
+
+      {result.state === "loaded" && (result.value.items.length > 0 || Boolean(result.value.next) || Boolean(after)) ? (
+        <StudioCollectionFooter>
+          <span>{result.value.items.length} {result.value.items.length === 1 ? "association" : "associations"} shown</span>
+          {result.value.next ? <StudioButton onClick={() => setAfter(result.value.next ?? undefined)}>Next associations</StudioButton> : null}
+          {after ? <StudioButton onClick={() => setAfter(undefined)}>First associations</StudioButton> : null}
+        </StudioCollectionFooter>
+      ) : null}
+
+      {adding ? (
+        <TriggerPickerDialog
+          api={api}
+          client={client}
+          onCancel={() => { opening.current++; setAdding(false); }}
+          onChoose={selected => {
+            opening.current++;
+            setAdding(false);
+            setEditing({ trigger: selected });
+          }}
+        />
+      ) : null}
+
+      {editing ? (
+        <SubscriptionDialog
+          key={`${editing.trigger.id}:${editing.subscription?.id ?? "new"}`}
+          api={api}
+          client={client}
+          actor={actor}
+          trigger={editing.trigger}
+          subscription={editing.subscription}
+          fixedDefinitionId={definitionId}
+          onCancel={closeEditor}
+          onSaved={saved}
+        />
+      ) : null}
+
+      {control ? (
+        <ChangeReviewDialog
+          key={opening.current}
+          api={api}
+          client={client}
+          trigger={control.trigger}
+          command={control.command}
+          onCancel={closeEditor}
+          onApplied={saved}
+        />
+      ) : null}
+    </section>
+  );
 }
-function TriggerPicker({ client, onChoose, onCancel }: { client: TriggerClient; onChoose(trigger: TriggerView): void; onCancel(): void }) {
+
+function TriggerPickerDialog({
+  api,
+  client,
+  onChoose,
+  onCancel
+}: {
+  api: ElsaStudioModuleApi;
+  client: TriggerClient;
+  onChoose(trigger: TriggerView): void;
+  onCancel(): void;
+}) {
   const [search, setSearch] = useState("");
   const [term, setTerm] = useState("");
   const [after, setAfter] = useState<string>();
+  const [typeDescriptors, setTypeDescriptors] = useState<TriggerTypeDescriptor[]>([]);
   const { result, reload } = useTriggerLoad(signal => client.list({ search: term, after }, signal), JSON.stringify([term, after]));
-  return <section aria-label="Choose standalone trigger"><h4>Choose a trigger</h4><div className="studio-page-actions"><StudioSearchInput aria-label="Search triggers to associate" value={search} onChange={event => setSearch(event.currentTarget.value)} /><StudioButton onClick={() => { setAfter(undefined); setTerm(search.trim()); }}>Search</StudioButton><StudioButton onClick={onCancel}>Cancel</StudioButton></div>
-    {result.state === "loading" ? <Loading /> : result.state === "error" ? <RequestError error={result.error} retry={reload} /> : <>{!result.value.items.length ? <p>No accessible triggers match this search.</p> : <ul>{result.value.items.map(trigger => <li key={trigger.id}><StudioButton disabled={!allowed(trigger.actions, "AddSubscription")} title={actionReason(trigger.actions, "AddSubscription")} onClick={() => onChoose(trigger)}>{trigger.name}</StudioButton> · {label(trigger.effectiveState)}</li>)}</ul>}{result.value.next ? <StudioButton onClick={() => setAfter(result.value.next ?? undefined)}>Next triggers</StudioButton> : null}{after ? <StudioButton onClick={() => setAfter(undefined)}>First triggers</StudioButton> : null}</>}
-  </section>;
+  const items = useMemo(() => (result.state === "loaded" ? result.value.items : []), [result]);
+
+  useEffect(() => {
+    if (!items.length || typeDescriptors.length > 0 || typeof client.types !== "function") return;
+    const controller = new AbortController();
+    void client.types(controller.signal)
+      .then(page => { if (!controller.signal.aborted) setTypeDescriptors(page.items); })
+      .catch(() => { /* Type presentations resolve from built-in defaults if types endpoint is unavailable. */ });
+    return () => controller.abort();
+  }, [client, items.length, typeDescriptors.length]);
+
+  const presentations = api.triggerTypePresentations?.list() ?? [];
+  const editors = api.triggerConfigurationEditors?.list() ?? [];
+
+  return (
+    <StudioDialog
+      open
+      title="Choose a trigger"
+      description="Select a standalone trigger to associate with this workflow."
+      className="wf-trigger-picker-dialog"
+      dismissOnOutsideClick={false}
+      onClose={onCancel}
+      footer={
+        <StudioDialogFooter
+          onCancel={onCancel}
+          cancelLabel="Cancel"
+        />
+      }
+    >
+      <section className="wf-trigger-picker-dialog-body" aria-label="Choose standalone trigger">
+        <form
+          className="wf-trigger-picker-search"
+          onSubmit={event => {
+            event.preventDefault();
+            setAfter(undefined);
+            setTerm(search.trim());
+          }}
+        >
+          <StudioSearchInput
+            aria-label="Search triggers to associate"
+            placeholder="Search triggers…"
+            value={search}
+            onChange={event => setSearch(event.currentTarget.value)}
+          />
+          <StudioButton type="submit">Search</StudioButton>
+        </form>
+        {result.state === "loading" ? (
+          <Loading label="Loading triggers" />
+        ) : result.state === "error" ? (
+          <RequestError error={result.error} retry={reload} />
+        ) : !items.length ? (
+          <div className="wf-trigger-picker-empty" role="status">
+            <p>No accessible triggers match this search.</p>
+          </div>
+        ) : (
+          <div className="wf-trigger-picker-list">
+            {items.map(trigger => {
+              const typePresentation = resolveTriggerTypeSummary(trigger.typeKey, trigger.schemaVersion, typeDescriptors, presentations, editors);
+              const TypeIcon = typePresentation.icon;
+              const canAttach = allowed(trigger.actions, "AddSubscription");
+              return (
+                <button
+                  key={trigger.id}
+                  type="button"
+                  className="wf-trigger-picker-card"
+                  data-accent={typePresentation.accent}
+                  disabled={!canAttach}
+                  title={actionReason(trigger.actions, "AddSubscription")}
+                  onClick={() => onChoose(trigger)}
+                >
+                  <span className="wf-trigger-type-card-icon" aria-hidden="true">
+                    <TypeIcon size={16} />
+                  </span>
+                  <span className="wf-trigger-picker-card-body">
+                    <span className="wf-trigger-picker-card-title">{trigger.name}</span>
+                    <span className="wf-trigger-picker-card-meta">
+                      <span>{typePresentation.displayName}</span>
+                      {trigger.http?.proposedEndpoint ? <span>· {trigger.http.proposedEndpoint}</span> : null}
+                      {trigger.schedule?.timezone ? <span>· {trigger.schedule.timezone}</span> : null}
+                    </span>
+                  </span>
+                  <span className="wf-trigger-picker-card-badges">
+                    <StatusChip tone={triggerStateTone(trigger.effectiveState)}>{label(trigger.effectiveState)}</StatusChip>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {result.state === "loaded" && (result.value.next || after) ? (
+          <div className="wf-trigger-picker-pagination">
+            {after ? <StudioButton type="button" size="sm" onClick={() => setAfter(undefined)}>First triggers</StudioButton> : null}
+            {result.value.next ? <StudioButton type="button" size="sm" onClick={() => setAfter(result.value.next ?? undefined)}>Next triggers</StudioButton> : null}
+          </div>
+        ) : null}
+      </section>
+    </StudioDialog>
+  );
 }
 
 export function WorkflowTriggersPanel({ api, context }: { api: ElsaStudioModuleApi; context: WorkflowDesignerPanelContext }) {
   const scope = useTriggerScope(api);
   return <WorkflowTriggerAssociations key={`${scope}:${context.definition.id}`} api={api} definitionId={context.definition.id} />;
 }
+
 function WorkflowTriggerAssociations({ api, definitionId }: { api: ElsaStudioModuleApi; definitionId: string }) {
   const client = useMemo(() => triggerClient(api.backend), [api.backend]);
   const { result, reload } = useTriggerLoad(signal => client.actor(signal), definitionId);

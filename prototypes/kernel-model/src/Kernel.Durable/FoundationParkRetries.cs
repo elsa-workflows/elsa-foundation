@@ -16,7 +16,7 @@ public sealed partial class InMemoryStore
     private const ushort DigestKey = ushort.MaxValue - 1;
     private const int RetryHeaderBytes = 2 * sizeof(long) + 2 * sizeof(ushort);
     private const int MaxRetryPlainBytes = RetryHeaderBytes + 2 * (MaxRetryKeyUnits + MaxRetryMatchUnits);
-    internal const int MaxRetryTokenChars = (MaxRetryPlainBytes + CursorNonceBytes + CursorTagBytes + 2) / 3 * 4;
+    internal const int MaxRetryTokenChars = (MaxRetryPlainBytes + FoundationReadCursor.Overhead + 2) / 3 * 4;
 
     // The stored Park and exact row incarnation qualify a handle for a later operator retry.
     internal string? SealFoundationKeptHandle(string tenant, string reference, InboxKey key)
@@ -157,7 +157,7 @@ public sealed partial class InMemoryStore
         digest = null;
         if (token.Length % 4 != 0) return false;
         var padding = token.EndsWith("==", StringComparison.Ordinal) ? 2 : token.EndsWith('=') ? 1 : 0;
-        var size = token.Length / 4 * 3 - padding - CursorNonceBytes - CursorTagBytes;
+        var size = token.Length / 4 * 3 - padding - FoundationReadCursor.Overhead;
         if (size <= RetryHeaderBytes || size > MaxRetryPlainBytes) return false;
         Span<byte> plain = stackalloc byte[size];
         if (!TryOpenReadCursor(context, token, plain)) return false;

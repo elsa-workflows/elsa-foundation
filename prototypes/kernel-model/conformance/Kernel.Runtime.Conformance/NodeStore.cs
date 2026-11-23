@@ -30,9 +30,16 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     public int Stalls { get; private set; }
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, long> _releases = new();
+    private int _setReleases, _setTakes, _singleTakes;
+    public int SetTakes => Volatile.Read(ref _setTakes);
+    public int SingleTakes => Volatile.Read(ref _singleTakes);
 
     /// <summary>When the node last began to give the partition up (Environment.TickCount64), if it ever did.</summary>
     public long? ReleaseBegan(int partition) => _releases.TryGetValue(partition, out var at) ? at : null;
+
+    internal (int Partition, Task Completion)? HoldScalarPoll { get; set; }
+
+    public int SetReleases => Volatile.Read(ref _setReleases);
 
     /// <summary>The node's commits answered "not landed".</summary>
     public int Refused => Volatile.Read(ref _refused);
@@ -177,7 +184,16 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
         finally { Interlocked.Decrement(ref _inFlight); }
     }
 
-    public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) => Call(() => inner.TakeAsync(partition, node, lease, cancellationToken));
+    public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _singleTakes);
+        return Call(() => inner.TakeAsync(partition, node, lease, cancellationToken));
+    }
+    public ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _setTakes);
+        return Call(() => inner.TakeAsync(partitions, node, lease, cancellationToken));
+    }
     public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => Call(async () =>
     {
         var taken = await inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
@@ -202,9 +218,22 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
         _releases[partition] = Environment.TickCount64;
         return Call(() => inner.ReleaseAsync(partition, epoch, cancellationToken));
     }
+    public ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _setReleases);
+        var at = Environment.TickCount64;
+        foreach (var fence in owned) _releases[fence.Partition] = at;
+        return Call(() => inner.ReleaseAsync(owned, cancellationToken));
+    }
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _polls);
+        if (HoldScalarPoll is { } hold && hold.Partition == partition)
+            return Call<Polled>(async () =>
+            {
+                await hold.Completion.WaitAsync(cancellationToken);
+                return await inner.PollAsync(partition, epoch, horizon, limit, cancellationToken);
+            });
         return Call(() => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken));
     }
     /// <summary>A set poll is one call, as on a SQL store; it still counts one poll per partition, for the cost run's column.</summary>

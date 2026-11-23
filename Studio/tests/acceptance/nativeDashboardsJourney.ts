@@ -3,8 +3,16 @@ import { attachDashboardJson, dashboardBackend, registerDashboardCleanup, observ
 
 async function openQuerySection(page: Page, path: string) {
   const section = page.locator(`[data-query-path="${path}"]`).first();
+  const id = await section.getAttribute("id");
+  if (id) {
+    const navLink = page.locator(`.named-query-section-nav a[aria-controls="${id}"]`).first();
+    if (await navLink.count()) {
+      if (await navLink.getAttribute("aria-current") !== "page") await navLink.click();
+      return section;
+    }
+  }
   const trigger = section.locator("button[aria-expanded]").first();
-  if (await trigger.getAttribute("aria-expanded") !== "true") await trigger.click();
+  if (await trigger.count() && await trigger.getAttribute("aria-expanded") !== "true") await trigger.click();
   return section;
 }
 
@@ -705,10 +713,11 @@ async function captureScrollPosition(page: Page, info: TestInfo, capture: Captur
   await capture(page, info, name);
 }
 
-async function captureNativeResultSections(page: Page, info: TestInfo, capture: Capture, name: string, result: Locator, compactProvenance = false) {
+async function captureNativeResultSections(page: Page, info: TestInfo, capture: Capture, name: string, result: Locator, compactProvenance = true) {
   const details = result.locator(".named-result-details");
-  if (compactProvenance) await details.getByRole("button", { name: "Result details" }).click();
-  const provenance = compactProvenance ? result.locator(".named-result-details-content > p") : result.locator(".named-result-provenance > p");
+  const compact = compactProvenance && await details.count() > 0;
+  if (compact) await details.getByRole("button", { name: "Result details" }).click();
+  const provenance = compact ? result.locator(".named-result-details-content > p") : result.locator(".named-result-provenance > p");
   await captureScrollPosition(page, info, capture, `${name}-provenance`, provenance.first());
   await captureScrollPosition(page, info, capture, `${name}-coverage-periods`, provenance.last(), "end");
   const series = result.locator(".named-chart-series"); await expect(series).toHaveCount(3);
@@ -719,7 +728,7 @@ async function captureNativeResultSections(page: Page, info: TestInfo, capture: 
   await values.evaluate(element => { element.scrollLeft = element.scrollWidth; });
   await capture(page, info, `${name}-exact-values-end`);
   await values.evaluate(element => { element.scrollLeft = 0; });
-  if (compactProvenance) await details.getByRole("button", { name: "Result details" }).click();
+  if (compact) await details.getByRole("button", { name: "Result details" }).click();
 }
 
 type DashboardAppearance = { style: string; mode: string; navigation: string; layout: string };

@@ -3,9 +3,42 @@ namespace Kernel.Store.Conformance;
 internal static class StoredStateChecks
 {
     internal static readonly Case Case=new("state envelope: opaque escaping, identity and future refusal",Level.Required,Run);
+    internal static readonly Case AbsentState = new("state envelope: absent actor state survives a physical reload", Level.Required, CheckAbsentState);
+
+    private static async Task CheckAbsentState(Context c)
+    {
+        const string id = "0/checkpoint";
+        var lease = await c.Take(0);
+        var absent = Make.Row(id, 1, state: "null") with { FoundationNullState = true };
+        var literal = absent with { Revision = 2, FoundationNullState = false };
+        Context.Equal(("null", false, false), StoredState.Decode(StoredState.Encode(literal)), "the present-state decoder preserves literal null");
+        try
+        {
+            StoredState.Decode(StoredState.Encode(absent));
+            throw new ConformanceException("the present-state decoder accepted an absent state");
+        }
+        catch (StoreException error) when (error.Failure == Failure.Definite) { }
+        await c.Lands(() => c.Commit(lease, 0, [Make.Turn(id, absent)]));
+        var reader = c.Provided.NewClient();
+        Context.That((await reader.LoadAsync([id])).Single() == absent, "physical reload changed absent actor state");
+
+        await c.Refused(() => c.Commit(0, lease.Epoch, lease.Position, [Make.Turn(id, literal, expected: 1)]));
+        Context.Equal(absent, (await reader.LoadActorsAsync([id])).Single().Row, "refused commit changed absent actor state");
+        Context.Equal(1, (await reader.ReadJournalOfAsync(0, id, 0)).Count, "refused change appended journal history");
+
+        await c.Lands(() => c.Commit(0, lease.Epoch, lease.Position + 1, [Make.Turn(id, literal, expected: 1)]));
+        Context.Equal(literal, (await reader.LoadAsync([id])).Single(), "opaque null text reloaded as absent state");
+        Context.Equal(2, (await reader.ReadJournalOfAsync(0, id, 0)).Count, "journal after state change");
+
+        var invalid = literal with { Revision = 3, State = "opaque", FoundationNullState = true };
+        await c.Refused(() => c.Commit(0, lease.Epoch, lease.Position + 2, [Make.Turn(id, invalid, expected: 2)]));
+        Context.Equal(literal, (await reader.LoadAsync([id])).Single(), "contradictory absent-state flag replaced opaque state");
+        Context.Equal(2, (await reader.ReadJournalOfAsync(0, id, 0)).Count, "invalid checkpoint appended journal history");
+    }
+
     private static async Task Run(Context c)
     {
-        var values=new[]{"", "null", "{}",StoredState.Identity,StoredState.MetadataIdentity,StoredState.Family+"1:identity-only",StoredState.Data,StoredState.Data+StoredState.Identity,
+        var values=new[]{"", "null", "{}",StoredState.Identity,StoredState.MetadataIdentity,StoredState.Absent,StoredState.Family+"1:identity-only",StoredState.Data,StoredState.Data+StoredState.Identity,
             StoredState.Family+"2:future/🌐",StoredState.Family+"1:unknown"};
         var lease=await c.Take(0);long position=lease.Position;
         for(var i=0;i<values.Length;i++)
