@@ -364,9 +364,10 @@ In two before-and-after runs on PostgreSQL 17, schema setup on an empty database
 the format check and 37 with the marker table, seed and read. Both the first and restarted process took 13 TCP
 turns for ownership, up from 12. The five workflow operations above kept their measured counts.
 
-Public PostgreSQL readers check the format once when opening the journal cursor. On two fresh PostgreSQL 17.12
-runs with this check, the first process reported 38 or 39 TCP turns for setup, the restarted process reported six,
-and both still reported 13 for ownership. The five workflow phases retained their earlier counts.
+The first public PostgreSQL readers checked the format when opening the journal cursor. On two fresh PostgreSQL
+17.12 runs with that check, the first process reported 38 or 39 TCP turns for setup, the restarted process reported
+six, and both still reported 13 for ownership. The five workflow phases retained their earlier counts. The current
+reader checks the format in each list and journal page statement.
 
 The relational schema marker is now 2 for the readable format columns on node rows. Schema 1 preview databases
 refuse open and acquisition before a node-row write. Use a fresh dedicated preview database for this revision.

@@ -13,12 +13,15 @@ internal static class PostgresRootHistoryChecks
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("This check needs a fresh dedicated PostgreSQL database.");
-        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        var counts = new Counting();
+        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).AddInterceptors(counts).Options;
         KernelDb Open() => new(options);
         EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var ct = timeout.Token;
         var reader = Store();
+        await using var db = Open();
+        Check(await PostgresFixtureDatabase.IsEmptyAsync(db, ct), "the journal fixture requires a fresh database");
         await reader.CreateAsync(1);
         var admissions = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         await admissions.InstallAsync(ct);
@@ -27,9 +30,15 @@ internal static class PostgresRootHistoryChecks
         var reads = await reader.OpenPreviewRootReadsAsync(pageSize: 128, cancellationToken: ct);
         var scope = FixedTenantScope.Bind("preview-history");
         var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
-        await using var db = Open();
         Task<long> Position() => db.Partitions.Select(p => p.Position).SingleAsync(ct);
         Task<long> Clock() => db.Database.SqlQueryRaw<long>("""SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value" """).SingleAsync(ct);
+
+        async Task SetCodecAsync(int from, int to, CancellationToken token)
+        {
+            var changed = await db.StoreVersions.Where(row => row.Id == StoreVersionEntity.MarkerId && row.JournalCodec == from)
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.JournalCodec, to), token);
+            Check(changed == 1, "the fixture moves only the expected codec marker");
+        }
 
         foreach (var history in new[] { Contract.History.Minimal, Contract.History.Full })
         {
@@ -92,19 +101,35 @@ internal static class PostgresRootHistoryChecks
             var startPage = await reads.TailAsync(scope, actor, cancellationToken: ct);
             if (!delayed)
             {
-                await db.Database.ExecuteSqlRawAsync("""UPDATE "KernelStoreVersions" SET "JournalCodec" = "JournalCodec" + 1""", ct);
+                var before = counts.Commands;
+                var page = await reads.ListAsync(scope, new Contract.ActorQuery(), cancellationToken: ct);
+                Check(page.Items is [var listed] && listed.Header.Ref == actor && counts.Commands - before == 1,
+                    "the public ordinary-profile list reads its marker and actor in one command");
+                var codec = db.RequiredFormat.JournalCodec;
+                var changed = codec + 1;
+                await SetCodecAsync(codec, changed, ct);
                 try
                 {
-                    await reads.TailAsync(scope, actor, cancellationToken: ct);
-                    throw new InvalidOperationException("An already-open journal reader accepted a new codec.");
-                }
-                catch (StoreFormatException error) when (error.Message.Contains("journal codec=2", StringComparison.Ordinal))
-                {
-                    Check(true, "an already-open public journal reader refuses a changed codec");
+                    await RefusesCodecAsync(() => reads.TailAsync(scope, actor, cancellationToken: ct).AsTask(), "journal");
+                    await RefusesCodecAsync(() => reads.ListAsync(scope, new Contract.ActorQuery(), cancellationToken: ct).AsTask(), "list");
+                    await RefusesCodecAsync(() => reads.ListAsync(scope, new Contract.ActorQuery(Type: "absent"), cancellationToken: ct).AsTask(),
+                        "empty list");
                 }
                 finally
                 {
-                    await db.Database.ExecuteSqlRawAsync("""UPDATE "KernelStoreVersions" SET "JournalCodec" = "JournalCodec" - 1""", ct);
+                    using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await SetCodecAsync(changed, codec, cleanup.Token);
+                }
+
+                async Task RefusesCodecAsync(Func<Task> read, string operation)
+                {
+                    try { await read(); }
+                    catch (StoreFormatException error) when (error.Message.Contains($"journal codec={changed}.", StringComparison.Ordinal))
+                    {
+                        Check(true, $"an already-open reader refuses a changed codec for {operation}");
+                        return;
+                    }
+                    throw new InvalidOperationException($"An already-open reader accepted a changed codec for {operation}.");
                 }
             }
             Check(startPage.Items.Count > 0 && startPage.Items.All(e => e.Revision == 1) && startPage.Next is not null &&

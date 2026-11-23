@@ -59,10 +59,7 @@ public sealed partial class EfStore
             throw;
         }
         var first = sampled[0];
-        if (first.StoreSchema is not { } schema || first.MessageProtocol is not { } protocol || first.JournalCodec is not { } codec)
-            throw new StoreFormatException("The kernel store version marker is missing.");
-        var stored = new StoreFormat(schema, protocol, codec);
-        if (stored != expected) throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {expected}.");
+        RequireSnapshotFormat(expected, first.StoreSchema, first.MessageProtocol, first.JournalCodec);
         var rows = sampled.Where(row => row.Position.HasValue)
             .Select(row => new RootJournalEntry(row.Position!.Value, row.Revision!.Value, row.Entries!)).ToArray();
         return new(rows, first.AsOf);

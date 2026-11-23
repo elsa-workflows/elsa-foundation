@@ -9,7 +9,8 @@ public sealed partial class EfStore
         string TypeData, IReadOnlyDictionary<string, string> Labels);
     internal sealed record RootListPage(IReadOnlyList<RootListItem> Items, long AsOf);
 
-    private sealed record RootListRow(string? Reference, int? Status, long? EndedAt, string? Header, long AsOf);
+    private sealed record RootListRow(string? Reference, int? Status, long? EndedAt, string? Header, long AsOf,
+        int? StoreSchema, int? MessageProtocol, int? JournalCodec);
     private sealed record RootPointRow(string? Reference, int? Status, long? EndedAt, string? Header, long AsOf, bool SourceReady,
         int? StoreSchema, int? MessageProtocol, int? JournalCodec);
 
@@ -105,10 +106,7 @@ public sealed partial class EfStore
             await RequireStoreVersionsAsync(db, cancellationToken);
             throw;
         }
-        if (row.StoreSchema is not { } schema || row.MessageProtocol is not { } protocol || row.JournalCodec is not { } codec)
-            throw new StoreFormatException("The kernel store version marker is missing.");
-        var stored = new StoreFormat(schema, protocol, codec);
-        if (stored != expected) throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {expected}.");
+        RequireSnapshotFormat(expected, row.StoreSchema, row.MessageProtocol, row.JournalCodec);
         if (!row.SourceReady)
             throw new StoreFormatException("The root actor projection source or a required trigger is missing or disabled.");
         return row.Reference is null ? null : (ToRootListItem(row.Reference, row.Status!.Value, row.EndedAt, row.Header!), row.AsOf);
@@ -119,29 +117,51 @@ public sealed partial class EfStore
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root actor lists require PostgreSQL.");
         await using var db = create();
-        await RequireStoreVersionsAsync(db, cancellationToken);
+        var expected = db.RequiredFormat;
         var encodedType = type is null ? null : DurableKeyJson.Write(type);
         var encodedLabels = DurableKeyJson.Write(labels);
-        var rows = await db.Database.SqlQuery<RootListRow>($"""
-            WITH page AS (
-                SELECT l."Reference", l."Status", l."EndedAt", l."Header"
-                FROM "FoundationActorList" l
-                WHERE l."Tenant" = {tenant} AND l."Reference" > {after}
-                    AND ({encodedType}::text IS NULL OR l."Type" = kernel_actor_list_filter({encodedType}::text))
-                    AND ({status}::integer IS NULL OR l."Status" = {status}::integer)
-                    AND ({endedBefore}::bigint IS NULL OR l."EndedAt" < {endedBefore}::bigint)
-                    AND {parked}::boolean IS NOT TRUE
-                    AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(kernel_actor_list_filter({encodedLabels})) criterion(entry)
-                        WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements(l."Labels") label(entry) WHERE label.entry = criterion.entry))
-                ORDER BY l."Reference" LIMIT {limit}
-            )
-            SELECT page."Reference", page."Status", page."EndedAt", page."Header",
-                floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
-            FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true
-            ORDER BY page."Reference" COLLATE "C"
-            """).ToListAsync(cancellationToken);
+        List<RootListRow> rows;
+        try
+        {
+            rows = await db.Database.SqlQuery<RootListRow>($"""
+                WITH marker AS (
+                    SELECT "StoreSchema", "MessageProtocol", "JournalCodec"
+                    FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
+                ), page AS (
+                    SELECT l."Reference", l."Status", l."EndedAt", l."Header"
+                    FROM "FoundationActorList" l
+                    WHERE l."Tenant" = {tenant} AND l."Reference" > {after}
+                        AND EXISTS (SELECT 1 FROM marker WHERE "StoreSchema" = {expected.StoreSchema}
+                            AND "MessageProtocol" = {expected.MessageProtocol} AND "JournalCodec" = {expected.JournalCodec})
+                        AND ({encodedType}::text IS NULL OR l."Type" = kernel_actor_list_filter({encodedType}::text))
+                        AND ({status}::integer IS NULL OR l."Status" = {status}::integer)
+                        AND ({endedBefore}::bigint IS NULL OR l."EndedAt" < {endedBefore}::bigint)
+                        AND {parked}::boolean IS NOT TRUE
+                        AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(kernel_actor_list_filter({encodedLabels})) criterion(entry)
+                            WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements(l."Labels") label(entry) WHERE label.entry = criterion.entry))
+                    ORDER BY l."Reference" LIMIT {limit}
+                )
+                SELECT page."Reference", page."Status", page."EndedAt", page."Header",
+                    marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec",
+                    floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
+                FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN marker ON true
+                ORDER BY page."Reference" COLLATE "C"
+                """).ToListAsync(cancellationToken);
+        }
+        catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
+        {
+            throw new StoreFormatException("The root list has an unreadable schema.", error);
+        }
+        catch (PostgresException error) when (error.SqlState.StartsWith("42", StringComparison.Ordinal) &&
+            error.SqlState != PostgresErrorCodes.InsufficientPrivilege)
+        {
+            await RequireStoreVersionsAsync(db, cancellationToken);
+            throw;
+        }
+        var first = rows[0];
+        RequireSnapshotFormat(expected, first.StoreSchema, first.MessageProtocol, first.JournalCodec);
         var items = rows.Where(row => row.Reference is not null).Select(row => ToRootListItem(row.Reference!, row.Status!.Value, row.EndedAt, row.Header!)).ToArray();
-        return new(items, rows[0].AsOf);
+        return new(items, first.AsOf);
     }
 
     private static RootListItem ToRootListItem(string reference, int status, long? endedAt, string encodedHeader)
