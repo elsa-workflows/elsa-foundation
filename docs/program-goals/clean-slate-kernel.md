@@ -33,6 +33,25 @@ plan: the ADR's non-goals for release 1, and anything not named there.
 - Proof: the store and runtime conformance suites on every engine, the simulation and its mutations, process-kill and
   two-writer tests on the commit, and deterministic command and round-trip budgets. No timing gate.
 
+## Runnable delivery increments
+
+The **Built-in Actor Foundation** provides actor turns, durability, delivery and recovery. The **Elsa Workflow Runtime**
+uses the Actor Foundation contract to run workflow instances and execution models. Deliver these capabilities as runnable
+increments, in parallel where their dependencies allow. Each increment names its run instructions, verified revision,
+acceptance evidence and outstanding work on [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229).
+
+The first opt-in increment is the **Core Preview**. One Embedded host runs a Native workflow on PostgreSQL through the
+public Actor Foundation contract. Start the workflow, commit a wait, restart the host, and resume it. Replay the same
+input and check that the actor advances once and that replay leaves the saved state and journal unchanged. Record the
+measured PostgreSQL round trips for each phase. The [runnable prototype proof](https://github.com/elsa-workflows/elsa-foundation/pull/5467)
+uses the legacy Native adapter. The public-path preview requires durable admission, opaque actor references, fenced
+actor checkpoints and scoped journal reads in PostgreSQL.
+[Owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7091776914)
+
+Subsequent increments can demonstrate two-node failover, Flowchart execution, or inspecting and recovering a parked
+workflow. Publish demo readiness and milestone acceptance separately. Provider and operator qualification follow the
+milestones below. The owner decides the default switch and approves the retirement inventory at their respective gates.
+
 ## Milestones
 
 Each milestone closes when its acceptance holds on main. K1 to K12 are gate 3 (release 1); K13 is gate 4; K14 is
