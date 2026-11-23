@@ -50,19 +50,34 @@ export function releaseInventory(kind: string): Plugin | false {
           }
           if (item.isEntry && item.facadeModuleId && isAbsolute(item.facadeModuleId)) {
             const directory = recordSource(item.facadeModuleId);
-            if (directory) entries.add(directory);
+            if (directory) {
+              entries.add(directory);
+              owners.set(item.facadeModuleId, directory);
+            }
           }
           for (const imported of [...item.imports, ...item.dynamicImports]) {
             if (!Object.hasOwn(bundle, imported)) externals.add(imported);
           }
         }
       }
+      const included = new Map(packages);
       const imports = new Map<string, Set<string>>();
+      // Facades and re-export barrels can contribute no rendered bytes. Follow their
+      // resolved imports, keeping only relationships between observed package owners.
+      // Map iteration includes intermediary modules added during this traversal.
       for (const [source, directory] of owners) {
         const info = this.getModuleInfo(source);
         if (!info) continue;
         for (const id of [...info.importedIds, ...info.dynamicallyImportedIds]) {
-          const target = owners.get(id) ?? (externals.has(id) ? id : undefined);
+          let target = owners.get(id);
+          if (!target && isAbsolute(id)) {
+            const result = recordSource(id);
+            if (result && included.has(result)) {
+              target = result;
+              owners.set(id, result);
+            }
+          }
+          target ??= externals.has(id) ? id : undefined;
           if (!target || target === directory) continue;
           if (!imports.has(directory)) imports.set(directory, new Set());
           imports.get(directory)!.add(target);
@@ -71,7 +86,7 @@ export function releaseInventory(kind: string): Plugin | false {
       mkdirSync(destination, { recursive: true });
       const key = createHash("sha256").update(outDir + ":" + kind).digest("hex");
       writeFileSync(join(destination, key + ".json"), JSON.stringify({
-        kind, outDir, packages: [...packages.values()], entries: [...entries],
+        kind, outDir, packages: [...included.values()], entries: [...entries],
         imports: [...imports].map(([from, to]) => [from, [...to]]), externals: [...externals].sort(), files
       }));
     }
