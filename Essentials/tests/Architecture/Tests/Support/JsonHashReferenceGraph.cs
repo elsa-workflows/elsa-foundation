@@ -202,8 +202,26 @@ internal sealed class JsonHashReferenceGraph
 
     private static bool IsDigestType(Type type)
     {
-        if (typeof(System.Security.Cryptography.HashAlgorithm).IsAssignableFrom(type) || type == typeof(System.Security.Cryptography.IncrementalHash)) return true;
-        return NonCryptographicAlgorithm.Value?.IsAssignableFrom(type) == true;
+        if (HasTrustedBase(type, typeof(System.Security.Cryptography.HashAlgorithm)) || HasTrustedBase(type, typeof(System.Security.Cryptography.IncrementalHash))) return true;
+        return NonCryptographicAlgorithm.Value is { } nonCryptographic && HasTrustedBase(type, nonCryptographic);
+    }
+
+    private static bool HasTrustedBase(Type type, Type authority)
+    {
+        if (authority.IsAssignableFrom(type)) return true;
+        var expected = authority.Assembly.GetName();
+        var token = expected.GetPublicKeyToken();
+        if (token is not { Length: > 0 }) return false;
+        // Studio can carry a different signed package version in its own load context.
+        // Runtime assignability crosses neither context nor version; the actual ancestry
+        // must still name the framework/vendor definition, including its signing identity.
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            var assembly = current.Assembly.GetName();
+            if (current.FullName == authority.FullName && assembly.Name == expected.Name &&
+                assembly.GetPublicKeyToken() is { } candidate && candidate.SequenceEqual(token)) return true;
+        }
+        return false;
     }
 
     private static bool CarriesDelegate(Type type)

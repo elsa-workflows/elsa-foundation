@@ -240,6 +240,26 @@ public sealed class JsonHashReferenceGraphTests
     }
 
     [Fact]
+    public void A_signed_digest_in_a_private_host_context_remains_a_primitive()
+    {
+        var context = new System.Runtime.Loader.AssemblyLoadContext("S9 private digest " + Guid.NewGuid().ToString("N"), isCollectible: true);
+        try
+        {
+            var privatePackage = context.LoadFromAssemblyPath(typeof(System.IO.Hashing.Crc32).Assembly.Location);
+            const string source = "public static class PrivateRecipe { public static byte[] Run(byte[] value) => System.IO.Hashing.Crc32.Hash(value); }";
+            var image = FixtureCompiler.Compile("S9.PrivateDigest." + Guid.NewGuid().ToString("N"), source, [typeof(System.IO.Hashing.Crc32).Assembly]);
+            using var stream = new MemoryStream(image);
+            var assembly = context.LoadFromStream(stream);
+            var privateDigest = privatePackage.GetType("System.IO.Hashing.Crc32")!;
+            Assert.False(typeof(System.IO.Hashing.NonCryptographicHashAlgorithm).IsAssignableFrom(privateDigest));
+            var graph = JsonHashReferenceGraph.Scan([assembly]);
+            Assert.Empty(graph.Errors);
+            Assert.Contains(graph.References, reference => Owner(reference, "Run") && reference.Role == "digest-primitive" && reference.Target.Contains("System.IO.Hashing.Crc32::Hash", StringComparison.Ordinal));
+        }
+        finally { context.Unload(); }
+    }
+
+    [Fact]
     public void An_indirect_function_pointer_is_an_explicit_unresolved_finding()
     {
         const string source = """
