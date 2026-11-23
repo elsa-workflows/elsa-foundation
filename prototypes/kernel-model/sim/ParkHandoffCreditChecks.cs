@@ -4,7 +4,7 @@ using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Sim;
 
-internal static class ParkHandoffCreditChecks
+internal static partial class ParkHandoffCreditChecks
 {
     internal static async Task Run(Action<bool, string> check)
     {
@@ -23,6 +23,9 @@ internal static class ParkHandoffCreditChecks
 
     internal static async Task CheckControlIdentities(Action<bool, string> check)
     {
+        await AcrossParks(discard: false, check);
+        await AcrossParks(discard: true, check);
+        await AcrossParks(discard: true, check, sameOwner: true);
         const long start = 1_702_610_019_000;
         var now = start;
         var store = new InMemoryStore(1, () => now);
@@ -716,6 +719,7 @@ internal static class ParkHandoffCreditChecks
         public string Type => "handoff-credit";
         internal bool HoldInputs { get; set; }
         internal string? HoldOnly { get; set; }
+        internal bool FaultOnSuspend { get; init; }
         internal bool KeepsJob { get; init; }
         internal int JobEntries { get; private set; }
         internal int JobResults { get; private set; }
@@ -727,7 +731,8 @@ internal static class ParkHandoffCreditChecks
             var releasesHeld = turn.Inbox.Any(message => message.Kind == "release-held");
             foreach (var message in turn.Inbox)
             {
-                if (message.Kind == "fault") throw new InvalidOperationException("Park the drain-credit fixture.");
+                if (message.Kind == "fault" || FaultOnSuspend && message.Kind == Contract.Kinds.Suspend)
+                    throw new InvalidOperationException("Park the drain-credit fixture.");
                 if (message.Kind is Contract.Kinds.Suspend or Contract.Kinds.Resume)
                     turn.SetHeader(message.Kind == Contract.Kinds.Suspend ? "suspended" : "", turn.Header.Labels);
                 if (message.Kind == "arm") turn.StartJob("credit-job");
