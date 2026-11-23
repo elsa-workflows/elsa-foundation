@@ -14,6 +14,12 @@ using Microsoft.EntityFrameworkCore;
 WriteLine.Out = null;
 if (args is ["sqlite-plan-projection", "build", var planFile]) return await SqlitePlanProjectionChecks.BuildAsync(planFile);
 if (args is ["sqlite-plan-projection", "inspect", var existingPlanFile, var issuedPlan]) return await SqlitePlanProjectionChecks.InspectAsync(existingPlanFile, issuedPlan);
+if (args is ["sqlite-plan-projection", "list", var listFile, var listPlan, var limit, .. var continuation] &&
+    int.TryParse(limit, out var pageSize) && continuation.Length <= 1)
+{
+    try { return await SqlitePlanProjectionChecks.ListAsync(listFile, listPlan, pageSize, continuation.SingleOrDefault()); }
+    catch (ArgumentException error) { Console.Error.WriteLine(error.Message); return 1; }
+}
 if (args is ["deadlines"]) return await Deadlines.RunAsync();
 if (args is ["smoke"]) return await Smoke.RunAsync();
 if (args is ["variants", var variantMode]) return await VariantChecks.RunAsync(variantMode);

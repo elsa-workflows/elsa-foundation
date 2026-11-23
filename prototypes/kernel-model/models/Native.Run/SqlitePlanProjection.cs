@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Kernel.Foundation.Contracts;
 using Kernel.WorkflowActor;
 using Microsoft.Data.Sqlite;
@@ -23,11 +24,16 @@ internal sealed class SqlitePlanProjection(string file, BoundScope scope, ActorR
                 tenant TEXT NOT NULL, plan TEXT NOT NULL, bookmark TEXT, closed INTEGER NOT NULL, as_of INTEGER NOT NULL,
                 PRIMARY KEY (tenant, plan)
             ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS plan_read_keys (
+                singleton INTEGER PRIMARY KEY CHECK (singleton = 1), cursor_key BLOB NOT NULL CHECK (length(cursor_key) = 32)
+            );
+            INSERT INTO plan_read_keys VALUES (1, $cursor_key) ON CONFLICT (singleton) DO NOTHING;
             CREATE TABLE IF NOT EXISTS plan_outcomes (
                 tenant TEXT NOT NULL, plan TEXT NOT NULL, actor TEXT NOT NULL, result INTEGER CHECK (result IN (0, 1, 2)),
                 PRIMARY KEY (tenant, plan, actor)
             ) WITHOUT ROWID;
             """;
+        command.Parameters.AddWithValue("$cursor_key", RandomNumberGenerator.GetBytes(32));
         await command.ExecuteNonQueryAsync(stop);
     }
 

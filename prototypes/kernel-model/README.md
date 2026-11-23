@@ -93,7 +93,18 @@ at the stored bookmark. An empty source page updates freshness, and populated ne
 and one unanswered actor from the closed plan, without rebuilding the view.
 
 This verifies the physical SQLite view and local keyset reads. The journal producer in the fixture uses the
-in-memory Actor Foundation. Operator API tokens, other view providers and K11 migration orchestration remain open.
+in-memory Actor Foundation. Other view providers and K11 migration orchestration remain open.
+
+To page the persisted result through the operator read contract, use the same file and printed plan reference:
+
+```sh
+dotnet "$dll" sqlite-plan-projection list "$scratch/plan.db" <plan-ref> 1
+dotnet "$dll" sqlite-plan-projection list "$scratch/plan.db" <plan-ref> 1 '<Next from previous result>'
+```
+
+Each JSON page has `Closed`, `AsOf`, `Items` and `Next`. A continuation is opaque and stays valid across
+a new CLI process. It is tied to the plan, the page size and the trusted host tenant. The CLI binds the demo
+tenant and reads the view file locally. Application hosting and operator authentication are separate work.
 
 ## The simulation
 

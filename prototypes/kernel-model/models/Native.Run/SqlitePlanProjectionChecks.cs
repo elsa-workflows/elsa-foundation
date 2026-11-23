@@ -85,6 +85,7 @@ internal static class SqlitePlanProjectionChecks
         await AddNeighborAsync("other", plan.Id, extra);
         await AddNeighborAsync(Scope.Tenant, OtherPlan, extra);
         var results = await VerifyAsync(file, plan, stop);
+        await VerifyOperatorAsync(file, plan, results, stop);
         Check(results[migrated] == MigrationPlanOutcome.Migrated && results[refusedActor] == MigrationPlanOutcome.Refused &&
             results[unanswered] is null && !results.ContainsKey(extra), "The rows must keep the original selected actors and exact senders.");
         Console.WriteLine($"projected {Environment.ProcessId} {plan.Id}");
@@ -187,6 +188,57 @@ internal static class SqlitePlanProjectionChecks
             !results.ContainsKey(foreignPage.Rows[0].Actor) && !results.ContainsKey(otherPlanPage.Rows[0].Actor),
             "The same physical database must isolate different tenants and plans.");
         return results;
+    }
+
+    internal static async Task<int> ListAsync(string file, string planRef, int size, string? pageToken)
+    {
+        using var timer = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var stop = timer.Token;
+        IMigrationPlanReads reads = await SqliteMigrationPlanReads.OpenAsync(file, stop);
+        var page = await reads.ListAsync(Scope, new(planRef), size, pageToken is null ? null : new Contract.PageToken(pageToken), stop);
+        Console.WriteLine(Json.Write(new
+        {
+            page.Closed,
+            page.Results.AsOf,
+            Items = page.Results.Items.Select(row => new
+            {
+                Actor = row.Actor.Id,
+                Outcome = row.Outcome?.ToString() ?? (page.Closed ? "NoAnswer" : "Pending")
+            }),
+            Next = page.Results.Next?.Value
+        }));
+        return 0;
+    }
+
+    private static async Task VerifyOperatorAsync(string file, Contract.ActorRef plan,
+        IReadOnlyDictionary<Contract.ActorRef, MigrationPlanOutcome?> expected, CancellationToken stop)
+    {
+        IMigrationPlanReads original = await SqliteMigrationPlanReads.OpenAsync(file, stop);
+        var first = await original.ListAsync(Scope, plan, 1, cancellationToken: stop);
+        var firstToken = first.Results.Next ?? throw new InvalidOperationException("The first operator page must supply a continuation.");
+        await new SqlitePlanProjection(file, Scope, plan).InitializeAsync(stop);
+        IMigrationPlanReads reopened = await SqliteMigrationPlanReads.OpenAsync(file, stop);
+        var second = await reopened.ListAsync(Scope, plan, 1, firstToken, stop);
+        var secondToken = second.Results.Next ?? throw new InvalidOperationException("The second operator page must supply a continuation.");
+        var third = await reopened.ListAsync(Scope, plan, 1, secondToken, stop);
+        var all = first.Results.Items.Concat(second.Results.Items).Concat(third.Results.Items).ToDictionary(row => row.Actor, row => row.Outcome);
+        Check(first.Closed && second.Closed && third.Closed && third.Results.Next is null && all.Count == expected.Count &&
+            expected.All(row => all[row.Key] == row.Value), "A reopened read API must traverse the same closed plan.");
+        var foreign = new Contract.BoundScope("other");
+        Check((await reopened.ListAsync(foreign, plan, 1, cancellationToken: stop)).Results.Items.Count == 1 &&
+            (await reopened.ListAsync(Scope, new(OtherPlan), 1, cancellationToken: stop)).Results.Items.Count == 1,
+            "Both neighboring queries must reach their own projection rows.");
+        await RefusesAsync(foreign, plan, 1, firstToken, "another tenant");
+        await RefusesAsync(Scope, new(OtherPlan), 1, firstToken, "another plan");
+        await RefusesAsync(Scope, plan, 2, firstToken, "another page size");
+        await RefusesAsync(Scope, plan, 1, new("invalid-page-token"), "an invalid token");
+
+        async Task RefusesAsync(Contract.BoundScope scope, Contract.ActorRef target, int limit, Contract.PageToken from, string context)
+        {
+            try { await reopened.ListAsync(scope, target, limit, from, stop); }
+            catch (ArgumentException error) when (error.ParamName == "from") { return; }
+            throw new InvalidOperationException($"The operator read must reject a continuation for {context}.");
+        }
     }
 
     private static void Check(bool ok, string message)
