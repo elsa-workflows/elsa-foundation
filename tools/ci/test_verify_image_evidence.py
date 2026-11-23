@@ -12,7 +12,8 @@ class ImageEvidenceTests(unittest.TestCase):
         self.children = {}
         for arch in ["amd64", "arm64"]:
             config = self.store({"os": "linux", "architecture": arch})
-            self.children[arch] = self.store({"config": config})["digest"]
+            self.children[arch] = self.store({"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                                              "config": config, "layers": [{"digest": "sha256:" + "9" * 64}]})["digest"]
 
     def store(self, document):
         data = json.dumps(document).encode()
@@ -29,7 +30,7 @@ class ImageEvidenceTests(unittest.TestCase):
             for kind in [SPDX, SLSA]:
                 if missing and kind == SPDX and arch == "arm64":
                     continue
-                predicate = {"runDetails": {"builder": {"id": "fixture/attempts/1"}}}
+                predicate = {"buildDefinition": {"buildType": "fixture", "externalParameters": {}}, "runDetails": {"builder": {"id": "fixture/attempts/1"}}}
                 if kind == SPDX:
                     refs = [{"referenceType": "purl", "referenceLocator": purl}
                             for purl in ["pkg:deb/os@1", "pkg:nuget/Elsa.Test@1"]]
@@ -44,36 +45,40 @@ class ImageEvidenceTests(unittest.TestCase):
             attestation["annotations"] = {"vnd.docker.reference.digest": child,
                                           "vnd.docker.reference.type": "attestation-manifest"}
             descriptors.append(attestation)
-        return "fixture@" + self.store({"manifests": descriptors})["digest"]
+        return "fixture@" + self.store({"schemaVersion": 2, "mediaType": "application/vnd.oci.image.index.v1+json",
+                                        "manifests": descriptors})["digest"]
+
+    def validate_spdx(self, document):
+        self.assertEqual("SPDX-2.3", document["spdxVersion"])
 
     def fetch(self, kind, reference):
         return self.blobs[reference.split("@")[1]]
 
     def test_paired_statements(self):
-        verify(self.index(), self.fetch, None, "fixture", "Elsa.Test")
+        verify(self.index(), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
 
     def test_missing_arm_inventory(self):
         with self.assertRaisesRegex(ValueError, "Missing SPDX"):
-            verify(self.index(missing=True), self.fetch, None, "fixture", "Elsa.Test")
+            verify(self.index(missing=True), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
 
     def test_amd64_subject_in_arm_inventory(self):
         with self.assertRaisesRegex(ValueError, "Incorrect .* subject for linux/arm64"):
-            verify(self.index(swap=True), self.fetch, None, "fixture", "Elsa.Test")
+            verify(self.index(swap=True), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
 
     def test_swapped_platform_labels(self):
         with self.assertRaisesRegex(ValueError, "Image config disagrees"):
-            verify(self.index(swap_platforms=True), self.fetch, None, "fixture", "Elsa.Test")
+            verify(self.index(swap_platforms=True), self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)
 
     def test_other_producer(self):
         with self.assertRaisesRegex(ValueError, "Unexpected SLSA builder"):
-            verify(self.index(), self.fetch, None, "another-run", "Elsa.Test")
+            verify(self.index(), self.fetch, None, "another-run", "Elsa.Test", self.validate_spdx)
 
     def test_unrelated_elsa_package(self):
         with self.assertRaisesRegex(ValueError, "Missing Elsa.Workbench inventory"):
-            verify(self.index(), self.fetch, None, "fixture", "Elsa.Workbench")
+            verify(self.index(), self.fetch, None, "fixture", "Elsa.Workbench", self.validate_spdx)
 
     def test_corrupt_download(self):
         ref = self.index()
         self.blobs[ref.split("@")[1]] += b" "
         with self.assertRaisesRegex(ValueError, "Incorrect manifest digest"):
-            verify(ref, self.fetch, None, "fixture", "Elsa.Test")
+            verify(ref, self.fetch, None, "fixture", "Elsa.Test", self.validate_spdx)

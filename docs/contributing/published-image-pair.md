@@ -78,10 +78,13 @@ Use the immutable **index** digest from the Foundation publisher run or release 
 Workbench, Foundation Host and consolidated Studio builds that enable SBOM generation
 carry SPDX documents for each Linux platform in Docker Hub. The historical pair below
 predates this feature. With Python 3 and [ORAS 1.4](https://github.com/oras-project/oras/releases/tag/v1.4.0),
-run the following from the repository root with the published digest and the expected
+install the [Sourcemeta JSON Schema CLI](https://github.com/sourcemeta/jsonschema/releases/tag/v17.3.3)
+and run the following from the repository root with the published digest and the expected
 producer URL (`https://github.com/elsa-workflows/elsa-foundation/actions/runs/<id>`):
 
 ```bash
+curl -fsSLo spdx-schema.json https://raw.githubusercontent.com/spdx/spdx-spec/6f2cb47d13db19b12c23885573b22ef32ec1ada5/schemas/spdx-schema.json
+export ELSA_IMAGE_SPDX_SCHEMA="$PWD/spdx-schema.json"
 image=docker.io/elsaworkflows/elsa-foundation-host
 python3 tools/ci/verify_image_evidence.py "$image@$INDEX_DIGEST" --application Elsa.Foundation.Host \
   --builder-run "$PRODUCER_RUN_URL" --output host-sboms

@@ -266,8 +266,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Install pinned OCI reader
-        run: bash tools/ci/install_image_evidence_oras.sh
+      - name: Install pinned image evidence tools
+        run: bash tools/ci/install_image_evidence_tools.sh
       - name: Verify signed builder output and per-platform inventories
         env:
           SIGNED: ${{ needs.build-and-push.outputs.signed }}
@@ -288,8 +288,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Install pinned OCI reader
-        run: bash tools/ci/install_image_evidence_oras.sh
+      - name: Install pinned image evidence tools
+        run: bash tools/ci/install_image_evidence_tools.sh
       - name: Verify signed builder output and per-platform inventories
         env:
           SIGNED: ${{ needs.build-and-push-foundation-host.outputs.signed }}

@@ -61,7 +61,7 @@ jobs:
         run: |
           STUDIO_IMAGE_VALIDATORS="$RUNNER_TEMP/studio-image-validation"
           mkdir -p "$STUDIO_IMAGE_VALIDATORS"
-          cp tools/ci/verify_image_evidence.py tools/ci/install_image_evidence_oras.sh \
+          cp tools/ci/verify_image_evidence.py tools/ci/install_image_evidence_tools.sh \
             tools/ci/studio_docker_publish.py tools/ci/studio_image_tags.py \
             tools/ci/verify_studio_nuget_packages.py tools/ci/studio-package-identities.json \
             "$STUDIO_IMAGE_VALIDATORS/"
@@ -307,9 +307,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Install pinned OCI reader
+      - name: Install pinned image evidence tools
         if: github.event_name == 'workflow_run' || inputs.publish == true
-        run: bash "$STUDIO_IMAGE_VALIDATORS/install_image_evidence_oras.sh"
+        run: bash "$STUDIO_IMAGE_VALIDATORS/install_image_evidence_tools.sh"
 
       - name: Read back the Studio platform SBOMs and provenance
         if: github.event_name == 'workflow_run' || inputs.publish == true

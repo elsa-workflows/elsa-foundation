@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -16,7 +17,7 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def verify(reference, fetch, output, builder_run, application):
+def verify(reference, fetch, output, builder_run, application, validate_spdx):
     repository, _, index_digest = reference.rpartition("@")
     require(repository and re.fullmatch(r"sha256:[0-9a-f]{64}", index_digest),
             "Supply an image reference pinned by its SHA-256 index digest")
@@ -29,6 +30,8 @@ def verify(reference, fetch, output, builder_run, application):
         return json.loads(data)
 
     index = read("manifest", index_digest)
+    require(index.get("schemaVersion") == 2 and index.get("mediaType") == "application/vnd.oci.image.index.v1+json",
+            "Expected an OCI image index")
     platforms = {}
     attestations = {}
     for descriptor in index["manifests"]:
@@ -48,6 +51,8 @@ def verify(reference, fetch, output, builder_run, application):
     documents = {}
     for platform, child in sorted(platforms.items()):
         image = read("manifest", child)
+        require(image.get("schemaVersion") == 2 and image.get("mediaType") == "application/vnd.oci.image.manifest.v1+json"
+                and isinstance(image.get("layers"), list) and image["layers"], f"Invalid runnable manifest for {platform}")
         config = read("blob", image["config"]["digest"])
         require(f"{config['os']}/{config['architecture']}" == platform,
                 f"Image config disagrees with index platform {platform}")
@@ -75,7 +80,8 @@ def verify(reference, fetch, output, builder_run, application):
             print(f"{platform} child={child} attestation={digest}")
         require(set(predicates) == {SPDX, SLSA}, f"Missing SPDX or SLSA statement for {platform}")
         sbom = predicates[SPDX]
-        require(sbom.get("spdxVersion", "").startswith("SPDX-2.") and sbom.get("packages"),
+        validate_spdx(sbom)
+        require(sbom.get("spdxVersion") == "SPDX-2.3" and sbom.get("packages"),
                 f"Missing SPDX package inventory for {platform}")
         purls = [ref.get("referenceLocator", "") for package in sbom["packages"]
                  for ref in package.get("externalRefs", []) if ref.get("referenceType") == "purl"]
@@ -83,6 +89,9 @@ def verify(reference, fetch, output, builder_run, application):
                 f"Missing operating-system inventory for {platform}")
         require(any(purl.casefold().startswith(f"pkg:nuget/{application}@".casefold()) for purl in purls),
                 f"Missing {application} inventory for {platform}")
+        definition = predicates[SLSA].get("buildDefinition", {})
+        require(definition.get("buildType") and isinstance(definition.get("externalParameters"), dict),
+                f"Incomplete SLSA build definition for {platform}")
         builder = predicates[SLSA].get("runDetails", {}).get("builder", {}).get("id", "")
         require(re.fullmatch(re.escape(builder_run.rstrip("/")) + r"/attempts/[1-9][0-9]*", builder),
                 f"Unexpected SLSA builder for {platform}: {builder}")
@@ -96,6 +105,8 @@ def verify(reference, fetch, output, builder_run, application):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("reference")
+    parser.add_argument("--spdx-schema", type=Path, default=os.environ.get("ELSA_IMAGE_SPDX_SCHEMA"),
+                        help="Path to the official SPDX 2.3.1 JSON schema")
     parser.add_argument("--application", required=True, help="Expected Elsa application package ID")
     parser.add_argument("--builder-run", required=True, help="Expected GitHub Actions producer run URL")
     parser.add_argument("--oci-layout", action="store_true", help="Read a local OCI layout with ORAS")
@@ -111,7 +122,15 @@ def main():
         return subprocess.check_output([*command, "--", reference])
 
     try:
-        verify(args.reference, fetch, args.output, args.builder_run, args.application)
+        require(args.spdx_schema, "Supply --spdx-schema or set ELSA_IMAGE_SPDX_SCHEMA")
+        expected = "4126dc29f15e92feec92e9622f4939131ad58b125d6f578aa93e980a6e6f3212"
+        require(hashlib.sha256(args.spdx_schema.read_bytes()).hexdigest() == expected, "Unexpected SPDX schema digest")
+
+        def validate_spdx(document):
+            subprocess.run(["jsonschema", "validate", str(args.spdx_schema), "-"],
+                           input=json.dumps(document).encode(), check=True, stdout=subprocess.DEVNULL)
+
+        verify(args.reference, fetch, args.output, args.builder_run, args.application, validate_spdx)
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         sys.exit(str(error))
 
