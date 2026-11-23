@@ -65,9 +65,7 @@ internal static class WorkflowRunContext
         reference = null;
         error = "The workflow Run context must name exactly one Workflow Instance and, where one is selected, one activity execution of it, bound to its Run target.";
         if (attachment.ModuleId != ModuleId || attachment.ContentType != RunKind || attachment.SchemaVersion != "1") return false;
-        JsonElement content;
-        try { content = attachment.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(attachment.Content, JsonOptions); }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
+        if (attachment.Content is not { } content) return false;
         if (content.ValueKind != JsonValueKind.Object) return false;
         string? workflowExecutionId = null, activityExecutionId = null;
         var admitted = attachment.Origin == WeaverContextOrigin.AuthoritativeRead;

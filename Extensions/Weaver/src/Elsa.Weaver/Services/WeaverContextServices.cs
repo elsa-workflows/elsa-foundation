@@ -99,11 +99,11 @@ internal sealed class DefaultWeaverContextCollector(
         {
             attachments = sanitized.Select(x => x with
             {
-                Content = x.Content is null ? null : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(x.Content).Clone(),
+                Content = x.Content?.Clone(),
                 References = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string>(x.References.ToDictionary()),
                 WeaverScopes = Array.AsReadOnly(x.WeaverScopes.ToArray())
             }).ToList();
-            if (attachments.Count > 32 || attachments.Any(x => x.Summary.Length > 4096 || Elsa.Serialization.Core.JsonConversionContract.Serialize(x.Content).Length > 32768))
+            if (attachments.Count > 32 || attachments.Any(x => x.Summary.Length > 4096 || (x.Content?.GetRawText().Length ?? 4) > 32768))
                 diagnostics.Add(new("host", "weaver.context.budget_exceeded", "The module context exceeds the supported candidate budget; use a bounded contribution or authorized detail tool.", true));
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException)

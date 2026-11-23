@@ -476,9 +476,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
     private static bool TryAdmitRequest(WeaverContextAttachment caller, out WeaverContextAttachment? admitted)
     {
         admitted = null;
-        JsonElement content;
-        try { content = caller.Content is JsonElement json ? json : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(caller.Content); }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
+        if (caller.Content is not { } content) return false;
         var kind = WorkflowWeaverSnapshot.Text(content, "requestKind");
         var reference = WorkflowWeaverSnapshot.Text(content, "referenceId");
         if (caller.ModuleId != WorkflowWeaverSnapshot.ModuleId || string.IsNullOrWhiteSpace(caller.Id) || caller.Id.Length > 256 || content.ValueKind != JsonValueKind.Object ||

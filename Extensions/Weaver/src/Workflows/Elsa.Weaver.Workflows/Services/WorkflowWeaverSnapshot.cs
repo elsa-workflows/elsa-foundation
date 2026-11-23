@@ -73,9 +73,7 @@ internal sealed record WorkflowWeaverSnapshot(WeaverResourceTarget Target, Weave
             !ValidString(target.ResourceId) || target.ResourceId == "active-draft" || !ValidString(target.Revision) ||
             attachment.Client is not { } client || !ValidString(client.ClientId) || !ValidString(client.GenerationId))
             return false;
-        JsonElement body;
-        try { body = attachment.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(attachment.Content, JsonOptions); }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
+        if (attachment.Content is not { } body) return false;
         // Malformed UTF-16 (a lone surrogate escape) throws wherever a name or string is read (JsonProperty.Name,
         // GetString), so it is refused once, up front, like any other malformed snapshot; every later read is then safe.
         if (body.ValueKind != JsonValueKind.Object || body.GetRawText().Length > 65536 || !WellFormedText(body)) return false;

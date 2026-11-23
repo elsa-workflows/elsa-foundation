@@ -9,6 +9,63 @@ namespace Elsa.Weaver.Tests;
 public sealed class WeaverJsonIntegrityTests
 {
     [Fact]
+    public void Public_data_carriers_require_JSON_instead_of_CLR_object_or_dictionary_values()
+    {
+        Assert.Equal(typeof(JsonElement?), typeof(WeaverContextAttachment).GetProperty(nameof(WeaverContextAttachment.Content))!.PropertyType);
+        Assert.Equal(typeof(IReadOnlyCollection<JsonElement>), typeof(WeaverActionProposal).GetProperty(nameof(WeaverActionProposal.Operations))!.PropertyType);
+    }
+
+    [Fact]
+    public void API_context_detaches_carried_JSON_before_the_request_document_is_disposed()
+    {
+        const string raw = """{ "OrderID":9007199254740993, "nil":null, "text":"Ren\u00e9 <+>", "amount":1.00 }""";
+        WeaverContextAttachment attachment;
+        using (var source = JsonDocument.Parse(raw))
+            attachment = new WeaverContextAttachmentRequest { Id = "context", Content = source.RootElement }.ToDomain();
+        Assert.Equal(raw, attachment.Content!.Value.GetRawText());
+        Assert.Equal(raw, attachment.ToResponse().Content!.Value.GetRawText());
+        var context = new WeaverJsonContext(Elsa.Serialization.Core.JsonBaseline.CreateCopy());
+        var wire = JsonSerializer.SerializeToElement(attachment.ToResponse(), context.WeaverContextAttachmentResponse);
+        Assert.Equal(raw, wire.GetProperty("content").GetRawText());
+        Assert.Equal("summary fallback", new WeaverContextAttachmentRequest { Summary = "summary fallback" }.ToDomain().Content!.Value.GetString());
+    }
+
+    [Fact]
+    public void Proposal_operation_objects_detach_documents_and_collections_and_keep_raw_data()
+    {
+        const string raw = """{ "op":"add", "OrderTotal":1.00, "nil":null, "large":9007199254740993, "text":"\u0061" }""";
+        WeaverActionProposal proposal;
+        using (var source = JsonDocument.Parse(raw))
+        {
+            var operations = new[] { source.RootElement };
+            proposal = Proposal(operations);
+            operations[0] = default;
+        }
+        Assert.Equal(raw, Assert.Single(proposal.Operations).GetRawText());
+        var context = new WeaverJsonContext(Elsa.Serialization.Core.JsonBaseline.CreateCopy());
+        var wire = JsonSerializer.SerializeToElement(proposal, context.WeaverActionProposal);
+        Assert.Equal(raw, wire.GetProperty("operations")[0].GetRawText());
+        using (var replacement = JsonDocument.Parse("{ \"replacement\":1.0 }"))
+            proposal = proposal with { Operations = [replacement.RootElement] };
+        Assert.Equal("{ \"replacement\":1.0 }", Assert.Single(proposal.Operations).GetRawText());
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("1")]
+    [InlineData("[1]")]
+    public void Proposal_operations_keep_the_existing_object_shape(string invalid)
+    {
+        using var source = JsonDocument.Parse(invalid);
+        Assert.ThrowsAny<JsonException>(() => Proposal([source.RootElement]));
+    }
+
+    private static WeaverActionProposal Proposal(IReadOnlyCollection<JsonElement> operations) =>
+        new("proposal", "session", null, "capability", "kind", "Title", "Summary", WeaverRisk.ReviewRequired, null,
+            [], operations, [], null, [], "resource", "id", true, WeaverActionProposalStatus.AwaitingApproval, null, null,
+            DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch);
+
+    [Fact]
     public void Api_attachment_input_and_output_keep_the_same_raw_data_contract()
     {
         const string raw = """{ "OrderID":9007199254740993, "nil":null, "text":"Ren\u00e9", "amount":1.00 }""";

@@ -52,9 +52,7 @@ internal static class WorkflowExecutableContext
         reference = null;
         error = "The workflow Executable context must name exactly one artifact id and its Artifact Hash, bound to its Executable target.";
         if (attachment.ModuleId != ModuleId || attachment.ContentType != ExecutableKind || attachment.SchemaVersion != "1") return false;
-        JsonElement content;
-        try { content = attachment.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(attachment.Content, JsonOptions); }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
+        if (attachment.Content is not { } content) return false;
         if (content.ValueKind != JsonValueKind.Object) return false;
         string? artifactId = null, artifactHash = null, sourceReferenceId = null;
         var admitted = attachment.Origin == WeaverContextOrigin.AuthoritativeRead;

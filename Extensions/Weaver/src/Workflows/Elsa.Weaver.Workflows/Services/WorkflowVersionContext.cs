@@ -55,9 +55,7 @@ internal static class WorkflowVersionContext
         reference = null;
         error = "The workflow version context must name exactly one definition and version identity, bound to its version target.";
         if (attachment.ModuleId != ModuleId || attachment.ContentType != VersionKind || attachment.SchemaVersion != "1") return false;
-        JsonElement content;
-        try { content = attachment.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(attachment.Content, JsonOptions); }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
+        if (attachment.Content is not { } content) return false;
         if (content.ValueKind != JsonValueKind.Object) return false;
         string? definitionId = null, versionId = null;
         // A page's reference holds only the two identities; the server's admitted read holds its own read fields as well.

@@ -403,7 +403,7 @@ public static class WeaverApiMapping
             attachment.ContentType,
             attachment.Sensitivity.ToContractString(),
             attachment.Scope,
-            attachment.Content is null ? null : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(attachment.Content))
+            attachment.Content?.Clone())
         {
             ModuleId = attachment.ModuleId,
             SchemaVersion = attachment.SchemaVersion,
@@ -425,7 +425,7 @@ public static class WeaverApiMapping
             ParseSensitivity(attachment.Sensitivity),
             attachment.Scope,
             attachment.Summary,
-            attachment.Content is { } content ? (object)content : attachment.Summary,
+            attachment.Content is { } content ? content.Clone() : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(attachment.Summary),
             attachment.References)
         {
             ModuleId = attachment.ModuleId,

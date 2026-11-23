@@ -109,7 +109,7 @@ internal sealed class WeaverDisclosureHistory
     private static WeaverDisclosureSnapshot Freeze(WeaverDisclosureSnapshot snapshot)
         => new(Array.AsReadOnly(snapshot.Context.Select(attachment => attachment with
         {
-            Content = attachment.Content is null ? null : JsonSerializer.SerializeToElement(attachment.Content, Elsa.Serialization.Core.JsonBaseline.Options).Clone(),
+            Content = attachment.Content?.Clone(),
             References = new ReadOnlyDictionary<string, string>(attachment.References.ToDictionary()),
             WeaverScopes = Array.AsReadOnly(attachment.WeaverScopes.ToArray())
         }).ToArray()), Array.AsReadOnly(snapshot.ToolResults.Select(result => result with
