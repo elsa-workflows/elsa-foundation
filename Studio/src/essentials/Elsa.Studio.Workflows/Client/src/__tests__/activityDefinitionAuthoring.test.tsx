@@ -2055,6 +2055,66 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   });
 
+  it("reveals the mapped output before focusing its source when a frame precedes React's deferred render", async () => {
+    const draft = fullDraft({ revision: 3 });
+    draft.contract.outputs = ["First", "Second"].map(name => ({
+      referenceKey: name.toLowerCase(), name,
+      type: { alias: "String", collectionKind: "Single" },
+      isRequired: false, isNullable: true, storageDriverKey: "elsa.json", durability: "Required"
+    }));
+    draft.provider.payload = { outputMappings: [{ outputReferenceKey: "second", source: null }] };
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [graphContribution()],
+      getJson: async url => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return draft;
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        throw new Error(`Unexpected GET ${url}`);
+      },
+      postJson: async () => ({
+        draftId: draft.draftId, revision: draft.revision, isValid: false,
+        validatedAt: "2026-07-17T10:01:00Z",
+        diagnostics: [{ code: "activity.graph.output-source", severity: "Error", message: "Choose the output source.",
+          subject: { kind: "ActivityDraft", id: draft.draftId, revision: draft.revision },
+          location: { providerKey: draft.provider.providerKey, jsonPointer: "/outputMappings/0/source" }, metadata: {} }]
+      })
+    });
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Validate saved revision"));
+    await waitForText(rendered.container, "activity.graph.output-source");
+    await waitFor(() => expect(rendered.container.querySelector('.ad-output-value-source[data-output-reference-key="second"]')).not.toBeNull());
+    const source = rendered.container.querySelector<HTMLElement>('.ad-output-value-source[data-output-reference-key="second"]')!;
+    expect(source.closest("[hidden]")).not.toBeNull();
+    let hiddenAtFocus: boolean | undefined;
+    const originalFocus = HTMLElement.prototype.focus;
+    const focus = vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (this: HTMLElement, options) {
+      if (this === source) hiddenAtFocus = Boolean(this.closest("[hidden]"));
+      originalFocus.call(this, options);
+    });
+    // A frame is allowed to arrive before React commits an async continuation's state update.
+    const frame = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+      queueMicrotask(() => callback(performance.now()));
+      return 1;
+    });
+    try {
+      const diagnostic = rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.graph.output-source']")!;
+      diagnostic.focus();
+      click(diagnostic);
+      await waitFor(() => expect(hiddenAtFocus).not.toBeUndefined());
+      expect(hiddenAtFocus).toBe(false);
+      expect(contractMemberPane(rendered.container, "output", "first").hidden).toBe(true);
+      expect(contractMemberPane(rendered.container, "output", "second").hidden).toBe(false);
+      expect(document.activeElement).toBe(source);
+      click(buttonByText(rendered.container, "Return to diagnostic"));
+      expect(document.activeElement).toBe(diagnostic);
+    } finally {
+      frame.mockRestore();
+      focus.mockRestore();
+      await rendered.unmount();
+    }
+  });
+
   it.each([[true, false], [false, false], [false, true]])("keeps empty-contract boundary mappings reachable (existing: %s, lazy: %s)", async (existingMappings, lazyMappings) => {
     const draft = fullDraft({ revision: 3 });
     draft.contract.outputs = [];

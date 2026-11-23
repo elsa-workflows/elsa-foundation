@@ -51,6 +51,9 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
     const node = page.locator(`.wf-sequence-step[data-id="${nodeId}"], .react-flow__node[data-id="${nodeId}"]`).first();
     await expect(node).toBeAttached();
     await node.press("Enter");
+    const inspector = page.getByRole("complementary", { name: "Inspector panel", exact: true });
+    const expand = inspector.getByRole("button", { name: "Expand inspector panel", exact: true });
+    if (await expand.isVisible()) await expand.press("Enter");
   }
   const inspector = () => page.getByRole("complementary", { name: "Run details panel", exact: true });
   async function fullyVisibleText(locator: Locator) {

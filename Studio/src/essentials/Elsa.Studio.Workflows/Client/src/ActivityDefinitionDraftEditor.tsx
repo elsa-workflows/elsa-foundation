@@ -699,8 +699,9 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
           const conflicts = draft.contract.outputs.filter(output => mappings?.some(mapping => mapping.outputReferenceKey === output.referenceKey) && setters.some(setter => setter.outputName === output.name));
           if (conflicts.length === 1) key = conflicts[0].referenceKey;
         }
-        if (key) contractEditorHandle.current?.revealMember("output", key);
+        if (key) flushSync(() => contractEditorHandle.current?.revealMember("output", key));
         await waitForAuthoringView();
+        if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
         const target = key ? [...(contractEditorRef.current?.querySelectorAll<HTMLElement>(".ad-output-value-source") ?? [])].find(element => element.dataset.outputReferenceKey === key) : contractEditorRef.current;
         if (target) { target.tabIndex = -1; target.focus(); target.scrollIntoView?.({ block: "center" }); result = { kind: "focused", announcement: key ? "Focused the output value source." : "Focused Outputs. Select an output to review its value source; this diagnostic does not identify a single output." }; }
         else result = unsupportedDiagnosticFocus();

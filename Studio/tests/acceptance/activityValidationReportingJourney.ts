@@ -2,7 +2,7 @@ import { expect, type Page, type TestInfo } from "@playwright/test";
 
 /** Real HTTP and rendered Studio against the acceptance runner's disposable stores. */
 export async function activityValidationReportingJourney(page: Page, info: TestInfo, capture: (page: Page, info: TestInfo, name: string) => Promise<void>) {
-  const authoringTabs = page.getByRole("tablist", { name: "Activity Definition authoring", exact: true });
+  const authoringTabs = page.getByRole("tablist", { name: "Activity Definition authoring views", exact: true });
   await page.goto("/workflows/activity-definitions");
   await page.locator(".studio-page-header").getByRole("button", { name: "New activity definition", exact: true }).click();
   await page.getByRole("textbox", { name: "Display name", exact: true }).fill(`Validation guidance ${info.project.name} ${Date.now()}`);
