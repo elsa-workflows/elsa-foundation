@@ -88,6 +88,11 @@ if (args is ["pg-root-value-check", var valueFence and ("checked" or "in-batch")
 if (args is ["pg-root-value-check", var valueRestartFence and ("checked" or "in-batch"), "restart", var valueActor, var valueEpoch] &&
     long.TryParse(valueEpoch, out var priorValueEpoch) && priorValueEpoch > 0)
     return await PostgresRootValueChecks.RunAsync(valueRestartFence == "in-batch", new(valueActor, priorValueEpoch));
+if (args is ["pg-root-value-volume", var volumeStorage and ("inline" or "reference"), var volumePattern and ("reused" or "changing"),
+    var volumePad, var volumeTurns] && volumePad.StartsWith("pad=", StringComparison.Ordinal) &&
+    volumeTurns.StartsWith("turns=", StringComparison.Ordinal) && int.TryParse(volumePad.AsSpan(4), out var padBytes) && padBytes > 0 &&
+    int.TryParse(volumeTurns.AsSpan(6), out var measuredTurns) && measuredTurns is > 1 and < int.MaxValue - 2)
+    return await PostgresValueVolume.RunAsync(volumeStorage == "reference", volumePattern == "changing", padBytes, measuredTurns);
 if (args is ["pg-timed-job-worker", var jobFence and ("checked" or "in-batch")])
     return await PostgresTimedJobChecks.RunAsync(jobFence == "in-batch");
 if (args is ["pg-root-timed-job-issuance", var timedFence and ("checked" or "in-batch"), .. var timedPhase])
