@@ -10,7 +10,8 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresPublicPreview
 {
-    internal static async Task<int> RunAsync(string phase, string? suppliedReference = null, string? suppliedBookmark = null, long priorEpoch = 0)
+    internal static async Task<int> RunAsync(string phase, string? suppliedReference = null, string? suppliedBookmark = null,
+        long priorEpoch = 0, bool flowchart = false)
     {
         var birth = phase is "birth" or "hold-owner";
         if (!birth && (phase is not ("restart" or "terminal" or "standby") || suppliedReference is null || suppliedBookmark is null))
@@ -50,7 +51,8 @@ internal static class PostgresPublicPreview
         var tail = new PostgresRootJournalReader(store, cursor, 1);
         var foundation = new PostgresPreviewFoundation(admission, store, tail, PublicActor.ActorType);
         var workflow = new WorkflowRuntime(foundation, foundation);
-        var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
+        var definition = flowchart ? DirectApprovalWorkflow.BuildFlowchart() : DirectApprovalWorkflow.Build();
+        var registry = new WorkflowRegistry().Add(definition);
         Report("host setup");
 
         Contract.ActorRef actor;
@@ -58,7 +60,7 @@ internal static class PostgresPublicPreview
         if (birth)
         {
             var created = await workflow.StartAsync(scope, Guid.NewGuid().ToString("N"),
-                NativeExecutionModel.Start(DirectApprovalWorkflow.Definition), cancellationToken: stop);
+                NativeExecutionModel.Start(definition.Id), cancellationToken: stop);
             Check(created is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "public start admitted a root");
             actor = created.Actor!.Value;
             Report("start admission");
@@ -71,9 +73,9 @@ internal static class PostgresPublicPreview
 
         Reset();
         var node = $"preview-{Environment.ProcessId}";
-        List<string[]>? standbyTurns = phase == "standby" ? [] : null;
+        List<string[]>? resumedTurns = phase == "standby" || flowchart && !birth ? [] : null;
         var prepared = await PostgresNativeRootOwner.PrepareAsync(store, node, scope.Tenant, actor.Id, registry, stop,
-            standbyTurns is null ? null : (_, inputs, _) => standbyTurns.Add(inputs.Select(input => input.Id).ToArray()));
+            resumedTurns is null ? null : (_, inputs, _) => resumedTurns.Add(inputs.Select(input => input.Id).ToArray()));
         await using var owner = phase == "standby" ?
             await PostgresPreviewFailover.TakeAfterExitAsync(prepared, store, data, node, priorEpoch, stop) :
             await prepared.TryActivateAsync(stop) ?? throw new InvalidOperationException("The partition is already owned.");
@@ -122,6 +124,12 @@ internal static class PostgresPublicPreview
             Reset();
             var before = await ReadCheckpoint();
             Check(before is { Revision: 2, Status: InstanceStatus.Running }, "cold process loaded the second wait");
+            if (flowchart)
+            {
+                var waiting = Json.Read<NativeState>(before.State!);
+                Check(waiting.Variables["joinCount"]!.GetValue<int>() == 0 && !waiting.Variables["automaticPath"]!.GetValue<bool>(),
+                    "the approval path still waits and the other path has not run");
+            }
             Check((await foundation.TailAsync(scope, actor, bookmark, stop)) is { Items.Count: 0, AsOf: > 0 },
                 "the previous process's bookmark resumes at the end of revision 2");
             var frame = await ReadFrame();
@@ -132,8 +140,8 @@ internal static class PostgresPublicPreview
                 "public ingress recognized the replay with changed payload");
             await owner.WokenAsync(null, stop);
             await owner.RunAsync(stop);
-            if (standbyTurns is not null)
-                Check(standbyTurns.Count == 0, "the duplicate started zero public actor turns on the standby");
+            if (resumedTurns is not null)
+                Check(resumedTurns.Count == 0, "the duplicate started zero public actor turns on the resumed owner");
             Report("replay including admission");
             var same = await ReadCheckpoint();
             Check(same.Revision == before.Revision && same.State == before.State, "replay left the checkpoint byte for byte");
@@ -159,12 +167,18 @@ internal static class PostgresPublicPreview
                     "a rowless terminal disposition cannot consume the running root's approval");
             }
             var finished = await Drive(3);
-            if (standbyTurns is not null)
-                Check(standbyTurns is [["approval-2"]], "the standby ran one public actor turn for approval-2");
+            if (resumedTurns is not null)
+                Check(resumedTurns is [["approval-2"]], "the resumed owner ran one public actor turn for approval-2");
             Check(finished is { Status: InstanceStatus.Finished, TerminalRevision: 3, TerminalAt: not null } &&
                 Json.Read<NativeState>(finished.State!).Results["approve"]!.AsArray()
                     .Select(n => n!.GetValue<string>()).SequenceEqual(["Ada", "Grace"]),
                 "persisted Native result is Ada, Grace exactly once");
+            if (flowchart)
+            {
+                var state = Json.Read<NativeState>(finished.State!);
+                Check(state.Variables["joinCount"]!.GetValue<int>() == 1 && !state.Variables["automaticPath"]!.GetValue<bool>(),
+                    "the join fired once after the selected path finished");
+            }
             Report(queued is null ? "second approval including admission" : "finish with two queued inputs including admission");
 
             Reset();
