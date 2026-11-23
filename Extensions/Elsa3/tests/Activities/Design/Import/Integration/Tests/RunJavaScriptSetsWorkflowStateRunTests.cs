@@ -14,6 +14,31 @@ namespace Elsa3.Activities.Design.Import.Integration.Tests;
 
 public sealed class RunJavaScriptSetsWorkflowStateRunTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData("function f(v = setCorrelationId('new')) { var setCorrelationId; } f();", "new", "before")]
+    [InlineData("function f(v = getWorkflowInstanceName()) { var getWorkflowInstanceName; setOutput('Read', v); } f();", "old", "before")]
+    [InlineData("switch (setCorrelationId('new')) { default: let setCorrelationId; }", "new", "before")]
+    [InlineData("switch (getWorkflowInstanceName()) { default: let getWorkflowInstanceName; }", "old", "before")]
+    [InlineData("function f(setCorrelationId, v = setCorrelationId('local')) {} f(x => x);", "old", "before")]
+    [InlineData("switch (1) { default: const setCorrelationId = x => x; setCorrelationId('local'); }", "old", "before")]
+    public async Task Imported_helpers_respect_parameter_and_switch_environments(string body, string correlation, string name)
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var workflow = await ImportBody(host, "setCorrelationId('old'); setWorkflowInstanceName('before'); " + body +
+            " setOutput('Scope', [getCorrelationId(), getWorkflowInstanceName()]); return 1;");
+        var run = await host.RunAsync(workflow);
+        Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
+        Assert.Empty(run.Incidents);
+        Assert.Equal(correlation, run.Workflow.CorrelationId);
+        Assert.Equal(name, run.Workflow.SystemMetadata[RuntimeMetadataKeys.InstanceName]);
+        var values = await Values(host, run.Workflow.WorkflowExecutionId);
+        var scope = Assert.Single(values, value => value.ValueId == "output:Scope").InlineValue!.Value;
+        Assert.Equal(correlation, scope[0].GetString());
+        Assert.Equal(name, scope[1].GetString());
+        if (values.SingleOrDefault(value => value.ValueId == "output:Read") is { } read)
+            Assert.Equal(name, read.InlineValue!.Value.GetString());
+    }
+
     [Fact]
     public async Task Local_class_members_and_labels_named_like_helpers_import_and_run_unchanged()
     {

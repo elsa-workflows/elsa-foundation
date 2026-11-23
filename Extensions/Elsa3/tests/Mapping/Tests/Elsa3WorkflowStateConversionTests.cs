@@ -9,6 +9,22 @@ namespace Elsa3.Mapping.Tests;
 public sealed class Elsa3WorkflowStateConversionTests
 {
     [Theory]
+    [InlineData("function f(v = setCorrelationId('new')) { var setCorrelationId; } f(); return getCorrelationId();", "function f(v = workflowState.setCorrelationId(workflowState.requireExactIdentity(('new')))) { var setCorrelationId; } f(); return workflowState.getCorrelationId();")]
+    [InlineData("setWorkflowInstanceName('new'); function f(v = getWorkflowInstanceName()) { var getWorkflowInstanceName; return v; } return f();", "workflowState.setInstanceName(workflowState.requireExactIdentity(('new'))); function f(v = workflowState.getInstanceName()) { var getWorkflowInstanceName; return v; } return f();")]
+    [InlineData("const f = (v = setOutput('Result', 42)) => { var setOutput; }; f(); return 1;", "const f = (v = workflowState.setOutput('Result', 42)) => { var setOutput; }; f(); return 1;")]
+    [InlineData("switch (setCorrelationId('new')) { default: let setCorrelationId; } return getCorrelationId();", "switch (workflowState.setCorrelationId(workflowState.requireExactIdentity(('new')))) { default: let setCorrelationId; } return workflowState.getCorrelationId();")]
+    [InlineData("setCorrelationId('new'); switch (getCorrelationId()) { default: let getCorrelationId; } return 1;", "workflowState.setCorrelationId(workflowState.requireExactIdentity(('new'))); switch (workflowState.getCorrelationId()) { default: let getCorrelationId; } return 1;")]
+    [InlineData("function f(setCorrelationId, v = setCorrelationId('local')) {} f(x => x); return 1;", "function f(setCorrelationId, v = setCorrelationId('local')) {} f(x => x); return 1;")]
+    [InlineData("switch (1) { default: const setCorrelationId = x => x; setCorrelationId('local'); } return 1;", "switch (1) { default: const setCorrelationId = x => x; setCorrelationId('local'); } return 1;")]
+    [InlineData("switch (setCorrelationId('local')) { default: var setCorrelationId; } return 1;", "switch (setCorrelationId('local')) { default: var setCorrelationId; } return 1;")]
+    public async Task Body_helpers_follow_parameter_and_switch_environments(string source, string expected)
+    {
+        var converted = await ConvertAsync(source);
+        Assert.True(converted.Succeeded, Describe(converted.Diagnostics));
+        Assert.Equal(expected, Text(Input(Node(converted.Value!.State, "node"), "script")));
+    }
+
+    [Theory]
     [InlineData("setOutput('Answer', 42)", "return workflowState.setOutput('Answer', 42)")]
     [InlineData("setCorrelationId('key'); return getCorrelationId();", "workflowState.setCorrelationId(workflowState.requireExactIdentity(('key'))); return workflowState.getCorrelationId();")]
     [InlineData("setWorkflowInstanceName(null); return getWorkflowInstanceName();", "workflowState.setInstanceName(workflowState.requireExactIdentity((null))); return workflowState.getInstanceName();")]

@@ -772,7 +772,26 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         private HashSet<string>? CachedScope(Node node)
         {
             if (!_scopeCache.TryGetValue(node, out var scope))
-                _scopeCache[node] = scope = ScopeOf(node);
+            {
+                scope = ScopeOf(node);
+                if (node is IFunction { Body: BlockStatement body })
+                {
+                    // Parameter initializers precede the body environment. Body var declarations
+                    // must not hide an outer helper until traversal enters that body.
+                    var bodyScope = ScopeOf(body)!;
+                    CollectVarDeclarations(body, bodyScope);
+                    _scopeCache[body] = bodyScope;
+                }
+                if (node is SwitchStatement selection)
+                {
+                    // All cases share one lexical environment, entered after the discriminant.
+                    // Associate the same set with each case so the pre-scan and visit agree.
+                    foreach (var @case in selection.Cases)
+                        _scopeCache[@case] = scope;
+                    scope = null;
+                }
+                _scopeCache[node] = scope;
+            }
             return scope;
         }
 
@@ -1194,7 +1213,6 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                         CollectBindings(functionId, names);
                     foreach (var parameter in function.Params)
                         CollectBindings(parameter, names);
-                    CollectVarDeclarations(function.Body, names);
                     break;
                 // A class static block is its own var scope.
                 case StaticBlock staticBlock:
