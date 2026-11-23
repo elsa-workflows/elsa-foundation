@@ -32,6 +32,7 @@ static class EngineRun
             args.Length != 4 || args[3] != "disposable=1"))
         {
             Console.Error.WriteLine("Usage: x reference-cost postgres|sqlserver|mysql|sqlite <disposable connection> disposable=1");
+            Console.Error.WriteLine("Use a disposable database and an isolated MySQL server. The MySQL fixture provisions a server-wide worker account.");
             return 2;
         }
         var options = args.Skip(3).Select(a => a.Split('=', 2)).ToDictionary(a => a[0], a => a.Length > 1 ? a[1] : "1");
