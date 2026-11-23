@@ -96,6 +96,7 @@ across its own versions; it never names a tenant; and its waits come back exactl
 | Member | Meaning and guarantee |
 |---|---|
 | `Header` | The actor's `ActorHeader` as committed, present on the first turn too |
+| `StartSettings` | On the creator turn, the foundation's admitted `Ephemeral` and `History` settings |
 | `Now` | The foundation clock, read once for the turn; the clock `dueAt` and `TimerSpec.Due` use |
 | `Inbox` | The messages this turn is given, in delivery order (FC-3) |
 | `State` get, set | The opaque state; what is set is what the commit writes |
@@ -109,7 +110,7 @@ across its own versions; it never names a tenant; and its waits come back exactl
 | `Hold(message)` | Handed to the next turn again, in its place in the order (FC-18) |
 | `Subscribe(key, wait, keep)`, `Unsubscribe(key, wait)` | A wait for events of the key from this commit on; `keep` also gives it the kept events (owner default: off) (FC-6, FC-7) |
 | `Publish(key, payload, keepFor)` → id | An event, durable with this commit, delivered to every subscription committed before it and kept for `keepFor` for waits that ask (FC-6) |
-| `Record(entry)` | A journal entry of this commit, at the actor's history level (FC-11) |
+| `Record(entry)` | A journal entry of this commit, at the actor's history level (FC-11). `Record(ActorLifecycle.Migrated)` records a successful migration when its command is consumed in that commit, at every history level. |
 | `End(status, output)` | The actor's status becomes final with this commit: the parent is notified, waits are removed, the foundation writes `EndedAt` and the end mark. Later turns still run for commands and for the type's own messages to an ended actor (a metadata query), and none of them changes the status (FC-15). The foundation sends the terminate cascade to the registered children and the idempotent job cancel when the actor's turn consumes a `Terminate`, whatever that turn does, and on `End(Cancelled)`; never on `End(Finished)` or `End(Faulted)` (FC-8) |
 | `SetHeader(typeData, labels)` | Replaces the actor type's bounded `TypeData` and `Labels` with this commit (a rebind, a suspend flag, a new state version). Exceeding either limit fails the turn |
 

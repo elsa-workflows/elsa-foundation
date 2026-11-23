@@ -54,6 +54,7 @@ internal static class MigrationPlanReadChecks
             open.Results[second] == Outcome.Refused && open.Pending.SequenceEqual([last]) && !open.AllAnswered,
             "Only selected lives count, including provisional and decisive answers.");
 
+        now++;
         await AnswerAsync(first, "migrated", Outcome.Migrated);
         await PumpAsync();
         await AnswerAsync(first, "replayed-not-at-source", Outcome.NotAtSource);
@@ -61,8 +62,13 @@ internal static class MigrationPlanReadChecks
         await SendAsync(plan, "replayed-selection", "selected", new[] { first, second });
         await SendAsync(plan, "close-plan", "closed");
         await PumpAsync();
-        await ProjectAsync(projection);
+        Require(await projection.ProjectNextAsync(stop) && projection.Read() is { Closed: false } partial && partial.AsOf == open.AsOf,
+            "A nonempty page before the committed close retains the previous catch-up time.");
+        var lastNonempty = projection.Read();
+        while (await projection.ProjectNextAsync(stop)) lastNonempty = projection.Read();
         var closed = projection.Read();
+        Require(lastNonempty.Closed && lastNonempty.AsOf == open.AsOf && closed.AsOf == now,
+            "Only the empty tail after the close advances the confirmed catch-up time.");
         Require(closed.Closed && closed.Results[first] == Outcome.Migrated && closed.Results[second] == Outcome.Refused &&
             closed.NoAnswer.SequenceEqual([last]) && !closed.Pending.Any() && !closed.AllAnswered,
             "Close identifies missing answers and replay preserves the first decisive outcome.");

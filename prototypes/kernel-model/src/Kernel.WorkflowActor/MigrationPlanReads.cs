@@ -2,10 +2,10 @@ using Kernel.Foundation.Contracts;
 
 namespace Kernel.WorkflowActor;
 
-public sealed record MigrationPlanResult(ActorRef Actor, MigrationPlanOutcome? Outcome);
+public sealed record MigrationPlanOutcomeRow(ActorRef Actor, MigrationPlanOutcome? Outcome);
 
 /// <summary>An empty outcome means Pending while open, and No Answer after close.</summary>
-public sealed record MigrationPlanResultPage(bool Closed, Page<MigrationPlanResult> Results);
+public sealed record MigrationPlanResultPage(bool Closed, Page<MigrationPlanOutcomeRow> Results);
 
 /// <summary>Reads a plan's projected outcomes by exact reference in the trusted host's tenant scope.</summary>
 public interface IMigrationPlanReads

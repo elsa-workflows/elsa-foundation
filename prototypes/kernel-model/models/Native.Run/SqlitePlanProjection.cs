@@ -51,17 +51,17 @@ internal sealed class SqlitePlanProjection(string file, BoundScope scope, ActorR
             var page = await source.TailAsync(scope, plan, before, stop);
             if (page.Items.Count == 0)
             {
-                if (before is null || await TryApplyAsync(before, before.Value, page.AsOf, [], stop)) return false;
+                if (await TryApplyAsync(before, before, page.AsOf, [], stop)) return false;
                 continue;
             }
             if (page.Next is not { } next || next == before)
                 throw new InvalidOperationException("A nonempty plan journal page needs an advancing bookmark.");
             var records = page.Items.Select(item => MigrationPlanJournal.Read(item.Entry)).ToArray();
-            if (await TryApplyAsync(before, next, page.AsOf, records, stop)) return true;
+            if (await TryApplyAsync(before, next, null, records, stop)) return true;
         }
     }
 
-    private async Task<bool> TryApplyAsync(PageToken? before, PageToken next, long asOf,
+    private async Task<bool> TryApplyAsync(PageToken? before, PageToken? next, long? caughtUpAt,
         IReadOnlyList<MigrationPlanJournal?> records, CancellationToken stop)
     {
         await using var db = Open();
@@ -73,14 +73,14 @@ internal sealed class SqlitePlanProjection(string file, BoundScope scope, ActorR
             await ensure.ExecuteNonQueryAsync(stop);
         bool closed;
         using (var advance = Command(db, write, """
-            UPDATE plan_cursors SET bookmark = $next, as_of = MAX(as_of, $as_of)
+            UPDATE plan_cursors SET bookmark = $next, as_of = MAX(as_of, COALESCE($caught_up_at, as_of))
             WHERE tenant = $tenant AND plan = $plan AND bookmark IS $before
             RETURNING closed
             """))
         {
             advance.Parameters.AddWithValue("$before", (object?)before?.Value ?? DBNull.Value);
-            advance.Parameters.AddWithValue("$next", next.Value);
-            advance.Parameters.AddWithValue("$as_of", asOf);
+            advance.Parameters.AddWithValue("$next", (object?)next?.Value ?? DBNull.Value);
+            advance.Parameters.AddWithValue("$caught_up_at", (object?)caughtUpAt ?? DBNull.Value);
             if (await advance.ExecuteScalarAsync(stop) is not long prior) return false;
             closed = prior != 0;
         }

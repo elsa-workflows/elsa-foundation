@@ -6,6 +6,5 @@
     <InternalsVisibleTo Include="Kernel.Runtime.Hosting" />
     <InternalsVisibleTo Include="Kernel.Store.Conformance" />
     <InternalsVisibleTo Include="Kernel.Sim" />
-    <InternalsVisibleTo Include="Kernel.Native.Run" />
   </ItemGroup>
 </Project>

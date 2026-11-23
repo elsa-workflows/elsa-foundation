@@ -24,6 +24,8 @@ internal static class ContractNativeChecks
             await ReceiptLifetime((ok, label) => check(ok, $"{mode}: {label}"), mode);
         }
         await CompletedJobRestore(check);
+        await NativeDetachedHandleChecks.Run(check);
+        await DirectApprovalPreviewChecks.Run(check);
     }
 
     private static async Task Run(Action<bool, string> check, string mode)
@@ -863,13 +865,13 @@ internal static class ContractNativeChecks
 
     public sealed class ReceiptReceiver : CompositeActivity
     {
-        protected override void Execute(CompositeContext context)
+        protected internal override void Execute(CompositeContext context)
         {
             context.RegisterInputInbox(2, 2, TimeSpan.FromMilliseconds(5));
             context.Schedule(context.Children.Single());
         }
 
-        protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
+        protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
     }
 
     private sealed class LocalReplies(Requests requests) : IReplyTransport

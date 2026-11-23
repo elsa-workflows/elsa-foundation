@@ -40,6 +40,35 @@ test("remembers collapse choices and reveals matching destinations through searc
   await expect(search).toHaveValue("");
 });
 
+test("focused sidebar search draws only the wrapper focus border without an inner input shadow", async ({ page }) => {
+  for (const query of ["theme=classic&appearance=dark", "theme=atelier&appearance=dark"]) {
+    await page.goto(`/?mode=nav-placement&${query}`);
+    const search = page.getByRole("searchbox", { name: "Search Studio", exact: true });
+    const wrapper = page.locator("label.sidebar-search");
+    const unfocusedBorder = await wrapper.evaluate(element => getComputedStyle(element).borderTopColor);
+    await search.focus();
+    await wrapper.evaluate(async element => {
+      await Promise.allSettled(element.getAnimations({ subtree: true }).map(animation => animation.finished));
+    });
+    const focused = await search.evaluate(element => {
+      const input = getComputedStyle(element);
+      const container = getComputedStyle(element.closest(".sidebar-search")!);
+      return {
+        inputBorderWidth: input.borderTopWidth,
+        inputOutlineStyle: input.outlineStyle,
+        inputBoxShadow: input.boxShadow,
+        wrapperBorderWidth: container.borderTopWidth,
+        wrapperBorderColor: container.borderTopColor
+      };
+    });
+    expect(focused.inputBorderWidth).toBe("0px");
+    expect(focused.inputOutlineStyle).toBe("none");
+    expect(focused.inputBoxShadow).toBe("none");
+    expect(focused.wrapperBorderWidth).toBe("1px");
+    expect(focused.wrapperBorderColor).not.toBe(unfocusedBorder);
+  }
+});
+
 for (const width of [390, 768, 1024]) test(`keeps navigation compact and keyboard reachable at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 844 });
   await page.goto("/?mode=nav-placement");

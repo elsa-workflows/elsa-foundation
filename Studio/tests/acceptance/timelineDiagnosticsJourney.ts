@@ -268,9 +268,9 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   await capture(page, info, "diagnostics-single-consumption-action");
   await page.goto(`/workflows/instances/${duplicate.id}?view=timeline`); await waitCapturedPlaybackReady(page);
   const timeline = page.getByRole("region", { name: "Run timeline", exact: true });
-  await timeline.getByText("Filter events", { exact: true }).click();
-  await timeline.getByRole("combobox", { name: "History detail", exact: true }).selectOption("all");
-  await timeline.getByText("Filter events", { exact: true }).click();
+  await timeline.getByRole("button", { name: "Filter events", exact: true }).click();
+  await page.getByRole("dialog", { name: "Filter events", exact: true }).getByRole("combobox", { name: "History detail", exact: true }).selectOption("all");
+  await page.keyboard.press("Escape");
   await expect(timeline).toHaveAttribute("aria-busy", "false");
   const rows = timeline.getByRole("list", { name: "Run history events", exact: true }).locator("[data-history-event-id]");
   await expect(rows.first()).toBeVisible();

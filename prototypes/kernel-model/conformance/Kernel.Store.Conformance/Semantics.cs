@@ -148,6 +148,7 @@ public static class Semantics
     [
         RetirementJournalChecks.Case,
         PhysicalRetirementChecks.Case,
+        .. JobTrialClearChecks.Cases,
         MarkerInsertChecks.Case,
         BatchIntegrityChecks.Atomic,
         DeleteShapeChecks.Case,
@@ -158,6 +159,7 @@ public static class Semantics
         IdentityClockChecks.Case,
         IdentityTerminalJobsChecks.Case,
         StoredStateChecks.Case,
+        StoredStateChecks.AbsentState,
         .. OwnedSetChecks.Cases,
         .. NodeLeaseChecks.Cases,
         new("actor addressing: an unwritten workflow retains its identity, state and owed job on alias delivery", Level.Required, VirtualActorAliases.Run),
@@ -720,6 +722,7 @@ public static class Semantics
                 ("ka", "e", "0/a", "b:c"),
                 ("ka", "e", "0/a:b", "c"),
                 ("kb", "e", "0/a", "b:c"),
+                ("kc", "e", "0/a", "b:c"),
                 ("ka", "e:0/a", "0/x", "w:0/x:q"),
             };
             var routes = pairs.Select(p => Events.Route(new(p.Item1, p.Item2, "p", now + 60_000), new(p.Item1, p.Item3, p.Item4))).ToArray();
@@ -736,6 +739,9 @@ public static class Semantics
                 Context.Equal((wanted.Event, wanted.Wait), Events.Delivered(actual)!.Value, "an ambiguous wire is decoded by its persisted match");
                 Context.Equal(match.Message.Id, actual.Id, "unchanged wire representation");
             }
+            var identities = rows.Select(row => row.InboxKey).ToArray();
+            await c.Lands(() => c.Commit(lease, 0, [], seen: identities));
+            Context.That((await c.All(0)).All(row => row.Seen == lease.Epoch), "every exact match is marked even when its physical slot overlaps a private namespace");
             await c.Lands(() => c.Commit(0, lease.Epoch, 0, [Make.Turn("0/a", consumed: [rows[0].InboxKey])]));
             Context.Equal(routes.Length - 1, (await c.All(0)).Count, "consume only the selected tuple");
             var deleted = rows[0];
@@ -825,6 +831,23 @@ public static class Semantics
             var stale = wanted with { Creation = 1 };
             Context.Equal(0, (await c.S.KeptMatchesAsync([stale])).Count, "qualified stale ticket retargeted a generation-zero subscription");
             var recovered = (await c.S.KeptMatchesAsync([.. many, stale])).Single();
+            var published = (await c.S.PublishedMatchesAsync(first with { Key = start.Key, Id = alternateId })).Single();
+            Context.Equal(first, published.Event, "publish uses the exact stored event after a caller retries with another spelling");
+            Context.Equal(start, published.Wait, "publish uses the exact registered wait");
+            Context.Equal(published.Delivery().Message, recovered.Delivery().Message, "publish and catch-up build the same complete delivery");
+            if (published.Event.Key != published.Wait.Key)
+            {
+                RefusesCopiedPair(published with { Event = published.Event with { } });
+                RefusesCopiedPair(published with { Wait = published.Wait with { } });
+                RefusesCopiedPair(new EventRoute(published.Event, published.Wait));
+
+                static void RefusesCopiedPair(EventRoute route)
+                {
+                    try { _ = route.Delivery(); }
+                    catch (ArgumentException) { return; }
+                    throw new ConformanceException("The store's key comparison applies only to the exact rows returned by its join.");
+                }
+            }
             Context.Equal(start, recovered.Wait, "the originally registered spelling, wait, and spec");
             Context.Equal(first, recovered.Event, "the originally published event and payload");
             await Events.CatchUpAsync(c.S, wanted, 1);

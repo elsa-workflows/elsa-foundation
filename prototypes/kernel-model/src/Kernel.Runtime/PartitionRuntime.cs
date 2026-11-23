@@ -31,6 +31,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 {
     private readonly IScopeActivation?[] _active = new IScopeActivation?[partitions];
     private readonly bool[] _activating = new bool[partitions], _passing = new bool[partitions];
+    private readonly bool[] _releasing = new bool[partitions];
     private IScopeHost? _host;
     private bool _balancing;
     private Cluster? _cluster;      // K1b: what the node's last renewing heartbeat saw, for the balancing round
@@ -79,7 +80,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// </summary>
     public async Task<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
     {
-        if (_activating[scope]) return null;
+        if (_activating[scope] || _releasing[scope]) return null;
         _activating[scope] = true;
         IScopeActivation? activation;
         try { activation = await (_host ?? throw new InvalidOperationException("The runtime has not started.")).ActivateAsync(scope, cancellationToken); }
@@ -106,7 +107,14 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// </summary>
     public async Task BalanceAsync(CancellationToken cancellationToken = default)
     {
-        if (_balancing) return;     // a single caller is assumed
+        if (_balancing) return;
+        _balancing = true;
+        try { await BalanceRoundAsync(cancellationToken); }
+        finally { _balancing = false; }
+    }
+
+    private async Task BalanceRoundAsync(CancellationToken cancellationToken)
+    {
         Cluster cluster;
         if (NodeLease is not null)
         {
@@ -116,19 +124,62 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         else
         {
             // A host without a node lease can still refresh membership, as the conformance stubs do.
-            _balancing = true;
             try { cluster = await membership.HeartbeatAsync(node, window, cancellationToken); }
             catch (Exception) { return; }
-            finally { _balancing = false; }
         }
         var scopes = Enumerable.Range(0, partitions).ToList();
         var (release, take) = Balancer.Plan(partitions, cluster, scopes.Where(Owns).ToList(), scopes.Where(Activating).ToList(), flaws);
-        foreach (var surplus in release)
+        if (release.Count > 1 && _host is IScopeSetRelease { SupportsSetRelease: true } setHost)
         {
+            if (release.Any(scope => _passing[scope] || _activating[scope])) return;     // hand the set over when every surplus scope is idle
             cancellationToken.ThrowIfCancellationRequested();     // a process that goes away mid-round gives nothing more up
-            await DeactivateAsync(surplus, cancellationToken);
+            var activations = release.Select(Activation).OfType<IScopeActivation>().ToArray();
+            if (activations.Length > 0)
+            {
+                foreach (var activation in activations) _releasing[activation.Scope] = true;
+                try
+                {
+                    await setHost.ReleaseAsync(activations, cancellationToken);
+                    foreach (var activation in activations)
+                        if (!activation.Active && ReferenceEquals(_active[activation.Scope], activation)) _active[activation.Scope] = null;
+                }
+                finally
+                {
+                    foreach (var activation in activations) _releasing[activation.Scope] = false;
+                }
+            }
         }
-        await Task.WhenAll(take.Select(s => ActivateAsync(s, cancellationToken)));
+        else
+        {
+            foreach (var surplus in release)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                // Earlier give-ups may have awaited the store while a pass started on this worker.
+                if (_passing[surplus] || _activating[surplus] || !Owns(surplus)) continue;
+                _releasing[surplus] = true;
+                try { await DeactivateAsync(surplus, cancellationToken); }
+                finally { _releasing[surplus] = false; }
+            }
+        }
+        if (take.Count > 1 && _host is IScopeSetGain { SupportsSetGain: true } gains)
+        {
+            // A release may have yielded since the plan was made.
+            var requested = take.Where(scope => !Owns(scope) && !_activating[scope]).ToArray();
+            if (requested.Length == 0) return;
+            foreach (var scope in requested) _activating[scope] = true;
+            IReadOnlyList<IScopeActivation> gained;
+            try
+            {
+                gained = await gains.ActivateAsync(requested, cancellationToken);
+                foreach (var activation in gained) _active[activation.Scope] = activation;
+            }
+            finally
+            {
+                foreach (var scope in requested) _activating[scope] = false;
+            }
+            foreach (var activation in gained) await activation.WokenAsync(null, cancellationToken);
+        }
+        else await Task.WhenAll(take.Select(s => ActivateAsync(s, cancellationToken)));
     }
 
     /// <summary>K1b: the node's lease, when the host keeps one (<see cref="INodeLeaseHost"/>); null for a host with no node lease.</summary>
@@ -171,7 +222,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// <summary>The serialized pass with the optional fairness hint used by a clocked host.</summary>
     public async ValueTask<ScopePass> PassWithAgeAsync(int scope, CancellationToken cancellationToken = default)
     {
-        if (_passing[scope] || Activation(scope) is not { } activation) return default;
+        if (_passing[scope] || _releasing[scope] || Activation(scope) is not { } activation) return default;
         _passing[scope] = true;
         try { return await activation.RunWithAgeAsync(cancellationToken); }
         finally { _passing[scope] = false; }
@@ -189,16 +240,17 @@ public static class Balancer
 {
     public static (IReadOnlyList<int> Release, IReadOnlyList<int> Take) Plan(int partitions, Cluster cluster, IReadOnlyCollection<int> owned, IReadOnlyCollection<int> activating, Flaw flaws = Flaw.None)
     {
-        bool Asked(int p) => !owned.Contains(p) && !activating.Contains(p);
+        var claimed = owned.ToHashSet();
+        claimed.UnionWith(activating);     // reactivating a partition already owned occupies one place in the share
         if ((flaws & Flaw.ContiguousOnlyBalancer) != 0)
         {
             // MUTATION: one contiguous range per node, its fair one by rank. Whatever lies outside it moves.
             var range = VirtualPartitions.FairRanges(partitions, Math.Max(1, cluster.Nodes)).ElementAtOrDefault(cluster.Rank);
-            return ([.. owned.Where(p => !range.Contains(p)).OrderDescending()], [.. cluster.Free.Where(p => range.Contains(p) && Asked(p)).Order()]);
+            return ([.. owned.Where(p => !range.Contains(p)).OrderDescending()], [.. cluster.Free.Where(p => range.Contains(p) && !claimed.Contains(p)).Order()]);
         }
         var share = (flaws & Flaw.GreedyBalancer) != 0 ? partitions : (partitions + cluster.Nodes - 1) / Math.Max(1, cluster.Nodes);
-        var release = owned.OrderDescending().Take(Math.Max(0, owned.Count + activating.Count - share)).ToList();
-        var held = owned.Count + activating.Count - release.Count;
-        return (release, [.. cluster.Free.Where(Asked).Order().Take(Math.Max(0, share - held))]);
+        var release = owned.OrderDescending().Take(Math.Max(0, claimed.Count - share)).ToList();
+        var held = claimed.Count - release.Count;
+        return (release, [.. cluster.Free.Where(p => !claimed.Contains(p)).Order().Take(Math.Max(0, share - held))]);
     }
 }

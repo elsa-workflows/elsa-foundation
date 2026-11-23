@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Text.Json;
 using Kernel.Foundation.Contracts;
 using Durable = Kernel.Durable;
@@ -71,40 +70,25 @@ internal sealed class ActorList : IActorReads
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        var context = JsonSerializer.SerializeToUtf8Bytes(new { Read = "actor-tail", scope.Tenant, Actor = actor.Id });
-        Span<byte> cursor = stackalloc byte[sizeof(long) + sizeof(int)];
-        (long Position, int Ordinal) after = default;
+        var context = Durable.FoundationJournalPaging.Context(scope.Tenant, actor.Id);
+        Span<byte> cursor = stackalloc byte[Durable.FoundationJournalPaging.Bookmark.Size];
+        Durable.FoundationJournalPaging.Bookmark after = default;
         if (from is { } token)
         {
             if (!_store.TryOpenReadCursor(context, token.Value, cursor))
                 throw new ArgumentException("The continuation does not match this actor journal.", nameof(from));
-            after = (BinaryPrimitives.ReadInt64LittleEndian(cursor), BinaryPrimitives.ReadInt32LittleEndian(cursor[sizeof(long)..]));
+            after = Durable.FoundationJournalPaging.Bookmark.Read(cursor);
         }
 
         // A commit can write several entries. Resume within that commit when a page ends partway through it.
         var snapshot = _store.ReadFoundationJournal(scope.Tenant, actor.Id, after.Position, _pageSize + 1);
-        var added = new List<JournalEntry>();
-        var last = after;
-        foreach (var row in snapshot.Rows)
-        {
-            using var document = JsonDocument.Parse(row.Entries);
-            var entries = document.RootElement;
-            var split = entries.ValueKind == JsonValueKind.Array && entries.GetArrayLength() > 0;
-            var count = split ? entries.GetArrayLength() : 1;
-            var ordinal = row.Position == after.Position ? after.Ordinal + 1 : 0;
-            for (; ordinal < count; ordinal++)
-            {
-                added.Add(new(row.Revision, split ? entries[ordinal].GetRawText() : row.Entries));
-                last = (row.Position, ordinal);
-                if (added.Count == _pageSize) break;
-            }
-            if (added.Count == _pageSize) break;
-        }
+        var (entries, last) = Durable.FoundationJournalPaging.Read(
+            snapshot.Rows.Select(row => (row.Position, row.Revision, row.Entries)), after, _pageSize);
+        var added = entries.Select(entry => new JournalEntry(entry.Revision, entry.Entry)).ToArray();
 
         // The final nonempty page also carries a bookmark so a caller can follow the tail after catching up.
-        if (added.Count == 0) return new(new Page<JournalEntry>(added, null, snapshot.AsOf));
-        BinaryPrimitives.WriteInt64LittleEndian(cursor, last.Position);
-        BinaryPrimitives.WriteInt32LittleEndian(cursor[sizeof(long)..], last.Ordinal);
+        if (added.Length == 0) return new(new Page<JournalEntry>(added, null, snapshot.AsOf));
+        last.Write(cursor);
         return new(new Page<JournalEntry>(added, new PageToken(_store.SealReadCursor(context, cursor)), snapshot.AsOf));
     }
 
@@ -113,31 +97,35 @@ internal sealed class ActorList : IActorReads
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        var context = JsonSerializer.SerializeToUtf8Bytes(new { Read = "actor-inbox", scope.Tenant, Actor = actor.Id });
-        Span<byte> cursor = stackalloc byte[sizeof(long)];
-        if (from is { } token && !_store.TryOpenReadCursor(context, token.Value, cursor))
-            throw new ArgumentException("The continuation does not match this actor inbox.", nameof(from));
-        var after = from is null ? long.MinValue : BinaryPrimitives.ReadInt64LittleEndian(cursor);
-        var snapshot = _store.ReadFoundationInbox(scope.Tenant, actor.Id, after, _pageSize + 1);
-        var page = snapshot.Rows.Take(_pageSize).Select(row => Delivery(actor, row)).ToArray();
-        PageToken? next = null;
-        if (snapshot.Rows.Count > _pageSize)
+        var context = JsonSerializer.SerializeToUtf8Bytes(new { Read = "actor-inbox-v2", scope.Tenant, Actor = actor.Id });
+        Durable.ParkPageCursor? after = null;
+        if (from is { } token)
         {
-            BinaryPrimitives.WriteInt64LittleEndian(cursor, snapshot.Rows[_pageSize - 1].Order);
-            next = new(_store.SealReadCursor(context, cursor));
+            if (!_store.TryOpenActorInboxCursor(context, token.Value, out var cursor))
+                throw new ArgumentException("The continuation does not match this actor inbox.", nameof(from));
+            after = cursor;
         }
+        var snapshot = _store.ReadFoundationInbox(scope.Tenant, actor.Id, after, _pageSize + 1);
+        var page = snapshot.Rows.Take(_pageSize).Select(Delivery).ToArray();
+        PageToken? next = snapshot.Rows.Count > _pageSize
+            ? new(_store.SealActorInboxCursor(context, snapshot.Rows[_pageSize - 1].Cursor)) : null;
         return new(new Page<DeliveryView>(page, next, snapshot.AsOf));
     }
 
-    private DeliveryView Delivery(ActorRef actor, Durable.InMemoryStore.ActorDelivery row)
+    private DeliveryView Delivery(Durable.InMemoryStore.ActorDelivery row)
     {
         var message = row.Message;
-        var handle = _store.DeliveryHandle(actor.Id, row.Seq, message.InboxKey);
         var id = message.Start is null && Durable.Events.MatchFor(message) is { } match ? match.Event :
             (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null ? _store.MessageHandle("inbox:" + message.Id) : message.Id;
-        return new(handle, id, message.Start is null ? message.Kind : Kinds.Start,
-            row.Sender is { } sender ? new ActorRef(sender) : null, message.Due,
-            row.Held ? DeliveryState.Held : DeliveryState.Pending, row.Attempts, JsonSerializer.SerializeToUtf8Bytes(message).LongLength);
+        var state = row.KeptBy switch
+        {
+            Durable.ParkKeepReason.Arrived => DeliveryState.Arrived,
+            Durable.ParkKeepReason.Consumed or Durable.ParkKeepReason.Selected => DeliveryState.Consumed,
+            _ => row.Held ? DeliveryState.Held : DeliveryState.Pending
+        };
+        return new(row.Handle, id, message.Start is null ? message.Kind : Kinds.Start,
+            row.Sender is { } sender ? new ActorRef(sender) : null, message.Due, state, row.Attempts,
+            JsonSerializer.SerializeToUtf8Bytes(message).LongLength);
     }
 
     private ActorView View(string tenant, Durable.InMemoryStore.ActorCheckpoint checkpoint, long asOf)
@@ -148,8 +136,18 @@ internal sealed class ActorList : IActorReads
             : null;
         var header = new ActorHeader(new(checkpoint.Reference), row.Model, tenant, (ActorStatus)row.Status,
             row.Fault, parent, checkpoint.EndedAt, checkpoint.Header.TypeData, checkpoint.Header.Labels);
+        var resolution = row switch
+        {
+            { ParkDiscard.Deletion: not null } or { ParkRecovery.Deletion: not null } => "deleting",
+            { ParkDiscard.Kind: Durable.ParkClearKind.Terminate } => "terminating",
+            { ParkDiscard.Kind: Durable.ParkClearKind.Discard } => "discarding",
+            { ParkDiscard.Kind: Durable.ParkClearKind.Expiry } => "expiring",
+            { ParkDiscard.Kind: Durable.ParkClearKind.Delete } => "deleting",
+            { ParkRecovery: not null } => "recovering",
+            _ => null
+        };
         var park = checkpoint.Park is { } mark
-            ? new ParkView(mark.At, row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate ? "terminating" : null)
+            ? new ParkView(mark.At, resolution)
             : null;
         return new(header, _store.SealFoundationSelection(tenant, checkpoint), park, asOf);
     }

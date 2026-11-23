@@ -846,8 +846,18 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken ct = default)
     {
         var result = await inner.TakeAsync(partition, node, lease, ct);
-        if (DelayTake) { DelayTake = false; Taken.TrySetResult(); await TakeReply.Task; }
+        await WaitForTakeReply();
         return result;
+    }
+    public async ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken ct = default)
+    {
+        var result = await inner.TakeAsync(partitions, node, lease, ct);
+        await WaitForTakeReply();
+        return result;
+    }
+    private async Task WaitForTakeReply()
+    {
+        if (DelayTake) { DelayTake = false; Taken.TrySetResult(); await TakeReply.Task; }
     }
     public async ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken ct = default)
     {

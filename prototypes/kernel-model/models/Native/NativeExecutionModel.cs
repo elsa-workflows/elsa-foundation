@@ -10,7 +10,7 @@ public sealed record NativeOutbound(Contract.ActorRef Actor, string Frame, strin
 
 /// <summary>The Native execution model hosted through the public workflow turn.</summary>
 public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecutionOptions? options = null,
-    Action<NativeOutbound>? outbound = null) : Models.IExecutionModel, Models.IModelMetadata
+    Action<NativeOutbound>? outbound = null) : Models.IExecutionModel, Models.IModelMetadata, Models.ISimpleModelMigration
 {
     private readonly NativeExecutionOptions _options = options ?? new();
     public const string ModelKey = "native";
@@ -29,6 +29,13 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         new() { Mode = JsonSerializer.Deserialize<NativeStart>(input ?? "{}")!.Mode };
 
     public object UpgradeState(string state, int fromVersion) => Upgrade(state, fromVersion);
+
+    public string? ValidateMigration(Models.InstanceInfo source, object state, string target)
+    {
+        if (!registry.TryGet(source.Definition, out var before) || !registry.TryGet(target, out var after))
+            return "DefinitionUnavailable";
+        return StructuredMigration.Validate(before, after, (NativeState)state)?.ToString();
+    }
 
     internal static NativeState Upgrade(string state, int fromVersion)
     {

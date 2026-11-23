@@ -43,7 +43,12 @@ const designApi = vi.hoisted(() => ({
   getDefinition: vi.fn()
 }));
 const valueApi = vi.hoisted(() => ({ getActivityExecutionValuePayload: vi.fn() }));
-const mockFlowInstance = vi.hoisted(() => ({ fitView: vi.fn() }));
+const mockFlowInstance = vi.hoisted(() => ({
+  fitView: vi.fn(),
+  setCenter: vi.fn(),
+  getViewport: vi.fn(() => ({ x: 0, y: 0, zoom: 0.8 })),
+  getNode: vi.fn<(id: string) => { id: string; position: { x: number; y: number }; measured?: { width: number; height: number } } | undefined>(() => undefined)
+}));
 const useActualReactFlow = vi.hoisted(() => ({ enabled: false }));
 
 vi.mock("../api/runtime", () => ({
@@ -67,15 +72,20 @@ vi.mock("@xyflow/react", async importOriginal => {
       nodes: Array<{ id: string; selected?: boolean; data: Record<string, unknown> }>;
       edges?: unknown[];
       onInit?: (instance: ReactFlowInstance) => void;
+      onNodeClick?: (event: React.MouseEvent, node: { id: string; selected?: boolean; data: Record<string, unknown> }) => void;
+      children?: React.ReactNode;
       [key: string]: unknown;
     }) => {
-      const { nodes, onInit } = props;
+      const { nodes, onInit, onNodeClick, children } = props;
       React.useEffect(() => {
         if (!useActualReactFlow.enabled) onInit?.(mockFlowInstance as unknown as ReactFlowInstance);
       }, [onInit]);
       if (useActualReactFlow.enabled) {
         return React.createElement(actual.ReactFlow as React.ComponentType<Record<string, unknown>>, props);
       }
+      const focusControls = React.Children.toArray(children).filter(
+        child => React.isValidElement<{ onFocusModeChange?: unknown }>(child) && typeof child.props.onFocusModeChange === "function"
+      );
       return (
         <div className="wf-mock-react-flow">
           {nodes.map(node => {
@@ -89,16 +99,18 @@ vi.mock("@xyflow/react", async importOriginal => {
                 data-runtime-node-id={runtimeNodeId}
                 data-flow-node-id={runtimeNodeId}
                 data-selected={String(!!node.selected)}
+                onClick={event => onNodeClick?.(event, node)}
               >
                 {String(node.data.label ?? "")}
               </button>
             );
           })}
+          {focusControls}
         </div>
       );
     },
     Background: () => null,
-    Controls: () => null,
+    Controls: ({ children }: { children?: React.ReactNode }) => children ? <div className="react-flow__controls">{children}</div> : null,
     MiniMap: () => null
   };
 });
@@ -114,6 +126,8 @@ beforeEach(() => {
   HTMLElement.prototype.scrollIntoView = scrollIntoView;
   window.localStorage.clear();
   window.localStorage.setItem("elsa-studio-run-detail-inspector-maximized", "true");
+  mockFlowInstance.getViewport.mockReturnValue({ x: 0, y: 0, zoom: 0.8 });
+  mockFlowInstance.getNode.mockReturnValue(undefined);
   useActualReactFlow.enabled = false;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -299,7 +313,7 @@ describe("workflow run workbench incident navigation", () => {
     expect(buttonByText(container, "Retry execution scope")).toBeFalsy();
     pending.resolve(activityInspection({ activityExecutionId: "slow-parent", provenance: {} as ActivityExecutionInspection["provenance"] }));
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
-    await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity journal']")).toBeTruthy());
+    await vi.waitFor(() => expect(container.querySelector("[data-tab-id='overview']")?.getAttribute("aria-selected")).toBe("true"));
     expect(container.textContent).not.toContain("interrupted");
     expect(container.textContent).not.toContain("Resolving execution scope");
     expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
@@ -344,6 +358,64 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector(".wf-execution-browser")).toBeNull();
     expect(api.getActivityExecutionLayout).toHaveBeenCalledWith(expect.anything(), "run-1", "boundary", expect.any(AbortSignal));
     expect(container.querySelector(".wf-boundary-layout-list button")?.textContent).toContain("Write Line");
+  });
+
+  it("keeps the diagram view when selecting a reusable activity or inlined child present in the outer graph", async () => {
+    api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
+    const rootExec = { ...activityExecution(), activityExecutionId: "root-exec", executableNodeId: "compiled-root-sequence", authoredActivityId: "root-sequence", parentActivityExecutionId: null };
+    const nestedExec = { ...activityExecution(), activityExecutionId: "nested-exec", executableNodeId: "compiled-nested-sequence", authoredActivityId: "nested-sequence", parentActivityExecutionId: "root-exec" };
+    const targetExec = { ...activityExecution(), activityExecutionId: "target-exec", executableNodeId: "compiled-target", authoredActivityId: "target-node", parentActivityExecutionId: "nested-exec" };
+    const executions = [rootExec, nestedExec, targetExec];
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: executions, incidents: [] }));
+    api.browseActivityExecutions.mockImplementation(async (_context, _run, request) => {
+      const matches = executions.filter(item =>
+        (!request.executableNodeId || item.executableNodeId === request.executableNodeId)
+        && (!request.parentActivityExecutionId || item.parentActivityExecutionId === request.parentActivityExecutionId)
+        && (!request.anchorActivityExecutionId || item.activityExecutionId === request.anchorActivityExecutionId));
+      return { items: matches.map((execution, index) => ({ execution, position: index + 1 })), totalCount: matches.length, previousCursor: null, nextCursor: null };
+    });
+    api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => {
+      if (id === "nested-exec") {
+        return activityInspection({
+          ...nestedExec,
+          outcomeNames: [],
+          executionSequence: 2,
+          provenance: { parentActivityExecutionId: "root-exec" } as ActivityExecutionInspection["provenance"],
+          boundary: { layoutAvailable: true } as ActivityExecutionInspection["boundary"]
+        });
+      }
+      if (id === "target-exec") {
+        return activityInspection({
+          ...targetExec,
+          outcomeNames: [],
+          executionSequence: 3,
+          provenance: { parentActivityExecutionId: "nested-exec" } as ActivityExecutionInspection["provenance"]
+        });
+      }
+      return activityInspection({
+        ...rootExec,
+        outcomeNames: [],
+        executionSequence: 1,
+        provenance: {} as ActivityExecutionInspection["provenance"]
+      });
+    });
+    renderWorkbench("activity", "nested-exec");
+    await vi.waitFor(() => expect(container.querySelector('.wf-sequence-step[data-id="nested-sequence"]')).toBeTruthy());
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+    click(container.querySelector<HTMLButtonElement>('.wf-sequence-step[data-id="nested-sequence"]'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(container.querySelector('.wf-sequence-step[data-id="nested-sequence"]')).toBeTruthy();
+    expect(container.querySelector(".wf-boundary-layout-list")).toBeNull();
+    expect(api.getActivityExecutionLayout).not.toHaveBeenCalled();
+
+    // Navigating into the inlined child slot and selecting the child also stays in the diagram view.
+    click(container.querySelector<HTMLButtonElement>(".wf-sequence-slot"));
+    await vi.waitFor(() => expect(container.querySelector('.wf-sequence-step[data-id="target-node"]')).toBeTruthy());
+    click(container.querySelector<HTMLButtonElement>('.wf-sequence-step[data-id="target-node"]'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(container.querySelector('.wf-sequence-step[data-id="target-node"]')).toBeTruthy();
+    expect(container.querySelector(".wf-boundary-layout-list")).toBeNull();
+    expect(api.getActivityExecutionLayout).not.toHaveBeenCalled();
   });
 
   it.each(["leaf", "scope"])("keeps a newer canvas selection when an earlier %s scope-step lookup completes late", async selected => {
@@ -415,20 +487,21 @@ describe("workflow run workbench incident navigation", () => {
     const second = { ...first, activityExecutionId: "execution-second", scheduledAt: "2026-10-01T12:01:00Z" };
     api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [first, second], incidents: [] }));
     renderWorkbench("activity", null, "timeline");
+    await switchToEventsMode();
 
     await vi.waitFor(() => expect(container.querySelectorAll(".wf-run-history-view .wf-history-event")).toHaveLength(2));
     const entries = container.querySelectorAll<HTMLButtonElement>(".wf-run-history-view .wf-history-event");
     const readsBeforeSelection = api.getActivityExecutionInspection.mock.calls.length;
     entries[0].focus(); click(entries[0]);
     await vi.waitFor(() => expect(entries[0]?.getAttribute("aria-pressed")).toBe("true"));
-    expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+    expect(buttonByText(container, "Timeline")?.getAttribute("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(entries[0]);
     expect(entries[0]?.isConnected).toBe(true);
 
     entries[1].focus(); click(entries[1]);
     await vi.waitFor(() => expect(entries[1]?.getAttribute("aria-pressed")).toBe("true"));
     expect(entries[0]?.getAttribute("aria-pressed")).toBe("false");
-    expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+    expect(buttonByText(container, "Timeline")?.getAttribute("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(entries[1]);
     expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(readsBeforeSelection);
 
@@ -436,7 +509,7 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText(container, "Inspect owning execution →"));
     await vi.waitFor(() => expect(container.textContent).toContain(second.activityExecutionId));
     expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
-    expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+    expect(buttonByText(container, "Timeline")?.getAttribute("aria-selected")).toBe("true");
   });
 
   it("uses the pinned Sequence canvas without authoring controls", async () => {
@@ -671,23 +744,54 @@ describe("workflow run workbench incident navigation", () => {
     expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
   });
 
-  it("keeps the Timeline primary and returns from an exact journal event to the same activity tab", async () => {
+  it("expands journal event details inline without switching away from the activity tab, and supports cross-navigation back to Journal", async () => {
     api.getWorkflowInstance.mockResolvedValue(workflowDetails({ incidents: [] }));
+    historyApi.getWorkflowHistoryEvent.mockResolvedValue({
+      coverage: historyCoverage,
+      event: historyEvent(1, {
+        historyEventId: "event-1",
+        activityExecutionId: "execution-target",
+        bookmarkId: "bookmark-1"
+      }),
+      readAt: "2026-11-05T09:00:05Z"
+    });
     renderWorkbench("activity", "execution-target", "timeline");
+    await showActivityEventsTab();
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-history .wf-history-event")).toBeTruthy());
     expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
     expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(true);
-    expect(container.querySelector("[data-tab-id='journal']")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.querySelector("[data-tab-id='events']")?.getAttribute("aria-selected")).toBe("true");
+
     const journalEvent = container.querySelector<HTMLButtonElement>(".wf-activity-history .wf-history-event")!;
+    expect(journalEvent.getAttribute("aria-expanded")).toBe("false");
     journalEvent.focus();
     click(journalEvent);
-    await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
+
+    await vi.waitFor(() => expect(buttonByText(container, "Inspect bookmark →")).toBeTruthy());
+    expect(container.querySelector(".wf-activity-history [aria-label='History event details']")).toBeTruthy();
+    expect(journalEvent.getAttribute("aria-expanded")).toBe("true");
+    // Activity header, tabs, and journal list stay visible in place.
+    expect(container.querySelector(".wf-activity-history")?.closest("[hidden]")).toBeNull();
+    expect(container.querySelector(".wf-activity-overview")?.closest("[hidden]")).toBeNull();
+    expect(container.querySelector("[data-tab-id='events']")?.getAttribute("aria-selected")).toBe("true");
+    expect(buttonByText(container, "Back to activity inspection")).toBeUndefined();
+    expect(container.querySelector(".wf-history-inspection-inline")?.textContent).not.toContain("Inspect owning execution");
+    expect(document.activeElement).toBe(journalEvent);
+
+    // Cross-navigating to a bookmark opens the full inspection view and Back returns to the Events tab.
+    const bookmarkBtn = buttonByText(container, "Inspect bookmark →")!;
+    click(bookmarkBtn);
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='Bookmark lifecycle']")).toBeTruthy());
     expect(container.querySelector(".wf-activity-history")?.closest("[hidden]")).toBeTruthy();
     click(buttonByText(container, "Back to activity inspection"));
-    await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeNull());
-    expect(container.querySelector("[data-tab-id='journal']")?.getAttribute("aria-selected")).toBe("true");
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='Bookmark lifecycle']")).toBeNull());
+    expect(container.querySelector("[data-tab-id='events']")?.getAttribute("aria-selected")).toBe("true");
     expect(container.querySelector(".wf-activity-overview")?.closest("[hidden]")).toBeNull();
-    await vi.waitFor(() => expect(document.activeElement).toBe(journalEvent));
+
+    // Clicking the expanded journal row again collapses it cleanly.
+    click(journalEvent);
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-history [aria-label='History event details']")).toBeNull());
+    expect(journalEvent.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("opens Diagram itself when leaving the stacked Timeline on a phone", async () => {
@@ -907,8 +1011,6 @@ describe("workflow run workbench incident navigation", () => {
     click([...container.querySelectorAll<HTMLButtonElement>(".wf-instance-incident-summary")]
       .find(button => button.textContent?.includes("Second failure.")));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
-    await vi.waitFor(() => expect(buttonByText(container, "Data")).toBeTruthy());
-    click(buttonByText(container, "Data"));
 
     await vi.waitFor(() => expect(container.textContent).toContain("execution-second"));
     await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")).toBeTruthy());
@@ -943,9 +1045,10 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect this activity execution"));
 
     click(buttonByText(container, "Timeline"));
+    await switchToEventsMode();
     await vi.waitFor(() => expect(container.querySelector(".wf-history-event")).toBeTruthy());
     click(container.querySelector<HTMLButtonElement>(".wf-history-event"));
-    expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+    expect(buttonByText(container, "Timeline")?.getAttribute("aria-selected")).toBe("true");
     await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
     await vi.waitFor(() => expect(buttonByText(container, "Inspect owning execution →")).toBeTruthy());
     click(buttonByText(container, "Inspect owning execution →"));
@@ -990,9 +1093,10 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(container.textContent).toContain("RefreshedFailure"));
     click(buttonByText(container, "Timeline"));
+    await switchToEventsMode();
     await vi.waitFor(() => expect(container.querySelector(".wf-history-event")).toBeTruthy());
     click(container.querySelector<HTMLButtonElement>(".wf-history-event"));
-    expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+    expect(buttonByText(container, "Timeline")?.getAttribute("aria-selected")).toBe("true");
     await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
     await vi.waitFor(() => expect(buttonByText(container, "Inspect owning execution →")).toBeTruthy());
     click(buttonByText(container, "Inspect owning execution →"));
@@ -1008,7 +1112,6 @@ describe("workflow run workbench incident navigation", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed");
-    click(buttonByText(container, "Data"));
     const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
       .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
     expect(incidentCount).toBe("0");
@@ -1065,6 +1168,7 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(container.textContent).toContain("ResolvedFailure-50"));
     click(buttonByText(container, "Timeline"));
+    await switchToEventsMode();
     await vi.waitFor(() => expect(container.querySelectorAll(".wf-history-event")).toHaveLength(lastIndex + 1));
     const timelineEntries = container.querySelectorAll<HTMLButtonElement>(".wf-history-event");
     expect(timelineEntries).toHaveLength(lastIndex + 1);
@@ -1085,7 +1189,6 @@ describe("workflow run workbench incident navigation", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed");
-    click(buttonByText(container, "Data"));
     const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
       .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
     expect(incidentCount).toBe("0");
@@ -1310,8 +1413,8 @@ describe("workflow run workbench incident navigation", () => {
     }));
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
     const dataTabs = container.querySelector<HTMLElement>('[role="tablist"][aria-label="Activity execution details"]')!;
-    expect(buttonByText(dataTabs, "Inputs")?.getAttribute("aria-selected")).toBe("true");
-    click(buttonByText(dataTabs, "Overview"));
+    expect(dataTabs.querySelector('[data-tab-id="inputs"]')?.getAttribute("aria-selected")).toBe("true");
+    click(dataTabs.querySelector<HTMLButtonElement>('[data-tab-id="overview"]'));
     const metadataValue = (label: string) => [...container.querySelectorAll<HTMLElement>(".wf-activity-meta-item")]
       .find(item => item.querySelector("dt")?.textContent === label)
       ?.querySelector(".wf-activity-meta-value")?.textContent;
@@ -1421,6 +1524,7 @@ describe("workflow run workbench definition names", () => {
 it.each([1440, 320])("keeps Timeline row focus and reads only event evidence when selecting a recorded event at %spx", async width => {
   observedWidth = width;
   renderWorkbench("activity", null, "timeline");
+  await switchToEventsMode();
   await vi.waitFor(() => expect(container.querySelector(".wf-run-history-view .wf-history-event")).toBeTruthy());
   const row = container.querySelector<HTMLButtonElement>(".wf-run-history-view .wf-history-event")!;
   const activityReads = api.getActivityExecutionInspection.mock.calls.length;
@@ -1431,6 +1535,63 @@ it.each([1440, 320])("keeps Timeline row focus and reads only event evidence whe
   expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
   expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(activityReads);
   expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+});
+
+it("keeps the docked timeline and diagram visible while showing selected event details", async () => {
+  observedWidth = 1400;
+  renderWorkbench("activity", null, "timeline");
+  await switchToEventsMode();
+
+  await vi.waitFor(() => expect(container.querySelector(".wf-run-history-view .wf-history-event")).toBeTruthy());
+  const workbench = container.querySelector(".wf-instance-detail-workbench")!;
+  expect(workbench.classList.contains("timeline-docked")).toBe(true);
+  expect(container.querySelector(".wf-run-primary-views")).toBeNull();
+  expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+  expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(false);
+
+  click(container.querySelector<HTMLButtonElement>(".wf-run-history-view .wf-history-event"));
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")).toBeTruthy());
+  expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+  expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(false);
+  expect(container.querySelector(".wf-instance-inspector")?.hasAttribute("hidden")).toBe(false);
+});
+
+it("does not load history while collapsed or in Activities mode, and loads when switching to Events", async () => {
+  observedWidth = 1400;
+  window.localStorage.setItem("elsa-studio-run-detail-timeline-collapsed", "true");
+  renderWorkbench("issues");
+
+  await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench.timeline-collapsed")).toBeTruthy());
+  expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(true);
+  expect(container.querySelector(".wf-run-diagram-view")?.hasAttribute("hidden")).toBe(false);
+  expect(container.querySelector("button[aria-label='Show timeline panel']")).toBeTruthy();
+  expect(historyApi.getWorkflowHistoryPage).not.toHaveBeenCalled();
+
+  click(container.querySelector<HTMLButtonElement>("button[aria-label='Show timeline panel']"));
+  await vi.waitFor(() => expect(container.querySelector(".wf-run-history-view .wf-activity-timeline-row")).toBeTruthy());
+  expect(historyApi.getWorkflowHistoryPage).not.toHaveBeenCalled();
+
+  await switchToEventsMode();
+  await vi.waitFor(() => expect(container.querySelector(".wf-run-history-view .wf-history-event")).toBeTruthy());
+  click(container.querySelector<HTMLButtonElement>("button[aria-label='Hide timeline panel']"));
+  expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(true);
+
+  click(container.querySelector<HTMLButtonElement>("button[aria-label='Show timeline panel']"));
+  await vi.waitFor(() => expect(container.querySelector(".wf-run-history-view .wf-history-event")).toBeTruthy());
+  expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
+});
+
+it("expands a collapsed timeline and switches to Events when focusing an execution from its activity Events tab", async () => {
+  observedWidth = 1400;
+  window.localStorage.setItem("elsa-studio-run-detail-timeline-collapsed", "true");
+  renderWorkbench("activity", "execution-target");
+
+  await showActivityEventsTab();
+  await vi.waitFor(() => expect(buttonByText(container, "Focus this execution in timeline")).toBeTruthy());
+  click(buttonByText(container, "Focus this execution in timeline"));
+  await vi.waitFor(() => expect(container.querySelector(".wf-run-history-view .wf-history-event")).toBeTruthy());
+  expect(container.querySelector(".wf-instance-detail-workbench.timeline-collapsed")).toBeNull();
+  expect(container.querySelector(".wf-run-history-view")?.hasAttribute("hidden")).toBe(false);
 });
 
 function buttonByText(scope: ParentNode, text: string) {
@@ -1459,9 +1620,30 @@ function click(button: HTMLElement | undefined | null) {
 }
 
 async function showActivityData() {
-  await vi.waitFor(() => expect(container.querySelector("[data-tab-id='data']")).toBeTruthy());
-  click(container.querySelector<HTMLButtonElement>("[data-tab-id='data']"));
-  await vi.waitFor(() => expect(container.querySelector("[data-tab-id='data']")?.getAttribute("aria-selected")).toBe("true"));
+  await vi.waitFor(() => expect(container.querySelector("[data-tab-id='overview']")).toBeTruthy());
+  if (container.querySelector("[data-tab-id='overview']")?.getAttribute("aria-selected") !== "true") {
+    click(container.querySelector<HTMLButtonElement>("[data-tab-id='overview']"));
+  }
+  await vi.waitFor(() => expect(container.querySelector("[data-tab-id='overview']")?.getAttribute("aria-selected")).toBe("true"));
+}
+
+async function showActivityEventsTab() {
+  await vi.waitFor(() => expect(container.querySelector("[data-tab-id='events']")).toBeTruthy());
+  click(container.querySelector<HTMLButtonElement>("[data-tab-id='events']"));
+  await vi.waitFor(() => expect(container.querySelector("[data-tab-id='events']")?.getAttribute("aria-selected")).toBe("true"));
+}
+
+async function switchToEventsMode() {
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Timeline view']")).toBeTruthy());
+  const eventsButton = buttonByText(container.querySelector("[aria-label='Timeline view']")!, "Events");
+  click(eventsButton);
+  await vi.waitFor(() => expect(eventsButton?.getAttribute("aria-pressed")).toBe("true"));
+}
+
+async function openPlayback() {
+  await vi.waitFor(() => expect(container.querySelector("button[aria-label='Playback']")).toBeTruthy());
+  click(container.querySelector<HTMLButtonElement>("button[aria-label='Playback']"));
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")).toBeTruthy());
 }
 
 function deferred<T>() {
@@ -1720,9 +1902,15 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   });
   renderWorkbench("activity", "write4");
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  if (initialScopePage) {
+    // The scope occurrence chooser stays hidden while its initial page is pending so singletons never flash.
+    await vi.waitFor(() => expect(api.browseActivityExecutions).toHaveBeenCalledWith(
+      expect.anything(), "run-1", expect.objectContaining({ executableNodeId: "compiled-nested-sequence" }), expect.any(AbortSignal)
+    ));
+    expect(container.querySelector(".wf-execution-scope-occurrence .wf-execution-choice")).toBeNull();
+    initialScopePage.resolve();
+  }
   await vi.waitFor(() => expect(container.querySelector(".wf-execution-scope-occurrence .wf-execution-choice")).toBeTruthy());
-  // The chooser mounts before its initial page enables occurrence navigation.
-  initialScopePage?.resolve();
   await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']")?.disabled).toBe(false));
   await showActivityData();
   const overview = container.querySelector(".wf-activity-overview")!;
@@ -1928,21 +2116,23 @@ function enableRecordedPlayback() {
 it("keeps the chosen Diagram canvas visible when advancing playback on a phone", async () => {
   observedWidth = 320;
   const { rows } = enableRecordedPlayback(); renderWorkbench("activity", rows[0].activityExecutionId, "timeline");
+  await openPlayback();
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 1 of 3"));
   click(buttonByText(container, "Diagram"));
   await vi.waitFor(() => expect(container.querySelector(".run-layout-narrow.narrow-canvas-view")).toBeTruthy());
   click(buttonByText(container.querySelector(".wf-playback-transport")!, "Next"));
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
-  expect(buttonByText(container, "Diagram")?.getAttribute("aria-pressed")).toBe("true");
+  expect(buttonByText(container, "Diagram")?.getAttribute("aria-selected")).toBe("true");
   expect(container.querySelector(".run-layout-narrow.narrow-canvas-view")).toBeTruthy();
   expect(container.querySelector(".narrow-inspector-view")).toBeNull();
 });
 
 it("keeps the user's Issues tab when playback is initially admitted at the existing exact occurrence", async () => {
   const { rows } = enableRecordedPlayback(); renderWorkbench("issues", rows[1].activityExecutionId, "timeline");
+  await openPlayback();
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
   expect(container.querySelector("[data-tab-id='issues']")?.getAttribute("aria-selected")).toBe("true");
-  expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+  expect(buttonByText(container, "Timeline")?.getAttribute("aria-selected")).toBe("true");
 });
 it.each(["event", "bookmark"])("keeps an existing exact %s deep link during initial playback admission", async kind => {
   const { rows } = enableRecordedPlayback();
@@ -1951,6 +2141,7 @@ it.each(["event", "bookmark"])("keeps an existing exact %s deep link during init
   const search = `?${parameter}=${id}`; window.history.replaceState(null, "", `/workflows/instances/run-1${search}`);
   if (kind === "bookmark") historyApi.getWorkflowHistoryBookmark.mockRejectedValue({ status: 404 });
   renderWorkbench("activity", null, "timeline", search);
+  await openPlayback();
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step"));
   expect(new URLSearchParams(window.location.search).get(parameter)).toBe(id);
   if (kind === "event") {
@@ -1960,6 +2151,7 @@ it.each(["event", "bookmark"])("keeps an existing exact %s deep link during init
 });
 it("keeps explicit Activity inspection when opening an exact occurrence deep link", async () => {
   const { rows } = enableRecordedPlayback(); renderWorkbench("activity", rows[1].activityExecutionId, "diagram");
+  await openPlayback();
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
   expect(container.querySelector("[aria-label='History event details']")).toBeNull();
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
@@ -1970,6 +2162,7 @@ it("anchors a retained bookmark's exact owner without replacing its lifecycle in
   historyApi.getWorkflowHistoryBookmark.mockResolvedValue({ coverage: historyCoverage, bookmark: item, readAt: "2026-11-14T06:00:00Z" });
   const search = "?bookmark=bookmark-1"; window.history.replaceState(null, "", `/workflows/instances/run-1${search}`);
   renderWorkbench("activity", null, "timeline", search);
+  await openPlayback();
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
   expect(new URLSearchParams(window.location.search).get("bookmark")).toBe("bookmark-1");
   expect(container.querySelector("[aria-label='History event details']")).toBeNull();
@@ -1982,6 +2175,7 @@ it("retains a visible exact later observation when an initial deep link is outsi
     : normal(...args));
   const search = "?historyEvent=claimed-later"; window.history.replaceState(null, "", `/workflows/instances/run-1${search}`);
   renderWorkbench("activity", null, "timeline", search);
+  await openPlayback();
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
   expect(container.querySelector("[aria-label='Run timeline'] [data-history-event-id='claimed-later'][aria-pressed='true']")).toBeTruthy();
   expect(new URLSearchParams(window.location.search).get("historyEvent")).toBe("claimed-later");
@@ -1999,11 +2193,17 @@ it("shows the selected first observation when the default Highlights filter omit
     historyEventId: `event-${row.activityExecutionId}`, activityExecutionId: row.activityExecutionId, name: "ActivityScheduled"
   }))));
   renderWorkbench("activity", null, "timeline");
+  await switchToEventsMode();
+  await openPlayback();
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 1 of 3"));
   click(buttonByText(container.querySelector(".wf-playback-transport")!, "Next"));
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
   expect(container.querySelector(`[aria-label='Run timeline'] [data-history-event-id='event-${rows[1].activityExecutionId}'][aria-pressed='true']`)).toBeTruthy();
-  expect(container.querySelector<HTMLSelectElement>("[aria-label='History detail']")?.value).toBe("highlights");
+  const filterTrigger = container.querySelector<HTMLButtonElement>("[aria-label='Run timeline'] button[aria-label='Filter events']")!;
+  vi.spyOn(filterTrigger, "getBoundingClientRect").mockReturnValue(new DOMRect(16, 16, 28, 28));
+  click(filterTrigger);
+  expect(document.body.querySelector<HTMLSelectElement>("[aria-label='History detail']")?.value).toBe("lifecycle");
+  flushSync(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   click(buttonByText(container, "Diagram")); click(buttonByText(container, "Timeline"));
   expect(container.querySelector(`[aria-label='Run timeline'] [data-history-event-id='event-${rows[1].activityExecutionId}'][aria-pressed='true']`)).toBeTruthy();
   click(buttonByText(container, "Timeline"));
@@ -2011,9 +2211,13 @@ it("shows the selected first observation when the default Highlights filter omit
 });
 it("requires a deliberate repeated-node occurrence choice after automatic playback visits", async () => {
   const { rows } = enableRecordedPlayback(); renderWorkbench("activity", null, "diagram");
+  await openPlayback();
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 1 of 3"));
-  const speed = container.querySelector<HTMLSelectElement>("[aria-label='Playback speed']")!;
-  flushSync(() => { speed.value = "4"; speed.dispatchEvent(new Event("change", { bubbles: true })); });
+  const optionsTrigger = container.querySelector<HTMLButtonElement>("button[aria-label='Playback options']")!;
+  vi.spyOn(optionsTrigger, "getBoundingClientRect").mockReturnValue(new DOMRect(16, 16, 32, 32));
+  click(optionsTrigger);
+  const speedGroup = document.body.querySelector<HTMLElement>("[role='group'][aria-label='Playback speed']")!;
+  click(buttonByText(speedGroup, "4×"));
   click(buttonByText(container.querySelector(".wf-playback-transport")!, "Play"));
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 3 of 3"));
   const node = container.querySelector<HTMLElement>('.wf-run-diagram-view [data-id="target-node"]')!;
@@ -2029,6 +2233,8 @@ it("requires a deliberate repeated-node occurrence choice after automatic playba
 
 it("retains confirmed inspector content until playback's exact destination is prepared", async () => {
   const { rows } = enableRecordedPlayback(); renderWorkbench("activity", null, "timeline");
+  await switchToEventsMode();
+  await openPlayback();
   await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain(rows[0].activityExecutionId));
   const previous = container.querySelector("[aria-label='History event details']")!;
   const held = deferred<ActivityExecutionInspection>();
@@ -2041,18 +2247,20 @@ it("retains confirmed inspector content until playback's exact destination is pr
   held.resolve(activityInspection({ ...rows[1], outcomeNames: [], provenance: { parentActivityExecutionId: null } as ActivityExecutionInspection["provenance"], incidents: [] }));
   await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain(rows[1].activityExecutionId));
   expect(container.querySelector("[aria-label='History event details']")?.textContent).not.toContain("Loading exact recorded event");
-  expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true"); expect(document.activeElement).toBe(next);
+  expect(buttonByText(container, "Timeline")?.getAttribute("aria-selected")).toBe("true"); expect(document.activeElement).toBe(next);
 });
 it("admits a manually selected timeline occurrence while initial playback admission is still pending", async () => {
   const { rows, readPage } = enableRecordedPlayback(); const held = deferred<ReturnType<typeof readPage>>();
   playbackApi.readActivityPlayback.mockReturnValueOnce(held.promise);
   renderWorkbench("activity", null, "timeline");
+  await switchToEventsMode();
+  await openPlayback();
   await vi.waitFor(() => expect(container.querySelector(`[data-history-event-id='event-${rows[1].activityExecutionId}']`)).toBeTruthy());
   click(container.querySelector<HTMLElement>(`[data-history-event-id='event-${rows[1].activityExecutionId}']`));
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
   held.resolve(readPage({}, "run-1")); await vi.dynamicImportSettled();
   expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3");
-  expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true");
+  expect(buttonByText(container, "Timeline")?.getAttribute("aria-selected")).toBe("true");
 });
 it("retires prepared playback evidence if the mounted exact-event read subsequently loses access", async () => {
   const { rows } = enableRecordedPlayback(); const normal = historyApi.getWorkflowHistoryEvent.getMockImplementation()!; let count = 0;
@@ -2063,6 +2271,8 @@ it("retires prepared playback evidence if the mounted exact-event read subsequen
   historyApi.getWorkflowHistoryPage.mockResolvedValue(historyPage(rows.map((row, index) => historyEvent(index + 1, {
     historyEventId: `event-${row.activityExecutionId}`, activityExecutionId: row.activityExecutionId, name: "ActivityScheduled" }))));
   renderWorkbench("activity", null, "timeline");
+  await switchToEventsMode();
+  await openPlayback();
   await vi.waitFor(() => expect(count).toBeGreaterThan(1));
   await vi.waitFor(() => expect(container.querySelector(".wf-playback-details")).toBeNull());
   expect(container.querySelector(".wf-playback-selected-observation")).toBeNull();
@@ -2080,6 +2290,8 @@ it.each(["ActivityCompleted", "ActivityScheduled"])("keeps exact %s playback ide
   historyApi.getWorkflowHistoryPage.mockResolvedValue(historyPage(rows.map((row, index) => historyEvent(index + 1, {
     historyEventId: `event-${row.activityExecutionId}`, activityExecutionId: row.activityExecutionId, name }))));
   renderWorkbench("activity", null, "timeline");
+  await switchToEventsMode();
+  await openPlayback();
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 1 of 3"));
   click(buttonByText(container.querySelector(".wf-playback-transport")!, "Next"));
   await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain(rows[1].activityExecutionId));
@@ -2091,12 +2303,14 @@ it.each(["ActivityCompleted", "ActivityScheduled"])("keeps exact %s playback ide
   row.focus(); click(row);
   await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain(rows[1].activityExecutionId));
   expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3");
-  expect(buttonByText(container, "Timeline")?.getAttribute("aria-pressed")).toBe("true"); expect(document.activeElement).toBe(row);
+  expect(buttonByText(container, "Timeline")?.getAttribute("aria-selected")).toBe("true"); expect(document.activeElement).toBe(row);
   expect(container.querySelector('button[aria-label="Pause playback"]')).toBeNull();
 });
 
 it("clears playback cursor and prepared protected inspection after the final owner recheck denies access", async () => {
   const { rows, readPage } = enableRecordedPlayback(); renderWorkbench("activity", null, "timeline");
+  await switchToEventsMode();
+  await openPlayback();
   await vi.waitFor(() => expect(container.querySelector("[aria-label='History event details']")?.textContent).toContain(rows[0].activityExecutionId));
   let requests = 0;
   playbackApi.readActivityPlayback.mockImplementation(async (...args: Parameters<typeof readPage>) => {
@@ -2123,6 +2337,9 @@ it.each([false, true])("restores the exact later resume event without playback a
   historyApi.getWorkflowHistoryEvent.mockImplementation(async (_context, _run, id) => ({ coverage: historyCoverage,
     event: events.find(event => event.historyEventId === id)!, readAt: "2026-10-01T12:02:00Z" }));
   renderWorkbench("activity", null, "timeline");
+  await switchToEventsMode();
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Event detail level']")).toBeTruthy());
+  click(buttonByText(container.querySelector("[aria-label='Event detail level']")!, "Highlights"));
   await vi.waitFor(() => expect(container.querySelectorAll(".wf-run-history-view .wf-history-event")).toHaveLength(2));
   const row = container.querySelector<HTMLButtonElement>('[data-history-event-id="later-resume"]')!;
   click(row);
@@ -2163,4 +2380,594 @@ it.each(["unattributed", "admitted", "legacy"] as const)("keeps child authoring 
     await vi.waitFor(() => expect(buttonByText(container, "Open definition")).toBeTruthy());
     expect(container.textContent).not.toContain("Source definition is unavailable for this child run.");
   }
+});
+
+it("omits the diagram rewind note and opens playback options in a flyout popover", async () => {
+  enableRecordedPlayback();
+  renderWorkbench("activity", null, "diagram");
+  expect(container.querySelector("[aria-label='Activity playback']")).toBeNull();
+  await openPlayback();
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 1 of 3"));
+
+  expect(container.textContent).not.toContain("Selecting a history event does not rewind it.");
+  const trigger = container.querySelector<HTMLButtonElement>("button[aria-label='Playback options']")!;
+  expect(trigger).toBeTruthy();
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  expect(document.body.querySelector("[role='dialog'][aria-label='Playback options']")).toBeNull();
+
+  vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue(new DOMRect(16, 16, 32, 32));
+  click(trigger);
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  const dialog = document.body.querySelector<HTMLElement>("[role='dialog'][aria-label='Playback options']")!;
+  expect(dialog).toBeTruthy();
+  const speedGroup = dialog.querySelector<HTMLElement>("[role='group'][aria-label='Playback speed']")!;
+  expect(speedGroup).toBeTruthy();
+  const paceButtons = [...speedGroup.querySelectorAll<HTMLButtonElement>("button")];
+  expect(paceButtons.map(button => button.textContent?.trim())).toEqual(["0.5×", "1×", "2×", "4×"]);
+  expect(paceButtons.find(button => button.textContent?.trim() === "1×")?.getAttribute("aria-pressed")).toBe("true");
+  click(buttonByText(speedGroup, "2×"));
+  expect(paceButtons.find(button => button.textContent?.trim() === "2×")?.getAttribute("aria-pressed")).toBe("true");
+
+  const details = dialog.querySelector<HTMLDetailsElement>(".wf-playback-details")!;
+  expect(details).toBeTruthy();
+  click(details.querySelector<HTMLElement>("summary"));
+  const factRows = [...details.querySelectorAll<HTMLElement>(".wf-playback-fact-row")];
+  const factByLabel = (label: string) => factRows.find(row => row.querySelector("dt")?.textContent?.trim() === label);
+  const occurredRow = factByLabel("Occurred")!;
+  expect(occurredRow).toBeTruthy();
+  expect(occurredRow.querySelector(".wf-playback-fact-value")?.textContent).not.toContain("2026-11-14T");
+  expect(occurredRow.querySelector(".wf-playback-fact-value")?.getAttribute("title")).toBe("2026-11-14T06:00:00Z");
+  expect(occurredRow.querySelector("button[aria-label='Copy occurred']")).toBeTruthy();
+  expect(factByLabel("Sequence range")?.querySelector("code")?.textContent).toBe("#0 – #3");
+  expect(factByLabel("Activity execution")?.querySelector(".wf-playback-fact-truncate code")).toBeTruthy();
+  expect(factByLabel("Activity execution")?.querySelector("button[aria-label='Copy activity execution']")).toBeTruthy();
+  expect(details.querySelector(".wf-playback-details-footer")?.textContent).toContain("Presentation pace does not change recorded durations.");
+
+  flushSync(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  expect(document.body.querySelector("[role='dialog'][aria-label='Playback options']")).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+});
+
+it("defers slow canvas loading into a floating pill instead of an inline banner above the canvas", async () => {
+  const pendingBrowse = deferred<{ items: Array<{ execution: ActivityExecutionStateSummary; position: number }>; totalCount: number; previousCursor: null; nextCursor: null }>();
+  api.browseActivityExecutions.mockImplementation(() => pendingBrowse.promise);
+  renderWorkbench("activity", null, "diagram");
+
+  await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell")).toBeTruthy());
+  expect(container.querySelector(".wf-instance-canvas-shell > .wf-instance-note")).toBeNull();
+  expect(container.querySelector(".wf-canvas-status-pill")).toBeNull();
+  expect(container.textContent).not.toContain("Loading visible run data…");
+
+  await vi.waitFor(() => expect(container.querySelector(".wf-canvas-status-pill.is-loading")?.textContent).toBe("Loading visible run data…"), { timeout: 1000 });
+  const shell = container.querySelector(".wf-instance-canvas-shell")!;
+  const canvas = shell.querySelector(".wf-instance-canvas")!;
+  const pill = shell.querySelector(".wf-canvas-status-pill.is-loading")!;
+  expect(canvas.compareDocumentPosition(pill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+  pendingBrowse.resolve({ items: [{ execution: activityExecution(), position: 1 }], totalCount: 2, previousCursor: null, nextCursor: null });
+  await vi.waitFor(() => expect(container.querySelector(".wf-canvas-status-pill.is-info")?.textContent).toBe("Some activities ran more than once. Choose an occurrence to inspect."));
+  expect(container.querySelector(".wf-canvas-status-pill.is-loading")).toBeNull();
+});
+
+it("keeps custom activity and sibling execution details accessible after stepping out of its nested activity-graph scope", async () => {
+  api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
+  const greeterCatalog: ActivityCatalogItem = {
+    ...writeLine,
+    activityVersionId: "Custom.Greeter@1",
+    activityTypeKey: "Custom.Greeter",
+    version: "1",
+    displayName: "Greeter",
+    category: "Custom",
+    description: "Greets a user.",
+    inputs: [],
+    outputs: [],
+    designFacets: []
+  };
+  api.listActivities.mockResolvedValue({ activities: [sequenceActivity, writeLine, greeterCatalog] });
+
+  const customExecutable = {
+    ...executable(),
+    rootActivity: {
+      executableNodeId: "compiled-outer-seq",
+      authoredActivityId: "outer-seq",
+      activityType: sequenceActivity.activityTypeKey,
+      activityTypeVersion: sequenceActivity.version,
+      structureKind: "elsa.sequence.structure",
+      inputBindings: [],
+      childSlots: [{
+        name: "Sequence.Activities",
+        activities: [
+          { executableNodeId: "compiled-write-1", authoredActivityId: "write-1", activityType: writeLine.activityTypeKey, activityTypeVersion: writeLine.version, inputBindings: [], childSlots: [] },
+          {
+            executableNodeId: "compiled-greeter",
+            authoredActivityId: "greeter",
+            activityType: greeterCatalog.activityTypeKey,
+            activityTypeVersion: greeterCatalog.version,
+            inputBindings: [],
+            childSlots: [{
+              name: "activity-graph",
+              activities: [{
+                executableNodeId: "compiled-inner-seq",
+                authoredActivityId: "inner-seq",
+                activityType: sequenceActivity.activityTypeKey,
+                activityTypeVersion: sequenceActivity.version,
+                structureKind: "elsa.sequence.structure",
+                inputBindings: [],
+                childSlots: [{
+                  name: "Sequence.Activities",
+                  activities: [{ executableNodeId: "compiled-inner-write", authoredActivityId: "inner-write", activityType: writeLine.activityTypeKey, activityTypeVersion: writeLine.version, inputBindings: [], childSlots: [] }]
+                }]
+              }]
+            }]
+          },
+          { executableNodeId: "compiled-write-2", authoredActivityId: "write-2", activityType: writeLine.activityTypeKey, activityTypeVersion: writeLine.version, inputBindings: [], childSlots: [] }
+        ]
+      }]
+    }
+  };
+  api.getExecutable.mockResolvedValue(customExecutable);
+
+  const make = (id: string, node: string, authored: string, type: string, parent: string | null): ActivityExecutionStateSummary => ({
+    ...activityExecution(),
+    activityExecutionId: id,
+    executableNodeId: node,
+    authoredActivityId: authored,
+    activityType: type,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    parentActivityExecutionId: parent,
+    provenance: { parentActivityExecutionId: parent },
+    executionSequence: 1
+  });
+  const rows = [
+    make("exec-outer-seq", "compiled-outer-seq", "outer-seq", sequenceActivity.activityTypeKey, null),
+    make("exec-write-1", "compiled-write-1", "write-1", writeLine.activityTypeKey, "exec-outer-seq"),
+    make("exec-greeter", "compiled-greeter", "greeter", greeterCatalog.activityTypeKey, "exec-outer-seq"),
+    make("exec-inner-seq", "compiled-inner-seq", "inner-seq", sequenceActivity.activityTypeKey, "exec-greeter"),
+    make("exec-inner-write", "compiled-inner-write", "inner-write", writeLine.activityTypeKey, "exec-inner-seq"),
+    make("exec-write-2", "compiled-write-2", "write-2", writeLine.activityTypeKey, "exec-outer-seq")
+  ];
+  const isAncestorOf = (ancestorId: string, execution: ActivityExecutionStateSummary) => {
+    let parent = execution.parentActivityExecutionId;
+    while (parent) {
+      if (parent === ancestorId) return true;
+      parent = rows.find(item => item.activityExecutionId === parent)?.parentActivityExecutionId ?? null;
+    }
+    return false;
+  };
+  api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: rows, incidents: [] }));
+  api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => {
+    const row = rows.find(item => item.activityExecutionId === id)!;
+    return activityInspection({ ...row, outcomeNames: ["Done"], incidents: [], provenance: row.provenance as ActivityExecutionInspection["provenance"] });
+  });
+  api.browseActivityExecutions.mockImplementation(async (_context, _run, request) => {
+    const matches = rows.filter(item =>
+      (!request.executableNodeId || item.executableNodeId === request.executableNodeId)
+      && (!request.parentActivityExecutionId || item.parentActivityExecutionId === request.parentActivityExecutionId)
+      && (!request.ancestorActivityExecutionId || isAncestorOf(request.ancestorActivityExecutionId, item))
+    );
+    const entries = matches.map((execution, index) => ({
+      execution,
+      position: index + 1,
+      previousActivityExecutionId: matches[index - 1]?.activityExecutionId ?? null,
+      nextActivityExecutionId: matches[index + 1]?.activityExecutionId ?? null
+    }));
+    const items = request.anchorActivityExecutionId
+      ? entries.filter(item => item.execution.activityExecutionId === request.anchorActivityExecutionId)
+      : entries.slice(-Number(request.limit ?? 50));
+    return { items, totalCount: entries.length, previousCursor: null, nextCursor: null };
+  });
+
+  // Start on the inner Sequence inside Greeter's activity-graph so active scope is Sequence > Greeter.
+  renderWorkbench("activity", "exec-inner-seq", "diagram");
+  await vi.waitFor(() => expect(container.querySelector(".wf-execution-scope")?.textContent).toContain("Greeter"));
+  await vi.waitFor(() => expect(container.querySelector(".wf-instance-breadcrumb")).toBeTruthy());
+
+  const stepItem = (id: string) => container.querySelector<HTMLElement>(`.wf-sequence-step[data-id='${id}']`)?.closest<HTMLElement>(".wf-sequence-item");
+
+  // Case A: Click Greeter in the execution breadcrumb so active scope stays Sequence > Greeter while on the outer canvas.
+  click([...container.querySelectorAll<HTMLButtonElement>(".wf-execution-scope > button")].find(button => button.textContent?.includes("Greeter")));
+  await vi.waitFor(() => expect(container.querySelector(".wf-sequence-step[data-id='write-1']")).toBeTruthy());
+  await vi.waitFor(() => expect(stepItem("write-1")?.querySelector(".wf-sequence-runtime-strip")?.textContent ?? "").toContain("Completed"));
+  await vi.waitFor(() => expect(stepItem("greeter")?.querySelector(".wf-sequence-runtime-strip")?.textContent ?? "").toContain("Completed"));
+  // Clicking Greeter on the outer canvas while Greeter is the active execution scope still displays Greeter's details.
+  click(container.querySelector<HTMLButtonElement>(".wf-sequence-step[data-id='greeter']"));
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  expect(container.textContent).not.toContain("No execution recorded in this scope.");
+  expect(window.location.search).toContain("exec-greeter");
+  // Clicking sibling Write Line 1 trims Greeter out of the active scope and shows Write Line 1's details.
+  click(container.querySelector<HTMLButtonElement>(".wf-sequence-step[data-id='write-1']"));
+  await vi.waitFor(() => expect(window.location.search).toContain("exec-write-1"));
+  expect(container.querySelector(".wf-execution-scope")?.textContent).not.toContain("Greeter");
+  expect(container.querySelector(".wf-activity-overview")).toBeTruthy();
+  expect(container.textContent).not.toContain("No execution recorded in this scope.");
+
+  // Case B: Re-enter Greeter's nested scope via Child executions, then navigate back to root via ScopeBreadcrumb.
+  click(container.querySelector<HTMLButtonElement>(".wf-sequence-step[data-id='greeter']"));
+  await vi.waitFor(() => expect(container.querySelector(".wf-execution-children button")).toBeTruthy());
+  click(container.querySelector<HTMLButtonElement>(".wf-execution-children button"));
+  await vi.waitFor(() => expect(container.querySelector(".wf-execution-child-group .wf-execution-list button")).toBeTruthy());
+  click(container.querySelector<HTMLButtonElement>(".wf-execution-child-group .wf-execution-list button"));
+  await vi.waitFor(() => expect(container.querySelector(".wf-execution-scope")?.textContent).toContain("Greeter"));
+  await vi.waitFor(() => expect(container.querySelector(".wf-instance-breadcrumb")).toBeTruthy());
+
+  // Navigate back to root via the diagram ScopeBreadcrumb; execution scope trims back to Sequence.
+  click(container.querySelector<HTMLButtonElement>(".wf-instance-breadcrumb button"));
+  await vi.waitFor(() => expect(container.querySelector(".wf-sequence-step[data-id='greeter']")).toBeTruthy());
+  expect(container.querySelector(".wf-execution-scope")?.textContent).not.toContain("Greeter");
+  await vi.waitFor(() => expect(stepItem("greeter")?.querySelector(".wf-sequence-runtime-strip")?.textContent ?? "").toContain("Completed"));
+  click(container.querySelector<HTMLButtonElement>(".wf-sequence-step[data-id='greeter']"));
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  expect(container.textContent).not.toContain("No execution recorded in this scope.");
+  expect(window.location.search).toContain("exec-greeter");
+});
+
+it("defaults to Activities in the docked left panel, opens Activity Overview directly on click, and keeps Playback opt-in", async () => {
+  observedWidth = 1400;
+  const rows = enableRecordedPlayback().rows;
+  renderWorkbench("activity", null, "timeline");
+
+  await vi.waitFor(() => expect(container.querySelectorAll(".wf-run-history-view .wf-activity-timeline-row")).toHaveLength(3));
+  const modeGroup = container.querySelector<HTMLElement>("[aria-label='Timeline view']")!;
+  expect(buttonByText(modeGroup, "Activities")?.getAttribute("aria-pressed")).toBe("true");
+  expect(buttonByText(modeGroup, "Events")?.getAttribute("aria-pressed")).toBe("false");
+  expect(historyApi.getWorkflowHistoryPage).not.toHaveBeenCalled();
+  expect(container.querySelector("[aria-label='Activity playback']")).toBeNull();
+  expect(container.querySelector("[aria-label='History event details']")).toBeNull();
+
+  // Clicking an activity row selects it directly and opens the flattened Activity Overview tab.
+  const activityRow = container.querySelector<HTMLButtonElement>(`[data-activity-execution-id='${rows[1].activityExecutionId}']`)!;
+  click(activityRow);
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  expect(activityRow.getAttribute("aria-pressed")).toBe("true");
+  expect(container.querySelector("[aria-label='History event details']")).toBeNull();
+  expect(container.querySelector("[data-tab-id='overview']")?.getAttribute("aria-selected")).toBe("true");
+  expect(container.querySelector("[aria-label='Activity execution views']")).toBeNull();
+
+  // Opening Playback in Activities mode steps directly to Activity Overview instead of Recorded Event.
+  await openPlayback();
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 2 of 3"));
+  click(buttonByText(container.querySelector(".wf-playback-transport")!, "Next"));
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 3 of 3"));
+  expect(container.querySelector("[aria-label='History event details']")).toBeNull();
+  expect(container.querySelector(".wf-activity-overview")).toBeTruthy();
+
+  // Toggling Playback off hides the bar without losing the selected activity.
+  click(container.querySelector<HTMLButtonElement>("button[aria-label='Hide playback']"));
+  expect(container.querySelector("[aria-label='Activity playback']")).toBeNull();
+  expect(container.querySelector(".wf-activity-overview")).toBeTruthy();
+});
+
+it("pans only offscreen flowchart activities by default, lets users switch focus mode in the controls bar, and keeps direct canvas clicks still", async () => {
+  observedWidth = 1400;
+  window.localStorage.removeItem("elsa-studio-run-detail-inspector-maximized");
+  api.listActivities.mockResolvedValue({ activities: [sequenceActivity, flowchartActivity, writeLine] });
+  const pinned = flowchartExecutable();
+  const nearChild: WorkflowExecutableNode = {
+    executableNodeId: "compiled-near-node",
+    authoredActivityId: "near-node",
+    activityType: writeLine.activityTypeKey,
+    activityTypeVersion: writeLine.version,
+    inputBindings: [],
+    childSlots: []
+  };
+  const farChild: WorkflowExecutableNode = {
+    executableNodeId: "compiled-far-node",
+    authoredActivityId: "far-node",
+    activityType: writeLine.activityTypeKey,
+    activityTypeVersion: writeLine.version,
+    inputBindings: [],
+    childSlots: []
+  };
+  api.getExecutable.mockResolvedValue({
+    ...pinned,
+    rootActivity: {
+      ...pinned.rootActivity,
+      childSlots: [{ name: "Flowchart.Activities", activities: [nearChild, farChild] }]
+    }
+  });
+  const rows: ActivityExecutionStateSummary[] = [
+    {
+      ...activityExecution(),
+      activityExecutionId: "exec-near",
+      executableNodeId: "compiled-near-node",
+      authoredActivityId: "near-node",
+      status: "Completed",
+      incidentCount: 0,
+      incidentIds: [],
+      faultCount: 0,
+      scheduledAt: "2026-10-01T12:00:00Z",
+      startedAt: "2026-10-01T12:00:00Z",
+      completedAt: "2026-10-01T12:00:01Z",
+      executionSequence: 1
+    },
+    {
+      ...activityExecution(),
+      activityExecutionId: "exec-far",
+      executableNodeId: "compiled-far-node",
+      authoredActivityId: "far-node",
+      status: "Completed",
+      incidentCount: 0,
+      incidentIds: [],
+      faultCount: 0,
+      scheduledAt: "2026-10-01T12:00:02Z",
+      startedAt: "2026-10-01T12:00:02Z",
+      completedAt: "2026-10-01T12:00:03Z",
+      executionSequence: 2
+    }
+  ];
+  api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: rows, incidents: [] }));
+  api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
+  api.supportsActivityExecutionInspection.mockResolvedValue(true);
+  api.browseActivityExecutions.mockImplementation(async (_context, _run, request) => {
+    const matches = rows.filter(item => !request.executableNodeId || item.executableNodeId === request.executableNodeId);
+    return {
+      items: matches.map((execution, index) => ({ execution, position: index + 1 })),
+      totalCount: matches.length,
+      previousCursor: null,
+      nextCursor: null
+    };
+  });
+  api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => {
+    const row = rows.find(item => item.activityExecutionId === id) ?? rows[0];
+    return activityInspection({ ...row, outcomeNames: ["Done"], incidents: [], provenance: row.provenance as ActivityExecutionInspection["provenance"] });
+  });
+
+  mockFlowInstance.getViewport.mockReturnValue({ x: 0, y: 0, zoom: 0.85 });
+  mockFlowInstance.getNode.mockImplementation((id: string) => {
+    if (id === "near-node") return { id, position: { x: 120, y: 120 }, measured: { width: 180, height: 60 } };
+    if (id === "far-node") return { id, position: { x: 1600, y: 200 }, measured: { width: 180, height: 60 } };
+    return undefined;
+  });
+
+  renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelector(".wf-mock-react-flow")).toBeTruthy());
+  await vi.waitFor(() => expect(container.querySelectorAll(".wf-run-history-view .wf-activity-timeline-row")).toHaveLength(2));
+
+  const canvasEl = container.querySelector<HTMLElement>(".wf-instance-canvas")!;
+  vi.spyOn(canvasEl, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 800, 600));
+
+  // Selecting an onscreen activity in default "pan" mode keeps the viewport completely still.
+  click(container.querySelector<HTMLButtonElement>("[data-activity-execution-id='exec-near']")!);
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  expect(mockFlowInstance.setCenter).not.toHaveBeenCalled();
+  expect(mockFlowInstance.fitView).not.toHaveBeenCalled();
+
+  // Selecting an offscreen activity pans at the current zoom without calling fitView.
+  click(container.querySelector<HTMLButtonElement>("[data-activity-execution-id='exec-far']")!);
+  await vi.waitFor(() => expect(mockFlowInstance.setCenter).toHaveBeenCalledWith(1690, 230, { zoom: 0.85, duration: 220 }));
+  expect(mockFlowInstance.fitView).not.toHaveBeenCalled();
+
+  // Switch to "Zoom to activity" from the bottom-left controls bar and verify persistence.
+  const trigger = container.querySelector<HTMLButtonElement>(".wf-canvas-focus-mode-trigger")!;
+  expect(trigger).toBeTruthy();
+  vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue(new DOMRect(20, 560, 26, 26));
+  click(trigger);
+  const zoomOption = [...document.body.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']")]
+    .find(item => item.textContent?.includes("Zoom to activity"))!;
+  click(zoomOption);
+  expect(window.localStorage.getItem("elsa-studio-run-canvas-focus-mode")).toBe("zoom");
+
+  mockFlowInstance.setCenter.mockClear();
+  mockFlowInstance.fitView.mockClear();
+
+  // Direct canvas click never moves or zooms the camera, even in "zoom" mode.
+  click(container.querySelector<HTMLButtonElement>(".wf-mock-react-flow button[data-id='far-node']")!);
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  expect(mockFlowInstance.fitView).not.toHaveBeenCalled();
+  expect(mockFlowInstance.setCenter).not.toHaveBeenCalled();
+
+  // Timeline click in "zoom" mode uses fitView with a capped maxZoom.
+  click(container.querySelector<HTMLButtonElement>("[data-activity-execution-id='exec-near']")!);
+  await vi.waitFor(() => expect(mockFlowInstance.fitView).toHaveBeenCalledWith({
+    nodes: [{ id: "near-node" }],
+    duration: 220,
+    padding: 0.35,
+    maxZoom: 1.2
+  }));
+
+  // Switch to "Off" in the controls bar and verify timeline clicks don't move the camera.
+  click(trigger);
+  const offOption = [...document.body.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']")]
+    .find(item => item.textContent?.includes("Off"))!;
+  click(offOption);
+  expect(window.localStorage.getItem("elsa-studio-run-canvas-focus-mode")).toBe("off");
+
+  mockFlowInstance.fitView.mockClear();
+  mockFlowInstance.setCenter.mockClear();
+  click(container.querySelector<HTMLButtonElement>("[data-activity-execution-id='exec-far']")!);
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  expect(mockFlowInstance.fitView).not.toHaveBeenCalled();
+  expect(mockFlowInstance.setCenter).not.toHaveBeenCalled();
+});
+
+it("displays custom activity presentation names on the Sequence diagram, Activities timeline, and inspector", async () => {
+  observedWidth = 1400;
+  window.localStorage.removeItem("elsa-studio-run-detail-inspector-maximized");
+
+  const base = executable();
+  const target = base.rootActivity.childSlots[0]!.activities[0]!.childSlots[0]!.activities[0]!;
+  const sequenceRoot: WorkflowExecutableDetails = {
+    ...base,
+    nodeCount: 2,
+    rootActivity: {
+      ...base.rootActivity,
+      childSlots: [{ name: "Sequence.Activities", activities: [target] }]
+    },
+    chosenReference: {
+      ...base.chosenReference!,
+      activityPresentation: [{ executableNodeId: "compiled-target", displayName: "Crony", description: "Heartbeat trigger" }]
+    }
+  };
+  const cronyExecution: ActivityExecutionStateSummary = {
+    ...activityExecution(),
+    activityExecutionId: "exec-crony",
+    executableNodeId: "compiled-target",
+    authoredActivityId: "target-node",
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  api.getExecutable.mockResolvedValue(sequenceRoot);
+  api.getWorkflowInstance.mockResolvedValue(workflowDetails({
+    activities: [cronyExecution],
+    incidents: []
+  }));
+  api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
+  api.supportsActivityExecutionInspection.mockResolvedValue(true);
+  api.browseActivityExecutions.mockResolvedValue({
+    items: [{
+      execution: cronyExecution,
+      position: 1
+    }],
+    totalCount: 1,
+    previousCursor: null,
+    nextCursor: null
+  });
+  api.getActivityExecutionInspection.mockResolvedValue(activityInspection({
+    activityExecutionId: "exec-crony",
+    executableNodeId: "compiled-target",
+    authoredActivityId: "target-node",
+    status: "Completed",
+    outcomeNames: ["Done"],
+    incidents: []
+  }));
+
+  renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelector(".wf-sequence-step")).toBeTruthy());
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-timeline-row")).toBeTruthy());
+
+  // Sequence diagram card uses the custom name.
+  expect(container.querySelector(".wf-sequence-title")?.textContent).toBe("Crony");
+
+  // Left Activities timeline row uses the custom name.
+  const timelineRow = container.querySelector<HTMLButtonElement>("[data-activity-execution-id='exec-crony']")!;
+  expect(timelineRow.textContent).toContain("Crony");
+
+  // Selecting the timeline row shows the custom name in the inspector.
+  click(timelineRow);
+  await vi.waitFor(() => expect(container.querySelector(".wf-instance-inspector")?.textContent).toContain("Crony"));
+});
+
+it("does not flash scope loading text or singleton occurrence controls in the scope strip when selecting timeline rows", async () => {
+  observedWidth = 1400;
+  window.localStorage.removeItem("elsa-studio-run-detail-inspector-maximized");
+
+  const pinned = executable();
+  const nested = pinned.rootActivity.childSlots[0]!.activities[0]!;
+  nested.childSlots[0]!.activities.push({
+    ...nested.childSlots[0]!.activities[0]!,
+    executableNodeId: "compiled-second",
+    authoredActivityId: "second-node"
+  });
+  api.getExecutable.mockResolvedValue(pinned);
+  api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
+  api.supportsActivityExecutionInspection.mockResolvedValue(true);
+
+  const rootExec = {
+    ...activityExecution(),
+    activityExecutionId: "exec-root",
+    executableNodeId: "compiled-root-sequence",
+    authoredActivityId: "root-sequence",
+    parentActivityExecutionId: null,
+    executionSequence: 1,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  const nestedExec = {
+    ...activityExecution(),
+    activityExecutionId: "exec-nested",
+    executableNodeId: "compiled-nested-sequence",
+    authoredActivityId: "nested-sequence",
+    parentActivityExecutionId: "exec-root",
+    executionSequence: 2,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  const firstLeaf = {
+    ...activityExecution(),
+    activityExecutionId: "exec-first",
+    executableNodeId: "compiled-target",
+    authoredActivityId: "target-node",
+    parentActivityExecutionId: "exec-nested",
+    executionSequence: 3,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  const secondLeaf = {
+    ...activityExecution(),
+    activityExecutionId: "exec-second",
+    executableNodeId: "compiled-second",
+    authoredActivityId: "second-node",
+    parentActivityExecutionId: "exec-nested",
+    executionSequence: 4,
+    status: "Completed",
+    incidentCount: 0,
+    incidentIds: [],
+    faultCount: 0
+  };
+  const allExecutions = [rootExec, nestedExec, firstLeaf, secondLeaf];
+  api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: allExecutions, incidents: [] }));
+
+  const pendingScopeBrowse = deferred<ActivityExecutionBrowsePage>();
+  api.browseActivityExecutions.mockImplementation(async (_context, _run, request) => {
+    if (request.executableNodeId === "compiled-nested-sequence" && request.anchorActivityExecutionId === "exec-nested") {
+      return pendingScopeBrowse.promise;
+    }
+    const matches = allExecutions.filter(item =>
+      (!request.executableNodeId || item.executableNodeId === request.executableNodeId)
+      && (!request.parentActivityExecutionId || item.parentActivityExecutionId === request.parentActivityExecutionId)
+      && (!request.ancestorActivityExecutionId || item.parentActivityExecutionId === request.ancestorActivityExecutionId)
+      && (!request.anchorActivityExecutionId || item.activityExecutionId === request.anchorActivityExecutionId));
+    return { items: matches.map((execution, index) => ({ execution, position: index + 1 })), totalCount: matches.length, previousCursor: null, nextCursor: null };
+  });
+  api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => {
+    const found = allExecutions.find(item => item.activityExecutionId === id) ?? firstLeaf;
+    return activityInspection({
+      ...found,
+      outcomeNames: ["Done"],
+      incidents: [],
+      provenance: { parentActivityExecutionId: found.parentActivityExecutionId ?? null } as ActivityExecutionInspection["provenance"]
+    });
+  });
+
+  renderWorkbench("activity", null, "timeline");
+  await vi.waitFor(() => expect(container.querySelector("[data-activity-execution-id='exec-first']")).toBeTruthy());
+
+  // Selecting the first leaf sets the execution scope synchronously without flashing scope loading or occurrence picker chrome.
+  click(container.querySelector<HTMLButtonElement>("[data-activity-execution-id='exec-first']")!);
+  await vi.waitFor(() => expect(container.querySelector(".wf-execution-scope")).toBeTruthy());
+  const scopeStrip = container.querySelector(".wf-instance-scope-strip")!;
+  expect(scopeStrip.textContent).not.toContain("Resolving execution scope");
+  expect(scopeStrip.textContent).not.toContain("Loading recorded executions");
+  expect(scopeStrip.querySelector(".wf-execution-choice")).toBeNull();
+
+  // Resolve the singleton scope browse: still no occurrence picker.
+  pendingScopeBrowse.resolve({
+    items: [{ execution: nestedExec, position: 1, previousActivityExecutionId: null, nextActivityExecutionId: null }],
+    totalCount: 1,
+    previousCursor: null,
+    nextCursor: null
+  });
+  await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
+  expect(scopeStrip.querySelector(".wf-execution-choice")).toBeNull();
+
+  // Switching to a sibling timeline row keeps the scope steady with zero scope-loading flash and no ancestor inspection calls.
+  api.getActivityExecutionInspection.mockClear();
+  click(container.querySelector<HTMLButtonElement>("[data-activity-execution-id='exec-second']")!);
+  expect(scopeStrip.textContent).not.toContain("Resolving execution scope");
+  expect(scopeStrip.textContent).not.toContain("Loading recorded executions");
+  expect(scopeStrip.querySelector(".wf-execution-choice")).toBeNull();
+  await vi.waitFor(() => expect(window.location.search).toContain("exec-second"));
+  expect(api.getActivityExecutionInspection).not.toHaveBeenCalledWith(expect.anything(), "run-1", "exec-nested", expect.anything());
+  expect(api.getActivityExecutionInspection).not.toHaveBeenCalledWith(expect.anything(), "run-1", "exec-root", expect.anything());
 });

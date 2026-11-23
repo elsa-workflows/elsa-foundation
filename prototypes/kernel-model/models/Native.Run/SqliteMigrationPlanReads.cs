@@ -80,7 +80,7 @@ internal sealed class SqliteMigrationPlanReads(string file, FoundationReadCursor
         long? cursorId = from is { } token ? Unseal(context, token) : null;
         var page = await new SqlitePlanProjection(file, scope, plan).ReadOperatorPageAsync(cursorId, pageSize, cancellationToken);
         PageToken? next = page.CursorId is { } last ? Seal(context, last) : null;
-        return new(page.Closed, new(page.Rows.Select(row => new MigrationPlanResult(row.Actor, row.Result)).ToArray(), next, page.AsOf));
+        return new(page.Closed, new(page.Rows.Select(row => new MigrationPlanOutcomeRow(row.Actor, row.Result)).ToArray(), next, page.AsOf));
     }
 
     private PageToken Seal(ReadOnlySpan<byte> context, long row)
