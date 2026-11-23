@@ -17,6 +17,7 @@ sealed class Wire
     private long _protocolRequests;
     private long _flushes, _executes, _limitedExecutes, _namedExecutes;
     private bool _postgres;
+    private string? _referenceEngine;
 
     private Wire(string host, int port) => (_host, _port) = (host, port);
 
@@ -40,11 +41,12 @@ sealed class Wire
 
     public int LocalPort => ((System.Net.IPEndPoint)_listener.LocalEndpoint).Port;
 
-    public static Wire Start(string engine, string connection)
+    public static Wire Start(string engine, string connection, bool referenceCost = false)
     {
         var match = Endpoint(engine, connection);
         var wire=Start(match.Groups[1].Value, int.Parse(match.Groups[2].Value));
-        wire._postgres=engine=="postgres";
+        wire._postgres = engine == "postgres" && !referenceCost;
+        if (referenceCost) wire._referenceEngine = engine;
         return wire;
     }
 
@@ -78,8 +80,13 @@ sealed class Wire
 
     public string Rewrite(string connection)
     {
-        var port = ((System.Net.IPEndPoint)_listener.LocalEndpoint).Port;
-        return System.Text.RegularExpressions.Regex.Replace(connection, @"(Server=[^,;]+,)\d+|(Port=)\d+", m => (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value) + port, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return _referenceEngine switch
+        {
+            "postgres" => new NpgsqlConnectionStringBuilder(connection) { Host = "127.0.0.1", Port = LocalPort }.ConnectionString,
+            "mysql" => new MySqlConnectionStringBuilder(connection) { Server = "127.0.0.1", Port = (uint)LocalPort }.ConnectionString,
+            "sqlserver" => new SqlConnectionStringBuilder(connection) { DataSource = $"127.0.0.1,{LocalPort}" }.ConnectionString,
+            _ => System.Text.RegularExpressions.Regex.Replace(connection, @"(Server=[^,;]+,)\d+|(Port=)\d+", m => (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value) + LocalPort, System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+        };
     }
 
     private async Task AcceptAsync()

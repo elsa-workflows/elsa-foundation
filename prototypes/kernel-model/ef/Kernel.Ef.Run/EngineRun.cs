@@ -73,7 +73,7 @@ static class EngineRun
             Console.Error.WriteLine("Watchdog resets its database. Run it on a disposable database server and pass disposable=1.");
             return 2;
         }
-        var target = new Target(args[1], args[2], options);
+        var target = new Target(args[1], args[2], options, referenceCost);
         return args[0] switch
         {
             "stress" => await Stress(target),
@@ -441,7 +441,7 @@ static class EngineRun
             var sent = counter.Commands + counter.Transactions.Ended + target.BeginTrips * counter.Transactions.Begun + target.OpenTrips * opens.Count + target.SaveTrips * (saves.Set + saves.Released);
             long? tcp = target.Proxy is { } proxy ? proxy.Trips - trips : null;
             Console.WriteLine($"{name,-58} {counter.Commands,8} {counter.Transactions.Begun,6} {counter.Transactions.Ended,6} {opens.Count,6} {saves.Set + saves.Released,6} {counted,8} {sent,6} {(wire < 0 ? "" : wire.ToString()),8} {tcp,6}");
-            if(target.Engine=="postgres" && target.Proxy is {} pg)Console.WriteLine($"    PostgreSQL frames (groups include pipelined BEGIN, not RTT): groups={pg.ProtocolRequests-groups}, Flush={pg.Flushes-pgBefore.Item1}, Execute={pg.Executes-pgBefore.Item2}, nonzero-limit={pg.LimitedExecutes-pgBefore.Item3}, named-portal={pg.NamedExecutes-pgBefore.Item4}");
+            if(sizes is not null && target.Engine=="postgres" && target.Proxy is {} pg)Console.WriteLine($"    PostgreSQL frames (groups include pipelined BEGIN, not RTT): groups={pg.ProtocolRequests-groups}, Flush={pg.Flushes-pgBefore.Item1}, Execute={pg.Executes-pgBefore.Item2}, nonzero-limit={pg.LimitedExecutes-pgBefore.Item3}, named-portal={pg.NamedExecutes-pgBefore.Item4}");
             if (locks.Largest != "") Console.WriteLine("    locks held at the largest commit: " + locks.Largest);
             if (walLine is not null) Console.WriteLine(walLine);
             if (setupLine is not null) Console.WriteLine(setupLine);
@@ -795,7 +795,7 @@ static class EngineRun
 }
 
 /// <summary>One engine in one configuration: connections, session settings, how to kill a session, what its errors are called.</summary>
-sealed class Target(string engine, string connection, Dictionary<string, string> options)
+sealed class Target(string engine, string connection, Dictionary<string, string> options, bool referenceCost = false)
 {
     public string Engine => engine;
     public string Get(string key, string fallback) => options.GetValueOrDefault(key, fallback);
@@ -818,7 +818,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     public string Quote(string sql) => engine == "mysql" ? sql.Replace('"', '`') : sql;
 
     /// <summary>With proxy=1 the workers connect through <see cref="Wire"/>, which counts round trips on the TCP stream.</summary>
-    public Wire? Proxy { get; } = options.ContainsKey("proxy") && engine != "sqlite" ? Wire.Start(engine, connection) : null;
+    public Wire? Proxy { get; } = options.ContainsKey("proxy") && engine != "sqlite" ? Wire.Start(engine, connection, referenceCost) : null;
 
     /// <summary>With writes=1 on PostgreSQL: the WAL and bloat measurement of WRITES.md.</summary>
     public PgWrites? Writes { get; } = engine == "postgres" && options.ContainsKey("writes") ? new PgWrites(connection) : null;
