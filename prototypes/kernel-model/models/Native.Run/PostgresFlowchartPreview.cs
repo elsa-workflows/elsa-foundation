@@ -15,6 +15,8 @@ internal static class PostgresFlowchartPreview
         long previousEpoch = 0, bool mergeEarly = false, bool durable = false, bool reachWait = false, long? waitingRevision = null)
     {
         var birth = reference is null;
+        if (durable && !birth && !reachWait && waitingRevision is not > 0)
+            throw new ArgumentOutOfRangeException(nameof(waitingRevision), "Durable restart requires a positive waiting revision.");
         var manual = route == "manual";
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var stop = deadline.Token;
@@ -90,7 +92,7 @@ internal static class PostgresFlowchartPreview
         }
 
         var before = await DriveAsync(manual ? 2 : 1);
-        Check(before.Status == InstanceStatus.Running && (durable ? waitingRevision is null || before.Revision == waitingRevision : before.Revision == (manual ? 2 : 1)), "The cold owner must resume the exact waiting revision.");
+        Check(before.Status == InstanceStatus.Running && (durable ? before.Revision == waitingRevision : before.Revision == (manual ? 2 : 1)), "The cold owner must resume the exact waiting revision.");
         var finance = Frame(State(before), "finance");
         if (manual)
         {
