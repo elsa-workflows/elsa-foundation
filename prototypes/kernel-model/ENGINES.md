@@ -125,7 +125,9 @@ units. It refuses an encoded row above the storage budget before its transaction
 
 The first generated-root Running checkpoint now consumes the exact creator, stores revision 1
 in `Instances` and appends its journal in the existing fenced PostgreSQL commit. That transaction
-checks the tenant, reference, partition, creator and start fingerprint before commit. Its qualified
+checks the tenant, reference and partition, then locks the pending creator and compares its
+stored input, start specification and deadline exactly. The database clock must have reached the
+creator's due time. The birth fingerprint remains compatible with earlier admissions. Its qualified
 point read returns the creation, nullable state, model version, type data and labels. Ordinary
 readers refuse the qualified state format. The preview protects this first checkpoint from legacy
 updates and deletes. Run `postgres "<server connection>" root-checkpoint` with either commit and

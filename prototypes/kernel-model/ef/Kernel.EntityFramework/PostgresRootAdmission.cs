@@ -137,7 +137,11 @@ internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan dedu
             ON b."Creator" = m."Id" AND m."InboxScope" = 0 AND b."Actor" = m."Target"
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND NOT m."Done"
             """).AsNoTracking().SingleOrDefaultAsync(cancellationToken);
-        if (row is null) return null;
+        return row is null ? null : DecodeCreator(row);
+    }
+
+    internal static Message DecodeCreator(MessageEntity row)
+    {
         if (!IsStoredCreator(row.Start) || row.Kind != Kinds.Start || row.Id != "root:" + row.Target || row.Sender is not null)
             throw new StoreException(Failure.Definite, "Invalid PostgreSQL generated root creator.");
         var stored = DurableKeyJson.Read<StoredRoot>(row.Start![CreatorPrefix.Length..]);

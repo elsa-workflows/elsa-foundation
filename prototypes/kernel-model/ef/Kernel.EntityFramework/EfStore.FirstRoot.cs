@@ -18,6 +18,27 @@ public sealed partial class EfStore
     {
         internal async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
+            // The existing commit already holds its partition fence. Claim one ready creator in that
+            // transaction and compare its persisted envelope exactly. Earlier birth fingerprints
+            // used the JSON serializer's replacement for isolated UTF-16 units.
+            var candidates = await db.Messages.FromSqlInterpolated($"""
+                SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b
+                    ON b."Creator" = m."Id" AND b."Actor" = m."Target" AND b."Partition" = m."Partition"
+                WHERE b."Reference" = {Reference} AND b."Tenant" = {Tenant} AND b."Creation" = 1
+                    AND m."Id" = {Creator.InboxKey.Id} AND m."InboxScope" = 0 AND NOT m."Done"
+                    AND m."Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint FOR UPDATE OF m
+                """).AsNoTracking().ToListAsync(cancellationToken);
+            if (candidates.Count != 1) return false;
+            var admitted = PostgresRootAdmission.DecodeCreator(candidates[0]);
+            if (admitted.Id != Creator.Id || admitted.Target != Creator.Target || admitted.InboxKey != Creator.InboxKey ||
+                admitted.Start != Creator.Start || admitted.Payload != Creator.Payload || admitted.Due != Creator.Due ||
+                admitted.KeepUntil != Creator.KeepUntil || admitted.ReplyTo != Creator.ReplyTo ||
+                admitted.SenderCreation != Creator.SenderCreation) return false;
+            var consumed = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                DELETE FROM "Messages" WHERE "Id" = {Creator.InboxKey.Id} AND "InboxScope" = 0 AND NOT "Done"
+                """, cancellationToken);
+            if (consumed != 1) return false;
+
             var fingerprint = CreationProtocol.Fingerprint(Creator.Start, Creator.Kind, Creator.Payload);
             var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" i SET "FoundationReference" = b."Reference", "FoundationTenant" = b."Tenant",
@@ -75,7 +96,8 @@ public sealed partial class EfStore
         // Model and definition are in the qualified header, including values that PostgreSQL text cannot carry.
         var row = new InstanceRow(creator.Target.Id, "", "", InstanceStatus.Running, "null", 1, null,
             History: start.History, StateVersion: stateVersion).WithFoundationState(storedState);
-        var turn = new TurnCommit(row.Id, row, null, [creator.InboxKey], [], [], [], [], journal);
+        // BindCheckpointAsync consumes the exact, due creator before this same transaction lands.
+        var turn = new TurnCommit(row.Id, row, null, [], [], [], [], [], journal);
         var batch = new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [turn], [], []);
         return CommitAsync(batch, new(tenant, reference, creator, header), cancellationToken);
     }
