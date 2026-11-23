@@ -46,6 +46,10 @@ public sealed class JavaScriptScriptEvaluationRequest
     /// <see langword="null"/> when the step has no variable session, and the script then has no <c>variables</c> root.
     /// </summary>
     public IScriptVariableSession? Variables { get; init; }
+
+    /// <summary>The bounded workflow-state capability; never supplied to an input expression evaluator.</summary>
+    public IScriptWorkflowState? WorkflowState { get; init; }
+
 }
 
 /// <summary>
@@ -66,6 +70,10 @@ public interface IScriptVariableSession : Elsa.Expressions.Core.Contracts.IExpre
     /// value-free form (spec 1229 FR-006).
     /// </summary>
     bool HasReadProtectedValue { get; }
+
+    /// <summary>Observes protection when the engine returns a value held after assignment.</summary>
+    /// <remarks>The compatible default uses an ordinary session read; hosts may keep protection separate from read bases.</remarks>
+    void ObservePendingRead(string name) { _ = Read(name); }
 
     /// <summary>
     /// Whether the variable is read-only to the script (a loop's item or index): the engine freezes it, so a change throws

@@ -199,3 +199,10 @@ with portable expression evaluation.
 - Base expression descriptor registration: [`Elsa.Expressions/EXTENSION_POINTS.md`](../../Elsa.Expressions/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Value-flow contract: [`../../../../specs/095-value-flow-redesign/contracts/expression-and-import-contract.md`](../../../../../specs/095-value-flow-redesign/contracts/expression-and-import-contract.md).
+
+### Script workflow state (spec 1234)
+
+- **Kind:** body-only capability contract `IScriptWorkflowState` in Expressions.JavaScript.Core, supplied as the optional `JavaScriptScriptEvaluationRequest.WorkflowState` member.
+- **Usage:** the Jint evaluator installs a fixed, non-extensible `workflowState` host object. Getters return JSON copies/string/null; setters return undefined. Ordinary input evaluators never receive it, and arguments cannot grant it.
+- **Refusals:** adapters latch host refusals and recheck after evaluation and serialization. Output writes use the existing value bridge/precision policy. `requireExactIdentity` is the generic runtime `VF-STATE-005` guard; migration names and literal diagnostics stay in Elsa3.Mapping.
+- **Authoring:** the language parser reports independent `ScriptWorkflowStateEffects`; consumers pin known targets or conservative computed/opaque access separately from variable writes.

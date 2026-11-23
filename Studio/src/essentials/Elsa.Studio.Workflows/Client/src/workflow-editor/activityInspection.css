@@ -150,7 +150,7 @@
   gap: var(--studio-space-2);
   border-bottom: 1px solid var(--studio-border);
   background: var(--studio-surface-muted);
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   padding: var(--studio-space-3);
 }
 
@@ -225,7 +225,14 @@
 }
 
 .wf-activity-overview-status {
-  justify-content: flex-end;
+  grid-column: 2;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.wf-activity-overview-status .wf-status-badge {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .wf-activity-summary-grid,

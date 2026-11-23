@@ -249,3 +249,9 @@ Requested cancellation and access drift still escape; no further work runs under
 ## Native compensation and child-control history
 
 `ActivityHistory` materializes native structural owner facts at the admitted continuation's actual return boundary. V5 compensation inputs stay before coalescing; v3/v4 retain their previous source envelope. `StructuralChildControlContribution` adds safe acceptance/application facts only when the final returned consumer decision commits the exact inbox/cursor contribution, including returned Fault and Cancel. Buffered acceptance creates no application; replayed acceptance creates no second receipt; a throw/disposal fault without committed inbox state creates neither fact. These use Core checkpoint/source contracts and do not add an execution or persistence boundary. See Runtime's [native owner contract](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#native-child-compensation-control-and-boundary-retry-history-3849).
+### Workflow state in inline step bodies (spec 1234)
+
+- **Kind:** author capability, `IStepWorkflowState` in Activities.Runtime.Core; native types declare `[AccessesWorkflowState]`.
+- **Usage:** `ActivityExecutionContext.WorkflowState` stages JSON output and string/null identity assignments for one inline leaf invoke/resume. Typed start/resume contexts carry the same evaluation capability. Script consumers pass the narrow Expressions.JavaScript.Core adapter.
+- **Lifetime:** fresh per evaluation, sealed before disposal, accepted only with the existing successful completion/suspension checkpoint. Placement and caught refusals are enforced at runtime. No setter persists; no bookmark key is rebound.
+- **Protection:** reads contribute to the existing result/diagnostic protection. Destination policy/storage remain minima; unavailable encoders refuse the whole evaluation.

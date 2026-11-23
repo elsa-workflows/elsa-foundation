@@ -6,6 +6,24 @@ import type { ExecutableActivityGraph } from "../executableGraph";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary } from "../workflowTypes";
 
 describe("WorkflowExecutionTimeline", () => {
+  it("keeps accepted suspension attribution separate from a later failed evaluation", () => {
+    const activity = {
+      activityExecutionId: "body", workflowExecutionId: "run", executableNodeId: "node", authoredActivityId: "node",
+      activityType: "State writer", activityTypeVersion: "1", status: "Faulted", metadata: {},
+      workflowStateEffects: ["outputs", "correlationId"],
+      workflowStateEffectReceipts: [
+        { attemptId: "accepted-attempt", acceptedAt: "2026-11-22T12:00:00Z", transition: "Suspension", kinds: ["outputs"] },
+        { attemptId: "resume-attempt", acceptedAt: "2026-11-22T12:01:00Z", transition: "Completion", kinds: ["correlationId"] }
+      ]
+    } as ActivityExecutionStateSummary;
+    const markup = renderToStaticMarkup(<WorkflowExecutionTimeline activities={[activity]} activityCatalog={[]} />);
+    expect(markup).toContain("Faulted");
+    expect(markup).toContain("Suspension accepted");
+    expect(markup).toContain("Completion accepted");
+    expect(markup).toContain("workflow outputs");
+    expect(markup).toContain("correlation");
+  });
+
   it("uses frozen source-reference presentation instead of current catalog wording", () => {
     const activity = {
       activityExecutionId: "activity-execution-1",

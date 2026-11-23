@@ -88,6 +88,7 @@ CAPTURES = {
     'variable lifecycle warnings and refusals': ['reference', 'lost-update-warning', 'fault-refusal', 'run-lost-update-badge', 'write-history-lost-updates', 'commit-journal', 'compare-refused', 'diagnostics-variable-writes'],
     'variable rename updates script reads and lists the rest': ['reference', 'rename-notice', 'flagged-reference', 'validation-collapsed', 'validation-expanded', 'validation-input-focused'],
     'script variable may-write analysis survives editing and reopening': ['reference', 'literal-writes', 'computed-writes', 'reopened-computed', 'no-writes', 'nearest-scope'],
+    'workflow state native and imported authoring and inspection': ['reference', 'native-effects', 'known-effects', 'computed-effects', 'empty-effects', 'native-completed', 'current-state', 'current-outputs', 'accepted-timeline', 'cleared-state', 'imported-effects', 'imported-completed', 'faulted', 'cancelled', 'protected'],
 }
 NATIVE_RESULT_CAPTURES = ('provenance', 'coverage-periods', 'series-1', 'series-2', 'series-3', 'exact-values', 'exact-values-end')
 CAPTURES['native dashboard questions and sharing'] += (
@@ -1107,6 +1108,9 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             report['fixture'] = {str(file.relative_to(ROOT)): hashlib.sha256(file.read_bytes()).hexdigest()
                                  for file in (fixture, fixture.with_name('CustomerFixture.cs'))}
             fixture_built = True
+        step_state = 'workflow state native and imported authoring and inspection' in selected
+        if step_state:
+            backend_command.append('-p:ElsaStepStateAcceptanceProbe=true')
         command(backend_command, output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=studio_root / 'Studio')
         workflow_module = studio_root / 'Studio/src/essentials/Elsa.Studio.Workflows'
@@ -1156,6 +1160,12 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                     if coverage_profiles or 'timeline durable diagnostics and process restart' in selected:
                         # Only this disposable combined host changes; a genuine material READ must reach EF.
                         backend_shells['CShells']['Shells']['default']['Features']['WorkflowsRuntimeEntityFrameworkCore']['CacheWorkflowExecutables'] = False
+                    if step_state:
+                        features = backend_shells['CShells']['Shells']['default']['Features']
+                        for name in ['ActivitiesDesignEntityFrameworkCore', 'WorkflowsDesignEntityFrameworkCore', 'Elsa3ImportActivitiesEntityFrameworkCore']:
+                            features[name] = {'ConnectionString': 'Data Source=step-state-design.db'}
+                        for name in ['Elsa3Mapping', 'Elsa3ImportJsonActivities', 'Elsa3ImportActivitiesPublishing']:
+                            features[name] = {}
                     studio_shells = json.loads((item['studio'] / 'shells.json').read_text(encoding='utf-8-sig'))
                     configure_activity_data(backend_shells, studio_shells, composition, selected)
                     (item['backend'] / 'shells.json').write_text(json.dumps(backend_shells))

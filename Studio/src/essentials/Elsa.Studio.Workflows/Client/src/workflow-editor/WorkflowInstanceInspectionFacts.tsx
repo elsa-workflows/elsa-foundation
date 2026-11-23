@@ -73,3 +73,15 @@ export function WorkflowInstanceInspectionNote({
     </p>
   );
 }
+
+/** Identity is the current committed projection; denied values remain visibly unavailable. */
+export function WorkflowInstanceIdentityFacts({ instance, canInspectValues }: {
+  instance: WorkflowInstanceDetails["instance"];
+  canInspectValues?: boolean;
+}) {
+  const label = (value: string | null | undefined) => canInspectValues === false ? "Hidden by access policy" : value || "None";
+  return <>
+    <dt>Instance name</dt><dd>{label(instance.instanceName)}</dd>
+    <dt>Correlation</dt><dd>{label(instance.correlationId)}</dd>
+  </>;
+}

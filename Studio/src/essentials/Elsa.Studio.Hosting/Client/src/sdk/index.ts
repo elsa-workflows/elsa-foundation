@@ -706,6 +706,9 @@ export interface StudioActivityDescriptor {
   accessesUndeclaredVariables?: boolean;
   /** Explicit C# free-name access cannot be narrowed by analysis of an activity's script input. */
   declaresAccessesUndeclaredVariables?: boolean;
+  /** Independent native workflow-state capability, refined by a script body when present. */
+  accessesWorkflowState?: boolean;
+  declaresAccessesWorkflowState?: boolean;
 }
 
 export type StudioExpressionEditingMode = "literal" | "text" | "structured" | "reference";

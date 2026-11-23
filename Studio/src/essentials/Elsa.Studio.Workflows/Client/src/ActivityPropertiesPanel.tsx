@@ -91,7 +91,7 @@ import {
 import { ActivityDataBindingChangeProvider, ActivityDataSelectionProvider, ChooseDataButton, focusBeside, useActivityDataSelectionAvailable } from "./ActivityDataChooser";
 import { activityDataMemberDescriptors } from "./activityDataPickerModel";
 import { ActivityOutputIcon } from "./activityOutputIcon";
-import { isVariableReferenceInput, VariableReferenceInputRow, VariableWritesSummary } from "./variableReferenceInput";
+import { isVariableReferenceInput, VariableReferenceInputRow, VariableWritesSummary, WorkflowStateEffectsSummary } from "./variableReferenceInput";
 // Imported directly. As a lazy component it was missing from the row's first commits on a fresh page, so a reopened
 // expression showed no bindings (#4743). The module is already in this graph through ExpressionEditorWithDataInsertion.
 import { readWorkflowInputExpressionArguments, readWorkflowRequestMemberKey, WorkflowInputArgumentBindings, WorkflowInputArgumentBindingsToggle } from "./workflowInputArgumentBindings";
@@ -247,6 +247,7 @@ export function ActivityPropertiesPanel({
     return (
       <>
         <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} scopeReady={scopeStatus === "ready"} workflowState={workflowState} scriptWrites={scriptWrites} />
+      <WorkflowStateEffectsSummary descriptor={descriptor} scriptWrites={scriptWrites} />
         <p className="wf-muted">{emptyLabel}</p>
       </>
     );
@@ -459,6 +460,7 @@ export function ActivityPropertiesPanel({
         onRetry={onRetryDescriptors}
       />
       <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} scopeReady={scopeStatus === "ready"} workflowState={workflowState} scriptWrites={scriptWrites} />
+      <WorkflowStateEffectsSummary descriptor={descriptor} scriptWrites={scriptWrites} />
       {renderGroups(directGroups)}
       {optionalGroups.length > 0 ? (
         <AdvancedSection

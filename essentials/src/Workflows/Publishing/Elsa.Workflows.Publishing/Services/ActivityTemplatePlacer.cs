@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Reflection;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -342,7 +343,7 @@ public sealed class ActivityTemplatePlacer(
                     dependency.ChildSlotName,
                     dependency.ChildIndex,
                     dependency.OccurrenceOverlay,
-                    IsClosedScope(frame.Template.Root.Descriptor)));
+                    frame.InClosedScope || IsClosedScope(frame.Template.Root.Descriptor)));
                 continue;
             }
 
@@ -475,6 +476,15 @@ public sealed class ActivityTemplatePlacer(
                     frame.Publication.Version,
                     frame.OccurrenceOverlay?.InputContracts, frame.OccurrenceOverlay?.Structure)
                 : current.Node.ActivityContract;
+            PinOccurrenceWorkflowState(current.Node, inputBindings, metadata);
+            var placedStructure = isBoundary && frame.OccurrenceOverlay is not null
+                ? frame.OccurrenceOverlay.Structure
+                : current.Node.Structure;
+            if ((frame.InClosedScope || closedScopeId is not null || placedStructure is not null || childSlots.Any(slot => slot.Activities.Count > 0)) &&
+                activityContract?.AccessesWorkflowState == true &&
+                (!metadata.TryGetValue("accessesWorkflowState", out var access) || access != "false"))
+                throw Rejected(current.Node.AuthoredActivityId, "VF-STATE-002",
+                    "Workflow outputs and identity require an inline leaf outside a closed reusable graph. Known read-only scripts remain supported.");
             var placed = new ExecutableNode(
                 nodeIds[current.Node.ExecutableNodeId],
                 isBoundary && stackIsRoot(frame) ? rootRequest.InvocationOrigin.Segments.LastOrDefault(x => x.Kind == ActivityInvocationOriginSegmentKind.AuthoredNode)?.Id ?? current.Node.AuthoredActivityId : current.Node.AuthoredActivityId,
@@ -486,9 +496,7 @@ public sealed class ActivityTemplatePlacer(
                 metadata,
                 current.Node.ExecutionPlacement,
                 childSlots,
-                isBoundary && frame.OccurrenceOverlay is not null
-                    ? frame.OccurrenceOverlay.Structure
-                    : current.Node.Structure,
+                placedStructure,
                 activityContract,
                 current.Node.IntrinsicKind,
                 current.Node.IntrinsicVariable);
@@ -642,6 +650,28 @@ public sealed class ActivityTemplatePlacer(
             .ToArray();
     }
 
+    private void PinOccurrenceWorkflowState(ExecutableNode source, IReadOnlyDictionary<string, RuntimeInputBinding> inputs,
+        Dictionary<string, string> metadata)
+    {
+        var type = typeRegistry is null ? null : BackgroundEligibilitySubject.ForPinnedNode(source, typeRegistry).ActivityType;
+        if (type is not null && Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.IsAccessedBy(type) &&
+            source.ActivityContract?.AccessesWorkflowState != true)
+            throw Rejected(source.AuthoredActivityId, "VF-STATE-002", "The activity's workflow-state capability must be independently pinned.");
+        if (source.ActivityContract?.AccessesWorkflowState != true)
+            return;
+        var effects = new ScriptWorkflowStateEffects { AccessesState = true, Conservative = true };
+        if (type is not null &&
+                 type.GetCustomAttribute<Elsa.Activities.Runtime.Core.Attributes.ActivityScriptOutcomesAttribute>(inherit: true)?.ScriptInputKey is { } key &&
+                 inputs.TryGetValue(key, out var binding) && binding.LiteralValue is { ValueKind: JsonValueKind.String } script)
+            effects = scriptVariableReadResolver?.Analyze("JavaScript", script.GetString()!, scriptBody: true)?.WorkflowState ?? effects;
+        if (type is not null && Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.IsDeclaredBy(type))
+            effects = effects with { AccessesState = true, Conservative = true };
+        if (effects.HasInvalidLiteralCall)
+            throw Rejected(source.AuthoredActivityId, "VF-STATE-001", "A workflow-state call has invalid literal arguments or an undefined payload.");
+        metadata["accessesWorkflowState"] = effects.AccessesState ? "true" : "false";
+        metadata["workflowStateEffects"] = JsonSerializer.Serialize(effects, OccurrenceSerializerOptions);
+    }
+
     private void EnsureTemplateNodeBackgroundEligible(ExecutableNode node)
     {
         var subject = typeRegistry is null
@@ -754,7 +784,7 @@ public sealed class ActivityTemplatePlacer(
             contract.SideEffectProfile,
             // Spec 1230: keep the type's background declaration, or a background leaf placed as an occurrence root
             // would be pinned as not background-safe and refused at admission.
-            contract.SupportsBackgroundExecution);
+            contract.SupportsBackgroundExecution, contract.AccessesUndeclaredVariables, contract.AccessesWorkflowState);
     }
 
     private static ExecutableNode CloneWithChildSlots(
@@ -813,9 +843,15 @@ public sealed class ActivityTemplatePlacer(
         var marked = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         foreach (var (key, binding) in bindings)
         {
-            if (binding.Expression is not { VariableReadFallback: null } expression ||
-                !scriptVariableReadResolver.Supports(expression.Language) ||
-                scriptVariableReadResolver.Analyze(expression.Language, expression.Expression) is not { ReadsVariables: true })
+            if (binding.Expression is not { } expression || !scriptVariableReadResolver.Supports(expression.Language) ||
+                scriptVariableReadResolver.Analyze(expression.Language, expression.Expression) is not { } analysis)
+            {
+                marked[key] = binding;
+                continue;
+            }
+            if (analysis.WorkflowState.AccessesState)
+                throw Rejected(binding.InputName, "VF-STATE-002", "Input expressions cannot access body workflow state. Use an inline leaf body.");
+            if (!analysis.ReadsVariables || expression.VariableReadFallback is not null)
             {
                 marked[key] = binding;
                 continue;

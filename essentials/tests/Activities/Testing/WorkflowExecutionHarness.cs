@@ -883,7 +883,9 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             // Mirror ExecutableNodeCompiler.ResolveSideEffectProfile: unmarked ⇒ External.
             sideEffectProfile: activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
                 ?? SideEffectProfile.External,
-            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
+            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true),
+            accessesUndeclaredVariables: VariableReferenceTypes.AccessesUndeclaredVariables(activityType),
+            accessesWorkflowState: AccessesWorkflowStateAttribute.IsAccessedBy(activityType));
     }
 
     private static (string Kind, JsonElement Payload) NewClrDescriptor(Type activityType)

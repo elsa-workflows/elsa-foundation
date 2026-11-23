@@ -2508,7 +2508,7 @@
 .wf-timeline-entry {
   display: grid;
   width: 100%;
-  align-items: center;
+  align-items: start;
   gap: 10px;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   border: 1px solid transparent;
@@ -2573,6 +2573,16 @@
   align-items: center;
   gap: 3px;
   font-family: inherit;
+}
+
+.wf-timeline-body .wf-timeline-effect {
+  overflow: visible;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .wf-activity-compensates {

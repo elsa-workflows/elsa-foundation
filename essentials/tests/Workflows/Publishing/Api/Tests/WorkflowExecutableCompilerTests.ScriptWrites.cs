@@ -81,7 +81,9 @@ public sealed partial class WorkflowExecutableCompilerTests
         Assert.Equal("true", executable.RootActivity.Metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable]);
     }
 
-    private ValueTask<WorkflowExecutable> CompileBodyAsync(string script, Type? probeType = null)
+    private ValueTask<WorkflowExecutable> CompileBodyAsync(string script, Type? probeType = null,
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null,
+        Elsa.Workflows.Design.Core.Models.ActivityNodeStructure? structure = null)
     {
         probeType ??= typeof(ScriptProbe);
         var registry = TestWellKnownTypeRegistry.Create();
@@ -92,13 +94,13 @@ public sealed partial class WorkflowExecutableCompilerTests
             "script",
             "activity-script-probe",
             [new WorkflowArgumentState("script", new ArgumentValue(script, "Literal"), null, null, null, null)],
-            Outputs: []);
+            Outputs: [], Structure: structure);
         return TestCompiler.Create(
                 new FakeVersionStore(WorkflowVersion(node, variables: [Greeting])),
                 new FakeActivityVersionStore([probe]),
                 _activityStructureService,
                 registry,
-                scriptVariableReadResolver: ReadResolver)
+                scriptVariableReadResolver: readResolver ?? ReadResolver)
             .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
     }
 

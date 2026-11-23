@@ -21,7 +21,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
-public sealed class ActivityTemplatePlacementTests
+public sealed partial class ActivityTemplatePlacementTests
 {
     [Fact]
     public async Task Graph_authored_occurrence_names_override_child_template_names_at_each_placed_identity()
@@ -783,11 +783,25 @@ public sealed class ActivityTemplatePlacementTests
         Assert.Equal(new[] { "total" }, facts.VariableDeclarations[placed.Root.ExecutableNodeId]);
     }
 
+    [Fact]
+    public async Task Closed_graph_refuses_an_explicit_native_state_declaration_with_a_read_only_script()
+    {
+        var node = await new WorkflowExecutableCompilerTests().NativeStateScriptNodeAsync();
+        var (placer, request) = ClosedScopeGraph("closed", computeRoot: node);
+        var error = await Assert.ThrowsAsync<Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionRejectedException>(
+            () => placer.PlaceAsync(request).AsTask());
+        Assert.Contains(error.Findings, finding => finding.Type == "VF-STATE-002");
+    }
+
     private static (ActivityTemplatePlacer Placer, ActivityTemplatePlacementRequest Request) ClosedScopeGraph(
         string? scopeModel,
         string? formatInputs = null,
         string? computeOutputs = null,
-        bool includeGraphContract = false)
+        bool includeGraphContract = false,
+        ExecutableNode? computeRoot = null,
+        string? computeInputs = null,
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null,
+        Elsa.Serialization.Core.IWellKnownTypeRegistry? registry = null)
     {
         var formatOverlay = new ExecutableActivityTemplateOccurrenceOverlay(
             "1",
@@ -798,7 +812,7 @@ public sealed class ActivityTemplatePlacementTests
                  ]
                  """),
             null);
-        var emptyOverlay = new ExecutableActivityTemplateOccurrenceOverlay("1", Json("[]"), null, computeOutputs is null ? null : Json(computeOutputs));
+        var emptyOverlay = new ExecutableActivityTemplateOccurrenceOverlay("1", Json(computeInputs ?? "[]"), null, computeOutputs is null ? null : Json(computeOutputs));
         var payload = scopeModel is null
             ? Json("""{"entryOccurrenceId":"compute"}""")
             : Json($$"""{"entryOccurrenceId":"compute","scopeModel":"{{scopeModel}}","variables":[{"referenceKey":"total","name":"Total","type":{"alias":"object","collectionKind":"Single"},"storageDriverKey":"elsa.json"}]}""");
@@ -811,7 +825,7 @@ public sealed class ActivityTemplatePlacementTests
             new("definition-compute", "version-compute", "1.0.0", "template-compute", "hash-compute", "compute", ActivityInvocationOrigin.Empty, null, "activity-graph", 0, emptyOverlay),
             new("definition-format", "version-format", "1.0.0", "template-format", "hash-format", "format", ActivityInvocationOrigin.Empty, null, "activity-graph", 1, formatOverlay)
         ]);
-        var computeTemplate = Template("template-compute", "hash-compute", new ExecutableNode(
+        var computeTemplate = Template("template-compute", "hash-compute", computeRoot ?? new ExecutableNode(
             "source-owned-root", "source-owned-root", "type.compute", "1", new("compute", "1", Json("{}")),
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(), activityContract: RuntimeContractWithInputs(["condition"], ["result"])));
@@ -832,7 +846,7 @@ public sealed class ActivityTemplatePlacementTests
             new PublicationStore([graphPublication, computePublication, formatPublication]),
             new TemplateReader([graphTemplate, computeTemplate, formatTemplate]),
             new SourceReader(references),
-            new Sha256ActivityPlacementHasher());
+            new Sha256ActivityPlacementHasher(), readResolver, registry);
         return (placer, new(
             graphPublication,
             graphTemplate,
@@ -961,7 +975,8 @@ public sealed class ActivityTemplatePlacementTests
         IExecutableActivityTemplateReader templates,
         IWorkflowExecutableSourceReferenceReader references,
         IActivityPlacementHasher hasher,
-        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null) => new(
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null,
+        Elsa.Serialization.Core.IWellKnownTypeRegistry? registry = null) => new(
         publications,
         templates,
         references,
@@ -969,7 +984,7 @@ public sealed class ActivityTemplatePlacementTests
         new SequenceOccurrenceStructureService(),
         new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()),
         new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])),
-        BackgroundLeafTypes(),
+        registry ?? BackgroundLeafTypes(),
         readResolver);
 
     private static Elsa.Serialization.Core.IWellKnownTypeRegistry BackgroundLeafTypes()

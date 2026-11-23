@@ -72,6 +72,9 @@ public sealed record ScriptVariableReadAnalysis
     /// <summary>The variables the source may write by name: each written or escaped literal name, once, in source order.</summary>
     public IReadOnlyList<string> MayWriteNames => Writes.Select(write => write.Name).Concat(Escapes).Distinct(StringComparer.Ordinal).ToArray();
 
+    /// <summary>Independent workflow-state access and possible effects, unrelated to variable names.</summary>
+    public Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects WorkflowState { get; init; } = Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.None;
+
     public static ScriptVariableReadAnalysis None { get; } = new([], false);
 }
 

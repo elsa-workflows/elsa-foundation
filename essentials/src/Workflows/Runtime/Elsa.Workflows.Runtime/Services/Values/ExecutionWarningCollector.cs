@@ -12,6 +12,9 @@ public sealed class ExecutionWarningCollector(bool protect = false) : IExecution
 {
     private readonly List<ExecutionWarning> _warnings = [];
     private readonly object _gate = new();
+    private Func<bool>? _protectedStateReads;
+    /// <summary>Selects value-free warnings using the body's final protected-read state, including late reads.</summary>
+    public void ProtectWorkflowStateReads(Func<bool> reads) => _protectedStateReads = reads;
 
     public void Report(ExecutionWarning warning)
     {
@@ -28,7 +31,10 @@ public sealed class ExecutionWarningCollector(bool protect = false) : IExecution
         get
         {
             lock (_gate)
-                return _warnings.ToArray();
+                return _protectedStateReads?.Invoke() == true
+                    ? _warnings.Select(warning => warning.ProtectedForm ?? warning with
+                    { Message = "Warning details are withheld because the body read protected workflow state.", Details = null }).ToArray()
+                    : _warnings.ToArray();
         }
     }
 }

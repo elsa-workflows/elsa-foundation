@@ -2623,3 +2623,8 @@ Elsa.Activities.Design.Core.Models.ActivityProviderDiagnosticDescriptor.JsonPoin
 Elsa.Activities.Design.Core.Models.ActivityProviderDiagnosticDescriptor.JsonPointerPattern.init -> void
 const Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet.DeclaredMember = "declared" -> string!
 static Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet.DeclaresAccessesUndeclaredVariables(System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.ActivityDesignFacet!>? facets) -> bool
+
+Elsa.Activities.Design.Core.Models.WorkflowStateDesignFacet
+const Elsa.Activities.Design.Core.Models.WorkflowStateDesignFacet.Kind = "elsa.workflow-state" -> string!
+const Elsa.Activities.Design.Core.Models.WorkflowStateDesignFacet.SchemaVersion = "1" -> string!
+static Elsa.Activities.Design.Core.Models.WorkflowStateDesignFacet.AccessesWorkflowState(System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.ActivityDesignFacet!>? facets) -> bool

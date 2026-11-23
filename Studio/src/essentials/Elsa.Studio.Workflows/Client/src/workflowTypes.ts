@@ -478,7 +478,16 @@ export interface ScopedVariableAnalysisResponse {
 }
 
 // The variables one script body may write, resolved as publication pins them (backend ScriptBodyWriteSet).
+export interface ScriptWorkflowStateEffects {
+  accessesState: boolean;
+  outputNames: string[];
+  writesCorrelationId: boolean;
+  writesInstanceName: boolean;
+  conservative: boolean;
+}
+
 export interface ScriptBodyWriteSet {
+  workflowState?: ScriptWorkflowStateEffects;
   variables: ScriptBodyWriteTarget[];
   mayWriteEveryVisibleVariable: boolean;
 }
@@ -890,6 +899,7 @@ export interface WorkflowExecutableRunResponse {
 }
 
 export interface WorkflowInstanceSummary {
+  instanceName?: string | null;
   workflowExecutionId: string;
   artifactId: string;
   definitionId: string;
@@ -970,6 +980,8 @@ export interface ActivityStateView {
 }
 
 export interface ActivityExecutionInspection {
+  workflowStateEffects?: string[];
+  workflowStateEffectReceipts?: { attemptId: string | null; acceptedAt: string; transition: "Completion" | "Suspension"; kinds: string[] }[];
   activityExecutionId: string;
   workflowExecutionId: string;
   executableNodeId: string;
@@ -1378,6 +1390,8 @@ export interface RuntimeValueTypeDescriptor {
 }
 
 export interface ActivityExecutionStateSummary {
+  workflowStateEffects?: string[];
+  workflowStateEffectReceipts?: { attemptId: string | null; acceptedAt: string; transition: "Completion" | "Suspension"; kinds: string[] }[];
   executionSequence?: number;
   activityExecutionId: string;
   workflowExecutionId: string;

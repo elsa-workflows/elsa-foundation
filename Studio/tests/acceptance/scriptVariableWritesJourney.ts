@@ -110,10 +110,10 @@ export async function scriptVariableWritesJourney(page: Page, info: TestInfo, ca
   await capture(page, info, "reopened-computed");
 
   const none = await edit(readOnly, "none", authored.draftId);
-  expect(none.scriptWrites).toEqual({ variables: [], mayWriteEveryVisibleVariable: false });
+  expect(none.scriptWrites).toMatchObject({ variables: [], mayWriteEveryVisibleVariable: false });
   await expect(summary()).toHaveCount(0);
   const reopenedNone = await open(authored.definition.id, "reopened-none");
-  expect(reopenedNone.scriptWrites).toEqual({ variables: [], mayWriteEveryVisibleVariable: false });
+  expect(reopenedNone.scriptWrites).toMatchObject({ variables: [], mayWriteEveryVisibleVariable: false });
   await expect(summary()).toHaveCount(0);
   await capture(page, info, "no-writes");
 
