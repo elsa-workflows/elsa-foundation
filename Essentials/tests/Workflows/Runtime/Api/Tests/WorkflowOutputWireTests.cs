@@ -10,6 +10,28 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 public sealed class WorkflowOutputWireTests
 {
     [Fact]
+    public void The_named_output_converter_preserves_the_complete_nested_JSON_value_through_the_real_owner_contract()
+    {
+        const string raw = """{ "OrderID":9007199254740993, "amount":1.00, "nil":null, "text":"\u0061 <+>" }""";
+        JsonElement data;
+        using (var document = JsonDocument.Parse(raw)) data = document.RootElement.Clone();
+        var view = new WorkflowInstanceDetailsView(null!, [], [], new Dictionary<string, WorkflowOutputView>(StringComparer.Ordinal)
+        {
+            ["OrderID"] = new(data, false, null, DateTimeOffset.UnixEpoch)
+        }, "Balanced", "Workflow");
+        var contract = DetailsContract();
+        var wire = JsonSerializer.SerializeToElement(view, contract);
+        var value = wire.GetProperty("outputs").GetProperty("OrderID").GetProperty("value");
+        Assert.Equal(raw, value.GetRawText());
+        var restored = (WorkflowInstanceDetailsView)JsonSerializer.Deserialize(wire, contract)!;
+        var retained = restored.Outputs["OrderID"].Value!.Value;
+        Assert.Equal(raw, retained.GetRawText());
+        Assert.Equal(9007199254740993L, retained.GetProperty("OrderID").GetInt64());
+        Assert.Equal(JsonValueKind.Null, retained.GetProperty("nil").ValueKind);
+        Assert.False(retained.TryGetProperty("missing", out _));
+    }
+
+    [Fact]
     public void Runtime_output_names_preserve_case_and_distinct_names_in_the_actual_generated_contract()
     {
         var view = new WorkflowInstanceDetailsView(null!, [], [], new Dictionary<string, WorkflowOutputView>(StringComparer.Ordinal)

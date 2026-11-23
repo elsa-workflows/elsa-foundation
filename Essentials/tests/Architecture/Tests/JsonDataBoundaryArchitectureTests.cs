@@ -61,7 +61,8 @@ public sealed class JsonDataBoundaryArchitectureTests
         {
             "Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ActivityLayoutRecordsPayload|Elsa.Activities.Design.Api.Commands.ActivityLayoutRecordsPayloadJsonConverter",
             "Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ActivityNodePresentationPayload|Elsa.Activities.Design.Api.Commands.ActivityPresentationPayloadConverter",
-            "Elsa.Etl.Design.Api.EtlDesignJsonContext|Elsa.Etl.Core.EtlPipelineV2|Elsa.Etl.Design.Api.EtlPipelineV2JsonConverter"
+            "Elsa.Etl.Design.Api.EtlDesignJsonContext|Elsa.Etl.Core.EtlPipelineV2|Elsa.Etl.Design.Api.EtlPipelineV2JsonConverter",
+            "Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceDetailsView.outputs|System.Collections.Generic.IReadOnlyDictionary`2[System.String,Elsa.Workflows.Runtime.Api.Models.WorkflowOutputView]|Elsa.Workflows.Runtime.Api.Models.WorkflowOutputsJsonConverter"
         }, snapshot.OpaqueConverters);
     }
 
@@ -70,6 +71,7 @@ public sealed class JsonDataBoundaryArchitectureTests
     [InlineData("Elsa.Activities.Design.Core.Models.ActivityArgumentValue", "Value")]
     [InlineData("Elsa.Workflows.Runtime.Core.Models.ValueEnvelope", "InlineValue")]
     [InlineData("Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommand", "Payload")]
+    [InlineData("Elsa.Workflows.Runtime.Api.Models.WorkflowOutputView", "Value")]
     [InlineData("Elsa.Weaver.Core.Models.WeaverContextAttachment", "Content")]
     public void Reviewed_data_members_remain_JSON_values(string owner, string member)
     {

@@ -59,6 +59,7 @@ The guard also pins these semantic roles separately:
 |---|---|
 | `ArgumentValue.Value`, `ActivityArgumentValue.Value` | Carried literal/default data, held as JSON; CLR producers explicitly apply their scoped conversion contract. |
 | `ValueEnvelope.InlineValue`, `WorkflowExecutionCommand.Payload` | Carried runtime data, held as JSON. Envelope admission and null/missing policies remain S-2-owned. |
+| `WorkflowInstanceDetailsView.Outputs`, `WorkflowOutputView.Value` | A named map of owned output records; the member converter preserves authored output names and each record's data remains JSON. `WorkflowOutputView` is also an explicit owner-context root. |
 | `WeaverContextAttachment.Content`, `WeaverActionProposal.Operations[*]` | Detached JSON data. Proposal operation roots are objects. |
 | `WeaverStreamEvent.Payload` | Owned event protocol alternatives described by `WeaverSseJsonContext`; their nested carried data remains JSON. It is not an arbitrary workflow-data slot. |
 | `WeaverToolCallOutcome.Result` | The owned `WeaverToolResult` protocol projection; its payload data remains JSON. |
