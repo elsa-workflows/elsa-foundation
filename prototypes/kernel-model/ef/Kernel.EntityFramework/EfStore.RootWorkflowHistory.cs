@@ -9,7 +9,7 @@ public sealed partial class EfStore
     internal sealed record RootWorkflowHistoryItem(string Reference, InstanceStatus Status, string? Definition, long UpdatedAt);
     internal sealed record RootWorkflowHistoryPage(IReadOnlyList<RootWorkflowHistoryItem> Items, long AsOf);
     private sealed record RootWorkflowHistoryRow(string? Reference, int? Status, string? Header, long? UpdatedAt,
-        int? Version, int? StoreSchema, int? MessageProtocol, int? JournalCodec, long AsOf);
+        int? Version, bool TriggerEnabled, int? StoreSchema, int? MessageProtocol, int? JournalCodec, long AsOf);
 
     internal async Task InstallRootWorkflowHistoryAsync(CancellationToken token = default)
     {
@@ -32,6 +32,7 @@ public sealed partial class EfStore
                 SELECT to_regclass('"FoundationWorkflowHistory"') IS NOT NULL AND EXISTS (
                     SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid = to_regclass('"Instances"')
                         AND tgname = 'kernel_project_root_workflow_history_v1' AND tgenabled IN ('O', 'A')
+                        AND tgfoid = to_regprocedure('kernel_project_root_workflow_history_v1()')
                 ) AS "Value"
                 """).SingleAsync(token))
                 throw new StoreFormatException("The installed workflow history projection is incomplete.");
@@ -102,10 +103,23 @@ public sealed partial class EfStore
             rows = await db.Database.SqlQuery<RootWorkflowHistoryRow>($"""
                 WITH kernel AS (
                     SELECT "StoreSchema", "MessageProtocol", "JournalCodec" FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
-                ), format AS (SELECT "Version" FROM "FoundationWorkflowHistoryFormat" WHERE "Singleton"), page AS (
+                ), format AS (
+                    SELECT "Version" FROM "FoundationWorkflowHistoryFormat" WHERE "Singleton"
+                ), readiness AS (
+                    -- The qualified writer identifies the relation even after a table rename.
+                    SELECT EXISTS (
+                        SELECT 1 FROM pg_catalog.pg_trigger projection JOIN pg_catalog.pg_trigger writer
+                            ON writer.tgrelid = projection.tgrelid
+                        WHERE projection.tgname = 'kernel_project_root_workflow_history_v1' AND projection.tgenabled IN ('O', 'A')
+                            AND projection.tgfoid = to_regprocedure('kernel_project_root_workflow_history_v1()')
+                            AND writer.tgname = 'kernel_require_root_checkpoint_writer'
+                            AND writer.tgfoid = to_regprocedure('kernel_require_root_checkpoint_writer()')
+                    ) AS "TriggerEnabled"
+                ), page AS (
                     SELECT l."Reference", l."Status", l."Header", h."UpdatedAt"
                     FROM "FoundationWorkflowHistory" h JOIN "FoundationActorList" l USING ("Tenant", "Reference")
-                    WHERE h."Tenant" = {tenant} AND EXISTS (SELECT 1 FROM format WHERE "Version" = {WorkflowHistoryVersion})
+                    WHERE h."Tenant" = {tenant} AND (SELECT "TriggerEnabled" FROM readiness)
+                        AND EXISTS (SELECT 1 FROM format WHERE "Version" = {WorkflowHistoryVersion})
                         AND EXISTS (SELECT 1 FROM kernel WHERE "StoreSchema" = {expected.StoreSchema}
                             AND "MessageProtocol" = {expected.MessageProtocol} AND "JournalCodec" = {expected.JournalCodec})
                         AND l."Type" = kernel_actor_list_filter({encodedType})
@@ -119,6 +133,7 @@ public sealed partial class EfStore
                     ORDER BY h."UpdatedAt" DESC, h."Reference" LIMIT {limit}
                 )
                 SELECT page.*, kernel.*, (SELECT "Version" FROM format) AS "Version",
+                    (SELECT "TriggerEnabled" FROM readiness) AS "TriggerEnabled",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
                 FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN kernel ON true
                 ORDER BY page."UpdatedAt" DESC, page."Reference" COLLATE "C"
@@ -134,6 +149,7 @@ public sealed partial class EfStore
         var stored = new StoreFormat(schema, protocol, codec);
         if (stored != expected) throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {expected}.");
         RequireHistoryVersion(first.Version);
+        if (!first.TriggerEnabled) throw new StoreFormatException("The workflow history projection trigger is missing or disabled.");
         var items = rows.Where(row => row.Reference is not null).Select(row =>
         {
             var definition = DurableKeyJson.Read<RootHeader>(row.Header!).Labels.FirstOrDefault(label => label.Key == "definition").Value;

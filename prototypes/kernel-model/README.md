@@ -310,13 +310,13 @@ projection upsert with its indexes per qualified checkpoint. The worker sends th
 
 The chronology route uses inclusive UTC bounds at the precision of the caller's dates and orders results by
 timestamp descending and exact reference ascending. It joins the timestamp and actor-list projections. Reads
-check both format markers in the same statement. The generic actor list still shows prior roots. Such a root
+check both format markers and the installed trigger in the same statement. The generic actor list still shows prior roots. Such a root
 enters chronological history on its first checkpoint observed after installation. Physical workflow retirement,
 legacy timestamps and product routing remain outside this preview.
 
 On a fresh disposable PostgreSQL database, run `pg-root-workflow-history <owned|ef> <checked|in-batch> birth`
-with the Native runner. Run the same command with `restart <projection-bookmark>` and `tenant <projection-bookmark>`
-in separate processes. The birth phase renames the checkpoint and journal tables after the physical checks so
+with the Native runner. Run the same command with `restart <projection-bookmark>` and
+`tenant <projection-bookmark> <tenant-reference>` in separate processes using the values from birth. The birth phase renames the checkpoint and journal tables after the physical checks so
 the new processes exercise both projections directly.
 
 On a fresh PostgreSQL database, `pg-root-history <owned|ef> <checked|in-batch>` on the same runner
