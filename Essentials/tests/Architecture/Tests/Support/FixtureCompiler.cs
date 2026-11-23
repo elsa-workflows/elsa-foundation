@@ -28,7 +28,8 @@ internal static class FixtureCompiler
         string assemblyName,
         string source,
         IEnumerable<Assembly>? references = null,
-        OptimizationLevel optimization = OptimizationLevel.Release)
+        OptimizationLevel optimization = OptimizationLevel.Release,
+        bool allowUnsafe = false)
     {
         var (platformPaths, platformReferences) = Platform.Value;
         var extra = (references ?? [])
@@ -42,6 +43,7 @@ internal static class FixtureCompiler
             [.. platformReferences, .. extra],
             new CSharpCompilationOptions(
                 OutputKind.DynamicallyLinkedLibrary,
+                allowUnsafe: allowUnsafe,
                 optimizationLevel: optimization,
                 nullableContextOptions: NullableContextOptions.Enable));
 
