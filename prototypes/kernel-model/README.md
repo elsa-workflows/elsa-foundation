@@ -266,7 +266,9 @@ and its issued timer share a PostgreSQL transaction and that the deadline equals
 seconds. A second process reads the original handle and absolute deadline
 at a higher ownership epoch. A future-horizon poll sees the timer early. A ready poll excludes it, and an ordinary
 application input of the same kind leaves the frame waiting. At the deadline the worker resumes the frame once.
-The receipt prints the deadline, the worker's application time and the database's terminal checkpoint time. The
+A process restarted after the deadline observes the timer ready immediately and completes the same frame.
+The receipt prints the deadline, the worker's application time, the database's terminal checkpoint time and
+whether the early-input check ran. The
 fixture checks the public journal after another worker pass. Use `ef` for the EF writer or `in-batch` for the batch
 fence. This preview exercises a single generated root, one partition and a clean process restart.
 

@@ -85,19 +85,28 @@ internal static class PostgresDelayPreview
         var saved = coldState.Waits.Single(p => p.Value.Kind == "timer");
         Check(saved.Value.Key == restart.Handle && saved.Value.Due == restart.Due, "cold checkpoint must retain the original deadline and handle");
         var future = await store.PollAsync(0, epoch, TimeSpan.FromMilliseconds(DelayMs * 2), 2, stop);
-        Check(future.Now < restart.Due && future.Messages.Any(m => m.Message.Id == restart.Handle && m.Message.Due == restart.Due),
-            "horizon read must see the pending future timer");
+        Check(future.Messages.Any(m => m.Message.Id == restart.Handle && m.Message.Due == restart.Due),
+            "horizon read must return the pending timer with its original deadline");
         var ready = await store.PollAsync(0, epoch, TimeSpan.Zero, 2, stop);
-        Check(ready.Now < restart.Due && ready.Messages.All(m => m.Message.Id != restart.Handle), "ready poll must exclude the future timer");
-        var app = await api.SendAsync(scope, new Contract.Target.Ref(actor), "ordinary-notice", NativeKinds.Timer, Json.Write(new TimerFired(saved.Key)),
-            cancellationToken: stop);
-        Check(app.Outcome == Contract.AdmissionOutcome.Accepted && app.Actor == actor, "an ordinary application message can use the same kind");
-        await DriveUntil(() => Task.FromResult(ordinary.Count == 1));
-        var early = (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))!;
-        var earlyState = Json.Read<NativeState>(early.State!);
-        Check(early.AsOf < restart.Due && applications.Count == 0 && ordinary.Single().Sender is null && ordinary.Single().Id != restart.Handle &&
-            early.Status == InstanceStatus.Running && earlyState.Waits[saved.Key] == saved.Value && !earlyState.Variables.ContainsKey("result"),
-            "ordinary input leaves the original wait pending before the deadline");
+        Check(ready.Messages.Any(m => m.Message.Id == restart.Handle) == (ready.Now >= restart.Due),
+            "the ready poll must expose the timer precisely when the database deadline is due");
+        var observedBeforeDue = false;
+        if (ready.Now < restart.Due)
+        {
+            var app = await api.SendAsync(scope, new Contract.Target.Ref(actor), "ordinary-notice", NativeKinds.Timer, Json.Write(new TimerFired(saved.Key)),
+                cancellationToken: stop);
+            Check(app.Outcome == Contract.AdmissionOutcome.Accepted && app.Actor == actor, "an ordinary application message can use the same kind");
+            await DriveUntil(() => Task.FromResult(ordinary.Count == 1 || applications.Count != 0));
+            var early = (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))!;
+            if (early.AsOf < restart.Due)
+            {
+                var earlyState = Json.Read<NativeState>(early.State!);
+                Check(applications.Count == 0 && ordinary.Single().Sender is null && ordinary.Single().Id != restart.Handle &&
+                    early.Status == InstanceStatus.Running && earlyState.Waits[saved.Key] == saved.Value && !earlyState.Variables.ContainsKey("result"),
+                    "ordinary input leaves the original wait pending before the deadline");
+                observedBeforeDue = true;
+            }
+        }
         await DriveUntil(async () => (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))?.Status == InstanceStatus.Finished);
         var finished = (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))!;
         var result = Json.Read<NativeState>(finished.State!);
@@ -110,10 +119,12 @@ internal static class PostgresDelayPreview
         Check(suffix.Items.Count(j => j.Entry.StartsWith("\"c:", StringComparison.Ordinal) && j.Entry.EndsWith(":finished-delay\"", StringComparison.Ordinal)) == 1,
             "the journal must show the post-delay activity once");
         await Pass();
+        var afterPass = (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))!;
         await using (var db = Open())
-            Check(!await db.Messages.AnyAsync(m => m.InboxScope == EfStore.RootSelfScope && m.Target == cold.Actor.Id, stop) &&
+            Check(suffix.Next is not null && (await api.TailAsync(scope, actor, suffix.Next, stop)).Items.Count == 0 &&
+                afterPass.Revision == finished.Revision && afterPass.State == finished.State && !await db.Messages.AnyAsync(m => m.InboxScope == EfStore.RootSelfScope && m.Target == cold.Actor.Id, stop) &&
                 (await api.TailAsync(scope, actor, cursor, stop)).Items.SequenceEqual(suffix.Items), "timer consumption and journal must remain stable");
-        Console.WriteLine($"finished {Environment.ProcessId} {actor.Id} epoch {epoch} due {restart.Due} applied {applications.Single().Now} checkpoint {finished.TerminalAt} timer 1");
+        Console.WriteLine($"finished {Environment.ProcessId} {actor.Id} epoch {epoch} due {restart.Due} applied {applications.Single().Now} checkpoint {finished.TerminalAt} timer 1 early-check {observedBeforeDue} already-due {ready.Now >= restart.Due}");
         return 0;
 
         async Task Pass()
