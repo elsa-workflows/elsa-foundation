@@ -161,7 +161,25 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
                 finally { _releasing[surplus] = false; }
             }
         }
-        await Task.WhenAll(take.Select(s => ActivateAsync(s, cancellationToken)));
+        if (take.Count > 1 && _host is IScopeSetGain { SupportsSetGain: true } gains)
+        {
+            // A release may have yielded since the plan was made.
+            var requested = take.Where(scope => !Owns(scope) && !_activating[scope]).ToArray();
+            if (requested.Length == 0) return;
+            foreach (var scope in requested) _activating[scope] = true;
+            IReadOnlyList<IScopeActivation> gained;
+            try
+            {
+                gained = await gains.ActivateAsync(requested, cancellationToken);
+                foreach (var activation in gained) _active[activation.Scope] = activation;
+            }
+            finally
+            {
+                foreach (var scope in requested) _activating[scope] = false;
+            }
+            foreach (var activation in gained) await activation.WokenAsync(null, cancellationToken);
+        }
+        else await Task.WhenAll(take.Select(s => ActivateAsync(s, cancellationToken)));
     }
 
     /// <summary>K1b: the node's lease, when the host keeps one (<see cref="INodeLeaseHost"/>); null for a host with no node lease.</summary>
