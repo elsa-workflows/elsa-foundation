@@ -1902,9 +1902,12 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   });
   renderWorkbench("activity", "write4");
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
-  await vi.waitFor(() => expect(container.querySelector(".wf-execution-scope-occurrence .wf-execution-choice")).toBeTruthy());
-  // The chooser mounts before its initial page enables occurrence navigation.
-  initialScopePage?.resolve();
+  if (initialScopePage) {
+    await vi.waitFor(() => expect(api.browseActivityExecutions.mock.calls.some(([, , request]) =>
+      request.executableNodeId === "compiled-nested-sequence")).toBe(true));
+    expect(container.querySelector(".wf-execution-scope-occurrence .wf-execution-choice")).toBeNull();
+    initialScopePage.resolve();
+  }
   await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']")?.disabled).toBe(false));
   await showActivityData();
   const overview = container.querySelector(".wf-activity-overview")!;
