@@ -13,7 +13,9 @@ using Microsoft.EntityFrameworkCore;
 
 WriteLine.Out = null;
 if (args is ["pg-runtime-cluster"]) return await PostgresRuntimeCluster.RunAsync();
+if (args is ["pg-runtime-cluster", "wake"]) return await PostgresRuntimeCluster.RunAsync(wake: true);
 if (args is ["pg-runtime-cluster-member"]) return await PostgresRuntimeCluster.MemberAsync();
+if (args is ["pg-runtime-cluster-member", "wake"]) return await PostgresRuntimeCluster.MemberAsync(wake: true);
 if (args is ["deadlines"]) return await Deadlines.RunAsync();
 if (args is ["smoke"]) return await Smoke.RunAsync();
 if (args is ["variants", var variantMode]) return await VariantChecks.RunAsync(variantMode);
@@ -42,7 +44,7 @@ if (args is ["cost", "postgres", var connection])
     return failures;
 }
 if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.Parse(args[1]) : 2000);
-Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | memory [runs] | pg-runtime-cluster");
+Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | memory [runs] | pg-runtime-cluster [wake]");
 return 2;
 
 static class Cost
