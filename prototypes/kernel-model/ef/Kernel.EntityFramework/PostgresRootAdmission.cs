@@ -40,6 +40,7 @@ internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan dedu
             INSERT INTO "FoundationRootIssuer" SELECT true, {RandomNumberGenerator.GetBytes(32)}, count(*)::integer FROM "Partitions"
             ON CONFLICT DO NOTHING
             """, cancellationToken);
+        await EfStore.InstallFirstRootCheckpointsAsync(db, cancellationToken);
         var placementMatches = await db.Database.SqlQueryRaw<bool>("""
             SELECT i."Partitions" = count(p."Id") AND min(p."Id") = 0 AND max(p."Id") = i."Partitions" - 1 AS "Value"
             FROM "FoundationRootIssuer" i CROSS JOIN "Partitions" p GROUP BY i."Partitions"
@@ -136,7 +137,11 @@ internal sealed class PostgresRootAdmission(Func<KernelDb> create, TimeSpan dedu
             ON b."Creator" = m."Id" AND m."InboxScope" = 0 AND b."Actor" = m."Target"
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND NOT m."Done"
             """).AsNoTracking().SingleOrDefaultAsync(cancellationToken);
-        if (row is null) return null;
+        return row is null ? null : DecodeCreator(row);
+    }
+
+    internal static Message DecodeCreator(MessageEntity row)
+    {
         if (!IsStoredCreator(row.Start) || row.Kind != Kinds.Start || row.Id != "root:" + row.Target || row.Sender is not null)
             throw new StoreException(Failure.Definite, "Invalid PostgreSQL generated root creator.");
         var stored = DurableKeyJson.Read<StoredRoot>(row.Start![CreatorPrefix.Length..]);
