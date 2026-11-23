@@ -15,6 +15,9 @@ internal sealed partial class PostgresRootAdmission
                 "Reference" text COLLATE "C" NOT NULL REFERENCES "FoundationRootBirths" ("Reference"),
                 "Until" bigint NOT NULL, PRIMARY KEY ("Tenant", "Operation"));
             CREATE INDEX IF NOT EXISTS "IX_FoundationOperatorReceipts_Until" ON "FoundationOperatorReceipts" ("Until");
+            CREATE INDEX IF NOT EXISTS "IX_FoundationRootOperators_Pending"
+                ON "Messages" ("Partition", "Target", "Seq") INCLUDE ("Due")
+                WHERE "InboxScope" = -4 AND "Id" LIKE 'operator/%' AND NOT "Done";
             """, token);
 
     internal async Task<Receipt?> AdmitRootOperatorAsync(string tenant, string reference, string operation, string kind, long? due,

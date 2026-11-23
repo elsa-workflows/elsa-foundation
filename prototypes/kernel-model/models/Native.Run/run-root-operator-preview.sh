@@ -2,9 +2,12 @@
 set -euo pipefail
 : "${KERNEL_PREVIEW_POSTGRES:?Supply a fresh, dedicated PostgreSQL database}"
 cd "$(dirname "$0")"
+writer=${1:-owned}
+fence=${2:-checked}
+[[ "$writer" == owned || "$writer" == ef ]] && [[ "$fence" == checked || "$fence" == in-batch ]] || exit 2
 dotnet restore --locked-mode
 dotnet build -c Release --no-restore
-run=(dotnet bin/Release/net10.0/Kernel.Native.Run.dll pg-root-operators)
+run=(dotnet bin/Release/net10.0/Kernel.Native.Run.dll pg-root-operators "$writer" "$fence")
 admitted="$("${run[@]}" admit)"
 printf '%s\n' "$admitted"
 read -r phase pid a b c <<<"${admitted##*$'\n'}"

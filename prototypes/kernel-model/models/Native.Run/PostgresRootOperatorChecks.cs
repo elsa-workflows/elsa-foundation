@@ -10,13 +10,14 @@ internal static class PostgresRootOperatorChecks
 {
     private const string SuspendId = "pause/\0once";
 
-    internal static async Task<int> RunAsync(string[]? previous)
+    internal static async Task<int> RunAsync(string[]? previous, bool owned = true, bool inBatch = false)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a fresh dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         KernelDb Open() => new(options);
-        var store = new EfStore(Open, postgres: true);
+        EfStore NewStore() => new(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
+        var store = NewStore();
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var ct = timeout.Token;
@@ -37,7 +38,9 @@ internal static class PostgresRootOperatorChecks
             var a = await Start(blue, "alpha");
             var b = await Start(blue, "bravo");
             var c = await Start(red, "charlie");
-            Check((await Send(blue, b, "pending-root", Contract.Kinds.Suspend, new(DueAt: long.MaxValue))).Outcome == Contract.AdmissionOutcome.Accepted &&
+            await using var clock = Open();
+            var now = await clock.Database.SqlQueryRaw<long>("""SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value" """).SingleAsync(ct);
+            Check((await Send(blue, b, "pending-root", Contract.Kinds.Suspend, new(DueAt: now + 3_600_000))).Outcome == Contract.AdmissionOutcome.Accepted &&
                 await admission.ReadDueRootOperatorAsync("blue", b.Id, ct) is null, "a pending creator admits the command and a due read excludes its future deadline");
             var completed = (await runtime.StartAsync(blue, "completed", NativeExecutionModel.Start("terminal"), cancellationToken: ct)).Actor!.Value;
             var host = await PostgresNativeRootOwner.PreparePartitionAsync(store, "operator-preview", 0,
@@ -71,6 +74,8 @@ internal static class PostgresRootOperatorChecks
                 "a grant resolves references only within the trusted tenant");
             Check((await operatorApi.SendAsync(blue, new Contract.Target.Ref(a), SuspendId, Contract.Kinds.Suspend, "body", cancellationToken: ct)).Outcome ==
                 Contract.AdmissionOutcome.Refused, "a one-way suspension has no selection payload");
+            Check((await basic.SendAsync(blue, new Contract.Target.Ref(a), "before-command", "input", "first", cancellationToken: ct)).Outcome ==
+                Contract.AdmissionOutcome.Accepted, "an ordinary input precedes the due suspension");
             Check((await Send(blue, a, SuspendId, Contract.Kinds.Suspend, new(DueAt: 0))).Outcome == Contract.AdmissionOutcome.Accepted,
                 "an authorized exact-ref suspension is admitted");
             Check((await basic.SendAsync(blue, new Contract.Target.Ref(a), SuspendId, Contract.Kinds.Suspend, cancellationToken: ct)).Outcome ==
@@ -79,6 +84,8 @@ internal static class PostgresRootOperatorChecks
                 Contract.AdmissionOutcome.Accepted, "an ordinary input can be queued behind the command");
             Check((await Send(blue, b, SuspendId, Contract.Kinds.Resume)) is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var replay } && replay == a,
                 "changed target and kind replay the original bound receipt");
+            Check((await basic.SendAsync(blue, new Contract.Target.Ref(b), "independent", "input", "next", cancellationToken: ct)).Outcome ==
+                Contract.AdmissionOutcome.Accepted, "an ordinary input on another root follows its own future command");
             Check((await Send(blue, b, "resume", Contract.Kinds.Resume)).Outcome == Contract.AdmissionOutcome.Accepted &&
                 (await Send(red, c, SuspendId, Contract.Kinds.Resume)).Outcome == Contract.AdmissionOutcome.Accepted,
                 "an independent resume and a second tenant's operation are admitted");
@@ -104,9 +111,10 @@ internal static class PostgresRootOperatorChecks
             first.Operator is not null && first.Target.Id == image.Actor.Id && first.InboxKey.Scope == InboxKey.FoundationOccurrenceScope &&
             second is { Id: "resume", Kind: Contract.Kinds.Resume, Due: null } && second.Operator is not null &&
             third is { Id: SuspendId, Kind: Contract.Kinds.Resume } && third.Operator is not null, "cold candidate read restores the exact envelopes");
-        var ordinary = (await admission.ReadPendingDirectAsync("blue", refs[0].Id, ct)).Single();
+        var ordered = await admission.ReadPendingDirectAsync("blue", refs[0].Id, ct);
+        var independent = (await admission.ReadPendingDirectAsync("blue", refs[1].Id, ct)).Single();
         Check(await admission.ReadDueRootOperatorAsync("blue", refs[2].Id, ct) is null &&
-            ordinary is { Id: "after-command", Payload: "pending", Operator: null }, "operator occurrences stay in their tenant and outside ordinary reads");
+            ordered is [{ Id: "before-command", Payload: "first", Operator: null }, { Id: "after-command", Payload: "pending", Operator: null }], "operator occurrences stay in their tenant and outside ordinary reads");
         await using (var db = Open())
         {
             Check(await db.Messages.CountAsync(m => m.InboxScope == InboxKey.FoundationOccurrenceScope && m.Id.StartsWith("operator/") && !m.Done, ct) == 7 &&
@@ -118,22 +126,55 @@ internal static class PostgresRootOperatorChecks
                 """).SingleAsync(ct), "the receipt and exact command were inserted by one PostgreSQL transaction");
         }
         await store.BindWorkerPartitionAsync(0, ct);
-        var lease = (await store.TakeAsync(0, "operator-cold", TimeSpan.FromSeconds(10), ct))!;
-        var refused = false;
-        try { await store.PollAsync(0, lease.Epoch, TimeSpan.Zero, 8, ct); }
-        catch (StoreException e) when (e.Failure == Failure.Definite) { refused = true; }
-        Check(refused, "the ordinary poll reports the staged operator explicitly");
-        refused = false;
-        try
+        var duration = TimeSpan.FromSeconds(30);
+        var lease = (await store.TakeAsync(0, "operator-cold", duration, ct))!;
+        var horizon = TimeSpan.FromHours(2);
+        var polled = await store.PollAsync(0, lease.Epoch, horizon, 8, ct);
+        Check(polled.Messages.Select(m => m.Message).SequenceEqual([ordered[0], independent]) &&
+            (await store.PollAsync(0, lease.Epoch, TimeSpan.Zero, 1, ct)).Messages.Single().Message == ordered[0],
+            "discovery offers the ordinary prefix and independent root before applying the page limit");
+        await using (var db = Open())
         {
-            var write = await store.CommitRootTurnAsync("blue", refs[0].Id, image, [ordinary], lease.For(0), TimeSpan.FromSeconds(10),
-                InstanceStatus.Running, image.State, image.StateVersion, image.TypeData, image.Labels, """["application"]""", ct);
-            refused = !write.Landed;
+            Check(await db.Messages.AnyAsync(m => m.Target == independent.Target.Id && m.Id.StartsWith("operator/") &&
+                m.Due > polled.Now && m.Due <= polled.Now + (long)horizon.TotalMilliseconds && !m.Done, ct),
+                "the other root's earlier command is inside the poll horizon and still in the future");
         }
-        catch (StoreException e) when (e.Failure == Failure.Definite) { refused = true; }
-        Check(refused && (await admission.ReadPendingDirectAsync("blue", refs[0].Id, ct)).Single() == ordinary &&
-            (await store.ReadFirstRootAsync("blue", refs[0].Id, ct))?.Revision == 1 &&
-            await admission.ReadDueRootOperatorAsync("blue", refs[0].Id, ct) == first, "an ordinary input cannot commit ahead of the due operator or change the waiting checkpoint");
+        var fixedStore = NewStore();
+        await fixedStore.BindWorkerRootsAsync([("blue", refs[0].Id), ("blue", refs[1].Id)], ct);
+        Check((await fixedStore.PollAsync(0, lease.Epoch, horizon, 8, ct)).Messages.Select(m => m.Message).SequenceEqual([ordered[0], independent]),
+            "fixed root bindings return the same eligible prefixes");
+        await store.ReleaseAsync(0, lease.Epoch, ct);
+        var current = (await store.TakeAsync(0, "replacement", duration, ct))!;
+        Check(current.Epoch > lease.Epoch && current.Position == lease.Position, "the ownership epoch changes at the same journal position");
+        Check(!await Apply(refs[0], image, ordered[0], lease.For(0)) &&
+            (await store.ReadFirstRootAsync("blue", refs[0].Id, ct))?.Revision == image.Revision &&
+            (await admission.ReadPendingDirectAsync("blue", refs[0].Id, ct)).SequenceEqual(ordered),
+            "a stale fence preserves the eligible prefix and checkpoint");
+        Check(await Apply(refs[0], image, ordered[0], current.For(0)), "the current fence commits the identical eligible prefix");
+        var after = (await store.ReadFirstRootAsync("blue", refs[0].Id, ct))!;
+        var next = current.For(0) with { Position = current.Position + 1 };
+        Check(after.Revision == image.Revision + 1 && !await Apply(refs[0], after, ordered[1], next) &&
+            (await store.ReadFirstRootAsync("blue", refs[0].Id, ct))?.Revision == after.Revision &&
+            (await admission.ReadPendingDirectAsync("blue", refs[0].Id, ct)).Single() == ordered[1] &&
+            await admission.ReadDueRootOperatorAsync("blue", refs[0].Id, ct) == first,
+            "a due command preserves the waiting checkpoint and prevents a later ordinary commit at the current fence");
+        var other = (await store.ReadFirstRootAsync("blue", refs[1].Id, ct))!;
+        Check((await store.PollAsync(0, current.Epoch, horizon, 1, ct)).Messages.Single().Message == independent &&
+            await Apply(refs[1], other, independent, next) &&
+            (await store.ReadFirstRootAsync("blue", refs[1].Id, ct))?.Revision == other.Revision + 1 &&
+            (await admission.ReadPendingDirectAsync("blue", refs[1].Id, ct)).Count == 0 &&
+            await admission.ReadDueRootOperatorAsync("blue", refs[1].Id, ct) == second,
+            "the next bounded poll and commit advance the independent root while both due commands stay pending");
+
+        async Task<bool> Apply(Contract.ActorRef root, EfStore.RootImage before, Message input, PartitionFence fence)
+        {
+            try
+            {
+                return (await store.CommitRootTurnAsync("blue", root.Id, before, [input], fence, duration, InstanceStatus.Running,
+                    before.State, before.StateVersion, before.TypeData, before.Labels, """["application"]""", ct)).Landed;
+            }
+            catch (StoreException e) when (e.Failure == Failure.Definite) { return false; }
+        }
         Console.WriteLine($"read {Environment.ProcessId} {refs[0].Id} {refs[1].Id} {refs[2].Id}");
         return 0;
 

@@ -634,6 +634,12 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string RootPollFilter => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."InboxScope" IN (0, {InboxKey.FoundationOccurrenceScope}, {RootSelfScope})
+             AND NOT (m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" LIKE 'operator/%')
+             AND (m."InboxScope" = 0 OR NOT EXISTS (
+                 SELECT 1 FROM "Messages" op
+                 WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
+                   AND op."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND op."Id" LIKE 'operator/%'
+                   AND NOT op."Done" AND op."Due" <= t.now))
              AND (m."InboxScope" = 0 OR EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
