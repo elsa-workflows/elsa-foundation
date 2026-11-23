@@ -78,6 +78,7 @@ internal sealed partial class PostgresRootAdmission
             if (!db.UsesRootReplyProtocol) return await RefuseAsync(DirectResult.Refused);
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
         }
+        if (lockOrdinaryWrites) await EfStore.LockCompatibleStoreFormatAsync(db, cancellationToken);
         var address = await RootAddressAsync(db, tenant, reference, cancellationToken);
         if (address is null) return await RefuseAsync(DirectResult.MissingTarget);
         var status = await AdmissionStatusAsync(db, address, tenant, reference, cancellationToken, requireCheckpoint: reply is not null);

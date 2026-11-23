@@ -291,6 +291,18 @@ only readers that already use that lock. The migration race fixture runs such a 
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 
+The Embedded preview composes `IIngress` through `EfStore.OpenPreviewRootIngressAsync`.
+A trusted host supplies a bound scope, the actor type and the receipt retention window. The provider accepts
+durable starts for that type and ordinary direct input to exact roots. Opening the adapter checks the
+installed schema. Each admission holds the shared store-format lock in its write transaction.
+The lock adds one SQL command to each measured start, direct send or replay. The ordinary adapter refuses
+privileged controls. Held requests and event starts require another profile.
+
+For a format-refusal check, run the Native `pg-core-preview birth` phase in a fresh disposable database,
+then run `pg-core-preview format-probe <reference>` in a new process against the same database.
+The probe changes the format marker after opening ingress, verifies refusal at both write paths and
+restores the marker. Its accepted control writes leave test data in that database.
+
 A host can use `EfStore.OpenPreviewRootReadsAsync` to open `IActorReads` for an already-installed ordinary
 PostgreSQL generated-root store. Compose the store with the public `new KernelDb(options)` PostgreSQL context.
 The trusted hosting layer supplies the caller's `BoundScope`. The provider supplies point, list and journal reads

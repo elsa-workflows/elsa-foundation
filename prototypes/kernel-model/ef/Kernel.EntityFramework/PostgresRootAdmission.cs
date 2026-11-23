@@ -6,7 +6,7 @@ namespace Kernel.EntityFramework;
 
 /// <summary>Store operations for externally generated root starts in the single-host PostgreSQL preview.
 /// The calling host supplies the tenant from its bound ingress scope. Schema installation is explicit.</summary>
-internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow)
+internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeSpan deduplicationWindow, bool lockOrdinaryWrites = false)
 {
     internal sealed record Receipt(string Reference, bool Duplicate);
     private sealed record Issuer(byte[] Key, int Partitions);
@@ -101,6 +101,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var name = tenant + "_" + Guid.NewGuid().ToString("N");
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+        if (lockOrdinaryWrites) await EfStore.LockCompatibleStoreFormatAsync(db, cancellationToken);
         var issuer = await db.Database.SqlQueryRaw<Issuer>("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """)
             .SingleAsync(cancellationToken);
         var actor = InstanceRef.In(InstanceRef.Spread(name, issuer.Partitions), name);

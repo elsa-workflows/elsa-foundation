@@ -1,5 +1,4 @@
 using Kernel.EntityFramework;
-using Kernel.Foundation.InMemory;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
@@ -12,6 +11,8 @@ internal sealed class PostgresPreviewFoundation(
     Func<Contract.BoundScope, string, bool>? authorizeOperator = null,
     PostgresDirectRequests? directRequests = null) : Contract.IIngress, Contract.IActorReads
 {
+    private readonly PostgresRootIngress ingress = new(admission, actorType);
+
     public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -29,38 +30,7 @@ internal sealed class PostgresPreviewFoundation(
             return control is null ? new(Contract.AdmissionOutcome.Refused) :
                 new(control.Duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(control.Reference));
         }
-        if (target is Contract.Target.Start start)
-        {
-            var spec = start.Spec;
-            if (kind != Contract.Kinds.Start || payload is not null || spec.Type != actorType || spec.Ephemeral ||
-                !Enum.IsDefined(spec.History))
-                throw new NotSupportedException("The preview starts durable roots of its configured actor type.");
-            if (!FoundationMetadataLimits.IsOutsideMessageId(id))
-                return new(Contract.AdmissionOutcome.Refused);
-            try
-            {
-                var accepted = await admission.AdmitAsync(scope.Tenant, id,
-                    new(spec.Type, spec.TypeData, spec.Input, History: (History)spec.History),
-                    options?.DueAt, options?.KeepFor, cancellationToken);
-                return new(accepted.Duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted,
-                    new Contract.ActorRef(accepted.Reference));
-            }
-            catch (MetadataLimitExceeded)
-            {
-                return new(Contract.AdmissionOutcome.Refused);
-            }
-        }
-        if (target is not Contract.Target.Ref direct || FoundationMetadataLimits.IsReservedKind(kind))
-            throw new NotSupportedException("The preview supports ordinary input addressed to a root reference.");
-        var admitted = await admission.AdmitDirectResultAsync(scope.Tenant, direct.Actor.Id, id, kind, payload,
-            options?.DueAt, options?.KeepFor, cancellationToken);
-        return admitted switch
-        {
-            PostgresRootAdmission.DirectResult.Accepted => new(Contract.AdmissionOutcome.Accepted, direct.Actor),
-            PostgresRootAdmission.DirectResult.Duplicate => new(Contract.AdmissionOutcome.Duplicate, direct.Actor),
-            PostgresRootAdmission.DirectResult.MissingTarget => new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch),
-            _ => new(Contract.AdmissionOutcome.Refused)
-        };
+        return await ingress.SendAsync(scope, target, id, kind, payload, options, cancellationToken);
     }
 
     public ValueTask<Contract.ActorView?> GetAsync(Contract.BoundScope scope, Contract.ActorRef actor,
