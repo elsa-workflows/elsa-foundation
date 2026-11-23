@@ -303,7 +303,10 @@ registration and reaches its own 504 deadline. The approval's state and journal 
 Use `checked` for the other owned fence mode. Use a fresh database for each run. Replace `timely` with
 `late` to hold the live reply through the deadline and observe HTTP 504 with the approval committed.
 Use `disconnect` to close the actual HTTP connection before the handover and see the admitted
-approval complete. The host uses PostgreSQL time to check deadlines and match incoming replies.
+approval complete. Use `slow-body` to send the valid JSON across the route deadline, or `blocked` to hold
+the target row until the edge has returned 504. Both cases verify no input was added, then run a normal
+successful approval. The edge starts its budget before reading the body, uses PostgreSQL time for the
+stored deadline and incoming replies, and returns 504 while a canceled database call finishes unwinding.
 
 This preview uses fixture-private protocol 10 and two Workers with orderly handover in one process.
 It enables the public request contract for exact actor references inside the opt-in PostgreSQL

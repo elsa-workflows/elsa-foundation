@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Net;
+using System.Text;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -40,7 +42,7 @@ internal static class PostgresHttpPreview
         await store.CreateAsync(1);
         await admission.InstallAsync(stop);
         var tenant = FixedTenantScope.Bind("approval");
-        var receiver = new PostgresDirectRequests(admission, store, Receiver);
+        var receiver = new PostgresDirectRequests(admission, Receiver);
         var preview = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType, directRequests: receiver);
         Contract.IIngress ingress = preview;
@@ -87,6 +89,8 @@ internal static class PostgresHttpPreview
                 (await admission.ReadPendingDirectAsync("other", foreignActor.Id, stop)).Count == 0,
                 "A request for another tenant's live reference must leave both workflow inboxes empty.");
 
+            if (schedule == "slow-body") await CheckSlowBodyAsync();
+            if (schedule == "blocked") await CheckBlockedAdmissionAsync(waiting.Actor.Id);
             request = PostAsync("/approval", "Ada", late ? 4_000 : 15_000, clientStop.Token);
             while (true)
             {
@@ -153,13 +157,49 @@ internal static class PostgresHttpPreview
             "A duplicate operation must leave the journal unchanged and cannot attach to an earlier reply.");
 
         var outcome = disconnect ? "disconnected" : late ? "504" : "202 approved";
-        Console.WriteLine($"ok PostgreSQL HTTP {(inBatch ? "in-batch" : "checked")}: epoch {firstEpoch}->{epoch}, one revision, HTTP {outcome}, replay 504, other tenant 404.");
+        Console.WriteLine($"ok PostgreSQL HTTP {(inBatch ? "in-batch" : "checked")} {schedule}: epoch {firstEpoch}->{epoch}, one revision, HTTP {outcome}, replay 504, other tenant 404.");
         return 0;
 
         Task<HttpResponseMessage> PostAsync(string path, string approver, int ms, CancellationToken? clientToken = null) =>
             client.PostAsJsonAsync($"{path}?wait={ms}", new { approver }, clientToken ?? stop);
 
         Task<IReadOnlyList<Message>> PendingAsync() => admission.ReadPendingDirectAsync(tenant.Tenant, actor.Id, stop);
+
+        async Task CheckSlowBodyAsync()
+        {
+            using var body = new SlowApprovalBody();
+            using var response = await client.PostAsync("/approval?wait=500", body, stop);
+            Require(response.StatusCode == HttpStatusCode.GatewayTimeout && (await PendingAsync()).Count == 0,
+                "A valid body that exceeds the route budget must return 504 and add no input.");
+            Console.WriteLine("Slow upload returned 504 before approval admission.");
+        }
+
+        async Task CheckBlockedAdmissionAsync(string id)
+        {
+            await using var locking = Open();
+            await using var gate = await locking.Database.BeginTransactionAsync(stop);
+            await locking.Database.SqlQuery<string>($"""
+                SELECT "Id" AS "Value" FROM "Instances" WHERE "Id" = {id} FOR UPDATE
+                """).SingleAsync(stop);
+            var blocked = PostAsync("/approval", "Ada", 1_500);
+            while (!await db.Database.SqlQueryRaw<bool>("""
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_stat_activity
+                    WHERE datname = current_database() AND wait_event_type = 'Lock'
+                        AND query LIKE '%FoundationReference%' AND query LIKE '%FOR SHARE%') AS "Value"
+                """).SingleAsync(stop))
+            {
+                Require(!blocked.IsCompleted, "The request must reach PostgreSQL and wait for the held row.");
+                await Task.Delay(15, stop);
+            }
+
+            using var response = await blocked.WaitAsync(TimeSpan.FromSeconds(3), stop);
+            Require(response.StatusCode == HttpStatusCode.GatewayTimeout && (await PendingAsync()).Count == 0,
+                "The HTTP deadline must return 504 while admission is still blocked by the held row.");
+            await gate.RollbackAsync(stop);
+            Require((await PendingAsync()).Count == 0, "Releasing the row must not admit the expired request.");
+            Console.WriteLine("Admission returned 504 while PostgreSQL still held the actor row.");
+        }
 
         async Task<bool> ResponseHasCommittedAsync()
         {
@@ -192,31 +232,32 @@ internal static class PostgresHttpPreview
 
         async Task<IResult> DispatchAsync(HttpContext context, Contract.ActorRef reference, string frame)
         {
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stop);
-            var token = linked.Token;
             if (!int.TryParse(context.Request.Query["wait"], out var wait) || wait is < 1 or > 15_000)
                 return Results.BadRequest();
-            JsonNode? body;
-            try { body = await JsonNode.ParseAsync(context.Request.Body, cancellationToken: token); }
-            catch (JsonException) { return Results.BadRequest(); }
-            if (body is not JsonObject fields || fields["approver"] is not JsonValue name || !name.TryGetValue<string>(out var approver))
-                return Results.BadRequest();
 
-            var now = await admission.ReadReplyTimeAsync(token);
-            var payload = Json.Write(new CompositeSignal(frame, "approve", approver));
+            var began = Stopwatch.GetTimestamp();
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stop);
+            budget.CancelAfter(wait);
+            var token = budget.Token;
+            var handling = ReadAndDispatchAsync();
             Contract.Reply reply;
-            try
-            {
-                reply = await ingress.RequestAsync(tenant, new Contract.Target.Ref(reference), Operation, CompositeSignal.Kind,
-                    payload, null, new(null, now + wait), token);
-            }
+            try { reply = await handling.WaitAsync(token); }
             catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
             {
+                await ObserveCanceledAsync();
                 disconnected.TrySetResult();
                 throw;
             }
+            catch (OperationCanceledException) when (budget.IsCancellationRequested && !stop.IsCancellationRequested)
+            {
+                // A canceled database call can still be waiting for its cancellation acknowledgment.
+                _ = ObserveCanceledAsync();
+                return Results.StatusCode(504);
+            }
+
             return reply switch
             {
+                { Error: "body" } => Results.BadRequest(),
                 { Error: "missing" } => Results.NotFound(),
                 { Error: "timeout" } => Results.StatusCode(504),
                 { Error: "lost" } => Results.StatusCode(503),
@@ -226,6 +267,50 @@ internal static class PostgresHttpPreview
                 { Error: null, Status: not Contract.ActorStatus.Faulted, Item: null } => Results.NoContent(),
                 _ => Results.StatusCode(500)
             };
+
+            async Task<Contract.Reply> ReadAndDispatchAsync()
+            {
+                var now = await admission.ReadReplyTimeAsync(token);
+                token.ThrowIfCancellationRequested();
+                var remaining = Math.Max(0, wait - (long)Stopwatch.GetElapsedTime(began).TotalMilliseconds);
+                var routeDeadline = now + remaining;
+                JsonNode? body;
+                try { body = await JsonNode.ParseAsync(context.Request.Body, cancellationToken: token); }
+                catch (JsonException) { return new(null, null, Error: "body"); }
+                if (body is not JsonObject fields || fields["approver"] is not JsonValue name || !name.TryGetValue<string>(out var approver))
+                    return new(null, null, Error: "body");
+
+                token.ThrowIfCancellationRequested();
+                var payload = Json.Write(new CompositeSignal(frame, "approve", approver));
+                return await ingress.RequestAsync(tenant, new Contract.Target.Ref(reference), Operation, CompositeSignal.Kind,
+                    payload, null, new(null, routeDeadline), token);
+            }
+
+            async Task ObserveCanceledAsync()
+            {
+                try { await handling; }
+                catch (Exception) when (token.IsCancellationRequested) { }
+            }
+        }
+    }
+
+    private sealed class SlowApprovalBody : HttpContent
+    {
+        private static readonly byte[] Prefix = Encoding.UTF8.GetBytes("{\"approver\":");
+        private static readonly byte[] Suffix = Encoding.UTF8.GetBytes("\"Ada\"}");
+
+        protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            await stream.WriteAsync(Prefix);
+            await stream.FlushAsync();
+            await Task.Delay(1_200);
+            await stream.WriteAsync(Suffix);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = Prefix.Length + Suffix.Length;
+            return true;
         }
     }
 
