@@ -114,7 +114,12 @@ internal static class JsonBaselineSourceScan
             var serializer = receiver is not null && (receiver == "JsonSerializer" || receiver.EndsWith(".JsonSerializer", StringComparison.Ordinal) || serializerAliases.Contains(receiver)) || member is null && staticSerializer;
             var arguments = call.ArgumentList.Arguments;
             if (name is "HasColumnType" or "SetColumnType" && arguments.Count > 0)
-                foreach (var storage in StorageTypes(arguments[0].Expression, call, storageRoots)) Add("storage:" + storage, call);
+            {
+                var typeArgument = arguments.FirstOrDefault(argument => argument.NameColon?.Name.Identifier.ValueText is "typeName" or "type" or "columnType")
+                    ?? arguments.FirstOrDefault(argument => argument.NameColon is null);
+                if (typeArgument is not null)
+                    foreach (var storage in StorageTypes(typeArgument.Expression, call, storageRoots)) Add("storage:" + storage, call);
+            }
             if (name is "Column" or "AlterColumn" && arguments.FirstOrDefault(argument => argument.NameColon?.Name.Identifier.ValueText == "type") is { } columnType)
                 foreach (var storage in StorageTypes(columnType.Expression, call, storageRoots)) Add("storage:" + storage, call);
             if (name == "ToJson")
@@ -131,7 +136,7 @@ internal static class JsonBaselineSourceScan
                 var profileStart = httpRead ? name == "GetFromJsonAsync" ? 1 : 0 : httpWrite ? name == "WriteAsJsonAsync" ? 1 : 2 : 1;
                 var acceptsProfile = !httpResult || name == "Json";
                 var explicitProfile = acceptsProfile && (arguments.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" or "jsonSerializerOptions" && !argument.Expression.IsKind(SyntaxKind.NullLiteralExpression)) ||
-                    effective.Skip(profileStart).Any(argument => IsProfileExpression(argument.Expression, call)));
+                    effective.Skip(profileStart).Take(httpResult ? 1 : 2).Any(argument => argument.NameColon is null && IsProfileExpression(argument.Expression, call)));
                 var bodyCount = name is "Created" or "Accepted" ? 2 : 1;
                 if (!explicitProfile && (httpRead || httpWrite || effective.Length >= bodyCount)) Add("optionless", call);
             }
@@ -362,9 +367,8 @@ internal static class JsonBaselineSourceScan
     private static bool IsProfileExpression(ExpressionSyntax expression, SyntaxNode site)
     {
         var type = DeclaredType(expression, site);
-        if (type is not null && (type.EndsWith("JsonSerializerOptions", StringComparison.Ordinal) || type.Contains("JsonTypeInfo", StringComparison.Ordinal))) return true;
-        var text = expression.ToString();
-        return IsBaselineExpression(expression) || expression is MemberAccessExpressionSyntax && text.Contains(".WireContext.", StringComparison.Ordinal);
+        if (type is not null) return type.EndsWith("JsonSerializerOptions", StringComparison.Ordinal) || type.Contains("JsonTypeInfo", StringComparison.Ordinal);
+        return IsBaselineExpression(expression);
     }
 
     private static string? DeclaredType(ExpressionSyntax expression, SyntaxNode site, HashSet<string>? visited = null)
@@ -403,8 +407,8 @@ internal static class JsonBaselineSourceScan
             return site.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Members.OfType<PropertyDeclarationSyntax>()
                 .FirstOrDefault(property => property.Identifier.ValueText == identifier.Identifier.ValueText)?.Type.ToString();
         var type = (declaration.Parent as VariableDeclarationSyntax)?.Type.ToString();
-        if (type != "var") return type;
-        return declaration.Initializer?.Value switch
+        if (type is not ("var" or "dynamic")) return type;
+        var inferred = declaration.Initializer?.Value switch
         {
             ObjectCreationExpressionSyntax creation => creation.Type.ToString(),
             IdentifierNameSyntax alias => DeclaredType(alias, site, visited),
@@ -415,6 +419,7 @@ internal static class JsonBaselineSourceScan
                 invocation.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText == "GetTypeInfo" && access.Expression.ToString().Contains(".WireContext", StringComparison.Ordinal)) == true => "JsonTypeInfo",
             _ => null
         };
+        return inferred ?? (type == "dynamic" ? "dynamic" : null);
 
         bool KnownType(string? typeName, string expected)
         {
