@@ -522,7 +522,10 @@ epoch and release isolation while a callback is still active.
 SQLite, PostgreSQL, SQL Server and MySQL support the counted clear on EF and owned SQL with either fence mode. The store conformance cases named
 `job trial clear` cover the selected ticket group, refusals, an ordinary input with the same wire id and takeover
 after a transport failure before or after commit. Owned SQL also checks a group across two partition epochs.
-Worker inline promotion and the same-actor deadline keep their K4 qualification. MongoDB-specific checks are deferred.
+The [PostgreSQL timed job Worker check](../../prototypes/kernel-model/README.md#timed-jobs-on-the-postgresql-worker)
+covers the same-actor race and counted takeover on the legacy relational path with both owned fence modes.
+Public generated-root deadline settlement, Worker inline promotion and the remaining provider runs retain
+their K4 qualification. MongoDB-specific checks are deferred.
 
 ### K11 foundation contract cases
 
