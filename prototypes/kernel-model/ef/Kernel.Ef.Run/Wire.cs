@@ -72,6 +72,7 @@ sealed class Wire
             return endpoint is { Host: "127.0.0.1" or "localhost", Port: > 0 and <= ushort.MaxValue } ? endpoint : null;
         }
         catch (ArgumentException) { return null; }
+        catch (FormatException) { return null; }
         catch (OverflowException) { return null; }
     }
 
