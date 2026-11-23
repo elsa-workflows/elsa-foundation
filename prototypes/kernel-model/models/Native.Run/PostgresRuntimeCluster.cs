@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using Kernel.EntityFramework;
 using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -56,8 +57,9 @@ internal static class PostgresRuntimeCluster
                       AND state = 'idle' AND query = 'LISTEN elsa_kernel_wake'
                     """).SingleAsync(token) != 2)
                     await Task.Delay(50, token);
-                await db.Database.ExecuteSqlRawAsync("""
-                    SELECT pg_notify('elsa_kernel_wake', 'invalid'), pg_notify('elsa_kernel_wake', '-1')
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    SELECT pg_notify('elsa_kernel_wake', 'invalid'), pg_notify('elsa_kernel_wake', '-1'),
+                           pg_notify('elsa_kernel_wake', {Partitions.ToString(CultureInfo.InvariantCulture)})
                     """, token);
             }
 
@@ -143,6 +145,12 @@ internal static class PostgresRuntimeCluster
         await using var node = member.Node;
         await member.StartAsync(limit.Token);
         if (await Console.In.ReadLineAsync(limit.Token) != "leave") return 1;
+        if (wake)
+        {
+            var wait = Stopwatch.StartNew();
+            while (member.Hints.Count < 2 && wait.Elapsed < TimeSpan.FromSeconds(5))
+                await Task.Delay(25, limit.Token);
+        }
         await node.StopAsync(limit.Token);
         var turns = member.Turns.ToArray();
         Check(node.Errors == 0 && node.Heartbeats.Renewed > 0, "departing runtime renewed its lease and reported zero loop errors");
