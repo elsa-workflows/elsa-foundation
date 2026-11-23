@@ -127,8 +127,29 @@ public sealed class Watcher
             if (_busy.TryGetValue((node, scope), out var now) && now == what) _busy.Remove((node, scope));
     }
 
-    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount, INodeLeaseHost
+    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount, INodeLeaseHost, IScopeSetRelease
     {
+        public bool SupportsSetRelease => inner is IScopeSetRelease { SupportsSetRelease: true };
+
+        public async ValueTask ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken = default)
+        {
+            var releasing = activations.Cast<Watched>().Where(activation => activation.BeginRelease()).ToArray();
+            var cancelled = false;
+            try
+            {
+                await ((IScopeSetRelease)inner).ReleaseAsync(releasing.Select(activation => activation.Inner).ToArray(), cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                cancelled = true;
+                throw;
+            }
+            finally
+            {
+                foreach (var activation in releasing) activation.EndRelease(cancelled);
+            }
+        }
+
         // K1b: the node lease is layer 2's too; the watcher passes it through, and watches what the node pass adopts as an activation.
         public TimeSpan? NodeLease => (inner as INodeLeaseHost)?.NodeLease;
         public ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default) =>
@@ -202,9 +223,16 @@ public sealed class Watcher
 
         public async ValueTask DisposeAsync()
         {
+            if (!BeginRelease()) return;
+            try { await inner.DisposeAsync(); }
+            finally { EndRelease(); }
+        }
+
+        internal bool BeginRelease()
+        {
             lock (watcher._lock)
             {
-                if (Disposed) return;
+                if (Disposed) return false;
                 Disposed = true;
                 // Layer 2 hands a node the same activation again when it takes the scope again; giving up this one then
                 // would give up the new epoch.
@@ -215,8 +243,13 @@ public sealed class Watcher
                     watcher._violations.Add($"SEAM {node} gave scope {scope} up after it was killed: a crash gives nothing up");
             }
             watcher.Enter(node, scope, "gave up");
-            try { await inner.DisposeAsync(); }
-            finally { watcher.Leave(node, scope, "gave up"); }
+            return true;
+        }
+
+        internal void EndRelease(bool cancelled = false)
+        {
+            if (cancelled) lock (watcher._lock) Disposed = false;
+            watcher.Leave(node, scope, "gave up");
         }
     }
 }

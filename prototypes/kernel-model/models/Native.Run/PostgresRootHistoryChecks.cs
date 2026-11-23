@@ -110,7 +110,58 @@ internal static class PostgresRootHistoryChecks
                 suffix.Items.Count > 0 && suffix.Items.All(e => e.Revision == 3) && await Position() == originalPosition + 2,
                 $"{history} next recorded turn appends the contiguous position and resumes the saved public tail");
         }
+        await CheckReaderOpenAsync(Open, admissions, ct);
         return 0;
+    }
+
+    private static async Task CheckReaderOpenAsync(Func<KernelDb> create, PostgresRootAdmission admissions, CancellationToken token)
+    {
+        await using var setup = create();
+        var original = await setup.StoreVersions.AsNoTracking().SingleAsync(token);
+        try
+        {
+            foreach (var (change, versions) in new (Action<StoreVersionEntity>, string)[]
+            {
+                (row => row.StoreSchema--, $"Stored schema={original.StoreSchema - 1},"),
+                (row => row.MessageProtocol--, $"message protocol={original.MessageProtocol - 1},"),
+                (row => row.JournalCodec++, $"journal codec={original.JournalCodec + 1}."),
+            })
+            {
+                await using var db = create();
+                var marker = await db.StoreVersions.SingleAsync(token);
+                db.Entry(marker).CurrentValues.SetValues(original);
+                change(marker);
+                await db.SaveChangesAsync(token);
+                await RequireReaderRefusal(versions);
+            }
+
+            await setup.StoreVersions.Where(row => row.Id == original.Id).ExecuteDeleteAsync(token);
+            await RequireReaderRefusal("version marker is missing");
+        }
+        finally
+        {
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await using var db = create();
+            var marker = await db.StoreVersions.SingleOrDefaultAsync(row => row.Id == original.Id, cleanup.Token);
+            if (marker is null) db.StoreVersions.Add(original);
+            else db.Entry(marker).CurrentValues.SetValues(original);
+            await db.SaveChangesAsync(cleanup.Token);
+        }
+
+        await admissions.OpenJournalCursorAsync(token);
+        Check(true, "a public reader reopens its cursor after restoring the supported format");
+        return;
+
+        async Task RequireReaderRefusal(string details)
+        {
+            try { await admissions.OpenJournalCursorAsync(token); }
+            catch (StoreFormatException error) when (error.Message.Contains(details, StringComparison.Ordinal))
+            {
+                Check(true, $"public reader startup refuses {details}");
+                return;
+            }
+            throw new InvalidOperationException($"Public reader startup must refuse {details}.");
+        }
     }
 
     private static void Check(bool valid, string description)

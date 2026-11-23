@@ -70,6 +70,10 @@ Between the two owner processes, a separate diagnostic process bound to another 
 send to the workflow or read its checkpoint or journal. This probe uses no measured connection.
 
 The default receipt estimates round trips by adding EF commands and explicit transaction completions. It excludes connection setup. Setup, ownership and journal reads have their own rows.
+The relational store reads its format marker during schema setup, each nonempty take or retake, and each renewing heartbeat.
+The preview counts these reads in setup and ownership. A relational format advance uses a coordinated stop. Fully stop every
+predecessor process before the first advance if it was built before the marker-lock protocol. The missed-stop check serializes
+only readers that already use that lock. The migration race fixture runs such a reader against the previous stored format.
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 
@@ -100,6 +104,54 @@ multiplexing disabled. The output also reports PostgreSQL Sync and Query groups 
 | First approval including admission | 18 | 20 |
 | Duplicate approval after restart including admission | 5 | 5 |
 | Finishing approval including admission | 19 | 21 |
+
+In two before-and-after runs on PostgreSQL 17, schema setup on an empty database took 34 or 35 TCP turns before
+the format check and 37 with the marker table, seed and read. Both the first and restarted process took 13 TCP
+turns for ownership, up from 12. The five workflow operations above kept their measured counts.
+
+Public PostgreSQL readers check the format once when opening the journal cursor. On two fresh PostgreSQL 17.12
+runs with this check, the first process reported 38 or 39 TCP turns for setup, the restarted process reported six,
+and both still reported 13 for ownership. The five workflow phases retained their earlier counts.
+
+The relational schema marker is now 2 for the readable format columns on node rows. Schema 1 preview databases
+refuse open and acquisition before a node-row write. Use a fresh dedicated preview database for this revision.
+
+The general relational projector checks the format before reading the cursor, reading a journal page and
+writing a projection. A PostgreSQL 17 round that advanced the cursor measured six TCP turns with those
+checks, up from three. The general journal reader, view reader and sweeper each check the marker on entry.
+The public preview uses separate tenant-scoped checkpoint and journal queries.
+
+To run two tenants' Native approvals on the same Embedded worker, use a fresh dedicated database. After building
+`models/Native.Run` in Release, run the following commands from `prototypes/kernel-model`. Supply the three
+references printed by the first process to the second. The third identifies a root outside the owner's set.
+
+```bash
+dll=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+birth=$(dotnet "$dll" pg-multi-root owned in-batch birth)
+read -r label first_ref second_ref outside_ref <<< "$(printf '%s\n' "$birth" | awk '$1 == "multi-references"')"
+dotnet "$dll" pg-multi-root owned in-batch restart "$first_ref" "$second_ref" "$outside_ref"
+```
+
+The fixture checks the PostgreSQL transaction IDs for two journal rows at different actor revisions, replays a
+direct input after restart, and checks that a terminal refusal on one root rolls back both turns. The second
+tenant issues its public requests in a separate process bound to that tenant. The writer choices
+are `owned` and `ef`. The fence choices are `in-batch` and `checked`.
+
+To let an Embedded worker discover public roots from their partition, use a fresh dedicated database and run:
+
+```bash
+dll=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+dotnet "$dll" pg-discover-roots birth 0
+dotnet "$dll" pg-discover-roots restart 0
+```
+
+The first process activates an empty partition, admits roots and leaves a final approval ready. The second process
+takes the same partition and finishes that approval before the observer looks up any actor references. The poll
+joins eligible inbox rows to their admitted births, respects its row limit, and returns tenant and reference with
+the creator. Direct inputs admitted before a scheduled birth become eligible after its first checkpoint. The fixture
+checks that an independent ready root runs during that interval, a replay adds no turn, and the other partition keeps its pending work.
+Each tenant uses its own fixed-scope public client process. To select a writer and fence, append `owned` or `ef`
+and `in-batch` or `checked` to both commands. This preview runs one registered workflow actor type on its dedicated database.
 
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
