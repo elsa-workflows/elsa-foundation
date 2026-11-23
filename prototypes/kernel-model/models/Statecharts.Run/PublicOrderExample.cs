@@ -42,8 +42,11 @@ internal static class PublicOrderExample
             Require(birth is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "The order must be admitted.");
             var actor = birth.Actor!.Value;
             string frame;
-            await using (var first = await ActivateAsync("order-owner"))
+            var originalWorker = OrderWorker("order-owner");
+            long originalEpoch;
+            await using (var first = await ActivateAsync(originalWorker))
             {
+                originalEpoch = originalWorker.Epoch;
                 await DriveAsync(first);
                 frame = (await HistoryAsync(actor)).Entries.Single(entry => entry is [_, null, "entry", "AwaitingPayment"])[0]!;
                 Require(await GetStatusAsync(actor) == Contract.ActorStatus.Running && Marks().SequenceEqual(["reserve stock", "book shipment"]),
@@ -51,7 +54,10 @@ internal static class PublicOrderExample
             }
 
             now++;
-            await using var replacement = await ActivateAsync("order-replacement");
+            var replacementWorker = OrderWorker("order-replacement");
+            await using var replacement = await ActivateAsync(replacementWorker);
+            Require(originalEpoch > 0 && replacementWorker.Epoch > originalEpoch,
+                "The replacement must hold a later epoch for the order partition.");
             var decision = accepted ? "approved" : "declined";
             var sent = await SignalAsync(actor, frame, "payment-decision", decision);
             Require(sent.Outcome == Contract.AdmissionOutcome.Accepted, "The payment decision must be admitted after owner replacement.");
@@ -109,17 +115,21 @@ internal static class PublicOrderExample
         async Task<Contract.ActorStatus?> GetStatusAsync(Contract.ActorRef actor) =>
             (await reads.GetAsync(scope, actor, token))?.Header.Status;
 
-        ValueTask<Contract.Admission> SignalAsync(Contract.ActorRef actor, string frame, string operation, string trigger) =>
-            ingress.SendAsync(scope, new Contract.Target.Ref(actor), operation, CompositeSignal.Kind,
-                JsonSerializer.Serialize(new CompositeSignal(frame, trigger)), cancellationToken: token);
-
-        async Task<IScopeActivation> ActivateAsync(string node)
+        async ValueTask<Contract.Admission> SignalAsync(Contract.ActorRef actor, string frame, string operation, string trigger)
         {
-            var worker = new Worker(node, 0, store, new ActorAdapter(store, new PublicWorkflow([new NativeExecutionModel(registry)])),
-                new WorkerOptions { Monotonic = () => now - start });
-            return await new DurableHost([worker]).ActivateAsync(0, token)
-                ?? throw new InvalidOperationException("The Embedded owner could not activate.");
+            var receipt = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), operation, CompositeSignal.Kind,
+                JsonSerializer.Serialize(new CompositeSignal(frame, trigger)), cancellationToken: token);
+            Require(receipt.Actor == actor, $"The receipt for {operation} must identify the order.");
+            return receipt;
         }
+
+        Worker OrderWorker(string node) =>
+            new Worker(node, 0, store, new ActorAdapter(store, new PublicWorkflow([new NativeExecutionModel(registry)])),
+                new WorkerOptions { Monotonic = () => now - start });
+
+        async Task<IScopeActivation> ActivateAsync(Worker worker) =>
+            await new DurableHost([worker]).ActivateAsync(0, token)
+                ?? throw new InvalidOperationException("The Embedded owner could not activate.");
 
         async Task DriveAsync(IScopeActivation owner)
         {
