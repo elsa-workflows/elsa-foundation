@@ -9,6 +9,23 @@ namespace Elsa.Serialization.Tests.Unit;
 public sealed class JsonConversionContractTests
 {
     [Fact]
+    public void Scalar_reads_keep_exact_numeric_null_and_selection_refusal_rules()
+    {
+        Assert.Equal(9007199254740993L, JsonConversionContract.Deserialize<long>("9007199254740993"));
+        Assert.Equal(ulong.MaxValue, JsonConversionContract.Deserialize<ulong>("18446744073709551615"));
+        Assert.Equal(0.100000000000000000000001m, JsonConversionContract.Deserialize<decimal>("0.100000000000000000000001"));
+        Assert.Equal('é', JsonConversionContract.Deserialize<char>("\"é\""));
+        Assert.True(JsonConversionContract.Deserialize<bool>("true"));
+        Assert.Equal(42, JsonConversionContract.Deserialize<int?>("42"));
+        Assert.Null(JsonConversionContract.Deserialize<int?>("null"));
+        Assert.Throws<JsonException>(() => JsonConversionContract.Deserialize<int>("null"));
+        Assert.Throws<JsonException>(() => JsonConversionContract.Deserialize<int>("2147483648"));
+        Assert.Throws<JsonException>(() => JsonConversionContract.Deserialize<char>("\"xy\""));
+        var property = typeof(InvalidScalarSelection).GetProperty(nameof(InvalidScalarSelection.Value))!;
+        Assert.Throws<ArgumentOutOfRangeException>(() => JsonConversionContract.For(typeof(int), property).Read(Element("1"), typeof(int)));
+    }
+
+    [Fact]
     public void Default_round_trips_camel_case_and_warns_without_rewriting_carried_data()
     {
         var contract = JsonConversionContract.For(typeof(Order));
@@ -88,6 +105,10 @@ public sealed class JsonConversionContractTests
 
     [Theory]
     [InlineData("\"42\"", typeof(int))]
+    [InlineData("\"NaN\"", typeof(double))]
+    [InlineData("\"Infinity\"", typeof(float))]
+    [InlineData("42", typeof(string))]
+    [InlineData("false", typeof(string))]
     [InlineData("5.0", typeof(int))]
     [InlineData("\"true\"", typeof(bool))]
     [InlineData("\"P1M\"", typeof(TimeSpan))]
@@ -177,6 +198,7 @@ public sealed class JsonConversionContractTests
     [JsonConversion(CaseInsensitive = true)] private sealed class Nested { [JsonPropertyName("customer_id")] public string? CustomerId { get; set; } }
     [JsonConversion(MemberMappings = ["invoiceID=Id"])] private sealed class Mapped { public int Id { get; set; } public Child? Child { get; set; } }
     private sealed class Child { public int Id { get; set; } }
+    private sealed class InvalidScalarSelection { [JsonConversion(NamingPolicy = (JsonKnownNamingPolicy)999)] public int Value { get; set; } }
     [JsonConversion(RefuseUnmatchedMembers = true)] private sealed class StrictOrder { public string? Name { get; set; } }
     private sealed class RequiredOrder { public required string Name { get; set; } }
     private sealed class AnnotatedNumber { [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] public int Number { get; set; } }

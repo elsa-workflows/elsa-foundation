@@ -111,7 +111,7 @@ public sealed class ActivityInputHydrator
             ?? throw new InvalidOperationException($"Activity input '{input.Key}' has no inline payload.");
         try
         {
-            return Elsa.Serialization.Core.JsonConversionContract.For(plan.Property.PropertyType, plan.Property).Read(inline, plan.Property.PropertyType,
+            return plan.Conversion.Read(inline, plan.Property.PropertyType,
                 diagnostic =>
                 {
                     var warning = Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{input.Key}");
@@ -134,8 +134,11 @@ public sealed class ActivityInputHydrator
             Nullable.GetUnderlyingType(property.PropertyType) is not null ||
             !property.PropertyType.IsValueType &&
             new NullabilityInfoContext().Create(property).WriteState is not NullabilityState.NotNull);
+        private readonly Lazy<Elsa.Serialization.Core.JsonConversionContract> _conversion = new(() =>
+            Elsa.Serialization.Core.JsonConversionContract.For(property.PropertyType, property));
 
         public PropertyInfo Property { get; } = property;
+        public Elsa.Serialization.Core.JsonConversionContract Conversion => _conversion.Value;
         public bool AcceptsNull => _acceptsNull.Value;
     }
 }

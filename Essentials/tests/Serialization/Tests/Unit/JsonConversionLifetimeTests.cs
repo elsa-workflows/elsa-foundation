@@ -11,6 +11,30 @@ namespace Elsa.Serialization.Tests.Unit;
 
 public sealed class JsonConversionLifetimeTests
 {
+    [Fact]
+    public async Task Scalar_optimization_does_not_cache_collectible_enum_contracts_in_the_baseline()
+    {
+        var type = ExerciseEnum();
+        await Task.Delay(TimeSpan.FromMilliseconds(1500));
+        _ = JsonSerializer.SerializeToElement(new Canary(), new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver() });
+        for (var round = 0; round < 12; round++) { GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); }
+        Assert.False(type.IsAlive);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference ExerciseEnum()
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("S9CollectibleEnum"), AssemblyBuilderAccess.RunAndCollect);
+        var builder = assembly.DefineDynamicModule("contract").DefineEnum("PluginState", TypeAttributes.Public, typeof(int));
+        builder.DefineLiteral("Ready", 1);
+        var type = builder.CreateTypeInfo()!.AsType();
+        using var document = JsonDocument.Parse("1");
+        var contract = JsonConversionContract.For(type);
+        var value = contract.Read(document.RootElement, type);
+        Assert.Equal(1, Convert.ToInt32(value));
+        return new WeakReference(type);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -52,6 +76,11 @@ public sealed class JsonConversionLifetimeTests
         Assert.Equal("Ada", memberContract.Write(instance, type).GetProperty("customerName").GetString());
         Assert.True(JsonConversionContract.For(typeof(object)).Options.IsReadOnly);
         _ = JsonSerializer.SerializeToElement<object>(instance, JsonConversionContract.For(typeof(object)).Options);
+        // A stable scalar contract is also an options provider and accepts an explicit requested type.
+        // Neither route may turn the scalar read optimization into a global plugin-metadata cache.
+        _ = JsonSerializer.SerializeToElement<object>(instance, JsonConversionContract.For(typeof(string)).Options);
+        using var empty = JsonDocument.Parse("{}");
+        _ = JsonConversionContract.For(typeof(string)).Read(empty.RootElement, type);
         return new WeakReference(type);
     }
 

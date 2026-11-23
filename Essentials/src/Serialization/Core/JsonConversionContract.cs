@@ -81,8 +81,21 @@ public sealed class JsonConversionContract
     public object? Read(JsonElement value, Type type, Action<JsonConversionDiagnostic>? report = null)
     {
         foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, this)) report?.Invoke(diagnostic);
+        // These fixed BCL contracts have no member naming, custom converter or temporal policy.
+        // Reusing their baseline metadata avoids rebuilding a reflection resolver on every scalar input.
+        // User, enum, collection and object contracts remain operation-local, including nested collectible types.
+        if (IsBaselineScalar(Nullable.GetUnderlyingType(type) ?? type))
+        {
+            _ = Naming(namingPolicy); // Invalid selections must still refuse even though scalar naming has no effect.
+            return value.Deserialize(type, JsonBaseline.Options);
+        }
         return value.Deserialize(type, Options);
     }
+
+    private static bool IsBaselineScalar(Type type) => type == typeof(string) || type == typeof(bool) || type == typeof(char) ||
+        type == typeof(byte) || type == typeof(sbyte) || type == typeof(short) || type == typeof(ushort) ||
+        type == typeof(int) || type == typeof(uint) || type == typeof(long) || type == typeof(ulong) ||
+        type == typeof(float) || type == typeof(double) || type == typeof(decimal);
 
     /// <summary>Writes with the same effective contract used for reads.</summary>
     public JsonElement Write(object? value, Type type) => JsonSerializer.SerializeToElement(value, type, Options);
