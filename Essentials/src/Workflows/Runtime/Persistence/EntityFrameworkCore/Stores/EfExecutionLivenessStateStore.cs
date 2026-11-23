@@ -716,7 +716,7 @@ public sealed class EfExecutionLivenessStateStore(
     }
 
     private static string RecoveryBinding(string scope, RuntimeRecoveryScanRequest request) =>
-        JsonSerializer.Serialize(new RecoveryScanBinding(
+        Elsa.Serialization.Core.JsonHashInput.Hash(new RecoveryScanBinding(
             scope,
             request.Now.UtcTicks,
             request.LeaseTimeout.Ticks,

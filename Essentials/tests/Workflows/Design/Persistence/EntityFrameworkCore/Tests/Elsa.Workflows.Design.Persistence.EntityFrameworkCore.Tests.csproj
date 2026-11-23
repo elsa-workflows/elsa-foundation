@@ -30,5 +30,6 @@
   <ItemGroup>
     <EmbeddedResource Include="../../../../../../../specs/1207-json-data-integrity-baseline/evidence/workflow-library-binding-hash-vectors.json" LogicalName="S9WorkflowLibraryBindingVectors.json" />
     <EmbeddedResource Include="../../../../../../../specs/1207-json-data-integrity-baseline/evidence/design-operation-hash-vectors.json" LogicalName="S9DesignOperationVectors.json" />
+    <EmbeddedResource Include="../../../../../../../specs/1207-json-data-integrity-baseline/evidence/nested-binding-hash-vectors.json" LogicalName="S9NestedBindingVectors.json" />
   </ItemGroup>
 </Project>
