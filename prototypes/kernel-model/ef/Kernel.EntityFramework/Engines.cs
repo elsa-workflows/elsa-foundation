@@ -183,7 +183,7 @@ public sealed class SqlServerEngine : Engine
 
     public override string Poll =>
         $"""
-         SELECT TOP ({"{3}"}) t.now AS "Now", m."Id", m."IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
+         SELECT TOP ({"{3}"}) t.now AS "Now", m."Id", m."IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration"
          FROM (SELECT {Now} AS now) t
          LEFT JOIN "Messages" m{(ReadPast ? " WITH (READPAST)" : "")} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = 0 AND m."Due" <= t.now + {"{2}"}
          ORDER BY m."Seq"
@@ -274,6 +274,7 @@ public sealed class SqlServerEngine : Engine
     {
         1205 => Failure.Transient,                                  // deadlock victim: the whole transaction was rolled back
         1222 => Failure.Transient,                                  // lock request time-out: the statement did not happen, and the store rolls back
+        51003 => Failure.Definite,                                  // kernel job generation rewind
         2627 or 2601 or 547 or 515 or 8152 or 2628 => Failure.Definite,    // key violation, constraint, null, value too long
         _ => Failure.Unknown,                                       // a killed session, a broken connection, a time-out
     };
@@ -288,7 +289,7 @@ public sealed class MySqlEngine : Engine
 
     public override string Poll => Sql(
         $"""
-         SELECT t.now AS "Now", m."Id", m."IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
+         SELECT t.now AS "Now", m."Id", m."IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration"
          FROM (SELECT {Now} AS now) t
          LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = 0 AND m."Due" <= t.now + {"{2}"}
          ORDER BY m."Seq" LIMIT {"{3}"}
@@ -359,6 +360,7 @@ public sealed class MySqlEngine : Engine
     {
         1213 => Failure.Transient,                          // deadlock victim: InnoDB rolled the whole transaction back
         1205 => Failure.Transient,                          // lock wait time-out: the statement did not happen, and the store rolls back
+        51003 => Failure.Definite,                          // kernel job generation rewind
         1062 or 1406 or 1048 or 1264 => Failure.Definite,   // duplicate key, data too long, null, out of range
         _ => Failure.Unknown,                               // a killed connection, a lost connection
     };

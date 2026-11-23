@@ -154,7 +154,7 @@ internal sealed partial class PostgresRootAdmission
 
     internal static Message DecodeDirect(MessageEntity row, string reference)
     {
-        if (!IsStoredDirect(row.Start))
+        if (row.JobGeneration != 0 || !IsStoredDirect(row.Start))
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
         var header = DurableKeyJson.Read<StoredDirect>(row.Start![DirectPrefix.Length..]);
         if (header.Creation != 1 || !MatchesDirectOccurrence(reference, header.Operation, row.Id))

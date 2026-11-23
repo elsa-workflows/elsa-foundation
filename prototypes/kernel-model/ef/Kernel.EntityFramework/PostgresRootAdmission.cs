@@ -158,7 +158,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
 
     internal static Message DecodeCreator(MessageEntity row)
     {
-        if (!IsStoredCreator(row.Start) || row.Kind != Kinds.Start || row.Id != "root:" + row.Target || row.Sender is not null)
+        if (row.JobGeneration != 0 || !IsStoredCreator(row.Start) || row.Kind != Kinds.Start || row.Id != "root:" + row.Target || row.Sender is not null)
             throw new StoreException(Failure.Definite, "Invalid PostgreSQL generated root creator.");
         var stored = DurableKeyJson.Read<StoredRoot>(row.Start![CreatorPrefix.Length..]);
         var digest = FoundationRootCreator.OperationDigest(stored.Id);
