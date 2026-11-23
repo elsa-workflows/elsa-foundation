@@ -1604,8 +1604,8 @@ calls one new model hook.
     re-armed timer finds it. At Open the kernel computes the same sum from the envelopes it is about to write, and a
     plan over `B_plan` refuses the recover with reason "plan" and changes nothing, as at `W_max` + 1 (TR-5).
 - **Checks.** The `ParkSelection` matches (above), no resolution is open, and the instance is recoverable under
-  decision 1. After the window's expiry the Park is resolved, so recover is refused in
-  both modes. Open splits the selection before it writes anything, reading the disposition first, as the lookup does,
+  decision 1. A finite deadline makes expiry eligible. The first fenced Open wins. A recovery Open can recall a due
+  expiry timer while it remains pending. Once expiry has opened, both recovery modes are refused. Open splits the selection before it writes anything, reading the disposition first, as the lookup does,
   and gives each handle one meaning:
   - a handle that names a timer this Park retains as `Suppressed` (below) goes to the re-arm path (below), even while
     its row is still kept, and is never marked `Selected` nor counted in the marking;

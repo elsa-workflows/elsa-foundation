@@ -20,8 +20,6 @@ internal sealed partial class ActorAdapter
         if (checkpoint.Park is not { } park || !store.MatchesFoundationSelection(header.Tenant, header.Ref.Id, selection))
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
         var expiry = store.FoundationExpiry(row);
-        if (expiry is not null && input.Services.Now >= expiry.At)
-            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "ParkExpired");
 
         Durable.ParkTimerRecipe[] timerRecipes;
         Durable.ParkJobRecipe[] jobRecipes;
