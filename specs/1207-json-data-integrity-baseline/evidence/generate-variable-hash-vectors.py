@@ -12,6 +12,8 @@ def quote(value):
     result = '"'
     for char in value:
         code = ord(char)
+        if 0xd800 <= code <= 0xdfff:
+            raise ValueError('Raw JSON fixture strings cannot contain unpaired surrogate code units')
         if char == '\\':
             result += '\\\\'
         elif code in {8, 9, 10, 12, 13}:
@@ -29,6 +31,19 @@ def quote(value):
 
 class Number(str):
     pass
+
+
+def load_json(raw):
+    def unique_members(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError('Duplicate JSON names require a token-preserving fixture generator')
+            result[key] = value
+        return result
+    value = json.loads(raw, parse_int=Number, parse_float=Number, object_pairs_hook=unique_members)
+    canonical(value)  # Validate raw string/name code units before any output is written.
+    return value
 
 
 def canonical(value):
@@ -71,10 +86,25 @@ def generate():
     for name, presence, raw in cases:
         payload = {'presence': Number(str(presence))}
         if raw is not None:
-            payload['inline'] = json.loads(raw, parse_int=Number, parse_float=Number)
+            payload['inline'] = load_json(raw)
         preimage = canonical(payload)
         result.append(dict(name=name, presence=presence, json=raw, canonical=preimage,
                            sha256=hashlib.sha256(preimage.encode('utf-8')).hexdigest()))
+    descriptor = dict(alias='String', collectionKind='Single', schema=None, schemaVersion=None)
+    plan = dict(schemaVersion=Number('1'), sourceRepresentation='TextValue', sourceType=descriptor,
+                targetType=descriptor, mode='Auto', operation='Identity', profile=None,
+                limits=dict(maxDepth=Number('64'), maxCollectionItems=Number('10000'), maxPayloadBytes=Number('1048576')), options={})
+    plan['fingerprint'] = 'sha256:' + hashlib.sha256(canonical(plan).encode()).hexdigest()
+    markers = [
+        ('external', Number('2'), dict(external=dict(storageProfile='blob', locator='object-1', metadata={'OwnerKey': 'René'}))),
+        ('withheld-policy', Number('3'), dict(withheld=dict(kind='PolicyRequiresEncryption'))),
+        ('withheld-secret-plan', Number('3'), dict(withheld=dict(kind='SecretReference',
+             secret=dict(name='api-key', typeName='String', scope='tenant-a'), conversionPlan=plan))),
+    ]
+    for name, presence, marker in markers:
+        preimage = canonical(dict(presence=presence, **marker))
+        result.append(dict(name=name, presence=int(presence), json=None, canonical=preimage,
+                           sha256=hashlib.sha256(preimage.encode()).hexdigest()))
     destination = Path(__file__).with_name('variable-value-hash-vectors.json')
     destination.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(f'Wrote {len(result)} independent variable digest vectors')

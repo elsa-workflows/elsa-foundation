@@ -13,7 +13,7 @@ spec.loader.exec_module(helper)
 
 
 def opaque(value):
-    return base64.b64encode(value.encode('utf-16-le')).decode()
+    return base64.b64encode(value.encode('utf-16-le', errors='surrogatepass')).decode()
 
 
 def frame_component(value):
@@ -30,7 +30,7 @@ def generate():
     elapsed = datetime.datetime(2026, 10, 26) - datetime.datetime(1, 1, 1)
     ticks = elapsed.days * 86400 * 10_000_000
     for name, raw in [*cases, ('absent', None), ('explicit-null', 'null')]:
-        value = None if raw is None else json.loads(raw, parse_int=helper.Number, parse_float=helper.Number)
+        value = None if raw is None else helper.load_json(raw)
         strings = ['elsa.post-commit.intent.v1', 'send', 'publisher', 'publish', str(ticks), 'activity', 'key', None, None, None]
         frame = b''.join(frame_component(None if item is None else item.encode('utf-16-le')) for item in strings)
         frame += frame_component(None if raw is None else helper.canonical(value).encode('utf-8'))

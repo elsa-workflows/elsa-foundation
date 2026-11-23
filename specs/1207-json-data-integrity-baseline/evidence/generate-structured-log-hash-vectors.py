@@ -18,11 +18,17 @@ def generate():
         ('array-forward', '[1,2]'), ('array-reverse', '[2,1]'),
         ('large-a', '9007199254740993'), ('large-b', '9007199254740992'),
     ]:
-        canonical = helper.canonical(json.loads(raw, parse_int=helper.Number, parse_float=helper.Number))
+        canonical = helper.canonical(helper.load_json(raw))
         parts = ['tenant-𐀀', 'scope-a', 'stream-a', 'token-1', canonical]
         frame = ''.join(str(len(value.encode('utf-16-le')) // 2) + ':' + value for value in parts)
         vectors.append(dict(name=name, payload=raw, canonical=canonical, frame=frame,
                             sha256=hashlib.sha256(frame.encode('utf-8')).hexdigest().upper()))
+    items = [dict(token='token-1', payload='{"x":1.0}'), dict(token='token-2', payload='{"x":2,"nil":null}')]
+    parts = ['tenant-𐀀', 'scope-a', 'stream-a']
+    for item in items:
+        parts.extend([item['token'], helper.canonical(helper.load_json(item['payload']))])
+    frame = ''.join(str(len(value.encode('utf-16-le')) // 2) + ':' + value for value in parts)
+    vectors.append(dict(name='two-items', items=items, frame=frame, sha256=hashlib.sha256(frame.encode()).hexdigest().upper()))
     Path(__file__).with_name('structured-log-hash-vectors.json').write_text(json.dumps(vectors, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(f'Wrote {len(vectors)} independent framed log vectors')
 

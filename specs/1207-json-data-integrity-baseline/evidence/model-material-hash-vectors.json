@@ -46,5 +46,29 @@
     "definition": "{\"x\":9007199254740992}",
     "canonical": "{\"definition\":{\"x\":9007199254740992e0},\"dependencies\":[],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[],\"version\":1e0},\"outputs\":[],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[]}",
     "sha256": "d2366ab0886e6c58c860fa45782f654d40212b60cafd97872cc5464becd655aa"
+  },
+  {
+    "name": "rich-value",
+    "rich": true,
+    "defaultKind": "value",
+    "definition": "{\"kind\":\"rich\",\"values\":[1,null]}",
+    "canonical": "{\"definition\":{\"kind\":\"rich\",\"values\":[1e0,null]},\"dependencies\":[{\"bindingId\":\"dwBvAHIAawBlAHIA\",\"executable\":{\"artifactHash\":\"cwBoAGEAMgA1ADYAOgBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAA==\",\"artifactId\":\"YQByAHQAaQBmAGEAYwB0AC0AbQBvAGQAZQBsAA==\",\"artifactVersion\":\"MQAuADAALgAwAA==\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgA=\",\"definitionVersionId\":\"dgBlAHIAcwBpAG8AbgA=\"}}],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[{\"defaultValue\":\"Ren\\u00E9\",\"hasDefault\":true,\"isRequired\":false,\"name\":\"dgBhAGwAdQBlAA==\",\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"Single\"}}],\"version\":1e0},\"outputs\":[{\"name\":\"cgBlAHMAdQBsAHQA\",\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"List\"}}],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[{\"consumerKey\":\"dABlAHMAdAAuAGMAbwBuAHMAdQBtAGUAcgA=\",\"schemaVersion\":\"MQAuADAA\"}]}",
+    "sha256": "44d5929b5aff3ddc4c3f08b7ad1658a106b187012a3881f371f34f5f0e756b97"
+  },
+  {
+    "name": "rich-missing",
+    "rich": true,
+    "defaultKind": "missing",
+    "definition": "{\"kind\":\"rich\",\"values\":[1,null]}",
+    "canonical": "{\"definition\":{\"kind\":\"rich\",\"values\":[1e0,null]},\"dependencies\":[{\"bindingId\":\"dwBvAHIAawBlAHIA\",\"executable\":{\"artifactHash\":\"cwBoAGEAMgA1ADYAOgBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAA==\",\"artifactId\":\"YQByAHQAaQBmAGEAYwB0AC0AbQBvAGQAZQBsAA==\",\"artifactVersion\":\"MQAuADAALgAwAA==\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgA=\",\"definitionVersionId\":\"dgBlAHIAcwBpAG8AbgA=\"}}],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[{\"defaultValue\":null,\"hasDefault\":false,\"isRequired\":false,\"name\":\"dgBhAGwAdQBlAA==\",\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"Single\"}}],\"version\":1e0},\"outputs\":[{\"name\":\"cgBlAHMAdQBsAHQA\",\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"List\"}}],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[{\"consumerKey\":\"dABlAHMAdAAuAGMAbwBuAHMAdQBtAGUAcgA=\",\"schemaVersion\":\"MQAuADAA\"}]}",
+    "sha256": "3dc2b9ed674519a2d32a2e63a40d591a77eff6416775639b32d2943858b94a24"
+  },
+  {
+    "name": "rich-null",
+    "rich": true,
+    "defaultKind": "null",
+    "definition": "{\"kind\":\"rich\",\"values\":[1,null]}",
+    "canonical": "{\"definition\":{\"kind\":\"rich\",\"values\":[1e0,null]},\"dependencies\":[{\"bindingId\":\"dwBvAHIAawBlAHIA\",\"executable\":{\"artifactHash\":\"cwBoAGEAMgA1ADYAOgBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAA==\",\"artifactId\":\"YQByAHQAaQBmAGEAYwB0AC0AbQBvAGQAZQBsAA==\",\"artifactVersion\":\"MQAuADAALgAwAA==\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgA=\",\"definitionVersionId\":\"dgBlAHIAcwBpAG8AbgA=\"}}],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[{\"defaultValue\":null,\"hasDefault\":true,\"isRequired\":false,\"name\":\"dgBhAGwAdQBlAA==\",\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"Single\"}}],\"version\":1e0},\"outputs\":[{\"name\":\"cgBlAHMAdQBsAHQA\",\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"List\"}}],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[{\"consumerKey\":\"dABlAHMAdAAuAGMAbwBuAHMAdQBtAGUAcgA=\",\"schemaVersion\":\"MQAuADAA\"}]}",
+    "sha256": "73490efe76cce4de7054f0a4e993732b157602a6d9efe48da84a4236dfe48769"
   }
 ]

@@ -110,5 +110,26 @@
     "json": "{\"text\":\"René <雪>\",\"items\":[1,null]}",
     "canonical": "{\"inline\":{\"items\":[1e0,null],\"text\":\"Ren\\u00E9 \\u003C\\u96EA\\u003E\"},\"presence\":2e0}",
     "sha256": "5386e965ece02ce960d924dbc40399048e9457609fb95ac902a228974574637e"
+  },
+  {
+    "name": "external",
+    "presence": 2,
+    "json": null,
+    "canonical": "{\"external\":{\"locator\":\"object-1\",\"metadata\":{\"OwnerKey\":\"Ren\\u00E9\"},\"storageProfile\":\"blob\"},\"presence\":2e0}",
+    "sha256": "11819f34ed2e9a43ec841c8b44893b24a65bf4f397979821a472057eab9eda4c"
+  },
+  {
+    "name": "withheld-policy",
+    "presence": 3,
+    "json": null,
+    "canonical": "{\"presence\":3e0,\"withheld\":{\"kind\":\"PolicyRequiresEncryption\"}}",
+    "sha256": "e7cbcb3367f074950accd596b568eaffd029d4f70bccd4ecef9cd2e689ae335b"
+  },
+  {
+    "name": "withheld-secret-plan",
+    "presence": 3,
+    "json": null,
+    "canonical": "{\"presence\":3e0,\"withheld\":{\"conversionPlan\":{\"fingerprint\":\"sha256:396d0ad07cbbf5b8074a8be3c6163e4db086b2b9445730c7d71794be59b22736\",\"limits\":{\"maxCollectionItems\":1e4,\"maxDepth\":64e0,\"maxPayloadBytes\":1048576e0},\"mode\":\"Auto\",\"operation\":\"Identity\",\"options\":{},\"profile\":null,\"schemaVersion\":1e0,\"sourceRepresentation\":\"TextValue\",\"sourceType\":{\"alias\":\"String\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"targetType\":{\"alias\":\"String\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null}},\"kind\":\"SecretReference\",\"secret\":{\"name\":\"api-key\",\"scope\":\"tenant-a\",\"typeName\":\"String\"}}}",
+    "sha256": "d1ba68a7013509642f21e75cf4f7dffbc6a202366b41e35cb87f9775f33f2e9b"
   }
 ]

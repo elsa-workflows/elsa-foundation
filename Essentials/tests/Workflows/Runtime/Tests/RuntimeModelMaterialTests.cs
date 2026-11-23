@@ -26,7 +26,17 @@ public sealed class RuntimeModelMaterialTests
         using var definition = JsonDocument.Parse(vector.GetProperty("definition").GetString()!);
         var expected = "sha256:" + vector.GetProperty("sha256").GetString();
         const string freeze = "First-stable hash freeze: changes require an explicit identity/migration decision.";
-        Assert.True(expected == NewMaterial(definition.RootElement).ComputeContentHash(), vector.GetProperty("name").GetString() + ": " + freeze);
+        using var jsonNull = JsonDocument.Parse("null");
+        using var text = JsonDocument.Parse("\"René\"");
+        var material = vector.TryGetProperty("rich", out _) ? new RuntimeModelMaterial(1, Pin, Protocol, "test/1", definition.RootElement,
+            new(1, [new("value", new TypeReference("String"), false, vector.GetProperty("defaultKind").GetString() switch
+            {
+                "value" => text.RootElement,
+                "null" => jsonNull.RootElement,
+                _ => (JsonElement?)null
+            })]), [new("result", new TypeReference("String", CollectionKind.List))], [new("worker", Pin)], [new("test.consumer", "1.0")])
+            : NewMaterial(definition.RootElement);
+        Assert.True(expected == material.ComputeContentHash(), vector.GetProperty("name").GetString() + ": " + freeze);
         Assert.True(expected == "sha256:" + Elsa.Serialization.Core.JsonHashInput.HashJson(vector.GetProperty("canonical").GetString()!), freeze);
     }
 
