@@ -30,9 +30,12 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     public int Stalls { get; private set; }
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, long> _releases = new();
+    private int _setReleases;
 
     /// <summary>When the node last began to give the partition up (Environment.TickCount64), if it ever did.</summary>
     public long? ReleaseBegan(int partition) => _releases.TryGetValue(partition, out var at) ? at : null;
+
+    public int SetReleases => Volatile.Read(ref _setReleases);
 
     /// <summary>The node's commits answered "not landed".</summary>
     public int Refused => Volatile.Read(ref _refused);
@@ -201,6 +204,13 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     {
         _releases[partition] = Environment.TickCount64;
         return Call(() => inner.ReleaseAsync(partition, epoch, cancellationToken));
+    }
+    public ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _setReleases);
+        var at = Environment.TickCount64;
+        foreach (var fence in owned) _releases[fence.Partition] = at;
+        return Call(() => inner.ReleaseAsync(owned, cancellationToken));
     }
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
