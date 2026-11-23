@@ -32,7 +32,7 @@ internal static class PostgresDelayPreview
         }
         await store.EnableRootSelfSendsAsync(stop);
         var scope = FixedTenantScope.Bind("preview-delay");
-        var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 32),
+        var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 32),
             WorkflowActor.WorkflowActor.ActorType);
         var delayed = Wf.Sequence(recall ? "slow" : "sequence", Wf.Delay("wait", DelayMs), Wf.Set("finished-delay", "result", "continued"));
         var body = recall ? Wf.Sequence("sequence", Wf.Parallel("race", 1, delayed, Wf.Node<PostgresFlowchartPreview.Approval>("win")),

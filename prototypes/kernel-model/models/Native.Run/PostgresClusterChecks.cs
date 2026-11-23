@@ -81,7 +81,7 @@ internal static class PostgresClusterChecks
         }
 
         var scope = FixedTenantScope.Bind("cluster");
-        var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 64), WorkflowActor.WorkflowActor.ActorType);
+        var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 64), WorkflowActor.WorkflowActor.ActorType);
         var workflow = new WorkflowRuntime(api, api);
         var roots = new List<Root>();
         do { await Start(); } while (roots.Select(r => r.Actor.Partition).Distinct().Count() < 2);

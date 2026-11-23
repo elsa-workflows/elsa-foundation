@@ -39,7 +39,7 @@ internal static class PostgresFlowchartPreview
 
         if (durable) await store.EnableRootSelfSendsAsync(stop);
         var scope = FixedTenantScope.Bind("purchase");
-        var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 8),
+        var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 8),
             WorkflowActor.WorkflowActor.ActorType);
         var registry = new WorkflowRegistry().Add(Build(mergeEarly));
         var host = await PostgresNativeRootOwner.PreparePartitionAsync(store, $"flowchart-{Environment.ProcessId}",
