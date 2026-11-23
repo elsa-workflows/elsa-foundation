@@ -200,6 +200,7 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   expect(protectedRun.details.outputs).not.toHaveProperty("ProtectedAttempt");
   await expect(inspector()).not.toContainText(secret);
   await expect(inspector().getByRole("region", { name: "Committed workflow changes", exact: true })).toHaveCount(0);
+  await fullyVisibleText(inspector().getByRole("heading", { level: 4 }).first());
   await capture(page, info, "protected-state");
   const protectedIncident = inspector().getByRole("region", { name: "Activity incidents", exact: true })
     .getByText("VF-STATE-003: Protected sources cannot flow into public identity fields or output names.", { exact: true });
