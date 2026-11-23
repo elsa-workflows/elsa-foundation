@@ -139,7 +139,7 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   await expect(inspector().locator("dl")).toContainText("CorrelationNone");
   await capture(page, info, "cleared-state");
 
-  const source = JSON.parse(readFileSync(new URL("../../../Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/script-workflow-state.json", import.meta.url), "utf8"));
+  const source = JSON.parse(readFileSync(new URL("../../../extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/script-workflow-state.json", import.meta.url), "utf8"));
   source.id = `state-version-${stamp}`; source.definitionId = `state-${stamp}`; source.name = `Imported state ${stamp}`;
   // Nested same-body getters exercise the repaired overlapping edit ordering through actual import and execution.
   source.root.activities[0].script.expression.value = source.root.activities[0].script.expression.value.replace("return [", "setCorrelationId(getCorrelationId()); setWorkflowInstanceName(getWorkflowInstanceName()); return [");

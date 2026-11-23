@@ -5,6 +5,7 @@ declare module "node:path" {
   export function join(...paths: string[]): string;
 }
 declare module "node:fs" {
+  export function readFileSync(path: URL, encoding: "utf8"): string;
   export function renameSync(oldPath: string, newPath: string): void;
 }
 
