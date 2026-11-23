@@ -40,6 +40,16 @@ for (const host of ["activity", "workflow"]) for (const composition of ["sequenc
     await expect(first).toHaveValue("Rejected");
     await expect(cases(page).getByRole("textbox", { name: "Case 2 label", exact: true })).toHaveValue("Approved");
     await expect(cases(page).locator(".wf-slot-collection-item").nth(1).getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true })).toContainText("1 + 1 === 2");
+    const mode = cases(page).getByRole("combobox", { name: "Match mode", exact: true });
+    await expect(mode).toHaveValue("MatchFirst");
+    await mode.selectOption("MatchAny");
+    await expect(cases(page)).toContainText("completes after all selected activities finish");
+    await page.getByRole("button", { name: /^Undo(?: Activity Graph edit)?$/ }).click();
+    if (host === "workflow") await owner(page).click();
+    await expect(mode).toHaveValue("MatchFirst");
+    await page.getByRole("button", { name: /^Redo(?: Activity Graph edit)?$/ }).click();
+    if (host === "workflow") await owner(page).click();
+    await expect(mode).toHaveValue("MatchAny");
     if (host === "workflow") {
       expect(await navigationAllowed(page)).toEqual({ studio: false, unload: false });
       await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -47,12 +57,14 @@ for (const host of ["activity", "workflow"]) for (const composition of ["sequenc
     }
     await expect.poll(async () => JSON.stringify(await saved(page))).toContain("1 + 1 === 2");
     const before = await saved(page);
+    expect(before.structure.payload.mode).toBe("MatchAny");
     expect(before.structure.payload.cases.map((item: { match: string }) => item.match)).toEqual(["Rejected", "Approved"]);
     expect(before.inputs).toEqual([]);
     expect(before.structure.payload.cases[1].condition.value.expressionType).toBe("JavaScript");
     await page.reload();
     await owner(page).click();
     await page.getByRole("tab", { name: "Slots", exact: true }).click();
+    await expect(cases(page).getByRole("combobox", { name: "Match mode", exact: true })).toHaveValue("MatchAny");
     await expect(cases(page).locator(".wf-slot-collection-item").nth(1).getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true })).toContainText("1 + 1 === 2");
     expect(await saved(page)).toEqual(before);
     const approvedRow = cases(page).locator(".wf-slot-collection-item").nth(1);
@@ -128,6 +140,7 @@ test("source-owned case conditions expose no mutation controls", async ({ page }
   await owner(page).click();
   await page.getByRole("tab", { name: "Slots", exact: true }).click();
   await expect(cases(page).getByRole("textbox", { name: "Case 1 label", exact: true })).toHaveAttribute("readonly", "");
+  await expect(cases(page).getByRole("combobox", { name: "Match mode", exact: true })).toBeDisabled();
   await expect(cases(page).getByRole("button", { name: /Condition expression syntax:/ })).toBeDisabled();
   await expect(cases(page).getByRole("button", { name: /^(Add case|Move case|Remove case|Use condition)/ })).toHaveCount(0);
 });
@@ -137,6 +150,12 @@ test("keyboard condition editing fits a narrow inspector", async ({ page }, test
   await page.goto("/?mode=activity-duplicate-editor&host=activity&composition=sequence&collection-slots=switch-conditions&theme=dark");
   const add = page.locator(".wf-sequence-slots").getByRole("button", { name: "Add case", exact: true });
   await add.focus(); await page.keyboard.press("Enter");
+  const mode = cases(page).getByRole("combobox", { name: "Match mode", exact: true });
+  await mode.focus();
+  await mode.press("a");
+  await mode.press("End");
+  await mode.press("Enter");
+  await expect(mode).toHaveValue("MatchAny");
   const syntax = cases(page).getByRole("button", { name: /Condition expression syntax:/ });
   await syntax.focus(); await page.keyboard.press("Enter");
   await page.getByRole("option", { name: /JavaScript/ }).click();

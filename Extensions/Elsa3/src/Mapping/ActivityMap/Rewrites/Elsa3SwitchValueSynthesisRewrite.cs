@@ -14,8 +14,8 @@ namespace Elsa3.Mapping.ActivityMap.Rewrites;
 /// expression returning the label of the first true case, keys each case by its label, and routes case and default
 /// activities into the <c>Switch.Case[{match}]</c> and <c>Switch.Default</c> slots. In MatchAny mode Elsa 3 takes every
 /// true case; the Elsa 4 Switch in <c>MatchAny</c> mode does the same from one Boolean condition per case (spec 1208
-/// FR-028), so each case keeps its own condition. A MatchAny case that holds an activity, or a mode set by an
-/// expression, is unconvertible.
+/// FR-028), so each case keeps its own condition and recursively converted body (S-12). Expression modes remain
+/// refused. The normalized/lowered new body-containing shape receives scoped control-outcome safety checks.
 /// </summary>
 internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
 {
@@ -57,6 +57,7 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
         }
 
         var labels = new HashSet<string>(StringComparer.Ordinal);
+        context.Node.SourceNames["cases"] = casesProperty;
         var script = new StringBuilder("(function () {");
         var index = 0;
         foreach (var @case in cases.EnumerateArray())
@@ -95,26 +96,19 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
             var hasActivity = @case.TryGetProperty("activity", out var activity) && activity.ValueKind == JsonValueKind.Object;
             if (matchAny)
             {
-                if (hasActivity)
-                {
-                    // Elsa 4 runs a case activity only as the one selected branch; several selected cases route through
-                    // their outcome connections (SwitchModes.MatchAny).
-                    context.Error(UnsupportedMode,
-                        $"Switch case '{label}' holds an activity; Elsa 3 runs every matching case's activity, but an Elsa 4 Switch in MatchAny mode routes each matching case through its outcome connection and cannot hold case activities.",
-                        "Use a FlowSwitch in a flowchart and connect each case to the activities it runs, or set the mode to MatchFirst.",
-                        casesProperty,
-                        $"{caseIndex}.activity");
-                    index++;
-                    continue;
-                }
-
                 // The condition is read with JavaScript truthiness, as the MatchFirst value script reads it, so both
                 // modes select the same cases; the Elsa 4 condition input needs a Boolean, never null.
                 var property = ConditionProperty(caseId);
                 context.SetProperty(property, condition is "true" or "false"
                     ? Elsa3TypedValues.CreateLiteral("Boolean", JsonValue.Create(condition == "true"))
                     : Elsa3TypedValues.CreateExpression("Boolean", "JavaScript", $"!!{condition}"));
-                context.Node.Slots.Add(new Elsa3SlotChild(CaseSlot, label, null, caseId, property));
+                if (hasActivity)
+                {
+                    context.AddChild(CaseSlot, label, activity, $"{context.Node.JsonPath}.{casesProperty}[{index}].activity");
+                    context.Node.Slots[^1] = context.Node.Slots[^1] with { ItemId = caseId, ConditionProperty = property };
+                }
+                else
+                    context.Node.Slots.Add(new Elsa3SlotChild(CaseSlot, label, null, caseId, property));
                 index++;
                 continue;
             }

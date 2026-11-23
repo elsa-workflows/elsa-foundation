@@ -56,6 +56,54 @@ public sealed class SwitchConditionRuntimeTests
     }
 
     [Fact]
+    public async Task MatchAny_evaluates_a_late_condition_before_starting_even_the_first_true_body()
+    {
+        await using var harness = NewHarness();
+        var run = await harness.RunAsync(Executable(true, false,
+            secondBinding: Expression("b", "throw new Error('late MatchAny condition')"), mode: "MatchAny"),
+            allowPendingWorkOnTerminalCompletion: false, allowAcceptedButFaulted: true);
+        run.AssertDidNotRun("approved", "rejected", "fallback");
+        var incident = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListAsync(harness.ExecutionId));
+        Assert.Equal(SwitchActivity.ConditionInputKey("b"), incident.Metadata[RuntimeMetadataKeys.InputKey]);
+        Assert.Null(run.State("switch").InputSnapshot);
+    }
+
+    [Fact]
+    public async Task MatchAny_materializes_every_condition_and_runs_both_true_bodies()
+    {
+        await using var harness = NewHarness();
+        var run = await harness.RunAsync(Executable(false, false,
+            firstBinding: Expression("a", "1 + 1 === 2"), secondBinding: Expression("b", "2 + 2 === 4"), mode: "MatchAny"));
+        run.AssertCompleted("approved");
+        run.AssertCompleted("rejected");
+        run.AssertDidNotRun("fallback");
+        run.AssertOutcomes("switch", "Approved", "Rejected");
+        run.AssertWorkflowCompleted();
+    }
+
+    [Fact]
+    public async Task Body_variable_writes_do_not_change_the_pinned_selection_on_parent_callbacks()
+    {
+        await using var harness = NewHarness();
+        var boolean = new ValueTypeDescriptor("Boolean");
+        var policy = ValueProtectionPolicy.InstanceInline;
+        var variable = new RuntimeVariableReference("flag", Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId);
+        var set = new ExecutableNode("approved", "approved", "elsa.intrinsic.set", "1.0.0", "intrinsic", JsonSerializer.SerializeToElement(new { }),
+            new Dictionary<string, RuntimeInputBinding> { [WorkflowIntrinsicInputKeys.Value] = new(WorkflowIntrinsicInputKeys.Value, boolean, policy,
+                RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Inline(boolean, JsonSerializer.SerializeToElement(false), policy)) },
+            new Dictionary<string, string>(), intrinsicKind: WorkflowIntrinsicKind.Set, intrinsicVariable: variable);
+        var root = Executable(true, false, secondBinding: new RuntimeInputBinding(SwitchActivity.ConditionInputKey("b"), boolean, policy,
+            RuntimeInputBindingSource.VariableRead, variable: variable), mode: "MatchAny", firstBody: set).RootActivity;
+        var initial = new RuntimeInputBinding("flag", boolean, policy, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(boolean, JsonSerializer.SerializeToElement(true), policy));
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root, new RuntimeVariableDeclaration("flag", "flag", boolean, policy, initial)));
+        run.AssertCompleted("approved");
+        run.AssertCompleted("rejected");
+        run.AssertOutcomes("switch", "Approved", "Rejected");
+        run.AssertWorkflowCompleted();
+    }
+
+    [Fact]
     public async Task An_evaluated_expression_error_records_the_normal_input_failure_instead_of_taking_default()
     {
         await using var harness = NewHarness();
@@ -115,12 +163,13 @@ public sealed class SwitchConditionRuntimeTests
     private static WorkflowExecutionHarness NewHarness() => WorkflowExecutionHarness.Create()
         .WithFeature(services => { new ActivitiesControlFlowFeature().ConfigureServices(services); new ExpressionsFeature().ConfigureServices(services);
             new JavaScriptFeature().ConfigureServices(services); new JintFeature().ConfigureServices(services); })
-        .WithProbeLeaf().Build("switch-invocation", "branch-invocation");
+        .WithProbeLeaf().Build("switch-invocation", "branch-invocation", "second-branch-invocation");
 
-    private static WorkflowExecutable Executable(bool first, bool second, bool emptyFirst = false, RuntimeInputBinding? firstBinding = null, RuntimeInputBinding? secondBinding = null)
+    private static WorkflowExecutable Executable(bool first, bool second, bool emptyFirst = false, RuntimeInputBinding? firstBinding = null, RuntimeInputBinding? secondBinding = null, string? mode = null, ExecutableNode? firstBody = null)
     {
         var payload = JsonSerializer.SerializeToElement(new
         {
+            mode,
             cases = new[]
             {
                 new { match = "Approved", activity = emptyFirst ? null : "approved", conditionInputKey = SwitchActivity.ConditionInputKey("a") },
@@ -141,7 +190,7 @@ public sealed class SwitchConditionRuntimeTests
             new(SwitchActivity.CaseSlotName("Rejected"), [WorkflowExecutionHarness.NewProbeNode("rejected")]),
             new(SwitchActivity.DefaultSlotName, [WorkflowExecutionHarness.NewProbeNode("fallback")])
         };
-        if (!emptyFirst) slots.Add(new(SwitchActivity.CaseSlotName("Approved"), [WorkflowExecutionHarness.NewProbeNode("approved")]));
+        if (!emptyFirst) slots.Add(new(SwitchActivity.CaseSlotName("Approved"), [firstBody ?? WorkflowExecutionHarness.NewProbeNode("approved")]));
         var node = new ExecutableNode("switch", "switch", typeof(SwitchActivity).FullName!, "4.1.0",
             descriptorType: prototype.DescriptorKind, descriptorPayload: prototype.DescriptorPayload,
             inputBindings: bindings, metadata: new Dictionary<string, string>(), childSlots: slots,

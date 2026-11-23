@@ -186,9 +186,17 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   - A Switch or FlowSwitch in `MatchFirst` mode (the default) gets a synthesized `Value` that returns the first true
     case's label. In `MatchAny` mode (`MatchAny`, `matchAny` or `1`) it becomes the Elsa 4 Switch's `MatchAny` mode,
     each case keeping its own condition (read with JavaScript truthiness, as in `MatchFirst`), so every true case's
-    connection runs, or `Default` when none is true (spec 1208 FR-028). Elsa 4 cannot run case activities in `MatchAny`
-    mode, so a `MatchAny` Switch case that holds an activity is `ELS3-ACTIVITY-UNSUPPORTED-MODE` (use a FlowSwitch and
-    connect the cases); so is a mode set by an expression or an unknown mode. Every case carries a case identity.
+    connection runs, or `Default` when none is true (spec 1208 FR-028). S-12 also recursively converts structured
+    MatchAny case activities, waiting for every selected body before completion. Empty selected cases suppress Default.
+    A newly enabled body-containing MatchAny Switch refuses owning labels `Break`/`Done` and effective or unproven
+    native Break escaping a body with localized `ELS3-ACTIVITY-UNSUPPORTED-MODE` guidance. Rename control labels or
+    restructure the body. Safe unused declared ports and supported case-local consuming loops remain convertible;
+    a script-selected Break can change internal container behavior even if an outer container consumes it. Expression
+    modes and unknown modes remain refused. A newly enabled body also refuses invalid Done co-selections and
+    unproven native-completion flow through helper aliases, eval/Function compilation, prototype constructors or
+    unresolved computed prototype/callable access. Numeric literal indexes, named data properties, protected variable
+    reads and proved ordinary scripts remain eligible. These scoped proof limits do not change standalone modes.
+    Every case carries a stable identity.
     A SendHttpRequest with expected status codes has no `Done` in Elsa 4, so its `Done` connection becomes one per
     code and one for the unmatched status code: Elsa 3 fired `Done` with every response, but not on "Failed to
     connect" or "Timeout". `ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE` warns only that, without expected codes, a non-2xx

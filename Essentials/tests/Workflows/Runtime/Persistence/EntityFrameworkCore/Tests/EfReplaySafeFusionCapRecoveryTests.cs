@@ -33,7 +33,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// Exercises the durable recovery image at a ReplaySafe cap-fold boundary using the real EF SQLite runtime stores.
 /// The SQLite backup is a persisted interruption snapshot; it is not an operating-system process-kill test.
 /// </summary>
-public sealed class EfReplaySafeFusionCapRecoveryTests
+public sealed partial class EfReplaySafeFusionCapRecoveryTests
 {
     private readonly ITestOutputHelper _output;
 
@@ -551,7 +551,8 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         CheckpointCommitGatePlacement gatePlacement,
         string? expectedOutputName = null,
         string? expectedOutputValue = null,
-        Action<RuntimeCheckpointCommit>? assertCut = null)
+        Action<RuntimeCheckpointCommit>? assertCut = null,
+        Action<IReadOnlyCollection<ActivityExecutionState>>? assertRecovered = null)
     {
         // Recovery allocates fresh identities for children the source never scheduled, so it draws from a namespace the
         // source never used and the test can tell recovered executions from copied ones.
@@ -728,6 +729,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                 expected.RecoveredNodeIds,
                 recoveredActivities.Select(activity => activity.Execution.ExecutableNodeId).Order(StringComparer.Ordinal));
             Assert.All(recoveredActivities, activity => Assert.Equal(ActivityExecutionStatus.Completed, activity.Status));
+            assertRecovered?.Invoke(recoveredActivities);
             Assert.Empty(await recoveryScope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
                 .ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
             await AssertQueueAndOutboxSettledAsync(recovery.Services);
@@ -779,7 +781,11 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                 if (timeProvider is not null)
                     services.AddSingleton(timeProvider);
             })
-            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services =>
+            {
+                new ActivitiesSequenceFeature().ConfigureServices(services);
+                new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services);
+            })
             .WithPersistenceMode(mode, maxActivitiesPerCommit: maxActivitiesPerCommit);
 
         if (gate is not null)

@@ -150,7 +150,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 "Rewrite the expression in the Elsa 3 workflow with JavaScript or an Elsa 4 built-in function, before import.")));
         }
 
-        return result.WithConversionNotes(analyzer.Warnings, analyzer.AppliedDateInterpretation);
+        return result.WithConversionNotes(analyzer.Warnings, analyzer.AppliedDateInterpretation, analyzer.MayAccessNativeCompletion);
     }
 
     private Elsa3ExpressionRewriteResult RewriteJavaScript(
@@ -542,7 +542,11 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             selection = $"__elsa3RouteOutcomes({PendingOutcomes})";
         }
 
-        return new(prelude, selection, new Elsa3ScriptOutcomeConversion(literals, catchAll), null);
+        return new(prelude, selection, new Elsa3ScriptOutcomeConversion(literals, catchAll)
+        {
+            HasInvalidLiteralSelection = analyzer.HasInvalidLiteralOutcomeSelection,
+            HasComputedSelectionSet = analyzer.HasComputedOutcomeSet
+        }, null);
     }
 
     /// <summary>
@@ -867,8 +871,11 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
         public bool CallsOutcomeSetter { get; private set; }
         public bool HasComputedOutcome { get; private set; }
+        public bool HasComputedOutcomeSet { get; private set; }
+        public bool HasInvalidLiteralOutcomeSelection { get; private set; }
         public List<string> OutcomeLiterals { get; } = [];
         public bool DeclaresComplete { get; private set; }
+        public bool MayAccessNativeCompletion { get; private set; }
 
         private void RecordOutcomeSetter(CallExpression call, string name)
         {
@@ -883,11 +890,14 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             if (name == "setOutcomes" && argument is ArrayExpression array &&
                 array.Elements.All(element => element is Literal { Value: string }))
             {
-                OutcomeLiterals.AddRange(array.Elements.Select(element => (string)((Literal)element!).Value!));
+                var names = array.Elements.Select(element => (string)((Literal)element!).Value!).Distinct(StringComparer.Ordinal).ToArray();
+                OutcomeLiterals.AddRange(names);
+                HasInvalidLiteralOutcomeSelection |= names.Contains("Done", StringComparer.Ordinal) && names.Any(value => value != "Done");
                 return;
             }
 
             HasComputedOutcome = true;
+            HasComputedOutcomeSet |= name == "setOutcomes";
         }
 
         private static readonly HashSet<string> SetterCalls = new(StringComparer.Ordinal)
@@ -1013,6 +1023,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// own <c>this</c> and <c>arguments</c>; arrow functions share their enclosing one's (spec 262 R-6).
         /// </summary>
         private readonly List<FunctionContext> _functions = [];
+        private readonly List<Node> _syntaxParents = [];
 
         public void Visit(Node node)
         {
@@ -1031,12 +1042,36 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             };
             if (function is not null)
                 _functions.Add(function);
+            var parent = _syntaxParents.LastOrDefault();
+            _syntaxParents.Add(node);
             try
             {
+                // A bare native helper reference can be aliased without being a direct host-function call.
+                // The global object also allows computed access to that helper. Record this separately so
+                // newly enabled Switch bodies cannot claim proven outcome safety from setter names alone.
+                if (node is Identifier { Name: "complete" or "globalThis" or "Function" or "eval" or "Reflect" } identifier
+                    && IsValueReference(identifier, parent) && !IsDeclared(identifier.Name))
+                    MayAccessNativeCompletion = true;
+                if (node is ObjectPattern pattern && pattern.Properties.OfType<Property>().Any(property =>
+                    MightSelectCompletionCapability(property.Key, property.Computed)))
+                    MayAccessNativeCompletion = true;
+                if (node is MemberExpression member)
+                {
+                    var name = member.Computed ? (member.Property as Literal)?.Value as string : (member.Property as Identifier)?.Name;
+                    var dataVariableRead = member.Object is Identifier { Name: "variables" } && !IsDeclared("variables");
+                    // An unresolved property can select a prototype constructor and be passed/aliased before
+                    // invocation. Numeric literal indexes and named data properties cannot select that capability.
+                    var knownKey = member.Property is Literal { Value: string or double or int or long };
+                    if (IsCompletionCapabilityKey(name)
+                        || member.Computed && !knownKey && !dataVariableRead
+                        )
+                        MayAccessNativeCompletion = true;
+                }
                 VisitNode(node);
             }
             finally
             {
+                _syntaxParents.RemoveAt(_syntaxParents.Count - 1);
                 if (function is not null)
                 {
                     _functions.RemoveAt(_functions.Count - 1);
@@ -1051,6 +1086,29 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     _scopes.RemoveAt(_scopes.Count - 1);
             }
         }
+
+        private static bool IsValueReference(Identifier identifier, Node? parent) => parent switch
+        {
+            MemberExpression { Computed: false } member when ReferenceEquals(member.Property, identifier) => false,
+            Property { Computed: false } property when ReferenceEquals(property.Key, identifier) && !ReferenceEquals(property.Value, identifier) => false,
+            MethodDefinition { Computed: false } method when ReferenceEquals(method.Key, identifier) => false,
+            PropertyDefinition { Computed: false } field when ReferenceEquals(field.Key, identifier) => false,
+            AccessorProperty { Computed: false } accessor when ReferenceEquals(accessor.Key, identifier) => false,
+            LabeledStatement labeled when ReferenceEquals(labeled.Label, identifier) => false,
+            BreakStatement or ContinueStatement => false,
+            _ => true
+        };
+
+        private static bool MightSelectCompletionCapability(Node key, bool computed) => key switch
+        {
+            Identifier identifier when !computed => IsCompletionCapabilityKey(identifier.Name),
+            Literal { Value: string name } => IsCompletionCapabilityKey(name),
+            Literal { Value: double or int or long } => false,
+            _ => true
+        };
+
+        private static bool IsCompletionCapabilityKey(string? name) => name is "constructor" or "__proto__"
+            or "getPrototypeOf" or "getOwnPropertyDescriptor" or "getOwnPropertyDescriptors";
 
         private sealed class FunctionContext(IEnumerable<Node> parameters)
         {
@@ -2693,7 +2751,9 @@ public sealed class Elsa3ExpressionRewriteResult
     /// <summary>Whether the converter's date interpretation decided how the expression converted (spec 1223 FR-034).</summary>
     public bool AppliedDateInterpretation { get; private init; }
 
-    internal Elsa3ExpressionRewriteResult WithConversionNotes(IReadOnlyList<Elsa3ExpressionRewriteIssue> warnings, bool appliedDateInterpretation) =>
+    internal bool MayAccessNativeCompletion { get; private init; }
+
+    internal Elsa3ExpressionRewriteResult WithConversionNotes(IReadOnlyList<Elsa3ExpressionRewriteIssue> warnings, bool appliedDateInterpretation, bool mayAccessNativeCompletion) =>
         new(Definition, Issues)
         {
             CompletionValueLost = CompletionValueLost,
@@ -2701,6 +2761,7 @@ public sealed class Elsa3ExpressionRewriteResult
             HasComputedVariableRead = HasComputedVariableRead,
             Warnings = warnings.ToArray(),
             AppliedDateInterpretation = appliedDateInterpretation,
+            MayAccessNativeCompletion = mayAccessNativeCompletion,
         };
 
     public static Elsa3ExpressionRewriteResult SuccessReading(
@@ -2731,6 +2792,9 @@ public sealed record Elsa3ScriptOutcomeContext(IReadOnlyList<string>? PossibleOu
 /// </summary>
 public sealed record Elsa3ScriptOutcomeConversion(IReadOnlyList<string> LiteralOutcomes, string? CatchAll)
 {
+    // Scope-specific fidelity analysis uses groups, not the union of alternative singleton selections.
+    internal bool HasInvalidLiteralSelection { get; init; }
+    internal bool HasComputedSelectionSet { get; init; }
     /// <summary>The catch-all outcome's name, unless the node already uses it.</summary>
     public const string CatchAllOutcome = "Unlisted outcome";
 }
