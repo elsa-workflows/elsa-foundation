@@ -321,6 +321,8 @@ if (args.Contains("--foundation-tenant-check"))
     await FoundationTenantChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--host-job-drain-check"))
+    return await HostJobDrainChecks.RunAsync();
 if (args.Contains("--host-drain-check"))
     return await HostDrainChecks.RunAsync();
 if (args.Contains("--foundation-migration-dispatch-check"))
