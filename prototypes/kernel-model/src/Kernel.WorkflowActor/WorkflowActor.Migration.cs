@@ -8,7 +8,7 @@ namespace Kernel.WorkflowActor;
 
 public sealed partial class WorkflowActor
 {
-    private const int DefinitionLimit = 1_024;
+    internal const int DefinitionLimit = 1_024;
     private const int HeaderLimit = 16 * 1_024;
     private const string AnsweredPlanLabel = "migration-plan";
 
