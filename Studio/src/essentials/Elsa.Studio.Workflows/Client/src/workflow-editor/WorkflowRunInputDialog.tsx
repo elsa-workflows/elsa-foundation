@@ -163,7 +163,7 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
           />
         </WorkflowRunInputEditorBoundary>
       ) : fallback}
-      {getWorkflowRunInputControlKind(input) === "datetime" && value ? <small>{dateOffsetPreview(value)}</small> : null}
+      {getWorkflowRunInputControlKind(input) === "datetime" && value && !error ? <small>{dateOffsetPreview(value)}</small> : null}
       {input.description ? <small id={descriptionId}>{input.description}</small> : null}
       {error ? <small id={errorId} role="alert">{error}</small> : null}
     </label>

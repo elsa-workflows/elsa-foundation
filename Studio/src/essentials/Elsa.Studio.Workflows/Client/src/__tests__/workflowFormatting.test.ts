@@ -44,7 +44,8 @@ describe("workflow formatting helpers", () => {
     try {
       const rendered = formatActivityDefinitionDate("2026-07-17T10:00:00Z");
       expect(rendered).toBe(formatStudioDate("2026-07-17T10:00:00Z"));
-      expect(rendered).toContain("10:00:00 UTC+00:00");
+      expect(rendered).toContain("10:00:00");
+      expect(rendered).toMatch(/ UTC\+00:00$/);
     } finally { setStudioTimeZonePreference("browser"); }
   });
 

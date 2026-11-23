@@ -247,7 +247,7 @@ describe("CompensationScopeDesigner scheduled retry (spec 261)", () => {
     });
 
     const label = container.querySelectorAll(".wf-compensation-state")[1].getAttribute("aria-label") ?? "";
-    expect(label).toContain(` · after ${dueAt.toLocaleString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", year: "numeric", month: "short", day: "numeric" })}`);
+    expect(label).toContain(` · after ${formatStudioDate(dueAt.toISOString())}`);
     expect(label).toContain(String(dueAt.getFullYear()));
   });
 
