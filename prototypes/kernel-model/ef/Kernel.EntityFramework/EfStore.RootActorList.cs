@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Kernel.EntityFramework;
 
@@ -9,6 +10,8 @@ public sealed partial class EfStore
     internal sealed record RootListPage(IReadOnlyList<RootListItem> Items, long AsOf);
 
     private sealed record RootListRow(string? Reference, int? Status, long? EndedAt, string? Header, long AsOf);
+    private sealed record RootPointRow(string? Reference, int? Status, long? EndedAt, string? Header, long AsOf, bool SourceReady,
+        int? StoreSchema, int? MessageProtocol, int? JournalCodec);
 
     internal static Task InstallRootActorListAsync(KernelDb db, CancellationToken cancellationToken) =>
         db.Database.ExecuteSqlRawAsync("""
@@ -69,14 +72,39 @@ public sealed partial class EfStore
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root actor reads require PostgreSQL.");
         await using var db = create();
-        await RequireStoreVersionsAsync(db, cancellationToken);
-        var row = await db.Database.SqlQuery<RootListRow>($"""
-            SELECT l."Reference", l."Status", l."EndedAt", l."Header",
-                floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
-            FROM "FoundationActorList" l
-            WHERE l."Tenant" = {tenant} AND l."Reference" = {reference}
-            """).SingleOrDefaultAsync(cancellationToken);
-        return row is null ? null : (ToRootListItem(row), row.AsOf);
+        var expected = db.RequiredFormat;
+        RootPointRow row;
+        try
+        {
+            row = await db.Database.SqlQuery<RootPointRow>($"""
+                SELECT l."Reference", l."Status", l."EndedAt", l."Header",
+                    kernel."StoreSchema", kernel."MessageProtocol", kernel."JournalCodec",
+                    floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
+                    EXISTS (
+                        SELECT 1 FROM pg_catalog.pg_trigger source
+                        WHERE (to_regclass('"Instances"') IS NULL OR source.tgrelid = to_regclass('"Instances"'))
+                            AND source.tgname::text = ANY({RootListSourceTriggers}) AND source.tgenabled IN ('O', 'A')
+                            AND source.tgfoid = to_regprocedure(source.tgname::text || '()')
+                        GROUP BY source.tgrelid HAVING count(*) = {RootListSourceTriggers.Length}
+                    ) AS "SourceReady"
+                FROM (VALUES (1)) stamp(id)
+                LEFT JOIN "KernelStoreVersions" kernel ON kernel."Id" = {StoreVersionEntity.MarkerId}
+                LEFT JOIN "FoundationActorList" l ON l."Tenant" = {tenant} AND l."Reference" = {reference}
+                    AND kernel."StoreSchema" = {expected.StoreSchema} AND kernel."MessageProtocol" = {expected.MessageProtocol}
+                    AND kernel."JournalCodec" = {expected.JournalCodec}
+                """).SingleAsync(cancellationToken);
+        }
+        catch (PostgresException error) when (error.SqlState == PostgresErrorCodes.UndefinedTable)
+        {
+            throw new StoreFormatException("A required root actor projection table is missing.", error);
+        }
+        if (row.StoreSchema is not { } schema || row.MessageProtocol is not { } protocol || row.JournalCodec is not { } codec)
+            throw new StoreFormatException("The kernel store version marker is missing.");
+        var stored = new StoreFormat(schema, protocol, codec);
+        if (stored != expected) throw new StoreFormatException($"Unsupported kernel store versions. Stored {stored}. This build reads {expected}.");
+        if (!row.SourceReady)
+            throw new StoreFormatException("The root actor projection source or a required trigger is missing or disabled.");
+        return row.Reference is null ? null : (ToRootListItem(row.Reference, row.Status!.Value, row.EndedAt, row.Header!), row.AsOf);
     }
 
     internal async Task<RootListPage> ReadRootActorListAsync(string tenant, string after, string? type, int? status,
@@ -105,14 +133,13 @@ public sealed partial class EfStore
             FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true
             ORDER BY page."Reference" COLLATE "C"
             """).ToListAsync(cancellationToken);
-        var items = rows.Where(row => row.Reference is not null).Select(ToRootListItem).ToArray();
+        var items = rows.Where(row => row.Reference is not null).Select(row => ToRootListItem(row.Reference!, row.Status!.Value, row.EndedAt, row.Header!)).ToArray();
         return new(items, rows[0].AsOf);
     }
 
-    private static RootListItem ToRootListItem(RootListRow row)
+    private static RootListItem ToRootListItem(string reference, int status, long? endedAt, string encodedHeader)
     {
-        var header = DurableKeyJson.Read<RootHeader>(row.Header!);
-        return new(row.Reference!, header.Model, (InstanceStatus)row.Status!.Value, row.EndedAt, header.TypeData,
-            header.Labels.ToDictionary(StringComparer.Ordinal));
+        var header = DurableKeyJson.Read<RootHeader>(encodedHeader);
+        return new(reference, header.Model, (InstanceStatus)status, endedAt, header.TypeData, header.Labels.ToDictionary(StringComparer.Ordinal));
     }
 }

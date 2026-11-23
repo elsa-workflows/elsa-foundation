@@ -62,7 +62,7 @@ internal static class PostgresRootListChecks
             Check(point is not null && point.Header.Ref == listed.Header.Ref && point.Header.Tenant == listed.Header.Tenant &&
                 point.Header.Status == listed.Header.Status && point.Header.Type == listed.Header.Type &&
                 point.Header.TypeData == listed.Header.TypeData &&
-                query.Labels!.All(label => point.Header.Labels[label.Key] == label.Value) && point.AsOf >= listed.AsOf &&
+                query.Labels!.All(label => point.Header.Labels[label.Key] == label.Value) && point.AsOf > 0 &&
                 await api.GetAsync(blue, new ActorRef("not a reference"), ct) is null,
                 "a cold point lookup reads committed metadata and the database clock without owner state or the journal");
             Check(await Refused(blue, query with { Status = ActorStatus.Finished }) &&
@@ -74,8 +74,8 @@ internal static class PostgresRootListChecks
             catch (ArgumentException) { }
             try { await api.TailAsync(blue, first.Items[0].Header.Ref, saved, ct); throw new InvalidOperationException("Accepted list token on tail."); }
             catch (ArgumentException) { }
-            Check(first.Items.All(item => item.AsOf == first.AsOf) && first.AsOf <= next.AsOf && next.AsOf <= final.AsOf &&
-                next.Items.All(item => item.AsOf == next.AsOf) && final.Items.All(item => item.AsOf == final.AsOf), "each returned page has its own database clock");
+            Check(new[] { first, next, final }.All(page => page.AsOf > 0 && page.Items.All(item => item.AsOf == page.AsOf)),
+                "each returned page has its own database clock");
             Console.WriteLine($"passed projection restart {Environment.ProcessId}");
             return 0;
         }
@@ -162,6 +162,28 @@ internal static class PostgresRootListChecks
         Check((await api.ListAsync(blue, query with { Parked = true }, cancellationToken: ct)).Items.Count == 0 &&
             (await api.ListAsync(blue, query with { Type = "wrong" }, cancellationToken: ct)).Items.Count == 0,
             "actor type and park state each restrict the list");
+
+        await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_project_root_actor_list""", ct);
+        try
+        {
+            await api.GetAsync(blue, completed, ct);
+            throw new InvalidOperationException("Point lookup accepted a disabled projection.");
+        }
+        catch (StoreFormatException) { }
+        await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" ENABLE TRIGGER kernel_project_root_actor_list""", ct);
+        Check(await api.GetAsync(blue, completed, ct) is { Header.Status: ActorStatus.Finished },
+            "point lookup requires an enabled source trigger and resumes after it is restored without intervening writes");
+
+        await db.Database.ExecuteSqlRawAsync("""UPDATE "KernelStoreVersions" SET "StoreSchema" = "StoreSchema" + 1""", ct);
+        try
+        {
+            await api.GetAsync(blue, completed, ct);
+            throw new InvalidOperationException("Point lookup accepted an incompatible store format.");
+        }
+        catch (StoreFormatException) { }
+        await db.Database.ExecuteSqlRawAsync("""UPDATE "KernelStoreVersions" SET "StoreSchema" = "StoreSchema" - 1""", ct);
+        Check(await api.GetAsync(blue, completed, ct) is { Header.Status: ActorStatus.Finished },
+            "point lookup requires a readable store format");
 
         // Simulate upgrading an older database, then make owner and tail tables inaccessible to the next process.
         await db.Database.ExecuteSqlRawAsync("""

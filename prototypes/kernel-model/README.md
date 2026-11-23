@@ -293,7 +293,8 @@ refused commits use a separate unmeasured client. The demonstration scopes execu
 
 The preview's public `IActorReads.GetAsync` and `ListAsync` use a persisted, tenant-indexed projection of generated roots. PostgreSQL
 updates the list within the fenced metadata commit, including suspension changes that leave no public journal entry.
-Point queries use the tenant and exact reference. List queries use a reference bookmark bound to the tenant and filters. The existing root schema
+Point queries use the tenant and exact reference and refuse a missing or disabled source trigger.
+If the projection trigger was disabled while writing checkpoints, rebuild the projection from committed metadata before serving it again. List queries use a reference bookmark bound to the tenant and filters. The existing root schema
 installer backfills public metadata for earlier preview databases. This slice represents running and finished roots,
 and leaves the release-wide projector, Park, and operator selections to K9 follow-up.
 
