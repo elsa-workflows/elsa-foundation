@@ -33,8 +33,8 @@ switch (args)
     case ["postgres", var connection, "root-journal"]:
         await new EfProvider("postgres", connection, []).CheckRootJournalAsync();
         return 0;
-    case ["postgres", var connection, "root-direct-send"]:
-        await new EfProvider("postgres", connection, []).CheckDirectSendAsync();
+    case ["postgres", var connection, "root-direct-send", .. var options]:
+        await new EfProvider("postgres", connection, options).CheckDirectSendAsync();
         return 0;
     case ["postgres", var connection, "root-turn", .. var options]:
         await new EfProvider("postgres", connection, options).CheckRootTurnAsync();

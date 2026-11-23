@@ -976,6 +976,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         for (var inner = e; inner is not null; inner = inner.InnerException)
         {
+            if (inner is StoreException classified) return classified;
             if (Engine?.Classify(inner) is { } failure) return new StoreException(failure, inner.Message, e);
             if (inner is PostgresException pg)
                 return new StoreException(pg.SqlState is "40001" or "40P01" or "55P03" ? Failure.Transient : pg.SqlState.StartsWith("22") || pg.SqlState.StartsWith("23") ? Failure.Definite : Failure.Unknown, pg.MessageText, e);

@@ -55,6 +55,9 @@ internal static class DirectSendChecks
               before.All(message => message.Target == creator.Target),
             "cold reads preserve actor life, FIFO, due presence, and exact kind and payload");
 
+        await CheckDirectReadFailures(create, store, cold, tenant, reference, another.Reference,
+            before[0], fence with { Position = fence.Position + 1 }, timeout);
+
         var valid = before[0].InboxKey.Id;
         Check(PostgresRootAdmission.MatchesDirectOccurrence(reference, "first", valid) &&
             !PostgresRootAdmission.MatchesDirectOccurrence(reference, "second", valid) &&
@@ -92,6 +95,59 @@ internal static class DirectSendChecks
             (await cold.ReadPendingDirectAsync(tenant, another.Reference)) is
                 [{ Id: "first", Payload: "another root" }, { Id: "smaller-retry", Payload: "fits" }],
             "a physical size refusal releases its receipt reservation for a smaller retry");
+    }
+
+    private static async Task CheckDirectReadFailures(Func<KernelDb> create, EfStore store, PostgresRootAdmission admission,
+        string tenant, string reference, string otherReference, Message input, PartitionFence fence, TimeSpan lease)
+    {
+        await using var db = create();
+        var row = await db.Messages.SingleAsync(m => m.Id == input.InboxKey.Id && m.InboxScope == input.InboxKey.Scope);
+        Check(PostgresRootAdmission.DecodeDirect(row, reference) == input, "the admitted occurrence decodes under its own reference");
+        try
+        {
+            PostgresRootAdmission.DecodeDirect(row, otherReference);
+            throw new InvalidOperationException("The decoder accepted the wrong bound reference.");
+        }
+        catch (StoreException e) when (e.Failure == Failure.Definite) { }
+
+        var current = (await store.ReadFirstRootAsync(tenant, reference))!;
+        var originalHeader = row.Start!;
+        var snapshot = db.Instances.AsNoTracking().Where(i => i.Id == current.Actor.Id)
+            .Select(i => new { i.State, i.Revision, i.Status });
+        var before = await snapshot.SingleAsync();
+        var journal = await store.ReadJournalOfAsync(fence.Partition, current.Actor.Id, 0);
+
+        // Simulate a future envelope codec while keeping the admitted operation, physical key and payload intact.
+        row.Start = "!kernel-direct/2:" + originalHeader[(originalHeader.IndexOf(':') + 1)..];
+        await db.SaveChangesAsync();
+        try
+        {
+            await RequireDefinite(async () => { await admission.ReadPendingDirectAsync(tenant, reference); });
+            ValueTask<Committed> Commit(PartitionFence f) => store.CommitRootTurnAsync(tenant, reference, current,
+                [input], f, lease, InstanceStatus.Running, "next", current.StateVersion, current.TypeData, current.Labels, """["next"]""");
+            await RequireDefinite(async () => { await Commit(fence); });
+            Check(!(await Commit(fence with { Position = fence.Position - 1 })).Landed,
+                "the stale position refuses a commit on the unreadable input");
+            var stored = await db.Messages.AsNoTracking().SingleAsync(m => m.Id == row.Id && m.InboxScope == row.InboxScope);
+            Check(!stored.Done && stored.Start == row.Start && stored.Payload == row.Payload &&
+                await snapshot.SingleAsync() == before &&
+                await db.Partitions.Where(p => p.Id == fence.Partition).Select(p => p.Position).SingleAsync() == fence.Position &&
+                (await store.ReadJournalOfAsync(fence.Partition, current.Actor.Id, 0)).SequenceEqual(journal),
+                "an unsupported direct envelope leaves its input, checkpoint, journal and position unchanged");
+        }
+        finally
+        {
+            row.Start = originalHeader;
+            await db.SaveChangesAsync();
+        }
+
+        static async Task RequireDefinite(Func<Task> attempt)
+        {
+            try { await attempt(); }
+            catch (StoreException e) when (e.Failure == Failure.Definite &&
+                e.Message == "Unsupported PostgreSQL public input envelope.") { return; }
+            throw new InvalidOperationException("The future envelope must be refused as a definite failure.");
+        }
     }
 
     private static void Check(bool valid, string message)
