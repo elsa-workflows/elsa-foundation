@@ -67,6 +67,7 @@ internal static class PostgresFlowchartPreview
         }
 
         var before = await DriveAsync(manual ? 2 : 1);
+        Check(before.Revision == (manual ? 2 : 1), "The cold owner must resume the exact waiting revision.");
         var finance = Frame(State(before), "finance");
         if (manual)
         {
@@ -81,17 +82,20 @@ internal static class PostgresFlowchartPreview
         await ApproveAsync("finance-approval", finance, "Finance accepted", Contract.AdmissionOutcome.Accepted);
         var finished = await DriveAsync(before.Revision + 1);
         var result = State(finished);
-        var (tail, _) = await HistoryAsync(saved);
-        Check((await api.GetAsync(scope, actor, stop)) is { Header.Status: Contract.ActorStatus.Finished } &&
+        var (tail, completion) = await HistoryAsync(saved);
+        Check(finished.Revision == before.Revision + 1 && (await api.GetAsync(scope, actor, stop)) is { Header.Status: Contract.ActorStatus.Finished } &&
             result.Variables["ready"]?.GetValue<bool>() == true &&
             result.Results["finance"]?.GetValue<string>() == "Finance accepted" &&
             (manual ? result.Results["risk"]?.GetValue<string>() == "Risk accepted" : !result.Results.ContainsKey("risk")),
             "The original actor must reach its join with precisely the selected approvals.");
-        Check(tail.Count(IsJoin) == 1 && tail.All(entry => entry.Revision == finished.Revision),
+        Check(completion is not null && completion != saved &&
+            tail.Count(IsJoin) == 1 && tail.All(entry => entry.Revision == finished.Revision),
             "One persisted join must appear after the saved bookmark at the final revision.");
         await ApproveAsync("finance-approval", finance, "Replay", Contract.AdmissionOutcome.Duplicate);
         await PassAsync();
-        Check((await ImageAsync())?.Revision == finished.Revision, "The repeated final approval must add no revision.");
+        var replayed = await ImageAsync();
+        Check(replayed is not null && replayed.Revision == finished.Revision && replayed.State == finished.State &&
+            (await HistoryAsync(completion)).Entries.Count == 0, "The repeated final approval must preserve the checkpoint and journal.");
         Console.WriteLine($"finished {Environment.ProcessId} {actor.Id} revision {finished.Revision} join 1 route {route} epoch {epoch}");
         return 0;
 
@@ -123,13 +127,9 @@ internal static class PostgresFlowchartPreview
             await owner.RunAsync(stop);
         }
 
-        async Task ApproveAsync(string operation, string frame, string value, Contract.AdmissionOutcome expected)
-        {
-            var payload = JsonSerializer.Serialize(new CompositeSignal(frame, "approve", value));
-            var accepted = await api.SendAsync(scope, new Contract.Target.Ref(actor), operation, CompositeSignal.Kind, payload,
-                cancellationToken: stop);
-            Check(accepted.Outcome == expected, $"Approval '{operation}' returned {accepted.Outcome}.");
-        }
+        Task ApproveAsync(string operation, string frame, string value, Contract.AdmissionOutcome expected) =>
+            PostgresMultiRootClient.Send(api, scope, actor, operation, JsonSerializer.Serialize(new CompositeSignal(frame, "approve", value)),
+                expected, stop);
 
         async Task<(List<Contract.JournalEntry> Entries, Contract.PageToken? End)> HistoryAsync(Contract.PageToken? from)
         {
