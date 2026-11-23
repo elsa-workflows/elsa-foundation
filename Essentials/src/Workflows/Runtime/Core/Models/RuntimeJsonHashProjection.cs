@@ -49,17 +49,23 @@ public static class RuntimeJsonHashProjection
     {
         var shape = JsonHashInput.SerializeToElement(node);
         var root = JsonNode.Parse(shape.GetRawText(), documentOptions: new() { MaxDepth = 1000 })!.AsObject();
-        Visit(root);
+        Visit(root, node);
         return JsonHashInput.SerializeToElement(root);
 
-        static void Visit(JsonObject current)
+        static void Visit(JsonObject current, ExecutableNode source)
         {
             var metadata = current["metadata"]!.AsObject();
             foreach (var key in ExecutableMetadataKeys)
-                if (metadata.TryGetPropertyValue(key, out var raw) && raw is not null)
-                    metadata[key] = ParseMetadata(raw.GetValue<string>(), key);
-            foreach (var slot in current["childSlots"]!.AsArray())
-                foreach (var child in slot!["activities"]!.AsArray()) Visit(child!.AsObject());
+                // Always parse the original text: serializing a CLR string first can replace a lone
+                // UTF-16 surrogate, which would make invalid protocol input appear to be valid JSON.
+                if (source.Metadata.TryGetValue(key, out var raw)) metadata[key] = ParseMetadata(raw, key);
+            var slots = source.ChildSlots.ToArray();
+            for (var slot = 0; slot < slots.Length; slot++)
+            {
+                var children = slots[slot].Activities.ToArray();
+                for (var child = 0; child < children.Length; child++)
+                    Visit(current["childSlots"]![slot]!["activities"]![child]!.AsObject(), children[child]);
+            }
         }
     }
 
@@ -71,6 +77,9 @@ public static class RuntimeJsonHashProjection
         var result = new JsonObject();
         foreach (var key in ExecutableMetadataKeys)
             if (metadata.TryGetValue(key, out var raw)) result[key] = ParseMetadata(raw, key);
+        // These two owner flags are ordinary strings, not nested JSON documents.
+        foreach (var key in new[] { "accessesWorkflowState", Constants.RuntimeMetadataKeys.MayWriteEveryVisibleVariable })
+            if (metadata.TryGetValue(key, out var raw)) result[key] = raw;
         return JsonHashInput.SerializeToElement(result);
     }
 

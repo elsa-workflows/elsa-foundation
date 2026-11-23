@@ -227,6 +227,22 @@ public sealed class RuntimeCheckpointCommitTests
         return capture([state])[state.Execution.ActivityExecutionId];
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Activity_metadata_hashes_refuse_literal_unpaired_UTF16_without_rewriting_it(bool key)
+    {
+        var raw = key ? "{\"\ud800\":\"sensitive\"}" : "{\"sensitive\":\"\ud800\"}";
+        foreach (var metadataKey in new[] { StepWorkflowStateEffects.MetadataKey, StepWorkflowStateEffects.ReceiptsMetadataKey })
+        {
+            var state = _activityState with { Metadata = new Dictionary<string, string> { [metadataKey] = raw } };
+            var commit = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with { StateChanges = NewStateChanges(activityState: state) };
+            Assert.Throws<JsonException>(() => RuntimeCheckpointCommitFingerprint.Compute(commit));
+            Assert.Throws<JsonException>(() => AlterationRevision(state));
+            Assert.Equal(raw, state.Metadata[metadataKey]);
+        }
+    }
+
     [Fact]
     public void Cleanup_only_changes_participate_in_the_checkpoint_identity()
     {

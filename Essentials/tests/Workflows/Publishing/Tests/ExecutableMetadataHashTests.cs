@@ -52,6 +52,36 @@ public sealed class ExecutableMetadataHashTests
         Assert.Equal(raw, node.Metadata[key]);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Literal_unpaired_UTF16_in_known_metadata_is_not_repaired_by_the_template_serializer(bool key)
+    {
+        var raw = key ? "{\"\ud800\":\"sensitive\"}" : "{\"sensitive\":\"\ud800\"}";
+        foreach (var metadataKey in new[] { "workflowStateEffects", "runtime.mayWriteVariables" })
+        {
+            var node = Node(new Dictionary<string, string> { [metadataKey] = raw });
+            Assert.Throws<JsonException>(() => Template(node));
+            Assert.Throws<JsonException>(() => Template(Parent(node)));
+            var hasher = new WorkflowExecutableHasher();
+            Assert.Throws<JsonException>(() => hasher.ComputeHash(node));
+            Assert.Throws<JsonException>(() => hasher.ComputeHash(node, new(1, []), []));
+            Assert.Equal(raw, node.Metadata[metadataKey]);
+        }
+    }
+
+    [Theory]
+    [InlineData("accessesWorkflowState")]
+    [InlineData("runtime.mayWriteEveryVisibleVariable")]
+    public void Ordinary_capability_flags_are_bound_by_both_executable_paths(string key)
+    {
+        var nodes = new[] { Node(new Dictionary<string, string>()), Node(new Dictionary<string, string> { [key] = "false" }), Node(new Dictionary<string, string> { [key] = "true" }) };
+        var hasher = new WorkflowExecutableHasher();
+        Assert.Equal(3, nodes.Select(hasher.ComputeHash).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(3, nodes.Select(node => hasher.ComputeHash(node, new(1, []), [])).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(3, nodes.Select(Template).Distinct(StringComparer.Ordinal).Count());
+    }
+
     private static ExecutableNode Node(IReadOnlyDictionary<string, string> metadata, string payload = "{}") =>
         new("node", "authored", "test.activity", "1", "test", Json(payload), new Dictionary<string, RuntimeInputBinding>(), metadata);
 

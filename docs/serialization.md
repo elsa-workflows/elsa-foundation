@@ -37,6 +37,13 @@ including JSON components of framed and keyed protocols. Its independent fixed o
 entry below. Canonical bytes belong to equality and hashing; they do not replace the bytes of stored or forwarded
 data. See [ADR 0091](adr/0091-json-data-passes-through-unchanged-and-every-serializer-derives-from-one-baseline.md).
 
+Runtime activity-state hashes interpret only the owner's `workflowStateEffects` and
+`workflowStateEffectReceipts` metadata strings as JSON. Executable/template hashes likewise interpret
+`workflowStateEffects` and `runtime.mayWriteVariables` only on actual nodes, following child slots.
+Malformed recognized text is refused from its original UTF-16 input. Ordinary metadata and user-data strings
+remain strings; the executable's `accessesWorkflowState` and `runtime.mayWriteEveryVisibleVariable` flags are
+bound as ordinary strings. These hash projections never rewrite stored metadata or filter future fields.
+
 Physical checksums remain byte checks: `EfMigrationPlan.ManifestSha256`, captured closure-file digests, exact transport copies and the activity authority row witness
 detect changes to stored bytes even when JSON values are equal. `ActivityAuthorityIntegrity` binds raw and auxiliary
 JSON spellings, token columns and decoded scalars using the length-framed UTF-16 recipe verified by SQL Server's
@@ -59,6 +66,9 @@ The guard also pins these semantic roles separately:
 |---|---|
 | `ArgumentValue.Value`, `ActivityArgumentValue.Value` | Carried literal/default data, held as JSON; CLR producers explicitly apply their scoped conversion contract. |
 | `ValueEnvelope.InlineValue`, `WorkflowExecutionCommand.Payload` | Carried runtime data, held as JSON. Envelope admission and null/missing policies remain S-2-owned. |
+| `ScriptBodyWriteSet.WorkflowState`, `ScriptWorkflowStateEffects` | Parser-produced capability/effect flags and authored output names; this analysis projection contains no assigned values. |
+| `ActivityExecutionInspectionView.WorkflowStateEffects` / `.WorkflowStateEffectReceipts`, `ActivityExecutionInspectionSummaryView.WorkflowStateEffects` / `.WorkflowStateEffectReceipts`, `StepWorkflowStateEffectReceipt` | Accepted-effect kinds and value-free evaluation attribution: engine attempt/time, transition and known kinds. Nested arbitrary data is not admitted by this classification. |
+| `WorkflowInstanceSummaryView.InstanceName` | Owned instance identity scalar, disclosed under the same sensitive-value permission as correlation identity. |
 | `WorkflowInstanceDetailsView.Outputs`, `WorkflowOutputView.Value` | A named map of owned output records; the member converter preserves authored output names and each record's data remains JSON. `WorkflowOutputView` is also an explicit owner-context root. |
 | `WeaverContextAttachment.Content`, `WeaverActionProposal.Operations[*]` | Detached JSON data. Proposal operation roots are objects. |
 | `WeaverStreamEvent.Payload` | Owned event protocol alternatives described by `WeaverSseJsonContext`; their nested carried data remains JSON. It is not an arbitrary workflow-data slot. |
@@ -111,7 +121,7 @@ for Elsa-owned contracts only. Workflow-data conversions never enter that list.
 
 | File | Setting | Reason | Approved by |
 |---|---|---|---|
-| `Essentials/src/Workflows/Runtime/Core/Models/StepWorkflowStateEffects.cs` | `PropertyNamingPolicy@3619e834e6e8` | The closed, value-free retained receipt protocol keeps its PascalCase field names. Bidirectional original/current reader and writer controls and append controls cover null attribution, escaped text and explicit offsets; API contexts retain camelCase. | ADR 0091 decision 7; spec 1207 FR-023 |
+| `Essentials/src/Workflows/Runtime/Core/Models/StepWorkflowStateEffects.cs` | `PropertyNamingPolicy@82d276b473ec` | The closed, value-free retained receipt protocol keeps its PascalCase field names. Bidirectional original/current reader and writer controls and append controls cover null attribution, escaped text and explicit offsets; API contexts retain camelCase. | ADR 0091 decision 7; spec 1207 FR-023 |
 | `Essentials/apps/Elsa.Workbench/ElsaModuleManagementApi.cs` | `WriteIndented@bae9e4e922a3, json-method:ToJson@4f6ff7edd851, json-method:ToJson@ddc5d46f705a` | The exact local ToJson calls construct feed configuration JsonObject values, not EF owned-JSON mappings. The owner retains indentation for operator configuration and raw JsonElement subtrees remain unchanged. | ADR 0091 decision 7; spec 1207 |
 | `Essentials/src/Activities/Bpmn/Core/Internal/BpmnEmbeddingJson.cs` | `UnmappedMemberHandling@a4fc9453ddd9, converter:TextConverter@30ec2f1086d9` | The closed BPMN embedding union retains its text converter and refuses unknown structural fields; embedded data values remain raw JSON. | ADR 0091 decision 7; spec 1207 |
 | `Essentials/src/Activities/Bpmn/Design/Internal/BpmnStructureHandler.cs` | `converter:JsonStringEnumConverter@aca668889826` | The BpmnStructureHandler owner retains its established enum vocabulary for matching typed readers; raw JsonElement members and dictionary keys retain the baseline behavior. | ADR 0091 decision 7; spec 1207 |

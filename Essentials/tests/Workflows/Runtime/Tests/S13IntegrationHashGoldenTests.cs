@@ -20,7 +20,8 @@ public sealed class S13IntegrationHashGoldenTests
     [MemberData(nameof(Vectors))]
     public void Actual_checkpoint_contract_node_and_full_artifact_consumers_match_independent_pins(JsonElement vector)
     {
-        if (vector.GetProperty("family").GetString() == "capability")
+        var family = vector.GetProperty("family").GetString();
+        if (family == "capability")
         {
             var mask = vector.GetProperty("mask").GetInt32();
             var contract = new ActivityContract("test.activity", "1", "test", Json("{\"x\":1.0}"), [],
@@ -33,6 +34,30 @@ public sealed class S13IntegrationHashGoldenTests
             Pin("sha256:" + vector.GetProperty("contract").GetProperty("sha256").GetString(), contract.SchemaFingerprint);
             Pin("sha256:" + vector.GetProperty("nodeSha256").GetString(), hasher.ComputeHash(node));
             Pin("sha256:" + vector.GetProperty("sha256").GetString(), hasher.ComputeHash(node, new(1, []), []));
+        }
+        else if (family == "flag")
+        {
+            var metadata = new Dictionary<string, string>();
+            if (vector.GetProperty("value").GetString() is { } flag) metadata[vector.GetProperty("key").GetString()!] = flag;
+            var node = new ExecutableNode("node", "authored", "test.activity", "1", "test", Json("{\"x\":1.0}"),
+                new Dictionary<string, RuntimeInputBinding>(), metadata);
+            var hasher = new WorkflowExecutableHasher();
+            Pin("sha256:" + vector.GetProperty("nodeSha256").GetString(), hasher.ComputeHash(node));
+            Pin("sha256:" + vector.GetProperty("sha256").GetString(), hasher.ComputeHash(node, new(1, []), []));
+        }
+        else if (family == "activity-metadata")
+        {
+            var metadata = new Dictionary<string, string> { ["identity\ud800"] = "value\ud801" };
+            if (vector.GetProperty("payload").GetString() is { } raw) metadata[vector.GetProperty("key").GetString()!] = raw;
+            var state = new ActivityExecutionState(new("activity", "workflow", "node", "authored", "test.activity", "1"),
+                ActivityExecutionStatus.Completed, null, 1, DateTimeOffset.UnixEpoch, null, null, null, null, null, null,
+                ActivitySchedulingProvenance.Empty, null, [], [], 0, 0, metadata);
+            var type = typeof(WorkflowExecutableHasher).Assembly.GetType("Elsa.Workflows.Runtime.Services.Alterations.WorkflowAlterationCapturedConcurrencyValidator", throwOnError: true)!;
+            var capture = type.GetMethod("CaptureActivities")!.CreateDelegate<Func<IReadOnlyCollection<ActivityExecutionState>, IReadOnlyDictionary<string, string>>>();
+            Pin(vector.GetProperty("revision").GetProperty("sha256").GetString(), capture([state])["activity"]);
+            var commit = new RuntimeCheckpointCommit("commit", new("checkpoint", "test", "workflow", DateTimeOffset.UnixEpoch, [], new Dictionary<string, string>()),
+                new(null, null, [new("activity", RuntimeStateChangeOperation.Upsert, state, new Dictionary<string, string>())], [], [], [], []), [], new Dictionary<string, string>());
+            Pin(vector.GetProperty("sha256").GetString(), RuntimeCheckpointCommitFingerprint.Compute(commit));
         }
         else
         {
