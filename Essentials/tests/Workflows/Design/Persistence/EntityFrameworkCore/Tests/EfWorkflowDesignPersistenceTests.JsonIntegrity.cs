@@ -6,6 +6,7 @@ using Elsa.Serialization.Core;
 using Elsa.Serialization.Testing;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -53,6 +54,40 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         Assert.Equal("René <+>", value.GetProperty("declared_name").GetString());
         Assert.False(value.TryGetProperty("name", out _));
         Assert.Equal("René <+>", JsonConversionContract.Deserialize<PersistedScopedDefault>(value)!.Name);
+
+        var firstText = stored.StateSource;
+        var revision = stored.Source!.Revision;
+        using var equivalent = JsonDocument.Parse("""{"text":"a <+>","nil":null,"amount":1e0,"OrderID":9007199254740993}""");
+        var retry = state with { RootActivity = state.RootActivity! with
+        {
+            Inputs = [new("input", new ArgumentValue(equivalent.RootElement, "Literal"), null, null, null, null)]
+        } };
+        var replay = new EfCreateDraftCommand(fresh, access, new EfDesignAtomicWriter(fresh, access), new TestIdentity("retry"), serializer, new TestLockProvider());
+        Assert.Equal(id, await replay.Execute(new("json-create"), "json-definition", retry));
+        Assert.Equal(1, await fresh.Drafts.CountAsync());
+        Assert.Equal(1, await fresh.Operations.CountAsync());
+        var after = await fresh.Drafts.AsNoTracking().SingleAsync(row => row.Id == id);
+        Assert.Equal(firstText, after.StateSource);
+        Assert.Equal(revision, after.Source!.Revision);
+    }
+
+    [Fact]
+    public async Task Malformed_materialized_state_is_a_normalized_serialization_failure_before_any_write()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var command = new EfMaterializeWorkflowDefinitionVersionCommand(db, access, new EfDesignAtomicWriter(db, access), SerializationServices.PayloadSerializer());
+        var version = new WorkflowDefinitionVersion("definition", "1.0.0", "not JSON") { Id = "invalid", TenantId = "tenant-a" };
+        var error = await Assert.ThrowsAsync<DesignPersistenceException>(() => command.Execute(new("invalid-state"), version));
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, error.FailureKind);
+        Assert.Equal(DesignPersistenceDomain.Workflow, error.Domain);
+        Assert.Equal(EfMaterializeWorkflowDefinitionVersionCommand.OperationKind, error.Operation);
+        Assert.IsAssignableFrom<JsonException>(error.InnerException);
+        Assert.Empty(await db.Operations.ToListAsync());
+        Assert.Empty(await db.Versions.ToListAsync());
     }
 
     [JsonConversion(MemberMappings = ["declared_name=Name"])]

@@ -214,12 +214,27 @@ internal static class EfDesignSupport
         return FingerprintJson(operationKind, JsonHashInput.SerializeToElement(value).GetRawText());
     }
 
+    /// <summary>Detaches the state value for a hash projection while the persisted state keeps its received text.</summary>
+    public static JsonElement StateHashValue(string source, string operationKind)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(source, new JsonDocumentOptions { MaxDepth = 1000 });
+            return document.RootElement.Clone();
+        }
+        catch (Exception exception) when (IsSerializationFailure(exception))
+        {
+            throw new DesignPersistenceException(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Serialization,
+                operationKind, "workflow state", exception);
+        }
+    }
+
     public static bool IsResultFingerprintValid(string operationKind, string fingerprint, string json) =>
         StringComparer.Ordinal.Equals(fingerprint, FingerprintJson(operationKind, json));
 
     private static string FingerprintJson(string operationKind, string json)
     {
-        using var document = JsonDocument.Parse(json);
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 1000 });
         var canonical = Encoding.UTF8.GetString(JsonHashInput.CanonicalBytes(document.RootElement));
         var material = string.Concat(
             Frame("elsa-design-material:v1"),
