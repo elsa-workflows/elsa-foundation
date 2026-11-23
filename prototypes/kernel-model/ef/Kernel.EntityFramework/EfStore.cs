@@ -260,7 +260,14 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     /// <summary>Set for SQL Server and MySQL (with postgres: true, as the database assigns seq there too); null for PostgreSQL and SQLite.</summary>
     public Engine? Engine { get; init; }
 
-    private sealed class PollRow
+    private sealed class GeneratedPollRow : PollRow
+    {
+        public string? BirthTenant { get; set; }
+        public string? BirthReference { get; set; }
+        public string? BirthFingerprint { get; set; }
+    }
+
+    private class PollRow
     {
         public long? InboxScope { get; set; }
         public byte[]? IssuedWire { get; set; }
@@ -611,22 +618,38 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         if (_ordinaryRoots is { } root)
         {
             if (partition != root.Partition) throw new InvalidOperationException("The root belongs to another partition.");
-            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken));
+            if (root.Discover)
+            {
+                var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
+                var found = page.Where(r => r.Target is not null).Select(r =>
+                    new WorkerRoot(r.BirthTenant!, r.BirthReference!, r.Target!, partition, r.BirthFingerprint!)).Distinct().ToArray();
+                return ToPolled(page, new(partition, found));
+            }
+            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root);
         }
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
     }
 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
-    private string RootPollFilter => _ordinaryRoots is null ? "" : """ AND m."Target" = ANY({4})""";
+    private string RootPollFilter => _ordinaryRoots is { Discover: false } ? """ AND m."Target" = ANY({4})""" : "";
+    private string PollBirthColumns => _ordinaryRoots is { Discover: true }
+        ? """, b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
+    private string PollMessages => _ordinaryRoots is { Discover: true }
+        ? $"""
+           ("Messages" m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
+              AND b."Creation" = 1 AND m."EventMatch" IS NULL
+              AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" = {InboxKey.FoundationOccurrenceScope}))
+           """
+        : "\"Messages\" m";
     private string PollSql => Engine?.Poll ??
         $"""
-         SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
+         SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"{PollBirthColumns}
          FROM (SELECT {Now} AS now) t
-         LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"}{RootPollFilter}
+         LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter}
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
 
-    private Polled ToPolled(List<PollRow> rows)
+    private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null)
     {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
         {
@@ -634,12 +657,15 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };
             // Only the scoped public owner can decode and commit these persisted envelopes.
-            if (_ordinaryRoots is { } root)
+            if (bindings is not null)
             {
-                if (r.Target is null || root.ForActor(r.Target) != root.ForInput(key)) throw RootShape();
+                if (r.Target is null) throw RootShape();
+                var root = bindings.ForActor(r.Target);
+                if (new InstanceRef(r.Target).Partition != bindings.Partition || root != bindings.ForInput(key)) throw RootShape();
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
-                var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) : PostgresRootAdmission.DecodeDirect(entity);
+                var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
+                    : PostgresRootAdmission.DecodeDirect(entity);
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
             }
             if (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start))
@@ -684,6 +710,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         await using var db = create();
         if (_ordinaryRoots is { } root)
         {
+            root = await ResolveWorkerRootsAsync(root, ids, [], cancellationToken);
             var found = new List<InstanceRow>();
             foreach (var binding in ids.Distinct().Select(root.ForActor))
                 if (await ReadFirstRootAsync(binding.Tenant, binding.Reference, cancellationToken) is { } image)

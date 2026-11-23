@@ -106,6 +106,20 @@ The fixture checks the PostgreSQL transaction IDs for two journal rows at differ
 direct input after restart, and checks that a terminal refusal on one root rolls back both turns. The writer choices
 are `owned` and `ef`. The fence choices are `in-batch` and `checked`.
 
+To let an Embedded worker discover public roots from their partition, use a fresh dedicated database and run:
+
+```bash
+dll=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+dotnet "$dll" pg-discover-roots birth 0
+dotnet "$dll" pg-discover-roots restart 0
+```
+
+The first process activates an empty partition, admits roots and leaves a final approval ready. The second process
+takes the same partition and finishes that approval before the observer looks up any actor references. The poll
+joins eligible inbox rows to their admitted births, respects its row limit, and returns tenant and reference with
+the creator. The fixture checks that a replay adds no turn and that the other partition keeps its own pending work.
+This preview runs one registered workflow actor type on its dedicated database.
+
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
 ```bash
