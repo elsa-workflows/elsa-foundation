@@ -110,6 +110,9 @@ Public PostgreSQL readers check the format once when opening the journal cursor.
 runs with this check, the first process reported 38 or 39 TCP turns for setup, the restarted process reported six,
 and both still reported 13 for ownership. The five workflow phases retained their earlier counts.
 
+The relational schema marker is now 2 for the readable format columns on node rows. Schema 1 preview databases
+refuse open and acquisition before a node-row write. Use a fresh dedicated preview database for this revision.
+
 The general relational projector checks the format before reading the cursor, reading a journal page and
 writing a projection. A PostgreSQL 17 round that advanced the cursor measured six TCP turns with those
 checks, up from three. The general journal reader, view reader and sweeper each check the marker on entry.

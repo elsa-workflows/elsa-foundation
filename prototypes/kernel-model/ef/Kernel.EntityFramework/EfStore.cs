@@ -20,6 +20,9 @@ public sealed class PartitionEntity
 public sealed class NodeEntity
 {
     public string Id { get; set; } = "";
+    public string ReadableStoreSchema { get; set; } = "";
+    public string ReadableMessageProtocol { get; set; } = "";
+    public string ReadableJournalCodec { get; set; } = "";
     public long SeenAt { get; set; }        // database time of the last heartbeat
     public long LeaseUntil { get; set; }    // K1b, the node lease: database time until which no other process may take this one's partitions
 }
@@ -161,7 +164,11 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
         model.Entity<NodeEntity>(e =>
         {
             e.ToTable("Nodes");
-            e.Property(n => n.LeaseUntil).HasDefaultValue(0L);      // the membership heartbeat's insert names SeenAt only
+            e.Property(n => n.LeaseUntil).HasDefaultValue(0L); // a membership beat does not acquire a lease
+            // MySQL permits a default on TEXT when the default is an expression.
+            e.Property(n => n.ReadableStoreSchema).IsRequired().HasDefaultValueSql("('')");
+            e.Property(n => n.ReadableMessageProtocol).IsRequired().HasDefaultValueSql("('')");
+            e.Property(n => n.ReadableJournalCodec).IsRequired().HasDefaultValueSql("('')");
         });
         model.Entity<InstanceEntity>(e =>
         {
@@ -374,8 +381,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         await using var db = create();
         var now = Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken) : (await db.Database.SqlQueryRaw<long>(
-            $"""INSERT INTO "Nodes" ("Id", "SeenAt") VALUES ({"{0}"}, {Now}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt" RETURNING "SeenAt" AS "Value" """,
-            node).ToListAsync(cancellationToken))[0];
+            $"""INSERT INTO "Nodes" ("Id", "SeenAt", {NodeAdvertisement.Columns}) VALUES ({"{0}"}, {Now}, {NodeAdvertisement.Parameters}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", {NodeAdvertisement.Update} RETURNING "SeenAt" AS "Value" """,
+            NodeAdvertisement.Arguments(node)).ToListAsync(cancellationToken))[0];
         return await MembershipAsync(db, now, window, cancellationToken);
     }
 
