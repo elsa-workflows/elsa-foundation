@@ -5,7 +5,7 @@ import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointCont
 import { buildExecutableActivityGraph, type ExecutableActivityGraph } from "../executableGraph";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionStateSummary, WorkflowExecutableNode } from "../workflowTypes";
 import { prepareAttachedExecution } from "../workflow-editor/prepareAttachedExecution";
-import { findMatchingExecutionScope, loadExecutionScope, resolveExecutionScopeAncestorId, trimExecutionScopesForTarget, type ExecutionScopeEntry } from "../workflow-editor/executionScope";
+import { findMatchingExecutionScope, loadExecutionScope, resolveExecutionScopeAncestorId, resolveKnownExecutionScope, sameExecutionScopes, trimExecutionScopesForTarget, type ExecutionScopeEntry } from "../workflow-editor/executionScope";
 import { useAttachedExecutionSelection, type AttachedExecutionSelection } from "../workflow-editor/useAttachedExecutionSelection";
 
 const api = vi.hoisted(() => ({ browse: vi.fn(), inspect: vi.fn(), layout: vi.fn(), supported: vi.fn(), payload: vi.fn() }));
@@ -391,4 +391,60 @@ it("prepares Journal execution identity without reading hidden captured-value pa
   expect(prepared.inspection?.activityExecutionId).toBe(selected.activityExecutionId);
   expect(prepared.inspection?.valueSnapshots).toEqual([captured]);
   expect(prepared.values.size).toBe(0); expect(api.payload).not.toHaveBeenCalled();
+});
+
+it("resolves known outer-graph execution scopes synchronously and falls back when async metadata is needed", () => {
+  const rootExec = summary("root-1", "root", null);
+  const doExec = summary("do-1", "do", "root-1");
+  const bodyExec = summary("body-1", "body", "do-1");
+  const writeA = summary("write-a", "write", "body-1");
+  const writeB = summary("write-b", "write", "body-1");
+  const known = [rootExec, doExec, bodyExec, writeA, writeB];
+
+  const resolvedFromKnown = resolveKnownExecutionScope("run", writeA, {
+    graph,
+    includeSelf: false,
+    currentScopes: [],
+    knownActivities: known,
+    labelFor
+  });
+  expect(resolvedFromKnown?.map(item => [item.execution.activityExecutionId, item.label])).toEqual([
+    ["root-1", "root"], ["do-1", "do"], ["body-1", "body"]
+  ]);
+
+  // Sibling in the same active scope preserves existing scope chain (including iteration labels).
+  const iterScopes: ExecutionScopeEntry[] = [
+    { execution: rootExec, label: "root" },
+    { execution: doExec, label: "do" },
+    { execution: { ...bodyExec, iterationId: "iter-1" }, label: "body · Iteration 1" }
+  ];
+  const siblingScopes = resolveKnownExecutionScope("run", writeB, {
+    graph,
+    includeSelf: false,
+    currentScopes: iterScopes,
+    knownActivities: known,
+    labelFor
+  });
+  expect(siblingScopes).toBeTruthy();
+  expect(sameExecutionScopes(iterScopes, siblingScopes!)).toBe(true);
+
+  // Clicking an ancestor crumb or root resolves synchronously.
+  expect(resolveKnownExecutionScope("run", rootExec, {
+    graph, includeSelf: false, currentScopes: iterScopes, knownActivities: known, labelFor
+  })).toEqual([]);
+  expect(resolveKnownExecutionScope("run", doExec, {
+    graph, includeSelf: true, currentScopes: iterScopes, knownActivities: known, labelFor
+  })?.map(item => item.execution.activityExecutionId)).toEqual(["root-1", "do-1"]);
+
+  // Falls back to async load when ancestry is unknown, unlabelled iteration, or outside the outer graph.
+  const unknownParent = { ...writeA, parentActivityExecutionId: undefined };
+  expect(resolveKnownExecutionScope("run", unknownParent, {
+    graph, includeSelf: false, currentScopes: [], knownActivities: known, labelFor
+  })).toBeNull();
+  expect(resolveKnownExecutionScope("run", writeA, {
+    graph, includeSelf: false, currentScopes: [], knownActivities: [rootExec, doExec, { ...bodyExec, iterationId: "iter-1" }], labelFor
+  })).toBeNull();
+  expect(resolveKnownExecutionScope("run", summary("private-1", "private-child", "body-1"), {
+    graph, includeSelf: false, currentScopes: iterScopes, knownActivities: known, labelFor
+  })).toBeNull();
 });
