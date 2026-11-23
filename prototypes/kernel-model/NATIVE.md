@@ -475,8 +475,8 @@ dotnet run -c Release --project sim -- --native-detached-handles-check
 The terminal projection still counts every handle carried in a checkpoint. Older handles stay stored because the
 checkpoint lacks the metadata to distinguish a detached creator from an attached creator. If repeated growth
 parks an older parent, inspect the Park and its retained inputs before retrying. Retrying the same operation
-against the same checkpoint can reach the bound again. An authorized operator can discard the parked delivery
-or terminate the selected instance through the existing qualified command. Discard settles the delivery and leaves
+against the same checkpoint can reach the bound again. An authorized operator can discard the selected Park and
+all its retained inputs, or terminate the selected instance through the existing qualified command. Discard leaves
 the instance faulted. The provider-encoding and near-limit termination cases retain their own checks.
 
 ## 10. Private durable lexical-resource probe
