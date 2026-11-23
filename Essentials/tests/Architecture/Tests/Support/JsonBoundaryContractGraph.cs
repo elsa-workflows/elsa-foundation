@@ -73,7 +73,8 @@ internal static class JsonBoundaryContractGraph
                 IgnoreUnknownDiscriminator = info.PolymorphismOptions?.IgnoreUnrecognizedTypeDiscriminators,
                 Derived = info.PolymorphismOptions?.DerivedTypes.Select(derived => new { Type = Name(derived.DerivedType), Discriminator = derived.TypeDiscriminator })
                     .OrderBy(derived => derived.Type, StringComparer.Ordinal).ToArray(),
-                Enum = type.IsEnum ? Enum.GetNames(type).Select(name => name + "=" + Enum.Format(type, Enum.Parse(type, name), "D")).ToArray() : null
+                Enum = type.IsEnum ? Enum.GetNames(type).Select(name => name + "=" + Enum.Format(type, Enum.Parse(type, name), "D")).ToArray() : null,
+                EnumWire = type.IsEnum ? Enum.GetNames(type).Select(name => JsonSerializer.Serialize(Enum.Parse(type, name), type, options)).ToArray() : null
             });
             shapes[identity] = shape;
             pins.Add(identity, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(shape))));
@@ -86,6 +87,7 @@ internal static class JsonBoundaryContractGraph
             }
             if (type.IsArray) Visit(type.GetElementType()!, options, owner);
             if (type.IsGenericType) foreach (var argument in type.GetGenericArguments()) Visit(argument, options, owner);
+            foreach (var element in CollectionContracts(type, info.Kind)) Visit(element, options, owner);
             if (info.PolymorphismOptions is { } polymorphism)
                 foreach (var derived in polymorphism.DerivedTypes) Visit(derived.DerivedType, options, owner);
         }
@@ -94,16 +96,32 @@ internal static class JsonBoundaryContractGraph
     internal static bool IsJsonData(Type type) =>
         (Nullable.GetUnderlyingType(type) ?? type) == typeof(JsonElement) || typeof(JsonNode).IsAssignableFrom(type);
 
-    internal static bool ContainsObject(Type type) => type == typeof(object) ||
-        (type.IsArray && ContainsObject(type.GetElementType()!)) ||
-        (type.IsGenericType && type.GetGenericArguments().Any(ContainsObject));
+    internal static bool ContainsObject(Type type) => ContainsObject(type, []);
+
+    private static bool ContainsObject(Type type, HashSet<Type> seen) => seen.Add(type) && (type == typeof(object) ||
+        (type.IsArray && ContainsObject(type.GetElementType()!, seen)) ||
+        (type.IsGenericType && type.GetGenericArguments().Any(argument => ContainsObject(argument, seen))) ||
+        CollectionContracts(type, JsonTypeInfoKind.Dictionary).Concat(CollectionContracts(type, JsonTypeInfoKind.Enumerable))
+            .Any(element => ContainsObject(element, seen)));
+
+    private static IEnumerable<Type> CollectionContracts(Type type, JsonTypeInfoKind kind)
+    {
+        var contracts = type.GetInterfaces().Prepend(type).Where(candidate => candidate.IsGenericType).ToArray();
+        if (kind == JsonTypeInfoKind.Dictionary)
+            return contracts.Where(candidate => candidate.GetGenericTypeDefinition() == typeof(IDictionary<,>) ||
+                candidate.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)).SelectMany(candidate => candidate.GetGenericArguments()).Distinct();
+        if (kind == JsonTypeInfoKind.Enumerable)
+            return contracts.Where(candidate => candidate.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                .Select(candidate => candidate.GetGenericArguments()[0]).Distinct();
+        return [];
+    }
 
     private static bool IsLeaf(Type type) => IsJsonData(type) || type == typeof(string) || type.IsPrimitive || type.IsEnum ||
         type == typeof(decimal) || type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(DateOnly) || type == typeof(TimeOnly) ||
         type == typeof(TimeSpan) || type == typeof(Guid) || type == typeof(Uri) || type == typeof(byte[]);
 
     internal static string Name(Type type) => type.IsArray ? Name(type.GetElementType()!) + "[]" :
-        type.IsGenericType ? type.GetGenericTypeDefinition().FullName!.Split('`')[0] + "<" + string.Join(',', type.GetGenericArguments().Select(Name)) + ">" : type.FullName!;
+        type.IsGenericType ? type.GetGenericTypeDefinition().FullName! + "[" + string.Join(',', type.GetGenericArguments().Select(Name)) + "]" : type.FullName ?? type.Name;
 
     internal static IReadOnlySet<string> DeclaredContexts(IEnumerable<string> sources)
     {

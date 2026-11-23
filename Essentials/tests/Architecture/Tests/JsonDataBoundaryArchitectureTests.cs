@@ -146,6 +146,75 @@ public sealed class JsonDataBoundaryArchitectureTests
         Assert.Equal(new[] { "A.Context", "B.Outer+Context", "Context" }, found.Order(StringComparer.Ordinal));
     }
 
+    [Theory]
+    [InlineData(typeof(Rows))]
+    [InlineData(typeof(RowsById))]
+    public void A_changed_element_beneath_an_unchanged_non_generic_collection_changes_its_own_pin(Type collection)
+    {
+        var before = InspectFixture(JsonBaseline.Options, [collection]);
+        var options = WithAddedMember(typeof(OtherDocument));
+        var after = InspectFixture(options, [collection]);
+        Assert.Empty(before.Errors);
+        Assert.Empty(after.Errors);
+        var root = "shape|fixture|" + JsonBoundaryContractGraph.Name(collection);
+        var element = "shape|fixture|" + JsonBoundaryContractGraph.Name(typeof(OtherDocument));
+        Assert.Equal(before.Pins[root], after.Pins[root]);
+        Assert.NotEqual(before.Pins[element], after.Pins[element]);
+        Assert.True(JsonBoundaryContractGraph.ContainsObject(typeof(ObjectRows)));
+    }
+
+    [Fact]
+    public void Both_nested_siblings_inside_a_generic_owner_have_distinct_pins()
+    {
+        var roots = new[] { typeof(GenericOwner<string>.First), typeof(GenericOwner<string>.Second) };
+        var before = InspectFixture(JsonBaseline.Options, roots);
+        var after = InspectFixture(WithAddedMember(roots[1]), roots);
+        Assert.Empty(before.Errors);
+        Assert.Empty(after.Errors);
+        var first = "shape|fixture|" + JsonBoundaryContractGraph.Name(roots[0]);
+        var second = "shape|fixture|" + JsonBoundaryContractGraph.Name(roots[1]);
+        Assert.NotEqual(first, second);
+        Assert.Equal(before.Pins[first], after.Pins[first]);
+        Assert.NotEqual(before.Pins[second], after.Pins[second]);
+    }
+
+    [Fact]
+    public void Effective_enum_wire_names_are_pinned_even_with_the_same_CLR_enum_and_converter_type()
+    {
+        JsonSerializerOptions Options(JsonNamingPolicy naming)
+        {
+            var options = JsonBaseline.CreateCopy();
+            options.Converters.Add(new JsonStringEnumConverter<WireState>(naming));
+            options.MakeReadOnly();
+            return options;
+        }
+        var left = Options(JsonNamingPolicy.CamelCase);
+        var right = Options(JsonNamingPolicy.SnakeCaseLower);
+        Assert.Equal(left.GetTypeInfo(typeof(WireState)).Converter.GetType(), right.GetTypeInfo(typeof(WireState)).Converter.GetType());
+        var before = InspectFixture(left, [typeof(WireState)]);
+        var after = InspectFixture(right, [typeof(WireState)]);
+        var key = "shape|fixture|" + JsonBoundaryContractGraph.Name(typeof(WireState));
+        Assert.NotEqual(before.Pins[key], after.Pins[key]);
+        using var shape = JsonDocument.Parse(before.Shapes[key]);
+        Assert.Contains(shape.RootElement.GetProperty("EnumWire").EnumerateArray(), token => token.GetString() == "\"ready\"");
+    }
+
+    private static JsonSerializerOptions WithAddedMember(Type target)
+    {
+        var options = JsonBaseline.CreateCopy();
+        var resolver = new DefaultJsonTypeInfoResolver();
+        resolver.Modifiers.Add(info =>
+        {
+            if (info.Type != target) return;
+            var property = info.CreateJsonPropertyInfo(typeof(string), "newMember");
+            property.Get = _ => "added";
+            info.Properties.Add(property);
+        });
+        options.TypeInfoResolver = resolver;
+        options.MakeReadOnly();
+        return options;
+    }
+
     private static JsonBoundaryContractGraph.Snapshot InspectFixture(JsonSerializerOptions options, Type[] roots) =>
         JsonBoundaryContractGraph.Inspect(new[] { new JsonBoundaryContractGraph.Contracts("fixture", roots, options) });
 
@@ -157,6 +226,15 @@ public sealed class JsonDataBoundaryArchitectureTests
         [JsonIgnore] public object? InProcess { get; init; }
     }
     public sealed class OtherDocument { public string Name { get; init; } = string.Empty; }
+    public sealed class Rows : List<OtherDocument>;
+    public sealed class RowsById : Dictionary<string, OtherDocument>;
+    public sealed class ObjectRows : List<object>;
+    public sealed class GenericOwner<T>
+    {
+        public sealed class First { public JsonElement Data { get; init; } }
+        public sealed class Second { public JsonElement Data { get; init; } }
+    }
+    public enum WireState { FirstChoice, [JsonStringEnumMemberName("ready")] ReadyChoice }
     [JsonPolymorphic, JsonDerivedType(typeof(FirstAlternative), "first")]
     public abstract class OwnedUnion;
     public sealed class FirstAlternative : OwnedUnion { public JsonElement Data { get; init; } }
