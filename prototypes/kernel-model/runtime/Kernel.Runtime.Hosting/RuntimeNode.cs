@@ -50,7 +50,6 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private readonly TaskScheduler _scheduler = new ConcurrentExclusiveSchedulerPair().ExclusiveScheduler;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private Task? _loop, _halted;
-    private TimeSpan? _heartbeatEvery;
     private readonly Func<CancellationToken, Task>? _beside;
     private readonly CancellationTokenSource _besideEnd = new();     // A1: cancelled at the end of the stop, or on a kill
     private Task? _besideRun;
@@ -77,7 +76,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
 
     public async ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
     {
-        if (host is INodeLeaseHost { NodeLease: { } lease }) _heartbeatEvery = Cadence(lease, _options);
+        var heartbeatEvery = host is INodeLeaseHost { NodeLease: { } lease } ? Cadence(lease, _options) : (TimeSpan?)null;
         await _runtime.StartAsync(host, cancellationToken);
         _runtime.Wake.Listen(actor =>
         {
@@ -89,7 +88,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         lock (_halting)
             if (_halted is null)     // a stop or kill that came first leaves the node unstarted
             {
-                _loop = Task.WhenAll(OnNode(LoopAsync), OnNode(BalanceLoopAsync), _heartbeatEvery is { } every ? Task.Run(() => HeartbeatLoopAsync(every)) : Task.CompletedTask);
+                _loop = Task.WhenAll(OnNode(LoopAsync), OnNode(BalanceLoopAsync), heartbeatEvery is { } every ? Task.Run(() => HeartbeatLoopAsync(every)) : Task.CompletedTask);
                 if (_beside is { } beside) _besideRun = Task.Run(() => Beside(beside));     // not in _loop: the stop must not wait on it
             }
     }

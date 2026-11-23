@@ -15,8 +15,10 @@ internal static class HostJobDrainChecks
     {
         await GracefulAsync(ownedSet: true);
         await GracefulAsync(ownedSet: false);
+        await ActiveHostAsync();
         await ConcurrentStopAsync();
         await CanceledStopAsync();
+        await CanceledReleaseAsync();
         await FaultedStopAsync();
         await DisposedSourceAsync();
         await BeforeEntryAsync();
@@ -92,6 +94,64 @@ internal static class HostJobDrainChecks
         Check(fixture.Fence.Owner is null, "the next start has its own orderly stop");
     }
 
+    private static async Task ActiveHostAsync()
+    {
+        var fixture = new Fixture();
+        var runtime = new PartitionRuntime("active-host", fixture.Store, 1, Timeout);
+        IActorRuntime lifecycle = runtime;
+        var type = new JobProbe();
+        var worker = new Worker(runtime.Node, 0, fixture.Store, new ActorAdapter(fixture.Store, type), fixture.Options);
+        var other = new Worker(runtime.Node, 0, fixture.Store, new ActorAdapter(fixture.Store, new JobProbe()), fixture.Options);
+        var host = new DurableHost([worker]);
+        var replacement = new DurableHost([other]);
+        await lifecycle.StartAsync(host);
+        var active = (await runtime.ActivateAsync(0))!;
+        await fixture.StartActorAsync(runtime.Node);
+
+        try
+        {
+            for (var pass = 0; pass < 16 && !type.Entered.Task.IsCompleted; pass++) await runtime.PassAsync(0);
+            await type.Entered.Task.WaitAsync(Timeout);
+            Check(!await StartSucceededAsync(lifecycle.StartAsync(replacement).AsTask()) &&
+                !await StartSucceededAsync(lifecycle.StartAsync(host).AsTask()),
+                "the running runtime refuses both a different host and a duplicate start of its own host");
+
+            using var canceled = new CancellationTokenSource();
+            canceled.Cancel();
+            await lifecycle.StopAsync(canceled.Token);
+            Check(!await StartSucceededAsync(lifecycle.StartAsync(replacement).AsTask()) &&
+                runtime.Activation(0) == active && fixture.Fence.Owner == runtime.Node && !type.Canceled.Task.IsCompleted,
+                "a pre-canceled direct stop leaves the original run active and still refuses replacement");
+
+            var stop = lifecycle.StopAsync().AsTask();
+            await type.Canceled.Task.WaitAsync(Timeout);
+            Check(!stop.IsCompleted && fixture.Fence.Owner == runtime.Node,
+                "the later orderly stop drains the original host's admitted job");
+            type.Finish.TrySetResult();
+            await stop.WaitAsync(Timeout);
+            Check(type.Exited.Task.IsCompleted && fixture.Fence.Owner is null,
+                "the original worker exits before its fence is released");
+        }
+        finally
+        {
+            type.Finish.TrySetResult();
+            if (type.Entered.Task.IsCompleted) await type.Exited.Task.WaitAsync(Timeout);
+        }
+    }
+
+    private static async Task<bool> StartSucceededAsync(Task start)
+    {
+        try
+        {
+            await start.WaitAsync(Timeout);
+            return true;
+        }
+        catch (InvalidOperationException error) when (error.Message.Contains("already running", StringComparison.Ordinal))
+        {
+            return false;
+        }
+    }
+
     private static async Task ConcurrentStopAsync()
     {
         var fixture = new Fixture();
@@ -106,14 +166,18 @@ internal static class HostJobDrainChecks
         });
         var runtime = new PartitionRuntime("overlapping-stops", store, 1, Timeout);
         IActorRuntime lifecycle = runtime;
-        var host = new DurableHost([new Worker(runtime.Node, 0, store, new ActorAdapter(fixture.Store, new JobProbe()), fixture.Options)]);
+        var worker = new Worker(runtime.Node, 0, store, new ActorAdapter(fixture.Store, new JobProbe()), fixture.Options);
+        var other = new Worker(runtime.Node, 0, store, new ActorAdapter(fixture.Store, new JobProbe()), fixture.Options);
+        var host = new DurableHost([worker]);
+        var replacement = new DurableHost([other]);
         await lifecycle.StartAsync(host);
         Check(await runtime.ActivateAsync(0) is { Active: true }, "the direct runtime starts with a real fence");
         var oldEpoch = fixture.Fence.Epoch;
 
         var first = lifecycle.StopAsync().AsTask();
         Task second;
-        Task restart;
+        Task firstRestart;
+        Task secondRestart;
         try
         {
             await released.Task.WaitAsync(Timeout);
@@ -127,15 +191,19 @@ internal static class HostJobDrainChecks
             await caller.WaitAsync(Timeout);
             Check(!first.IsCompleted && !second.IsCompleted, "canceling a joined stop wait leaves the shared release pending");
 
-            restart = lifecycle.StartAsync(host).AsTask();
-            Check(!restart.IsCompleted, "a concurrent start waits until the old shutdown completes");
+            firstRestart = lifecycle.StartAsync(host).AsTask();
+            secondRestart = lifecycle.StartAsync(replacement).AsTask();
+            Check(!firstRestart.IsCompleted && !secondRestart.IsCompleted, "both concurrent starts wait until the old shutdown completes");
         }
         finally { finishRelease.TrySetResult(); }
 
-        await Task.WhenAll(first, second, restart).WaitAsync(Timeout);
-        Check(releases == 1 && await runtime.ActivateAsync(0) is { Active: true } && runtime.Owns(0) &&
+        await Task.WhenAll(first, second).WaitAsync(Timeout);
+        var starts = await Task.WhenAll(StartSucceededAsync(firstRestart), StartSucceededAsync(secondRestart));
+        Check(starts[0] != starts[1], "exactly one queued start binds its host after the common shutdown");
+        var winner = starts[0] ? worker : other;
+        Check(releases == 1 && await runtime.ActivateAsync(0) == winner && runtime.Owns(0) &&
             fixture.Fence.Owner == runtime.Node && fixture.Fence.Epoch > oldEpoch,
-            "one release completes both stops and the fresh start can own a new fence");
+            "one release completes both stops and the winning host alone owns the fresh fence");
         await lifecycle.StopAsync().AsTask().WaitAsync(Timeout);
         Check(releases == 2 && fixture.Fence.Owner is null, "the restarted runtime can stop and release its own new fence");
     }
@@ -175,6 +243,60 @@ internal static class HostJobDrainChecks
             type.Finish.TrySetResult();
             if (type.Entered.Task.IsCompleted) await type.Exited.Task.WaitAsync(Timeout);
         }
+    }
+
+    private static async Task CanceledReleaseAsync()
+    {
+        const int partitions = 2;
+        var fixture = new Fixture(partitions);
+        var issued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var answered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releases = 0;
+        var store = new CountingStore(fixture.Store, static () => { }, afterRelease: async () =>
+        {
+            if (Interlocked.Increment(ref releases) != 1) return;
+            issued.TrySetResult();
+            await finishRelease.Task.WaitAsync(Timeout);
+            answered.TrySetResult();
+        });
+        var runtime = new PartitionRuntime("release-deadline", store, partitions, Timeout);
+        var successor = new PartitionRuntime("after-release-deadline", store, partitions, Timeout);
+        DurableHost Host(string node) => new(Enumerable.Range(0, partitions).Select(partition =>
+            new Worker(node, partition, store, new ActorAdapter(fixture.Store, new JobProbe()), fixture.Options)));
+
+        var host = Host(runtime.Node);
+        await runtime.StartAsync(host);
+        Check(await runtime.ActivateAsync(0) is { Active: true } && await runtime.ActivateAsync(1) is { Active: true },
+            "the release deadline fixture owns two real fences");
+        var oldEpoch = fixture.Fence.Epoch;
+        using var deadline = new CancellationTokenSource();
+        var stop = runtime.StopAsync(deadline.Token).AsTask();
+        try
+        {
+            await issued.Task.WaitAsync(Timeout);
+            var queuedStart = runtime.StartAsync(Host(runtime.Node)).AsTask();
+            Check(!queuedStart.IsCompleted, "a second start is waiting for the first issued fence release");
+            deadline.Cancel();
+            Check(await Task.WhenAny(stop, Task.Delay(TimeSpan.FromSeconds(2))) == stop && !answered.Task.IsCompleted,
+                "the initiating deadline ends stop while the issued disposal is still pending");
+            await stop;
+            await RejectAbandonedRestartAsync(queuedStart);
+            await RejectAbandonedRestartAsync(successor.StartAsync(host).AsTask());
+            Check(releases == 1 && runtime.Activation(0) is null && runtime.Activation(1) is null &&
+                fixture.Fence.Owner is null && fixture.Store.Partitions[1].Owner == runtime.Node,
+                "abandoning the first release detaches the old run and leaves the second fence for expiry");
+
+            await successor.StartAsync(Host(successor.Node));
+            Check(await successor.ActivateAsync(0) is { Active: true } && fixture.Fence.Epoch > oldEpoch,
+                "an independent runtime can take the fence already released by the old run");
+        }
+        finally { finishRelease.TrySetResult(); }
+
+        await answered.Task.WaitAsync(Timeout);
+        Check(successor.Owns(0) && fixture.Fence.Owner == successor.Node && fixture.Store.Partitions[1].Owner == runtime.Node,
+            "the late release answer leaves the independent owner's fence and old unreleased fence intact");
+        await successor.StopAsync().AsTask().WaitAsync(Timeout);
     }
 
     private static async Task FaultedStopAsync()
@@ -390,10 +512,10 @@ internal static class HostJobDrainChecks
         internal WorkerOptions Options { get; }
         internal InMemoryStore.PartitionRow Fence => Store.Partitions[0];
 
-        internal Fixture()
+        internal Fixture(int partitions = 1)
         {
-            Store = new(1, () => 1_701_000_000_000 + _clock.ElapsedMilliseconds);
-            Options = new() { Partitions = 1, Lease = Timeout, Monotonic = () => _clock.ElapsedMilliseconds,
+            Store = new(partitions, () => 1_701_000_000_000 + _clock.ElapsedMilliseconds);
+            Options = new() { Partitions = partitions, Lease = Timeout, Monotonic = () => _clock.ElapsedMilliseconds,
                 JobScheduler = TaskScheduler.Default };
         }
 

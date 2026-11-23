@@ -45,27 +45,39 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 
     public int ScopeOf(InstanceRef actor) => actor.Partition;
 
+    /// <summary>Attach one host to an idle runtime. A start waits for an ongoing shutdown.</summary>
     public async ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
     {
-        if (host is IScopeCount counted) await counted.CheckScopesAsync(partitions, cancellationToken);     // refuses a mismatch
+        ArgumentNullException.ThrowIfNull(host);
+        var counted = host as IScopeCount;
         bool listen;
         while (true)
         {
-            Task stopping;
+            Task? stopping;
             lock (_lifecycle)
             {
                 if (_abandoned)
                     throw new InvalidOperationException("This runtime cannot restart because its previous shutdown did not complete.");
-                if (_stopping is not { } pending)
+                stopping = _stopping;
+                if (stopping is null)
                 {
-                    _host = host;
-                    listen = !_listening;
-                    _listening = true;
-                    break;
+                    if (_host is not null)
+                        throw new InvalidOperationException("This runtime is already running.");
+                    if (counted is null)
+                    {
+                        _host = host;
+                        listen = !_listening;
+                        _listening = true;
+                        break;
+                    }
                 }
-                stopping = pending;
             }
-            await stopping.WaitAsync(cancellationToken);
+            if (stopping is not null) await stopping.WaitAsync(cancellationToken);
+            else if (counted is not null)
+            {
+                await counted.CheckScopesAsync(partitions, cancellationToken);
+                counted = null;
+            }
             cancellationToken.ThrowIfCancellationRequested();
         }
         if (listen) Wake.Listen(actor => _ = Woken(actor));
@@ -112,16 +124,24 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         // What is not given up yet runs out by its lease, as after a crash.
         var released = false;
         Exception? failure = null;
+        Task? operation = null;
         try
         {
-            await host.PrepareToStopAsync(cancellationToken);
+            operation = host.PrepareToStopAsync(cancellationToken).AsTask();
+            await operation.WaitAsync(cancellationToken);
             for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++)
-                await DeactivateAsync(scope, cancellationToken);
+            {
+                operation = DeactivateAsync(scope, cancellationToken);
+                await operation.WaitAsync(cancellationToken);
+            }
             if (cancellationToken.IsCancellationRequested) return;
             host.Stopped();
             released = true;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (operation is not null) _ = ObserveAbandonedShutdownAsync(operation);
+        }
         catch (Exception error) { failure = error; }
         finally
         {
@@ -141,6 +161,12 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
                 }
             }
         }
+    }
+
+    private static async Task ObserveAbandonedShutdownAsync(Task operation)
+    {
+        try { await operation.ConfigureAwait(false); }
+        catch (Exception) { } // The stop deadline has passed. Observe the late outcome without changing the run.
     }
 
     /// <summary>This node holds the scope's fence, as far as layer 2 knows.</summary>

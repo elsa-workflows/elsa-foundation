@@ -25,7 +25,7 @@ public interface IScopeHost
     ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default);
 
     /// <summary>After the last pass, end admitted off-turn work before the runtime gives up its scopes.
-    /// Cancellation abandons the wait. This is called only for orderly shutdown of the host.</summary>
+    /// This starts orderly shutdown. Cancellation abandons the wait and a release already issued may still finish.</summary>
     ValueTask PrepareToStopAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
     /// <summary>All shutdown releases completed. The host can accept a fresh activation.</summary>

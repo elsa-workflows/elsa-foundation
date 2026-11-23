@@ -27,6 +27,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
     private readonly Worker? _node;
     private readonly Dictionary<int, NodeScope> _scopes = [];
     private readonly SemaphoreSlim _turn = new(1, 1);     // a pass, a gain and a loss of the node's worker never overlap
+    private volatile bool _stopping;
     private long _passes, _lastAt, _calls;
     private TimeSpan? _last;
     private Dictionary<int, TimeSpan> _lastAges = [];
@@ -84,6 +85,8 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
     /// </summary>
     public async ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default)
     {
+        if (_stopping)
+            throw new InvalidOperationException("This durable host cannot start while its previous shutdown is incomplete.");
         if (_counted is not { } counted) return;
         var stored = await counted.Store.PartitionCountAsync(cancellationToken);
         // A store that does not say its count is refused too, unless the node places part of it (the simulation's).
@@ -99,6 +102,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
 
     public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
     {
+        if (_stopping) return null;
         if (_node is not { } node)
         {
             if (_fixed(scope) is not { } worker) return null;
@@ -109,7 +113,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         await _turn.WaitAsync(CancellationToken.None);
         try
         {
-            if (!await node.GainAsync(scope, cancellationToken)) return null;
+            if (_stopping || !await node.GainAsync(scope, cancellationToken)) return null;
             // The same activation each time: layer 1 holds the one it got, and gives up the one it holds.
             return Scope(scope);
         }
@@ -129,12 +133,14 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
 
     async ValueTask IScopeHost.PrepareToStopAsync(CancellationToken cancellationToken)
     {
+        _stopping = true;
         await Task.WhenAll(Workers.Select(worker => worker.DrainJobsAsync())).WaitAsync(cancellationToken);
     }
 
     void IScopeHost.Stopped()
     {
         foreach (var worker in Workers) worker.ReopenJobEntry();
+        _stopping = false;
     }
 
     private IKernelStore? Store => _counted?.Store ?? Workers.FirstOrDefault()?.Store;
@@ -230,6 +236,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (_stopping) return [];
             await _node!.GainSetAsync(scopes, cancellationToken);
             return scopes.Where(_node.Holds).Select(Scope).ToArray();
         }
