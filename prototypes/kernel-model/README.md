@@ -155,7 +155,8 @@ dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-fl
 
 The two RuntimeNodes establish an equal split. A public purchase Flowchart starts on the peer. A fixture callback
 pauses that process after its creator's commit, and the parent checks that the checkpoint and pending continuation
-share a PostgreSQL transaction ID. The fixture ends its own peer process there. The surviving RuntimeNode takes
+share a PostgreSQL transaction ID. The parent locks that partition row, rechecks the peer epoch and pending input,
+and holds the lock until its child process has exited. The surviving RuntimeNode then takes
 the partition at a higher epoch, applies that exact continuation once, and runs both approval branches to one join.
 A changed-body approval replay preserves the original result. Two actor revisions are silent. The partition journal
 keeps consecutive positions. The check also runs with eight virtual partitions.

@@ -165,24 +165,43 @@ internal static class PostgresClusterChecks
                 before = await Placement(target);
             } while (before.Node != Peer);
 
-            // The peer stops at a landed commit while its process and its lease are still live.
-            string? persisted = null;
-            await Until(async () =>
-            {
-                await using var db = Open();
-                persisted = await db.Database.SqlQuery<string>($"""
+            async Task<string?> Pending(KernelDb db) =>
+                await db.Database.SqlQuery<string>($"""
                     SELECT m."Id" AS "Value" FROM "Messages" m JOIN "Instances" i
                          ON i."Id" = m."Target" AND i."Partition" = m."Partition" AND i.xmin = m.xmin
                     WHERE i."Id" = {target.Actor.Id} AND i."Revision" = 1 AND m."InboxScope" = {EfStore.RootSelfScope}
                         AND NOT m."Done" AND m."Sender" = i."Id"
                     """).SingleOrDefaultAsync(stop);
+            string? persisted = null;
+            await Until(async () =>
+            {
+                await using var db = Open();
+                persisted = await Pending(db);
                 return persisted is not null;
             });
-            Check(!peerProcess.HasExited && await Placement(target) == before, "the publishing peer retained its exact epoch");
             var birth = await api.TailAsync(scope, target.Ref, cancellationToken: stop);
             Check(birth.Next is not null && birth.Items.All(j => !PostgresFlowchartPreview.IsJoin(j)), "a pre-join journal bookmark is available");
-            peerProcess.Kill();
-            await peerProcess.WaitForExitAsync(stop);
+            await using (var guard = Open())
+            await using (var transaction = await guard.Database.BeginTransactionAsync(stop))
+            {
+                // Hold only the target fence. The child exits at OS level and needs no database cleanup to finish.
+                var held = await guard.Database.SqlQuery<Ownership>($"""
+                    SELECT "Owner" AS "Node", "Epoch" FROM "Partitions" WHERE "Id" = {target.Actor.Partition} FOR UPDATE
+                    """).ToListAsync(stop);
+                Check(held.Single() == before && await Pending(guard) == persisted && !peerProcess.HasExited,
+                    "the live peer owns the locked fence with its original continuation pending");
+                await using (var observer = Open())
+                {
+                    var available = await observer.Database.SqlQuery<int>($"""
+                        SELECT "Id" AS "Value" FROM "Partitions" WHERE "Id" = {target.Actor.Partition} FOR UPDATE SKIP LOCKED
+                        """).ToListAsync(stop);
+                    Check(available.Count == 0, "an independent ownership update would have to wait");
+                }
+                peerProcess.Kill();
+                await peerProcess.WaitForExitAsync(stop);
+                Check(await Pending(guard) == persisted, "the exact continuation is still pending after the peer exits");
+                await transaction.CommitAsync(stop);
+            }
             await Until(async () => await Count(Primary) == partitions);
             var after = await Placement(target);
             Check(after.Node == Primary && after.Epoch > before.Epoch, "the surviving runtime took the partition at a later epoch");
