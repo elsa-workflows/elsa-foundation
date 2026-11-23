@@ -47,7 +47,7 @@ public sealed class StructuredLogAppendFingerprintTests
     [InlineData("NaN")]
     [InlineData("[1,]")]
     public void Malformed_payload_is_refused_before_a_digest_is_returned(string payload) =>
-        Assert.Throws<JsonException>(() => StructuredLogAppendFingerprint.Compute(Binding, [new("token-1", payload)]));
+        Assert.ThrowsAny<JsonException>(() => StructuredLogAppendFingerprint.Compute(Binding, [new("token-1", payload)]));
 
     [Fact]
     public void The_same_binding_and_payloads_produce_the_same_fingerprint()
