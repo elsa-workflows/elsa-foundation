@@ -42,7 +42,7 @@ internal static class PostgresRootListChecks
         }
         var reads = new PostgresRootReads(store, await admission.OpenJournalCursorAsync(ct), 2);
         var foundation = new PostgresPreviewFoundation(admission, reads, Actor.ActorType, (scope, _) => scope == blue);
-        IActorReads api = foundation;
+        var api = await store.OpenPreviewRootReadsAsync(pageSize: 2, cancellationToken: ct);
 
         if (saved is not null)
         {

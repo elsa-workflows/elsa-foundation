@@ -84,11 +84,7 @@ internal sealed class PostgresPreviewFoundation(
         Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
         reads.ListAsync(scope, query, from, cancellationToken);
 
-    internal ValueTask<Contract.Page<WorkflowRunView>> ListRunsAsync(Contract.BoundScope scope, WorkflowRunQuery query,
-        Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
-        reads.ListRunsAsync(scope, actorType, query, from, cancellationToken);
-
     public ValueTask<Contract.Page<Contract.DeliveryView>> InboxAsync(Contract.BoundScope scope, Contract.ActorRef actor,
         Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("Inbox inspection is outside this preview.");
+        reads.InboxAsync(scope, actor, from, cancellationToken);
 }

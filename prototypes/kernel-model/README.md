@@ -291,6 +291,11 @@ only readers that already use that lock. The migration race fixture runs such a 
 The approval and replay rows include public admission and the Worker pass. Diagnostic checkpoint probes and deliberately
 refused commits use a separate unmeasured client. The demonstration scopes execution to one generated root and direct messages.
 
+After installing the PostgreSQL generated-root preview, a host can open `IActorReads` with
+`EfStore.OpenPreviewRootReadsAsync`. The provider supplies point, list and journal reads directly. Callers use a
+bound tenant scope and can carry list and journal bookmarks across process restarts. Inbox inspection and operator
+selections remain full-provider work.
+
 The preview's public `IActorReads.GetAsync` and `ListAsync` use a persisted, tenant-indexed projection of generated roots. PostgreSQL
 updates the list within the fenced metadata commit, including suspension changes that leave no public journal entry.
 Point queries use the tenant and exact reference and refuse a missing or disabled source trigger.

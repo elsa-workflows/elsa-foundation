@@ -11,6 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Kernel.Durable/Kernel.Durable.csproj" />
+    <ProjectReference Include="../../src/Kernel.Foundation.Contracts/Kernel.Foundation.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Ef.Conformance" />
