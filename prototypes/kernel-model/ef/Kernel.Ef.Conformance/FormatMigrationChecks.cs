@@ -1,3 +1,4 @@
+using System.Globalization;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,8 +31,8 @@ internal static class FormatMigrationChecks
             "migration with an unadvertised live node");
         await SetNode(node =>
         {
-            node.ReadableStoreSchema = "1";
-            node.ReadableMessageProtocol = "1";
+            node.ReadableStoreSchema = current.StoreSchema.ToString(CultureInfo.InvariantCulture);
+            node.ReadableMessageProtocol = current.MessageProtocol.ToString(CultureInfo.InvariantCulture);
             node.ReadableJournalCodec = "12";
         });
         await VersionTakeChecks.Refuses(() => store.AdvanceStoreFormatAsync(current, next), "journal codec=[12]",
