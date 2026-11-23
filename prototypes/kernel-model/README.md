@@ -53,6 +53,23 @@ for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conform
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
+## Migration plan outcomes from the journal
+
+From `prototypes/kernel-model`, run:
+
+```sh
+dotnet run -c Release --project sim -- --migration-plan-reads
+```
+
+This K9 example projects one plan's committed journal through `IActorReads`, using its opaque page token.
+It counts each selected exact actor reference once. An answer of `NotAtSource` can be replaced by a decisive result.
+The first decisive result survives replay. An unanswered actor is pending before close and has no answer after close.
+A late reply still updates the closed plan. A fresh projector recovers the same results from the journal.
+
+The example stores its view and bookmark in memory and uses a fixture to write the plan journal from real actor turns.
+The persisted view and its paging are separate K9 work. K11 supplies the migration plan actor, exact-ref dispatch
+and operator controls.
+
 ## The simulation
 
 ```
