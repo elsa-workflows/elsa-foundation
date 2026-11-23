@@ -14,9 +14,10 @@ public static class SetReleaseChecks
         var expired = await ExpiredAsync();
         var cancelled = await CancelledAsync();
         var busy = await BusySurplusAsync();
+        var activating = await ActivatingSurplusAsync();
         var fixedBusy = await FixedBusySurplusAsync(passStartsDuringRelease: false);
         var fixedInterleaved = await FixedBusySurplusAsync(passStartsDuringRelease: true);
-        return owned && fixedWorkers && expired && cancelled && busy && fixedBusy && fixedInterleaved ? 0 : 1;
+        return owned && fixedWorkers && expired && cancelled && busy && activating && fixedBusy && fixedInterleaved ? 0 : 1;
     }
 
     private static async Task<bool> CheckAsync(bool ownedSets)
@@ -129,6 +130,36 @@ public static class SetReleaseChecks
         var expected = deferred && wire.SetReleases == 1 && watcher.Violations.Count == 0
             && Enumerable.Range(0, Count).All(partition => runtime.Owns(partition) == (partition < 4));
         Console.WriteLine($"{(expected ? "ok" : "FAIL")} a running surplus pass defers the group until a later round, " +
+            $"seam violations [{string.Join(", ", watcher.Violations)}]");
+        await runtime.StopAsync();
+        return expected;
+    }
+
+    private static async Task<bool> ActivatingSurplusAsync()
+    {
+        var watcher = new Watcher();
+        var (store, wire, _, runtime) = await ReadyToReleaseAsync(ownedSets: true, () => 1_000L, watcher);
+        await runtime.Activation(0)!.WokenAsync(null);
+        wire.Stall(TimeSpan.FromMinutes(1));
+        var pass = runtime.PassAsync(0).AsTask();     // a retained partition holds the shared worker
+        var activation = runtime.ActivateAsync(7);
+        var balance = runtime.BalanceAsync();
+        bool deferred;
+        try
+        {
+            deferred = !wire.Idle && !activation.IsCompleted && runtime.Activating(7) && balance.IsCompletedSuccessfully &&
+                wire.SetReleases == 0 && store.Partitions.All(partition => partition.Owner == "first");
+        }
+        finally
+        {
+            wire.Resume();
+            await Task.WhenAll(pass, activation, balance).WaitAsync(TimeSpan.FromSeconds(3));
+        }
+        await runtime.BalanceAsync();
+        var expected = deferred && activation.Result is not null && wire.SetReleases == 1 && watcher.Violations.Count == 0 &&
+            Enumerable.Range(0, Count).All(p => runtime.Owns(p) == (p < 4) &&
+                store.Partitions[p].Owner == (p < 4 ? "first" : null));
+        Console.WriteLine($"{(expected ? "ok" : "FAIL")} an activating surplus scope defers the entire set release; " +
             $"seam violations [{string.Join(", ", watcher.Violations)}]");
         await runtime.StopAsync();
         return expected;
