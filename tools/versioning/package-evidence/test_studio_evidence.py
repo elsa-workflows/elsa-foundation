@@ -48,12 +48,14 @@ class StudioEvidence(unittest.TestCase):
             rows = [inspect(npm(path, name))[0] for name in reversed(ORDER)]
             (path / "npm-subjects.json").write_bytes(data(rows))
             # Simulate the first publication and its readback without registry access.
-            answers = [answer for row in reversed(rows) for answer in (None, row["integrity"])]
+            answers = [None] * len(rows) + [row["integrity"] for row in reversed(rows)]
             with patch("studio_publish_npm.observed", side_effect=answers), patch("studio_publish_npm.subprocess.run") as run:
                 publish(path, "https://example.invalid/", "preview", False)
                 self.assertEqual([Path(call.args[0][2]).stem for call in run.call_args_list], ORDER)
-            with patch("studio_publish_npm.observed", return_value="sha512-wrong"), self.assertRaisesRegex(ValueError, "integrity differs"):
-                publish(path, "https://example.invalid/", "preview", False)
+            with patch("studio_publish_npm.observed", side_effect=[None, "sha512-wrong"]), patch("studio_publish_npm.subprocess.run") as run:
+                with self.assertRaisesRegex(ValueError, "integrity differs"):
+                    publish(path, "https://example.invalid/", "preview", False)
+                run.assert_not_called()
             with self.assertRaisesRegex(ValueError, "payload mismatch"):
                 inspect(npm(path, ORDER[0], body=b"changed"))
             with self.assertRaisesRegex(ValueError, "declarations differ"):

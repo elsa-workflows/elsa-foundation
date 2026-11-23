@@ -13,13 +13,17 @@ ORDER = ["studio-sdk", "studio-ui", "studio-code-editor", "studio-workflows"]
 
 
 def observed(spec, registry):
-    p = subprocess.run(["npm", "view", spec, "dist.integrity", "--json", "--registry", registry],
+    p = subprocess.run(["npm", "view", spec, "name", "version", "dist", "--json", "--registry", registry],
                        capture_output=True, text=True, timeout=60)
     if p.returncode:
         if json.loads(p.stdout or "{}").get("error", {}).get("code") == "E404":
             return None
         raise ValueError("npm could not read " + spec + " from " + registry)
-    return json.loads(p.stdout) if p.stdout.strip() else None
+    result = json.loads(p.stdout)
+    check(result.get("name", "") + "@" + result.get("version", "") == spec, "Unexpected registry identity for " + spec)
+    integrity = result.get("dist", {}).get("integrity")
+    check(isinstance(integrity, str) and integrity.startswith("sha512-"), "Missing registry integrity for " + spec)
+    return integrity
 
 
 def publish(directory, registry, tag, dry_run):
@@ -34,10 +38,11 @@ def publish(directory, registry, tag, dry_run):
         path = directory / row["name"]
         actual, _ = inspect(path)
         check(row == actual, "Archive/receipt mismatch for " + name)
-        candidates.append((row, path))
-    for row, path in candidates:
         spec = row["id"] + "@" + row["version"]
         previous = None if dry_run else observed(spec, registry)
+        check(previous is None or previous == row["integrity"], "Registry integrity differs for " + spec)
+        candidates.append((row, path, spec, previous))
+    for row, path, spec, previous in candidates:
         if previous is None:
             command = ["npm", "publish", str(path.resolve()), "--registry", registry, "--access", "public", "--tag", tag]
             subprocess.run(command + (["--dry-run"] if dry_run else []), check=True)

@@ -54,10 +54,16 @@ async function inventory(name, directory, builds, output) {
   })) property(metadata, key, value);
   const components = new Map();
   const edges = new Map();
+  function graphRow(ref) {
+    if (!edges.has(ref)) edges.set(ref, new Set());
+  }
   function edge(from, to) {
-    if (!edges.has(from)) edges.set(from, new Set());
+    assert.ok(from && to, 'Unidentified component in dependency graph');
+    if (from === to) return;
+    graphRow(from);
     edges.get(from).add(to);
   }
+  graphRow(root['bom-ref']);
   const visited = new Set();
   function addLocked(id) {
     if (visited.has(id)) return;
@@ -68,7 +74,9 @@ async function inventory(name, directory, builds, output) {
     if (id !== name) components.set(parent, { ...locked.metadata.component, version, purl: parent, 'bom-ref': parent });
     for (const c of locked.components ?? []) components.set(c['bom-ref'], structuredClone(c));
     for (const row of locked.dependencies ?? []) {
-      for (const child of row.dependsOn ?? []) edge(row.ref === oldRoot ? parent : row.ref, child);
+      const ref = row.ref === oldRoot ? parent : row.ref;
+      graphRow(ref);
+      for (const child of row.dependsOn ?? []) edge(ref, child);
     }
     const direct = new Set([...(edges.get(parent) ?? [])].map(ref => fullName(components.get(ref))));
     for (const kind of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
@@ -132,20 +140,44 @@ async function inventory(name, directory, builds, output) {
     property(c, 'bundled', 'true');
     components.set(ref, c);
     bundledRefs.set(key, ref);
-    edge(root['bom-ref'], ref);
+  }
+  const dependencyNames = pkg => Object.keys({ ...pkg.dependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies });
+  const packageName = specifier => specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/');
+  function externalRef(file) {
+    const actual = json(file);
+    const tested = !file.includes('/node_modules/') && names.includes(actual.name) ? version : actual.version;
+    const ref = npmPurl(actual.name, tested);
+    if (!components.has(ref) && ref !== root['bom-ref']) {
+      const c = { type: 'library', name: actual.name, version: tested, purl: ref, 'bom-ref': ref };
+      property(c, 'version-context', 'producer-resolved external');
+      components.set(ref, c);
+    }
+    if (!dependencyNames(actual).length) graphRow(ref);
+    return ref;
   }
   for (const r of builds) {
-    // Record package-level relationships only when both frozen inputs occur in this bundle.
     const directories = new Map(r.packages.map(p => [p.directory, bundledRefs.get(p.name + '@' + p.version)]));
+    for (const dir of r.entries) edge(root['bom-ref'], directories.get(dir));
+    for (const [dir, targets] of r.imports) {
+      const resolver = createRequire(join(dir, 'package.json'));
+      for (const target of targets) {
+        const file = directories.has(target) ? null : resolvedManifest(resolver, packageName(target));
+        const child = directories.get(target) ?? (file && externalRef(file));
+        if (child) edge(directories.get(dir), child);
+      }
+    }
+    const externalNames = new Set(r.externals.map(packageName));
     for (const p of r.packages) {
       const from = directories.get(p.directory);
       const path = join(p.directory, 'package.json');
-      const pkg = json(path);
+      const dependencies = dependencyNames(json(path));
+      if (!dependencies.length) graphRow(from);
       const resolver = createRequire(path);
-      for (const dep of Object.keys({ ...pkg.dependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies })) {
+      for (const dep of dependencies) {
         const file = resolvedManifest(resolver, dep);
-        const child = file && directories.get(dirname(file));
-        if (child && child !== from) edge(from, child);
+        if (!file) continue;
+        const child = directories.get(dirname(file)) ?? (externalNames.has(dep) && externalRef(file));
+        if (child) edge(from, child);
       }
     }
     for (const [file, expected] of Object.entries(r.files)) {
