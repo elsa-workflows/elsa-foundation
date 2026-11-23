@@ -35,18 +35,7 @@ internal static class PostgresRootListChecks
         await using var db = Open();
         if (saved is null)
         {
-            // A later schema on the search path can supply tables missing from the first schema.
-            var empty = await db.Database.SqlQueryRaw<bool>("""
-                WITH user_schema AS (
-                    SELECT oid, nspname FROM pg_catalog.pg_namespace
-                    WHERE nspname <> 'information_schema' AND nspname !~ '^pg_'
-                )
-                SELECT EXISTS (SELECT 1 FROM user_schema WHERE nspname = pg_catalog.current_schema()) AND NOT EXISTS (
-                    SELECT 1 FROM pg_catalog.pg_depend dependency
-                    JOIN user_schema ns ON ns.oid = dependency.refobjid
-                    WHERE dependency.refclassid = 'pg_catalog.pg_namespace'::pg_catalog.regclass
-                ) AS "Value"
-                """).SingleAsync(ct);
+            var empty = await PostgresFixtureDatabase.IsEmptyAsync(db, ct);
             Check(empty, "Use an empty PostgreSQL database dedicated to the actor-list fixture.");
             await store.CreateAsync(1);
             await admission.InstallAsync(ct);
