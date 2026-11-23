@@ -52,6 +52,9 @@
           "Kernel.Runtime": "[1.0.0, )"
         }
       },
+      "kernel.foundation.contracts": {
+        "type": "Project"
+      },
       "kernel.runtime": {
         "type": "Project"
       }

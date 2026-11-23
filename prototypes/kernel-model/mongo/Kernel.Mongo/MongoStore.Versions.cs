@@ -8,6 +8,10 @@ public sealed partial class MongoStore
     private static readonly BsonDocument PartitionMarker = new("_id", "partitions");
     private readonly MongoStoreFormat _format;
     private static MongoStoreFormat JobGenerationFormat => new(2, 2, 1);
+    private static MongoStoreFormat ScopedJobRootFormat => new(3, 3, 1);
+
+    internal Task<bool> UpgradeScopedJobRootFormatAsync(CancellationToken token = default) =>
+        AdvanceStoreFormatAsync(JobGenerationFormat, ScopedJobRootFormat, cancellationToken: token);
 
     private async Task OpenVersionsAsync(IReadOnlyCollection<string> collections, int partitions)
     {
@@ -46,11 +50,12 @@ public sealed partial class MongoStore
     private async Task RequireVersionsAsync(IClientSessionHandle session, CancellationToken cancellationToken) =>
         RequireVersions(await _meta.Find(session, PartitionMarker).FirstOrDefaultAsync(cancellationToken), _format);
 
-    private async Task RequireReadOnlyVersionsAsync(CancellationToken token)
+    private async Task RequireReadOnlyVersionsAsync(CancellationToken token, IClientSessionHandle? session = null)
     {
-        var marker = await _meta.Find(PartitionMarker).FirstOrDefaultAsync(token);
+        var marker = await (session is null ? _meta.Find(PartitionMarker) : _meta.Find(session, PartitionMarker)).FirstOrDefaultAsync(token);
         // The staged reader understands the earlier checkpoint and inbox representation.
-        var readable = _options.JobGenerations && CurrentFormat.Matches(marker) ? CurrentFormat : _format;
+        var readable = _options.JobGenerations && CurrentFormat.Matches(marker) ? CurrentFormat
+            : _options.ScopedJobRoots && JobGenerationFormat.Matches(marker) ? JobGenerationFormat : _format;
         RequireVersions(marker, readable);
     }
 

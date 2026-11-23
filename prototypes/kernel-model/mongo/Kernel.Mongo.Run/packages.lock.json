@@ -64,6 +64,7 @@
         "type": "Project",
         "dependencies": {
           "Kernel.Durable": "[1.0.0, )",
+          "Kernel.Foundation.Contracts": "[1.0.0, )",
           "MongoDB.Driver": "[3.9.0, )"
         }
       },
