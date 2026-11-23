@@ -429,22 +429,21 @@ public sealed class DurableTurn
         return Send(id, target, kind, payload, new SendOptions(TargetCreation: targetCreation, DueAt: dueAt), actorAuthored: true);
     }
 
-    internal string SendImmediateToSelf(Func<string, string> issue, string kind, string? payload)
+    internal string SendToSelf(Func<string, string> issue, string kind, string? payload, long? dueAt)
     {
         Kinds.RequireApplicationSend(kind);
-        var id = issue(FoundationSelfSend.Seed(Origin, Revision, _ordinal++));
-        _sent.Add(FoundationSelfSend.Create(Id, _input.Creation, id, kind, payload));
+        var id = FoundationSelfSend.Issue(issue, Origin, Revision, _ordinal++, dueAt);
+        _sent.Add(FoundationSelfSend.Create(Id, _input.Creation, id, kind, payload, dueAt));
         return id;
     }
 
     internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt)
     {
         Kinds.RequireApplicationSend(kind);
-        if (target == Actor && targetCreation == _input.Creation && dueAt is null)
-            return SendImmediateToSelf(store.MessageHandle, kind, payload);
+        if (target == Actor && targetCreation == _input.Creation)
+            return SendToSelf(store.MessageHandle, kind, payload, dueAt);
         var issued = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal++:D4}");
-        var id = dueAt is not null && target == Actor && targetCreation == _input.Creation
-            ? store.FoundationTimerHandle(Origin, issued) : store.MessageHandle("send:" + issued);
+        var id = store.MessageHandle("send:" + issued);
         _sent.Add(new Message(id, target, kind, payload, Id, Due: dueAt, TargetCreation: targetCreation, SenderCreation: _input.Creation)
             { ActorAuthored = true, StorageId = Origin + "#" + id }.AsIssued());
         return id;
