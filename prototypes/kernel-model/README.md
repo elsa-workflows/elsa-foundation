@@ -131,6 +131,22 @@ direct input after restart, and checks that a terminal refusal on one root rolls
 tenant issues its public requests in a separate process bound to that tenant. The writer choices
 are `owned` and `ef`. The fence choices are `in-batch` and `checked`.
 
+To let an Embedded worker discover public roots from their partition, use a fresh dedicated database and run:
+
+```bash
+dll=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+dotnet "$dll" pg-discover-roots birth 0
+dotnet "$dll" pg-discover-roots restart 0
+```
+
+The first process activates an empty partition, admits roots and leaves a final approval ready. The second process
+takes the same partition and finishes that approval before the observer looks up any actor references. The poll
+joins eligible inbox rows to their admitted births, respects its row limit, and returns tenant and reference with
+the creator. Direct inputs admitted before a scheduled birth become eligible after its first checkpoint. The fixture
+checks that an independent ready root runs during that interval, a replay adds no turn, and the other partition keeps its pending work.
+Each tenant uses its own fixed-scope public client process. To select a writer and fence, append `owned` or `ef`
+and `in-batch` or `checked` to both commands. This preview runs one registered workflow actor type on its dedicated database.
+
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
 ```bash
