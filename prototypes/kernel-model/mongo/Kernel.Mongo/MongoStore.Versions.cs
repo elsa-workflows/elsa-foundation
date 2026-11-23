@@ -10,6 +10,11 @@ public sealed partial class MongoStore
     private static MongoStoreFormat JobGenerationFormat => new(2, 2, 1);
     private static MongoStoreFormat ScopedJobRootFormat => new(3, 3, 1);
 
+    private static MongoStoreFormat JobResultFormat => new(4, 4, 1);
+
+    internal Task<bool> UpgradeScopedJobResultsAsync(CancellationToken token = default) =>
+        AdvanceStoreFormatAsync(ScopedJobRootFormat, JobResultFormat, cancellationToken: token);
+
     internal Task<bool> UpgradeScopedJobRootFormatAsync(CancellationToken token = default) =>
         AdvanceStoreFormatAsync(JobGenerationFormat, ScopedJobRootFormat, cancellationToken: token);
 
@@ -55,7 +60,8 @@ public sealed partial class MongoStore
         var marker = await (session is null ? _meta.Find(PartitionMarker) : _meta.Find(session, PartitionMarker)).FirstOrDefaultAsync(token);
         // The staged reader understands the earlier checkpoint and inbox representation.
         var readable = _options.JobGenerations && CurrentFormat.Matches(marker) ? CurrentFormat
-            : _options.ScopedJobRoots && JobGenerationFormat.Matches(marker) ? JobGenerationFormat : _format;
+            : _options.ScopedJobRoots && JobGenerationFormat.Matches(marker) ? JobGenerationFormat
+            : _options.ScopedJobResults && ScopedJobRootFormat.Matches(marker) ? ScopedJobRootFormat : _format;
         RequireVersions(marker, readable);
     }
 

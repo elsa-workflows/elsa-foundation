@@ -19,6 +19,7 @@ public sealed record MongoStoreOptions
     // Release default stays at format 1. Only the staged provider qualification selects format 2.
     internal bool JobGenerations { get; init; }
     internal bool ScopedJobRoots { get; init; }
+    internal bool ScopedJobResults { get; init; }
 
 }
 
@@ -53,7 +54,9 @@ public sealed partial class MongoStore : IKernelStore
         _options = options ?? new MongoStoreOptions();
         if (_options.ScopedJobRoots && !_options.JobGenerations)
             throw new ArgumentException("Scoped job roots require the job-generation representation.", nameof(options));
-        _format = _options.ScopedJobRoots ? ScopedJobRootFormat : _options.JobGenerations ? JobGenerationFormat : CurrentFormat;
+        if (_options.ScopedJobResults && !_options.ScopedJobRoots)
+            throw new ArgumentException("Scoped job results require scoped job roots.", nameof(options));
+        _format = _options.ScopedJobResults ? JobResultFormat : _options.ScopedJobRoots ? ScopedJobRootFormat : _options.JobGenerations ? JobGenerationFormat : CurrentFormat;
         _grant = new BsonDocument
         {
             { "storeSchema", _format.StoreSchema }, { "messageProtocol", _format.MessageProtocol }, { "journalCodec", _format.JournalCodec }
@@ -186,12 +189,12 @@ public sealed partial class MongoStore : IKernelStore
     private readonly record struct Check(int Index, bool Delete, long Expected, CheckKind Kind, BsonDocument? Rewind = null);
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
-        CommitAsync(batch, null, cancellationToken);
+        CommitAsync(batch, null, null, cancellationToken);
 
-    private async ValueTask<Committed> CommitAsync(CommitBatch batch, FirstJobWrite? firstJob, CancellationToken cancellationToken)
+    private async ValueTask<Committed> CommitAsync(CommitBatch batch, FirstJobWrite? firstJob, JobResultWrite? settlement, CancellationToken cancellationToken)
     {
         StoreBatchRules.Validate(batch, ownedSets: true, supportsJobTrialClear: SupportsJobTrialClear);
-        if (firstJob is null) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
+        if (firstJob is null && settlement is null) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         CommitClockFacts.RejectUnsupported(batch);
         if (!_options.JobGenerations && batch.Turns.Any(t => t.Row?.NextJobGeneration is not null || t.Sent.Any(m => m.JobGeneration != 0)))
             throw new StoreFormatException("Job generations require schema=2, message protocol=2.");
@@ -283,6 +286,11 @@ public sealed partial class MongoStore : IKernelStore
                 await session.AbortTransactionAsync(cancellationToken);
                 return new Committed(false, 0, []);
             }
+            if (settlement is not null && !await CanSettleJobAsync(session, settlement, cancellationToken))
+            {
+                await session.AbortTransactionAsync(cancellationToken);
+                return new Committed(false, 0, []);
+            }
             var counted = owned ? CheckKind.Bound : CheckKind.Count;
             foreach (var turn in batch.Turns)
             {
@@ -325,7 +333,9 @@ public sealed partial class MongoStore : IKernelStore
                 if (turn.Consumed.Count > 0)
                 {
                     checks.Add(new(models.Count, true, turn.Consumed.Count, counted));
-                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_messages.CollectionNamespace, firstJob is null ? Keys(turn.Consumed, notDone: true) : CreatorFilter(firstJob)));
+                    var consume = firstJob is not null ? CreatorFilter(firstJob)
+                        : settlement is not null ? JobTicketFilter(settlement) : Keys(turn.Consumed, notDone: true);
+                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_messages.CollectionNamespace, consume));
                 }
                 if (turn.Done.Count > 0)
                 {
@@ -342,6 +352,12 @@ public sealed partial class MongoStore : IKernelStore
                     {
                         envelope.Add("rootRef", firstJob.Reference).Add("tenant", firstJob.Tenant)
                             .Add("senderCreation", message.SenderCreation).Add("targetCreation", message.TargetCreation!.Value);
+                    }
+                    if (settlement is not null)
+                    {
+                        envelope.Add("rootRef", settlement.Reference).Add("tenant", settlement.Tenant)
+                            .Add("senderCreation", message.SenderCreation).Add("targetCreation", message.TargetCreation!.Value)
+                            .Add("resultOf", InboxId(settlement.Ticket));
                     }
                     models.Add(new BulkWriteInsertOneModel<BsonDocument>(_messages.CollectionNamespace, envelope));
                 }

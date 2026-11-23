@@ -6,7 +6,7 @@ namespace Kernel.Mongo.Run;
 
 internal static class FirstJobRootChecks
 {
-    internal static async Task RunAsync(string connection, MongoStoreOptions options)
+    internal static async Task RunAsync(string connection, MongoStoreOptions options, bool settle = false)
     {
         var name = "kstartjob_" + Guid.NewGuid().ToString("N");
         var staged = options with { JobGenerations = true, ScopedJobRoots = true };
@@ -110,6 +110,8 @@ internal static class FirstJobRootChecks
             Check(successor is not null && successor.Epoch > current.Epoch &&
                   (await cold.ReadJobRootCheckpointAsync(scope, receipt.Reference))?.Tickets.Single(m => m.JobGeneration == 1).InboxKey == outcome.Sent[1].InboxKey,
                 "a new owner finds the original generation-one job after takeover");
+            if (settle)
+                await JobResultChecks.RunAsync(connection, name, staged, cold, scope, receipt.Reference);
         }
         finally { await client.DropDatabaseAsync(name); }
     }

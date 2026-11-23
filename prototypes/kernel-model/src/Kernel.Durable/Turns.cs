@@ -602,7 +602,7 @@ public sealed class DurableTurn
     internal void ReportFoundationJobResult(JobFinished result, long generation)
     {
         Send(InboxKey.JobResult(Id, result.Key, _input.Creation, generation), Actor, Kinds.JobFinished, result, jobGeneration: generation);
-        _sent[^1] = _sent[^1] with { FoundationJobResult = true };
+        _sent[^1] = (_sent[^1] with { FoundationJobResult = true }).AsKernelTicket();
     }
 
     public void Hold(Message message)
