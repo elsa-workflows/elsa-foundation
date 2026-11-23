@@ -899,6 +899,15 @@ $MOR "$MO" [--fence-in-batch] cost
 $MOR "$MO" probe crash|limits
 ```
 
+### Relational store format checks
+
+The EF conformance runner accepts `node-formats`, `version-take`, `version-services`, `format-migration` and
+`job-generation-format` in place of `semantic`. Use a disposable database server and both fence options.
+SQLite uses a temporary file. These cases check node advertisements, format refusals and coordinated schema
+changes. `version-take` and `version-services` exercise a higher and lower value for each of schema, message
+protocol and journal codec. An unsupported marker leaves ownership, the journal, projection and retained
+rows untouched. A supported marker lets the same paths operate again.
+
 ### MySQL node-lease cancellation
 
 From `prototypes/kernel-model`, use an isolated TLS-enabled MySQL test server with an administrative fixture
