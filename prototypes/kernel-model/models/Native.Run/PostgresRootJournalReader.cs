@@ -21,7 +21,7 @@ internal sealed class PostgresRootJournalReader(EfStore store, FoundationReadCur
 
         // Issued root references are ASCII hex. An unissued, unrepresentable reference is a
         // normal miss, and an empty read still carries the database clock.
-        var reference = actor.Id is { Length: 64 } id && id.All(char.IsAsciiHexDigit) ? id : "";
+        var reference = PostgresRootAdmission.IsIssuedReferenceShape(actor.Id) ? actor.Id : "";
         var snapshot = await store.ReadRootJournalAsync(scope.Tenant, reference, after.Position, _pageSize + 1, cancellationToken);
         var (entries, last) = FoundationJournalPaging.Read(
             snapshot.Rows.Select(row => (row.Position, row.Revision, row.Entries)), after, _pageSize);

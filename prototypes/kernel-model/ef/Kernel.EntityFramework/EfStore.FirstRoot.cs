@@ -15,6 +15,7 @@ public sealed partial class EfStore
         internal InstanceStatus Status { get; init; }
         internal long? TerminalRevision { get; init; }
         internal long? TerminalAt { get; init; }
+        internal long AsOf { get; init; }
     }
 
     private sealed record RootHeader(string Model, string Definition, string TypeData, KeyValuePair<string, string>[] Labels, bool EscapedState);
@@ -137,14 +138,16 @@ public sealed partial class EfStore
         return (storedState, header);
     }
 
-    private sealed record PhysicalRoot(string Id, long Creation, string State, int StateVersion, long Revision, string Header, InstanceStatus Status, long? TerminalRevision, long? TerminalAt);
+    private sealed record PhysicalRoot(string Id, long Creation, string State, int StateVersion, long Revision, string Header,
+        InstanceStatus Status, long? TerminalRevision, long? TerminalAt, long AsOf);
 
     internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
         await using var db = create();
         var physical = await db.Database.SqlQuery<PhysicalRoot>($"""
             SELECT i."Id", b."Creation", i."State", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
-                i."Status", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt"
+                i."Status", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
+                floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Reference" = i."FoundationReference"
                 AND b."Actor" = i."Id" AND b."Tenant" = i."FoundationTenant"
             WHERE i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference} AND i."Partition" = b."Partition" AND NOT i."Retired"
@@ -158,6 +161,6 @@ public sealed partial class EfStore
         var state = logical.FoundationNullState ? null : header.EscapedState ? DurableKeyJson.Read<string>(logical.State) : logical.State;
         return new(new(physical.Id, physical.Creation), header.Model, header.Definition, header.TypeData,
             header.Labels.ToDictionary(StringComparer.Ordinal), state, physical.StateVersion, physical.Revision)
-            { Status = physical.Status, TerminalRevision = physical.TerminalRevision, TerminalAt = physical.TerminalAt };
+            { Status = physical.Status, TerminalRevision = physical.TerminalRevision, TerminalAt = physical.TerminalAt, AsOf = physical.AsOf };
     }
 }

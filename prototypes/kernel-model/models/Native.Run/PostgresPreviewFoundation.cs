@@ -1,0 +1,79 @@
+using Kernel.EntityFramework;
+using Contract = Kernel.Foundation.Contracts;
+
+namespace Kernel.Native.Run;
+
+/// <summary>Public Foundation surfaces for the opt-in PostgreSQL direct-input preview.</summary>
+internal sealed class PostgresPreviewFoundation(
+    PostgresRootAdmission admission,
+    EfStore store,
+    PostgresRootJournalReader journal,
+    string actorType) : Contract.IIngress, Contract.IActorReads
+{
+    public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
+        string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(kind);
+        if (target is Contract.Target.Start start)
+        {
+            var spec = start.Spec;
+            if (kind != Contract.Kinds.Start || payload is not null || spec.Type != actorType || spec.Ephemeral ||
+                !Enum.IsDefined(spec.History))
+                throw new NotSupportedException("The preview starts durable roots of its configured actor type.");
+            var accepted = await admission.AdmitAsync(scope.Tenant, id,
+                new(spec.Type, spec.TypeData, spec.Input, History: (History)spec.History),
+                options?.DueAt, options?.KeepFor, cancellationToken);
+            return new(accepted.Duplicate ? Contract.AdmissionOutcome.Duplicate : Contract.AdmissionOutcome.Accepted,
+                new Contract.ActorRef(accepted.Reference));
+        }
+        if (target is not Contract.Target.Ref direct || !FoundationMetadataLimits.IsOrdinaryKind(kind))
+            throw new NotSupportedException("The preview supports ordinary input addressed to a root reference.");
+        FoundationMetadataLimits.RequireContent(payload, nameof(payload));
+        if (!FoundationMetadataLimits.IsOutsideMessageId(id))
+            throw new ArgumentException("The operation ID is outside the Foundation limits.", nameof(id));
+        var admitted = PostgresRootAdmission.IsIssuedReferenceShape(direct.Actor.Id)
+            ? await admission.AdmitDirectAsync(scope.Tenant, direct.Actor.Id, id, kind, payload, options?.DueAt,
+                options?.KeepFor, cancellationToken)
+            : null;
+        return admitted switch
+        {
+            true => new(Contract.AdmissionOutcome.Accepted, direct.Actor),
+            false => new(Contract.AdmissionOutcome.Duplicate, direct.Actor),
+            null => new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch)
+        };
+    }
+
+    public async ValueTask<Contract.ActorView?> GetAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!PostgresRootAdmission.IsIssuedReferenceShape(actor.Id)) return null;
+        var image = await store.ReadFirstRootAsync(scope.Tenant, actor.Id, cancellationToken);
+        return image is null ? null : new(new(actor, image.Model, scope.Tenant, (Contract.ActorStatus)image.Status, null,
+            null, image.TerminalAt, image.TypeData, image.Labels), null, null, image.AsOf);
+    }
+
+    public ValueTask<Contract.Page<Contract.JournalEntry>> TailAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
+        journal.TailAsync(scope, actor, from, cancellationToken);
+
+    public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
+        string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Held requests are outside this preview.");
+
+    public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Event starts are outside this preview.");
+
+    public ValueTask<Contract.Page<Contract.ActorView>> ListAsync(Contract.BoundScope scope, Contract.ActorQuery query,
+        Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Actor lists are outside this preview.");
+
+    public ValueTask<Contract.Page<Contract.DeliveryView>> InboxAsync(Contract.BoundScope scope, Contract.ActorRef actor,
+        Contract.PageToken? from = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Inbox inspection is outside this preview.");
+}

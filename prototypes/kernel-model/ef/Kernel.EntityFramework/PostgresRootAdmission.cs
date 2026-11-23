@@ -13,6 +13,9 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     private sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput, bool ExplicitZeroDue = false);
     private const string CreatorPrefix = "!kernel-root/1:";
 
+    internal static bool IsIssuedReferenceShape(string? reference) =>
+        reference is { Length: 64 } && reference.All(char.IsAsciiHexDigit);
+
     internal async Task<FoundationReadCursor> OpenJournalCursorAsync(CancellationToken cancellationToken)
     {
         await using var db = create();
