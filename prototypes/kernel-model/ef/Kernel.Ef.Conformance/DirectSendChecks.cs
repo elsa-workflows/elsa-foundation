@@ -1,0 +1,91 @@
+using Kernel.EntityFramework;
+using Microsoft.EntityFrameworkCore;
+
+namespace Kernel.Ef.Conformance;
+
+internal static class DirectSendChecks
+{
+    internal static async Task Run(Func<KernelDb> create, EfStore store)
+    {
+        const string tenant = "demo";
+        var roots = new PostgresRootAdmission(create, TimeSpan.FromMinutes(1));
+        await roots.InstallAsync();
+        var admitted = await roots.AdmitAsync(tenant, "start-direct", new StartSpec("workflow", "definition"));
+        var reference = admitted.Reference;
+        var creator = (await roots.ReadPendingCreatorAsync(tenant, reference))!;
+        var original = "payload\u0000\ud800";
+        const string originalKind = "input\u0000next";
+        Check(await roots.AdmitDirectAsync(tenant, reference, "first", originalKind, original, due: 0) == true,
+            "the exact pending creator accepts an ordinary input");
+        Check(await roots.AdmitDirectAsync(tenant, reference, "first", "input", "replacement") == false,
+            "a replay remains a duplicate and cannot replace the pending payload");
+        Check(await roots.AdmitDirectAsync("other", reference, "wrong-scope", "input") is null &&
+            (await roots.ReadPendingDirectAsync("other", reference)).Count == 0,
+            "reads and admissions require the bound tenant");
+        Check(await roots.AdmitDirectAsync(tenant, reference, "requires-qualification", Kinds.Delete) is null,
+            "the ordinary route leaves qualified commands to their operator path");
+
+        foreach (var unknown in new[] { reference[..63] + '\0', reference[..63] + '\ud800', reference[..63] })
+        {
+            Check(await roots.AdmitDirectAsync(tenant, unknown, "first", "input") is null &&
+                (await roots.ReadPendingDirectAsync(tenant, unknown)).Count == 0,
+                "an invalid generated reference is unavailable for both admission and pending reads");
+        }
+        var another = await roots.AdmitAsync(tenant, "start-another", new StartSpec("workflow", "definition"));
+        Check(await roots.AdmitDirectAsync(tenant, another.Reference, "first", "input", "another root") == true &&
+            (await roots.ReadPendingDirectAsync(tenant, another.Reference)) is [{ Id: "first", Payload: "another root" }] &&
+            (await roots.ReadPendingDirectAsync(tenant, reference)) is [{ Id: "first", Payload: var firstBody }] && firstBody == original,
+            "the same operation on two exact roots retains its own receipt and input on each");
+
+        var timeout = TimeSpan.FromSeconds(30);
+        var acquired = (await store.TakeAsync(creator.Target.Partition, "direct-fence", timeout))!;
+        var fence = new PartitionFence(creator.Target.Partition, acquired.Epoch, acquired.Position);
+        var saved = await store.CommitFirstRootAsync(tenant, reference, creator, fence, timeout, "waiting", 14, "runtime",
+            new Dictionary<string, string>(), """["started"]""");
+        Check(saved.Landed, "the live checkpoint consumes only its creator");
+        var cold = new PostgresRootAdmission(create, TimeSpan.FromMinutes(1));
+        var sameId = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(index => cold.AdmitDirectAsync(tenant, reference, "second", "input", $"path-{index}")));
+        var winner = Array.FindIndex(sameId, value => value == true);
+        Check(winner >= 0 && sameId.Count(value => value == true) == 1 && sameId.Count(value => value == false) == 7,
+            "eight concurrent live admissions leave one durable receipt and one input");
+        var before = await cold.ReadPendingDirectAsync(tenant, reference);
+        Check(before is [{ Id: "first", Due: 0, TargetCreation: 1 }, { Id: "second", Due: null, TargetCreation: 1 }] &&
+              before[0].Payload == original && before[0].Kind == originalKind && before[1].Payload == $"path-{winner}" &&
+              before.All(message => message.Target == creator.Target),
+            "cold reads preserve actor life, FIFO, due presence, and exact kind and payload");
+
+        await using (var db = create())
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "FoundationDirectReceipts" SET "Until" = 0 WHERE "Reference" = {reference}
+                """);
+        }
+        Check(await cold.SweepDirectReceiptsAsync() == 2 &&
+              await cold.AdmitDirectAsync(tenant, reference, "first", "input", "new occurrence", due: 2_000_000_000_000) == true,
+            "receipt expiry permits a new occurrence while the original remains pending");
+        var after = await cold.ReadPendingDirectAsync(tenant, reference);
+        Check(after.Count == 3 && after[0] == before[0] && after[1] == before[1] &&
+              after[2] is { Id: "first", Payload: "new occurrence", Due: 2_000_000_000_000 } &&
+              after.Select(message => message.InboxKey).Distinct().Count() == 3,
+            "reused operation has a separate physical occurrence and leaves earlier input untouched");
+
+        // In its logical form this is 3 MiB. The stored JSON representation needs six bytes per NUL.
+        var expanded = new string('\0', 3 * 1024 * 1024);
+        Check(await cold.AdmitDirectAsync(tenant, another.Reference, "first", "input", expanded) == false &&
+            (await cold.ReadPendingDirectAsync(tenant, another.Reference)) is [{ Id: "first", Payload: "another root" }],
+            "a live receipt wins over an oversized replacement encoding and preserves its original input");
+        Check(await cold.AdmitDirectAsync(tenant, another.Reference, "smaller-retry", "input", expanded) is null &&
+            (await cold.ReadPendingDirectAsync(tenant, another.Reference)).Count == 1 &&
+            await cold.AdmitDirectAsync(tenant, another.Reference, "smaller-retry", "input", "fits") == true &&
+            (await cold.ReadPendingDirectAsync(tenant, another.Reference)) is
+                [{ Id: "first", Payload: "another root" }, { Id: "smaller-retry", Payload: "fits" }],
+            "a physical size refusal releases its receipt reservation for a smaller retry");
+    }
+
+    private static void Check(bool valid, string message)
+    {
+        if (!valid) throw new InvalidOperationException(message);
+        Console.WriteLine($"ok {message}");
+    }
+}

@@ -42,8 +42,8 @@ public sealed partial class MongoStore
     private async Task<int> RequireVersionsAsync(CancellationToken cancellationToken) =>
         RequireVersions(await _meta.Find(PartitionMarker).FirstOrDefaultAsync(cancellationToken));
 
-    private async Task RequireVersionsAsync(IClientSessionHandle session, CancellationToken cancellationToken) =>
-        RequireVersions(await _meta.Find(session, PartitionMarker).FirstOrDefaultAsync(cancellationToken));
+    private async Task RequireVersionsAsync(IClientSessionHandle session, CancellationToken cancellationToken, FindOptions? options = null) =>
+        RequireVersions(await _meta.Find(session, PartitionMarker, options).FirstOrDefaultAsync(cancellationToken));
 
     private static int RequireVersions(BsonDocument? marker)
     {

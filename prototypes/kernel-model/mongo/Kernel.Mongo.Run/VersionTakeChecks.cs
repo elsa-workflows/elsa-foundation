@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoDB.Driver.Core.Events;
 
 namespace Kernel.Mongo.Run;
 
@@ -7,10 +9,19 @@ internal static class VersionTakeChecks
 {
     internal static async Task RunAsync(string connection, MongoStoreOptions options)
     {
-        using var client = MongoProvider.Client(connection, "kernel-version-check");
+        var markerTimeouts = new ConcurrentQueue<long>();
+        void ObserveMarker(CommandStartedEvent started)
+        {
+            var command = started.Command;
+            if (started.CommandName == "find" && command["find"] == "meta" &&
+                command.GetValue("autocommit", true) == false && command["filter"]["_id"] == "partitions")
+                markerTimeouts.Enqueue(command.GetValue("maxTimeMS", -1).ToInt64());
+        }
+        using var client = MongoProvider.Client(connection, "kernel-version-check", ObserveMarker);
+        using var coldClient = MongoProvider.Client(connection, "kernel-version-check-cold", ObserveMarker);
         var database = "kfmt_" + Guid.NewGuid().ToString("N");
         var store = new MongoStore(client, database, options);
-        var cold = new MongoStore(client, database, options);
+        var cold = new MongoStore(coldClient, database, options);
         var db = store.Database;
         var meta = db.GetCollection<BsonDocument>("meta");
         var fences = db.GetCollection<BsonDocument>("partitions");
@@ -38,6 +49,7 @@ internal static class VersionTakeChecks
                 "initialization at the recorded count repairs a partial store with the original marker");
 
             Check(await store.TakeAsync(0, "owner", lease) is { Epoch: 1 }, "a supported marker permits the take");
+            CheckMarkerDeadline("take", lease);
             var stable = await Snapshot();
             foreach (var (family, value) in new (string, BsonValue)[] { ("storeSchema", 0), ("messageProtocol", 2), ("journalCodec", 2), ("journalCodec", "1") })
             {
@@ -52,9 +64,19 @@ internal static class VersionTakeChecks
             await FailsClosed("missing marker");
             Check(stable == await Snapshot() && !await meta.Find(markerId).AnyAsync(), "reopen leaves the marker absent on an existing store");
             await meta.InsertOneAsync(original);
-            Check(await cold.RetakeAsync(0, "owner", 1, lease) is { Epoch: 2 }, "a supported marker permits a cold retake");
+            markerTimeouts.Clear();
+            var retakeLease = TimeSpan.FromSeconds(12);
+            Check(await cold.RetakeAsync(0, "owner", 1, retakeLease) is { Epoch: 2 }, "a supported marker permits a cold retake");
+            CheckMarkerDeadline("retake", retakeLease);
         }
         finally { await client.DropDatabaseAsync(database); }
+
+        void CheckMarkerDeadline(string operation, TimeSpan duration)
+        {
+            var observed = markerTimeouts.ToArray();
+            Check(observed.Length > 0 && observed.All(ms => ms == (long)(duration / 3).TotalMilliseconds),
+                $"the transactional {operation} marker read carries the third-lease server deadline");
+        }
 
         async Task CheckLegacy(string label, Func<Task> seed)
         {

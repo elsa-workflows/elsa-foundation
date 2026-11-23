@@ -8,6 +8,7 @@ internal static class VersionServiceChecks
     internal static async Task RunAsync(string connection, MongoStoreOptions options)
     {
         using var client = MongoProvider.Client(connection, "kernel-role-version-check");
+        using var coldClient = MongoProvider.Client(connection, "kernel-role-version-cold");
         var database = "kformatservices_" + Guid.NewGuid().ToString("N");
         var store = new MongoStore(client, database, options);
         var db = store.Database;
@@ -19,6 +20,7 @@ internal static class VersionServiceChecks
         var events = db.GetCollection<BsonDocument>("events");
         var views = db.GetCollection<BsonDocument>("views");
         var projections = db.GetCollection<BsonDocument>("projections");
+        var nodes = db.GetCollection<BsonDocument>("nodes");
         var partition = new BsonDocument("_id", 0);
         var retained = new BsonDocument { { "_id", "retained" }, { "done", true }, { "keepUntil", 1L } };
         var expired = new BsonDocument { { "_id", "expired" }, { "keepUntil", 1L } };
@@ -31,7 +33,7 @@ internal static class VersionServiceChecks
             await messages.InsertOneAsync(retained);
             await events.InsertOneAsync(expired);
             await SetCodec(2);
-            var cold = new MongoStore(client, database, options);
+            var cold = new MongoStore(coldClient, database, options);
             var host = DurableHost.ForNode("cold", cold, new WorkflowInstance([]), partitions: 2);
             var runtime = new PartitionRuntime("cold", cold, 2, TimeSpan.FromSeconds(30));
 
@@ -59,13 +61,23 @@ internal static class VersionServiceChecks
             Check(scheduled.Idle.IsCompletedSuccessfully && scheduled.Rounds == 1, "subsequent nudges leave the stopped scheduler idle");
             Check((await projections.Find(partition).SingleAsync())["position"] == 0 &&
                 !await views.Find(FilterDefinition<BsonDocument>.Empty).AnyAsync() &&
-                !await db.GetCollection<BsonDocument>("nodes").Find(FilterDefinition<BsonDocument>.Empty).AnyAsync() &&
+                !await nodes.Find(FilterDefinition<BsonDocument>.Empty).AnyAsync() &&
                 (await messages.Find(FilterDefinition<BsonDocument>.Empty).SingleAsync()).Equals(retained) &&
                 (await events.Find(FilterDefinition<BsonDocument>.Empty).SingleAsync()).Equals(expired),
                 "refusal preserves empty membership, cursor, views and both expired retained documents");
 
+            var stored = await meta.FindOneAndDeleteAsync(marker);
+            var missing = new PartitionRuntime("cold", cold, 2, TimeSpan.FromSeconds(30));
+            Check(await db.GetCollection<BsonDocument>("partitions").CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty) == 2,
+                "the unversioned store has exactly the two partitions requested by the host");
+            await Refuses(() => missing.StartAsync(host).AsTask(), "marker is missing", "counted host refuses a missing marker on a populated store");
+            Check(!await missing.HeartbeatAsync() && !await nodes.Find(FilterDefinition<BsonDocument>.Empty).AnyAsync(),
+                "the refused counted start cannot publish its first heartbeat");
+            await meta.InsertOneAsync(stored);
             await SetCodec(1);
             await runtime.StartAsync(host);
+            Check(await runtime.HeartbeatAsync() && await nodes.Find(new BsonDocument("_id", "cold")).AnyAsync(),
+                "the compatible counted host publishes its first heartbeat");
             await runtime.StopAsync();
             Check(await cold.PartitionCountAsync() == 2, "the counted host starts at the recorded partition count after repair");
             Check(await store.ProjectedAsync(0) == new Projection(0, 1) &&
@@ -78,12 +90,6 @@ internal static class VersionServiceChecks
                 (await store.ReadViewsAsync([actor])).Single() == new ViewRow(actor, 1, 1), "a restarted projector advances the cursor and writes the view");
             Check(await store.SweepAsync() == 2 && !await messages.Find(FilterDefinition<BsonDocument>.Empty).AnyAsync() &&
                 !await events.Find(FilterDefinition<BsonDocument>.Empty).AnyAsync(), "sweep removes both expired records after compatibility returns");
-
-            await meta.DeleteOneAsync(marker);
-            var missing = new PartitionRuntime("cold", cold, 2, TimeSpan.FromSeconds(30));
-            await Refuses(() => missing.StartAsync(host).AsTask(), "marker is missing", "counted host refuses a missing marker on a populated store");
-            Check(!await db.GetCollection<BsonDocument>("nodes").Find(FilterDefinition<BsonDocument>.Empty).AnyAsync(),
-                "the refused counted start leaves membership unchanged");
         }
         finally { await client.DropDatabaseAsync(database); }
 
