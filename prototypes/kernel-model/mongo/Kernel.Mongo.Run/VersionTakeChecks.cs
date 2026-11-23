@@ -8,9 +8,10 @@ internal static class VersionTakeChecks
     internal static async Task RunAsync(string connection, MongoStoreOptions options)
     {
         using var client = MongoProvider.Client(connection, "kernel-version-check");
+        using var coldClient = MongoProvider.Client(connection, "kernel-version-check-cold");
         var database = "kfmt_" + Guid.NewGuid().ToString("N");
         var store = new MongoStore(client, database, options);
-        var cold = new MongoStore(client, database, options);
+        var cold = new MongoStore(coldClient, database, options);
         var db = store.Database;
         var meta = db.GetCollection<BsonDocument>("meta");
         var fences = db.GetCollection<BsonDocument>("partitions");
