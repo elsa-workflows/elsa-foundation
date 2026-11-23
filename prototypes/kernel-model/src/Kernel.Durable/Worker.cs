@@ -3171,8 +3171,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationHeader = unit.FoundationHeader,
             FoundationRootOperator = unit.Row?.FoundationDispatchHeader is not null && unit.Consumed is [var qualified] &&
                 qualified.Message.Operator is not null ? qualified.Message : null,
-            FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null && unit.Consumed is [var completed] &&
-                completed.IsWorkerJobCompletion && completed.JobDeadline is null ? (completed.Message with { }).AsKernelTicket() : null,
+            FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
+                unit.Consumed is [{ IsWorkerJobCompletion: true, JobDeadline: null, Original: { } original } completed]
+                    ? new((original with { }).AsKernelTicket(), (completed.Message with { }).AsKernelTicket()) : null,
             FoundationSelfRecalls = unit.FoundationSelfRecalls,
             FoundationHeldPromotions = promotions,
             FoundationReleasedHolds = releases,

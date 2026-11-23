@@ -6,7 +6,7 @@ public sealed partial class EfStore
 {
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
         string State, string Header, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
-        bool? OperatorSuspension, RootJobState? JobState) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
+        bool? OperatorSuspension, RootJobState? JobState, RootJobCompletion? JobCompletion) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -29,7 +29,8 @@ public sealed partial class EfStore
             if (OperatorSuspension is not null && !db.UsesRootOperatorProtocol) return false;
             if (Inputs is [var job] && job.Kind == Kinds.Job)
             {
-                if (Current.Suspended || !await ConsumeRootJobAsync(db, Current.Actor, job, cancellationToken)) return false;
+                if (Current.Suspended || JobCompletion is not { } completed ||
+                    !await ConsumeRootJobAsync(db, Current.Actor, completed.Original, cancellationToken)) return false;
             }
             else if (!await SettleRootInputsAsync(db, Reference, Current.Actor, Inputs.Select(input => input.InboxKey).ToArray(), Inputs, Issue,
                          Current.Suspended, cancellationToken)) return false;
@@ -113,7 +114,7 @@ public sealed partial class EfStore
 
     private PreparedRoot PrepareRootTurn(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,
-        string typeData, IReadOnlyDictionary<string, string> labels, string? journal, string[]? recalls = null, bool? operatorSuspension = null, RootJobState? jobState = null)
+        string typeData, IReadOnlyDictionary<string, string> labels, string? journal, string[]? recalls = null, bool? operatorSuspension = null, RootJobState? jobState = null, RootJobCompletion? jobCompletion = null)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
@@ -132,7 +133,7 @@ public sealed partial class EfStore
         var image = new InstanceRow(current.Actor.Id, "", "", status, "null", checked(current.Revision + 1), null)
             .WithFoundationState(stored);
         var root = new RootTurnCheckpoint(tenant, reference, current, status, PublicRootState + StoredState.Encode(image),
-            header, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, jobState);
+            header, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, jobState, jobCompletion);
         var turn = new TurnCommit(image.Id, null, null, [], [], [], [], [], journal);
         return new(turn, root);
 

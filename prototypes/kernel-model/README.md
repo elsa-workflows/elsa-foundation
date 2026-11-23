@@ -538,15 +538,16 @@ models/Native.Run/run-root-job-preview.sh checked
 
 Use `in-batch` on another fresh database to exercise the other owned SQL fence. The first Embedded process starts
 two public Native workflows. Each start commits the waiting checkpoint, issued job ticket and journal together.
-A replacement process reads the same ticket at a higher epoch. The background activity receives and returns its
-own opaque public actor reference. The Worker commits the job result in the Native checkpoint, consumes its
-ticket and advances the workflow to completion. The public journal shows one activity completion per root.
+A replacement process recovers each job at a higher epoch. Each callback receives and returns its own opaque
+public actor reference. The Worker commits the first result, consumes its exact ticket and issues the next
+generation's ticket in the same transaction. A third process reloads and completes both successor jobs.
+For each root, the public journal shows one success for each background activity and one end marker.
 
 The profile uses schema 3, message protocol 6 and journal codec 1. Readers of the ordinary protocol refuse
-ownership. The fixture also checks refusal of a cross-root ticket, a stale fence, a missing Worker completion and an
-outside completion. This opt-in uses Embedded, Balanced persistence and one active untimed job per generated root.
-Timed and held results, job cancellation, inline promotion and recovery after repeated callback failures require
-separate qualification.
+ownership. The fixture checks refusal of cross-root, stale and unproven completions, including a physical
+argument change between preparation and the locked read. Only the qualified Worker can write these checkpoints.
+This opt-in uses Embedded, Balanced persistence and one active untimed job per generated root.
+Timed and held results, job cancellation, inline promotion and job fault recovery require separate qualification.
 
 ### PostgreSQL Suspend and Resume preview
 

@@ -56,16 +56,16 @@ public sealed partial class EfStore
     }
 
     // A job completion takes its original row, independently of the ordinary input FIFO.
-    private static async Task<bool> ConsumeRootJobAsync(KernelDb db, CreationAddress actor, Message expected, CancellationToken token)
+    private static async Task<bool> ConsumeRootJobAsync(KernelDb db, CreationAddress actor, Message original, CancellationToken token)
     {
-        if (!db.UsesRootJobProtocol) return false;
-        var id = StoredJobId(expected.InboxKey);
+        if (!db.UsesRootJobProtocol || !original.HasIssuedTicket) return false;
+        var id = StoredJobId(original.InboxKey);
         var home = new InstanceRef(actor.Id).Partition;
         var rows = await db.Messages.FromSqlInterpolated($"""
             SELECT * FROM "Messages" WHERE "InboxScope" = {RootJobScope} AND "Id" = {id}
                 AND "Target" = {actor.Id} AND "Partition" = {home} AND NOT "Done" FOR UPDATE
             """).AsNoTracking().ToListAsync(token);
-        if (rows is not [var stored] || DecodeRootJob(stored) != expected) return false;
+        if (rows is not [var stored] || DecodeRootJob(stored) != original.WithoutTicketAuthority()) return false;
         return await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "InboxScope" = {RootJobScope} AND "Id" = {id}
                 AND "Target" = {actor.Id} AND "Partition" = {home} AND NOT "Done"
@@ -73,7 +73,7 @@ public sealed partial class EfStore
     }
 
     private static void ValidateRootJobChange(RootImage? before, InstanceRow row, Message[] inputs, IReadOnlyList<Message> sends,
-        Message? completion)
+        RootJobCompletion? completion)
     {
         var previous = JobRegistry.Read(before?.Jobs);
         var current = JobRegistry.Read(row.Jobs);
@@ -82,9 +82,11 @@ public sealed partial class EfStore
         var started = sends.Where(message => message.Kind == Kinds.Job).ToArray();
         if (consumed.Length != 0)
         {
-            if (inputs is not [var input] || previous is not [var old] || started.Length != 0 ||
+            if (inputs is not [var input] || previous is not [var old] ||
                 RootUntimedJob.Read(input, row.Id, row.Model)?.Key != old.Key || input.JobGeneration != old.Generation ||
-                completion is not { HasIssuedTicket: true } || !RootUntimedJob.MatchesCompletion(input, completion, old.Key)) throw RootShape();
+                completion is not { Original.HasIssuedTicket: true, Result.HasIssuedTicket: true } ||
+                completion.Original.WithoutTicketAuthority() != input ||
+                !RootUntimedJob.MatchesCompletion(completion.Original, completion.Result, old.Key)) throw RootShape();
             previous.Clear();
         }
         else if (completion is not null) throw RootShape();

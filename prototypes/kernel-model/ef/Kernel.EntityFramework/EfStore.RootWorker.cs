@@ -176,9 +176,15 @@ public sealed partial class EfStore
 
     private sealed record PreparedRoot(TurnCommit? JournalTurn, QualifiedRootCheckpoint Checkpoint);
 
-    private ValueTask<Committed> CommitPreparedRootAsync(PartitionFence fence, TimeSpan lease, PreparedRoot prepared, CancellationToken token) =>
-        CommitAsync(new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [prepared.JournalTurn!], [], []),
+    private async ValueTask<Committed> CommitPreparedRootAsync(PartitionFence fence, TimeSpan lease, PreparedRoot prepared, CancellationToken token)
+    {
+        await using var db = create();
+        await RequireStoreVersionsAsync(db, token);
+        if (db.UsesRootJobProtocol)
+            throw new NotSupportedException("The PostgreSQL job profile requires the qualified Worker checkpoint writer.");
+        return await CommitAsync(new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [prepared.JournalTurn!], [], []),
             prepared.Checkpoint, System.Diagnostics.Stopwatch.GetTimestamp(), token);
+    }
 
     private sealed record RootCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> Commands, IReadOnlyDictionary<string, long> Revisions)
         : QualifiedRootCheckpoint(0)
@@ -342,6 +348,7 @@ public sealed partial class EfStore
         if (row.Suspended != current.Suspended || inputs.Any(input => input.Operator is not null)) throw RootShape();
         if (RootJobsEnabled) ValidateRootJobChange(current, row, inputs, turn.Sent, turn.FoundationRootJobCompletion);
         return WithSends(PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
-            row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, recalls?.Select(key => key.Id).ToArray(), jobState: jobState));
+            row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, recalls?.Select(key => key.Id).ToArray(),
+            jobState: jobState, jobCompletion: turn.FoundationRootJobCompletion));
     }
 }

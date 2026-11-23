@@ -1,5 +1,7 @@
 namespace Kernel.Durable;
 
+internal sealed record RootJobCompletion(Message Original, Message Result);
+
 /// <summary>The generated-root preview can issue and complete one untimed job under its existing typed ticket.</summary>
 internal static class RootUntimedJob
 {
