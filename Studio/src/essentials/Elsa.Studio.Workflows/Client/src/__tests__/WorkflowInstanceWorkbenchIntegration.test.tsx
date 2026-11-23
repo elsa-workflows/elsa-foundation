@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import type { ReactFlowInstance } from "@xyflow/react";
 import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getIncidentRootCause, WorkflowInstanceDetailsWorkbench } from "../workflow-editor/WorkflowInstances";
-import type { ActivityExecutionBrowsePage } from "../api/runtime";
+import type { ActivityExecutionBrowsePage, ActivityExecutionBrowseRequest } from "../api/runtime";
 import type {
   ActivityExecutionInspection,
   ActivityExecutionStateSummary,
@@ -1890,9 +1890,11 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
     return activityInspection({ ...row, outcomeNames: [], incidents: [], provenance: row.provenance as ActivityExecutionInspection["provenance"] });
   });
   const initialScopePage = mode === "ambiguous" ? deferred<void>() : null;
+  const isInitialScopePage = (request: ActivityExecutionBrowseRequest) => request.executableNodeId === "compiled-nested-sequence"
+    && request.parentActivityExecutionId === "root" && request.anchorActivityExecutionId === "scope4";
   api.browseActivityExecutions.mockImplementation(async (_context, _run, request) => {
     if (mode === "disposed" && request.ancestorActivityExecutionId === "scope5" && request.limit === 1) return pendingChild.promise;
-    if (initialScopePage && request.executableNodeId === "compiled-nested-sequence") await initialScopePage.promise;
+    if (initialScopePage && isInitialScopePage(request)) await initialScopePage.promise;
     const matches = rows.filter(item => (!request.executableNodeId || item.executableNodeId === request.executableNodeId) &&
       (!request.parentActivityExecutionId || item.parentActivityExecutionId === request.parentActivityExecutionId) &&
       (!request.ancestorActivityExecutionId || item.parentActivityExecutionId === request.ancestorActivityExecutionId));
@@ -1903,9 +1905,10 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   renderWorkbench("activity", "write4");
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
   if (initialScopePage) {
-    await vi.waitFor(() => expect(api.browseActivityExecutions.mock.calls.some(([, , request]) =>
-      request.executableNodeId === "compiled-nested-sequence")).toBe(true));
-    expect(container.querySelector(".wf-execution-scope-occurrence .wf-execution-choice")).toBeNull();
+    await vi.waitFor(() => expect(api.browseActivityExecutions.mock.calls.some(([, , request]) => isInitialScopePage(request))).toBe(true));
+    const navigator = container.querySelector(".wf-execution-scope-occurrence");
+    expect(navigator).not.toBeNull();
+    expect(navigator!.querySelector(".wf-execution-choice")).toBeNull();
     initialScopePage.resolve();
   }
   await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']")?.disabled).toBe(false));

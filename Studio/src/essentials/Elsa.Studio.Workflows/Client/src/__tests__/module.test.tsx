@@ -3915,9 +3915,12 @@ describe("workflows module", () => {
     await vi.waitFor(() => expect(container.querySelector('[aria-label="History event details"]')?.textContent).toContain("route-event-B"));
     expect(fetchMock).toHaveBeenCalledWith(`${runPath}/history/events/route-event-B`, expect.any(Object));
     const filterTrigger = buttonByLabel(container, "Filter events")!;
+    expect(filterTrigger.closest("[hidden]")).toBeNull();
     vi.spyOn(filterTrigger, "getBoundingClientRect").mockReturnValue(new DOMRect(16, 16, 28, 28));
     await click(filterTrigger);
-    const filters = document.body.querySelector('[role="dialog"][aria-label="Filter events"]');
+    const filters = document.getElementById(filterTrigger.getAttribute("aria-controls")!);
+    await vi.waitFor(() => expect(filters?.getAttribute("aria-hidden")).toBe("false"));
+    expect(filters?.hasAttribute("inert")).toBe(false);
     expect(filters?.querySelector<HTMLInputElement>('[aria-label="Search recorded events"]')?.value).toBe("second");
     await click(filterTrigger);
     expect(new URLSearchParams(window.location.search).get("returnTo")).toBe("/workflows/instances?status=Completed");
@@ -4057,13 +4060,16 @@ describe("workflows module", () => {
     expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
     await waitForText(container, "Overview");
     const activityTabs = container.querySelector('[role="tablist"][aria-label="Activity execution details"]');
-    expect(activityTabs?.querySelector('[data-tab-id="overview"]')?.getAttribute("aria-selected")).toBe("true");
-    await click(container.querySelector(".wf-activity-execution-details summary"));
-    expect(container.querySelector<HTMLDetailsElement>(".wf-activity-execution-details")?.open).toBe(true);
-    await waitForText(container, "Activity Execution ID");
-    expect(container.textContent).toContain("activity-execution-1");
-    expect(container.textContent).toContain("Current bookmarksUnavailable");
-    expect(container.textContent).toContain("IncidentsUnavailable");
+    const overviewTab = activityTabs?.querySelector('[data-tab-id="overview"]');
+    expect(overviewTab?.getAttribute("aria-selected")).toBe("true");
+    const overview = document.getElementById(overviewTab!.getAttribute("aria-controls")!);
+    expect(overview?.closest("[hidden]")).toBeNull();
+    const disclosure = overview!.querySelector<HTMLDetailsElement>(".wf-activity-execution-details")!;
+    await click(disclosure.querySelector("summary"));
+    expect(disclosure.open).toBe(true);
+    expect(disclosure.textContent).toContain("Activity Execution IDactivity-execution-1");
+    expect(disclosure.textContent).toContain("Current bookmarksUnavailable");
+    expect(overview!.querySelector(".wf-activity-summary-grid")?.textContent).toContain("IncidentsUnavailable");
     await click(buttonByText(container, "Diagram"));
     expect(buttonByLabel(container, "Collapse run details panel")).toBeTruthy();
     expect(buttonByLabel(container, "Maximize run details panel")).toBeTruthy();
@@ -4409,6 +4415,8 @@ describe("workflows module", () => {
 
     await waitForRunWorkbench(container);
     expect(container.querySelector(".wf-detail-header h2")?.textContent).toBe("Run · definition-1");
+    expect(fetchMock).toHaveBeenCalledWith("https://server.example/runtime/workflows/executables/test-artifact-46792146fbed", expect.any(Object));
+    expect(container.querySelector(".wf-instance-canvas [data-id='send-email-1']")?.textContent).toContain("SendEmail");
     // Timeline reports the original host's history capability explicitly.
     await click(buttonByText(container, "Events"));
     await waitForText(container, "This host does not support durable run history");
