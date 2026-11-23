@@ -54,7 +54,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             ON CONFLICT DO NOTHING
             """, cancellationToken);
         await EfStore.InstallFirstRootCheckpointsAsync(db, cancellationToken);
-        if (db.RequiredFormat == StoreFormat.RootSelf)
+        if (db.UsesRootSelfProtocol)
             await EfStore.InstallRootSelfAsync(db, cancellationToken);
         await InstallDirectReceiptsAsync(db, cancellationToken);
         var placementMatches = await db.Database.SqlQueryRaw<bool>("""

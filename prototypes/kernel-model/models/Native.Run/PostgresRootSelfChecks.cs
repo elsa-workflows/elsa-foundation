@@ -6,12 +6,12 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootSelfChecks
 {
-    internal static async Task<int> RunAsync(bool owned, bool inBatch)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool timers)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a dedicated PostgreSQL preview database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => KernelDb.ForPostgresRootSelf(options);
+        KernelDb Open() => timers ? KernelDb.ForPostgresRootTimers(options) : KernelDb.ForPostgresRootSelf(options);
         EfStore Client() => new(Open, postgres: true, fenceInBatch: inBatch)
             { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -34,9 +34,9 @@ internal static class PostgresRootSelfChecks
         var lease = (await bare.TakeAsync(0, "check", window, stop))!;
         await bare.NodeHeartbeatAsync("check", window, window, stop);
         await using (var db = Open())
-            Check((await db.Nodes.SingleAsync(n => n.Id == "check", stop)).ReadableMessageProtocol == "3" &&
+            Check((await db.Nodes.SingleAsync(n => n.Id == "check", stop)).ReadableMessageProtocol == (timers ? "4" : "3") &&
                 !await db.Nodes.AnyAsync(n => n.Id == "old-reader", stop),
-                "only the continuation reader holds ownership and advertises protocol 3");
+                "only the configured reader holds ownership and advertises its protocol");
         Check((await bare.CommitFirstRootAsync(tenant, reference, creator, lease.For(0), window, null, 1,
             "state", new Dictionary<string, string>(), """["start"]""", stop)).Landed, "creator");
         await scoped.EnableRootSelfSendsAsync(stop);
@@ -46,17 +46,26 @@ internal static class PostgresRootSelfChecks
         var direct = (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single();
         const string suffix = "\0\ud800\u007f\udfff\U0001f642\n";
         var payload = new string('"', FoundationMetadataLimits.MessageContentBytes - Encoding.UTF8.GetByteCount(suffix)) + suffix;
-        var logical = FoundationSelfSend.Issue(scoped.RootSelfIssuer!, CreationProtocol.Origin(actor, 1), 2, 0, null);
+        var logical = FoundationSelfSend.Issue(scoped.RootSelfIssuer!.Handle, CreationProtocol.Origin(actor, 1), 2, 0, null);
         var sent = FoundationSelfSend.Create(actor, 1, logical, "ordinary\0step", payload);
         Message Timer(int ordinal, long due)
         {
-            var handle = FoundationSelfSend.Issue(scoped.RootSelfIssuer!, CreationProtocol.Origin(actor, 1), 2, ordinal, due);
+            var handle = FoundationSelfSend.Issue(scoped.RootSelfIssuer!.Handle, CreationProtocol.Origin(actor, 1), 2, ordinal, due);
             return FoundationSelfSend.Create(actor, 1, handle, "wake", null, due);
         }
         var zero = Timer(1, 0);
         var future = Timer(2, long.MaxValue);
         CommitBatch Batch(params TurnCommit[] turns) => new(0, lease.Epoch, 1, window, false, turns, [], []);
         var emit = new TurnCommit(actor, row with { Revision = 2 }, 1, [], [direct.InboxKey], [sent, zero, future], [], [], null);
+        if (!timers)
+        {
+            try { await scoped.CommitAsync(Batch(emit), stop); throw new InvalidOperationException("A protocol-3 writer accepted a timer."); }
+            catch (NotSupportedException) { }
+            Check((await scoped.LoadAsync([actor], stop)).Single().Revision == 1 &&
+                (await ingress.ReadPendingDirectAsync(tenant, reference, stop)).Single().InboxKey == direct.InboxKey,
+                "protocol 3 refuses the mixed immediate and scheduled checkpoint before consuming its input");
+            emit = emit with { Sent = [sent] };
+        }
         Check((await scoped.CommitAsync(Batch(emit), stop)).Landed, "silent checkpoint and full-size emitted input");
         var key = sent.InboxKey;
         var stored = key with { Scope = EfStore.RootSelfScope };
@@ -112,9 +121,10 @@ internal static class PostgresRootSelfChecks
         Check((await cold.CommitAsync(Batch(new TurnCommit(actor, row with { Revision = 3 }, 2, [key], [], [], [], [], null)), stop)).Landed,
             "qualified owner consumes the exact input with the next silent checkpoint");
 
+        if (!timers) return 0;
         var nowDue = (await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop)).Messages.Single();
         Check(nowDue.Message == zero && nowDue.Message.Due == 0 && zero.Id != FoundationSelfSend.Issue(
-            scoped.RootSelfIssuer!, CreationProtocol.Origin(actor, 1), 2, 1, null),
+            scoped.RootSelfIssuer!.Handle, CreationProtocol.Origin(actor, 1), 2, 1, null),
             "cold poll distinguishes the explicit zero deadline from an immediate send");
         row = (await cold.LoadAsync([actor], stop)).Single();
         TurnCommit Advance(Message input) => new(actor, row with { Revision = row.Revision + 1 }, row.Revision, [input.InboxKey], [], [], [], [], null);

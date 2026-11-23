@@ -40,7 +40,7 @@ internal sealed partial class ActorAdapter
         foreach (var delivery in input.Taken)
         {
             var message = delivery.Message;
-            if (issueSelf is not null && delivery.Durable && input.Row is { } issuer &&
+            if (issueSelf is not null && issueSelf.Allows(message.Due) && delivery.Durable && input.Row is { } issuer &&
                 Durable.FoundationSelfSend.IsSelfInput(message, issuer.Id, issuer.Creation)) continue;
             if (!delivery.Durable || message.Target.Id != input.Actor || message.TargetCreation != 1 ||
                 message.Sender is not null || message.EventMatch is not null ||
@@ -62,7 +62,7 @@ internal sealed partial class ActorAdapter
     private void RequireRootOutcome(Durable.TurnOutcome outcome)
     {
         if (outcome.Row is not { Status: Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished } ||
-            outcome.Sent.Any(m => issueSelf is null || !Durable.FoundationSelfSend.IsSelfInput(m, outcome.Row.Id, outcome.Row.Creation)) ||
+            outcome.Sent.Any(m => issueSelf is null || !issueSelf.Allows(m.Due) || !Durable.FoundationSelfSend.IsSelfInput(m, outcome.Row.Id, outcome.Row.Creation)) ||
             outcome.Held.Count != 0 || outcome.Cancelled.Count != 0 ||
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
             outcome.Emitted.Count != 0 || outcome.FoundationCascade is not null || outcome.InMemory)

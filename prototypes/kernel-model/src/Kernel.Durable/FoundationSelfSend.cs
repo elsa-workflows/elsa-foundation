@@ -2,6 +2,11 @@ using System.Security.Cryptography;
 
 namespace Kernel.Durable;
 
+internal sealed record FoundationSelfIssuer(Func<string, string> Handle, bool SupportsTimers)
+{
+    internal bool Allows(long? due) => due is null || SupportsTimers;
+}
+
 internal static class FoundationSelfSend
 {
     internal static string Handle(byte[] issuer, string seed) =>

@@ -5,7 +5,7 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
-        string State, string Header, int StateVersion, Message[] Inputs, Func<string, string>? Issue) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
+        string State, string Header, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -45,7 +45,7 @@ public sealed partial class EfStore
 
     // Both a model turn and a terminal no-turn disposition settle the same due FIFO prefix.
     private static async Task<bool> SettleRootInputsAsync(KernelDb db, string reference, CreationAddress actor, IReadOnlyList<InboxKey> expected,
-        Message[]? expectedEnvelopes, Func<string, string>? issue, CancellationToken cancellationToken)
+        Message[]? expectedEnvelopes, FoundationSelfIssuer? issue, CancellationToken cancellationToken)
     {
         var home = new InstanceRef(actor.Id).Partition;
         var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
@@ -91,7 +91,7 @@ public sealed partial class EfStore
         if (status == InstanceStatus.Finished && journal is null)
             throw new ArgumentException("A finished public root requires its terminal journal entry.", nameof(journal));
         var accepted = inputs.ToArray();
-        if (accepted.Length == 0 || accepted.Any(message => (message.InboxKey.Scope != InboxKey.FoundationOccurrenceScope && (RootSelfIssuer is null || !FoundationSelfSend.IsSelfInput(message, current.Actor.Id, current.Actor.Creation))) ||
+        if (accepted.Length == 0 || accepted.Any(message => (message.InboxKey.Scope != InboxKey.FoundationOccurrenceScope && (RootSelfIssuer is null || !RootSelfIssuer.Allows(message.Due) || !FoundationSelfSend.IsSelfInput(message, current.Actor.Id, current.Actor.Creation))) ||
             message.InboxKey.Match is not null || message.Target.Id != current.Actor.Id || message.TargetCreation != current.Actor.Creation) ||
             accepted.Select(message => message.InboxKey).Distinct().Count() != accepted.Length)
             throw new ArgumentException("The turn requires distinct ordinary inputs for its exact actor creation.", nameof(inputs));

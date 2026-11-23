@@ -116,7 +116,15 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     // EF keys its model cache by context type. Fresh opt-in databases seed their marker in the
     // same creation transaction as the schema. An existing database keeps its original marker.
     private sealed class RootSelfDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    internal StoreFormat RequiredFormat => this is RootSelfDb ? StoreFormat.RootSelf : StoreFormat.Current;
+    private sealed class RootTimerDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    internal StoreFormat RequiredFormat => this switch
+    {
+        RootTimerDb => StoreFormat.RootTimers,
+        RootSelfDb => StoreFormat.RootSelf,
+        _ => StoreFormat.Current
+    };
+    internal bool UsesRootSelfProtocol => this is RootSelfDb or RootTimerDb;
+    internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => new RootTimerDb(options);
     internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => new RootSelfDb(options);
 
     internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
@@ -148,7 +156,7 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
 
     protected override void OnModelCreating(ModelBuilder model)
     {
-        if (this is RootSelfDb && !Database.IsNpgsql())
+        if (UsesRootSelfProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The continuation profile requires PostgreSQL.");
         model.Entity<StoreVersionEntity>(entity =>
         {

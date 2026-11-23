@@ -230,8 +230,8 @@ and the initial checkpoint share a PostgreSQL transaction ID. The next process p
 to the finance wait. A third process resumes the same workflow using its saved journal cursor. The manual route
 replays the risk approval with a changed body and checks the saved result. Both routes require one join, no remaining
 self inputs, and an unchanged journal on final replay. `KERNEL_PREVIEW_FENCE=checked` or `in-batch` selects the
-fence mode. This scoped path supports immediate and timed sends back to the exact generated actor creation. Cross-actor sends
-and other authored effects remain outside this preview.
+fence mode. This scoped path supports immediate sends back to the exact generated actor creation. Scheduled sends,
+cross-actor sends and other authored effects remain outside this preview.
 
 The Durable command creates a dedicated PostgreSQL database format (schema 2, message protocol 3,
 journal codec 1). Use an empty database for this profile. Fresh creation seeds that marker with the schema.
@@ -256,6 +256,10 @@ On a fresh dedicated PostgreSQL database set `KERNEL_PREVIEW_POSTGRES` and run:
 ```sh
 models/Native.Run/run-delay-preview.sh owned checked
 ```
+
+The Delay profile seeds schema 2, message protocol 4 and journal codec 1. Its issued deadlines require a fresh
+database. The immediate-continuation Flowchart stays on protocol 3 and the ordinary preview stays on protocol 1.
+Pass `durable` as a third script argument to run the same Delay in Durable mode. The default is Balanced.
 
 The first Embedded process starts a public Native sequence with an eight-second Delay. It checks that the saved wait
 and its issued timer share a PostgreSQL transaction and that the deadline equals the issuing turn time plus eight

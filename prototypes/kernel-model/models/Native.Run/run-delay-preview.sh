@@ -7,7 +7,12 @@ fence=${2:-checked}
 [[ "$writer" == owned || "$writer" == ef ]] && [[ "$fence" == checked || "$fence" == in-batch ]] || { echo "Usage: $0 [owned|ef] [checked|in-batch]" >&2; exit 2; }
 dotnet restore --locked-mode
 dotnet build -c Release --no-restore
-run=(dotnet bin/Release/net10.0/Kernel.Native.Run.dll pg-delay-preview "$writer" "$fence")
+case "${3:-balanced}" in
+  balanced) preview=pg-delay-preview ;;
+  durable) preview=pg-durable-delay-preview ;;
+  *) echo "Use balanced or durable for the persistence mode." >&2; exit 2 ;;
+esac
+run=(dotnet bin/Release/net10.0/Kernel.Native.Run.dll "$preview" "$writer" "$fence")
 waiting="$("${run[@]}" birth)"
 printf '%s\n' "$waiting"
 read -r phase pid actor epoch due issued handle cursor <<<"$waiting"

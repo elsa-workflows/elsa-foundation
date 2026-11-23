@@ -1,4 +1,5 @@
 using Kernel.EntityFramework;
+using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -12,12 +13,14 @@ internal static class PostgresDelayPreview
 
     internal sealed record Restart(string Reference, long Epoch, long Due, string Handle, string Cursor);
 
-    internal static async Task<int> RunAsync(bool owned, bool inBatch, Restart? restart)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, string mode, Restart? restart)
     {
+        if (restart is { Epoch: <= 0 })
+            throw new ArgumentOutOfRangeException(nameof(restart), "Restart requires a positive prior epoch.");
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a fresh dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => new(options);
+        KernelDb Open() => KernelDb.ForPostgresRootTimers(options);
         var store = new EfStore(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -28,7 +31,7 @@ internal static class PostgresDelayPreview
             await admission.InstallAsync(stop);
         }
         await store.EnableRootSelfSendsAsync(stop);
-        var scope = new Contract.BoundScope("preview-delay");
+        var scope = FixedTenantScope.Bind("preview-delay");
         var api = new PostgresPreviewFoundation(admission, store, new(store, await admission.OpenJournalCursorAsync(stop), 32),
             WorkflowActor.WorkflowActor.ActorType);
         var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition,
@@ -48,11 +51,12 @@ internal static class PostgresDelayPreview
 
         if (restart is null)
         {
-            var receipt = await new WorkflowRuntime(api, api).StartAsync(scope, "one-delay", NativeExecutionModel.Start(Definition),
+            var receipt = await new WorkflowRuntime(api, api).StartAsync(scope, "one-delay", NativeExecutionModel.Start(Definition, mode),
                 cancellationToken: stop);
             Check(receipt is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "the public start must be accepted");
             var reference = receipt.Actor!.Value;
-            await DriveUntil(async () => await store.ReadFirstRootAsync(scope.Tenant, reference.Id, stop) is not null);
+            await DriveUntil(async () => await store.ReadFirstRootAsync(scope.Tenant, reference.Id, stop) is { } current &&
+                Json.Read<NativeState>(current.State!).Waits.Values.Any(w => w.Kind == "timer"));
             var image = (await store.ReadFirstRootAsync(scope.Tenant, reference.Id, stop))!;
             var wait = Json.Read<NativeState>(image.State!).Waits.Values.Single(w => w.Kind == "timer");
             var issuance = trace.Events.Single(e => e.Name == "native.timer.issued");
@@ -76,7 +80,9 @@ internal static class PostgresDelayPreview
         var actor = new Contract.ActorRef(restart.Reference);
         Check(epoch > restart.Epoch, "the cold owner must take a newer epoch");
         var cold = (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))!;
-        var saved = Json.Read<NativeState>(cold.State!).Waits.Single(p => p.Value.Kind == "timer");
+        var coldState = Json.Read<NativeState>(cold.State!);
+        Check(coldState.Mode == mode && cold.Status == InstanceStatus.Running, "cold owner must resume the waiting actor in its original persistence mode");
+        var saved = coldState.Waits.Single(p => p.Value.Kind == "timer");
         Check(saved.Value.Key == restart.Handle && saved.Value.Due == restart.Due, "cold checkpoint must retain the original deadline and handle");
         var future = await store.PollAsync(0, epoch, TimeSpan.FromMilliseconds(DelayMs * 2), 2, stop);
         Check(future.Now < restart.Due && future.Messages.Any(m => m.Message.Id == restart.Handle && m.Message.Due == restart.Due),
@@ -85,7 +91,7 @@ internal static class PostgresDelayPreview
         Check(ready.Now < restart.Due && ready.Messages.All(m => m.Message.Id != restart.Handle), "ready poll must exclude the future timer");
         var app = await api.SendAsync(scope, new Contract.Target.Ref(actor), "ordinary-notice", NativeKinds.Timer, Json.Write(new TimerFired(saved.Key)),
             cancellationToken: stop);
-        Check(app.Outcome == Contract.AdmissionOutcome.Accepted, "an ordinary application message can use the same kind");
+        Check(app.Outcome == Contract.AdmissionOutcome.Accepted && app.Actor == actor, "an ordinary application message can use the same kind");
         await DriveUntil(() => Task.FromResult(ordinary.Count == 1));
         var early = (await store.ReadFirstRootAsync(scope.Tenant, actor.Id, stop))!;
         var earlyState = Json.Read<NativeState>(early.State!);
