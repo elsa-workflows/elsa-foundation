@@ -1,13 +1,13 @@
 # S-9 retained BPMN fixtures
 
-These are current-writer retained-state witnesses regenerated under spec1207 T026 before Elsa4's first stable release. They prove recovery and restart with the current hash recipe. They do not reassert an authentic old-writer upgrade claim.
+These current-writer witnesses were regenerated under spec1207 T026 before Elsa4's first stable release. Each row states its scope: retained execution recovery/restart or material/hash publication. They do not reassert an authentic old-writer upgrade claim.
 
 The historical spec1017 inputs, archive pins and source-bound claims remain unchanged. The direct BPMN suite separately opens the original delayed-compensation database, verifies its original digest, and requires its obsolete model hash to be refused without advancing retained model, input, native, outbox or scheduler documents. Production has no old-hash verifier or compatibility branch.
 
 | Scenario | Current fixture | Capture and required recovery |
 |---|---|---|
 | Cancelled compensation worker with a queued model result and obsolete delayed retry | `delayed-compensation.sqlite.gz`; provenance in `delayed-compensation.json` | Existing real-writer journey, captured at its `queued-result` checkpoint. Direct recovery keeps new admission disabled; standard runtime-only Workbench recovery and a second cold start retain the worker, retry, material incarnation and authority. |
-| Format-2 material without a service fault policy | `current-model-v2.json`; independent preimage in `current-model-v2.golden.json` | Actual ordinary BPMN publication at `d031d98efef7bb705adc0f1245962dfd62ae3638`, referencing a newly published worker whose hash is verified. This is a material/hash witness, not execution or historical writer recovery. Paired current-pin and archived-hash-refusal controls remain pending local validation. |
+| Format-2 material without a service fault policy | `current-model-v2.json`; independent preimage in `current-model-v2.golden.json` | Actual ordinary BPMN publication at `d031d98efef7bb705adc0f1245962dfd62ae3638`, referencing a newly published worker whose hash is verified. This is a material/hash witness, not execution or historical writer recovery. Paired current-pin, archived mismatch, precise refusal-before-write and related policy controls passed 14/14 at `638b92ee2ed8801b021d326e14d6a55eb7463117`; Python integrity/corruption controls passed 6/6. |
 
 The format-2 capture retains all model preimage fields, its complete dependency pin and capture-time source/binaries.
 [Its packager](../../record-current-bpmn-v2.py) independently calculates the opaque-identity canonical projection and

@@ -27,11 +27,13 @@ public sealed class BpmnServiceFaultPolicyTests
         }
         using var golden = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "CurrentNativeModelV2.golden.json")));
         var preimage = golden.RootElement.GetProperty("canonical").GetString()!;
-        Assert.Equal(golden.RootElement.GetProperty("captureSha256").GetString(), Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))));
+        const string freeze = "FR-021: this recipe freezes from Elsa 4 first stable; later changes require the agreed compatibility process. Do not update pins to hide a regression.";
+        Assert.True(golden.RootElement.GetProperty("captureSha256").GetString() == Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))), "The retained capture changed. " + freeze);
         var expected = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(preimage)));
-        Assert.Equal(expected, golden.RootElement.GetProperty("expectedContentHash").GetString());
-        Assert.Equal(expected, root.GetProperty("expectedContentHash").GetString());
-        Assert.Equal(expected, material.ComputeContentHash()); // First-stable freeze: changing this pin requires the agreed compatibility process.
+        Assert.True(expected == golden.RootElement.GetProperty("expectedContentHash").GetString(), "The independent golden preimage and hash differ. " + freeze);
+        Assert.True(expected == root.GetProperty("expectedContentHash").GetString(), "The actual publication and golden differ. " + freeze);
+        var actual = material.ComputeContentHash();
+        Assert.True(expected == actual, $"Expected {expected}, actual {actual}. " + freeze);
     }
 
     internal static RuntimeModelMaterial ReadMaterial(JsonElement root)
