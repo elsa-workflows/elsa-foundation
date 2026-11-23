@@ -65,7 +65,7 @@ public sealed class JsonHostEntrypointTests
                 if (Environment.GetEnvironmentVariable("ELSA_JSON_HOST_EVIDENCE") is { Length: > 0 } evidence)
                 {
                     Directory.CreateDirectory(evidence);
-                    var retained = Directory.CreateTempSubdirectory(evidence, name + "-").FullName;
+                    var retained = Directory.CreateDirectory(Path.Combine(evidence, name + "-" + Guid.NewGuid().ToString("N"))).FullName;
                     await File.WriteAllTextAsync(Path.Combine(retained, "host.log"),
                         (stdout is null ? string.Empty : await stdout) + (stderr is null ? string.Empty : await stderr));
                     if (File.Exists(receipt)) File.Copy(receipt, Path.Combine(retained, "receipt.json"));
