@@ -13,6 +13,16 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     private sealed record StartWrite(bool Claimed, bool Enqueued);
     private sealed record StoredRoot(string Id, StartSpec Spec, bool EscapedInput, bool ExplicitZeroDue = false);
     private const string CreatorPrefix = "!kernel-root/1:";
+    // Bound the formatting and payload cost of a duplicate that loses the batched receipt claim.
+    private const int BatchedStartInputCodeUnits = 8 * 1024;
+    private const string ClaimReceiptSql = """
+        INSERT INTO "FoundationRootReceipts" AS r ("Tenant","Operation","Reference","Until")
+        SELECT {0}, {1}, {2}, floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {3}
+        WHERE NOT {4}
+        ON CONFLICT ("Tenant","Operation") DO UPDATE SET "Reference" = EXCLUDED."Reference",
+            "Until" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {3}
+        WHERE r."Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+        """;
 
     internal static bool IsIssuedReferenceShape(string? reference) =>
         FoundationRootCreator.IsGeneratedReference(reference);
@@ -87,9 +97,14 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var issuer = await db.Database.SqlQueryRaw<Issuer>("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """)
             .SingleAsync(cancellationToken);
         var actor = InstanceRef.In(InstanceRef.Spread(name, issuer.Partitions), name);
-        var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, null);
         var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
         var windowMs = (long)window.TotalMilliseconds;
+        var claimFirst = spec.Input is { Length: > BatchedStartInputCodeUnits };
+        if (claimFirst && await db.Database.ExecuteSqlRawAsync(ClaimReceiptSql,
+                new object[] { tenant, digest, reference, windowMs, false }, cancellationToken) == 0)
+            return await Replay();
+
+        var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, null);
         var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
         // Raw PostgreSQL text avoids JSON expansion for large quoted or international inputs. Only a
         // value that PostgreSQL text cannot represent travels in the reversible JSON envelope.
@@ -101,30 +116,39 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var fits = Encoding.UTF8.GetByteCount(header) + (payload is null ? 0 : Encoding.UTF8.GetByteCount(payload)) <= contentLimit;
 
         // A live receipt wins even when the replay's encoded envelope is too large. When no receipt
-        // wins the transaction rolls back the new claim if its creator cannot be stored.
-        var write = (await db.Database.SqlQuery<StartWrite>($"""
+        // wins, this transaction rolls back the claim if its creator cannot be stored.
+        var command = """
             WITH receipt AS (
-                INSERT INTO "FoundationRootReceipts" AS r ("Tenant","Operation","Reference","Until")
-                VALUES ({tenant}, {digest}, {reference}, floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
-                ON CONFLICT ("Tenant","Operation") DO UPDATE SET "Reference" = EXCLUDED."Reference",
-                    "Until" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs}
-                WHERE r."Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+            """ + ClaimReceiptSql + """
+
                 RETURNING "Reference"
+            ), accepted AS (
+                SELECT "Reference" FROM receipt
+                UNION ALL SELECT {2} WHERE {4}
             ), birth AS (
                 INSERT INTO "FoundationRootBirths" ("Tenant","Reference","Actor","Partition","Creation","Creator","Fingerprint")
-                SELECT {tenant}, receipt."Reference", {actor.Id}, {actor.Partition}, 1, {creator.InboxKey.Id}, {fingerprint}
-                FROM receipt WHERE {fits}
+                SELECT {0}, accepted."Reference", {5}, {6}, 1, {7}, {8}
+                FROM accepted WHERE {9}
                 RETURNING "Actor", "Partition", "Creator"
             ), creator AS (
                 INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Payload","Start","Done","Seen","Attempts","Trial","JobGeneration")
-                SELECT birth."Creator", 0, birth."Actor", birth."Partition", {creator.Kind}, {creator.Due ?? 0},
-                    {(fits ? payload : null)}, {(fits ? header : "")}, false, 0, 0, 0, 0
+                SELECT birth."Creator", 0, birth."Actor", birth."Partition", {10}, {11}, {12}, {13}, false, 0, 0, 0, 0
                 FROM birth
                 RETURNING "Id"
             )
-            SELECT EXISTS (SELECT 1 FROM receipt) AS "Claimed", EXISTS (SELECT 1 FROM creator) AS "Enqueued"
-            """).ToListAsync(cancellationToken)).Single();
-        if (!write.Claimed)
+            SELECT EXISTS (SELECT 1 FROM accepted) AS "Claimed", EXISTS (SELECT 1 FROM creator) AS "Enqueued"
+            """;
+        var write = (await db.Database.SqlQueryRaw<StartWrite>(command, tenant, digest, reference, windowMs, claimFirst,
+            actor.Id, actor.Partition, creator.InboxKey.Id, fingerprint, fits, creator.Kind, creator.Due ?? 0,
+            (fits ? payload : null)!, fits ? header : "").ToListAsync(cancellationToken)).Single();
+        if (!write.Claimed) return await Replay();
+        if (!fits) throw new MetadataLimitExceeded(nameof(spec), contentLimit);
+        if (!write.Enqueued)
+            throw new InvalidOperationException("A generated root start must commit its creator with the receipt.");
+        await transaction.CommitAsync(cancellationToken);
+        return new(reference, false);
+
+        async Task<Receipt> Replay()
         {
             var existing = await db.Database.SqlQuery<string>($"""
                 SELECT "Reference" AS "Value" FROM "FoundationRootReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
@@ -132,12 +156,6 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             await transaction.CommitAsync(cancellationToken);
             return new(existing, true);
         }
-
-        if (!fits) throw new MetadataLimitExceeded(nameof(spec), contentLimit);
-        if (!write.Enqueued)
-            throw new InvalidOperationException("A generated root start must commit its creator with the receipt.");
-        await transaction.CommitAsync(cancellationToken);
-        return new(reference, false);
     }
 
     internal async Task<CreationAddress?> ResolveAsync(string tenant, string reference, CancellationToken cancellationToken = default)

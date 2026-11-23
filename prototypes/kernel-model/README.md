@@ -460,7 +460,8 @@ commands and transaction completions separately.
 PostgreSQL 17 measured **16 round trips in-batch and 17 checked** with both writers. Each public admission cost
 3 trips. Polling and the terminal commit used 13 in-batch or 14 checked. The initial qualified path took 22 and
 23 respectively. The 16-trip test passes with the in-batch fence. Add `--require-budget` to make an over-budget
-result fail the command.
+result fail the command. Large inputs claim their receipt before the body is formatted or sent, so a duplicate
+can reuse the original reference without uploading another body.
 
 ### Flowchart restart on the public PostgreSQL preview
 

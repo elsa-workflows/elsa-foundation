@@ -44,6 +44,7 @@ public sealed partial class EfStore
                     WHERE b."Creator" = m."Id" AND b."Actor" = m."Target" AND b."Partition" = m."Partition"
                         AND b."Reference" = {Reference} AND b."Tenant" = {Tenant} AND b."Creation" = 1
                         AND m."Id" = {Creator.InboxKey.Id} AND m."InboxScope" = 0 AND NOT m."Done"
+                        AND m."KeepUntil" IS NULL AND m."EventMatch" IS NULL
                         AND m."Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
                     RETURNING m.*
                 ), bound AS (

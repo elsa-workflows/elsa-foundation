@@ -1,6 +1,8 @@
+using System.Data.Common;
 using System.Diagnostics;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Kernel.Ef.Conformance;
 
@@ -103,6 +105,14 @@ internal static class GeneratedRootChecks
 
         var messageCount = await db.Messages.CountAsync();
         var receiptCount = await Count("receipts");
+        var payloadProbe = new DuplicatePayloadProbe();
+        var probeOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(db.Database.GetConnectionString()!)
+            .AddInterceptors(payloadProbe).Options;
+        var probeAdmission = new PostgresRootAdmission(() => new(probeOptions), TimeSpan.FromMinutes(1));
+        var duplicateLarge = await probeAdmission.AdmitAsync(tenant, operation, spec with { Input = new string('x', 2 * 1024 * 1024) });
+        Check(duplicateLarge.Duplicate && duplicateLarge.Reference == afterSweep.Reference &&
+            payloadProbe.Commands > 0 && payloadProbe.MaxTextLength < 1024,
+            "a valid large duplicate sends only the bounded receipt metadata");
         var oversized = spec with { Input = new string('\0', 3 * 1024 * 1024) };
         var duplicateOversized = await next.AdmitAsync(tenant, operation, oversized);
         Check(duplicateOversized.Duplicate && duplicateOversized.Reference == afterSweep.Reference,
@@ -152,5 +162,33 @@ internal static class GeneratedRootChecks
     {
         if (!passed) throw new InvalidOperationException(description);
         Console.WriteLine("ok " + description);
+    }
+
+    private sealed class DuplicatePayloadProbe : DbCommandInterceptor
+    {
+        internal int Commands { get; private set; }
+        internal int MaxTextLength { get; private set; }
+
+        private void Observe(DbCommand command)
+        {
+            Commands++;
+            foreach (DbParameter parameter in command.Parameters)
+                if (parameter.Value is string value)
+                    MaxTextLength = Math.Max(MaxTextLength, value.Length);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            Observe(command);
+            return new(result);
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            Observe(command);
+            return new(result);
+        }
     }
 }
