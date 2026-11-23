@@ -116,29 +116,40 @@ internal static class PostgresRootHistoryChecks
 
     private static async Task CheckReaderOpenAsync(Func<KernelDb> create, PostgresRootAdmission admissions, CancellationToken token)
     {
-        foreach (var (change, versions) in new (Action<StoreVersionEntity>, string)[]
+        await using var setup = create();
+        var original = await setup.StoreVersions.AsNoTracking().SingleAsync(token);
+        try
         {
-            (row => row.StoreSchema = 2, "schema=2, message protocol=1, journal codec=1"),
-            (row => row.MessageProtocol = 0, "schema=1, message protocol=0, journal codec=1"),
-            (row => row.JournalCodec = 2, "schema=1, message protocol=1, journal codec=2"),
-        })
+            foreach (var (change, versions) in new (Action<StoreVersionEntity>, string)[]
+            {
+                (row => row.StoreSchema = 2, "schema=2, message protocol=1, journal codec=1"),
+                (row => row.MessageProtocol = 0, "schema=1, message protocol=0, journal codec=1"),
+                (row => row.JournalCodec = 2, "schema=1, message protocol=1, journal codec=2"),
+            })
+            {
+                await using var db = create();
+                var marker = await db.StoreVersions.SingleAsync(token);
+                db.Entry(marker).CurrentValues.SetValues(original);
+                change(marker);
+                await db.SaveChangesAsync(token);
+                await RequireReaderRefusal(versions);
+            }
+
+            await setup.StoreVersions.Where(row => row.Id == original.Id).ExecuteDeleteAsync(token);
+            await RequireReaderRefusal("version marker is missing");
+        }
+        finally
         {
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await using var db = create();
-            var marker = await db.StoreVersions.SingleAsync(token);
-            change(marker);
-            await db.SaveChangesAsync(token);
-            await RequireReaderRefusal(versions);
-            marker.StoreSchema = StoreVersionEntity.StoreSchemaVersion;
-            marker.MessageProtocol = StoreVersionEntity.MessageProtocolVersion;
-            marker.JournalCodec = StoreVersionEntity.JournalCodecVersion;
-            await db.SaveChangesAsync(token);
+            var marker = await db.StoreVersions.SingleOrDefaultAsync(row => row.Id == original.Id, cleanup.Token);
+            if (marker is null) db.StoreVersions.Add(original);
+            else db.Entry(marker).CurrentValues.SetValues(original);
+            await db.SaveChangesAsync(cleanup.Token);
         }
 
         await admissions.OpenJournalCursorAsync(token);
-        Check(true, "a public reader opens its cursor with the supported format");
-        await using var missing = create();
-        await missing.StoreVersions.ExecuteDeleteAsync(token);
-        await RequireReaderRefusal("version marker is missing");
+        Check(true, "a public reader reopens its cursor after restoring the supported format");
         return;
 
         async Task RequireReaderRefusal(string details)
