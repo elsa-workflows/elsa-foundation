@@ -18,6 +18,9 @@ public sealed partial class EfStore
     internal async Task EnableRootSelfSendsAsync(CancellationToken token)
     {
         await using var db = create();
+        if (!db.Database.IsNpgsql() || db.RequiredFormat != StoreFormat.RootSelf)
+            throw new StoreFormatException("Immediate public continuations require the PostgreSQL continuation protocol.");
+        await RequireStoreVersionsAsync(db, token);
         var install = await db.Database.SqlQueryRaw<SelfInstallation>("""
             SELECT "Key", to_regprocedure('kernel_root_self_insert_v2()') IS NOT NULL AS "Installed" FROM "FoundationRootIssuer"
             """).SingleAsync(token);

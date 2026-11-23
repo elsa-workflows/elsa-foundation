@@ -735,7 +735,12 @@ public sealed class DurableTurn
         // Received and recalled rows lose their old memberships. Only surviving sends establish new ones:
         // retracting a staged twin leaves a previously committed row and its old membership intact.
         foreach (var message in _sent)
-            if (message.InboxKey.Scope == InboxKey.ChildCreatorScope || message.InboxKey == InboxKey.Custom(Origin, message.Id)) _custom.Add(message.Id);
+        {
+            // A public detached start returns the child's reference. It never issues a recall handle for its creator.
+            var retainsCreator = message.InboxKey.Scope == InboxKey.ChildCreatorScope &&
+                (!message.BindFoundationChild || message.Start?.Parent is not null);
+            if (retainsCreator || message.InboxKey == InboxKey.Custom(Origin, message.Id)) _custom.Add(message.Id);
+        }
         unit.Row = row with
         {
             CommitTimes = ((TurnClock)Clock).Snapshot(), CustomHandles = _custom.Count == 0 ? null : DurableKeyJson.WriteKeys(_custom),

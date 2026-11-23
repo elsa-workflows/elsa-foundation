@@ -76,7 +76,7 @@ public sealed partial class EfStore
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, TimeSpan lease, InstanceStatus status, string? state, int stateVersion,
-        string typeData, IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken = default) =>
+        string typeData, IReadOnlyDictionary<string, string> labels, string? journal, CancellationToken cancellationToken = default) =>
         CommitPreparedRootAsync(fence, lease, PrepareRootTurn(tenant, reference, current, inputs, fence, status, state, stateVersion, typeData, labels, journal), cancellationToken);
 
     private PreparedRoot PrepareRootTurn(string tenant, string reference, RootImage current,
@@ -88,6 +88,8 @@ public sealed partial class EfStore
             new InstanceRef(current.Actor.Id).Partition != fence.Partition ||
             status is not (InstanceStatus.Running or InstanceStatus.Finished))
             throw new ArgumentException("Invalid running root or target disposition.", nameof(current));
+        if (status == InstanceStatus.Finished && journal is null)
+            throw new ArgumentException("A finished public root requires its terminal journal entry.", nameof(journal));
         var accepted = inputs.ToArray();
         if (accepted.Length == 0 || accepted.Any(message => (message.InboxKey.Scope != InboxKey.FoundationOccurrenceScope && (RootSelfIssuer is null || !FoundationSelfSend.IsSelfInput(message, current.Actor.Id, current.Actor.Creation))) ||
             message.InboxKey.Match is not null || message.Target.Id != current.Actor.Id || message.TargetCreation != current.Actor.Creation) ||

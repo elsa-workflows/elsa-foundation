@@ -23,13 +23,15 @@ if ! waiting="$(dotnet "$dll" "$mode" birth "$route")"; then
 fi
 printf '%s\n' "$waiting"
 read -r phase first_pid actor bookmark epoch <<< "$waiting"
+revision=""
 if [[ "$mode" == pg-durable-flowchart-preview ]]; then
   [[ "$phase" == seeded && "$first_pid" =~ ^[1-9][0-9]*$ && -n "$actor" && -n "$bookmark" && "$epoch" =~ ^[1-9][0-9]*$ ]]
   seeded_pid="$first_pid"
   seeded_actor="$actor"
   waiting="$(dotnet "$dll" "$mode" wait "$route" "$actor" "$epoch")"
   printf '%s\n' "$waiting"
-  read -r phase first_pid actor bookmark epoch <<< "$waiting"
+  read -r phase first_pid actor bookmark epoch revision <<< "$waiting"
+  [[ "$revision" =~ ^[1-9][0-9]*$ ]]
   [[ "$first_pid" != "$seeded_pid" && "$actor" == "$seeded_actor" ]]
 fi
 if [[ "$phase" != waiting || ! "$first_pid" =~ ^[1-9][0-9]*$ || -z "$actor" || -z "$bookmark" || ! "$epoch" =~ ^[1-9][0-9]*$ ]]; then
@@ -37,7 +39,9 @@ if [[ "$phase" != waiting || ! "$first_pid" =~ ^[1-9][0-9]*$ || -z "$actor" || -
   exit 1
 fi
 
-if ! finished="$(dotnet "$dll" "$mode" restart "$route" "$actor" "$bookmark" "$epoch")"; then
+restart=("$mode" restart "$route" "$actor" "$bookmark" "$epoch")
+if [[ -n "$revision" ]]; then restart+=("$revision"); fi
+if ! finished="$(dotnet "$dll" "${restart[@]}")"; then
   printf '%s\n' "$finished"
   exit 1
 fi
