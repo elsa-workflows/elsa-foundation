@@ -78,8 +78,12 @@ internal sealed class SwitchNavigator
             structure.Default,
             SwitchActivity.DefaultSlotName);
 
-        if (structure.MatchesAny && cases.Any(@case => @case.Branch is not null))
-            throw Fail($"A Switch in '{SwitchModes.MatchAny}' mode cannot hold case activities.");
+        if (structure.Mode is { } mode && mode != SwitchModes.MatchAny)
+            throw Fail($"Unknown Switch mode '{mode}'.");
+        if (structure.MatchesAny && cases.Any(item => item.Branch is not null) && cases.Any(item => item.Match == "Done"))
+            throw Fail("A MatchAny Switch with case activities cannot use the reserved case label 'Done'. Choose another label.");
+        if (@default is not null && cases.Any(item => item.Branch?.ExecutableNodeId == @default.ExecutableNodeId))
+            throw Fail("Switch default and case branches must have distinct node identities.");
 
         return new SwitchNavigator(cases, @default, version == SwitchActivity.StructureSchemaVersion, structure.MatchesAny);
     }
@@ -98,7 +102,10 @@ internal sealed class SwitchNavigator
     /// read once, like <see cref="Select(string?, IReadOnlyDictionary{string, ValueEnvelope})"/> reads the ones it reaches.
     /// </summary>
     public IReadOnlyList<string> SelectAll(string? value, IReadOnlyDictionary<string, ValueEnvelope> inputs) =>
-        _cases.Where(item => Matches(item, value, inputs)).Select(item => item.Match).ToArray();
+        SelectCases(value, inputs).Select(item => item.Match).ToArray();
+
+    public IReadOnlyList<SwitchCase> SelectCases(string? value, IReadOnlyDictionary<string, ValueEnvelope> inputs) =>
+        _cases.Where(item => Matches(item, value, inputs)).ToArray();
 
     private bool Matches(SwitchCase item, string? value, IReadOnlyDictionary<string, ValueEnvelope> inputs) =>
         item.ConditionInputKey is { } conditionKey

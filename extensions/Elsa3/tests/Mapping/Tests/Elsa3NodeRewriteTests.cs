@@ -2,6 +2,10 @@ using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa3.Mapping.Tests.Support;
 using Elsa3.Models;
+using Elsa3.Mapping.Contracts;
+using Elsa3.Mapping.Conversion;
+using Elsa3.Mapping.Mappings;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa3.Mapping.Tests.Elsa3BuiltInConversionTests;
 
@@ -237,7 +241,7 @@ public sealed class Elsa3NodeRewriteTests
     }
 
     [Fact]
-    public async Task A_match_any_case_that_holds_an_activity_is_unconvertible()
+    public async Task Match_any_preserves_populated_and_empty_cases_with_conditions_and_ids()
     {
         var @switch = Activity("switch", "Elsa.Switch", ("mode", Literal("MatchAny")));
         @switch.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement(new object[]
@@ -248,11 +252,326 @@ public sealed class Elsa3NodeRewriteTests
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", @switch)));
 
-        var diagnostic = Assert.Single(result.Diagnostics);
-        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
-        Assert.Contains("'busy'", diagnostic.Message, StringComparison.Ordinal);
-        Assert.Contains("FlowSwitch", diagnostic.Guidance, StringComparison.Ordinal);
-        Assert.Equal("$.root.activities[0].cases[1].activity", diagnostic.Path);
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var cases = Node(result.Value!.State, "switch").Structure!.Payload.GetProperty("cases").EnumerateArray().ToArray();
+        Assert.Equal("case-1", cases[1].GetProperty("caseId").GetString());
+        Assert.Equal("body", cases[1].GetProperty("activity").GetProperty("nodeId").GetString());
+        Assert.True(cases[1].TryGetProperty("condition", out _));
+    }
+
+    [Theory]
+    [InlineData("break")]
+    [InlineData("script")]
+    [InlineData("scripts")]
+    [InlineData("computed")]
+    [InlineData("nested-label")]
+    public async Task Match_any_refuses_effective_Break_at_the_case_boundary(string form)
+    {
+        var body = form switch
+        {
+            "break" => Activity("body", "Elsa.Break"),
+            "script" => Activity("body", "Elsa.RunJavaScript", ("script", Literal("setOutcome('Break');"))),
+            "scripts" => Activity("body", "Elsa.RunJavaScript", ("script", Literal("setOutcomes(['Break']);"))),
+            "computed" => Activity("body", "Elsa.RunJavaScript", ("script", Literal("const name = 'Break'; setOutcome(name);")), ("possibleOutcomes", Literal("[\"Break\"]", "List<String>"))),
+            _ => MatchAnyCase(Activity("leaf", "Elsa.WriteLine", ("text", Literal("nested"))), "Break", mode: "MatchFirst")
+        };
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Sequence("root", MatchAnyCase(body))));
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+        Assert.Contains("Break", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("cases[0].activity", diagnostic.Path, StringComparison.Ordinal);
+        Assert.False(string.IsNullOrWhiteSpace(diagnostic.Guidance));
+    }
+
+    [Theory]
+    [InlineData("Break")]
+    [InlineData("Done")]
+    public async Task Match_any_refuses_own_control_labels_before_they_change_Sequence_behavior(string label)
+    {
+        var body = Activity("body", "Elsa.WriteLine", ("text", Literal("body")));
+        var source = Sequence("root", MatchAnyCase(body, label), Activity("after", "Elsa.WriteLine", ("text", Literal("after"))));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(source));
+        var diagnostic = Assert.Single(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+        Assert.EndsWith("cases[0].label", diagnostic.Path, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("script")]
+    [InlineData("if")]
+    [InlineData("loop")]
+    [InlineData("nested-label")]
+    public async Task Match_any_keeps_proven_safe_case_bodies_convertible(string form)
+    {
+        var leaf = Activity("leaf", "Elsa.WriteLine", ("text", Literal("safe")));
+        var body = form switch
+        {
+            "script" => Activity("body", "Elsa.RunJavaScript", ("script", Literal("setOutcome('Ordinary');"))),
+            "if" => Activity("body", "Elsa.If", ("condition", Literal("true", "Boolean")), ("then", Port(leaf))),
+            "loop" => Activity("body", "Elsa.While", ("condition", Literal("true", "Boolean")), ("body", Port(Activity("inner-break", "Elsa.Break")))),
+            _ => MatchAnyCase(leaf, "Ordinary", mode: "MatchFirst")
+        };
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Sequence("root", MatchAnyCase(body))));
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    private static Elsa3Activity MatchAnyCase(Elsa3Activity body, string label = "Case", string mode = "MatchAny", bool matches = true)
+    {
+        var node = Activity("switch-" + body.Id, "Elsa.Switch", ("mode", Literal(mode)));
+        node.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement(new object[]
+        {
+            new { label, condition = new { expression = new { type = "Literal", value = matches ? "true" : "false" } }, activity = Port(body) }
+        });
+        return node;
+    }
+
+    [Theory]
+    [InlineData("setOutcome('Break');", false)]
+    [InlineData("setOutcomes(['Done','Other']);", false)]
+    [InlineData("return 42;", true)]
+    [InlineData("setOutcome('Ordinary');", true)]
+    public async Task Newly_enabled_owner_checks_Default_outcome_fidelity_too(string script, bool safe)
+    {
+        var owner = MatchAnyCase(Activity("never", "Elsa.WriteLine", ("text", Literal("never"))), matches: false);
+        owner.AdditionalProperties["default"] = Port(Activity("fallback", "Elsa.RunJavaScript", ("script", Literal(script))));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", owner)));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode && item.Path.Contains(".default", StringComparison.Ordinal));
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Fact]
+    public async Task An_outer_loop_does_not_make_an_escaping_case_Break_faithful()
+    {
+        var owner = MatchAnyCase(Activity("body", "Elsa.Break"));
+        var loop = Activity("outer", "Elsa.While", ("condition", Literal("true", "Boolean")), ("body", Port(owner)));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", loop)));
+        Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode && item.Path.Contains("cases[0].activity", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("Acme.PossibleBreak", false)]
+    [InlineData("Acme.SendInvoice", true)]
+    public async Task Alias_outcomes_are_checked_after_catalog_resolution(string type, bool safe)
+    {
+        var catalog = RealActivityCatalog.CreateWith(typeof(PossibleBreakAliasActivity).Assembly);
+        var result = await ConversionServices.ConvertAsync(catalog,
+            ConversionServices.Definition(Sequence("root", MatchAnyCase(Activity("body", type)))));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("Break", false)]
+    [InlineData("Ordinary", true)]
+    public async Task Exact_replacement_outcomes_are_checked_after_effective_resolution(string outcome, bool safe)
+    {
+        await using var provider = ConversionServices.Create(RealActivityCatalog.Create());
+        await using var scope = provider.CreateAsyncScope();
+        var source = ConversionServices.Definition(Sequence("root", MatchAnyCase(Activity("body", "Acme.Reference"))));
+        var result = await scope.ServiceProvider.GetRequiredService<IElsa3DefinitionConverter>().ConvertAsync(new Elsa3ConversionRequest(source,
+            replacements: new Dictionary<string, Elsa3ActivityExactReplacement> { ["body"] = new("replacement-version", [],
+                new HashSet<string>(), new HashSet<string> { outcome }) }));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("MatchAny", true, false)]
+    [InlineData("MatchAny", false, true)]
+    [InlineData("MatchFirst", true, true)]
+    public async Task Nested_Done_is_refused_only_when_its_MatchAny_selection_can_be_invalid(string mode, bool secondCase, bool safe)
+    {
+        var nested = Activity("nested", "Elsa.Switch", ("mode", Literal(mode)));
+        nested.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement((secondCase ? new[] { "Done", "Other" } : ["Done"])
+            .Select(label => new { label, condition = new { expression = new { type = "Literal", value = "true" } } }).ToArray());
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Sequence("root", MatchAnyCase(nested))));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode && item.Message.Contains("Done", StringComparison.Ordinal));
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Fact]
+    public async Task A_proven_false_nested_case_cannot_create_a_Done_co_selection()
+    {
+        var nested = Activity("nested", "Elsa.Switch", ("mode", Literal("MatchAny")));
+        nested.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement(new[]
+        {
+            new { label = "Done", condition = new { expression = new { type = "Literal", value = "true" } } },
+            new { label = "Other", condition = new { expression = new { type = "Literal", value = "false" } } }
+        });
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", MatchAnyCase(nested))));
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("setOutcomes(['Done','Other']);", false)]
+    [InlineData("const names=['Done','Other']; setOutcomes(names);", false)]
+    [InlineData("if (Math.random() > .5) setOutcome('Done'); else setOutcome('Other');", true)]
+    [InlineData("const name='Done'; setOutcome(name);", true)]
+    [InlineData("setOutcomes(['Done']);", true)]
+    [InlineData("setOutcomes(['Other']);", true)]
+    public async Task Script_Done_co_selection_is_distinct_from_valid_alternative_singletons(string script, bool safe)
+    {
+        var body = Activity("body", "Elsa.RunJavaScript", ("script", Literal(script)), ("possibleOutcomes", Literal("[\"Done\",\"Other\"]", "List<String>")));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", MatchAnyCase(body))));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode && item.Message.Contains("Done", StringComparison.Ordinal));
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("const emit = typeof complete === 'function' ? complete : (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const root = globalThis; const key = 'complete'; const emit = typeof root[key] === 'function' ? root[key] : (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const build = new Function('return globalThis.complete'); const emit = build() || (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const evaluate = eval; const emit = evaluate('globalThis.complete') || (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const build = (function(){}).constructor; const emit = build('return globalThis.complete')() || (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const key = 'con' + 'structor'; const build = (function(){})[key]; const emit = build('return globalThis.complete')() || (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const proto = Object.getPrototypeOf(function(){}); const build = Object.values(Object.getOwnPropertyDescriptors(proto))[0].value; return build('return globalThis.complete')()(null,['Break']);", false)]
+    [InlineData("const build = Reflect.get(function(){}, 'constructor'); const emit = build(\"return typeof complete === 'function' ? complete : (value => value)\")(); return emit(null, ['Break']);", false)]
+    [InlineData("const { constructor: build } = Object; const emit = build(\"return typeof complete === 'function' ? complete : (value => value)\")(); return emit(null, ['Break']);", false)]
+    [InlineData("const key='con'+'structor'; const { [key]: build } = Object; const emit = build(\"return typeof complete === 'function' ? complete : (value => value)\")(); return emit(null, ['Break']);", false)]
+    [InlineData("const O = Object; const proto = O.getPrototypeOf(function(){}); const descriptors = O.getOwnPropertyDescriptors(proto); return Object.values(descriptors)[0].value;", false)]
+    [InlineData("const { getPrototypeOf: getProto, getOwnPropertyDescriptors: describe } = Object; return describe(getProto(function(){}));", false)]
+    [InlineData("const local = { complete: 42 }; return local.complete;", true)]
+    [InlineData("const globalThis = { complete: 42 }; return globalThis.complete;", true)]
+    [InlineData("const Reflect = { get: value => value }; return Reflect.get(42);", true)]
+    [InlineData("complete: { break complete; } return 42;", true)]
+    [InlineData("class Local { complete() { return 42; } } return new Local().complete();", true)]
+    [InlineData("const source = { complete: () => 42 }; const { complete: read } = source; return read();", true)]
+    [InlineData("const source = { value: 42 }; const { value: answer } = source; return answer;", true)]
+    [InlineData("const values = [1,2]; return values[0];", true)]
+    [InlineData("const local = { complete: 42 }; return local['complete'];", true)]
+    [InlineData("function twice(value) { return value * 2; } return twice(2);", true)]
+    [InlineData("return Math.max(1, 2);", true)]
+    public async Task Script_native_completion_aliases_cannot_hide_an_unproven_case_boundary(string script, bool safe)
+    {
+        var body = Activity("body", "Elsa.RunJavaScript", ("script", Literal(script)), ("possibleOutcomes", Literal("[\"Break\"]", "List<String>")));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", MatchAnyCase(body))));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task Parallel_consumes_named_Break_but_cannot_repair_a_skipped_Sequence_successor(bool sequence, bool safe)
+    {
+        var script = Activity("script", "Elsa.RunJavaScript", ("script", Literal("setOutcome('Break');")));
+        var branch = sequence ? Sequence("branch", script, Activity("must-run", "Elsa.WriteLine", ("text", Literal("after")))) : script;
+        var parallel = Activity("parallel", "Elsa.Parallel");
+        parallel.AdditionalProperties["activities"] = JsonSerializer.SerializeToElement(new[]
+        {
+            Port(branch), Port(Activity("other", "Elsa.WriteLine", ("text", Literal("other"))))
+        });
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Sequence("root", MatchAnyCase(parallel))));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("expression", Elsa3ActivityDiagnosticCodes.UnsupportedMode)]
+    [InlineData("variable", Elsa3ActivityDiagnosticCodes.UnsupportedMode)]
+    [InlineData("variable-syntax", Elsa3ActivityDiagnosticCodes.UnsupportedMode)]
+    [InlineData("memory", Elsa3ActivityDiagnosticCodes.ValueOutsideContract)]
+    public async Task Parallel_cannot_make_an_unsupported_or_unanalyzed_script_body_safe(string form, string expectedCode)
+    {
+        const string source = "setOutcomes(['Done','Other']);";
+        var script = Activity("body", "Elsa.RunJavaScript", ("script", form switch
+        {
+            "expression" => Expression("JavaScript", JsonSerializer.Serialize(source)),
+            "variable" => Expression("JavaScript", "getVariable('code')"),
+            "variable-syntax" => JsonSerializer.SerializeToElement(new { typeName = "String",
+                expression = new { type = "Variable", value = new { id = "code-memory", name = "code", typeName = "String" } } }),
+            _ => Captured("code-memory", "String")
+        }));
+        var parallel = Activity("parallel", "Elsa.Parallel");
+        parallel.AdditionalProperties["activities"] = JsonSerializer.SerializeToElement(new[] { Port(script),
+            Port(Activity("sibling", "Elsa.WriteLine", ("text", Literal("sibling")))) });
+        var definition = ConversionServices.Definition(Sequence("root", MatchAnyCase(parallel)), variables:
+            [new Elsa3Variable { Id = "code-memory", Name = "code", TypeName = "String", Value = JsonSerializer.Serialize(source) }]);
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, item => item.Code == expectedCode && item.Path.Contains("cases[0].activity", StringComparison.Ordinal));
+        if (form == "memory")
+        {
+            var refusal = Assert.Single(result.Diagnostics, item => item.IsError);
+            Assert.EndsWith(".script", refusal.Path, StringComparison.Ordinal);
+            Assert.Contains("Variable expression", refusal.Guidance, StringComparison.Ordinal);
+            Assert.DoesNotContain(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+        }
+    }
+
+    [Theory]
+    [InlineData("return 42;")]
+    [InlineData("setOutcome('Ordinary');")]
+    public async Task Match_any_allows_a_script_with_an_unused_declared_Break_port(string script)
+    {
+        var body = Activity("body", "Elsa.RunJavaScript", ("script", Literal(script)),
+            ("possibleOutcomes", Literal("[\"Break\",\"Ordinary\"]", "List<String>")));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Sequence("root", MatchAnyCase(body))));
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \t\n")]
+    public async Task Blank_script_keeps_standalone_and_Switch_source_refusal(string script)
+    {
+        Elsa3Activity Body() => Activity("body", "Elsa.RunJavaScript", ("script", Literal(script)),
+            ("possibleOutcomes", Literal("[\"Break\"]", "List<String>")));
+        var roots = new[] { Sequence("root", Body()), Sequence("root", MatchAnyCase(Body(), mode: "MatchFirst")),
+            Sequence("root", MatchAnyCase(Body())) };
+        foreach (var root in roots)
+        {
+            var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+            Assert.False(result.Succeeded);
+            var refusal = Assert.Single(result.Diagnostics, item => item.IsError);
+            Assert.Equal(Elsa3ActivityDiagnosticCodes.ValueOutsideContract, refusal.Code);
+            Assert.EndsWith(".script", refusal.Path, StringComparison.Ordinal);
+            Assert.Contains("Elsa 3", refusal.Guidance, StringComparison.Ordinal);
+            Assert.DoesNotContain(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.RequiredInputUnbound);
+            Assert.DoesNotContain(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+        }
+    }
+
+    [Theory]
+    [InlineData("Literal", "false", true)]
+    [InlineData("Literal", "true", false)]
+    [InlineData("JavaScript", "Math.random() > 0.5", false)]
+    public async Task Nested_outcome_only_Break_is_safe_only_when_proven_unreachable(string language, string condition, bool safe)
+    {
+        var nested = Activity("nested", "Elsa.Switch", ("mode", Literal("MatchAny")));
+        nested.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement(new[]
+        {
+            new { label = "Break", condition = new { expression = new { type = language, value = condition } } },
+            new { label = "Ordinary", condition = new { expression = new { type = "Literal", value = "true" } } }
+        });
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Sequence("root", MatchAnyCase(nested))));
+        Assert.Equal(safe, result.Succeeded);
+        if (safe) Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        else Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+    }
+
+    [Fact]
+    public async Task Match_any_control_label_diagnostic_keeps_source_property_casing()
+    {
+        var node = MatchAnyCase(Activity("body", "Elsa.WriteLine", ("text", Literal("body"))), "Break");
+        node.AdditionalProperties["Cases"] = node.AdditionalProperties["cases"];
+        node.AdditionalProperties.Remove("cases");
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", node)));
+        var error = Assert.Single(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+        Assert.EndsWith(".Cases[0].label", error.Path, StringComparison.Ordinal);
     }
 
     [Theory]

@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { addCollectionItem, collectionSlotItems, getCollectionSlots, removeCollectionItem, renameCollectionItem } from "../collectionSlots";
+import { addCollectionItem, collectionSlotItems, getCollectionSlots, removeCollectionItem, renameCollectionItem, setSwitchMode } from "../collectionSlots";
 import { createActivityNode } from "../workflowAdapter";
 import { setDialogs } from "../workflow-editor/dialogs";
 import { CollectionSlotEditor } from "../workflow-editor/CollectionSlotEditor";
 import { collectionActivity, sequenceNode, leafNode } from "./fixtures";
-import type { ActivityNode } from "../workflowTypes";
+import type { ActivityNode, WorkflowDraft } from "../workflowTypes";
+import { buildDraftFromJson } from "../workflowSerialization";
 
 const catalog = collectionActivity("switch");
 const empty = () => createActivityNode(catalog, "switch");
@@ -43,6 +44,83 @@ function type(input: HTMLInputElement, value: string) {
 function enter(input: HTMLInputElement) { flushSync(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))); }
 
 describe("catalog collection slots", () => {
+  it("changes Switch mode without replacing cases, bodies or unknown payload members", () => {
+    const node = addCollectionItem(empty(), descriptor);
+    node.structure!.payload.extra = { keep: true };
+    const items = collectionSlotItems(node, descriptor)!;
+    items[0].activity = sequenceNode("body", [leafNode("nested")]);
+    const any = setSwitchMode(node, "MatchAny");
+    expect(any.structure!.payload.mode).toBe("MatchAny");
+    expect(any.structure!.payload.cases).toBe(node.structure!.payload.cases);
+    expect(any.structure!.payload.extra).toBe(node.structure!.payload.extra);
+    expect(setSwitchMode(any, "MatchFirst").structure!.payload.mode).toBeUndefined();
+    expect(node.structure!.payload.mode).toBeUndefined();
+  });
+
+  it.each(["", " \t\n", "\u0085", "\u2003"])("presents legacy blank mode %j as the supported MatchFirst default", mode => {
+    const node = empty();
+    node.structure!.payload.mode = mode;
+    const view = mount(node);
+    expect(view.element.querySelector("select")!.value).toBe("MatchFirst");
+    expect(view.element.textContent).toContain("The first matching case wins");
+    expect(view.element.textContent).not.toContain("Unknown mode");
+    expect(view.current().structure!.payload.mode).toBe(mode);
+  });
+
+  it("retains a BOM mode as unsupported instead of displaying the default", () => {
+    const node = empty();
+    node.structure!.payload.mode = "\uFEFF";
+    const view = mount(node);
+    expect(view.element.querySelector("select")!.value).toBe("\uFEFF");
+    expect(view.element.textContent).toContain("Choose a supported match mode");
+    expect(view.current().structure!.payload.mode).toBe("\uFEFF");
+  });
+
+  it.each([["MatchAny"], ["MatchFirst"], [], 42, false, { toString: "invalid" }].map(mode => ({ mode })))(
+    "keeps malformed Code-view mode $mode visibly unsupported until explicitly repaired", ({ mode }) => {
+      const node = empty();
+      node.structure!.payload.mode = mode;
+      const current: WorkflowDraft = {
+        id: "draft", definitionId: "definition", state: { rootActivity: node, inputs: [], outputs: [], variables: [] },
+        layout: [], validationErrors: []
+      };
+      const parsed = buildDraftFromJson(JSON.stringify({ state: current.state }), current);
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) throw new Error(parsed.error);
+      const loaded = parsed.draft.state.rootActivity!;
+      const view = mount(loaded);
+      const select = view.element.querySelector("select")!;
+      expect(["MatchFirst", "MatchAny"]).not.toContain(select.value);
+      expect(view.element.textContent).toContain("Unknown mode");
+      expect(view.element.textContent).toContain("Choose a supported match mode");
+      expect(view.current().structure!.payload.mode).toEqual(mode);
+      flushSync(() => { select.value = "MatchFirst"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+      expect(view.current().structure!.payload.mode).toBeUndefined();
+      expect(view.current().structure!.payload.cases).toBe(loaded.structure!.payload.cases);
+    }
+  );
+
+  it("exposes mode and accurate help, respects read-only and retains unknown modes", () => {
+    const node = empty();
+    const view = mount(node);
+    const select = view.element.querySelector("select")!;
+    expect(select.value).toBe("MatchFirst");
+    flushSync(() => { select.value = "MatchAny"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(view.current().structure!.payload.mode).toBe("MatchAny");
+    expect(view.element.textContent).toContain("All matching cases run");
+    view.replace({ ...view.current(), structure: { ...view.current().structure!, payload: { ...view.current().structure!.payload, mode: "Future" } } });
+    expect(select.value).toBe("Future");
+    expect(view.element.textContent).toContain("Choose a supported match mode");
+  });
+
+  it("rejects programmatic mode changes in read-only views", () => {
+    const node = setSwitchMode(empty(), "MatchAny");
+    const view = mount(node, true);
+    const select = view.element.querySelector("select")!;
+    expect(select.disabled).toBe(true);
+    flushSync(() => { select.value = "MatchFirst"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(view.current()).toBe(node);
+  });
   it.each(["switch", "parallel"] as const)("admits empty %s collections and creates unique labels", kind => {
     const item = collectionActivity(kind), node = createActivityNode(item, kind), slot = getCollectionSlots(node, item)[0];
     expect(slot).toBeDefined();

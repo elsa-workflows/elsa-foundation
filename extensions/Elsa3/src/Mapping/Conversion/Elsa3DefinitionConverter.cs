@@ -186,6 +186,8 @@ internal sealed class Elsa3DefinitionConverter(
         var plan = await normalizer.NormalizeAsync(request, clone, cancellationToken);
         var boundaryOutcomes = request.IsReusable ? Elsa3OutcomeKey.Assemble(plan) : [];
         await LowerAsync(plan, cancellationToken);
+        if (!plan.HasErrors)
+            Elsa3SwitchSafety.Validate(plan);
         if (request.IsReusable)
             RefuseIntrinsics(plan);
         return (plan, boundaryOutcomes);

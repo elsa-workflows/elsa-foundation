@@ -33,6 +33,11 @@ public sealed class SecondSharedClaimActivity : ReplacingTestActivity;
 [ReplacesActivityType("Elsa.WriteLine")]
 public sealed class WriteLineClaimActivity : ReplacingTestActivity;
 
+/// <summary>A custom alias whose declared boundary includes native Break and cannot be proved safe.</summary>
+[ReplacesActivityType("Acme.PossibleBreak")]
+[ActivityOutcome("Break")]
+public sealed class PossibleBreakAliasActivity : ReplacingTestActivity;
+
 /// <summary>A rebuilt custom activity whose input declares a default: replaces Elsa 3 <c>Acme.RetryOrder</c> (#3293).</summary>
 [ReplacesActivityType("Acme.RetryOrder")]
 public sealed class RetryOrderActivity : ReplacingTestActivity

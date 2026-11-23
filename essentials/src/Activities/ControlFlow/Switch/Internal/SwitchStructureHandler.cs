@@ -82,11 +82,16 @@ internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivi
     public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
         new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = false };
 
-    // Switch runs the first matching case, or Default: exactly one branch, once per run.
-    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
-        StringComparer.Ordinal.Equals(firstChildNodeId, secondChildNodeId)
-            ? ActivityChildTimeRelation.FirstBeforeSecond
+    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId)
+    {
+        if (StringComparer.Ordinal.Equals(firstChildNodeId, secondChildNodeId))
+            return ActivityChildTimeRelation.FirstBeforeSecond;
+        var structure = ReadAuthoredStructure(activity);
+        var cases = structure.Cases.Where(item => item.Activity is not null).Select(item => item.Activity!.NodeId).ToHashSet(StringComparer.Ordinal);
+        return structure.MatchesAny && cases.Contains(firstChildNodeId) && cases.Contains(secondChildNodeId)
+            ? ActivityChildTimeRelation.Unordered
             : ActivityChildTimeRelation.MutuallyExclusive;
+    }
 
     public bool? CompletesAfterItsChildren(ActivityNode activity) => true;
 
@@ -131,13 +136,6 @@ internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivi
 
         if (authoredStructure.Mode is { } mode && mode != SwitchModes.MatchAny)
             throw new ArgumentException($"Switch activity node '{activity.NodeId}' declares unknown mode '{mode}'. Use '{SwitchModes.MatchFirst}' or '{SwitchModes.MatchAny}'.");
-        // In MatchAny mode several cases can be selected at once, and they route through their outcome connections; a
-        // case branch activity runs only as the one selected branch, so it cannot express that (spec 1208 FR-031).
-        if (authoredStructure.MatchesAny && authoredStructure.Cases.FirstOrDefault(@case => @case.Activity is not null) is { } branched)
-            throw new ArgumentException(
-                $"Switch activity node '{activity.NodeId}' is in '{SwitchModes.MatchAny}' mode, so its case '{branched.Match}' cannot hold an activity. " +
-                "Connect each case outcome to the activities it should run instead.");
-
         var executableStructure = new SwitchExecutableStructure(
             authoredStructure.Cases
                 .Select(@case => new SwitchExecutableCase(@case.Match, @case.Activity?.NodeId)
