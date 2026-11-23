@@ -941,23 +941,39 @@ public static class Semantics
             var lease = await c.Take(0);
             var hold = await c.Provided.HoldPartitionAsync(0);
             if (hold is null) throw new SkipException("the provider cannot hold the partition record");
-            var commit = c.Commit(lease, 0, [Make.New("0/a")]);
-            if (await Task.WhenAny(commit, Task.Delay(500)) == commit)
+            // SQLite can block synchronously while its other connection holds the write lock.
+            // Dispatch the commit separately so that the observation window can release that lock.
+            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var commit = Task.Run(() =>
+            {
+                started.SetResult();
+                return c.Commit(lease, 0, [Make.New("0/a")]);
+            });
+            bool returnedWhileHeld;
+            try
+            {
+                await started.Task;
+                returnedWhileHeld = await Task.WhenAny(commit, Task.Delay(500)) == commit;
+            }
+            finally
             {
                 await hold.DisposeAsync();
+            }
+
+            if (returnedWhileHeld)
+            {
                 try
                 {
                     var result = await commit;
                     throw new ConformanceException($"beside a held partition record the commit returned at once, landed: {result.Landed}");
                 }
                 catch (StoreException e) { Context.Equal(Failure.Transient, e.Failure, "failure beside a held record"); }
-                c.Notes.Add("transient at once");
+                c.Notes.Add("transient while held");
                 await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a")]), "the commit tried again after the other writer let go");
             }
             else
             {
                 c.Notes.Add("waits");
-                await hold.DisposeAsync();
                 Context.That((await commit).Landed, "the commit that waited did not land");
             }
             Context.Equal(1, (await c.S.ReadJournalAsync(0, 0, 10)).Count, "journal rows");
