@@ -12,12 +12,12 @@ internal static class PostgresMultiRootClient
 {
     internal const string Primary = "preview-a", Secondary = "preview-b";
 
-    internal static Func<KernelDb> Database()
+    internal static Func<KernelDb> Database(bool durable = false)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a dedicated PostgreSQL preview database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        return () => new KernelDb(options);
+        return () => durable ? KernelDb.ForPostgresRootSelf(options) : new KernelDb(options);
     }
 
     internal static async Task<Contract.ActorRef> Start(PostgresPreviewFoundation foundation, Contract.BoundScope scope, string id, CancellationToken token,
@@ -54,7 +54,7 @@ internal static class PostgresMultiRootClient
     internal static async Task<int> SecondaryAsync(string[] args)
     {
         var scope = FixedTenantScope.Bind(Secondary);
-        var open = Database();
+        var open = Database(durable: args is ["missing-durable", _]);
         var store = new EfStore(open, postgres: true);
         var ingress = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -68,7 +68,7 @@ internal static class PostgresMultiRootClient
             case ["start-receipt", var operation, var result] when Enum.TryParse<Contract.AdmissionOutcome>(result, out var required):
                 Console.WriteLine((await Start(foundation, scope, operation, token, required)).Id);
                 break;
-            case ["missing", var hidden]:
+            case ["missing" or "missing-durable", var hidden]:
                 var unavailable = new Contract.ActorRef(hidden);
                 var journal = await foundation.TailAsync(scope, unavailable, cancellationToken: token);
                 if (await foundation.GetAsync(scope, unavailable, token) is not null || journal.Items.Count != 0 || journal.Next is not null)
