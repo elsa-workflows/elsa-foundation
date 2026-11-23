@@ -39,7 +39,8 @@ internal static class DirectApprovalPreviewChecks
         var firstApproval = await Send("approval-1", "Ada");
         await Pump(first);
         var afterFirst = await reads.GetAsync(scope, reference);
-        check(firstApproval.Outcome == Contract.AdmissionOutcome.Accepted && afterFirst?.Header.Status == Contract.ActorStatus.Running &&
+        check(firstApproval.Outcome == Contract.AdmissionOutcome.Accepted && firstApproval.Actor == reference &&
+            afterFirst?.Header.Status == Contract.ActorStatus.Running &&
             writes.Count == 2 && writes[1] is { Expected: 1, Row.Revision: 2 } && writes[1].Done.Count == 1 &&
             State().Frames[frame].State!.AsArray().Single()!.GetValue<string>() == "Ada",
             "first approval stores one value and marks the retained exact input done at revision two");
@@ -47,9 +48,10 @@ internal static class DirectApprovalPreviewChecks
         await first.DisposeAsync();
 
         await using var next = await Activate("successor");
+        ingress = new InMemoryIngress(store, new Requests("direct-preview-successor"), "direct-preview-successor");
         var duplicate = await Send("approval-1", "replacement");
         await Pump(next);
-        check(duplicate.Outcome == Contract.AdmissionOutcome.Duplicate && writes.Count == 2 &&
+        check(duplicate.Outcome == Contract.AdmissionOutcome.Duplicate && duplicate.Actor == reference && writes.Count == 2 &&
             (await reads.TailAsync(scope, reference)).Items.SequenceEqual(before) &&
             State().Frames[frame].State!.AsArray().Single()!.GetValue<string>() == "Ada",
             "a cold owner ignores replay of the original operation and preserves its first value and journal");
@@ -58,7 +60,8 @@ internal static class DirectApprovalPreviewChecks
         await Pump(next);
         var ended = await reads.GetAsync(scope, reference);
         var result = State().Results["approve"]!.AsArray().Select(v => v!.GetValue<string>());
-        check(secondApproval.Outcome == Contract.AdmissionOutcome.Accepted && ended?.Header is { Status: Contract.ActorStatus.Finished, EndedAt: now } &&
+        check(secondApproval.Outcome == Contract.AdmissionOutcome.Accepted && secondApproval.Actor == reference &&
+            ended?.Header is { Status: Contract.ActorStatus.Finished, EndedAt: now } &&
             result.SequenceEqual(["Ada", "Grace"]) && writes.Count == 3 && writes[2] is { Expected: 2, Row.Revision: 3, Unsubscribe: true } &&
             writes[2].Done.Count == 1, "second approval finishes once, marks its retained input done and records its terminal timestamp");
         check(writes.All(t => t.Sent.Count == 0 && t.Subscribed.Count == 0 && t.Unsubscribed.Count == 0 && t.Held is null or { Count: 0 } &&
