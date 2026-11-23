@@ -857,7 +857,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     }
 
     private static EventRoute Match(EventEntity e, SubscriptionEntity s) =>
-        new(new(e.Key, e.Id, e.Payload, e.KeepUntil), new(s.Key, s.Instance, s.Wait, s.Start is null ? null : Json.Read<StartSpec>(s.Start)));
+        EventRoute.FromLegacyStoreJoin(new(e.Key, e.Id, e.Payload, e.KeepUntil), new(s.Key, s.Instance, s.Wait, s.Start is null ? null : Json.Read<StartSpec>(s.Start)));
 
     public async ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default)
     {

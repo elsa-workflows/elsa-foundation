@@ -503,14 +503,26 @@ public sealed class EventDelivery
 public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
 {
     internal StringComparer? FoundationKeyEquality { get; init; }
+    private (EventRow Event, SubscriptionRow Wait)? StoreJoin { get; init; }
+
+    // A relational join compares these particular stored rows under the database collation.
+    // The ordinary constructor and Foundation routes retain their own key comparison.
+    internal static EventRoute FromLegacyStoreJoin(EventRow publication, SubscriptionRow registration)
+    {
+        if (publication.Key == registration.Key || publication.FoundationTenant is not null ||
+            registration.FoundationTenant is not null || CreationProtocol.Qualified(registration))
+            return new(publication, registration);
+        return new(publication, registration) { StoreJoin = (publication, registration) };
+    }
 
     public EventDelivery Delivery(int partitions = 1, string? replyTo = null)
         => Delivery(partitions, replyTo, null);
 
     internal EventDelivery Delivery(int partitions, string? replyTo, InboxKey? scopedKey)
     {
+        var storedPair = StoreJoin is { } joined && ReferenceEquals(Event, joined.Event) && ReferenceEquals(Wait, joined.Wait);
         if (Event.FoundationTenant != Wait.FoundationTenant ||
-            !(FoundationKeyEquality ?? StringComparer.Ordinal).Equals(Event.Key, Wait.Key))
+            !storedPair && !(FoundationKeyEquality ?? StringComparer.Ordinal).Equals(Event.Key, Wait.Key))
             throw new ArgumentException("The event and wait must share their key and tenant scope.");
         var delivery = Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo };
         if (Event is { FoundationTenant: not null, FoundationIncarnation: { } incarnation })
