@@ -87,8 +87,13 @@ internal static class PostgresValueVolume
             checkpoint.TerminalRevision == checkpoint.Revision, "The measured schedule must finish at its final revision.");
         var journal = await api.TailAsync(scope, reference, cancellationToken: stop);
         var expected = new List<Contract.JournalEntry> { new(1, Json.Write("start")) };
+        var uniqueDigests = new HashSet<string>(StringComparer.Ordinal);
         for (var step = 1; step <= turns; step++)
-            expected.Add(new(step + 1, Json.Write(Entry(step, Hash(Payload(pad, changes ? step : 1))))));
+        {
+            var digest = Hash(Payload(pad, changes ? step : 1));
+            uniqueDigests.Add(digest);
+            expected.Add(new(step + 1, Json.Write(Entry(step, digest))));
+        }
         expected.Add(new(turns + 1, Json.Write("end")));
         Check(journal.Items.SequenceEqual(expected) && journal.Next is { } bookmark &&
             (await api.TailAsync(scope, reference, bookmark, stop)).Items.Count == 0,
@@ -106,7 +111,7 @@ internal static class PostgresValueVolume
                 FROM "FoundationRootValues" WHERE "Actor" = i."Id" AND "Creation" = {address.Creation}
             ) v WHERE i."Id" = {address.Id}
             """).SingleAsync(stop);
-        var expectedRows = byReference ? (changes ? turns : 1) : 0;
+        var expectedRows = byReference ? uniqueDigests.Count : 0;
         Check(physical.ValueRows == expectedRows && physical.ValueBytes == (long)expectedRows * pad &&
             wal.All(bytes => bytes > 0), "Every measured turn must write WAL and retain the expected physical value rows.");
 
