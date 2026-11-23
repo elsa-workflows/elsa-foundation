@@ -21,6 +21,7 @@ internal static class PostgresHttpPreview
 {
     private const string Receiver = "http-approval-receiver";
     private const string Operation = "approval";
+    private const int ClockSampleLimitMs = 25;
 
     internal static async Task<int> RunAsync(bool inBatch, string schedule)
     {
@@ -29,7 +30,7 @@ internal static class PostgresHttpPreview
         var late = schedule == "late";
         var disconnect = schedule == "disconnect";
         var clockDelay = schedule == "clock-delay";
-        long observedDeadline = 0;
+        var observedDeadline = new TaskCompletionSource<(long Earliest, long Latest)>(TaskCreationOptions.RunContinuationsAsynchronously);
         var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var clientStop = CancellationTokenSource.CreateLinkedTokenSource(stop);
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
@@ -62,8 +63,23 @@ internal static class PostgresHttpPreview
         var first = await PostgresHeldDirectChecks.TakeAsync(store, "first-http-owner", registry, transport, stop);
         var firstEpoch = first.Fences.Single().Epoch;
 
-        var databaseTime = await admission.ReadReplyTimeAsync(stop);
-        var clockObservedAt = Stopwatch.GetTimestamp();
+        long databaseTime;
+        long clockObservedAt;
+        var samples = 0;
+        do
+        {
+            var began = Stopwatch.GetTimestamp();
+            databaseTime = await admission.ReadReplyTimeAsync(stop);
+            if (++samples == 1 && clockDelay) await Task.Delay(1_200, stop);
+            clockObservedAt = Stopwatch.GetTimestamp();
+            if (Stopwatch.GetElapsedTime(began, clockObservedAt).TotalMilliseconds <= ClockSampleLimitMs) break;
+        } while (true);
+        if (clockDelay)
+        {
+            Require(samples > 1, "The preview must discard the delayed startup observation.");
+            Console.WriteLine("Discarded a delayed PostgreSQL startup clock observation.");
+        }
+
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
         builder.Configuration.Sources.Clear();
@@ -116,8 +132,12 @@ internal static class PostgresHttpPreview
             Require(pending.ReplyTo is { } route && ReplyTo.Parse(route).Node == Receiver && !request.IsCompleted && transport.Count == 0,
                 "The original reply route must be persisted on the input while the HTTP connection waits.");
             if (clockDelay)
-                Require(Volatile.Read(ref observedDeadline) is > 0 and var observed && ReplyTo.Parse(pending.ReplyTo!).Deadline <= observed,
-                    "Waiting before the request's database admission must leave the original persisted deadline in place.");
+            {
+                var (earliest, latest) = await observedDeadline.Task.WaitAsync(stop);
+                var persisted = ReplyTo.Parse(pending.ReplyTo!).Deadline;
+                Require(persisted >= earliest && persisted <= latest,
+                    "Delayed admission must keep the persisted deadline within the independently observed request-start interval.");
+            }
 
             if (disconnect)
             {
@@ -251,7 +271,8 @@ internal static class PostgresHttpPreview
             if (!int.TryParse(context.Request.Query["wait"], out var wait) || wait is < 1 or > 15_000)
                 return Results.BadRequest();
 
-            var routeDeadline = databaseTime + (long)Stopwatch.GetElapsedTime(clockObservedAt).TotalMilliseconds + wait;
+            var enteredAt = Stopwatch.GetTimestamp();
+            var routeDeadline = databaseTime + (long)Stopwatch.GetElapsedTime(clockObservedAt, enteredAt).TotalMilliseconds + wait;
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stop);
             budget.CancelAfter(wait);
             var token = budget.Token;
@@ -286,11 +307,13 @@ internal static class PostgresHttpPreview
 
             async Task<Contract.Reply> ReadAndDispatchAsync()
             {
-                if (clockDelay && reference == actor && Volatile.Read(ref observedDeadline) == 0)
+                if (clockDelay && reference == actor && !observedDeadline.Task.IsCompleted)
                 {
-                    // Observe database time independently of the route before delaying its application work.
-                    var witness = await admission.ReadReplyTimeAsync(token);
-                    Volatile.Write(ref observedDeadline, witness + wait);
+                    // The database took this independent sample between handler entry and receipt.
+                    var latest = await admission.ReadReplyTimeAsync(token) + wait;
+                    var elapsed = (long)Math.Ceiling(Stopwatch.GetElapsedTime(enteredAt).TotalMilliseconds);
+                    // Include both round trips' uncertainty and millisecond rounding.
+                    observedDeadline.TrySetResult((latest - elapsed - ClockSampleLimitMs - 2, latest + 1));
                     await Task.Delay(2_400, token);
                 }
 
