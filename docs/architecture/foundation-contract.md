@@ -23,7 +23,7 @@ turn").
 
 ## Measure first
 
-What layer 3 can reach today, counted from the prototype on main (`src/Kernel.Workflows`, the `Kernel.Durable` and
+What layer 3 can reach today, counted from the prototype on main ([Kernel.Workflows](../../essentials/tests/ActorFoundation/Legacy/Workflows), the `Kernel.Durable` and
 `Kernel.Runtime` types its models and `WorkflowInstance` use), against the contract below. Public types and their
 public members, positional record fields and enum values included, static helpers and parameters excluded; `IActorType` has 12
 members on main, and the read-model records and command payloads are counted.
@@ -279,15 +279,15 @@ An inventory on main; no code changes here. Lines are those of main at `9583f4da
 
 | File:line | What | Fix | Milestone |
 |---|---|---|---|
-| `src/Kernel.Workflows/Turn.cs:57,59,114` | `Instance.Ref.Partition`, `InstanceRef.Spread(name, Services.Partitions)`, `Id.StartsWith($"g{partition}/key/")`: placement and key detection by parsing the id | `Placement` hint; the key check goes with the identity-only family | K2 |
+| [Turn.cs:57,59,114](../../essentials/tests/ActorFoundation/Legacy/Workflows/Turn.cs) | `Instance.Ref.Partition`, `InstanceRef.Spread(name, Services.Partitions)`, `Id.StartsWith($"g{partition}/key/")`: placement and key detection by parsing the id | `Placement` hint; the key check goes with the identity-only family | K2 |
 | `Turn.cs:88-91,135-137` | Builds `InstanceRow` with `CreationProtocol.Fingerprint`, `StartIntent`, `Taken[From]`; edits `CommitTimes` through `WorkflowCommitClock.End` | The foundation builds its record from `End`, `SetHeader`, `State`; the end mark and time are its own | K2 |
-| `src/Kernel.Workflows/WorkflowInstance.cs:14-29` | `SingleMessage`, `SelectsAlone`, `RevisitsHeld`, `Withholds` read `InstanceRow`, `Delivery.IsDurableJobTicket`, `Flaw` | `Withholds(ActorHeader)`; batching rules move into the foundation | K2 |
+| [WorkflowInstance.cs:14-29](../../essentials/tests/ActorFoundation/Legacy/Workflows/WorkflowInstance.cs) | `SingleMessage`, `SelectsAlone`, `RevisitsHeld`, `Withholds` read `InstanceRow`, `Delivery.IsDurableJobTicket`, `Flaw` | `Withholds(ActorHeader)`; batching rules move into the foundation | K2 |
 | `WorkflowInstance.cs:43-47,50,61,211-212` | `CreationProtocol.HasTerminalNoticeId`, `Refuse`, `TerminalNoticeId`, `TargetCreation`, `SenderCreation` checks on the parent notice | The notice and its checks are the foundation's (`Kinds.ChildFinished`) | K2 |
 | `WorkflowInstance.cs:57-58,72-73,81-90,129,148,165-171,192-199` | Builds `TurnOutcome` with `Expected`, `Revision`, `Journal`, `Retire(row)`, `Delete`, `Unsubscribe`, composes terminate ids `{origin}#{revision}.{i}` and `InboxKey.Ticket` cancels (FINDINGS L9) | `End` and `Record`; the foundation's cascade and job cancel when a `Terminate` is consumed or on `End(Cancelled)`, its delete with `ProtectsDeletion` | K2 |
 | `WorkflowInstance.cs:138-143` | `RemainingJobs` matches tickets by `InboxKey.Ticket` and `IsWorkerJobCompletion` | The foundation keeps the job registry | K2 |
-| `src/Kernel.Workflows/EffectKey.cs:42` | `CreationProtocol.Origin(instance, creation)` | `Instance.Ref.Id` is the origin | K2 |
-| `src/Kernel.Workflows/Contracts.cs:8,62` | `InstanceInfo.Ref` is `InstanceRef` (plan K2 row); `TerminalIdentity.From(InstanceRow)` | `ActorRef`; the identity-only family goes | K2 |
-| `src/Kernel.Workflows/IdentityMetadataTurn.cs:7-8,28` | `TurnOutcome`, `DurableTurn`, `InboxKey` | Goes with the identity-only family | K2 |
+| [EffectKey.cs:42](../../essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs) | `CreationProtocol.Origin(instance, creation)` | `Instance.Ref.Id` is the origin | K2 |
+| [Contracts.cs:8,62](../../essentials/tests/ActorFoundation/Legacy/Workflows/Contracts.cs) | `InstanceInfo.Ref` is `InstanceRef` (plan K2 row); `TerminalIdentity.From(InstanceRow)` | `ActorRef`; the identity-only family goes | K2 |
+| [IdentityMetadataTurn.cs:7-8,28](../../essentials/tests/ActorFoundation/Legacy/Workflows/IdentityMetadataTurn.cs) | `TurnOutcome`, `DurableTurn`, `InboxKey` | Goes with the identity-only family | K2 |
 | `models/Native/Live.cs:61-65,87,91,100,103,108,110-111` | `RespondBeforeCommit` per route; `HttpHost` takes `IKernelStore` and `Worker`; `InstanceRef.In(local.Partition, …)`, `local.Post(…, ambient:)`, `store.FindSubscriptionsAsync` and a delivery to `waiting[0]`, `EventRoute`, `EventRow`, `store.AddEventAsync` | `RequestAsync` with `Target.Start` or `Target.Event` (fanned out to every waiter) with `AddOptions` and `RequestOptions(Ambient, Deadline, ReleaseBeforeCommit, Inline)` | K2 defines, K8 runs |
 | `models/Native/Incidents.cs:108` | `CreationProtocol.Origin` for the operation key | `turn.Instance.Ref.Id` | K6 |
 | `models/Native/InvocationLifetime.cs:69` | `CommitClockFacts.ModelPrefix` | Goes with the commit clock (owner decision 3); retention reads `Now` and `EndedAt` | K6 |
