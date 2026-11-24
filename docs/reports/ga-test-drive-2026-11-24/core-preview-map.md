@@ -29,8 +29,8 @@ release 1 milestone on [#4229](https://github.com/elsa-workflows/elsa-foundation
      designer."
   2. **The activity library through the adapted context.** The designer's toolbox has Switch, For, Fault, Complete
      and RunJavaScript, which the Native model lacks (NATIVE.md lists Switch, For and Do as not done). ADR 0099 says
-     the activity library carries over with an adapted activity context, which K6 delivers, so each activity needs
-     no separate Native version. No K6 case names which designer activities must run on the kernel. Compensation is
+     the activity library carries over with an adapted activity context, which K6 delivers; the owner's card 3 calls
+     each such activity a port. No K6 case names which designer activities must run on the kernel. Compensation is
      out of release 1 by owner decision (StateMachine page, decision 4), so CompensationScope and Compensate will not
      run on a kernel host. JavaScript carries
      over under K12 item 3.
@@ -83,12 +83,12 @@ design in [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702)):
 | W2 | 201/400 with headers | ✅ since #5706 | | K8 |
 | W3 `/orders/{id}/enrich` | Route value `{id}` | ❌ | Route templates in `HttpRoutes` | K8 |
 | W3 | Parallel calls, join | ✅ Parallel, Flowchart joins | | K6, K7 |
-| W3 | Read the downstream response, react to a 500 | ❌ | A response result; a shipped HTTP sender | **No case** (K6 wires only the effect key) |
-| W3 | Timeout on the call | ❌ | Timeout input | **No case** |
+| W3 | Read the downstream response, react to a 500 | ❌ | A response result; a shipped HTTP sender | **No case**; the owner decided a Background job for K6 (card 2) |
+| W3 | Timeout on the call | ❌ | Timeout input | **No case**; decided with card 2 for K6 |
 | W4 `/orders/{id}/ship` | Respond 202, then continue | ✅ WriteHttpResponse does not end the workflow | | K8 |
 | W4 | `Delay` 2 min, survive restart | ✅ timer as message to self; restart proven for an approval wait | Proof on a designed workflow | **No case** |
 | W4 | Child via `DispatchWorkflow` | ✅ | Parked-child registry | K6 |
-| W5 `/orders/{id}/cancel` | Resume the waiting W4 | 🟡 Event and mid-flow HttpEndpoint exist; no correlation input, so an event name per order is the workaround | Route values or a correlation key | K8 for route values; **No case** for resuming a wait on a template route |
+| W5 `/orders/{id}/cancel` | Resume the waiting W4 | 🟡 Event and mid-flow HttpEndpoint exist; no correlation input, so an event name per order is the workaround | Route values or a correlation key | K8 for route values; **No case** for resuming a wait on a template route, decided for K8 (card 1) |
 | W6 `POST /batch` | ForEach over 1,000 items into children | ✅ ForEach, DispatchWorkflow | Fan-out limits on a provider | K6 (large fan-out decision 5), K12 |
 | W7 payment | `Fault` raises an incident | 🟡 thrown errors and leaf faults become incidents | A Fault activity in the toolbox | K6 |
 | W7 | Compensation | ❌ | | **Out** (release 1 has no compensation port) |
@@ -125,7 +125,7 @@ design in [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702)):
 | Duplicate POST | 🟡 replay dedup by event id proven; HTTP start dedup needs a caller key | **No case** |
 | Large request body | ❌ bodies sit in state, under the checkpoint cap | **Out** (values by reference) |
 | Two workflows on one route | ❌ the later one silently wins | K8 (refused when the route table is built) |
-| 404 and 405 | 🟡 an unmatched event returns 404 in the edge check; no 405 | K8 for 404; **No case** for 405 |
+| 404 and 405 | 🟡 an unmatched event returns 404 in the edge check; no 405 | **No case** |
 | Suspends before responding | ✅ 500 when a held response's turn parks; 504 at the reply deadline | K8 |
 | SQLite Embedded, then PostgreSQL with two nodes | 🟡 PostgreSQL only in the preview; Cluster demo exists separately | K4, K5; SQL Server and MySQL are **Out** |
 
