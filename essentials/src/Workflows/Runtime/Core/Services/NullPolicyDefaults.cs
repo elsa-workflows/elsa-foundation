@@ -22,7 +22,7 @@ public static class NullPolicyDefaults
                 ? TryGetTypeDefault(clrType, out typeDefault)
                 : TryGetTypeDefault(value.Type.Alias, out typeDefault));
         if (!policies.DefaultOnNull || !supported)
-            throw new InvalidOperationException($"VF-ACT-004: {target} does not accept null.");
+            throw new NullContractViolationException(target);
         warnings?.Report(new ExecutionWarning("VF-NULL-001", $"{target} used its type default because DefaultOnNull is enabled.", ExecutionWarningSeverity.Information));
         return ValueEnvelope.Inline(value.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType()), value.Policy);
     }
@@ -100,5 +100,10 @@ public static class NullPolicyDefaults
             return true;
         }
         return TryGetTypeDefault(type.FullName ?? type.Name, out value);
+    }
+
+    private sealed class NullContractViolationException(string target) : InvalidOperationException($"VF-ACT-004: {target} does not accept null."), IValueFreeExpressionFailure
+    {
+        public string ValueFreeMessage => "VF-ACT-004: The assignment target does not accept null. Assign a non-null value, or enable DefaultOnNull for a target with a supported type default.";
     }
 }

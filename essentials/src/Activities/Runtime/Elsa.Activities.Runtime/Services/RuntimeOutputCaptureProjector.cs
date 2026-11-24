@@ -102,7 +102,7 @@ public sealed class RuntimeOutputCaptureProjector
                 if (!node.Metadata.ContainsKey(RuntimeMetadataKeys.ScriptResultInputKey) || capture.OutputName != "result")
                     continue;
                 if (!_policies.UndefinedAsNull)
-                    throw new InvalidOperationException($"VF-UNDEF-001: Activity '{node.AuthoredActivityId}' bound script result '{capture.OutputName}' produced no value; return a value, remove the result binding, or enable UndefinedAsNull.");
+                    throw new UndefinedCapturedResultException(node.AuthoredActivityId, capture.OutputName);
                 projected = ValueEnvelope.Null(projected.Type, projected.Policy);
             }
             var encodeEnvelope = capture.ConversionPlan is not null || projected.Presence == ValuePresence.ExplicitNull;
@@ -379,6 +379,11 @@ public sealed class RuntimeOutputCaptureProjector
                 RuntimeMetadataKeys.OutputName,
                 capture.OutputName);
         }
+    }
+
+    private sealed class UndefinedCapturedResultException(string activity, string output) : InvalidOperationException($"VF-UNDEF-001: Activity '{activity}' bound script result '{output}' produced no value; return a value, remove the result binding, or enable UndefinedAsNull."), Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure
+    {
+        public string ValueFreeMessage => "VF-UNDEF-001: The bound script result produced no value; return a value, remove the result binding, or enable UndefinedAsNull.";
     }
 
     private static object? ToEncodedValue(ValueEnvelope envelope) => envelope.Presence switch

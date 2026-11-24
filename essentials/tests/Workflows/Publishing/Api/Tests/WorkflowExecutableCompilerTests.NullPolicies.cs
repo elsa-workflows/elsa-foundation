@@ -37,13 +37,16 @@ public sealed partial class WorkflowExecutableCompilerTests
     }
 
     [Theory]
-    [InlineData("String", false, false)]
-    [InlineData("Int32", false, true)]
-    [InlineData("Int32", true, false)]
-    public async Task SetOutput_uses_the_declared_output_type_instead_of_the_authored_fallback(string alias, bool policy, bool refused)
+    [InlineData("String", false, false, "Literal")]
+    [InlineData("Int32", false, true, "Literal")]
+    [InlineData("Int32", true, false, "Literal")]
+    [InlineData("String", false, false, "literal")]
+    [InlineData("Int32", false, true, "literal")]
+    [InlineData("Int32", true, false, "LITERAL")]
+    public async Task SetOutput_uses_the_declared_output_type_instead_of_the_authored_fallback(string alias, bool policy, bool refused, string syntax)
     {
         var root = new ActivityNode("set", "", [
-            new("name", new ArgumentValue("count", "Literal"), null, null, null, null),
+            new("name", new ArgumentValue("count", syntax), null, null, null, null),
             new("value", new ArgumentValue(JsonSerializer.SerializeToElement<object?>(null), "Literal"), null, null, null, null)], [])
             { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new(alias == "String" ? "Int32" : "Any")) };
         var version = WorkflowVersion(root);

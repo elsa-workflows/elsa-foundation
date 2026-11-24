@@ -71,8 +71,13 @@ public sealed class RuntimeOutputCaptureNullPolicyTests
 
         if (!policy && (noValue || alias == "Int32"))
         {
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(Project);
+            var exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(Project);
             Assert.Contains(noValue ? "VF-UNDEF-001" : "VF-ACT-004", exception.Message);
+            var safe = Assert.IsAssignableFrom<Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure>(exception).ValueFreeMessage;
+            using var masking = new ActivityFaultMasking(new DefaultRuntimeSecretMask(), "invocation");
+            masking.ProtectWorkflowStateReads(() => true);
+            Assert.Equal(safe, masking.Mask(exception).Message);
+            Assert.Contains(noValue ? "return a value, remove the result binding" : "Assign a non-null value", safe);
             return;
         }
         if (encrypted && alias == "Int32")

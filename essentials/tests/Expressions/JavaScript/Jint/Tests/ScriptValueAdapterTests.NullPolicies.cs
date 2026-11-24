@@ -5,6 +5,38 @@ namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 public sealed partial class ScriptValueAdapterTests
 {
+    [Theory]
+    [InlineData("Object.defineProperty(Array.prototype, '0', {get(){throw new Error('inherited hole');}, configurable:true});")]
+    [InlineData("Array.prototype[0] = {toJSON(){throw new Error('inherited toJSON');}};")]
+    [InlineData("Object.defineProperty(Object.prototype, 'getOwnPropertyDescriptor', {get(){throw new Error('handler prototype');}, configurable:true}); Object.defineProperty(Array.prototype, '0', {get(){throw new Error('inherited hole');}, configurable:true});")]
+    [InlineData("globalThis.Proxy = function(){ throw new Error('replaced Proxy'); }; Object.defineProperty(Array.prototype, '0', {get(){throw new Error('inherited hole');}, configurable:true});")]
+    public async Task An_inherited_getter_is_not_read_for_a_sparse_array_hole(string setup)
+    {
+        var sink = new RecordingWarningSink();
+        var value = await ExpressionAsync("(() => { " + setup + " const a = [,]; a.toJSON = () => a; return a; })()", sink: sink);
+        Assert.Equal("[null]", value.GetRawText());
+        Assert.Equal("VF-UNDEF-003", Assert.Single(sink.Warnings).Code);
+    }
+
+    [Theory]
+    [InlineData("const a=[0,2]; Object.defineProperty(a,'0',{get(){delete a[1]; return this===a ? 7 : 99;}});", "[7,null]", 1)]
+    [InlineData("const a=[0]; Object.defineProperty(a,'0',{get(){delete a[0]; return 7;}, configurable:true});", "[7]", 0)]
+    public async Task Array_own_getters_keep_their_receiver_and_observe_prior_getter_changes(string setup, string expected, int warnings)
+    {
+        var sink = new RecordingWarningSink();
+        var value = await ExpressionAsync("(() => { " + setup + " a.toJSON = () => a; return a; })()", sink: sink);
+        Assert.Equal(expected, value.GetRawText());
+        Assert.Equal(warnings, sink.Warnings.Count);
+        Assert.All(sink.Warnings, warning => Assert.Equal("VF-UNDEF-003", warning.Code));
+    }
+
+    [Fact]
+    public async Task Array_cycles_still_refuse_after_a_custom_toJSON()
+    {
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => ExpressionAsync("(() => { const a=[]; a[0]=a; a.toJSON=()=>a; return a; })()"));
+        Assert.Contains("cyc", failure.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task An_inherited_boxed_value_does_not_replace_or_coerce_a_sparse_array_hole()
     {
@@ -27,7 +59,7 @@ public sealed partial class ScriptValueAdapterTests
     public async Task A_root_toJSON_that_produces_undefined_obeys_the_same_result_policy()
     {
         const string source = "({toJSON(){return undefined;}})";
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExpressionAsync(source));
+        var exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(() => ExpressionAsync(source));
         Assert.Contains("VF-UNDEF-001", exception.Message);
         Assert.Equal(JsonValueKind.Null, (await ExpressionAsync(source, undefinedAsNull: true)).ValueKind);
     }
@@ -75,7 +107,7 @@ public sealed partial class ScriptValueAdapterTests
     [InlineData("let unused = 1;")]
     public async Task Undefined_binding_results_follow_the_workflow_policy(string source)
     {
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExpressionAsync(source));
+        var exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(() => ExpressionAsync(source));
         Assert.Contains("VF-UNDEF-001", exception.Message);
         Assert.Equal(JsonValueKind.Null, (await ExpressionAsync(source, undefinedAsNull: true)).ValueKind);
     }

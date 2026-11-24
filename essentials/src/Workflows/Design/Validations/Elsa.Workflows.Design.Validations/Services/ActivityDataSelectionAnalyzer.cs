@@ -262,7 +262,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
                     item.ScopeId == NormalizeScope(context.Document, variable.DeclaringScopeId))?.Variable.Type ?? valueType
                 : valueType;
             if (intrinsic.Kind == AuthoredWorkflowIntrinsicKind.SetOutput &&
-                location.Node.Inputs.FirstOrDefault(input => input.ReferenceKey == "name")?.Value is { ExpressionType: "Literal" } nameArgument)
+                location.Node.Inputs.FirstOrDefault(input => input.ReferenceKey == "name")?.Value is { } nameArgument &&
+                StringComparer.OrdinalIgnoreCase.Equals(nameArgument.ExpressionType, "Literal"))
             {
                 var name = nameArgument.Value switch { string text => text, JsonElement { ValueKind: JsonValueKind.String } json => json.GetString(), _ => null };
                 type = context.Document.Outputs.FirstOrDefault(output => StringComparer.Ordinal.Equals(output.Name, name))?.Type ?? type;

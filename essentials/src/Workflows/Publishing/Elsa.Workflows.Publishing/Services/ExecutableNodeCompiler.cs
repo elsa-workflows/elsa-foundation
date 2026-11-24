@@ -567,7 +567,8 @@ public sealed class ExecutableNodeCompiler(
             ? ResolveIntrinsicVariableType(activity.NodeId, target, projection, workflowVariables)
             : intrinsic.ValueType;
         if (runtimeKind == WorkflowIntrinsicKind.SetOutput &&
-            activity.Inputs.FirstOrDefault(input => input.ReferenceKey == WorkflowIntrinsicInputKeys.Name)?.Value is { ExpressionType: "Literal" } nameArgument)
+            activity.Inputs.FirstOrDefault(input => input.ReferenceKey == WorkflowIntrinsicInputKeys.Name)?.Value is { } nameArgument &&
+            StringComparer.OrdinalIgnoreCase.Equals(nameArgument.ExpressionType, "Literal"))
         {
             var outputName = nameArgument.Value switch
             {

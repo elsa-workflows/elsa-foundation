@@ -305,14 +305,17 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.Equal("consumer/inputs/CustomerId", Assert.Single(result.Findings, finding => finding.Type == "ValueFlow/ScopeBoundary").Path);
     }
 
-    [Fact]
-    public async Task SetOutput_metadata_and_conversion_use_the_declared_output_type()
+    [Theory]
+    [InlineData("Literal")]
+    [InlineData("literal")]
+    [InlineData("LITERAL")]
+    public async Task SetOutput_metadata_and_conversion_use_the_declared_output_type(string syntax)
     {
         var previewer = new RecordingPreviewer();
         using var provider = Provider(services => services.AddSingleton<IActivityBindingConversionPreviewer>(previewer));
         var value = new ArgumentState("value", ScopeFreeResult("producer", "known"), null, null, null, null)
             { Conversion = new(AuthoredValueConversionMode.None) };
-        var setter = new ActivityNode("setter", "test", [new("name", new ArgumentValue("count", "Literal"), null, null, null, null), value], [])
+        var setter = new ActivityNode("setter", "test", [new("name", new ArgumentValue("count", syntax), null, null, null, null), value], [])
             { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new("Int32")) };
         var document = Document(Sequence(Node("producer"), setter)) with
             { Outputs = [new("count-key", "count", new("String"), null, "Count", null, false)] };

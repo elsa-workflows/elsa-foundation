@@ -264,7 +264,7 @@ internal sealed class StepVariableSession : IStepVariableSession
             throw Fault(new InvalidOperationException(
                 $"Variable '{resolved.Name}' is transient: a script cannot write it."));
         if (!_valuePolicies.UndefinedAsNull)
-            throw Fault(new InvalidOperationException($"VF-UNDEF-001: Variable '{resolved.Name}' cannot be assigned undefined; assign a value or null, or enable UndefinedAsNull."));
+            throw Fault(new UndefinedVariableAssignmentException(resolved.Name));
         Stage(resolved, null, StepVariableWriteKind.WholeAssignment, droppedMembers: null);
     }
 
@@ -588,4 +588,9 @@ internal static class DroppedMembers
 
         return false;
     }
+}
+
+internal sealed class UndefinedVariableAssignmentException(string variable) : InvalidOperationException($"VF-UNDEF-001: Variable '{variable}' cannot be assigned undefined; assign a value or null, or enable UndefinedAsNull."), Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure
+{
+    public string ValueFreeMessage => "VF-UNDEF-001: A variable cannot be assigned undefined; assign a value or null, or enable UndefinedAsNull. The variable name is withheld because a value it read is protected.";
 }

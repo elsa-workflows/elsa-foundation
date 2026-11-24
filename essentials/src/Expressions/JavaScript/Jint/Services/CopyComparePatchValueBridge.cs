@@ -42,6 +42,9 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
     {
         private const char MarkerStart = '';
         private readonly Engine _engine;
+        private readonly JsValue _proxyConstructor;
+        private readonly JsValue _objectCreate;
+        private readonly Dictionary<ObjectInstance, ObjectInstance> _holeSafeArrays = new(ReferenceEqualityComparer.Instance);
         private readonly FeatureOptions _options;
         private readonly bool _undefinedAsNull;
         private readonly List<ExecutionWarning> _warnings = [];
@@ -65,6 +68,8 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         public Evaluation(Engine engine, FeatureOptions options, bool undefinedAsNull)
         {
             _engine = engine;
+            _proxyConstructor = engine.GetValue("Proxy");
+            _objectCreate = engine.Intrinsics.Object.Get("create");
             _options = options;
             _undefinedAsNull = undefinedAsNull;
         }
@@ -369,15 +374,12 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             // statement, so the bridge's work stays apart from the script's in the evaluation limits.
             return new ClrFunction(_engine, "replacer", (holder, arguments) =>
             {
-                if (holder is ObjectInstance array && array.IsArray() &&
-                    array.GetOwnProperty(arguments.At(0)) == PropertyDescriptor.Undefined && arguments.At(0).ToString() != "")
-                    return new JsString(UndefinedMarkerText);
                 var value = UnboxNumber(arguments.At(1));
                 if (value.IsUndefined())
                     return new JsString(UndefinedMarkerText);
                 if (value.IsNumber() && !double.IsFinite(value.AsNumber()))
                     return infinity.Call(JsValue.Undefined, [value]);
-                return value is ObjectInstance ? lookup.Call(JsValue.Undefined, [value]) : value;
+                return ProtectArrayHoles(value is ObjectInstance ? lookup.Call(JsValue.Undefined, [value]) : value);
             });
         }
 
@@ -417,14 +419,34 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             var infinity = InfinityMarker();
             return _infinityReplacer = new ClrFunction(_engine, "replacer", (holder, arguments) =>
             {
-                if (holder is ObjectInstance array && array.IsArray() &&
-                    array.GetOwnProperty(arguments.At(0)) == PropertyDescriptor.Undefined && arguments.At(0).ToString() != "")
-                    return new JsString(UndefinedMarkerText);
                 var value = UnboxNumber(arguments.At(1));
                 if (value.IsUndefined())
                     return new JsString(UndefinedMarkerText);
-                return value.IsNumber() && !double.IsFinite(value.AsNumber()) ? infinity.Call(JsValue.Undefined, [value]) : value;
+                return value.IsNumber() && !double.IsFinite(value.AsNumber()) ? infinity.Call(JsValue.Undefined, [value]) : ProtectArrayHoles(value);
             });
+        }
+
+        // JSON.stringify reads an array index (and that value's toJSON) before calling its replacer. Guard the Get
+        // itself so an inherited getter or object never fills a hole. Own getters retain the original receiver and
+        // serialization order; cached proxies retain identity so cycles still fail rather than expanding forever.
+        private JsValue ProtectArrayHoles(JsValue value)
+        {
+            if (value is not ObjectInstance array || !array.IsArray()) return value;
+            if (_holeSafeArrays.TryGetValue(array, out var known)) return known;
+            var handler = _engine.Invoke(_objectCreate, JsValue.Undefined, [JsValue.Null]).AsObject();
+            handler.DefineOwnProperty("get", new PropertyDescriptor(new ClrFunction(_engine, "arrayIndex", (_, arguments) =>
+            {
+                var key = arguments.At(1);
+                if (key.IsString() && uint.TryParse(key.AsString(), NumberStyles.None, CultureInfo.InvariantCulture, out var index) &&
+                    index != uint.MaxValue && key.AsString() == index.ToString(CultureInfo.InvariantCulture) &&
+                    array.GetOwnProperty(key) == PropertyDescriptor.Undefined)
+                    return JsValue.Undefined;
+                return array.Get(key, array);
+            }), writable: false, enumerable: false, configurable: false));
+            var guarded = _engine.Construct(_proxyConstructor, [array, handler]).AsObject();
+            _holeSafeArrays[array] = guarded;
+            _holeSafeArrays[guarded] = guarded;
+            return guarded;
         }
 
         private static JsValue UnboxNumber(JsValue value) =>

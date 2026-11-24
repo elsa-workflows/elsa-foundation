@@ -88,7 +88,7 @@ public sealed class StepVariableSessionUnitTests
         }
         if (!policy)
         {
-            Assert.Contains("VF-ACT-004", Assert.Throws<InvalidOperationException>(Write).Message);
+            Assert.Contains("VF-ACT-004", Assert.ThrowsAny<InvalidOperationException>(Write).Message);
             Assert.NotNull(session.PendingFault);
             Assert.Empty(session.Intents);
         }

@@ -75,11 +75,21 @@ internal sealed class JintPortableJavaScriptEvaluator(
         if (written.Value is null)
         {
             if (!request.UndefinedAsNull)
-                throw new InvalidOperationException("VF-UNDEF-001: A JavaScript binding must produce a value. Use an expression or return a value from the statement block; undefined is not supported.");
+                throw new UndefinedBindingResultException();
         }
         foreach (var warning in values.Warnings)
             request.Warnings?.Report(warning);
         JavaScriptValueWrites.WarnLossyReads(values, written.Losses, request.Warnings, logger);
         return written.Value ?? JsonSerializer.SerializeToElement<object?>(null);
     }
+}
+
+/// <summary>An undefined binding result has no value or path to redact, so its recovery guidance stays visible.</summary>
+internal sealed class UndefinedBindingResultException : InvalidOperationException, Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure
+{
+    private const string Description = "VF-UNDEF-001: A JavaScript binding must produce a value. Use an expression or return a value from the statement block; undefined is not supported.";
+
+    public UndefinedBindingResultException() : base(Description) { }
+
+    public string ValueFreeMessage => Description;
 }
