@@ -312,6 +312,20 @@ The probe verifies typed refusal after the format changes. It also starts admiss
 holds the marker, confirms the admission is waiting, then runs the migration's DDL. Both write paths
 must refuse the changed schema without a lock cycle. The probe restores the marker and tables. Its accepted control writes leave test data in that database.
 
+### Workbench PostgreSQL provider rehearsal
+
+Run `bash tools/ci/actor-foundation/check-workbench-postgres.sh` from the repository root. The script
+builds a disposable archive of the selected revision. It compiles the preview provider using
+Workbench's locked EF provider versions, adds a qualification command to the archived Workbench,
+and checks its emitted dependency manifest. Each test uses a fresh loopback PostgreSQL database.
+
+Two Workbench processes run the real Native approval with the hosted PostgreSQL launcher.
+The first stops after Ada's approval. The next takes a higher epoch, checks that replay preserves
+the checkpoint bytes and journal, then records Grace's approval once and completes the workflow.
+The meter reports each process's provider traffic, including connection setup, owner polling and
+shutdown. Schema setup and direct diagnostic reads are outside that meter. The separate warm
+public preview budget has its own command.
+
 A host can use `EfStore.OpenPreviewRootReadsAsync` to open `IActorReads` for an already-installed ordinary
 PostgreSQL generated-root store. Compose the store with the public `new KernelDb(options)` PostgreSQL context.
 The trusted hosting layer supplies the caller's `BoundScope`. The provider supplies point, list and journal reads

@@ -35,20 +35,26 @@ internal static class WorkbenchPostgresPreview
             ?? throw new InvalidOperationException("A disposable PostgreSQL database is required.");
         var settings = new NpgsqlConnectionStringBuilder(connection);
         if (settings.Host != "127.0.0.1" || !settings.ShouldSerialize("Port") ||
-            settings.Port == 5095 || string.IsNullOrEmpty(settings.Database))
-            throw new ArgumentException("Use an explicit loopback PostgreSQL database and port.");
+            settings.Port == 5095 || string.IsNullOrEmpty(settings.Database) ||
+            settings.SslMode != SslMode.Disable || settings.GssEncryptionMode != GssEncryptionMode.Disable)
+            throw new ArgumentException("Use an explicit plaintext loopback PostgreSQL database and port for the wire meter.");
 
+        var observationOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings.ConnectionString).Options;
+        KernelDb OpenObservation() => new(observationOptions);
+        if (phase == "birth")
+        {
+            await using var db = OpenObservation();
+            Require(await PostgresFixtureDatabase.IsEmptyAsync(db, token), "birth uses an empty database");
+            var setup = new EfStore(OpenObservation, postgres: true);
+            await setup.CreateAsync();
+            await setup.InstallPreviewRootSchemaAsync(token);
+        }
+
+        var wire = Wire.Start("postgres", $"Host={settings.Host};Port={settings.Port}");
+        settings.Port = wire.LocalPort;
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings.ConnectionString).Options;
         KernelDb Open() => new(options);
         var store = new EfStore(Open, postgres: true);
-        if (phase == "birth")
-        {
-            await using var db = Open();
-            Require(await PostgresFixtureDatabase.IsEmptyAsync(db, token), "birth uses an empty database");
-            await store.CreateAsync();
-            await store.InstallPreviewRootSchemaAsync(token);
-        }
-
         var scope = EmbeddedTenant.Bind("workbench-preview");
         var ingress = await store.OpenPreviewRootIngressAsync(WorkflowActorType.ActorType, TimeSpan.FromHours(1), token);
         var reads = await store.OpenPreviewRootReadsAsync(64, token);
@@ -85,7 +91,8 @@ internal static class WorkbenchPostgresPreview
             }
             else
             {
-                var previous = JsonSerializer.Deserialize<Receipt>(await File.ReadAllTextAsync(receiptPath, token))!;
+                var previous = JsonSerializer.Deserialize<Receipt>(await File.ReadAllTextAsync(receiptPath, token))
+                    ?? throw new InvalidOperationException("A birth receipt is required.");
                 var actor = new Contract.ActorRef(previous.Actor);
                 var bookmark = new Contract.PageToken(previous.Bookmark);
                 var waiting = await WaitFor(actor, 2);
@@ -118,6 +125,8 @@ internal static class WorkbenchPostgresPreview
 
         if (receipt is not null)
             await File.WriteAllTextAsync(receiptPath, JsonSerializer.Serialize(receipt), token);
+        Require(wire.Trips > 0 && wire.Connections > 0, "the meter observed the preview provider connections");
+        Console.WriteLine($"wire {phase} {wire.Trips} round trips, {wire.ProtocolRequests} protocol groups, {wire.Connections} connections");
         Console.WriteLine($"ok Workbench process {Environment.ProcessId} {phase} stopped");
 
         async Task<Contract.AdmissionOutcome> Approve(Contract.ActorRef actor, string id, string person, string frame) =>
@@ -126,7 +135,7 @@ internal static class WorkbenchPostgresPreview
 
         async Task<Checkpoint?> Read(Contract.ActorRef actor)
         {
-            await using var db = Open();
+            await using var db = OpenObservation();
             return await db.Database.SqlQuery<Checkpoint>($"""
                 SELECT i."Revision", i."State", p."Epoch", p."Owner" FROM "Instances" i
                 JOIN "Partitions" p ON p."Id" = i."Partition"

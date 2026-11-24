@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 repo=$(git -c core.fsmonitor=false rev-parse --show-toplevel)
-revision=$(git -C "$repo" -c core.fsmonitor=false rev-parse "${1:-HEAD}^{commit}")
+revision=$(git -C "$repo" -c core.fsmonitor=false rev-parse --verify --end-of-options "${1:-HEAD}^{commit}")
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/elsa-workbench-preview.XXXXXXXX")
 container=
 cleanup() {
@@ -28,6 +28,10 @@ for reference in xml.findall('.//PackageReference'):
     reference.set('Version', version)
     print(f'Compile kernel provider with Workbench {package} {version}')
 xml.write(provider, encoding='unicode')
+expected = ('Microsoft.EntityFrameworkCore', 'Microsoft.EntityFrameworkCore.Relational',
+    'Microsoft.EntityFrameworkCore.Sqlite', 'Microsoft.EntityFrameworkCore.SqlServer',
+    'Npgsql.EntityFrameworkCore.PostgreSQL', 'Npgsql', 'MySql.EntityFrameworkCore')
+Path('expected-workbench-providers.json').write_text(json.dumps({package: locked[package]['resolved'] for package in expected}))
 project=app/'Elsa.Workbench.csproj'
 text=project.read_text()
 assert text.count('</Project>')==1
@@ -39,6 +43,7 @@ project.write_text(text.replace('</Project>', '''
     <ProjectReference Include="../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
     <Compile Include="../../tools/ci/actor-foundation/WorkbenchPostgresPreview.cs" Link="Qualification/WorkbenchPostgresPreview.cs" />
     <Compile Include="../../prototypes/kernel-model/models/Native.Run/DirectApprovalWorkflow.cs" Link="Qualification/DirectApprovalWorkflow.cs" />
+    <Compile Include="../../prototypes/kernel-model/ef/Kernel.Ef.Run/Wire.cs" Link="Qualification/Wire.cs" />
     <Compile Include="../../prototypes/kernel-model/models/Native.Run/PostgresFixtureDatabase.cs" Link="Qualification/PostgresFixtureDatabase.cs" />
   </ItemGroup>
 </Project>'''))
@@ -58,6 +63,18 @@ PY
 dotnet restore apps/Elsa.Workbench /p:RestoreLockedMode=false
 dotnet build -c Release --no-restore apps/Elsa.Workbench
 workbench=apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll
+
+python3 - <<'PYDEPS'
+import json
+from pathlib import Path
+
+expected = json.loads(Path('expected-workbench-providers.json').read_text())
+manifest = Path('apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.deps.json')
+actual = dict(key.rsplit('/', 1) for key in json.loads(manifest.read_text())['libraries'])
+for package, version in expected.items():
+    assert actual.get(package) == version, (package, actual.get(package), version)
+    print(f'ok Workbench dependency {package} {version}')
+PYDEPS
 
 for major in ${PG_VERSIONS:-16 17}; do
   export POSTGRES_PASSWORD
