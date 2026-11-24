@@ -9,8 +9,9 @@ public sealed record HttpRouteSegment(HttpRouteSegmentKind Kind, string Text);
 /// <summary>
 /// An HttpEndpoint's path as a route template: literal segments and whole-segment parameters, <c>{name}</c>,
 /// <c>{name?}</c> as the last segment and <c>{*rest}</c> as the last segment. Inline constraints and defaults
-/// (<c>{id:int}</c>, <c>{id=1}</c>) and parameters inside a segment are refused. Literals and names are kept in lower
-/// case, so the template's <see cref="Text"/> is its normalized key text. The model only parses templates and builds
+/// (<c>{id:int}</c>, <c>{id=1}</c>), parameters inside a segment and percent-escapes in a literal are refused. Literals
+/// and names are kept in lower case, so the template's <see cref="Text"/> is its normalized key text; a resolved path
+/// keeps its values' case. The model only parses templates and builds
 /// keys from them; matching a request against them is the HTTP edge's work.
 /// </summary>
 public sealed class HttpRouteTemplate
@@ -55,6 +56,8 @@ public sealed class HttpRouteTemplate
             {
                 if (part.AsSpan().IndexOfAny('{', '}') >= 0)
                     throw new HttpRouteTemplateException($"The route '{template}' has a parameter inside the segment '{part}'; a parameter is a whole segment.");
+                if (part.Contains('%'))
+                    throw new HttpRouteTemplateException($"The route '{template}' has a percent-escape in '{part}'; write a literal as it reads.");
                 segments.Add(new(HttpRouteSegmentKind.Literal, part.ToLowerInvariant()));
                 continue;
             }
@@ -85,6 +88,8 @@ public sealed class HttpRouteTemplate
                 throw new HttpRouteTemplateException($"The route '{Text}' has an optional or catch-all parameter; a wait's route is fully bound.");
             if (values?.FirstOrDefault(value => string.Equals(value.Key, segment.Text, StringComparison.OrdinalIgnoreCase)).Value is not { Length: > 0 } value)
                 throw new HttpRouteTemplateException($"The route '{Text}' has no value for '{segment.Text}'.");
+            if (value is "." or "..")
+                throw new HttpRouteTemplateException($"The route '{Text}' has '{value}' for '{segment.Text}', which a client removes from its path.");
             parts.Add(Uri.EscapeDataString(value));
         }
         return string.Join('/', parts);
@@ -99,9 +104,17 @@ public sealed class HttpRouteTemplate
     public static int Compare(HttpRouteTemplate a, HttpRouteTemplate b)
     {
         for (var i = 0; i < Math.Min(a.Segments.Count, b.Segments.Count); i++)
-            if (((int)a.Segments[i].Kind).CompareTo((int)b.Segments[i].Kind) is var order and not 0) return order;
+            if (Rank(a.Segments[i].Kind).CompareTo(Rank(b.Segments[i].Kind)) is var order and not 0) return order;
         return a.Segments.Count.CompareTo(b.Segments.Count);
     }
+
+    private static int Rank(HttpRouteSegmentKind kind) => kind switch
+    {
+        HttpRouteSegmentKind.Literal => 0,
+        HttpRouteSegmentKind.Parameter => 1,
+        HttpRouteSegmentKind.Optional => 2,
+        _ => 3,
+    };
 }
 
 /// <summary>A route template is not one the model accepts, or a wait's route has no value for one of its parameters.</summary>

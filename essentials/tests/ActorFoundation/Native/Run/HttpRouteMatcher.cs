@@ -19,8 +19,9 @@ public static class HttpRouteMatcher
             if (route.Method != verb || !TryMatch(route.Template, segments, out var values)) continue;
             return new(route, route.Start ? HttpRoutes.Key(verb, route.Template.Text) : HttpRoutes.WaitKey(verb, route.Template, values), values);
         }
-        // A wait whose path an expression computes is known only at run time: its key is its literal path's.
-        return new(null, HttpRoutes.Key(verb, path), new Dictionary<string, string>());
+        // A wait whose path an expression computes is known only at run time: its key is its literal path's, decoded as a
+        // template match decodes it.
+        return new(null, HttpRoutes.Key(verb, string.Join('/', segments)), new Dictionary<string, string>());
     }
 
     private static bool TryMatch(HttpRouteTemplate template, string[] segments, out IReadOnlyDictionary<string, string> values)

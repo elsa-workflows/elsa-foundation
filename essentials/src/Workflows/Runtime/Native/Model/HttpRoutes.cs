@@ -31,21 +31,30 @@ public sealed class HttpRoutes
     private readonly List<HttpRoute> _routes = [];
 
     /// <summary>
-    /// The subscription key of a method and path: <c>http:{METHOD}:{path}</c>, with the path trimmed and in lower case,
-    /// or <c>http:{METHOD}:h:{sha-256 of the path}</c> past <see cref="MaxReadableKeyBytes"/>.
+    /// The subscription key of a literal method and path: <c>http:{METHOD}:{path}</c>, with the path trimmed and in lower
+    /// case, or <c>http:{METHOD}:#{sha-256 of the path}</c> past <see cref="MaxReadableKeyBytes"/> ('#' never reaches a
+    /// request path).
     /// </summary>
-    public static string Key(string method, string path)
-    {
-        var (verb, normalized) = (method.ToUpperInvariant(), Normalize(path));
-        var key = $"http:{verb}:{normalized}";
-        return System.Text.Encoding.UTF8.GetByteCount(key) <= MaxReadableKeyBytes
-            ? key
-            : $"http:{verb}:h:{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(normalized)))}";
-    }
+    public static string Key(string method, string path) => Readable(method, Normalize(path));
+
+    /// <summary>
+    /// The key of a path a route template resolved (<see cref="HttpRouteTemplate.Resolve"/>): its literals are already in
+    /// lower case and its values keep their case, so that ids that differ only in case are two keys.
+    /// </summary>
+    public static string ResolvedKey(string method, string path) => Readable(method, path.Trim().Trim('/'));
 
     /// <summary>The key a wait route subscribes on for these route values, and a matched request is delivered to.</summary>
     public static string WaitKey(string method, HttpRouteTemplate template, IReadOnlyDictionary<string, string>? values) =>
-        Key(method, template.Resolve(values));
+        ResolvedKey(method, template.Resolve(values));
+
+    private static string Readable(string method, string path)
+    {
+        var verb = method.ToUpperInvariant();
+        var key = $"http:{verb}:{path}";
+        return System.Text.Encoding.UTF8.GetByteCount(key) <= MaxReadableKeyBytes
+            ? key
+            : $"http:{verb}:#{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(path)))}";
+    }
 
     private static string Normalize(string path) => path.Trim().Trim('/').ToLowerInvariant();
 
@@ -67,14 +76,18 @@ public sealed class HttpRoutes
                 var start = starts.Contains(node);
                 if (!start && !template.FullyBound)
                     throw new HttpRouteTemplateException($"Workflow '{workflow.Id}', endpoint '{node.Id}': the wait's route '{template.Text}' has an optional or catch-all parameter; a wait's route is fully bound.");
+                if (!start && template.Segments.Any(segment => segment.Kind != HttpRouteSegmentKind.Literal) && !node.Inputs.ContainsKey("RouteValues"))
+                    throw new HttpRouteTemplateException($"Workflow '{workflow.Id}', endpoint '{node.Id}': the wait's route '{template.Text}' has parameters and no RouteValues to resolve them.");
                 // Its opt-out of the release rule (the owner's default of 12 November is to release a response after the
                 // commit of the turn that wrote it).
                 var early = node.Inputs.GetValueOrDefault("RespondBeforeCommit") is LiteralBinding { Value: { } flag } && flag.GetValue<bool>();
                 var route = new HttpRoute(Method(node).ToUpperInvariant(), template, workflow.Id, node.Id, start, early);
-                // Two waits on one shape are fine: each resolves to its own key. Anything else on one shape is refused.
-                if (shapes.TryGetValue($"{route.Method} {template.Shape}", out var claimed) && (claimed.Start || start))
+                // Two waits on one shape are fine when they read alike, since each resolves to its own key: the edge matches
+                // the shape once, so their parameter names and release rule must agree. Anything else on one shape is refused.
+                if (shapes.TryGetValue($"{route.Method} {template.Shape}", out var claimed) &&
+                    (claimed.Start || start || claimed.Template.Text != template.Text || claimed.RespondBeforeCommit != early))
                     throw new HttpRouteConflictException(route.Method, template.Text, (claimed.Workflow, claimed.Node), (workflow.Id, node.Id),
-                        startAndWait: claimed.Start != start);
+                        claimed.Start && start ? HttpRouteConflict.TwoStarts : claimed.Start || start ? HttpRouteConflict.StartAndWait : HttpRouteConflict.TwoWaits);
                 if (start || !shapes.ContainsKey($"{route.Method} {template.Shape}")) shapes[$"{route.Method} {template.Shape}"] = route;
                 _routes.Add(route);
                 if (start) _starts[Key(route.Method, template.Text)] = (workflow.Id, node.Id);
@@ -111,12 +124,24 @@ public sealed class HttpRoutes
 /// <summary>A start or wait route the HTTP edge matches requests against.</summary>
 public sealed record HttpRoute(string Method, HttpRouteTemplate Template, string Workflow, string Node, bool Start, bool RespondBeforeCommit);
 
+/// <summary>What two claims on one method and route shape are.</summary>
+public enum HttpRouteConflict
+{
+    /// <summary>Two starts: a route starts one workflow at one endpoint.</summary>
+    TwoStarts,
+    /// <summary>A start and a wait: a request reaches one of them.</summary>
+    StartAndWait,
+    /// <summary>Two waits that name their parameters differently or differ in their release rule.</summary>
+    TwoWaits,
+}
+
 /// <summary>
-/// Two endpoints claim one method and route shape: two starts, or a start and a wait. A request must reach one of them, so
-/// the route table refuses the second claim.
+/// Two endpoints claim one method and route shape in a way a request cannot tell apart (<see cref="HttpRouteConflict"/>),
+/// so the route table refuses the second claim.
 /// </summary>
-public sealed class HttpRouteConflictException(string method, string path, (string Workflow, string Node) first, (string Workflow, string Node) second, bool startAndWait = false)
-    : InvalidOperationException(Describe(method, path, first, second, startAndWait))
+public sealed class HttpRouteConflictException(string method, string path, (string Workflow, string Node) first, (string Workflow, string Node) second,
+    HttpRouteConflict kind = HttpRouteConflict.TwoStarts)
+    : InvalidOperationException(Describe(method, path, first, second, kind))
 {
     /// <summary>The method both claim, in upper case.</summary>
     public string Method { get; } = method;
@@ -130,11 +155,13 @@ public sealed class HttpRouteConflictException(string method, string path, (stri
     /// <summary>The claim met second, at which the table was refused.</summary>
     public (string Workflow, string Node) Second { get; } = second;
 
-    /// <summary>True when one claim is a start and the other a wait; false when both are starts.</summary>
-    public bool StartAndWait { get; } = startAndWait;
+    /// <summary>What the two claims are.</summary>
+    public HttpRouteConflict Kind { get; } = kind;
 
-    private static string Describe(string method, string path, (string Workflow, string Node) first, (string Workflow, string Node) second, bool startAndWait) =>
-        startAndWait
+    private static string Describe(string method, string path, (string Workflow, string Node) first, (string Workflow, string Node) second, HttpRouteConflict kind) =>
+        kind == HttpRouteConflict.TwoWaits
+            ? $"Endpoints '{first.Node}' of '{first.Workflow}' and '{second.Node}' of '{second.Workflow}' wait on {method} /{path}'s shape with other parameter names or another release rule; a request matches the shape once. Name the parameters alike or change one route."
+            : kind == HttpRouteConflict.StartAndWait
             ? $"Endpoint '{first.Node}' of '{first.Workflow}' and endpoint '{second.Node}' of '{second.Workflow}' are a start and a wait on {method} /{path}'s shape; a request reaches one of them. Change the method or path of one of them."
             : first.Workflow == second.Workflow
                 ? $"Workflow '{first.Workflow}' starts on {method} /{path} at two endpoints, '{first.Node}' and '{second.Node}'; a route starts one workflow at one endpoint. Change the method or path of one of them."

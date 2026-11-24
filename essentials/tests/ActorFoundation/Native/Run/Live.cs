@@ -62,7 +62,8 @@ public sealed class HttpHost(string node, Requests requests, HttpRoutes routes, 
     {
         var id = "q" + Interlocked.Increment(ref _requests);
         var match = HttpRouteMatcher.Match(routes, request.Method, request.Path);
-        request = request with { RouteValues = match.Values };
+        try { request = request with { RouteValues = match.Values }; }
+        catch (HttpFieldsException refused) { return new HttpResponse(414, "text/plain", refused.Message); }
         var open = requests.Open(id, local.Now + 30_000);
         var replyTo = open.ReplyAddress(node, match.Route?.RespondBeforeCommit ?? false);
         try

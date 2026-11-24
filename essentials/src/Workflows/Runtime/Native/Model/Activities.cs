@@ -523,7 +523,10 @@ public sealed record HttpWaitState(string Method, string Path);
 public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, HttpRequest>
 {
     [Input] public string Path { get; set; } = "";
-    /// <summary>In the middle of a workflow, the values of its route's parameters: an object of strings, numbers or booleans.</summary>
+    /// <summary>
+    /// In the middle of a workflow, the values of its route's parameters: an object of strings, numbers or booleans. Bound,
+    /// it makes <see cref="Path"/> a template to resolve; unbound, the path is literal.
+    /// </summary>
     [Input] public JsonObject? RouteValues { get; set; }
     [Input] public string Method { get; set; } = "POST";
     /// <summary>The route's opt-out of the release rule: its caller is answered when the turn ends, not after its commit.</summary>
@@ -532,6 +535,9 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
     protected override ValueTask<Transition> ExecuteAsync(StartContext<HttpRequest> context)
     {
         if (context.TryGetTrigger(out var request)) return new(Complete(request));
+        // Without route values the path is a literal route, as before templates: an expression may compute it, braces and
+        // all, so it is not parsed. (A literal template with parameters and no route values is refused by HttpRoutes.)
+        if (RouteValues is null) return new(Suspend(new HttpWaitState(Method, Path), new HttpTrigger(Method, Path)));
         string path;
         try
         {
@@ -542,7 +548,7 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
         {
             return new(Fault("http.route.invalid", refused.Message));
         }
-        return new(Suspend(new HttpWaitState(Method, path), new HttpTrigger(Method, path)));
+        return new(Suspend(new HttpWaitState(Method, path), new HttpTrigger(Method, path, Resolved: true)));
     }
 
     protected override ValueTask<Transition> ResumeAsync(ResumeContext<HttpWaitState, HttpRequest> context) => new(Complete(context.Trigger));

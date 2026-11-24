@@ -78,7 +78,8 @@ public static class HttpFields
         if (fields is null) return None;
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, value) in fields)
-            if (!string.IsNullOrEmpty(name)) values[name.ToLowerInvariant()] = value ?? "";
+            if (!string.IsNullOrEmpty(name) && !values.TryAdd(name.ToLowerInvariant(), value ?? ""))
+                throw new HttpFieldsException($"The route value '{name}' is given twice.");
         return Bounded(values, "route values");
     }
 
