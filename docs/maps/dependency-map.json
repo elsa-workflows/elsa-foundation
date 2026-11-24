@@ -3098,6 +3098,30 @@
       ]
     },
     {
+      "path": "essentials/src/ActorFoundation/BuiltIn/Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj",
+      "name": "Elsa.ActorFoundation.BuiltIn.Durable",
+      "kind": "source",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "BuiltIn.Durable",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.ActorFoundation.BuiltIn.Durable",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Runtime",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Contracts",
+          "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj"
+        }
+      ]
+    },
+    {
       "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj",
       "name": "Elsa.ActorFoundation.BuiltIn.Hosting",
       "kind": "source",
@@ -3117,6 +3141,135 @@
       ]
     },
     {
+      "path": "essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj",
+      "name": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
+      "kind": "source",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "BuiltIn.PostgreSql",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Hosting",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Data.SqlClient",
+          "version": "7.0.2"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore.Relational",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore.SqlServer",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Memory",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "MySql.Data",
+          "version": "26.7.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "MySql.EntityFrameworkCore",
+          "version": "10.0.9"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Npgsql",
+          "version": "10.0.3"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
+          "version": "10.0.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "SQLitePCLRaw.bundle_e_sqlite3",
+          "version": "3.0.3"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "System.Security.Cryptography.Pkcs",
+          "version": "9.0.21"
+        }
+      ]
+    },
+    {
       "path": "essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj",
       "name": "Elsa.ActorFoundation.BuiltIn.Runtime",
       "kind": "source",
@@ -3128,6 +3281,130 @@
       "package_id": "Elsa.ActorFoundation.BuiltIn.Runtime",
       "line": "B",
       "edges": []
+    },
+    {
+      "path": "essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj",
+      "name": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
+      "kind": "source",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "BuiltIn.Store.EntityFrameworkCore",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Durable",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Contracts",
+          "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Data.SqlClient",
+          "version": "7.0.2"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.SqlServer",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "MySql.EntityFrameworkCore",
+          "version": "10.0.9"
+        },
+        {
+          "type": "external",
+          "id": "Npgsql",
+          "version": "10.0.3"
+        },
+        {
+          "type": "external",
+          "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
+          "version": "10.0.0"
+        },
+        {
+          "type": "external",
+          "id": "SQLitePCLRaw.bundle_e_sqlite3",
+          "version": "3.0.3"
+        },
+        {
+          "type": "external",
+          "id": "System.Security.Cryptography.Pkcs",
+          "version": "9.0.21"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.EntityFrameworkCore.Relational",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Memory",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "MySql.Data",
+          "version": "26.7.0"
+        }
+      ]
     },
     {
       "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj",
@@ -11274,6 +11551,19 @@
       ]
     },
     {
+      "path": "essentials/src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj",
+      "name": "Elsa.Workflows.Runtime.Graph",
+      "kind": "source",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Graph",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Workflows.Runtime.Graph",
+      "line": "B",
+      "edges": []
+    },
+    {
       "path": "essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj",
       "name": "Elsa.Workflows.Runtime.Http",
       "kind": "source",
@@ -14813,13 +15103,13 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.ActorFoundation.Model.Contracts",
-          "path": "essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj"
+          "id": "Elsa.ActorFoundation.BuiltIn.Durable",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj"
         },
         {
           "type": "internal",
-          "id": "Kernel.Durable",
-          "path": "prototypes/kernel-model/src/Kernel.Durable/Kernel.Durable.csproj"
+          "id": "Elsa.ActorFoundation.Model.Contracts",
+          "path": "essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj"
         }
       ]
     },
@@ -14842,13 +15132,23 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
+          "path": "essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.ActorFoundation.Hosting",
           "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj"
         },
         {
           "type": "internal",
-          "id": "Kernel.EntityFramework",
-          "path": "prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj"
+          "id": "Kernel.Foundation.InMemory",
+          "path": "essentials/tests/ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj"
         },
         {
           "type": "internal",
@@ -14859,16 +15159,6 @@
           "type": "internal",
           "id": "Kernel.Statecharts.Native",
           "path": "prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Kernel.Foundation.Postgres",
-          "path": "prototypes/kernel-model/runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Kernel.Foundation.InMemory",
-          "path": "prototypes/kernel-model/src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj"
         },
         {
           "type": "internal",
@@ -14901,6 +15191,11 @@
         },
         {
           "type": "internal",
+          "id": "Kernel.Foundation.InMemory",
+          "path": "essentials/tests/ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.ActorFoundation.TestSupport",
           "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj"
         },
@@ -14916,13 +15211,42 @@
         },
         {
           "type": "internal",
-          "id": "Kernel.Foundation.InMemory",
-          "path": "prototypes/kernel-model/src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj"
+          "id": "Kernel.WorkflowActor",
+          "path": "prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/ActorFoundation/Statecharts/Run/Elsa.ActorFoundation.Statecharts.Run.csproj",
+      "name": "Elsa.ActorFoundation.Statecharts.Run",
+      "kind": "test",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "Statecharts.Run",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Hosting",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj"
         },
         {
           "type": "internal",
-          "id": "Kernel.WorkflowActor",
-          "path": "prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj"
+          "id": "Elsa.ActorFoundation.Hosting",
+          "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Sim",
+          "path": "essentials/tests/ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Statecharts.Native",
+          "path": "prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj"
         }
       ]
     },
@@ -14964,13 +15288,37 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Kernel.Store.Conformance",
-          "path": "essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj"
+          "id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
-          "id": "Kernel.EntityFramework",
-          "path": "prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj"
+          "id": "Kernel.Store.Conformance",
+          "path": "essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj",
+      "name": "Elsa.ActorFoundation.Store.InMemory",
+      "kind": "test",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "Store.InMemory",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Durable",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Contracts",
+          "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj"
         }
       ]
     },
@@ -15367,13 +15715,28 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Durable",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.ActorFoundation.BuiltIn.Hosting",
           "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj"
         },
         {
           "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
+          "path": "essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.ActorFoundation.BuiltIn.Runtime",
           "path": "essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -15819,6 +16182,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
           "path": "essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Graph",
+          "path": "essentials/src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj"
         },
         {
           "type": "internal",
@@ -24499,6 +24867,40 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/Workflows/Runtime/Graph/Tests/Elsa.Workflows.Runtime.Graph.Tests.csproj",
+      "name": "Elsa.Workflows.Runtime.Graph.Tests",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Graph.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Graph",
+          "path": "essentials/src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
         }
       ]
     },
