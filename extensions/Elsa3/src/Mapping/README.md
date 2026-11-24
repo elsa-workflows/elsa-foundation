@@ -43,6 +43,8 @@ Nothing throws for input or catalog content. Every cause is a diagnostic:
 - `ELS3-ACTIVITY-*` errors make the item unconvertible;
 - `ELS3-BEHAVIOUR-*` warnings mean it converts, but Elsa 4 behaves differently at run time;
 - `VF-IMP-*` are value-flow errors;
+- `ELS3-VARIABLE-TYPE-UNREGISTERED` (an info) and `ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED` (an error) name a variable's
+  custom type that Elsa 4 does not register, or its storage driver other than the default (#5666);
 - `ELS3-UNTYPED-RESULT` (an error) is an untyped activity result bound to a typed input whose kind is not known to match
   (spec 1228 US6, #4898); `ELS3-SCRIPT-OUTCOME-*` are about a script's computed outcomes.
 
@@ -93,6 +95,20 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     custom class or an unregistered enum) → `Object`. A JSON starting value (`{…}` or `[…]`) is held as parsed JSON,
     exactly as written: Elsa 3 deserialized it case-insensitively and wrote camelCase names, but `Object` keeps the
     names as the author wrote them (`{"ID":1}` stays `ID`).
+
+  A custom type Elsa 4 does not register (the type itself, or the innermost element of a collection of it, such as
+  `Acme.Orders.OrderDto` or `List<Acme.Orders.OrderDto>`) gets the info `ELS3-VARIABLE-TYPE-UNREGISTERED`, naming the
+  variable and the type: its Elsa 4 type is Any until an Elsa 4 feature registers the type and the workflow is converted
+  again (#5666). The converter looks the Elsa 3 name up in Elsa 4's registry, as an alias or as the full name of a
+  registered type, and otherwise loads it as an assembly-qualified CLR name. The info is raised even when the variable
+  is also refused, so every custom type is reported. A nesting Elsa 4 cannot express (`List<List<String>>`,
+  `ObjectDictionary[]`) gets none, and neither do Elsa 3's JSON types (`JsonElement`, `JsonNode`, `JsonObject`,
+  `JsonArray`, `ExpandoObject`), which Any holds faithfully.
+
+  A variable on an Elsa 3 storage driver other than the default (`WorkflowInstanceStorageDriver`) is refused with
+  `ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED`: Elsa 4 cannot store a variable outside the workflow instance yet (publication
+  refuses it with VF-ACT-005), so the guidance is to set the variable back to the default storage (#5666). The default
+  driver becomes no storage driver.
 
   A resource type (`FormFile`, `IFormFile`, `Stream`, `byte[]` or `Byte` with the array flag, alone, as a collection
   element or as a CLR generic type argument) is refused with or without a starting value: it stands for a file, a stream or raw bytes, which Elsa 4 cannot hold yet (#3194).

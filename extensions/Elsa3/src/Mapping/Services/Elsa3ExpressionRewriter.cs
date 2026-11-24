@@ -3030,4 +3030,16 @@ public static class Elsa3ImportDiagnosticCodes
     /// never creates a variable (spec 1231 FR-033): refused, with guidance to declare it.
     /// </summary>
     public const string SetterOfUndeclaredVariable = "ELS3-SETTER-UNDECLARED-VARIABLE";
+
+    /// <summary>
+    /// Info: a variable's Elsa 3 type is not registered in Elsa 4, so its Elsa 4 type is Any (#5666). It keeps its type
+    /// once an Elsa 4 feature registers the type and the workflow is converted again.
+    /// </summary>
+    public const string VariableTypeUnregistered = "ELS3-VARIABLE-TYPE-UNREGISTERED";
+
+    /// <summary>
+    /// A variable uses an Elsa 3 storage driver other than the default one (#5666): refused, because Elsa 4 cannot store a
+    /// variable outside the workflow instance yet (publication refuses it with VF-ACT-005), with guidance to use the default.
+    /// </summary>
+    public const string VariableStorageDriverUnmapped = "ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED";
 }
