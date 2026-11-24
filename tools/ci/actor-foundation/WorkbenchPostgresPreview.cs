@@ -174,7 +174,8 @@ internal static class WorkbenchPostgresPreview
         }
 
         Require(await Read(actor) == (last with { Owner = null }),
-            "StopAsync clears the partition owner at the same epoch before host disposal");
+            workbench is null ? "StopAsync clears the partition owner at the same epoch before host disposal"
+                : "the stopped Workbench has released the partition at the same epoch");
         if (receipt is not null)
             await File.WriteAllTextAsync(receiptPath, JsonSerializer.Serialize(receipt), token);
         Require(wire.Trips > 0 && wire.Connections > 0 && wire.ProtocolRequests > 0, "the meter observed the preview provider traffic");
