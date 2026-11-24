@@ -233,6 +233,40 @@ internal static class PostgresRootComposedInstallChecks
                     """).SingleAsync(stop), "the refused install rolls back the columns it added");
             await new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed, capabilities), TimeSpan.FromHours(1)).InstallAsync(stop);
             Check(true, "the narrower set still reinstalls over its own definitions");
+
+            // The same set reinstalling over a UNIQUE copy of its inspectable index, then over an invalid one, is refused.
+            var same = new PostgresRootAdmission(() => KernelDb.ForUnshippedComposition(narrow, Composed, capabilities), TimeSpan.FromHours(1));
+            await using var tamper = KernelDb.ForUnshippedComposition(narrow, Composed, capabilities);
+            var definition = await tamper.Database.SqlQueryRaw<string>("""
+                SELECT pg_catalog.pg_get_indexdef(to_regclass('"IX_FoundationRootInbox_Inspectable"')) AS "Value"
+                """).SingleAsync(stop);
+            await tamper.Database.ExecuteSqlRawAsync("DROP INDEX \"IX_FoundationRootInbox_Inspectable\"; " +
+                definition.Replace("CREATE INDEX", "CREATE UNIQUE INDEX", StringComparison.Ordinal), stop);
+            await IndexRefused(same, "a reinstall over a UNIQUE inspectable index is refused");
+            await tamper.Database.ExecuteSqlRawAsync("DROP INDEX \"IX_FoundationRootInbox_Inspectable\"; " + definition, stop);
+            await tamper.Database.ExecuteSqlRawAsync("""
+                UPDATE pg_catalog.pg_index SET indisvalid = false WHERE indexrelid = to_regclass('"IX_FoundationRootInbox_Inspectable"')
+                """, stop);
+            await IndexRefused(same, "a reinstall over an invalid inspectable index is refused");
+            await tamper.Database.ExecuteSqlRawAsync("""
+                UPDATE pg_catalog.pg_index SET indisvalid = true WHERE indexrelid = to_regclass('"IX_FoundationRootInbox_Inspectable"')
+                """, stop);
+            await same.InstallAsync(stop);
+            Check(true, "the restored inspectable index reinstalls cleanly");
+        }
+
+        async Task IndexRefused(PostgresRootAdmission admission, string label)
+        {
+            try
+            {
+                await admission.InstallAsync(stop);
+                throw new InvalidOperationException("Expected an index definition refusal: " + label);
+            }
+            catch (StoreFormatException error) when (error.Message.StartsWith("The installed root definitions differ", StringComparison.Ordinal) &&
+                error.Message.Contains("IX_FoundationRootInbox_Inspectable", StringComparison.Ordinal))
+            {
+                Check(true, label);
+            }
         }
 
         Task<EfStore.RootWorkflowHistoryPage> History(EfStore store) =>
