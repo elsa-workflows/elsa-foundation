@@ -25,13 +25,13 @@ def sha(value):
     return hashlib.sha256(value).hexdigest()
 
 
-def verify(data, report):
+def verify(data, report, writers=WRITERS):
     receipt = report.get('captureProvenance', {})
     if receipt.get('version') != 1 or receipt.get('sourceDirty') is not False or re.fullmatch('[0-9a-f]{40}', receipt.get('sourceSha', '')) is None:
         raise ValueError('Recapture with the clean source/binary/database receipt enabled')
     if receipt.get('databaseSha256') != sha(data) or receipt.get('databaseByteLength') != len(data):
         raise ValueError('Database differs from its capture-time receipt')
-    if set(receipt.get('binaryHashes', {})) != WRITERS or set(receipt.get('binaryVersions', {})) != WRITERS:
+    if set(receipt.get('binaryHashes', {})) != writers or set(receipt.get('binaryVersions', {})) != writers:
         raise ValueError('The complete native, canonical and schema hash writer inventory must be pinned')
     hashes, versions = receipt['binaryHashes'], receipt['binaryVersions']
     for name, digest in hashes.items():
