@@ -45,7 +45,7 @@ The lowerer resolves it in this order:
 
 If two candidates match at the same step, the result is `VF-IMP-002`.
 
-Since #5664 a callee that a registered host function declares it replaces (`ReplacesGlobalFunctions`) is checked before
+Since #5664 a callee that is the name after the namespace prefix of a registered host function is checked before
 this lookup and converts to that function; if the accessor lookup would also resolve it, the result is `VF-IMP-002`.
 
 ### `Elsa3JavaScriptNames` (new, internal static)

@@ -275,48 +275,6 @@ public sealed class ExpressionCapabilityTests
         Assert.Contains("more than once", exception.Message, StringComparison.Ordinal);
     }
 
-    // ---- #5664: a host function declares the unprefixed global it replaces ----
-
-    [Fact]
-    public void A_declaration_records_the_global_functions_it_replaces()
-    {
-        var declaration = new JavaScriptHostFunctionDeclaration("acme.getSettings", _ => default)
-        {
-            ReplacesGlobalFunctions = ["getSettings", "readSettings"],
-        };
-
-        Assert.Equal(["getSettings", "readSettings"], declaration.ReplacesGlobalFunctions);
-        Assert.Empty(new JavaScriptHostFunctionDeclaration("acme.lookup", _ => default).ReplacesGlobalFunctions);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData(" ")]
-    [InlineData(" getSettings")]
-    [InlineData("acme.getSettings")]
-    [InlineData("get settings")]
-    [InlineData("1getSettings")]
-    public void A_replaced_global_that_is_not_a_plain_name_fails_naming_the_function(string replaced)
-    {
-        var exception = Assert.Throws<ArgumentException>(() => new JavaScriptHostFunctionDeclaration("acme.getSettings", _ => default)
-        {
-            ReplacesGlobalFunctions = [replaced],
-        });
-
-        Assert.Contains("'acme.getSettings'", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void A_function_without_a_namespace_cannot_replace_a_global()
-    {
-        var exception = Assert.Throws<ArgumentException>(() => new JavaScriptHostFunctionDeclaration(JavaScriptBuiltInFunctions.NewGuid, _ => default)
-        {
-            ReplacesGlobalFunctions = ["createGuid"],
-        });
-
-        Assert.Contains("no namespace prefix", exception.Message, StringComparison.Ordinal);
-    }
-
     // ---- T034: the default composition (framework §2.23.1) ----
 
     [Fact]

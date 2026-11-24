@@ -325,13 +325,13 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     }
 
     /// <summary>
-    /// An undeclared function keeps VF-IMP-005, with guidance naming the declaration route (#5664), whether the call
+    /// An unmatched function keeps VF-IMP-005, with guidance to register it under a namespace prefix (#5664), whether the call
     /// reaches the generic refusal (it has arguments) or the generated-accessor lookup (a get… call without arguments).
     /// </summary>
     [Theory]
     [InlineData("getConfiguration('Key')", "getConfiguration")]
     [InlineData("getCustomer()", "getCustomer")]
-    public async Task An_undeclared_host_function_keeps_the_refusal_with_the_declaration_route(string expression, string name)
+    public async Task An_unmatched_host_function_keeps_the_refusal_with_the_naming_route(string expression, string name)
     {
         var result = await ConvertTextAsync(expression);
 
@@ -339,20 +339,17 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
         Assert.Contains($"unknown or unapproved host function '{name}'", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains($"'acme.{name}'", diagnostic.Guidance, StringComparison.Ordinal);
-        Assert.Contains("ReplacesGlobalFunctions", diagnostic.Guidance, StringComparison.Ordinal);
+        Assert.Contains($"'<prefix>.{name}'", diagnostic.Guidance, StringComparison.Ordinal);
         Assert.DoesNotContain("deterministic", diagnostic.Guidance, StringComparison.OrdinalIgnoreCase);
     }
 
     // ---- #5664: an Elsa 3 custom function rebuilt as a prefixed Elsa 4 host function ----
 
     private static readonly JavaScriptHostFunctionDeclaration LookupCustomer =
-        new("acme.lookupCustomer", _ => JsonSerializer.SerializeToElement(new { name = "Ada" }))
-        {
-            ReplacesGlobalFunctions = ["lookupCustomer"],
-        };
+        new("acme.lookupCustomer", _ => JsonSerializer.SerializeToElement(new { name = "Ada" }));
 
     [Fact]
-    public async Task A_declared_global_is_rewritten_to_its_prefixed_host_function_and_runs()
+    public async Task A_matched_global_is_rewritten_to_its_prefixed_host_function_and_runs()
     {
         var result = await ConvertTextAsync("lookupCustomer('c-1').name", [LookupCustomer]);
 
@@ -364,9 +361,9 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     }
 
     [Fact]
-    public async Task A_declared_global_call_converts_its_arguments()
+    public async Task A_matched_global_call_converts_its_arguments()
     {
-        var lookup = new JavaScriptHostFunctionDeclaration("acme.lookup", call => call.Arguments[0]) { ReplacesGlobalFunctions = ["lookup"] };
+        var lookup = new JavaScriptHostFunctionDeclaration("acme.lookup", call => call.Arguments[0]);
 
         var result = await ConvertTextAsync("lookup(getVariable('Key'))", [lookup], new Elsa3Variable { Id = "v", Name = "Key", TypeName = "String" });
 
@@ -379,9 +376,9 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     /// script that does converts, as with a built-in.
     /// </summary>
     [Fact]
-    public async Task A_reusable_script_passing_a_variable_to_a_declared_global_converts()
+    public async Task A_reusable_script_passing_a_variable_to_a_matched_global_converts()
     {
-        var lookup = new JavaScriptHostFunctionDeclaration("acme.lookup", call => call.Arguments[0]) { ReplacesGlobalFunctions = ["lookup"] };
+        var lookup = new JavaScriptHostFunctionDeclaration("acme.lookup", call => call.Arguments[0]);
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("return lookup(getVariable('Order'));"))));
 
         var result = await ConversionServices.ConvertAsync(
@@ -400,7 +397,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [Fact]
     public async Task A_reusable_script_writing_through_a_claimed_converted_name_is_refused()
     {
-        var claim = new JavaScriptHostFunctionDeclaration("acme.String", _ => default) { ReplacesGlobalFunctions = ["String"] };
+        var claim = new JavaScriptHostFunctionDeclaration("acme.String", _ => default);
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script",
             Literal("const o = getVariable('Order'); String({ toString() { o.Status = 'Paid'; return ''; } }); return 1;"))));
 
@@ -414,22 +411,56 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
     }
 
-    /// <summary>A declaration does not take over a name the converter converts itself.</summary>
+    /// <summary>A host function does not take over a name the converter converts itself.</summary>
     [Fact]
-    public async Task A_declaration_claiming_a_converted_name_keeps_the_conversion()
+    public async Task A_host_function_named_like_a_converted_name_keeps_the_conversion()
     {
-        var claim = new JavaScriptHostFunctionDeclaration("acme.toJson", _ => default) { ReplacesGlobalFunctions = ["toJson", "newGuid"] };
+        JavaScriptHostFunctionDeclaration[] claims =
+        [
+            new("acme.toJson", _ => default),
+            new("acme.newGuid", _ => default),
+            new("acme.getVariable", _ => default),
+        ];
 
-        var result = await ConvertTextAsync("toJson({ a: 1 }) + newGuid()", [claim]);
+        var result = await ConvertTextAsync("toJson({ a: 1 }) + newGuid() + getVariable('Key')", claims,
+            new Elsa3Variable { Id = "v", Name = "Key", TypeName = "String" });
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("JSON.stringify({ a: 1 }) + newGuid()", ReadExpression(result).Source);
+        Assert.Equal("JSON.stringify({ a: 1 }) + newGuid() + variables.Key", ReadExpression(result).Source);
+    }
+
+    /// <summary>
+    /// An Elsa 3 built-in the converter refuses (spec 247) is matched like a custom function: a host that rebuilt it under a
+    /// namespace gets the call rewritten instead of the refusal.
+    /// </summary>
+    [Fact]
+    public async Task A_host_function_named_like_a_refused_elsa3_built_in_takes_the_call()
+    {
+        var configuration = new JavaScriptHostFunctionDeclaration("acme.getConfiguration", _ => default);
+
+        var result = await ConvertTextAsync("getConfiguration('Key')", [configuration]);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("acme.getConfiguration('Key')", ReadExpression(result).Source);
+    }
+
+    /// <summary>Only the whole name after the prefix matches; a host function with another member name leaves the refusal.</summary>
+    [Fact]
+    public async Task A_host_function_with_another_member_name_does_not_match()
+    {
+        var lookup = new JavaScriptHostFunctionDeclaration("acme.lookup", _ => default);
+
+        var result = await ConvertTextAsync("lookupCustomer('c-1')", [lookup]);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
+            diagnostic.Message.Contains("'lookupCustomer'", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task A_global_two_host_functions_replace_is_ambiguous()
+    public async Task A_global_two_namespaces_carry_is_ambiguous()
     {
-        var other = new JavaScriptHostFunctionDeclaration("other.lookupCustomer", _ => default) { ReplacesGlobalFunctions = ["lookupCustomer"] };
+        var other = new JavaScriptHostFunctionDeclaration("other.lookupCustomer", _ => default);
 
         var result = await ConvertTextAsync("lookupCustomer()", [LookupCustomer, other]);
 
@@ -439,9 +470,9 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     }
 
     [Fact]
-    public async Task A_declared_global_that_is_also_a_generated_accessor_is_ambiguous()
+    public async Task A_matched_global_that_is_also_a_generated_accessor_is_ambiguous()
     {
-        var getCustomer = new JavaScriptHostFunctionDeclaration("acme.getCustomer", _ => default) { ReplacesGlobalFunctions = ["getCustomer"] };
+        var getCustomer = new JavaScriptHostFunctionDeclaration("acme.getCustomer", _ => default);
 
         var result = await ConvertTextAsync("getCustomer()", [getCustomer], new Elsa3Variable { Id = "v", Name = "Customer", TypeName = "String" });
 
@@ -451,9 +482,9 @@ public sealed class Elsa3JavaScriptHostFunctionTests
 
     /// <summary>Two variables whose generated accessor is the same name: Elsa 3 generated it, so the clash stands.</summary>
     [Fact]
-    public async Task A_declared_global_that_is_also_an_ambiguous_generated_accessor_is_ambiguous()
+    public async Task A_matched_global_that_is_also_an_ambiguous_generated_accessor_is_ambiguous()
     {
-        var getCustomer = new JavaScriptHostFunctionDeclaration("acme.getCustomer", _ => default) { ReplacesGlobalFunctions = ["getCustomer"] };
+        var getCustomer = new JavaScriptHostFunctionDeclaration("acme.getCustomer", _ => default);
 
         var result = await ConvertTextAsync("getCustomer()", [getCustomer],
             new Elsa3Variable { Id = "v1", Name = "customer", TypeName = "String" },
@@ -497,7 +528,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [InlineData("typeof lookupCustomer")]
     [InlineData("new lookupCustomer('c-1')")]
     [InlineData("lookupCustomer('c-1') && [lookupCustomer, lookupCustomer]")]
-    public async Task A_declared_global_used_other_than_in_a_direct_call_is_refused(string expression)
+    public async Task A_matched_global_used_other_than_in_a_direct_call_is_refused(string expression)
     {
         var result = await ConvertTextAsync(expression, [LookupCustomer]);
 
@@ -514,16 +545,16 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [InlineData("({ lookupCustomer: 1 }).lookupCustomer")]
     [InlineData("(() => { const lookupCustomer = id => id; return ['c-1'].map(lookupCustomer); })()")]
     [InlineData("['c-1'].map(id => lookupCustomer(id).name)")]
-    public async Task A_name_that_is_not_a_reference_to_the_declared_global_converts(string expression)
+    public async Task A_name_that_is_not_a_reference_to_the_matched_global_converts(string expression)
     {
         var result = await ConvertTextAsync(expression, [LookupCustomer]);
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
-    /// <summary>Without a declaration the name is not a replaced global, so no reference diagnostic is reported.</summary>
+    /// <summary>Without a host function of that member name the name is not a replaced global, so no reference diagnostic is reported.</summary>
     [Fact]
-    public async Task An_undeclared_global_used_as_a_value_gets_no_replaced_reference_diagnostic()
+    public async Task An_unmatched_global_used_as_a_value_gets_no_replaced_reference_diagnostic()
     {
         var result = await ConvertTextAsync("['c-1'].map(lookupCustomer)");
 
@@ -539,7 +570,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [InlineData("(() => { ({ a: [lookupCustomer = 2] } = { a: [] }); return 1; })()")]
     [InlineData("(() => { [...lookupCustomer] = [1]; return 1; })()")]
     [InlineData("(() => { for ([lookupCustomer] of [[1]]) {} return 1; })()")]
-    public async Task A_write_to_a_declared_global_is_an_undeclared_write(string expression)
+    public async Task A_write_to_a_matched_global_is_an_undeclared_write(string expression)
     {
         var result = await ConvertTextAsync(expression, [LookupCustomer]);
 

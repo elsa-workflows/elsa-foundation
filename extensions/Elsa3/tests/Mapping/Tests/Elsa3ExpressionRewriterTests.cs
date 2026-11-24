@@ -58,7 +58,7 @@ public sealed class Elsa3ExpressionRewriterTests
     [InlineData(false, true)]
     public void Passing_a_variable_to_a_replaced_global_is_no_write(bool declared, bool mayWrite)
     {
-        var lookup = new JavaScriptHostFunctionDeclaration("acme.lookupCustomer", _ => default) { ReplacesGlobalFunctions = ["lookupCustomer"] };
+        var lookup = new JavaScriptHostFunctionDeclaration("acme.lookupCustomer", _ => default);
         var rewriter = new Elsa3ExpressionRewriter(Support.ConversionServices.DotNetUsageAnalyzer(), hostFunctions: declared ? [lookup] : []);
 
         var result = rewriter.ScriptMayWriteVariables("lookupCustomer(getVariable('customer'))", reference => reference.Kind == Elsa3AmbientReferenceKind.Variable

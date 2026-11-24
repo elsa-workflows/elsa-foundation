@@ -25,8 +25,9 @@ namespace Elsa3.Mapping.Services;
 /// <param name="dotNetUsage">The default JavaScript strategy's .NET-usage analysis.</param>
 /// <param name="options">The converter's settings; the default refuses zone-dependent date usage.</param>
 /// <param name="hostFunctions">
-/// The host's registered JavaScript functions: a call to an Elsa 3 global one of them declares it replaces
-/// (<see cref="JavaScriptHostFunctionDeclaration.ReplacesGlobalFunctions"/>) becomes a call to it (#5664).
+/// The host's registered JavaScript functions: a call to an Elsa 3 global becomes a call to the prefixed host function
+/// whose member name is that global, <c>lookupCustomer()</c> to <c>acme.lookupCustomer()</c> (#5664). No declaration maps
+/// them: the name after the namespace prefix is the match.
 /// </param>
 public sealed class Elsa3ExpressionRewriter(
     IJavaScriptDotNetUsageAnalyzer dotNetUsage,
@@ -35,23 +36,31 @@ public sealed class Elsa3ExpressionRewriter(
 {
     private readonly Elsa3ConversionOptions _options = Validated(options ?? new());
 
-    /// <summary>Each replaced Elsa 3 global, with the host functions that declare they replace it, in name order.</summary>
+    /// <summary>Each member name of a prefixed host function, with the host functions that carry it, in name order.</summary>
     private readonly IReadOnlyDictionary<string, string[]> _replacedGlobals = (hostFunctions ?? [])
-        .SelectMany(declaration => declaration.ReplacesGlobalFunctions.Select(replaced => (replaced, declaration.Name)))
-        .GroupBy(item => item.replaced, StringComparer.Ordinal)
+        .Select(declaration => (replaced: MemberName(declaration.Name), declaration.Name))
+        .Where(item => item.replaced is not null)
+        .GroupBy(item => item.replaced!, StringComparer.Ordinal)
         .ToDictionary(
             group => group.Key,
             group => group.Select(item => item.Name).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             StringComparer.Ordinal);
 
+    /// <summary>The name after a host function's namespace prefix (<c>lookupCustomer</c> in <c>acme.lookupCustomer</c>), or null for an unprefixed built-in.</summary>
+    private static string? MemberName(string name)
+    {
+        var dot = name.LastIndexOf('.');
+        return dot > 0 && dot < name.Length - 1 ? name[(dot + 1)..] : null;
+    }
+
     /// <summary>
     /// What to do about a call to a function neither Elsa 4 nor a registered host function provides (VF-IMP-005). Elsa 4
     /// host functions carry a namespace prefix (ADR 0045 §5 D-5, spec 1223 FR-027), so an Elsa 3 custom function rebuilt for
-    /// Elsa 4 is mapped by declaration.
+    /// Elsa 4 matches the host function whose name after the prefix is the Elsa 3 name.
     /// </summary>
     internal static string UndeclaredFunctionGuidance(string name) =>
-        $"If the host rebuilt '{name}' for Elsa 4, register it as a host function with a namespace prefix (for example 'acme.{name}') " +
-        $"and declare that it replaces '{name}' (JavaScriptHostFunctionDeclaration.ReplacesGlobalFunctions); the converter then rewrites the call. " +
+        $"If the host rebuilt '{name}' for Elsa 4, register a host function named '<prefix>.{name}' (for example 'acme.{name}'); " +
+        "the converter then rewrites the call. " +
         "Otherwise compute the value with JavaScript or an Elsa 4 built-in function, or in an activity, in the Elsa 3 workflow before import.";
 
     private static Elsa3ConversionOptions Validated(Elsa3ConversionOptions options)
@@ -706,7 +715,7 @@ public sealed class Elsa3ExpressionRewriter(
         public bool AllowsOutcomeSetters { get; init; }
 
         /// <summary>
-        /// Each Elsa 3 global a registered host function declares it replaces, with the functions that do. An Elsa 3
+        /// Each member name of a prefixed host function, with the functions that carry it: the Elsa 3 globals they replace. An Elsa 3
         /// built-in the converter converts itself (<c>getVariable</c>, the setters, <c>getCorrelationId</c>, …) keeps that
         /// conversion; Elsa 3 functions the converter refuses (<c>getConfig</c>, …) can be replaced.
         /// </summary>
@@ -2249,7 +2258,7 @@ public sealed class Elsa3ExpressionRewriter(
         }
 
         /// <summary>
-        /// Rewrites a call to an Elsa 3 global into a call to the host function that declares it replaces it
+        /// Rewrites a call to an Elsa 3 global into a call to the host function with that member name
         /// (<c>getSettings()</c> becomes <c>acme.getSettings()</c>). The arguments convert as written.
         /// </summary>
         private void ConvertReplacedGlobal(CallExpression call, Identifier callee, string[] replacements)
@@ -2258,8 +2267,8 @@ public sealed class Elsa3ExpressionRewriter(
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
                     Elsa3ImportDiagnosticCodes.AmbiguousReference,
-                    $"JavaScript calls '{callee.Name}', which more than one host function declares it replaces: {string.Join(", ", replacements.Select(name => $"'{name}'"))}.",
-                    $"Declare the replacement of '{callee.Name}' on one host function only."));
+                    $"JavaScript calls '{callee.Name}', which more than one registered host function carries as its name: {string.Join(", ", replacements.Select(name => $"'{name}'"))}.",
+                    $"Register '{callee.Name}' under one namespace only, or rename the other functions, before import."));
                 return;
             }
 
