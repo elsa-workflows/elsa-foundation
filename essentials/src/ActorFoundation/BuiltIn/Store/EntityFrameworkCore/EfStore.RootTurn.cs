@@ -15,7 +15,7 @@ public sealed partial class EfStore
         {
             var family = RootStateFamily(db);
             var jobs = JobState is null ? Current.Jobs : JobState.Jobs;
-            var contentBytes = await MeasureRootContentAsync(db, family.Length, State, Header, jobs, cancellationToken);
+            var contentBytes = await MeasureRootContentAsync(db, family.Length, State, Header, jobs, cancellationToken, comparePriorSize: true);
             var overBudget = contentBytes > RootContentBytes;
 
             var home = new InstanceRef(Current.Actor.Id).Partition;

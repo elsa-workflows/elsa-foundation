@@ -179,7 +179,7 @@ public sealed partial class EfStore
     private const string RootContentFailure = "The encoded PostgreSQL checkpoint exceeds its storage budget.";
 
     private static ValueTask<long> MeasureRootContentAsync(KernelDb db, int framing, string state, string header,
-        string? jobs, CancellationToken cancellationToken)
+        string? jobs, CancellationToken cancellationToken, bool comparePriorSize = false)
     {
         // The known framing is ASCII. The remaining 24 KiB covers bounded identifiers and scalars.
         // ASCII stores the same way in all PostgreSQL encodings. For small non-ASCII values,
@@ -194,6 +194,9 @@ public sealed partial class EfStore
         var bound = framing + units + 3 * (utf8 - units);
         if (utf8 == units || bound <= RootContentBytes)
             return new(bound);
+        var asciiBytes = framing + Math.Max(0, 2 * units - utf8);
+        if (!comparePriorSize && asciiBytes > RootContentBytes)
+            return new(asciiBytes);
         return new(db.Database.SqlQuery<long>($"""
             SELECT {framing}::bigint + octet_length({state}) + octet_length({header}) + coalesce(octet_length({jobs}::text), 0) AS "Value"
             """).SingleAsync(cancellationToken));

@@ -32,6 +32,7 @@ internal static class RootCheckpointLimitChecks
         var id = target.Creator.Target.Id;
         if (unrepresentableText)
         {
+            await Reject(() => First(target, new string('x', Budget + 8) + "🌐", fence));
             // EUC_JP cannot store this scalar. Passing the cheap size bound forces
             // the provider measurement before either transactional fence runs.
             var unrepresentable = fit + "🌐";
