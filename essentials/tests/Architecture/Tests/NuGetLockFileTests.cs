@@ -15,7 +15,7 @@ public sealed class NuGetLockFileTests
 {
     private const string LockFileName = "packages.lock.json";
 
-    /// <summary>Self-contained repositories outside the solution, each with its own build and package files.</summary>
+    /// <summary>Prototype trees with their own build and package files.</summary>
     private const string PrototypesDirectory = "prototypes/";
 
     /// <summary>
@@ -23,8 +23,7 @@ public sealed class NuGetLockFileTests
     /// there is none: NuGet then writes one and carries on. A project added without its lock file would restore in CI
     /// resolved afresh while every restore step reads as locked, so its absence fails here instead. Two projects in one
     /// directory would share one lock file, and a lock file with no project beside it pins nothing. Under
-    /// <c>prototypes/</c>, a self-contained repository of its own outside the solution, a lock file needs a committed
-    /// project file beside it instead.
+    /// <c>prototypes/</c>, a standalone project can also commit a lock file beside its committed project file.
     /// </summary>
     [Fact]
     public void Every_solution_project_has_a_committed_lock_file_and_every_lock_file_a_solution_project()
