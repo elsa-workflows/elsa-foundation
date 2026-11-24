@@ -670,7 +670,7 @@ same way `Elsa.Modularity.Core` does.
 Every command resolves the active package set already on disk: `store-state.json` for a Nuplane
 host, or `--packages <dir>` for an override directory carrying no state file, honoring the
 `.nuplane-ready` marker and skipping `.tmp/` either way. No command reconciles or fetches from a feed
-by default. Spec 171 research item R4 turned this from a design default into a hard rule for
+by default, except under the two exceptions below. Spec 171 research item R4 turned this from a design default into a hard rule for
 reconciliation specifically: a reconcile pass always rewrites `store-state.json`
 (`nuplane: src/Nuplane/Reconciliation/Middleware/CleanupMiddleware.cs:36`) and extracts into the
 install root (`nuplane: src/Nuplane/Feeds/PackageInstallStore.cs:79-142`), so no command may reconcile
@@ -681,7 +681,7 @@ install root, and it **deletes no installed package** — cleanup records decisi
 and the only deletes are the pass's own staging directory and an extraction carrying no
 `.nuplane-ready` marker, which is not an installed package at all.
 
-**The one exception is opt-in and explicit.** The owner decided on 2026-09-21 (spec 171 research item
+**The first exception is opt-in and explicit.** The owner decided on 2026-09-21 (spec 171 research item
 R5, [#1927](https://github.com/elsa-workflows/elsa-foundation/issues/1927)) that the tool may touch the
 network when, and only when, the operator asks it to, with a `--restore` flag that is off by default
 and implied by nothing. It acts only on a host that records no package set at all, refuses any desired
