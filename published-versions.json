@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "534ae0284a617bd2214e6d8625ab1f7ae987f105",
+  "last_publish_commit": "92bc067918f9d3038fcd97bccea5f0e68caa7000",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -629,8 +629,8 @@
     },
     {
       "package_id": "Elsa.Foundation.Hosting",
-      "version": "4.0.1-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.2-preview",
+      "commit": "92bc067918f9d3038fcd97bccea5f0e68caa7000"
     },
     {
       "package_id": "Elsa.Foundation.Identity",
@@ -696,6 +696,11 @@
       "package_id": "Elsa.Foundation.Identity.OpenIddict.Behavior",
       "version": "4.0.25-preview",
       "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+    },
+    {
+      "package_id": "Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore",
+      "version": "4.0.0-preview",
+      "commit": "92bc067918f9d3038fcd97bccea5f0e68caa7000"
     },
     {
       "package_id": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore",
