@@ -42,7 +42,7 @@ public sealed class SwitchStructureHandlerTests : IDisposable
         Assert.Equal(SwitchActivity.ConditionInputKey("a"), input.ReferenceKey);
         Assert.Equal("Boolean", input.Definition!.Type.Alias);
         Assert.NotNull(input.State);
-        Assert.False(Assert.IsType<bool>(input.State.Value.Value));
+        Assert.Equal(JsonValueKind.False, input.State.Value.Value!.Value.ValueKind);
         var compiled = _handler.CompileExecutableStructure(node);
         Assert.Equal(input.ReferenceKey, compiled.Payload.GetProperty("cases")[0].GetProperty("conditionInputKey").GetString());
     }
@@ -62,7 +62,7 @@ public sealed class SwitchStructureHandlerTests : IDisposable
             JsonSerializer.SerializeToElement(new { cases = new[] { new { caseId = "clear", match = "Approved", condition } } }, new JsonSerializerOptions(JsonSerializerDefaults.Web))) };
         var original = node.Structure!.Payload.GetRawText();
         var input = Assert.Single(_handler.ProjectInputs(node).Inputs);
-        Assert.False(Assert.IsType<bool>(input.State!.Value.Value));
+        Assert.Equal(JsonValueKind.False, input.State!.Value.Value!.Value.ValueKind);
         Assert.Null(input.State.Conversion);
         Assert.Equal(original, node.Structure.Payload.GetRawText());
     }
