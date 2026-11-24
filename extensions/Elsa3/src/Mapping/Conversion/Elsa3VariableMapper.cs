@@ -21,7 +21,8 @@ internal sealed record Elsa3VariableNotice(string Message, string Guidance);
 /// starting value as text and converted it to the variable's type when the workflow started; the converter does that
 /// conversion here and carries the result as a <c>Literal</c>, as Elsa 4's own authoring does. No Elsa 3 value means no
 /// starting value. A collection whose element type Elsa 4 knows starts from a JSON array and a dictionary from a JSON
-/// object; any other type Elsa 4 does not know starts from a JSON object or array. Text is never split on commas.
+/// object; any other type Elsa 4 does not know, a resource aside (refused, #3194), starts from a JSON object or array.
+/// Text is never split on commas.
 /// </summary>
 internal static class Elsa3VariableMapper
 {
