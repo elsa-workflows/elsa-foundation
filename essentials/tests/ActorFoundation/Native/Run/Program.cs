@@ -142,6 +142,10 @@ if (args is ["pg-core-preview", var replayPhase and ("restart" or "terminal" or 
 if (args is ["pg-flowchart-preview", "birth"]) return await PostgresPublicPreview.RunAsync("birth", flowchart: true);
 if (args is ["pg-flowchart-preview", "restart", var flowchartActor, var flowchartBookmark])
     return await PostgresPublicPreview.RunAsync("restart", flowchartActor, flowchartBookmark, flowchart: true);
+if (args is ["pg-root-worker", "budget-birth", var budgetMode] && budgetMode is Modes.Balanced or Modes.Durable)
+    return await PostgresRootWorkerChecks.RunAsync("budget-birth", null, budgetMode);
+if (args is ["pg-root-worker", "budget-restart", var budgetReference])
+    return await PostgresRootWorkerChecks.RunAsync("budget-restart", budgetReference);
 if (args is ["pg-root-worker", "birth"]) return await PostgresRootWorkerChecks.RunAsync("birth", null);
 if (args is ["pg-root-worker", var phase and ("restart" or "bounds"), var reference]) return await PostgresRootWorkerChecks.RunAsync(phase, reference);
 if (args is ["deadlines"]) return await Deadlines.RunAsync();
