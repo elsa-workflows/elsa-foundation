@@ -206,9 +206,10 @@ describe("createStudioCodeToolingProjection", () => {
         data: { items: [{ label: "city", detail: "String", kind: "property", insertText: "city", documentation: note }] }
       })
       .mockResolvedValueOnce({ state: "ready", data: { items: [] } });
+    // A root symbol that matches the typed word, so a fallback to local symbols would invent an item.
     const projection = createStudioCodeToolingProjection({
       document: { source: "variables.customer.ci", sourceVersion: 1 },
-      authoringContext: { rootSymbols: [] },
+      authoringContext: { rootSymbols: [{ id: "variable:cities", name: "cities", kind: "variable" }] },
       tooling: { getCompletions }
     });
     const signal = new AbortController().signal;
