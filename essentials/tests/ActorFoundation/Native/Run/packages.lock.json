@@ -302,7 +302,7 @@
           "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       },
-      "kernel.statecharts.native": {
+      "Kernel.Statecharts.Native": {
         "type": "Project",
         "dependencies": {
           "Kernel.Native": "[1.0.0, )",

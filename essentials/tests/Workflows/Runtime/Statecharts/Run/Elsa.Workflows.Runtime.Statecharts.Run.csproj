@@ -11,7 +11,7 @@
     <Using Include="Elsa.ActorFoundation.Hosting" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../../../prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj" />
+    <ProjectReference Include="../Native/Elsa.Workflows.Runtime.Statecharts.Native.csproj" />
     <ProjectReference Include="../OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj" />
     <ProjectReference Include="../../../../ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj" />
     <ProjectReference Include="../../../../ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />

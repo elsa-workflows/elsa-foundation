@@ -3,6 +3,6 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../../../prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj" />
+    <ProjectReference Include="../Native/Elsa.Workflows.Runtime.Statecharts.Native.csproj" />
   </ItemGroup>
 </Project>

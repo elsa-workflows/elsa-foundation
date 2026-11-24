@@ -265,7 +265,6 @@
     <Project Path="prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
     <Project Path="prototypes/kernel-model/models/Native.Activities/Kernel.Native.Activities.csproj" />
     <Project Path="prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj" />
-    <Project Path="prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/ActorFoundation/Legacy/">
     <Project Path="essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
@@ -949,6 +948,7 @@
     <Project Path="essentials/tests/Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Statecharts/">
+    <Project Path="essentials/tests/Workflows/Runtime/Statecharts/Native/Elsa.Workflows.Runtime.Statecharts.Native.csproj" />
     <Project Path="essentials/tests/Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj" />
     <Project Path="essentials/tests/Workflows/Runtime/Statecharts/Run/Elsa.Workflows.Runtime.Statecharts.Run.csproj" />
   </Folder>
