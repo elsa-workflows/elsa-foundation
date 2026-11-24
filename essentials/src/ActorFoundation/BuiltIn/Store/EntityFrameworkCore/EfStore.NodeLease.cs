@@ -50,7 +50,6 @@ public sealed partial class EfStore
         try
         {
             if (bound is not null) await db.Database.ExecuteSqlRawAsync(bound, cancellationToken);
-            if (db.UsesRootRetirement) await PostgresRootAdmission.PinSelectedOperatorSchemaAsync(db, cancellationToken);
             return (transaction, reset);
         }
         catch
@@ -103,7 +102,8 @@ public sealed partial class EfStore
         try
         {
             deadline.CheckRenewalWindow();
-            await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
+            if (db.UsesRootRetirement) await PostgresRootAdmission.PinSelectedOperatorSchemaAsync(db, deadline.Token);
+            else await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
             var expired = new List<string>();
             if (ids is not null)
             {

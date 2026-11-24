@@ -174,17 +174,17 @@ internal sealed partial class PostgresRootAdmission
             """, token);
         if (db.UsesRootRetirement)
             await db.Database.ExecuteSqlRawAsync("""
-                LOCK TABLE "Partitions", "Nodes", "Journal", "Subscriptions", "FoundationDirectReceipts", "FoundationActorList"
-                IN ACCESS SHARE MODE
+                LOCK TABLE "Partitions", "Nodes", "Journal", "Subscriptions", "FoundationDirectReceipts", "FoundationActorList",
+                    "FoundationRootReceipts" IN ACCESS SHARE MODE
                 """, token);
         var sameSchema = await db.Database.SqlQuery<bool>($"""
-            SELECT count(*) = {(db.UsesRootRetirement ? 12 : 6)} AS "Value"
+            SELECT count(*) = {(db.UsesRootRetirement ? 13 : 6)} AS "Value"
             FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
                 ('"Instances"'), ('"FoundationOperatorReceipts"'), ('"Messages"'), ('"Partitions"'), ('"Nodes"'), ('"Journal"'), ('"Subscriptions"'),
-                ('"FoundationDirectReceipts"'), ('"FoundationActorList"')) required(name)
+                ('"FoundationDirectReceipts"'), ('"FoundationActorList"'), ('"FoundationRootReceipts"')) required(name)
             JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name)
             JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace AND ns.nspname = {source}
-            WHERE {db.UsesRootRetirement} OR required.name NOT IN ('"Partitions"', '"Nodes"', '"Journal"', '"Subscriptions"', '"FoundationDirectReceipts"', '"FoundationActorList"')
+            WHERE {db.UsesRootRetirement} OR required.name NOT IN ('"Partitions"', '"Nodes"', '"Journal"', '"Subscriptions"', '"FoundationDirectReceipts"', '"FoundationActorList"', '"FoundationRootReceipts"')
             """).SingleAsync(token);
         if (!sameSchema)
             throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");
@@ -195,7 +195,8 @@ internal sealed partial class PostgresRootAdmission
     {
         await using var db = create();
         if (!db.UsesRootOperatorProtocol) return null;
-        await EfStore.RequireStoreVersionsAsync(db, token);
+        await using var pinned = await EfStore.BeginRootRetirementOperationAsync(db, token);
+        if (pinned is null) await EfStore.RequireStoreVersionsAsync(db, token);
         var row = await db.Messages.FromSqlInterpolated($"""
             SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1

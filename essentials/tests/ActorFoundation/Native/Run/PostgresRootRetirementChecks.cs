@@ -95,11 +95,13 @@ internal static class PostgresRootRetirementChecks
         await RetirementRollback(before, pendingDelete, pending, RetirementRejection.MarkerSuppressed);
         await RetirementRollback(before, pendingDelete, pending, RetirementRejection.ProjectionSuppressed);
 
+        await MarkerLockSharesRenewalDeadline();
         var lease = (await cold.TakeAsync(0, "canonical-control", Defaults.Lease, stop))!;
         var shadow = await OpenShadowAsync();
         Check(await shadow.TakeAsync(0, "shadow-candidate", Defaults.Lease, stop) is null,
             "ownership cannot be taken from a shadow partition while the canonical lease is held");
         await cold.ReleaseAsync(0, lease.Epoch, stop);
+        long positionAfterRetirement;
         await using (var owner = await Own("successor", shadow))
         {
             Check(((Worker)owner).Epoch > staleEpoch, "a successor owns the deletion partition");
@@ -109,6 +111,20 @@ internal static class PostgresRootRetirementChecks
                 await owner.RunAsync(stop);
             }
             while (!(await Inbox(pendingProtected)).Done || !(await Inbox(pendingDelete)).Done);
+            await using (var db = Open())
+                positionAfterRetirement = await db.Partitions.Select(partition => partition.Position).SingleAsync(stop);
+
+            var shadowIngress = await shadow.OpenSelectedRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1),
+                (scope, _) => ReferenceEquals(scope, tenant), stop);
+            var shadowRuntime = new WorkflowRuntime(shadowIngress, reads);
+            var started = await shadowRuntime.StartAsync(tenant, "source-start", NativeExecutionModel.Start("protect"), cancellationToken: stop);
+            var source = started.Actor!.Value;
+            await Drive(owner, source, InstanceStatus.Running);
+            var selection = (await reads.GetAsync(tenant, source, stop))!;
+            Check((await shadowRuntime.TerminateAsync(tenant, "source-terminate", selection, cancellationToken: stop)).Outcome ==
+                Contract.AdmissionOutcome.Accepted, "start and subsequent command are admitted with shadow birth and message tables present");
+            await Drive(owner, source, InstanceStatus.Cancelled);
+            Console.WriteLine("ok the worker applies both turns against the canonical birth and inputs");
         }
 
         var kept = await cold.ReadFirstRootAsync(tenant.Tenant, protectedActor.Id, stop);
@@ -124,9 +140,8 @@ internal static class PostgresRootRetirementChecks
                 FROM "Instances" WHERE "Id" = {before.Actor.Id}
                 """).SingleAsync(stop);
             var history = await cold.ReadJournalOfAsync(0, before.Actor.Id, 0, stop);
-            var position = await db.Partitions.Select(partition => partition.Position).SingleAsync(stop);
             Check(marker is { State: "null", WireBytes: null, Header: null, Retired: true } && marker.Revision == before.Revision + 1 &&
-                history is [{ Revision: -1, Entries: """["delete"]""", Position: var deletion }] && deletion == position,
+                history is [{ Revision: -1, Entries: """["delete"]""", Position: var deletion }] && deletion == positionAfterRetirement,
                 "retirement erases the physical state and replaces history with one fenced deletion marker");
             var done = await Inbox(pending);
             Check(done.Done && done.Payload is null && done.Start is null && done.KeepUntil == pending.KeepUntil,
@@ -190,6 +205,8 @@ internal static class PostgresRootRetirementChecks
             await db.Database.ExecuteSqlRawAsync("""
                 CREATE SCHEMA retirement_shadow;
                 CREATE TABLE retirement_shadow."Instances" AS TABLE "Instances";
+                CREATE TABLE retirement_shadow."FoundationRootBirths" (LIKE "FoundationRootBirths" INCLUDING ALL);
+                CREATE TABLE retirement_shadow."Messages" (LIKE "Messages" INCLUDING ALL);
                 CREATE TABLE retirement_shadow."Partitions" (LIKE "Partitions" INCLUDING ALL);
                 INSERT INTO retirement_shadow."Partitions" SELECT * FROM "Partitions";
                 UPDATE retirement_shadow."Partitions" SET "Owner" = NULL, "Epoch" = "Epoch" - 1;
@@ -212,12 +229,29 @@ internal static class PostgresRootRetirementChecks
                 { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         }
 
-        async Task CheckUnreadableSchemaAsync()
+        async Task MarkerLockSharesRenewalDeadline()
         {
             await using var db = Open();
-            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "KernelStoreVersions" RENAME TO "SavedKernelVersions" """, stop);
+            await using var transaction = await db.Database.BeginTransactionAsync(stop);
+            await db.Database.ExecuteSqlRawAsync("""SELECT "Id" FROM "KernelStoreVersions" FOR UPDATE""", stop);
             try
             {
+                await cold.TakeAsync(0, "blocked-at-marker", TimeSpan.FromMilliseconds(1500), stop);
+                throw new InvalidOperationException("A take renewed with the format marker held.");
+            }
+            catch (StoreException error) when (error.Failure == Failure.Transient &&
+                error.Message.Contains("outlasted a third of the lease", StringComparison.Ordinal))
+            {
+                Console.WriteLine("ok the schema pin shares the one-third take deadline");
+            }
+        }
+
+        async Task CheckUnreadableSchemaAsync()
+        {
+            try
+            {
+                await using var db = Open();
+                await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "KernelStoreVersions" RENAME TO "SavedKernelVersions" """, stop);
                 await RequiresFormatError(async () => _ = await cold.ReadFirstRootAsync(tenant.Tenant, neighbor.Id, stop));
                 await RequiresFormatError(async () => _ = await ingress.SendAsync(tenant, new Contract.Target.Ref(neighbor),
                     "unavailable-store", "ordinary", null, cancellationToken: stop));
@@ -226,7 +260,11 @@ internal static class PostgresRootRetirementChecks
             finally
             {
                 using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "SavedKernelVersions" RENAME TO "KernelStoreVersions" """, cleanup.Token);
+                await using var db = Open();
+                if (await db.Database.SqlQueryRaw<bool>("""
+                    SELECT pg_catalog.to_regclass('"SavedKernelVersions"') IS NOT NULL AS "Value"
+                    """).SingleAsync(cleanup.Token))
+                    await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "SavedKernelVersions" RENAME TO "KernelStoreVersions" """, cleanup.Token);
             }
 
             static async Task RequiresFormatError(Func<Task> attempt)

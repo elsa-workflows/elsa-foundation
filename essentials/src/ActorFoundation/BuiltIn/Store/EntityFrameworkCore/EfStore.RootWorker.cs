@@ -125,6 +125,7 @@ public sealed partial class EfStore
         var ids = actorIds.ToArray();
         var refs = references.ToArray();
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, token);
         var found = await db.Database.SqlQuery<WorkerRoot>($"""
             SELECT "Tenant", "Reference", "Actor", "Partition", "Fingerprint" FROM "FoundationRootBirths"
             WHERE ({scope.FixedPartition}::integer IS NULL OR "Partition" = {scope.FixedPartition}) AND "Creation" = 1 AND ("Actor" = ANY({ids}) OR "Reference" = ANY({refs}))
@@ -148,6 +149,7 @@ public sealed partial class EfStore
         var references = requested.Select(r => r.Reference).ToArray();
         var tenants = requested.Select(r => r.Tenant).ToArray();
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         var bindings = await db.Database.SqlQuery<WorkerRoot>($"""
             SELECT "Tenant", "Reference", "Actor", "Partition", "Fingerprint" FROM "FoundationRootBirths"
             WHERE ("Tenant", "Reference") IN (SELECT * FROM unnest({tenants}::text[], {references}::text[])) AND "Creation" = 1
@@ -429,6 +431,7 @@ public sealed partial class EfStore
         if (RootTimedJobSettlementEnabled)
             return await PrepareRootTimedTurnAsync(root, turn, row, state, current, fence, wires, cancellationToken);
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         var ids = turn.Done.Concat(turn.Consumed).Select(key => key.Scope > 0 ? StoredJobId(key) : key.Id).ToArray();
         var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
         var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&

@@ -6,7 +6,7 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     // Keep the marker lock and the pinned PostgreSQL namespace for the whole operation.
-    private static async ValueTask<IDbContextTransaction?> BeginRootRetirementOperationAsync(KernelDb db, CancellationToken token)
+    internal static async ValueTask<IDbContextTransaction?> BeginRootRetirementOperationAsync(KernelDb db, CancellationToken token)
     {
         if (!db.UsesRootRetirement) return null;
         var transaction = await db.Database.BeginTransactionAsync(token);
