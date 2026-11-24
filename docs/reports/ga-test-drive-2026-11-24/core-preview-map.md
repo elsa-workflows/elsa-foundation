@@ -1,6 +1,6 @@
 # GA test drive: Core Preview map
 
-24 November 2026. The source was read at `main` `1980bbe7e6`; nothing was run. Milestones follow the trimmed
+24 November 2026. The source was read at `main` `1980bbe7e6`, with rows marked where later merges changed them; nothing was run. Milestones follow the trimmed
 release 1 scope the owner set the same day ([clean-slate kernel plan](../../program-goals/clean-slate-kernel.md#trimmed-scope-owner-24-november-2026)).
 Independent checks of the claims against the source, ADR 0099 and #4229 corrected the drafts.
 
@@ -12,7 +12,7 @@ release 1 milestone on [#4229](https://github.com/elsa-workflows/elsa-foundation
 
 - **None of the seven workflows can run on the Core Preview today.** The Workbench preview registers only
   `direct-approval` workflows built in C#: one by default, up to five with the job settings
-  ([WorkbenchCorePreview.cs](../../../apps/Elsa.Workbench/CorePreview/WorkbenchCorePreview.cs)). Its only HTTP route
+  ([WorkbenchCorePreview.cs](../../../apps/Elsa.Workbench.Host/CorePreview/WorkbenchCorePreview.cs)). Its only HTTP route
   is a read-only instance list. The kernel README says: "Existing workflow and Studio endpoints still use their
   current runtime."
 - **The Native model is further along than the preview shows.** `Elsa.Workflows.Runtime.Native.Model` already has
@@ -32,11 +32,12 @@ release 1 milestone on [#4229](https://github.com/elsa-workflows/elsa-foundation
      the activity library carries over with an adapted activity context, which K6 delivers, so each activity needs
      no separate Native version. No K6 case names which designer activities must run on the kernel. Compensation is
      out of release 1 by owner decision (StateMachine page, decision 4), so CompensationScope and Compensate will not
-     run on a kernel host; whether the toolbox hides them is an owner decision. JavaScript carries
+     run on a kernel host. JavaScript carries
      over under K12 item 3.
   3. **The HTTP surface of the Native activities.**
-     - The request is `(Method, Path, Body)`: no query string, headers or route values. The response is
-       `(StatusCode, ContentType, Body)`: no headers.
+     - The request was `(Method, Path, Body)`: no query string, headers or route values. The response was
+       `(StatusCode, ContentType, Body)`: no headers. [#5706](https://github.com/elsa-workflows/elsa-foundation/pull/5706)
+       has since added the query string and headers to the request and headers to the response.
      - Routes match literal paths only, so `/orders/{id}` cannot be expressed.
      - A start route registers only when the HttpEndpoint is the root or first in a root Sequence, so a Flowchart
        workflow, which is what the designer produces, gets no start route (`HttpRoutes.cs` lines 21–22).
@@ -74,12 +75,12 @@ design in [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702)):
 | All | Designed in Studio, published, runs | ❌ | Publications to the kernel, with their routes | K10 |
 | All | HTTP request reaches the kernel in Workbench | 🟡 test-only Kestrel edge | A shipped route host in the Workbench | K10 |
 | All | Flowchart root starts from its HttpEndpoint (built in code until K10) | ❌ only a root or first-in-Sequence endpoint registers | Start routes found inside a Flowchart | K8 |
-| W1 `GET /hello?name=` | Read a query parameter | ❌ | Query string on `HttpRequest` | K8 |
+| W1 `GET /hello?name=` | Read a query parameter | ✅ since #5706 | | K8 |
 | W1 | Expression builds the greeting | 🟡 built-in language | JavaScript, as the designer offers it | K12 item 3 |
-| W2 `POST /orders` | Read the JSON body | ✅ | | |
+| W2 `POST /orders` | Read the JSON body | ✅ | | K8 |
 | W2 | Branch with `If` | ✅ | | K6 |
-| W2 | Branch with `Switch` | ❌ | Switch through the adapted context | K6, if the owner puts it on the release 1 list |
-| W2 | 201/400 with headers | 🟡 status and content type | Response headers | K8 |
+| W2 | Branch with `Switch` | ❌ | Switch through the adapted context | K6 |
+| W2 | 201/400 with headers | ✅ since #5706 | | K8 |
 | W3 `/orders/{id}/enrich` | Route value `{id}` | ❌ | Route templates in `HttpRoutes` | K8 |
 | W3 | Parallel calls, join | ✅ Parallel, Flowchart joins | | K6, K7 |
 | W3 | Read the downstream response, react to a 500 | ❌ | A response result; a shipped HTTP sender | **No case** (K6 wires only the effect key) |
@@ -89,7 +90,7 @@ design in [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702)):
 | W4 | Child via `DispatchWorkflow` | ✅ | Parked-child registry | K6 |
 | W5 `/orders/{id}/cancel` | Resume the waiting W4 | 🟡 Event and mid-flow HttpEndpoint exist; no correlation input, so an event name per order is the workaround | Route values or a correlation key | K8 for route values; **No case** for resuming a wait on a template route |
 | W6 `POST /batch` | ForEach over 1,000 items into children | ✅ ForEach, DispatchWorkflow | Fan-out limits on a provider | K6 (large fan-out decision 5), K12 |
-| W7 payment | `Fault` raises an incident | 🟡 thrown errors and leaf faults become incidents | A Fault activity in the toolbox | K6, if the owner puts it on the release 1 list |
+| W7 payment | `Fault` raises an incident | 🟡 thrown errors and leaf faults become incidents | A Fault activity in the toolbox | K6 |
 | W7 | Compensation | ❌ | | **Out** (release 1 has no compensation port) |
 
 ## Designer pass
@@ -98,7 +99,7 @@ design in [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702)):
 |---|---|---|
 | Build, validate and lay out a workflow | Core-independent; works today on the old core | n/a |
 | Test-run from the designer | ❌ no path from a draft to the kernel | **No case** |
-| Toolbox shows only what the kernel runs | ❌ the toolbox lists activities the kernel lacks or will not have (compensation) | **No case**; an owner decision first |
+| Toolbox shows only what the kernel runs | ❌ the toolbox lists activities the kernel lacks or will not have (compensation) | **No case**; the owner decided on a kernel-unsupported set (#4229) |
 | Expression editor | 🟡 JavaScript in the designer, built-in language in the kernel | K12 item 3 |
 
 ## Management pass
@@ -130,7 +131,7 @@ design in [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702)):
 
 ## Sources
 
-- [apps/Elsa.Workbench/CorePreview/](../../../apps/Elsa.Workbench/CorePreview/)
+- [apps/Elsa.Workbench.Host/CorePreview/](../../../apps/Elsa.Workbench.Host/CorePreview/)
 - [essentials/src/Workflows/Runtime/Native/Model/Activities.cs](../../../essentials/src/Workflows/Runtime/Native/Model/Activities.cs),
   [HttpRoutes.cs](../../../essentials/src/Workflows/Runtime/Native/Model/HttpRoutes.cs),
   [Expression.cs](../../../essentials/src/Workflows/Runtime/Native/Model/Expression.cs),
