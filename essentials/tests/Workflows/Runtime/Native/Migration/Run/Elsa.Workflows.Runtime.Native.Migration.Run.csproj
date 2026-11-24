@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../../ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
+    <ProjectReference Include="../../../../../ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj" />
+    <ProjectReference Include="../../../../../ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
+    <ProjectReference Include="../../../../../../../prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
+    <ProjectReference Include="../../../../../../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
+    <Using Include="Elsa.ActorFoundation.TestSupport" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Runtime" />
+  </ItemGroup>
+</Project>

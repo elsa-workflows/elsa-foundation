@@ -3,7 +3,7 @@ using Kernel.Runtime;
 using Kernel.WorkflowActor;
 using Contract = Kernel.Foundation.Contracts;
 
-namespace Kernel.Sim;
+namespace Elsa.Workflows.Runtime.Native.Migration;
 
 internal static class MigrationPlanDispatchChecks
 {
@@ -17,11 +17,12 @@ internal static class MigrationPlanDispatchChecks
         var scope = ContractScopes.Bind("migration");
         var permitted = true;
         var fixture = new WitnessActor();
-        var edge = new InMemoryIngress(store, new Requests("migration-dispatch"), "migration-dispatch",
+        var foundation = new InMemoryActorFixture(store, "migration-dispatch", 4,
             (bound, kind) => bound.Tenant == scope.Tenant && (kind == Contract.Kinds.Delete || kind == Contract.Kinds.Migrate && permitted));
+        var edge = foundation.Ingress;
         var ingress = new WitnessIngress(edge);
-        Contract.IActorReads reads = new ActorList(store, 4);
-        var worker = new Worker("migration-owner", 0, store, new ActorAdapter(store, fixture),
+        var reads = foundation.Reads;
+        var worker = new Worker("migration-owner", 0, store, foundation.Bind(fixture),
             new WorkerOptions { Monotonic = () => now - initial });
         await using var owner = await new DurableHost([worker]).ActivateAsync(0, stop)
             ?? throw new InvalidOperationException("The migration actor owner could not activate.");
@@ -53,7 +54,7 @@ internal static class MigrationPlanDispatchChecks
             "The caller key now names a different live actor.");
 
         var oversized = Json.Write(new MigrationRequest("source",
-            new string('x', FoundationMetadataLimits.MessageContentBytes + 1), plan));
+            new string('x', InMemoryActorFixture.MessageContentLimit + 1), plan));
         var tooLarge = await edge.SendAsync(scope, new Contract.Target.Ref(first), "oversized-migration",
             Contract.Kinds.Migrate, oversized, cancellationToken: stop);
         Require(tooLarge is { Outcome: Contract.AdmissionOutcome.Refused, Reason: null } &&

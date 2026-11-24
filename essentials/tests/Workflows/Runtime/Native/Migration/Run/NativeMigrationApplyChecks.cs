@@ -2,13 +2,14 @@ using System.Text;
 using System.Text.Json;
 using Kernel.Foundation.InMemory;
 using Kernel.Native;
+using Kernel.Sim;
 using Kernel.WorkflowActor;
 using Contract = Kernel.Foundation.Contracts;
 using Models = Kernel.Model.Contracts;
 using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
 using PublicRuntime = Kernel.WorkflowActor.WorkflowRuntime;
 
-namespace Kernel.Sim;
+namespace Elsa.Workflows.Runtime.Native.Migration;
 
 internal static class NativeMigrationApplyChecks
 {
@@ -27,15 +28,16 @@ internal static class NativeMigrationApplyChecks
     {
         var store = new InMemoryStore(1, () => 1_701_800_000_000);
         var scope = ContractScopes.Bind("acme");
-        Contract.IIngress edge = new InMemoryIngress(store, new Requests("queued-job-migration"), "queued-job-migration",
+        var foundation = new InMemoryActorFixture(store, "queued-job-migration", 32,
             (_, kind) => kind == Contract.Kinds.Migrate);
-        Contract.IActorReads reads = new ActorList(store, 32);
+        var edge = foundation.Ingress;
+        var reads = foundation.Reads;
         var runtime = new PublicRuntime(edge, reads);
         var registry = new WorkflowRegistry()
             .Add(DefinitionWithJob("source", TimeSpan.FromSeconds(5)))
             .Add(DefinitionWithJob("changed-timeout", TimeSpan.FromSeconds(6)))
             .Add(DefinitionWithJob("same-timeout", TimeSpan.FromSeconds(5)));
-        var adapter = new ActorAdapter(store, new PublicWorkflow([new NativeExecutionModel(registry), new PlanSink()]));
+        var adapter = foundation.Bind(new PublicWorkflow([new NativeExecutionModel(registry), new PlanSink()]));
         var worker = new Worker("queued-job-migration", 0, store, adapter, new WorkerOptions { Monotonic = () => 0, PassTurnBudget = 1 });
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
         var changedPlan = (await runtime.StartAsync(scope, "changed-plan", new(PlanSink.Key, "changed-plan"))).Actor!.Value;
@@ -64,7 +66,7 @@ internal static class NativeMigrationApplyChecks
             migrated == actor && (await reads.GetAsync(scope, actor))?.Header.Labels.GetValueOrDefault("definition") == "same-timeout",
             "keeping the queued background node's timeout allows the exact root to adopt the replacement definition");
 
-        InstanceRow? Row(Contract.ActorRef reference) => store.ReadFoundationActor(scope.Tenant, reference.Id).Actor?.Row;
+        InstanceRow? Row(Contract.ActorRef reference) => foundation.ReadCheckpoint(scope.Tenant, reference.Id);
         PlanAnswer[] Answers(Contract.ActorRef plan) => Json.Read<PlanAnswer[]>(Row(plan)!.State);
         ValueTask<Contract.Admission> MigrateAsync(string destination, Contract.ActorRef plan) =>
             edge.SendAsync(scope, new Contract.Target.Ref(actor), destination, Contract.Kinds.Migrate,
@@ -80,9 +82,10 @@ internal static class NativeMigrationApplyChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var scope = ContractScopes.Bind("acme");
-        Contract.IIngress edge = new InMemoryIngress(store, new Requests("version-hold"), "version-hold",
+        var foundation = new InMemoryActorFixture(store, "version-hold", 32,
             (_, kind) => kind == Contract.Kinds.Migrate);
-        Contract.IActorReads reads = new ActorList(store, 32);
+        var edge = foundation.Ingress;
+        var reads = foundation.Reads;
         var runtime = new PublicRuntime(edge, reads);
         var native = new NativeExecutionModel(new WorkflowRegistry()
             .Add(Definition("source", "ready", "source tail")).Add(Definition("target", "ready", "target tail"))
@@ -95,7 +98,7 @@ internal static class NativeMigrationApplyChecks
         var endedPlan = (await runtime.StartAsync(scope, "hold-ended-plan", new(PlanSink.Key, "hold-ended-plan"))).Actor!.Value;
         await using var first = await ActivateAsync("version-first", current);
         await PumpAsync(first);
-        var state = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.State;
+        var state = foundation.ReadCheckpoint(scope.Tenant, actor.Id)!.State;
         var endedBefore = (await reads.GetAsync(scope, ended))!.Header;
 
         now += 20_000;
@@ -112,7 +115,7 @@ internal static class NativeMigrationApplyChecks
         var held = await reads.InboxAsync(scope, actor);
         check(held.Items is [{ Id: "wait-for-stale", State: Contract.DeliveryState.Held },
                 { Id: "wait-for-version", State: Contract.DeliveryState.Pending }] &&
-            store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.State == state &&
+            foundation.ReadCheckpoint(scope.Tenant, actor.Id)!.State == state &&
             (await reads.InboxAsync(scope, plan)).Items.Count == 0 &&
             (await reads.InboxAsync(scope, stalePlan)).Items.Count == 0 &&
             (await reads.TailAsync(scope, actor)).Items.All(row => row.Entry != "\"migrate\""),
@@ -130,20 +133,20 @@ internal static class NativeMigrationApplyChecks
         await edge.SendAsync(scope, new Contract.Target.Ref(actor), "model-available", "wake");
         await edge.SendAsync(scope, new Contract.Target.Ref(ended), "ended-model-available", "wake");
         await PumpAsync(latest);
-        var answers = Json.Read<PlanAnswer[]>(store.ReadFoundationActor(scope.Tenant, plan.Id).Actor!.Row.State);
-        var staleAnswers = Json.Read<PlanAnswer[]>(store.ReadFoundationActor(scope.Tenant, stalePlan.Id).Actor!.Row.State);
+        var answers = Json.Read<PlanAnswer[]>(foundation.ReadCheckpoint(scope.Tenant, plan.Id)!.State);
+        var staleAnswers = Json.Read<PlanAnswer[]>(foundation.ReadCheckpoint(scope.Tenant, stalePlan.Id)!.State);
         check((await reads.GetAsync(scope, actor))?.Header.Labels.GetValueOrDefault("definition") == "target" &&
             answers is [{ Actor: var sender, Result.Outcome: MigrationPlanOutcome.Migrated }] && sender == actor &&
             staleAnswers is [{ Actor: var staleSender, Result.Outcome: MigrationPlanOutcome.NotAtSource }] && staleSender == actor,
             "a newer owner replays both original commands and classifies their source definitions");
-        var endedAnswers = Json.Read<PlanAnswer[]>(store.ReadFoundationActor(scope.Tenant, endedPlan.Id).Actor!.Row.State);
+        var endedAnswers = Json.Read<PlanAnswer[]>(foundation.ReadCheckpoint(scope.Tenant, endedPlan.Id)!.State);
         check(endedAnswers is [{ Actor: var endedSender, Result: { Outcome: MigrationPlanOutcome.Refused, Finding: "Ended" } }] &&
             endedSender == ended && (await reads.GetAsync(scope, ended))!.Header.TypeData == endedBefore.TypeData,
             "a newer owner refuses the held command from the original finished life");
 
         async Task<IScopeActivation> ActivateAsync(string node, PublicWorkflow model)
         {
-            var worker = new Worker(node, 0, store, new ActorAdapter(store, model), new WorkerOptions { Monotonic = () => now - initial });
+            var worker = new Worker(node, 0, store, foundation.Bind(model), new WorkerOptions { Monotonic = () => now - initial });
             return await new DurableHost([worker]).ActivateAsync(0)
                 ?? throw new InvalidOperationException("The version witness could not acquire its owner.");
         }
@@ -156,9 +159,10 @@ internal static class NativeMigrationApplyChecks
         var store = new InMemoryStore(1, () => now);
         var scope = ContractScopes.Bind("acme");
         var otherScope = ContractScopes.Bind("other");
-        Contract.IIngress edge = new InMemoryIngress(store, new Requests("migration-apply"), "migration-apply",
+        var foundation = new InMemoryActorFixture(store, "migration-apply", 64,
             (_, kind) => kind is Contract.Kinds.Migrate or Contract.Kinds.Suspend or Contract.Kinds.Resume);
-        Contract.IActorReads reads = new ActorList(store, 64);
+        var edge = foundation.Ingress;
+        var reads = foundation.Reads;
         var runtime = new PublicRuntime(edge, reads);
         var registry = new WorkflowRegistry()
             .Add(Definition("source", "ready", "source tail"))
@@ -286,13 +290,13 @@ internal static class NativeMigrationApplyChecks
         Task<Contract.Admission> MigrateAsync(string id, string from, string to, Contract.ActorRef plan) =>
             edge.SendAsync(scope, target, id, Contract.Kinds.Migrate, Json.Write(new MigrationRequest(from, to, plan))).AsTask();
         string Checkpoint(Contract.ActorRef reference) =>
-            store.ReadFoundationActor(reference == foreign ? otherScope.Tenant : scope.Tenant, reference.Id).Actor?.Row.State
+            foundation.ReadCheckpoint(reference == foreign ? otherScope.Tenant : scope.Tenant, reference.Id)?.State
                 ?? throw new InvalidOperationException("The witness checkpoint is missing.");
         PlanAnswer[] Answers(Contract.ActorRef plan) => Json.Read<PlanAnswer[]>(Checkpoint(plan));
         async Task<string?> BoundDefinition() => (await reads.GetAsync(scope, actor))?.Header.Labels.GetValueOrDefault("definition");
         async Task<IScopeActivation> ActivateAsync(string node)
         {
-            var worker = new Worker(node, 0, wire, new ActorAdapter(store, type), new WorkerOptions { Monotonic = () => now - initial });
+            var worker = new Worker(node, 0, wire, foundation.Bind(type), new WorkerOptions { Monotonic = () => now - initial });
             return await new DurableHost([worker]).ActivateAsync(0)
                 ?? throw new InvalidOperationException("The migration witness could not acquire its owner.");
         }
@@ -303,14 +307,15 @@ internal static class NativeMigrationApplyChecks
         const int headerLimit = 16 * 1_024;
         var store = new InMemoryStore(1, () => 1_701_800_000_000);
         var scope = ContractScopes.Bind("acme");
-        Contract.IIngress edge = new InMemoryIngress(store, new Requests("header-limit"), "header-limit",
+        var foundation = new InMemoryActorFixture(store, "header-limit", 32,
             (_, kind) => kind == Contract.Kinds.Migrate);
-        Contract.IActorReads reads = new ActorList(store, 32);
+        var edge = foundation.Ingress;
+        var reads = foundation.Reads;
         var runtime = new PublicRuntime(edge, reads);
         var type = new PublicWorkflow([new PlanSink(), new CappedHeaderModel()]);
         var actor = (await runtime.StartAsync(scope, "capped-start", new(CappedHeaderModel.Key, "source"))).Actor!.Value;
         var plan = (await runtime.StartAsync(scope, "capped-plan", new(PlanSink.Key, "plan"))).Actor!.Value;
-        var worker = new Worker("header-limit", 0, store, new ActorAdapter(store, type), new WorkerOptions { Monotonic = () => 0 });
+        var worker = new Worker("header-limit", 0, store, foundation.Bind(type), new WorkerOptions { Monotonic = () => 0 });
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
         await PumpAsync(owner);
         var original = (await reads.GetAsync(scope, actor))!.Header.TypeData;
@@ -326,7 +331,7 @@ internal static class NativeMigrationApplyChecks
         await edge.SendAsync(scope, target, "capped-replay", Contract.Kinds.Migrate, command);
         await PumpAsync(owner);
         var after = (await reads.GetAsync(scope, actor))!.Header;
-        var answers = Json.Read<PlanAnswer[]>(store.ReadFoundationActor(scope.Tenant, plan.Id).Actor!.Row.State);
+        var answers = Json.Read<PlanAnswer[]>(foundation.ReadCheckpoint(scope.Tenant, plan.Id)!.State);
         check(Encoding.UTF8.GetByteCount(full) == headerLimit && after.TypeData == full &&
             after.Labels.GetValueOrDefault("definition") == "source" &&
             answers is [{ Actor: var sender, Result: { Outcome: MigrationPlanOutcome.Refused, Finding: "HeaderLimit" } }] &&

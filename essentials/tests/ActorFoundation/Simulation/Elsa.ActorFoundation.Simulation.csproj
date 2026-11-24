@@ -5,7 +5,6 @@
     <AssemblyName>Kernel.Sim</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
     <IsPackable>false</IsPackable>
-    <DefineConstants>$(DefineConstants);NATIVE_FRIEND</DefineConstants>
     <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
   <ItemGroup>

@@ -4,6 +4,7 @@
     <KernelContractOnly>true</KernelContractOnly>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Native.Migration.Run" />
     <InternalsVisibleTo Include="Kernel.Sim" />
     <InternalsVisibleTo Include="Kernel.Native.Run" />
     <ProjectReference Include="../../../../essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />

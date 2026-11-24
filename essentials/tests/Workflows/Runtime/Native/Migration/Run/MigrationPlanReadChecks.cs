@@ -4,7 +4,7 @@ using Kernel.WorkflowActor;
 using Contract = Kernel.Foundation.Contracts;
 using Outcome = Kernel.WorkflowActor.MigrationPlanOutcome;
 
-namespace Kernel.Sim;
+namespace Elsa.Workflows.Runtime.Native.Migration;
 
 internal static class MigrationPlanReadChecks
 {
@@ -16,10 +16,11 @@ internal static class MigrationPlanReadChecks
         var stop = timeout.Token;
         var store = new InMemoryStore(1, () => now);
         var scope = ContractScopes.Bind("migration");
-        Contract.IIngress ingress = new InMemoryIngress(store, new Requests("migration-plan"), "migration-plan");
-        Contract.IActorReads reads = new ActorList(store, 2);
+        var foundation = new InMemoryActorFixture(store, "migration-plan", 2);
+        var ingress = foundation.Ingress;
+        var reads = foundation.Reads;
         var type = new JournalActor();
-        var worker = new Worker("migration-owner", 0, store, new ActorAdapter(store, type),
+        var worker = new Worker("migration-owner", 0, store, foundation.Bind(type),
             new WorkerOptions { Monotonic = () => now - initial });
         await using var owner = await new DurableHost([worker]).ActivateAsync(0, stop)
             ?? throw new InvalidOperationException("The migration fixture could not activate.");

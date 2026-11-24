@@ -329,46 +329,12 @@ if (args.Contains("--foundation-migration-dispatch-check"))
     await FoundationMigrationDispatchChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
-if (args.Contains("--migration-plan-dispatch"))
+if (args.Any(argument => argument is "--migration-plan-dispatch" or "--native-migration-validation" or
+    "--native-migration-apply" or "--migration-plan-actor" or "--migration-plan-runner" or "--migration-plan-reads"))
 {
-    try { await MigrationPlanDispatchChecks.RunAsync(); return 0; }
-    catch (InvalidOperationException error) { Console.Error.WriteLine(error.Message); return 1; }
+    Console.Error.WriteLine("Run this check with essentials/tests/Workflows/Runtime/Native/Migration/Run.");
+    return 2;
 }
-
-if (args.Contains("--native-migration-validation"))
-{
-    var failed = false;
-    await StructuredMigrationChecks.RunAsync((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
-    return failed ? 1 : 0;
-}
-
-if (args.Contains("--native-migration-apply"))
-{
-    var failed = false;
-    await NativeMigrationApplyChecks.RunAsync((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
-    return failed ? 1 : 0;
-}
-
-if (args.Contains("--migration-plan-actor"))
-{
-    var failed = false;
-    await MigrationPlanActorChecks.RunAsync((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
-    return failed ? 1 : 0;
-}
-
-if (args.Contains("--migration-plan-runner"))
-{
-    var failed = false;
-    await MigrationPlanRunnerChecks.RunAsync((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
-    return failed ? 1 : 0;
-}
-
-if (args.Contains("--migration-plan-reads"))
-{
-    try { await MigrationPlanReadChecks.RunAsync(); return 0; }
-    catch (InvalidOperationException error) { Console.Error.WriteLine(error.Message); return 1; }
-}
-
 
 if (args.Contains("--native-direct-preview-check"))
 {

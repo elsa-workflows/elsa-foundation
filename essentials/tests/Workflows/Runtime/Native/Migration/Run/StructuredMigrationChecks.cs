@@ -6,7 +6,7 @@ using Contract = Kernel.Foundation.Contracts;
 using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
 using PublicRuntime = Kernel.WorkflowActor.WorkflowRuntime;
 
-namespace Kernel.Sim;
+namespace Elsa.Workflows.Runtime.Native.Migration;
 
 internal static class StructuredMigrationChecks
 {
@@ -334,7 +334,7 @@ internal static class StructuredMigrationChecks
     private static Workflow Definition(string id, params Node[] children) =>
         Wf.Workflow(id, Wf.Sequence("sequence", children), ("output", null));
 
-    private sealed class WaitingActor(InMemoryStore store, Contract.BoundScope scope, Contract.IIngress ingress,
+    private sealed class WaitingActor(InMemoryStore store, InMemoryActorFixture foundation, Contract.BoundScope scope, Contract.IIngress ingress,
         Contract.ActorRef actor, IScopeActivation owner) : IAsyncDisposable
     {
         internal static async Task<WaitingActor> StartAsync(Workflow source, string mode, string? trigger = null, bool singleTurn = false)
@@ -342,33 +342,34 @@ internal static class StructuredMigrationChecks
             const long now = 1_701_800_000_000;
             var store = new InMemoryStore(1, () => now);
             var scope = ContractScopes.Bind("acme");
-            Contract.IIngress ingress = new InMemoryIngress(store, new Requests("migration-validation"), "migration-validation");
-            var runtime = new PublicRuntime(ingress, new ActorList(store, 16));
+            var foundation = new InMemoryActorFixture(store, "migration-validation", 16);
+            var ingress = foundation.Ingress;
+            var runtime = new PublicRuntime(ingress, foundation.Reads);
             var registry = new WorkflowRegistry().Add(source);
             var start = NativeExecutionModel.Start(source.Id, mode, triggerNode: trigger, trigger: trigger is null ? null : JsonValue.Create("receipt"));
             var actor = (await runtime.StartAsync(scope, "validate", start)).Actor!.Value;
-            var adapter = new ActorAdapter(store, new PublicWorkflow([new NativeExecutionModel(registry)]));
+            var adapter = foundation.Bind(new PublicWorkflow([new NativeExecutionModel(registry)]));
             var worker = new Worker("validate", 0, store, adapter, new WorkerOptions { Monotonic = () => 0, PassTurnBudget = singleTurn ? 1 : 500 });
             var owner = (await new DurableHost([worker])
                 .ActivateAsync(0))!;
-            var instance = new WaitingActor(store, scope, ingress, actor, owner);
+            var instance = new WaitingActor(store, foundation, scope, ingress, actor, owner);
             if (singleTurn)
             {
-                for (var step = 0; step < 20 && store.ReadFoundationActor(scope.Tenant, actor.Id).Actor is null; step++)
+                for (var step = 0; step < 20 && foundation.ReadCheckpoint(scope.Tenant, actor.Id) is null; step++)
                     await instance.PumpAsync(1);
             }
             else await instance.PumpAsync();
             return instance;
         }
 
-        internal string Checkpoint() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor?.Row.State
+        internal string Checkpoint() => foundation.ReadCheckpoint(scope.Tenant, actor.Id)?.State
             ?? throw new InvalidOperationException("The Native checkpoint was not committed.");
         internal bool HasPendingJob(string key)
         {
-            var row = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row;
+            var row = foundation.ReadCheckpoint(scope.Tenant, actor.Id)!;
             return store.Messages.GetValueOrDefault(InboxKey.Ticket(row.Id, key, row.Creation)) is { Done: false };
         }
-        internal InstanceStatus Status() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.Status;
+        internal InstanceStatus Status() => foundation.ReadCheckpoint(scope.Tenant, actor.Id)!.Status;
 
         internal async Task PublishAsync(string key = "ready")
         {

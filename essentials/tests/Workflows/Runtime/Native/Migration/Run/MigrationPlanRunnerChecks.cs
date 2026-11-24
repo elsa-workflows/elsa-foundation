@@ -8,7 +8,7 @@ using Models = Kernel.Model.Contracts;
 using PublicRuntime = Kernel.WorkflowActor.WorkflowRuntime;
 using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
 
-namespace Kernel.Sim;
+namespace Elsa.Workflows.Runtime.Native.Migration;
 
 internal static class MigrationPlanRunnerChecks
 {
@@ -23,10 +23,11 @@ internal static class MigrationPlanRunnerChecks
         var other = ContractScopes.Bind("other");
         var key = RandomNumberGenerator.GetBytes(32);
         var authority = new MigrationPlanAuthority(key);
-        Contract.IIngress edge = new InMemoryIngress(store, new Requests("plan-runner"), "plan-runner",
+        var foundation = new InMemoryActorFixture(store, "plan-runner", 1,
             (_, kind) => kind is Contract.Kinds.Migrate or Contract.Kinds.Terminate or Contract.Kinds.Delete);
+        var edge = foundation.Ingress;
         var observed = new SelectionReceipts(edge);
-        Contract.IActorReads reads = new ActorList(store, 1);
+        var reads = foundation.Reads;
         var runtime = new PublicRuntime(edge, reads);
         var registry = new WorkflowRegistry().Add(Definition(source, "old")).Add(Definition(target, "new"))
             .Add(Definition("absent", "empty")).Add(Definition("selected-for-delete", "gone"))
@@ -165,7 +166,7 @@ internal static class MigrationPlanRunnerChecks
         check(closedOnRequest && (await waiting.ReadOutcomesAsync()) is { Closed: true } closed && closed.NoAnswer.SequenceEqual([missing]),
             "an operator close reports the exact missing life with no answer");
 
-        var wideReads = new ActorList(store, 256);
+        var wideReads = foundation.OpenReads(256);
         var wideService = NewOperator(wideReads);
         var positions = new List<Contract.ActorRef>();
         for (var index = 0; index <= MigrationPlanModel.BatchLimit; index++)
@@ -206,10 +207,10 @@ internal static class MigrationPlanRunnerChecks
         async Task<Contract.ActorRef> StartActor(string id, string definition, string mode) =>
             (await runtime.StartAsync(scope, id, NativeExecutionModel.Start(definition, mode))).Actor!.Value;
         async Task<IScopeActivation> Open(string node) => (await new DurableHost(
-            [new Worker(node, 0, store, new ActorAdapter(store, actorType), new WorkerOptions { Monotonic = () => now - initial })])
+            [new Worker(node, 0, store, foundation.Bind(actorType), new WorkerOptions { Monotonic = () => now - initial })])
             .ActivateAsync(0))!;
         bool FinishedUnderTarget(Contract.ActorRef actor) =>
-            store.ReadFoundationActor(scope.Tenant, actor.Id).Actor is { Row: { Status: InstanceStatus.Finished } row } &&
+            foundation.ReadCheckpoint(scope.Tenant, actor.Id) is { Status: InstanceStatus.Finished } row &&
             Json.Read<NativeState>(row.State).Variables["output"]?.GetValue<string>() == "new";
     }
 
@@ -219,9 +220,10 @@ internal static class MigrationPlanRunnerChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var scope = ContractScopes.Bind("legacy-plan");
-        Contract.IIngress ingress = new InMemoryIngress(store, new Requests("legacy-plan"), "legacy-plan",
+        var foundation = new InMemoryActorFixture(store, "legacy-plan", 8,
             (_, kind) => kind == Contract.Kinds.Terminate);
-        Contract.IActorReads reads = new ActorList(store, 8);
+        var ingress = foundation.Ingress;
+        var reads = foundation.Reads;
         var runtime = new PublicRuntime(ingress, reads);
         var key = MigrationPlanModel.ModelKey;
         var deadline = initial + 600_000;
@@ -230,7 +232,7 @@ internal static class MigrationPlanRunnerChecks
         await using (var predecessor = await Open("legacy", new PublicWorkflow([new V1PlanFixture()])))
             await Pump(predecessor);
 
-        var before = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.State;
+        var before = foundation.ReadCheckpoint(scope.Tenant, actor.Id)!.State;
         var header = (await reads.GetAsync(scope, actor))!.Header;
         var latest = new PublicWorkflow([new MigrationPlanModel(new(RandomNumberGenerator.GetBytes(32)), (_, _, _) => true)]);
         var reserved = latest.TerminalGrowth(header, before);
@@ -238,7 +240,7 @@ internal static class MigrationPlanRunnerChecks
         await using var successor = await Open("latest", latest);
         await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "terminate", Contract.Kinds.Terminate);
         await Pump(successor);
-        var after = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.State;
+        var after = foundation.ReadCheckpoint(scope.Tenant, actor.Id)!.State;
         var ended = (await reads.GetAsync(scope, actor))!.Header;
         check(header.Labels.GetValueOrDefault("version") == "1" && ended.Labels.GetValueOrDefault("version") == "2" &&
             ended.Status == Contract.ActorStatus.Cancelled && Json.Read<V1PendingPlan>(before).Pending == 1 &&
@@ -247,7 +249,7 @@ internal static class MigrationPlanRunnerChecks
             "terminating a persisted version-1 pending checkpoint stays within its two-byte reservation");
 
         async Task<IScopeActivation> Open(string node, PublicWorkflow type) => (await new DurableHost(
-            [new Worker(node, 0, store, new ActorAdapter(store, type), new WorkerOptions { Monotonic = () => now - initial })])
+            [new Worker(node, 0, store, foundation.Bind(type), new WorkerOptions { Monotonic = () => now - initial })])
             .ActivateAsync(0))!;
     }
 
