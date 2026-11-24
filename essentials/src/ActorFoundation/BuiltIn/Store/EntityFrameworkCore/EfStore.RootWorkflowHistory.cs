@@ -6,10 +6,6 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     private const int WorkflowHistoryVersion = 1;
-    private static readonly string[] RootListSourceTriggers = ["kernel_require_root_checkpoint_writer", "kernel_project_root_actor_list"];
-    private static readonly string[] RootListWithParkTriggers = [..RootListSourceTriggers, "kernel_project_root_park_metadata"];
-    private static readonly string[] RootListWithMarkTriggers = ["kernel_require_root_checkpoint_writer", "kernel_require_root_actor_list_v13", "kernel_project_root_actor_list_v13"];
-    private static readonly string[] WorkflowHistorySourceTriggers = [..RootListSourceTriggers, "kernel_project_root_workflow_history_v1"];
 
     internal sealed record RootWorkflowHistoryItem(string Reference, InstanceStatus Status, string? Definition, long UpdatedAt);
     internal sealed record RootWorkflowHistoryPage(IReadOnlyList<RootWorkflowHistoryItem> Items, long AsOf);
@@ -33,7 +29,11 @@ public sealed partial class EfStore
             """).ToListAsync(token);
         var installed = versions.Count == 1;
         if (installed) RequireHistoryVersion(versions[0]);
-        var required = installed ? WorkflowHistorySourceTriggers : RootListSourceTriggers;
+        // History reads the actor's own list row, so it requires the projector of this profile and not the Park metadata.
+        var projection = ActorListProjection.Of(db);
+        if (!db.SupportsRootWorkflowHistory)
+            throw new StoreFormatException("This store profile does not carry workflow history.");
+        var required = installed ? projection.WorkflowHistoryTriggers : projection.SourceTriggers;
         if (!await db.Database.SqlQuery<bool>($"""
             SELECT to_regclass('"FoundationActorList"') IS NOT NULL
                 AND (NOT {installed} OR to_regclass('"FoundationWorkflowHistory"') IS NOT NULL)
@@ -100,7 +100,10 @@ public sealed partial class EfStore
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified workflow history requires PostgreSQL.");
         await using var db = create();
+        if (!db.SupportsRootWorkflowHistory)
+            throw new StoreFormatException("This store profile does not carry workflow history.");
         var expected = db.RequiredFormat;
+        var triggers = ActorListProjection.Of(db).WorkflowHistoryTriggers;
         var encodedType = DurableKeyJson.Write(type);
         var encodedDefinition = definition is null ? null : DurableKeyJson.Write(new KeyValuePair<string, string>("definition", definition));
         List<RootWorkflowHistoryRow> rows;
@@ -121,8 +124,8 @@ public sealed partial class EfStore
                         WHERE relation.relnamespace = (SELECT relnamespace FROM pg_catalog.pg_class
                                 WHERE oid = to_regclass('"FoundationWorkflowHistory"'))
                             AND (to_regclass('"Instances"') IS NULL OR source.tgrelid = to_regclass('"Instances"'))
-                            AND source.tgname::text = ANY({WorkflowHistorySourceTriggers}) AND source.tgenabled IN ('O', 'A')
-                        GROUP BY source.tgrelid HAVING count(*) = {WorkflowHistorySourceTriggers.Length}
+                            AND source.tgname::text = ANY({triggers}) AND source.tgenabled IN ('O', 'A')
+                        GROUP BY source.tgrelid HAVING count(*) = {triggers.Length}
                     ) AS "TriggerEnabled"
                 ), page AS (
                     SELECT l."Reference", l."Status", l."Header", h."UpdatedAt"

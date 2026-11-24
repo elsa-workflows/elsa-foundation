@@ -164,11 +164,10 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             await EfStore.InstallRootParkRecoveryAsync(db, cancellationToken);
         if (db.UsesRootValueProtocol)
             await EfStore.InstallRootValuesAsync(db, cancellationToken);
+        // The actor list and its one projector follow the profile's capabilities, terminal marks included.
         await EfStore.InstallRootActorListAsync(db, cancellationToken);
         if (db.UsesRootParkInspection)
             await EfStore.InstallRootParkReadModelAsync(db, cancellationToken);
-        if (db.UsesRootTerminalSelection)
-            await EfStore.InstallRootTerminalMarksAsync(db, cancellationToken);
         if (db.UsesRootSelfProtocol)
             await EfStore.InstallRootSelfAsync(db, cancellationToken);
         await InstallDirectReceiptsAsync(db, cancellationToken);
