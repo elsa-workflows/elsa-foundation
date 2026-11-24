@@ -946,6 +946,7 @@
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Native/">
     <Project Path="essentials/tests/Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
+    <Project Path="essentials/tests/Workflows/Runtime/Native/RetentionFixture/Elsa.Workflows.Runtime.Native.RetentionFixture.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Statecharts/">
     <Project Path="essentials/tests/Workflows/Runtime/Statecharts/Native/Elsa.Workflows.Runtime.Statecharts.Native.csproj" />
