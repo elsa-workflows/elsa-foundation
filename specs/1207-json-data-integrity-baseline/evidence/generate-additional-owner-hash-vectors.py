@@ -547,15 +547,16 @@ def generate():
             isBrowsable=True,isSerializable=True,description='Raw data output',order=2.5,uiHint='json-editor',propertyInfo=marker,uiSpecifications=marker,isRequired=False,sourceRepresentation=None)
         root=dict(nodeId='root-é',activityVersionId='',inputs=[argument],outputs=[],structure=None,intrinsic=dict(kind='return',valueType=data_type,variable=None))
         projected=dict(variables=[variable],rootActivity=root,inputs=[input_definition],outputs=[output_definition],
-            strategyOptions=dict(activationStrategyType='default',incidentStrategy=dict(alias='fault',version='1.0.0'),persistenceMode='Balanced'))
+            strategyOptions=dict(nullHandling=None,activationStrategyType='default',incidentStrategy=dict(alias='fault',version='1.0.0'),persistenceMode='Balanced'))
         actual=json.loads(json.dumps(projected));actual['rootActivity']['intrinsic']['kind']=3
+        actual['strategyOptions'].pop('nullHandling')
         input_text=json.dumps(actual,ensure_ascii=True,separators=(',',':')).replace(json.dumps(marker),raw)
         # S2 derives workflow member nullability from the type and omits the CLR catalog flag from both authored wires.
         for member in [*projected['inputs'],*projected['outputs']]:member.pop('isNullable')
         wire_text=json.dumps(projected,ensure_ascii=True,separators=(',',':')).replace(json.dumps(marker),raw)
         expected_wire=helper.load_json(wire_text)
         for member in [*actual['inputs'],*actual['outputs']]:member.pop('isNullable')
-        # The CLR strategy contract exposes S-2's absent override as null; the API wire omits it.
+        # Both the CLR state and the authored API wire retain S-2's absent strategy override as null.
         actual['strategyOptions']['nullHandling']=None
         reconstructed_text=json.dumps(actual,ensure_ascii=True,separators=(',',':')).replace(json.dumps(marker),raw)
         add('authoring-snapshot-rich/' + label,'Elsa.Workflows.Design.Api','Elsa.Workflows.Design.Api.Services.WorkflowAuthoringRevision','Snapshot',
