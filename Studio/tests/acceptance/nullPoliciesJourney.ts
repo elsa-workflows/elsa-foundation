@@ -65,9 +65,10 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     keyboardActions.push(`Enter: ${name}`);
   }
   async function selectWithKeyboard(control: Locator, value: string) {
+    await expect(control).toBeVisible(); await expect(control).toBeEnabled();
     const options = await control.locator("option:not([disabled])").evaluateAll(items => items.map(item => (item as HTMLOptionElement).value));
     expect(options).toContain(value);
-    await expect(control).toBeEnabled(); await control.focus(); await page.keyboard.press("Home");
+    await control.focus(); await page.keyboard.press("Home");
     for (let index = 0; index < options.indexOf(value); index++) await page.keyboard.press("ArrowDown");
     await expect(control).toHaveValue(value);
     keyboardActions.push(`Home/ArrowDown: ${value}`);
