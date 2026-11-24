@@ -11,6 +11,8 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresCorePreviewReadSeed
 {
+    private sealed record SeedManifest(IReadOnlyList<string> References, long? TerminalAt);
+
     internal static async Task<int> RunAsync(string original, string seedFile, bool timed)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
@@ -32,8 +34,19 @@ internal static class PostgresCorePreviewReadSeed
                 neighbor.Labels.GetValueOrDefault("definition") == definition
             : neighbors.Length == 0;
         if (File.Exists(seedFile) || !validNeighbors || actor?.Status != expectedStatus ||
-            actor.Labels.GetValueOrDefault("definition") != expectedDefinition || timed && actor.EndedAt is not > 0)
+            actor.Labels.GetValueOrDefault("definition") != expectedDefinition)
             throw new InvalidOperationException("The page fixture requires a fresh Workbench birth receipt and test database.");
+
+        long? terminalAt = null;
+        if (timed)
+        {
+            // Read the owner checkpoint so the expected time is independent of the public projection.
+            var checkpoint = await store.ReadFirstRootAsync(tenant.Tenant, original, token);
+            if (checkpoint is not { Status: InstanceStatus.Finished, TerminalAt: > 0 and var at } ||
+                checkpoint.TerminalRevision != checkpoint.Revision)
+                throw new InvalidOperationException("The timed workflow needs a committed terminal checkpoint.");
+            terminalAt = at;
+        }
 
         var ingress = await store.OpenPreviewRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1), token);
         var runtime = new WorkflowRuntime(ingress, reads);
@@ -48,7 +61,7 @@ internal static class PostgresCorePreviewReadSeed
                 throw new InvalidOperationException("The provider did not admit a fresh actor for the page test.");
             roots.Add(root.Id);
         }
-        await File.WriteAllTextAsync(seedFile, JsonSerializer.Serialize(roots), token);
+        await File.WriteAllTextAsync(seedFile, JsonSerializer.Serialize(new SeedManifest(roots, terminalAt)), token);
         Console.WriteLine("ok admitted 26 exact actors for the Workbench preview read pages");
         return 0;
     }

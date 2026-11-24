@@ -132,7 +132,8 @@ def run(scratch):
         subprocess.run([RUNNER, "pg-workbench-core-preview", "restart", receipt, *profile_args], env=env, check=True, timeout=100)
     seed_file = scratch / "expected-roots.json"
     subprocess.run([RUNNER, "pg-workbench-preview-reads-seed", actor, seed_file, *profile_args], env=env, check=True, timeout=45)
-    seeded = json.loads(seed_file.read_text())
+    manifest = json.loads(seed_file.read_text())
+    seeded = manifest["References"]
     references = sorted(seeded)
     expected_running = sorted(seeded[2:]) if TIMED else references[:25]
     reader = ("preview-allowed", TENANT, [READ, INSPECT])
@@ -163,7 +164,8 @@ def run(scratch):
         expect(row["ref"] == actor and row["status"] == status and row["definition"] == definition,
                "the preview page contains the exact persisted workflow, projected status and definition")
         if TIMED:
-            expect(row["endedAt"] > 0, "the HTTP projection carries the actual ended time after the timed jobs settle")
+            expect(row["endedAt"] == manifest["TerminalAt"],
+                   "the HTTP projection matches the exact actor's committed terminal timestamp")
         expect(set(row) == {"ref", "status", "definition", "version", "endedAt"} and snapshot["asOf"] > 0,
                "the preview returns only bounded metadata and the foundation read time")
         for name in ("preview-other", "preview-no-inspection", "preview-no-runtime"):
