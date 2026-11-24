@@ -478,8 +478,9 @@ destination (a meeting or discussion instead of a post), or who can access it (a
 
 ## The initiative board
 
-The initiative issue's description is the board. It holds navigation and status only: links, open decisions, the
-approvers and who is needed where. Analyses, discussion and evidence live in the PRs. Only the coordinator, or the
+The initiative issue's description is the board. It holds navigation and status (links, open decisions, the
+approvers and who is needed where) plus the short *Problem*, *Goal* and *Sources for research* statement that frames
+the initiative. Analyses, discussion and longer evidence live in the PRs. Only the coordinator, or the
 recorded delegate, edits it.
 
 **A new board states the problem, not a solution.** When an initiative starts, its *Problem*, *Goal* and *Sources for
