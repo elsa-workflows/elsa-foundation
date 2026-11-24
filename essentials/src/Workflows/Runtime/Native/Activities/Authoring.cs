@@ -27,7 +27,7 @@ public abstract record Trigger;
 public sealed record EventTrigger(string Name) : Trigger;                                 // a subscription
 public sealed record TimerTrigger(long Milliseconds) : Trigger;                           // a message to self with a due time
 public sealed record ChildTrigger(string Workflow, JsonNode? Input, string Mode) : Trigger;  // a child start and its child-finished
-public sealed record HttpTrigger(string Method, string Path) : Trigger;                   // a subscription on the route
+public sealed record HttpTrigger(string Method, string Path, bool Resolved = false) : Trigger;                   // a subscription on the route
 
 /// <summary>What an activity does to the world besides its result. The model turns each into a kernel call.</summary>
 public abstract record Effect;

@@ -453,8 +453,10 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 turn.Subscribe("event:" + e.Name, id);
                 break;
             case HttpTrigger h:
-                _s.Waits[id] = new WaitEntry(frame.Id, "event", HttpRoutes.Key(h.Method, h.Path));
-                turn.Subscribe(HttpRoutes.Key(h.Method, h.Path), id);
+                // A path resolved from a route template keeps its values' case; any other path is a literal route's.
+                var key = h.Resolved ? HttpRoutes.ResolvedKey(h.Method, h.Path) : HttpRoutes.Key(h.Method, h.Path);
+                _s.Waits[id] = new WaitEntry(frame.Id, "event", key);
+                turn.Subscribe(key, id);
                 break;
             case TimerTrigger t:
                 // The key is the timer message's id, so that a cancel can take it back (friction F-N4, fixed in the merge).

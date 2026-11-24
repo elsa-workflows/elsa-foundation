@@ -72,8 +72,12 @@ public static class Wf
         return node;
     }
 
-    public static Node HttpEndpoint(string id, Binding path, string method = "POST", bool respondBeforeCommit = false) =>
-        Node<HttpEndpoint>(id, ("Path", path), ("Method", method), ("RespondBeforeCommit", respondBeforeCommit));
+    public static Node HttpEndpoint(string id, Binding path, string method = "POST", bool respondBeforeCommit = false, Binding? routeValues = null)
+    {
+        var node = Node<HttpEndpoint>(id, ("Path", path), ("Method", method), ("RespondBeforeCommit", respondBeforeCommit));
+        if (routeValues is not null) node.Inputs["RouteValues"] = routeValues;
+        return node;
+    }
 
     public static Node Respond(string id, Binding body, int status = 200, string contentType = "text/plain", Binding? headers = null) =>
         headers is null
