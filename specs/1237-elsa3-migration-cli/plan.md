@@ -81,9 +81,9 @@ essentials engine image (specification 1236).
 | P-3 | Shared pipeline | R-2: `Elsa3ImportRun`, extracted from `Elsa3FolderImportTask`. |
 | P-4 | Code table | R-3: `Elsa3MigrationCodeTable` in the tooling project, which references every project that holds code constants, with a completeness test in the migration tests. It also holds the fixed texts for codes the converter does not own. |
 | P-5 | Database | R-4: one named in-memory shared-cache database, held open for the run. |
-| P-6 | Composition | R-5: a generic host that is never started, with one shell and the merged settings. Shell initializers and startup tasks run, background hosted services do not, and required secret settings get run-only generated values. |
+| P-6 | Composition | R-5: a generic host that is never started, with one shell composed through `Elsa.Essentials.Composition` (lists from `/app/composition`, merged settings). Shell initializers run except the task initializer; startup tasks run alone through a new startup-only `ITaskManager` member; no background or recurring task or hosted service starts; required secret settings get run-only generated values. |
 | P-7 | Packages | R-6: the image's addition folder and the user's folder are read as directory feeds into a run-scoped install root. A missing dependency refuses the run. |
-| P-8 | Image | R-7: `extensions/Elsa3/docker/Dockerfile`, `FROM` the essentials engine image at the same version. It adds `/app/composition/elsa3.features.json`, the addition packages in `/app/composition/packages/`, the tool and the entry point, through specification 1236's extension contract. |
+| P-8 | Image | R-7: `extensions/Elsa3/docker/Dockerfile`, `FROM` the essentials engine image at the same version. It adds `/app/composition/elsa3.features.json` (specification 1236's base contract), its own packages in `/app/elsa3/packages/`, the tool and the entry point. |
 | P-9 | Migrated export | R-8: writers next to the readers, reading back from the design stores. |
 | P-10 | HTML | R-9: an embedded template with the JSON inline. |
 | P-11 | Output swap | data-model: a hidden staging folder inside `--out`, renamed into place last. |
@@ -116,8 +116,11 @@ essentials/src/Cli/Elsa.Cli/
 
 essentials/src/Cli/Worker/
 ├── WorkerContract.cs                           # + elsa3-migration command family
-├── ToolingEntryPoint.cs                        # + second entry point resolution by name
-└── NuplanePackageSet.cs                        # + run-scoped directory-feed install root (R-6)
+├── ToolingEntryPoint.cs                        # + second entry point, found among loaded package assemblies
+└── NuplanePackageSet.cs                        # + run-scoped directory-feed install root; shared Elsa.Essentials.Composition
+
+essentials/src/Tasks/Elsa.Tasks/
+└── Services/TaskManager.cs                     # + startup-only member on ITaskManager (keeps dependency order)
 
 essentials/src/Workflows/Design/Reconciliation/Json/
 ├── Contracts/IJsonWorkflowCatalogWriter.cs     # + writer contract

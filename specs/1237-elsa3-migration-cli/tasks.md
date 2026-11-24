@@ -36,8 +36,9 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
 ## Phase 1: Setup
 
 - [ ] T001 Create `Tooling/Elsa3.Migration.Tooling.csproj`. It references the Elsa 3 models, mapping, import, import
-  persistence, publishing and reconciliation projects, and the JSON workflow and activity reconciliation projects.
-  Create `MTests/Tests/Elsa3.Migration.Tests.csproj` (xunit). Add both to the solution, regenerate the solution filters
+  persistence, publishing and reconciliation projects, the JSON workflow and activity reconciliation projects, and
+  specification 1236's composition library `Elsa.Essentials.Composition`, as a compile-time reference that is not
+  copied (at run time it binds to the copy in `/app`). Create `MTests/Tests/Elsa3.Migration.Tests.csproj` (xunit). Add both to the solution, regenerate the solution filters
   and check the CI tier placement (§E7).
 - [ ] T002 [P] Build the fixture export in `MTests/Fixtures/export/`, with:
   - clean definitions;
@@ -63,11 +64,15 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T004 Add `Tooling/Elsa3MigrationCodeTable.cs`. It maps each code to a remedy, a component kind and, for codes
-  the converter does not own, a fixed text, with a default text for unknown Elsa 4 codes. Give it an entry for every
-  code the converter, the import and reconciliation emit, including the codes of the converter diagnostic units. Add
-  the completeness test in `MTests/Tests/`: it reflects over every code constant class in Models, Mapping and
-  Reconciliation, and fails on an Error code without a remedy or a component code without a kind (FR-016, FR-019).
+- [ ] T004 Add `Tooling/Elsa3MigrationCodeTable.cs`. It maps each code to a remedy, a component kind, a routine mark
+  and, for codes the converter does not own, a fixed text, with `patch-definition` and a default text for unlisted
+  Elsa 4 codes. Give it an entry for every code the converter, the import and reconciliation emit, including the codes
+  of the converter diagnostic units. Mark `ELS3-NULL-POLICIES` routine. Promote the codes that are emitted as inline
+  literals (`ELS3-INPUT-DEFAULT-REQUIRED`, `ELS3-NULL-POLICIES` and any others in `Elsa3ActivityNormalizer` and its
+  peers) to constants. Add the completeness test in `MTests/Tests/`. It reflects over every code constant class in
+  Models, Mapping, Import (`ReusableActivityImportDiagnosticCodes`) and Reconciliation, and fails on any code without
+  an entry, whatever its severity. It also greps the Elsa 3 sources for `"ELS3-`, `"VF-IMP-` and `"ELS3-REUSABLE-`
+  string literals outside the constant classes, and fails on any (FR-016, FR-019).
 - [ ] T005 Extract `Elsa3ImportRun` from `Elsa3FolderImportTask` in
   `extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Services/`. It returns the plan items, the skips with
   their cause and code, the publication outcomes and the publish diagnostics. Move the registration of its collaborators
@@ -85,23 +90,31 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
 - [ ] T008 Add `Tooling/Elsa3MigrationToolingHost.cs`, with the frozen `RunAsync(Stream, Stream)` and the request and
   response records of [contracts/worker-entry-point.md](contracts/worker-entry-point.md), including the refusal of an
   unknown `contractVersion`. Test the contract parsing.
+- [ ] T009a Add a startup-only member to `ITaskManager` in `essentials/src/Tasks/Elsa.Tasks/`. It runs the registered
+  startup tasks in their dependency order (`TopologicalTaskSorter`) and starts no background or recurring task. Test
+  the order, and test that no `IBackgroundTask` or recurring task starts (R-5).
 - [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It builds a generic host that is never started, with one
-  shell from the composition and the merged settings. It runs the shell's initializers and startup tasks, starts no
-  background hosted service, and registers the import run through `Elsa3ImportRunRegistration.Add` without the
+  shell composed through `Elsa.Essentials.Composition`: `EssentialsFeatureList.Read("/app/composition")`,
+  `EssentialsFeatureAssemblies.All`, and `AddEssentialsConfiguration` with the image's baked `appsettings.json` and the
+  `--settings` file. It runs every shell initializer except `RunShellTasksInitializer`, runs the startup tasks through
+  the T009a member, starts no background hosted service, and registers the import run through `Elsa3ImportRunRegistration.Add` without the
   reconciliation feature. It sets every enabled EF feature to SQLite on
   `file:elsa3-migration-<guid>;Mode=Memory;Cache=Shared`, sets the migrate policy to apply, keeps one connection open,
   and disposes everything on every path. For each required engine setting that the settings leave empty, it generates
   a run-only value. Tests:
   - two EF modules commit in one shared transaction without `EfSharedTransactionTargetMismatchException`;
   - after composition, the schema exists and the activity catalog holds the essentials activities;
-  - no background hosted service runs;
+  - no background hosted service, `IBackgroundTask` or recurring task starts;
+  - the addition list is read after the essentials list;
   - a run with no settings composes, and no generated value appears in the output;
   - no file appears outside a temporary `--out`.
 
   (FR-008 to FR-010, SC-003.)
 - [ ] T010 Add the `elsa3-migration` command family to `essentials/src/Cli/Worker/WorkerContract.cs`, and resolution of
-  the second entry point by name to `ToolingEntryPoint.cs`. A missing type is a resolution failure that names the type
-  and the minimum version. Test it with a fake host layout that lacks the assembly.
+  the second entry point to `ToolingEntryPoint.cs`. The worker finds the `Elsa3.Migration.Tooling` assembly among the
+  loaded package set's assemblies, then calls `Assembly.GetType`. A missing assembly or type is the
+  `entry-point-missing` refusal (exit 2), which names the type and the minimum version. Test it with a package set
+  that lacks the assembly.
 - [ ] T011 Add `essentials/src/Cli/Elsa.Cli/Elsa3MigrationCommands.cs`, with:
   - the two commands;
   - the argument rules and refusal reasons of [contracts/cli.md](contracts/cli.md);
@@ -111,8 +124,9 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   Register the group in `ElsaCli.cs`. Test the argument combinations and the exit mapping in the existing CLI test
   style, and confirm that `Elsa3MigrationBoundaryTests` stays green.
 - [ ] T012 Extend `essentials/src/Cli/Worker/NuplanePackageSet.cs`, or add a sibling, with the run-scoped install root
-  (R-6). The image's Elsa 3 addition folder and, for `assess`, the `--packages` folder are reconciled as directory
-  feeds into one temporary root. Resolution is restricted to those feeds and the host's closure, and the root is
+  (R-6). `/app/elsa3/packages/` and, for `assess`, the `--packages` folder are reconciled as directory feeds into one
+  temporary root. The Nuplane setup declares `Elsa.Essentials.Composition` a shared assembly, so packages bind to the
+  copy in `/app`. Resolution is restricted to those feeds and the host's closure, and the root is
   deleted on every path. An unresolvable dependency is the `package-unresolved` refusal. Test it with the T003 package
   and with a package whose dependency is missing.
 
@@ -122,9 +136,9 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   specification 1236's `*.features.json`: `Elsa3Mapping`, the collection import for reusables, the import's EF ledger
   and the publishing bridge. Check that the pack workflow packs each feature's project, their dependencies and
   `Elsa3.Migration.Tooling` as Nuplane packages.
-- [ ] T014 [US3] Add `extensions/Elsa3/docker/Dockerfile`, using specification 1236's extension contract (R-7). It
-  is `FROM` the essentials engine image at the same version. It copies `elsa3.features.json` to `/app/composition/`
-  and the addition packages to `/app/composition/packages/`, installs `dotnet-elsa` at the same version, and sets the
+- [ ] T014 [US3] Add `extensions/Elsa3/docker/Dockerfile`, using specification 1236's base contract (R-7). It is
+  `FROM` the essentials engine image at the same version. It copies `elsa3.features.json` to `/app/composition/` and
+  the addition and tooling packages to `/app/elsa3/packages/`, installs `dotnet-elsa` at the same version, and sets the
   entry point to `dotnet-elsa elsa3-migration`, with the worker pointed at the engine host's build output in `/app`. It
   starts no web host. Add the image to the workflow that publishes the essentials images, tagged with their version.
 - [ ] T015 [US3] Add the image test: the image builds; its composition is the essentials feature list plus the addition
@@ -148,8 +162,9 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
     targets, input findings and run;
   - the ordering rules of data-model.md.
 
-  Unit-test the bucket rule and the category mapping table-driven, and test the component inventory: no unused
-  component, correct counts (SC-001).
+  Every skip is an `error` finding. A definition goes smoothly when its only findings are routine. Unit-test the
+  bucket rule, the category mapping, the skip severity and the goes-smoothly rule table-driven, and test the component
+  inventory: no unused component, correct counts (SC-001).
 - [ ] T020 [US1] Detect dispatched and executed workflow targets missing from the export, from the converted
   definitions' dispatch and execute-workflow activities. List them as Take into account (FR-018 item 5), and test with
   the fixture.
@@ -163,13 +178,14 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   reusable activity versions back from the design stores and writes them through the T006 and T007 writers: one file
   per workflow definition, and one activities file in dependency order. It sets `exportedTo`, and sets
   `needsCompositeSourceSupport` on every reusable and every workflow that uses one. It leaves out refused and blocked
-  definitions. Test the layout and the absence.
+  definitions. It always creates `migrated/workflows/` and always writes `migrated/activities/activities.json`, as
+  `[]` when no reusable is exported. Test the layout, the absence, and a run that exports no workflow and no reusable.
 - [ ] T023 [US4] Add the output swap: write to a hidden `.staging-<guid>` folder inside `--out`, rename `report.json`,
   `report.html` and `migrated/` into place last, and touch no other file. A failed run removes the staging folder and
   leaves the previous output intact. Test both paths, and test with `--out` as a bind-mount root in T034.
 - [ ] T024 [US4] Add the loadability test (SC-004). Compose the essentials feature list with JSON workflow and activity
   reconciliation over the fixture run's `migrated/`, and assert that every exported workflow that uses no reusable
-  loads. Assert that reusables are skipped with `activity.source.dependencies-unsupported`, and that the workflows
+  loads, also for a run that exported nothing (both entries empty). Assert that reusables are skipped with `activity.source.dependencies-unsupported`, and that the workflows
   using them do not load, until the spec Q2 gap is fixed; T032 then flips both.
 
 ## Phase 6: User Story 2 - Assess with my own features (P1)

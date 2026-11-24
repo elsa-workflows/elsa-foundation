@@ -32,9 +32,8 @@ essentials engine image. Fix, rebuild the packages and rerun until every remaini
 
 ## Go live (outside the tool)
 
-Start the essentials engine image with your `appsettings.json`, your packages and `./migration/migrated/` mounted.
-Point JSON workflow reconciliation at `migrated/workflows/` and JSON activity reconciliation at
-`migrated/activities/activities.json`. A reusable marked `needsCompositeSourceSupport` loads only on an engine that
+Start the essentials engine image with your `appsettings.json`, your packages, and `./migration/migrated/` mounted at
+`/app/migrated`. The engine imports `workflows/` and `activities/activities.json` from there at startup. A reusable marked `needsCompositeSourceSupport` loads only on an engine that
 supports source-owned composites with dependencies.
 
 ## Validation scenarios (for implementers)

@@ -182,7 +182,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   converter rewrites only direct calls, so it reports such a reference with a diagnostic of its own (see
   *Dependencies and boundaries*). The CLI scans no scripts itself.
 - A converted reusable activity always depends on other activity versions, because its body is made of catalog
-  activities. The engine's source reconciliation cannot publish such content yet, so the report flags every reusable,
+  activities. While the engine's source reconciliation refuses such content, the report flags every reusable,
   and every workflow that uses one, as Take into account until the engine supports it (see *Dependencies and
   boundaries*).
 
@@ -212,12 +212,14 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 
 **The migration image**
 
-- **FR-006**: The Elsa 3 migration image MUST be built `FROM` the essentials engine image at the same version, through
-  the engine image's extension contract. The addition list is baked as `/app/composition/elsa3.features.json` and its
-  packages into `/app/composition/packages/`, with no host rebuild. The Dockerfile and the addition list are
-  maintained under `extensions/Elsa3/`. The image's composition is the essentials feature list plus that addition list: the converter (`Elsa3Mapping`), the collection import for reusables, the
-  import's EF ledger and the publishing bridge, with their dependencies. Neither the user nor the skill configures
-  them.
+- **FR-006**: The Elsa 3 migration image MUST be built `FROM` the essentials engine image at the same version, with no
+  host rebuild. Following the engine image's base contract, it bakes its addition list as
+  `/app/composition/elsa3.features.json`, and composes through the engine's composition library, which reads the
+  essentials list first and the addition list after it. The packages of the added features are this image's own: they
+  are baked into `/app/elsa3/packages/`, and the CLI's worker loads them itself, because the engine host loads nothing
+  that a derived image adds. The Dockerfile and the addition list are maintained under `extensions/Elsa3/`. The added
+  features are the converter (`Elsa3Mapping`), the collection import for reusables, the import's EF ledger and the
+  publishing bridge, with their dependencies. Neither the user nor the skill configures them.
 - **FR-007**: The image MUST contain the `dotnet-elsa` CLI, and its entry point MUST be the `elsa3-migration` command
   group. It starts no web host. It is published with the essentials images and tagged with their version, which is also the
   version of the `dotnet-elsa` it contains, so a consumer pulls the migration image tagged with its CLI version.
@@ -225,9 +227,10 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 **Composition and persistence**
 
 - **FR-008**: Features MUST be composed as a shell composes them, from the image's composition plus `--settings`,
-  merged as the essentials engine image merges `appsettings.json`. The shell's initializers and startup tasks run as they
-  do at engine start, so the EF schema and the activity catalog exist. No web host, HTTP endpoint or background hosted
-  service starts: no trigger runtime, scheduler, recurring task or workflow execution. The Elsa 3 folder import is not
+  merged as the essentials engine image merges `appsettings.json`, through the engine's composition library. The
+  shell's initializers and its startup tasks run, so the EF schema and the activity catalog exist. No web host, HTTP
+  endpoint, background hosted service, background task or recurring task starts, so there is no trigger runtime,
+  scheduler or workflow execution. The Elsa 3 folder import is not
   composed.
 - **FR-008a**: When the engine requires a setting before it starts (such as a signing key or the seeded admin
   password) and `--settings` does not set it, the run MUST generate a value for that run only. Generated values never
@@ -263,14 +266,17 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   - `ELS3-BEHAVIOUR-*` warning → **Reconsider**;
   - any other warning, or Info → **Take into account**.
 
-  A definition with no finding **goes smoothly**.
+  A definition **goes smoothly** when it has no finding other than routine ones. A code is routine when the code table
+  marks it so: an Info the converter adds to every definition, such as the null-policy record.
 - **FR-016**: Every Must fix finding MUST carry one of three remedies:
   - `patch-definition`: change the Elsa 3 definition;
   - `build-component`: supply the missing Elsa 4 component;
   - `none`: there is no Elsa 4 equivalent.
 
-  The remedy, and the component kind for component codes, comes from one code table maintained with the converter's
-  diagnostic codes. A test fails when a code the converter can emit has no entry.
+  The remedy, the component kind for component codes and the routine mark come from one code table maintained with
+  the converter's diagnostic codes. A test fails when an Elsa 3 code the converter, the import or reconciliation can
+  emit has no entry. A code from Elsa 4 that the table does not list gets `patch-definition`. A skip (duplicate input,
+  blocked by dependency, a failed publish, an import refusal) is reported at Error severity.
 - **FR-017**: Every definition MUST carry exactly one bucket. The bucket names come from the specification 1235
   acceptance, but the rule here is this specification's own: it is automatic, and no coordinator approval is involved.
   - `incompatible`: any Must fix finding has remedy `none`;
@@ -305,8 +311,11 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 
 - **FR-023**: `migrated/` MUST be exported from the run's Elsa 4 store after publish:
   - workflows in the JSON workflow reconciliation format, one file per definition under `migrated/workflows/`;
-  - reusable activities in the JSON activity reconciliation format, in one file under `migrated/activities/`,
+  - reusable activities in the JSON activity reconciliation format, in `migrated/activities/activities.json`,
     dependencies first.
+
+  Both always exist: an empty `workflows/` folder, and an `activities.json` holding `[]`, when there is nothing to
+  export, because the engine mounts the folder at `/app/migrated` and its readers need both.
 
   It carries no publication state. Whether the loading engine publishes is up to that engine's configuration.
 - **FR-024**: Refused and blocked definitions MUST NOT appear in `migrated/`.
@@ -335,7 +344,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 | ID | Question | Decision |
 |---|---|---|
 | Q1 | Where does the migrated content come from? | It is exported from the run's own Elsa 4 store after publish, not written from the converter's output. The folder is `migrated/`. Workflows use the workflow format, and reusables use the activity format. |
-| Q2 | Converted reusables depend on other activity versions, and the engine's source reconciliation refuses such content today. | The engine gap is fixed in its own issue, outside this specification. The CLI exports reusables anyway, and the report flags every reusable and every workflow that uses one. Only that part of SC-004 waits on the fix. |
+| Q2 | Converted reusables depend on other activity versions, and the engine's source reconciliation refuses such content. | The engine gap is fixed in its own issue, outside this specification. The CLI exports reusables anyway, and the report flags every reusable and every workflow that uses one. Only that part of SC-004 waits on the fix. |
 | Q3 | Where does the CLI's Elsa 4 closure come from? | The Elsa 3 migration image, built `FROM` the essentials engine at the same version, with the Elsa 3 additions baked in. The CLI ships no closure, and Docker is a prerequisite. |
 | Q4 | Does using the ADR 0076 worker for this group need an ADR change? | Yes. A small ADR 0076 amendment lets the worker reach further named frozen entry points, one per command group. This specification is provisional on it. |
 | Q5 | How is the run kept to one database when the shared transaction refuses a supplied connection? | Every module gets the same connection string, for a uniquely named in-memory shared-cache database that is kept alive for the run. |
@@ -361,7 +370,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **SC-003 - Nothing persists**: After a run, including a run that fails part-way, nothing remains outside the output
   folder: the container is removed, and no database or install root survives.
 - **SC-004 - Loadable output**: The essentials engine image, with JSON workflow and activity reconciliation over a run's
-  `migrated/`, loads every workflow in it that uses no reusable. Reusables, and the workflows that use them, load once
+  `migrated/`, loads every workflow in it that uses no reusable, including when the run exported no reusable or no workflow. Reusables, and the workflows that use them, load once
   the engine gap of Q2 is fixed.
 - **SC-005 - Redaction**: The sentinel test finds no sentinel in `report.json` or `report.html`.
 - **SC-006 - Determinism**: Two runs over the same input produce byte-identical `report.json` and `migrated/`.

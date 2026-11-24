@@ -3,7 +3,6 @@
   "$id": "elsa3-migration-workflows-report-v1",
   "title": "Elsa 3 workflows migration report, schema version 1",
   "type": "object",
-  "additionalProperties": false,
   "required": [
     "schemaVersion",
     "tool",
@@ -25,7 +24,6 @@
     },
     "tool": {
       "type": "object",
-      "additionalProperties": false,
       "required": [
         "name",
         "version"
@@ -56,7 +54,6 @@
     },
     "options": {
       "type": "object",
-      "additionalProperties": false,
       "required": [
         "allVersions"
       ],
@@ -68,7 +65,6 @@
     },
     "summary": {
       "type": "object",
-      "additionalProperties": false,
       "required": [
         "definitions",
         "goesSmoothly",
@@ -106,7 +102,6 @@
         },
         "byCategory": {
           "type": "object",
-          "additionalProperties": false,
           "required": [
             "mustFix",
             "reconsider",
@@ -129,7 +124,6 @@
         },
         "byBucket": {
           "type": "object",
-          "additionalProperties": false,
           "required": [
             "convertAsIs",
             "convertWithAdjustments",
@@ -168,7 +162,6 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "required": [
           "definitionId",
           "version",
@@ -191,7 +184,6 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "required": [
           "definitionId",
           "referencedBy"
@@ -213,7 +205,6 @@
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "required": [
           "file",
           "finding"
@@ -230,7 +221,6 @@
     },
     "run": {
       "type": "object",
-      "additionalProperties": false,
       "required": [
         "imageVersion",
         "packages",
@@ -246,7 +236,6 @@
           "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": false,
             "required": [
               "id",
               "version"
@@ -282,7 +271,6 @@
   "$defs": {
     "finding": {
       "type": "object",
-      "additionalProperties": false,
       "required": [
         "code",
         "severity",
@@ -353,6 +341,9 @@
         },
         "publishStoppedHere": {
           "type": "boolean"
+        },
+        "routine": {
+          "type": "boolean"
         }
       },
       "allOf": [
@@ -393,7 +384,6 @@
     },
     "definition": {
       "type": "object",
-      "additionalProperties": false,
       "required": [
         "definitionId",
         "name",
@@ -461,7 +451,6 @@
     },
     "component": {
       "type": "object",
-      "additionalProperties": false,
       "required": [
         "kind",
         "name",
@@ -492,5 +481,6 @@
         }
       }
     }
-  }
+  },
+  "description": "Consumers ignore unknown properties; adding one does not change schemaVersion. The implementation's tests also check the exact shape."
 }

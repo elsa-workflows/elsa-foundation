@@ -46,6 +46,7 @@ export root, use `/` separators, and are ordinal-sorted. A zip entry path is use
 | `message` | Redacted message text (FR-019). For a code the converter does not own, the code table's fixed text. |
 | `guidance` | Redacted guidance text. |
 | `publishStoppedHere` | `true` on the publish finding at which publish stopped (FR-014). |
+| `routine` | `true` for a code the code table marks routine, such as the null-policy Info added to every definition. |
 
 Findings within a definition are ordered by stage, then path, then code, all ordinal.
 
@@ -61,7 +62,7 @@ spec Q2).
 `mustFix` and no `reconsider` finding. Otherwise `convert-with-adjustments`. A blocked definition has no own error
 other than the blocked-by finding, so its bucket is `convert-with-adjustments`, and `blockedBy` names the root.
 
-**Goes smoothly**: a definition with no findings at all.
+**Goes smoothly**: a definition with no finding other than routine ones (`routine: true`).
 
 ## Component
 
@@ -80,7 +81,9 @@ only from findings whose code has a component kind (spec FR-018 item 2), so an u
 
 ## Code table
 
-`Elsa3MigrationCodeTable`: a code maps to `{ remedy, componentKind? }`. Codes with an `ELS3-BEHAVIOUR-` prefix are
+`Elsa3MigrationCodeTable`: a code maps to `{ remedy?, componentKind?, routine, fixedText? }`. `fixedText` is the
+report text for a code the converter does not own. Every Elsa 3 code needs an entry, whatever its severity. An Elsa 4
+code with no entry gets `patch-definition` and a default fixed text. Every skip is reported as an `error` finding. Codes with an `ELS3-BEHAVIOUR-` prefix are
 `reconsider` by severity rule and need no remedy. Every Error-severity code needs a remedy, and every component code
 needs a kind. The completeness test enforces both. `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY` has remedy
 `patch-definition`: the blocked definition is fixed by fixing its root, whose own finding carries the real remedy.
@@ -93,8 +96,9 @@ That keeps a blocked definition out of `incompatible`.
 ├── report.json
 ├── report.html
 └── migrated/
-    ├── workflows/<definitionId>.json   # JSON workflow reconciliation array (one envelope per exported version)
-    └── activities/activities.json      # JSON activity reconciliation array, dependencies first (absent if none)
+    ├── workflows/<definitionId>.json   # JSON workflow reconciliation array (one envelope per exported version);
+    │                                   #   the folder always exists, empty when nothing was exported
+    └── activities/activities.json      # JSON activity reconciliation array, dependencies first; [] when none
 ```
 
 The run replaces `report.json`, `report.html` and `migrated/` as a whole. It writes them to a hidden staging folder
