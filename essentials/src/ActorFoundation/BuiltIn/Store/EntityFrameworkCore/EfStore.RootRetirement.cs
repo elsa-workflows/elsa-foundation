@@ -53,12 +53,14 @@ public sealed partial class EfStore
                 return false;
 
             var revision = checked(Current.Revision + 1);
+            var status = running ? InstanceStatus.Cancelled : Current.Status;
+            var terminalRevision = running ? revision : Current.TerminalRevision;
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL,
                     "Model" = '', "Definition" = '', "Fault" = NULL, "StateVersion" = 1, "History" = {(int)History.Minimal},
                     "NextJobGeneration" = NULL, "Suspended" = false, "Retired" = true,
                     "Revision" = {revision}, "FoundationWriteRevision" = {revision},
-                    "Status" = {(int)(running ? InstanceStatus.Cancelled : Current.Status)},
+                    "Status" = {(int)status},
                     "FoundationTerminalRevision" = CASE WHEN {running} THEN {revision} ELSE "FoundationTerminalRevision" END,
                     "FoundationTerminalAt" = CASE WHEN {running} THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint ELSE "FoundationTerminalAt" END
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Current.Revision}
@@ -73,7 +75,14 @@ public sealed partial class EfStore
             return await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Journal" ("Instance", "Partition", "Position", "Revision", "Entries")
                 SELECT {Root.Actor}, {Root.Partition}, {Position}, -1, '["delete"]'
-                WHERE NOT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference})
+                WHERE EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
+                    AND "FoundationTenant" = {Root.Tenant} AND "FoundationReference" = {Root.Reference}
+                    AND "Revision" = {revision} AND "FoundationWriteRevision" = {revision}
+                    AND "Retired" AND "Status" = {(int)status} AND "State" = 'null'
+                    AND "FoundationHeader" IS NULL AND "FoundationStateWire" IS NULL
+                    AND "FoundationTerminalRevision" = {terminalRevision} AND "FoundationTerminalAt" IS NOT NULL
+                    AND ({running} OR "FoundationTerminalAt" = {Current.TerminalAt}))
+                    AND NOT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference})
                     AND NOT EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
                     AND NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                         AND (NOT "Done" OR "Payload" IS NOT NULL OR "Start" IS NOT NULL OR "ReplyTo" IS NOT NULL))

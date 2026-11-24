@@ -87,8 +87,9 @@ internal static class PostgresRootThenDeleteChecks
             "the earlier Terminate and the selected ThenDelete are admitted before the owner runs");
 
         await CheckWireFraming(removable);
-        await VerifyRollback(removable, retainWire: false);
-        await VerifyRollback(removable, retainWire: true);
+        await VerifyRollback(removable, RollbackFault.SuppressMarker);
+        await VerifyRollback(removable, RollbackFault.RetainWireBeforeGuard);
+        await VerifyRollback(removable, RollbackFault.RetainWireAfterGuard);
         EfStore.RootImage endedBeforeDelivery;
         EfStore.RootImage finishedBeforeAdmission;
         await using (var owner = await Own("successor"))
@@ -170,7 +171,7 @@ internal static class PostgresRootThenDeleteChecks
             }
         }
 
-        async Task VerifyRollback(EfStore.RootImage current, bool retainWire)
+        async Task VerifyRollback(EfStore.RootImage current, RollbackFault fault)
         {
             var command = (await admission.ReadDueRootOperatorAsync(tenant.Tenant, remove.Id, stop))!;
             var store = Store();
@@ -185,26 +186,37 @@ internal static class PostgresRootThenDeleteChecks
             try
             {
                 await using var db = Open();
-                await db.Database.ExecuteSqlRawAsync(retainWire ? """
-                    CREATE FUNCTION fixture_retain_retirement_wire() RETURNS trigger LANGUAGE plpgsql AS $fn$
-                    BEGIN NEW."FoundationStateWire" = OLD."FoundationStateWire"; RETURN NEW; END
-                    $fn$;
-                    CREATE TRIGGER fixture_retain_retirement_wire BEFORE UPDATE ON "Instances"
-                    FOR EACH ROW WHEN (NEW."Retired") EXECUTE FUNCTION fixture_retain_retirement_wire();
-                    """ : """
-                    CREATE FUNCTION fixture_skip_termination_marker() RETURNS trigger LANGUAGE plpgsql AS $fn$
-                    BEGIN RETURN NULL; END
-                    $fn$;
-                    CREATE TRIGGER fixture_skip_termination_marker BEFORE INSERT ON "Journal"
-                    FOR EACH ROW WHEN (NEW."Revision" = -1) EXECUTE FUNCTION fixture_skip_termination_marker();
-                    """, stop);
+                if (fault == RollbackFault.SuppressMarker)
+                    await db.Database.ExecuteSqlRawAsync("""
+                        CREATE FUNCTION fixture_skip_termination_marker() RETURNS trigger LANGUAGE plpgsql AS $fn$
+                        BEGIN RETURN NULL; END
+                        $fn$;
+                        CREATE TRIGGER fixture_skip_termination_marker BEFORE INSERT ON "Journal"
+                        FOR EACH ROW WHEN (NEW."Revision" = -1) EXECUTE FUNCTION fixture_skip_termination_marker();
+                        """, stop);
+                else
+                {
+                    await db.Database.ExecuteSqlRawAsync("""
+                        CREATE FUNCTION fixture_retain_retirement_wire() RETURNS trigger LANGUAGE plpgsql AS $fn$
+                        BEGIN NEW."FoundationStateWire" = OLD."FoundationStateWire"; RETURN NEW; END
+                        $fn$;
+                        """, stop);
+                    // PostgreSQL runs same-event triggers by name. Also exercise retention after the checkpoint guard.
+                    await db.Database.ExecuteSqlRawAsync(fault == RollbackFault.RetainWireBeforeGuard ? """
+                        CREATE TRIGGER fixture_retain_retirement_wire BEFORE UPDATE ON "Instances"
+                        FOR EACH ROW WHEN (NEW."Retired") EXECUTE FUNCTION fixture_retain_retirement_wire();
+                        """ : """
+                        CREATE TRIGGER z_fixture_retain_retirement_wire BEFORE UPDATE ON "Instances"
+                        FOR EACH ROW WHEN (NEW."Retired") EXECUTE FUNCTION fixture_retain_retirement_wire();
+                        """, stop);
+                }
                 var stopped = false;
                 try
                 {
                     var result = await store.CommitAsync(new(0, lease.Epoch, lease.Position, Defaults.Lease, false, [turn], [], []), stop);
-                    stopped = !retainWire && !result.Landed;
+                    stopped = fault != RollbackFault.RetainWireBeforeGuard && !result.Landed;
                 }
-                catch (StoreException error) when (retainWire && error.Failure == Failure.Definite &&
+                catch (StoreException error) when (fault == RollbackFault.RetainWireBeforeGuard && error.Failure == Failure.Definite &&
                     error.InnerException?.GetBaseException() is PostgresException
                         { SqlState: PostgresErrorCodes.CheckViolation, MessageText: "Qualified actor checkpoint requires a qualified update" })
                 {
@@ -217,8 +229,7 @@ internal static class PostgresRootThenDeleteChecks
                     (await admission.ReadDueRootOperatorAsync(tenant.Tenant, remove.Id, stop)) == command &&
                     (await cold.ReadJournalOfAsync(0, current.Actor.Id, 0, stop)).SequenceEqual(history) &&
                     await db.Partitions.Select(partition => partition.Position).SingleAsync(stop) == lease.Position,
-                    retainWire ? "the checkpoint guard rejects a retirement that keeps the binary state"
-                        : "a suppressed deletion marker rolls back termination, checkpoint, operator input, journal, projection and fence");
+                    $"{fault} rolls back termination, checkpoint, operator input, journal, projection and fence");
             }
             finally
             {
@@ -228,6 +239,7 @@ internal static class PostgresRootThenDeleteChecks
                     DROP TRIGGER IF EXISTS fixture_skip_termination_marker ON "Journal";
                     DROP FUNCTION IF EXISTS fixture_skip_termination_marker();
                     DROP TRIGGER IF EXISTS fixture_retain_retirement_wire ON "Instances";
+                    DROP TRIGGER IF EXISTS z_fixture_retain_retirement_wire ON "Instances";
                     DROP FUNCTION IF EXISTS fixture_retain_retirement_wire();
                     """, cleanup.Token);
                 await store.ReleaseAsync(0, lease.Epoch, cleanup.Token);
@@ -271,6 +283,8 @@ internal static class PostgresRootThenDeleteChecks
             FROM "Instances" WHERE "Id" = {id}
             """).SingleAsync(stop);
     }
+
+    private enum RollbackFault { SuppressMarker, RetainWireBeforeGuard, RetainWireAfterGuard }
 
     private sealed record PhysicalMarker(string State, int? WireBytes, string? Header, bool Retired, InstanceStatus Status, long Revision, long? TerminalRevision, long? TerminalAt);
 
