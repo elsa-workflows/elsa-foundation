@@ -69,6 +69,17 @@ jtest run "tests/**/*" "!tests/performance/baseline-dispatch-tests.json" "!tests
 docker stop elsa3-jtest
 ```
 
+An adjusted copy (`adjusted/`, task T036) is checked on 3.6.3 the same way, with a setup suite whose `filePath` points
+at the copy instead of the original; then run the suites that use that definition. The baseline itself always runs the
+originals.
+
+```powershell
+$setup = [regex]::Replace((Get-Content import-and-publish-workflows.json -Raw), '"workflow-definitions/([^"]+)"', { param($m) $copy = "adjusted/$($m.Groups[1].Value)"; if (Test-Path $copy) { '"' + $copy + '"' } else { $m.Value } })
+Set-Content import-adjusted.tmp.json $setup
+jtest run import-adjusted.tmp.json --env-file environments/elsa3.json
+Remove-Item import-adjusted.tmp.json
+```
+
 ## Elsa 4 Workbench
 
 The Workbench has the `Elsa3JsonReconciliation` feature in its catalog but leaves it off in `shells.json`. A run turns it
@@ -97,6 +108,8 @@ Set-RunVariable "${feature}WorkflowsRuntimeCheckpointPersistence__Mode" 'Durable
 # The acceptance set (spec Q13, Q15): the definitions the Elsa 3 setup suite imports, in its order, without the two excluded.
 $excluded = 'workflow-definitions/branching-implicit.json', 'workflow-definitions/branching-wait-all-active.json'
 $files = @([regex]::Matches((Get-Content import-and-publish-workflows.json -Raw), '"filePath":\s*"(workflow-definitions/[^"]+)"') | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -notin $excluded })
+# An approved adjusted copy (adjusted/, task T036) takes the place of its original.
+$files = @($files | ForEach-Object { $copy = $_ -replace '^workflow-definitions/', 'adjusted/'; if (Test-Path $copy) { $copy } else { $_ } })
 for ($i = 0; $i -lt $files.Count; $i++) {
     Set-RunVariable "${feature}Elsa3JsonReconciliation__Options__Files__${i}__Order" "$i"
     Set-RunVariable "${feature}Elsa3JsonReconciliation__Options__Files__${i}__FilePath" (Join-Path $PWD $files[$i])

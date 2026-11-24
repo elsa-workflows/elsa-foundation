@@ -170,19 +170,19 @@ cannot produce with the same meaning fails the template with the output named (F
   `JTest/ledger/suites.md`; a template cause is fixed in `templates-elsa4/` and rerun; a missing prerequisite marks
   the suite `blocked: <prerequisite>` (FR-016); a value that comes back truncated or unavailable under the capture
   limits marks it `blocked: value capture` with the key and limit (FR-024).
-- [ ] T034 [US3] For a converter or engine cause: if the definition cannot convert faithfully, confirm it is refused
+- [X] T034 [US3] For a converter or engine cause: if the definition cannot convert faithfully, confirm it is refused
   with guidance and propose the `incompatible` bucket, recorded only after the coordinator approves it in
   `JTest/ledger/dispositions.md`; if a genuine Elsa 4 gap or converter defect, file a `needs-triage` issue
   (sub-issue of the initiative), mark the suite `blocked: <issue>` and leave the bucket `unclassified` until the
   issue is fixed, an approved adjusted copy passes (T036) or the definition is bucketed `incompatible`; never add a
   converter workaround (FR-016, FR-017).
-- [ ] T035 [US3] For each suite whose definition contains a join, decide from the failure whether the join is what stops
+- [X] T035 [US3] For each suite whose definition contains a join, decide from the failure whether the join is what stops
   it; mark `blocked: JOIN` with the construct and failure only then (FR-018), and keep the rest in the main run.
 - [ ] T036 [US3] **Approval gate** for adjustments: for a definition that needs an adjusted copy, add it under
   `JTest/adjusted/` with the exact change and reason in `JTest/ledger/dispositions.md`, get the coordinator's
   approval, and run the Elsa 4 host with the adjusted copy in place of the original via the reconciliation `Files`
   list (FR-014, FR-015).
-- [ ] T037 [US3] Bucket every definition in `JTest/ledger/dispositions.md` whose suites are neither JOIN-blocked,
+- [X] T037 [US3] Bucket every definition in `JTest/ledger/dispositions.md` whose suites are neither JOIN-blocked,
   value-capture-blocked nor issue-blocked; the rest stay `unclassified` with the reason, and T043 completes SC-003.
 - [ ] T038 [US3] Once spec 1207 is implemented on the initiative branch (its status Implemented), merge the initiative branch into this branch and
   make the qualifying run: the 39 suites of the acceptance set on a fresh Workbench from that head. Record it as the non-JOIN milestone run
