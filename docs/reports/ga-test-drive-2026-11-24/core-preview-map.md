@@ -40,7 +40,7 @@ release 1 milestone on [#4229](https://github.com/elsa-workflows/elsa-foundation
      - Routes match literal paths only, so `/orders/{id}` cannot be expressed.
      - A start route registers only when the HttpEndpoint is the root or first in a root Sequence, so a Flowchart
        workflow, which is what the designer produces, gets no start route (`HttpRoutes.cs` lines 21–22).
-     - A second workflow on the same route replaces the first without an error (`_starts[key] = ...`).
+     - A second workflow on the same route replaces the first without an error (the start-route assignment in `HttpRoutes.cs`, line 23).
      - `SendHttpRequest` takes only Url, Method and Body. The workflow never receives the response, and the
        Workbench preview passes no outbound sender, so the request is never sent.
      K8 covered delivery, the reply transport and timeouts, and none of these authoring features.
@@ -84,7 +84,7 @@ make the release 1 list, and whether Studio's toolbox hides the rest on a kernel
 | W3 | Read the downstream response, react to a 500 | ❌ | A response result; a shipped HTTP sender | **No case** (K6 wires only the effect key) |
 | W3 | Timeout on the call | ❌ | Timeout input | **No case** |
 | W4 `/orders/{id}/ship` | Respond 202, then continue | ✅ WriteHttpResponse does not end the workflow | | K8 |
-| W4 | `Delay` 2 min, survive restart | ✅ timer as message to self; restart proven for an approval wait | Proof on a designed workflow | K5, K6 |
+| W4 | `Delay` 2 min, survive restart | ✅ timer as message to self; restart proven for an approval wait | Proof on a designed workflow | **No case** |
 | W4 | Child via `DispatchWorkflow` | ✅ | Parked-child registry | K6 |
 | W5 `/orders/{id}/cancel` | Resume the waiting W4 | 🟡 Event and mid-flow HttpEndpoint exist; no correlation input, so an event name per order is the workaround | Route values or a correlation key | K8 for route values; **No case** for resuming a wait on a template route |
 | W6 `POST /batch` | ForEach over 1,000 items into children | ✅ ForEach, DispatchWorkflow | Fan-out limits on a provider | K6 (large fan-out decision 5), K12 |
@@ -117,10 +117,10 @@ make the release 1 list, and whether Studio's toolbox hides the rest on a kernel
 
 | Check | Core Preview | Milestone |
 |---|---|---|
-| Restart the host during a wait | ✅ for the built-in approval workflow | K5 for designed workflows |
+| Restart the host during a wait | ✅ for the built-in approval workflow | **No case** for designed workflows |
 | Kill the host while a request waits | 🟡 503 and 504 cases in the edge checks | K8 |
-| About 200 requests a second on W1 | ❌ no admission or route host | K11 (admission), K12 (budgets) |
-| Duplicate POST | 🟡 replay dedup by event id proven; HTTP start dedup needs a caller key | K8 |
+| About 200 requests a second on W1 | ❌ no admission or route host | K11 (admission), K12 item 1 (sustained arrivals) |
+| Duplicate POST | 🟡 replay dedup by event id proven; HTTP start dedup needs a caller key | **No case** |
 | Large request body | ❌ bodies sit in state, under the checkpoint cap | **Out** (values by reference) |
 | Two workflows on one route | ❌ the later one silently wins | K8 (refused at publishing) |
 | 404 and 405 | 🟡 an unmatched event returns 404 in the edge check; no 405 | K8 for 404; **No case** for 405 |
