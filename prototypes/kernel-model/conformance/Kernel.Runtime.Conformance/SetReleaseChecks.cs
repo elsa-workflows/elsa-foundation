@@ -36,8 +36,19 @@ public static class SetReleaseChecks
             && wire.SetReleases == (ownedSets ? 1 : 0);
         Console.WriteLine($"{(expected ? "ok" : "FAIL")} {(ownedSets ? "set" : "fixed")} host gave up only its surplus, " +
             $"held [{string.Join(", ", heldAfter)}], made {wire.SetReleases} set release call(s)");
+        var beforeStop = wire.SetReleases;
+        await runtime.StopAsync(new CancellationToken(canceled: true));
+        var keptAfterCancelledStop = heldAfter.SequenceEqual(Enumerable.Range(0, Count).Where(runtime.Owns)) &&
+            wire.SetReleases == beforeStop && store.Partitions.Take(4).All(partition => partition.Owner == "first");
         await runtime.StopAsync();
-        return expected;
+        var stopCalls = wire.SetReleases - beforeStop;
+        var stopped = keptAfterCancelledStop && stopCalls == (ownedSets ? 1 : 0) &&
+            !Enumerable.Range(0, Count).Any(runtime.Owns) &&
+            store.Partitions.All(partition => partition.Owner is null) &&
+            store.Partitions.Select(partition => partition.Epoch).SequenceEqual(epochs);
+        Console.WriteLine($"{(stopped ? "ok" : "FAIL")} {(ownedSets ? "set" : "fixed")} stop released its remaining scopes " +
+            $"at the same epochs, made {stopCalls} set release call(s)");
+        return expected && stopped;
     }
 
     private static async Task<bool> ExpiredAsync()

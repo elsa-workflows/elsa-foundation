@@ -62,6 +62,18 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
+        if (cancellationToken.IsCancellationRequested) return;
+        // The clocked host joins its loops before stopping. Retain the scalar path when a caller stops with work in flight.
+        if (_host is IScopeSetRelease { SupportsSetRelease: true } setHost &&
+            !_passing.Contains(true) && !_activating.Contains(true) && !_releasing.Contains(true))
+        {
+            var held = Enumerable.Range(0, partitions).Select(Activation).OfType<IScopeActivation>().ToArray();
+            if (held.Length > 1)
+            {
+                await ReleaseSetAsync(setHost, held, cancellationToken);
+                return;
+            }
+        }
         // A cancelled token ends it: what is not given up yet runs out by its lease, as after a crash.
         for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++) await DeactivateAsync(scope, cancellationToken);
     }
@@ -134,20 +146,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             if (release.Any(scope => _passing[scope] || _activating[scope])) return;     // hand the set over when every surplus scope is idle
             cancellationToken.ThrowIfCancellationRequested();     // a process that goes away mid-round gives nothing more up
             var activations = release.Select(Activation).OfType<IScopeActivation>().ToArray();
-            if (activations.Length > 0)
-            {
-                foreach (var activation in activations) _releasing[activation.Scope] = true;
-                try
-                {
-                    await setHost.ReleaseAsync(activations, cancellationToken);
-                    foreach (var activation in activations)
-                        if (!activation.Active && ReferenceEquals(_active[activation.Scope], activation)) _active[activation.Scope] = null;
-                }
-                finally
-                {
-                    foreach (var activation in activations) _releasing[activation.Scope] = false;
-                }
-            }
+            if (activations.Length > 0) await ReleaseSetAsync(setHost, activations, cancellationToken);
         }
         else
         {
@@ -180,6 +179,22 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             foreach (var activation in gained) await activation.WokenAsync(null, cancellationToken);
         }
         else await Task.WhenAll(take.Select(s => ActivateAsync(s, cancellationToken)));
+    }
+
+    private async ValueTask ReleaseSetAsync(IScopeSetRelease host, IScopeActivation[] activations,
+        CancellationToken cancellationToken)
+    {
+        foreach (var activation in activations) _releasing[activation.Scope] = true;
+        try
+        {
+            await host.ReleaseAsync(activations, cancellationToken);
+            foreach (var activation in activations)
+                if (!activation.Active && ReferenceEquals(_active[activation.Scope], activation)) _active[activation.Scope] = null;
+        }
+        finally
+        {
+            foreach (var activation in activations) _releasing[activation.Scope] = false;
+        }
     }
 
     /// <summary>K1b: the node's lease, when the host keeps one (<see cref="INodeLeaseHost"/>); null for a host with no node lease.</summary>
