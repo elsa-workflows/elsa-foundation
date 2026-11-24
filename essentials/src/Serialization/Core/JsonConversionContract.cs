@@ -51,6 +51,9 @@ public sealed class JsonConversionContract
         {
             Modifiers = { info =>
             {
+                // Our transparent adapter delegates to an inner declared-type root, which owns native
+                // discriminator dispatch. The outer value converter cannot itself carry that metadata.
+                if (info.Kind == JsonTypeInfoKind.None && IsContractAdapter(info.Converter)) info.PolymorphismOptions = null;
                 info.NumberHandling = JsonNumberHandling.Strict;
                 foreach (var property in info.Properties)
                 {
