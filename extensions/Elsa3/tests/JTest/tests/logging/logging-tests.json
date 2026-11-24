@@ -1,0 +1,359 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing whether logging works as expected: asserting priority hierarchy (e.g. global workflow log persistence, versus granular input/output persistence, versus default activity persistence)",
+        "description": "The workflow is configured as follows: 1) default workflow persistence = 'Exclude', 2) HttpEndpoint output.ParsedContent = 'Included', 3) SetVariable input.Variable = 'Included', and 4) WriteHttpResponse has a default 'Include' strategy and only the output.ResponseHeaders = 'Exclude'"
+    },
+    "globals": {
+        "endpoint": "qa/logging",
+        "workflowDefinitionId": "c7576b41b8d5185e",
+        "workflowDefinitionVersion": 1,
+        "requestBody": {
+            "expectedResponseHeader": {
+                "name": "test-response-header12",
+                "value": "TestValue235"
+            },
+            "testProperty1": "test-value-1"
+        },
+        "customRequestHeader": {
+            "name": "custom-header",
+            "value": "1234"
+        },
+        "activityIds": {
+            "httpEndpoint": "f1267306ea594a16",
+            "setVariable": "1e110c1220050925",
+            "writeHttpResponse": "1b66ef180e7586da"
+        },
+        "variableIds": {
+            "httpResponseBody": "f73778bcbbf374bf",
+            "httpRequestBody": "273a1d88e64a75d4",
+            "queryArguments": "2423406fc8070941",
+            "httpRequestHeaders": "642e0c234bc6eff1"
+        }
+    },
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Act: Execute workflow definition",
+            "description": "Executes workflow and asserts that all headers, body, and query arguments successfully pass through entire workflow",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "headers": [
+                        {
+                            "name": "{{ $.globals.customRequestHeader.name }}",
+                            "value": "{{ $.globals.customRequestHeader.value }}"
+                        }
+                    ],
+                    "query": {
+                        "queryParam": "abc"
+                    },
+                    "body": "{{ $.globals.requestBody }}",
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.status}}",
+                            "expectedValue": 202
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.testProperty1 }}",
+                            "expectedValue": "{{ $.globals.requestBody.testProperty1 }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.headers[?(@.name == '{{ $.globals.requestBody.expectedResponseHeader.name }}')].value }}",
+                            "expectedValue": "{{ $.globals.requestBody.expectedResponseHeader.value }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.queryArguments.queryParam }}",
+                            "expectedValue": "abc"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                },
+                {
+                    "type": "wait",
+                    "name": "Wait until instance data available",
+                    "ms": 1000
+                }
+            ]
+        },
+        {
+            "name": "Assert: instance created",
+            "description": "Asserts that even when values pass through the workflow, that based on log persistence these values are, or are not, retrievable through the workflow/activity instance API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Get workflow instance",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].subStatus }}",
+                            "expectedValue": "Finished"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Assert: HttpEndpoint log persistence",
+            "description": "Asserts that: 1) by default input/output instance data hidden due to workflow strategy, and 2) only the output.ParsedContent 'Include' strategy overrules this default strategy",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get journal item: HttpEndpoint",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.httpEndpoint }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert HttpEndpoint activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.activityState }}",
+                            "description": "ActivityState a.k.a. input is not even present because all input excluded"
+                        },
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.outputs.ParsedContent }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.outputs.ParsedContent.testProperty1 }}",
+                            "expectedValue": "{{ $.globals.requestBody.testProperty1 }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Assert: SetVariable log persistence",
+            "description": "Asserts that: 1) by default input/output instance data hidden due to workflow strategy, and 2) only the input.Variable 'Include' strategy overrules this default strategy",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get journal item: SetVariable",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.setVariable }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert SetVariable activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityState.Variable }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Variable.id }}",
+                            "expectedValue": "{{ $.globals.variableIds.httpResponseBody }}"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.outputs }}",
+                            "description": "Outputs is not even present because all output data excluded"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Assert: WriteHttpResponse log persistence",
+            "description": "Asserts that: 1) the activity default 'Include' strategy override the default workflow strategy, and 2) only the input.ResponseHeaders 'Exclude' strategy overrules the activity default strategy",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get journal item: WriteHttpResponse",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.writeHttpResponse }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert WriteHttpResponse activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.StatusCode }}",
+                            "expectedValue": "Accepted"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.ContentType }}",
+                            "expectedValue": "application/json"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Content.testProperty1 }}",
+                            "expectedValue": "{{ $.globals.requestBody.testProperty1 }}"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.activityState.ResponseHeaders }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Assert: all variables still visible in workflow instance data even when workflow log strategy = 'Excluded'",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-get-workflow-instance",
+                    "name": "Get workflow instance & assert variables",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instance }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.httpRequestBody }}'].testProperty1 }}",
+                            "expectedValue": "{{ $.globals.requestBody.testProperty1 }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.httpRequestHeaders }}']['{{ $.globals.customRequestHeader.name }}'] }}",
+                            "expectedValue": "{{ $.globals.customRequestHeader.value }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.queryArguments }}'].queryParam }}",
+                            "expectedValue": "abc"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.httpResponseBody }}'].testProperty1 }}",
+                            "expectedValue": "{{ $.globals.requestBody.testProperty1 }}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

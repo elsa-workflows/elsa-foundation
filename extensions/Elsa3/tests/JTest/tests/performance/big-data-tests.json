@@ -1,0 +1,143 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Test case: performance big data",
+        "description": "Executes a workflow that processes large raw variable data; which is stored both in the workflow execution log as well as the activity logs"
+    },
+    "globals": {
+        "definitionId": "e1e1f7b3526f2a7a",
+        "bigDataFilePath": "test-files/big-mock-data.json",
+        "expectedItemCount": 10782,
+        "activityIds": {
+            "javascript": "260a47548a90d1b2",
+            "setVariable": "7f3b3271b0615e2e",
+            "setOutput": "8ad638490df2cb0c"
+        }
+    },
+    "categories": [
+        "performance",
+        "bigdata"
+    ],
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Act & Assert - Execute workflow",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Execute workflow",
+                    "url": "{{ $.env['elsaApi:baseUrl'] }}/elsa/api/workflow-definitions/{{ $.globals.definitionId }}/execute",
+                    "method": "POST",
+                    "file": "{{ $.globals.bigDataFilePath }}",
+                    "headers": [
+                        {
+                            "name": "Authorization",
+                            "value": "{{ $.globals.authHeader }}"
+                        }
+                    ],
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.workflowState.status }}",
+                            "expectedValue": "Finished",
+                            "description": "Workflow state is finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.workflowState.subStatus }}",
+                            "expectedValue": "Finished",
+                            "description": "Workflow sub-state is finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.workflowState.output.OutputData.itemCount }}",
+                            "expectedValue": "{{ $.globals.expectedItemCount }}",
+                            "description": "Assert that big data is returned as part of workflow execution log"
+                        },
+                        {
+                          "op": "exists",
+                          "actualValue": "{{ $.this.body.workflowState.id }}",
+                          "description": "Instance ID is returned"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.instanceId": "{{ $.this.body.workflowState.id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Get SetVariable Instance",
+                    "template": "elsa-activity-instance-find",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityId": "{{ $.globals.activityIds.setVariable }}",
+                        "workflowInstanceId": "{{ $.globals.instanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Value.itemCount }}",
+                            "expectedValue": "{{ $.globals.expectedItemCount }}",
+                            "description": "Activity has expected input"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get Javascript Instance",
+                    "template": "elsa-activity-instance-find",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityId": "{{ $.globals.activityIds.javascript }}",
+                        "workflowInstanceId": "{{ $.globals.instanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.outputs.Result.itemCount }}",
+                            "expectedValue": "{{ $.globals.expectedItemCount }}",
+                            "description": "Activity has expected output"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get SetOutput Instance",
+                    "template": "elsa-activity-instance-find",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.instanceId }}",
+                        "activityId": "{{ $.globals.activityIds.setOutput }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.OutputValue.itemCount }}",
+                            "expectedValue": "{{ $.globals.expectedItemCount }}",
+                            "description": "Activity has expected input"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

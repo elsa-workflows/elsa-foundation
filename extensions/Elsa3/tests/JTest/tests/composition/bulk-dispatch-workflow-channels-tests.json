@@ -1,0 +1,161 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing the BulkDispatch workflow activity. Case: channels"
+    },
+    "using": [],
+    "globals": {
+        "endpoint": "qa/composition/bulk-dispatch",
+        "workflowDefinitionId": "ccb613931f8b60a",
+        "workflowDefinitionVersion": 1,
+        "subWorkflowDefinitionId": "32aa8cdf445d8276",
+        "subWorkflowDefinitionVersion": 1,
+        "subWorkflowInputItems": [
+            {
+                "ShouldFault": false
+            }
+        ]
+    },
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Execute Test Case: Channels",
+            "description": "Testing whether the bulk dispatch workflow activity behaves the same when using different channels",
+            "datasets": [
+                {
+                    "name": "channel1",
+                    "case": {
+                        "channel": "{{ $.env.dispatch.chanels.channel_1 }}",
+                        "correlationIdSuffix": "channel-1"
+                    }
+                },
+                {
+                    "name": "channel2",
+                    "case": {
+                        "channel": "{{ $.env.dispatch.chanels.channel_2 }}",
+                        "correlationIdSuffix": "channel-2"
+                    }
+                },
+                {
+                    "name": "channel3",
+                    "case": {
+                        "channel": "{{ $.env.dispatch.chanels.channel_3 }}",
+                        "correlationIdSuffix": "channel-3"
+                    }
+                },
+                {
+                    "name": "default",
+                    "case": {
+                        "channel": "{{ $.env.dispatch.chanels.channel_Default }}",
+                        "correlationIdSuffix": "default"
+                    }
+                }
+            ],
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "headers": [
+                    ],
+                    "body": {
+                        "subWorkflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "subWorkflowInputItems": [
+                            {
+                                "ShouldFault": true,
+                                "correlationIdSuffix": "{{ $.case.correlationIdSuffix }}"
+                            }
+                        ],
+                        "channel": "{{ $.case.channel }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.status}}",
+                            "expectedValue": 202
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Execute ROOT-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        }
+                    ],
+                    "save": {
+                        "$.rootWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "wait",
+                    "name": "Wait until instance is available",
+                    "ms": 500
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Faulted SUB-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.subWorkflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}{{ $.case.correlationIdSuffix }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].subStatus }}",
+                            "expectedValue": "Faulted",
+                            "description": "Asserting the faulted status because it requires that the input 'ShouldFault' is correctly retrieved from the context"
+                        }
+                    ],
+                    "save": {
+                        "faultedSubWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                }
+            ]
+        }
+    ]
+}

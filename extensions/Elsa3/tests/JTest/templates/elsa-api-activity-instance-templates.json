@@ -1,0 +1,601 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Templates for executing activity instance endpoints",
+        "description": ""
+    },
+    "components": {
+        "templates": [
+            {
+                "name": "elsa-activity-instance-find",
+                "description": "Finds and activity instance by id in the specified workflow instance",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "use",
+                        "name": "Get Journal Item",
+                        "template": "elsa-activity-instance-get-journal-item",
+                        "with": {
+                            "baseUrl": "{{ $.baseUrl }}",
+                            "authHeader": "{{ $.authHeader }}",
+                            "workflowInstanceId": "{{ $.workflowInstanceId }}",
+                            "activityId": "{{ $.activityId }}"
+                        },
+                        "save": {
+                            "instanceId": "{{ $.this.activityInstanceId }}"
+                        }
+                    },
+                    {
+                        "type": "use",
+                        "name": "Get Activity Instance",
+                        "template": "elsa-activity-instance-get",
+                        "with": {
+                            "baseUrl": "{{ $.baseUrl }}",
+                            "authHeader": "{{ $.authHeader }}",
+                            "activityInstanceId": "{{ $.instanceId }}"
+                        },
+                        "save": {
+                            "activityState": "{{ $.this.activityState }}",
+                            "startedAt": "{{ $.this.startedAt }}",
+                            "completedAt": "{{ $.this.completedAt }}",
+                            "status": "{{ $.this.status }}",
+                            "id": "{{ $.this.id }}",
+                            "outputs": "{{ $.this.outputs }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "activityState": "{{ $.activityState }}",
+                    "status": "{{ $.status }}",
+                    "id": "{{ $.id }}",
+                    "startedAt": "{{ $.startedAt }}",
+                    "completedAt": "{{ $.completedAt }}",
+                    "outputs": "{{ $.outputs }}"
+                }
+            },
+            {
+                "name": "elsa-activity-instance-get",
+                "description": "Gets the activity instance",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "activityInstanceId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: /activity-executions/<activityInstanceId>",
+                        "url": "{{ $.baseUrl }}/elsa/api/activity-executions/{{$.activityInstanceId}}",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            },
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.body.id}}",
+                                "expectedValue": "{{ $.activityInstanceId }}"
+                            }
+                        ],
+                        "save": {
+                            "activityState": "{{ $.this.body.activityState }}",
+                            "startedAt": "{{ $.this.body.startedAt }}",
+                            "completedAt": "{{ $.this.body.completedAt }}",
+                            "status": "{{ $.this.body.status }}",
+                            "id": "{{ $.this.body.id }}",
+                            "outputs": "{{ $.this.body.outputs }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "activityState": "{{ $.activityState }}",
+                    "status": "{{ $.status }}",
+                    "id": "{{ $.id }}",
+                    "startedAt": "{{ $.startedAt }}",
+                    "completedAt": "{{ $.completedAt }}",
+                    "outputs": "{{ $.outputs }}"
+                }
+            },
+            {
+                "name": "elsa-activity-instance-get-journal-items-completed",
+                "description": "Gets the activity instance journal items with status 'Completed' for specified activity in the workflow instance",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "wait",
+                        "ms": 1000
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: /journal",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-instances/{{$.workflowInstanceId}}/journal",
+                        "method": "POST",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "body": {
+                            "filter": {
+                                "activityIds": [
+                                    "{{$.activityId}}"
+                                ],
+                                "excludedActivityTypes": [
+                                    "Elsa.Workflow",
+                                    "Elsa.Flowchart"
+                                ],
+                                "eventNames": [
+                                    "Completed"
+                                ]
+                            }
+                        },
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "journalEntries": "{{ $.this.body.items }}",
+                            "journalEntriesCount": "{{ $.this.body.totalCount }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "journalEntries": "{{ $.journalEntries }}",
+                    "journalEntriesCount": "{{ $.journalEntriesCount }}"
+                }
+            },
+            {
+                "name": "elsa-activity-instance-get-journal-item",
+                "description": "Gets the activity instance journal item containing: activityInstanceId, startedAt, and completedAt",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "wait",
+                        "ms": 1000
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: /journal",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-instances/{{$.workflowInstanceId}}/journal",
+                        "method": "POST",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "body": {
+                            "filter": {
+                                "activityIds": [
+                                    "{{$.activityId}}"
+                                ],
+                                "excludedActivityTypes": [
+                                    "Elsa.Workflow",
+                                    "Elsa.Flowchart"
+                                ]
+                            }
+                        },
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            },
+                            {
+                                "op": "greaterorequal",
+                                "actualValue": "{{$.this.body.totalCount}}",
+                                "expectedValue": 1,
+                                "description": "At least a started event is expected"
+                            }
+                        ],
+                        "save": {
+                            "activityInstanceId": "{{ $.this.body.items[0].activityInstanceId }}",
+                            "startedAt": "{{ $.this.body.items[?(@.eventName == 'Started')].timestamp }}",
+                            "completedAt": "{{ $.this.body.items[?(@.eventName == 'Completed')].timestamp }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "activityInstanceId": "{{ $.activityInstanceId }}",
+                    "startedAt": "{{ $.startedAt }}",
+                    "completedAt": "{{ $.completedAt }}"
+                }
+            },
+            {
+                "name": "elsa-activity-instance-get-count-started",
+                "description": "Returns how many times the specified activity is executed with the status 'Started' in the workflow instance",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "use",
+                        "name": "Call internal activity instance count template (Started events)",
+                        "template": "internal-elsa-activity-instance-get-count",
+                        "with": {
+                            "baseUrl": "{{ $.baseUrl }}",
+                            "authHeader": "{{ $.authHeader }}",
+                            "workflowInstanceId": "{{ $.workflowInstanceId }}",
+                            "activityId": "{{ $.activityId }}",
+                            "eventName": "Started"
+                        },
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{$.this.count}}"
+                            }
+                        ],
+                        "save": {
+                            "count": "{{ $.this.count }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "count": "{{ $.count }}"
+                }
+            },
+            {
+                "name": "elsa-activity-instance-get-count-completed",
+                "description": "Returns how many times the specified activity is executed with the status 'Completed' in the workflow instance",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "use",
+                        "name": "Call internal activity instance count template (Completed events)",
+                        "template": "internal-elsa-activity-instance-get-count",
+                        "with": {
+                            "baseUrl": "{{ $.baseUrl }}",
+                            "authHeader": "{{ $.authHeader }}",
+                            "workflowInstanceId": "{{ $.workflowInstanceId }}",
+                            "activityId": "{{ $.activityId }}",
+                            "eventName": "Completed"
+                        },
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{$.this.count}}"
+                            }
+                        ],
+                        "save": {
+                            "count": "{{ $.this.count }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "count": "{{ $.count }}"
+                }
+            },
+            {
+                "name": "internal-elsa-activity-instance-get-count",
+                "description": "Returns how many times the specified activity is executed in the workflow instance",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "eventName": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "wait",
+                        "ms": 1000
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: /journal",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-instances/{{$.workflowInstanceId}}/journal",
+                        "method": "POST",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "body": {
+                            "filter": {
+                                "activityIds": [
+                                    "{{$.activityId}}"
+                                ],
+                                "excludedActivityTypes": [
+                                    "Elsa.Workflow",
+                                    "Elsa.Flowchart"
+                                ],
+                                "eventNames": [
+                                    "{{$.eventName}}"
+                                ]
+                            }
+                        },
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "count": "{{ $.this.body.totalCount }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "count": "{{ $.count }}"
+                }
+            },
+            {
+                "name": "elsa-activity-instance-assert-all-completed",
+                "description": "Asserts the specified activity identifiers are all executed and completed",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityIdentifiers": {
+                        "type": "array",
+                        "required": true
+                    },
+                    "activityIdentifiersCount": {
+                        "type": "integer",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "wait",
+                        "ms": 1000
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: /journal",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-instances/{{$.workflowInstanceId}}/journal",
+                        "method": "POST",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "body": {
+                            "filter": {
+                                "activityIds": "{{$.activityIdentifiers}}",
+                                "excludedActivityTypes": [
+                                    "Elsa.Workflow",
+                                    "Elsa.Flowchart"
+                                ],
+                                "eventNames": [
+                                    "Completed"
+                                ]
+                            }
+                        },
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            },
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.body.totalCount}}",
+                                "expectedValue": "{{ $.activityIdentifiersCount }}"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "elsa-activity-instance-assert-none-executed",
+                "description": "Asserts the specified activity identifiers are all executed and completed",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityIdentifiers": {
+                        "type": "array",
+                        "required": true
+                    },
+                    "eventNames": {
+                        "type": "array",
+                        "required": false,
+                        "default": [
+                            "Completed",
+                            "Started"
+                        ]
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "wait",
+                        "ms": 1000
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: /journal",
+                        "url": "{{ $.baseUrl }}/elsa/api/workflow-instances/{{$.workflowInstanceId}}/journal",
+                        "method": "POST",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "body": {
+                            "filter": {
+                                "activityIds": "{{$.activityIdentifiers}}",
+                                "excludedActivityTypes": [
+                                    "Elsa.Workflow",
+                                    "Elsa.Flowchart"
+                                ],
+                                "eventNames": "{{ $.eventNames }}"
+                            }
+                        },
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            },
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.body.totalCount}}",
+                                "expectedValue": 0
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

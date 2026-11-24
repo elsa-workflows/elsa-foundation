@@ -1,0 +1,234 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing the behaviour of variables with different storage driver types",
+        "description": "Two storage types are tested: 'Memory' and 'Workflow Instance'"
+    },
+    "globals": {
+        "memoryEndpoint": "qa/variables/storage/memory",
+        "workflowInstanceEndpoint": "qa/variables/storage/workflow-instance",
+        "workflowDefinitionId": "775ed70076c8d703",
+        "workflowDefinitionVersion": 1,
+        "requestBody":{
+            "testProperty1": "testvalue1"
+        },
+        "variableIds": {
+            "memory": {
+                "httpRequestBody": "1feb1d7493333472",
+                "httpResponse": "efd088613774cc33",
+                "subWorkflowInputVariable": "fe2fea1874754463"
+            },
+            "workflowInstance": {
+                "httpRequestBody": "b4d304271762a2fb",
+                "httpResponse": "96082f5e9c498ee6",
+                "subWorkflowInputVariable": "84e05a5c73d43dc4"
+            }
+        }
+    },
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Execute test case: Memory",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.memoryEndpoint }}",
+                    "method": "POST",
+                    "headers": [
+                    ],
+                    "body": "{{ $.globals.requestBody }}",
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.status}}",
+                            "expectedValue": 202
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Find workflow instance",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        }
+                    ],
+                    "save": {
+                        "$.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-get-workflow-instance",
+                    "name": "Get workflow instance data & assert variables",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.workflowInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instance }}"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.memory.httpRequestBody }}'] }}"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.memory.httpResponse }}']}}"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.memory.subWorkflowInputVariable }}'] }}",
+                            "description": "We must assert current behaviour, that no matter the storage driver type; any variables defined in sub workflows are never returned by get-instance API"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.workflowInstance.subWorkflowInputVariable }}'] }}",
+                            "description": "We must assert current behaviour, that no matter the storage driver type; any variables defined in sub workflows are never returned by get-instance API"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.workflowInstance.httpRequestBody }}'] }}"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.workflowInstance.httpResponse }}'] }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case: Workflow Instance",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.workflowInstanceEndpoint }}",
+                    "method": "POST",
+                    "headers": [
+                    ],
+                    "body": "{{ $.globals.requestBody }}",
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.status}}",
+                            "expectedValue": 202
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Find workflow instance",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        }
+                    ],
+                    "save": {
+                        "$.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-get-workflow-instance",
+                    "name": "Get workflow instance data & assert variables",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.workflowInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instance }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.workflowInstance.httpRequestBody }}'].testProperty1 }}",
+                            "expectedValue": "{{ $.globals.requestBody.testProperty1 }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.workflowInstance.httpResponse }}'].testProperty1 }}",
+                            "expectedValue": "{{ $.globals.requestBody.testProperty1 }}"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.memory.subWorkflowInputVariable }}'] }}",
+                            "description": "We must assert current behaviour, that no matter the storage driver type; any variables defined in sub workflows are never returned by get-instance API"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.workflowInstance.subWorkflowInputVariable }}'] }}",
+                            "description": "We must assert current behaviour, that no matter the storage driver type; any variables defined in sub workflows are never returned by get-instance API"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.memory.httpRequestBody }}'] }}"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.memory.httpResponse }}']}}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

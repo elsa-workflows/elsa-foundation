@@ -1,0 +1,68 @@
+{
+    "$schema": "https://elsaworkflows.io/schemas/workflow-definition/v3.0.0/schema.json",
+    "id": "1dc550bab54a9c19",
+    "definitionId": "e1248e15b33efa5a",
+    "name": "Simple Write Hello World",
+    "createdAt": "2026-02-03T12:08:16.7505794\u002B00:00",
+    "version": 1,
+    "toolVersion": "3.6.0.0",
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+        "autoUpdateConsumingWorkflows": false
+    },
+    "root": {
+        "id": "c16f437a36a6e7b0",
+        "nodeId": "Workflow1:c16f437a36a6e7b0",
+        "name": "Flowchart1",
+        "type": "Elsa.Flowchart",
+        "version": 1,
+        "customProperties": {
+            "notFoundConnections": [],
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+        },
+        "metadata": {},
+        "activities": [
+            {
+                "text": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Hello World"
+                    }
+                },
+                "id": "ef426166e2ffe0b9",
+                "nodeId": "Workflow1:c16f437a36a6e7b0:ef426166e2ffe0b9",
+                "name": "WriteLine1",
+                "type": "Elsa.WriteLine",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -124,
+                            "y": -161.5
+                        },
+                        "size": {
+                            "width": 159.625,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            }
+        ],
+        "variables": [],
+        "connections": []
+    }
+}

@@ -1,0 +1,725 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing the array methods in javascript",
+        "description": "We additionally assert that none of the array methods change the array Elsa variable"
+    },
+    "globals": {
+        "endpoint": "qa/javascript/array-methods",
+        "array": [
+            "test1",
+            "test2",
+            "test3"
+        ]
+    },
+    "tests": [
+        {
+            "name": "Execute test case for array method 'unshift'",
+            "description": "Assertion proves original variable is not changed",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "unshift",
+                        "array": "{{ $.globals.array }}",
+                        "unshift": {
+                            "itemToAdd": "added item1"
+                        }
+                    },
+                    "assert": [
+                        {
+                            "op": "length",
+                            "actualValue": "{{$.this.body.unshiftedArray}}",
+                            "expectedValue": 4
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.unshiftedArray[0]}}",
+                            "expectedValue": "added item1"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.unshiftedArray[3]}}",
+                            "expectedValue": "test3"
+                        },
+                        {
+                            "op": "length",
+                            "actualValue": "{{ $.this.body.arrayVariable }}",
+                            "expectedValue": 3
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.arrayVariable[0]}}",
+                            "expectedValue": "test1"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'shift'",
+            "description": "Assertion proves original variable is not changed",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "shift",
+                        "array": "{{ $.globals.array }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "length",
+                            "actualValue": "{{$.this.body.shiftedArray}}",
+                            "expectedValue": 2
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.shiftedArray[0]}}",
+                            "expectedValue": "test2"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.shiftedArray[1]}}",
+                            "expectedValue": "test3"
+                        },
+                        {
+                            "op": "length",
+                            "actualValue": "{{ $.this.body.arrayVariable }}",
+                            "expectedValue": 3
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.arrayVariable[0]}}",
+                            "expectedValue": "test1"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'push'",
+            "description": "Assertion proves original variable is not changed",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "push",
+                        "array": "{{ $.globals.array }}",
+                        "push": {
+                            "itemToAdd": "newly pushed item1"
+                        }
+                    },
+                    "assert": [
+                        {
+                            "op": "length",
+                            "actualValue": "{{$.this.body.pushedArray}}",
+                            "expectedValue": 4
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.newLength}}",
+                            "expectedValue": 4
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.pushedArray[3] }}",
+                            "expectedValue": "newly pushed item1"
+                        },
+                        {
+                            "op": "length",
+                            "actualValue": "{{ $.this.body.arrayVariable }}",
+                            "expectedValue": 3
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'pop'",
+            "description": "Assertion proves original variable is not changed",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "pop",
+                        "array": "{{ $.globals.array }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "length",
+                            "actualValue": "{{$.this.body.poppedArray}}",
+                            "expectedValue": 2
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.poppedArray[0] }}",
+                            "expectedValue": "test1"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.poppedArray[1] }}",
+                            "expectedValue": "test2"
+                        },
+                        {
+                            "op": "length",
+                            "actualValue": "{{ $.this.body.arrayVariable }}",
+                            "expectedValue": 3
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'replace'",
+            "description": "Assertion proves original variable is not changed",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "replace",
+                        "array": "{{ $.globals.array }}",
+                        "replace": {
+                            "index": 1,
+                            "item": "replaced item"
+                        }
+                    },
+                    "assert": [
+                        {
+                            "op": "length",
+                            "actualValue": "{{$.this.body.replacedArray}}",
+                            "expectedValue": 3
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.replacedArray[1]}}",
+                            "expectedValue": "replaced item"
+                        },
+                        {
+                            "op": "length",
+                            "actualValue": "{{ $.this.body.arrayVariable }}",
+                            "expectedValue": 3
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.arrayVariable[1]}}",
+                            "expectedValue": "test2"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'isArray'",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "isArray",
+                        "array": "{{ $.globals.array }}",
+                        "isArray": {
+                            "object": {
+                                "someProp1": "testValue1"
+                            },
+                            "text": "Test text",
+                            "numeric": 12
+                        }
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.isArray.array}}",
+                            "expectedValue": true
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.isArray.numeric}}",
+                            "expectedValue": false
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.isArray.object}}",
+                            "expectedValue": false
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.isArray.text}}",
+                            "expectedValue": false
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'concat'",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "concat",
+                        "array": "{{ $.globals.array }}",
+                        "concat": {
+                            "array": [
+                                "concatItem1",
+                                "concatItem2"
+                            ]
+                        }
+                    },
+                    "assert": [
+                        {
+                            "op": "length",
+                            "actualValue": "{{$.this.body.concat}}",
+                            "expectedValue": 5
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.concat[3]}}",
+                            "expectedValue": "concatItem1"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.concat[4]}}",
+                            "expectedValue": "concatItem2"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'splice'",
+            "description": "Assertion proves original variable is not changed",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "splice",
+                        "array": "{{ $.globals.array }}",
+                        "splice": {
+                            "startIndex": 0,
+                            "removeNumberItems": 1,
+                            "itemToAdd": "spliced1"
+                        }
+                    },
+                    "assert": [
+                        {
+                            "op": "length",
+                            "actualValue": "{{$.this.body.splicedArray}}",
+                            "expectedValue": 3
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.splicedArray[0]}}",
+                            "expectedValue": "spliced1"
+                        },
+                        {
+                            "op": "length",
+                            "actualValue": "{{$.this.body.arrayVariable}}",
+                            "expectedValue": 3
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.deletedItems[0]}}",
+                            "expectedValue": "test1"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.arrayVariable[0]}}",
+                            "expectedValue": "test1"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'slice'",
+            "description": "Assertion proves original variable is not changed",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "slice",
+                        "array": "{{ $.globals.array }}",
+                        "slice": {
+                            "index": 2
+                        }
+                    },
+                    "assert": [
+                        {
+                            "op": "length",
+                            "actualValue": "{{$.this.body.slicedArray}}",
+                            "expectedValue": 1
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.slicedArray[0]}}",
+                            "expectedValue": "test3"
+                        },
+                        {
+                            "op": "length",
+                            "actualValue": "{{$.this.body.arrayVariable}}",
+                            "expectedValue": 3
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'indexOf'",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "indexOf",
+                        "array": [
+                            "test1",
+                            "test2",
+                            "test3",
+                            "test2"
+                        ],
+                        "indexOf": {
+                            "item": "test2",
+                            "startIndex": 2
+                        }
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.index}}",
+                            "expectedValue": 1
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.indexAfterStartIndex}}",
+                            "expectedValue": 3
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'lastIndexOf'",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "lastIndexOf",
+                        "array": [
+                            "test2",
+                            "test1",
+                            "test3",
+                            "test2"
+                        ],
+                        "lastIndexOf": {
+                            "item": "test2",
+                            "startIndex": 2
+                        }
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.index}}",
+                            "expectedValue": 3
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.indexAfterStartIndex}}",
+                            "expectedValue": 0
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'find'",
+            "description": "",
+            "datasets": [
+                {
+                    "name": "found",
+                    "case": {
+                        "findItem": "test2",
+                        "expectedResult": "test2"
+                    }
+                },
+                {
+                    "name": "not_found",
+                    "case": {
+                        "findItem": "unknown item",
+                        "expectedResult": null
+                    }
+                }
+            ],
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "find",
+                        "array": "{{ $.globals.array }}",
+                        "findItem": "{{ $.case.findItem }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.find}}",
+                            "expectedValue": "{{ $.case.expectedResult }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'includes'",
+            "description": "",
+            "datasets": [
+                {
+                    "name": "found",
+                    "case": {
+                        "item": "test2",
+                        "expectedResult": true
+                    }
+                },
+                {
+                    "name": "not_found",
+                    "case": {
+                        "item": "unknown item",
+                        "expectedResult": false
+                    }
+                }
+            ],
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "includes",
+                        "array": "{{ $.globals.array }}",
+                        "includes": {
+                            "item": "{{ $.case.item }}"
+                        }
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.includes}}",
+                            "expectedValue": "{{ $.case.expectedResult }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'sort'",
+            "description": "Assertion proves original variable is not changed",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "sort",
+                        "array": [
+                            "test3",
+                            "test1",
+                            "test2"
+                        ]
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.sortedArray[0]}}",
+                            "expectedValue": "test1"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.sortedArray[1]}}",
+                            "expectedValue": "test2"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.sortedArray[2]}}",
+                            "expectedValue": "test3"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.arrayVariable[0]}}",
+                            "expectedValue": "test3"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.arrayVariable[1]}}",
+                            "expectedValue": "test1"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.arrayVariable[2]}}",
+                            "expectedValue": "test2"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'reverse'",
+            "description": "Assertion proves original variable is not changed",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "reverse",
+                        "array": [
+                            "test1",
+                            "test2",
+                            "test3"
+                        ]
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.reversedArray[0]}}",
+                            "expectedValue": "test3"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.reversedArray[1]}}",
+                            "expectedValue": "test2"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.reversedArray[2]}}",
+                            "expectedValue": "test1"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.arrayVariable[0]}}",
+                            "expectedValue": "test1"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.arrayVariable[1]}}",
+                            "expectedValue": "test2"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.arrayVariable[2]}}",
+                            "expectedValue": "test3"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'forEach'",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "forEach",
+                        "array": "{{ $.globals.array }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.forEachResult}}",
+                            "expectedValue": "test1-test2-test3"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'map'",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",                    
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "map",
+                        "array": [
+                            1,
+                            2,
+                            3
+                        ]
+                    },
+                    "assert": [
+                        {
+                            "op": "length",
+                            "actualValue": "{{$.this.body.mapResult}}",
+                            "expectedValue": 3
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.mapResult[0]}}",
+                            "expectedValue": 2
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.mapResult[1]}}",
+                            "expectedValue": 4
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.mapResult[2]}}",
+                            "expectedValue": 6
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for array method 'length'",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "length",
+                        "array": "{{ $.globals.array }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.length }}",
+                            "expectedValue": 3
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

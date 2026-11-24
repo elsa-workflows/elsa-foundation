@@ -1,0 +1,221 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Test Join with WaitAny mode",
+        "description": "We will expect the following result. If there are inbound paths that can never be executed, we will expect this join activity not to wait for those inbound paths and be executed once all possible inbound paths arrive."
+    },
+    "globals": {
+        "authHeader": null,
+        "workflowInstanceId": null,
+        "endpoint": "qa/branching/wait-any",
+        "versionId": "364ae36ed7e2341c38",
+        "definitionId": "16253948d00ea5633",
+        "version": 1,
+        "expectedStatusCode": 202,
+        "expectedCompletedActivities": [
+            "{{ $.globals.activityIds.httpEndpoint }}",
+            "{{ $.globals.activityIds.correlate }}",
+            "{{ $.globals.activityIds.decision_AlwaysTrue }}",
+            "{{ $.globals.activityIds.fork }}",
+            "{{ $.globals.activityIds.fork_SubBranch1_RunJavascript }}",
+            "{{ $.globals.activityIds.fork_SubBranch2_WriteLine }}",
+            "{{ $.globals.activityIds.fork_SubBranch3_WriteLine }}",
+            "{{ $.globals.activityIds.join }}",
+            "{{ $.globals.activityIds.httpResponse_Final }}"
+        ],
+        "expectedCompletedActivitiesCount": 9,
+        "expectedActivitiesNeverExecuted": [
+            "{{ $.globals.activityIds.writeLine_PathThatNeverExecutes }}"
+        ],
+        "activityIds": {
+            "httpEndpoint": "8a1a086771335e5a",
+            "correlate": "a6e37d9980ab51a3",
+            "decision_AlwaysTrue": "1f6e2e455ba35d4f",
+            "writeLine_PathThatNeverExecutes": "ca525c538176493b",
+            "fork": "c48d023baf3158d6",
+            "fork_SubBranch1_RunJavascript": "327675988ad9a07d",
+            "fork_SubBranch2_WriteLine": "ae919f146c26ad4a",
+            "fork_SubBranch3_WriteLine": "cba7b6a948339708",
+            "join": "b30911da0e0c6dfc",
+            "httpResponse_Final": "c7a083e4b01a1c28"
+        }
+    },
+    "tests": [
+        {
+            "name": "Act: Execute workflow definition",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Execute workflow",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "GET",
+                    "headers": [
+                    ],
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "{{ $.globals.expectedStatusCode }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Required setup for assertions",
+            "description": "Authenticate with Elsa API and get the executed workflow instance",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username']}}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Find workflow instance",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.definitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.version }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionId }}",
+                            "expectedValue": "{{ $.globals.definitionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionVersionId }}",
+                            "expectedValue": "{{ $.globals.versionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].correlationId }}",
+                            "expectedValue": "{{ $.globals.correlationId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Assert: expected activities completed",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "",
+                    "template": "elsa-activity-instance-assert-all-completed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityIdentifiers": "{{ $.globals.expectedCompletedActivities }}",
+                        "activityIdentifiersCount": "{{ $.globals.expectedCompletedActivitiesCount }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Assert: expected activities never executed",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "",
+                    "template": "elsa-activity-instance-assert-none-executed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityIdentifiers": "{{ $.globals.expectedActivitiesNeverExecuted }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Assert: Join activity waits for all possible inbound paths before being activated with status 'Started'",
+            "description": "The join activity does not start when any of the inbound paths reach the activity. Instead it waits for all inbound paths that could possibly reach it. Asserted by comparing 'startedAt' of Join is greater than the 'RunJavascript' activity which has a script that waits two seconds making sure other inbound paths arrive at the join much earlier.",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get Journal Item of Join Activity",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{ $.globals.activityIds.join }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.startedAt }}"
+                        }
+                    ],
+                    "save": {
+                        "joinActivityInstanceStartedAt": "{{ $.this.startedAt }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Get Journal Item of RunJavascript Activity",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{ $.globals.activityIds.fork_SubBranch1_RunJavascript }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.startedAt }}"
+                        }
+                    ],
+                    "save": {
+                        "runJavascriptActivityInstanceCompletedAt": "{{ $.this.completedAt }}"
+                    }
+                },
+                {
+                    "type": "assert",
+                    "name": "Assert: 'joinActivityInstance.startedAt' is greater than 'runJavascript.completedAt'",
+                    "description": "This proves that the join activity waits for all possible inbound paths to join before starting",
+                    "assert": [
+                        {
+                            "op": "greaterthan",
+                            "actualValue": "{{ $.joinActivityInstanceStartedAt }}",
+                            "expectedValue": "{{ $.runJavascriptActivityInstanceCompletedAt }}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

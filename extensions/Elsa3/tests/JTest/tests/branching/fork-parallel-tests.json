@@ -1,0 +1,194 @@
+{
+  "version": "1.0",
+  "info": {
+    "name": "Testing fork: parallel execution",
+    "description": "The description of the activity in Elsa states that all forked branches are executed in parallel. This test case asserts whether that is really the case"
+  },
+  "globals": {
+    "authHeader": null,
+    "workflowInstanceId": null,
+    "endpoint": "qa/branching/fork-parallel",
+    "versionId": "b5a9dbe4bbb0ddad",
+    "definitionId": "1827851ae82eae1096",
+    "version": 1,
+    "expectedStatusCode": 202,
+    "activityIds": {
+      "fork_SubBranch1_RunJavascript": "327675988ad9a07d",
+      "fork_SubBranch2_WriteLine": "ae919f146c26ad4a",
+      "fork_SubBranch3_WriteLine": "cba7b6a948339708"
+    }    
+  },
+  "tests": [
+    {
+      "name": "Act: Execute workflow definition",
+      "description": "",
+      "steps": [
+        {
+          "type": "http",
+          "name": "Execute workflow",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "GET",
+          "headers": [
+          ],
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": "{{ $.globals.expectedStatusCode }}"
+            }
+          ],
+          "save": {
+            "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Required setup for assertions",
+      "description": "Authenticate with Elsa API and get the executed workflow instance",
+      "steps": [
+        {
+          "type": "use",
+          "template": "elsa-authenticate",
+          "with": {
+            "username": "{{ $.env['elsaApi:username']}}",
+            "password": "{{ $.env['elsaApi:password'] }}",
+            "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+          },
+          "save": {
+            "$.globals.authHeader": "{{ $.this.authHeader }}"
+          }
+        },
+        {
+          "type": "use",
+          "template": "elsa-search-workflow-instances",
+          "name": "Find workflow instance",
+          "with": {
+            "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+            "authHeader": "{{ $.globals.authHeader }}",
+            "workflowDefinitionId": "{{ $.globals.definitionId }}",
+            "workflowDefinitionVersion": "{{ $.globals.version }}",
+            "correlationId": "{{ $.globals.correlationId }}"
+          },
+          "assert": [
+            {
+              "op": "exists",
+              "actualValue": "{{ $.this.instances }}"
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.instances[0].status }}",
+              "expectedValue": "Finished"
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.instances[0].definitionId }}",
+              "expectedValue": "{{ $.globals.definitionId }}"
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.instances[0].definitionVersionId }}",
+              "expectedValue": "{{ $.globals.versionId }}"
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.instances[0].correlationId }}",
+              "expectedValue": "{{ $.globals.correlationId }}"
+            }
+          ],
+          "save": {
+            "$.globals.workflowInstanceId": "{{ $.this.instances[0].id }}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Assert: Fork does not execute in parallel",
+      "description": "The branches of a fork execute in order top-to-bottom (subBranch1, subBranch2, subBranch3), and each branch waits for the previous branch to complete",      
+      "steps": [
+        {
+          "type": "use",
+          "name": "Get Journal Item of SubBranch1 Activity",
+          "description": "SubBranch1 only has 1 RunJavaScript activity, whose script simply waits 2 seconds",
+          "template": "elsa-activity-instance-get-journal-item",
+          "with": {
+            "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+            "authHeader": "{{ $.globals.authHeader }}",
+            "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+            "activityId": "{{ $.globals.activityIds.fork_SubBranch1_RunJavascript }}"
+          },
+          "assert": [
+            {
+              "op": "exists",
+              "actualValue": "{{ $.this.startedAt }}"
+            }
+          ],
+          "save": {            
+            "subBranch1_CompletedAt": "{{ $.this.completedAt }}"
+          }
+        },
+        {
+          "type": "use",
+          "name": "Get Journal Item of SubBranch2 Activity",
+          "description": "SubBranch2 only has 1 WriteLine activity",
+          "template": "elsa-activity-instance-get-journal-item",
+          "with": {
+            "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+            "authHeader": "{{ $.globals.authHeader }}",
+            "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+            "activityId": "{{ $.globals.activityIds.fork_SubBranch2_WriteLine }}"
+          },
+          "assert": [
+            {
+              "op": "exists",
+              "actualValue": "{{ $.this.startedAt }}"
+            }
+          ],
+          "save": {
+            "subBranch2_StartedAt": "{{ $.this.startedAt }}"
+          }
+        },
+        {
+          "type": "use",
+          "name": "Get Journal Item of SubBranch2 Activity",
+          "description": "SubBranch3 only has 1 WriteLine activity",
+          "template": "elsa-activity-instance-get-journal-item",
+          "with": {
+            "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+            "authHeader": "{{ $.globals.authHeader }}",
+            "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+            "activityId": "{{ $.globals.activityIds.fork_SubBranch3_WriteLine }}"
+          },
+          "assert": [
+            {
+              "op": "exists",
+              "actualValue": "{{ $.this.startedAt }}"
+            }
+          ],
+          "save": {
+            "subBranch3_StartedAt": "{{ $.this.startedAt }}"
+          }
+        },
+        {
+          "type": "assert",
+          "name": "Assert that subBranch2.startedAt and subBranch3.startedAt is greater than subBranch1.completedAt",          
+          "description": "SubBranch1 is a branch that simply waits 2 seconds. It would make sense if all branches are executed in parallel that subBranch2 and subBranch3 will not wait for the 2 seconds in subBranch1",
+          "assert": [
+            {
+              "op": "greaterthan",
+              "expectedValue": "{{ $.subBranch1_CompletedAt }}",
+              "actualValue": "{{ $.subBranch2_StartedAt }}",
+              "description": "SubBranch2.startedAt > subBranch1.completedAt"
+            },
+            {
+              "op": "greaterthan",
+              "expectedValue": "{{ $.subBranch1_CompletedAt }}",
+              "actualValue": "{{ $.subBranch3_StartedAt }}",
+              "description": "SubBranch3.startedAt > subBranch1.completedAt"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,274 @@
+{
+    "$schema": "https://elsaworkflows.io/schemas/workflow-definition/v3.0.0/schema.json",
+    "id": "5db4f3405a1d4ebc",
+    "definitionId": "f4e543514bd28e61",
+    "name": "QA - JTest - Performance - Concurrency",
+    "createdAt": "2026-02-03T12:16:01.634738\u002B00:00",
+    "version": 1,
+    "toolVersion": "3.6.0.0",
+    "variables": [
+        {
+            "id": "373b8eb51d14f66c",
+            "name": "DispatchCorrelationId",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        }
+    ],
+    "inputs": [
+        {
+            "uiHint": "singleline",
+            "storageDriverType": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core",
+            "type": "Object",
+            "name": "ConcurrencyCount",
+            "displayName": "ConcurrencyCount",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outputs": [
+        {
+            "type": "Object",
+            "name": "DispatchCorrelationIdentifier",
+            "displayName": "DispatchCorrelationIdentifier",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outcomes": [],
+    "customProperties": {
+        "VariableTestValues": {}
+    },
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+        "autoUpdateConsumingWorkflows": false
+    },
+    "root": {
+        "id": "c94d0ac2317c1d42",
+        "nodeId": "Workflow1:c94d0ac2317c1d42",
+        "name": "Flowchart1",
+        "type": "Elsa.Flowchart",
+        "version": 1,
+        "customProperties": {
+            "notFoundConnections": [],
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+        },
+        "metadata": {},
+        "activities": [
+            {
+                "correlationId": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return newGuid();"
+                    }
+                },
+                "id": "56e941854b5a4899",
+                "nodeId": "Workflow1:c94d0ac2317c1d42:56e941854b5a4899",
+                "name": "Correlate1",
+                "type": "Elsa.Correlate",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -680,
+                            "y": -81.4921875
+                        },
+                        "size": {
+                            "width": 153.828125,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "variable": {
+                    "id": "373b8eb51d14f66c",
+                    "name": "DispatchCorrelationId",
+                    "typeName": "Object",
+                    "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+                },
+                "value": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return newGuid();"
+                    }
+                },
+                "id": "99e6ae73de50f06e",
+                "nodeId": "Workflow1:c94d0ac2317c1d42:99e6ae73de50f06e",
+                "name": "SetVariable1",
+                "type": "Elsa.SetVariable",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -380,
+                            "y": -81.4921875
+                        },
+                        "size": {
+                            "width": 275.390625,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "Set dispatch correlation id"
+                }
+            },
+            {
+                "workflowDefinitionId": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "e1248e15b33efa5a"
+                    }
+                },
+                "items": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "const length = getConcurrencyCount();\r\nreturn Array.from({ length: length }, (_, i) =\u003E i \u002B 1);"
+                    }
+                },
+                "defaultItemInputKey": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Item"
+                    }
+                },
+                "correlationIdFunction": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getDispatchCorrelationId();"
+                    }
+                },
+                "input": null,
+                "waitForCompletion": {
+                    "typeName": "Boolean",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "False"
+                    }
+                },
+                "startNewTrace": {
+                    "typeName": "Boolean",
+                    "expression": {
+                        "type": "Literal",
+                        "value": false
+                    }
+                },
+                "channelName": null,
+                "childCompleted": null,
+                "childFaulted": null,
+                "id": "431f371e079fc025",
+                "nodeId": "Workflow1:c94d0ac2317c1d42:431f371e079fc025",
+                "name": "BulkDispatchWorkflows1",
+                "type": "Elsa.BulkDispatchWorkflows",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 27,
+                            "y": -106.5
+                        },
+                        "size": {
+                            "width": 265.625,
+                            "height": 117.984375
+                        }
+                    }
+                }
+            },
+            {
+                "outputName": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "DispatchCorrelationIdentifier"
+                    }
+                },
+                "outputValue": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getDispatchCorrelationId();"
+                    }
+                },
+                "id": "78e45a78fe372fb5",
+                "nodeId": "Workflow1:c94d0ac2317c1d42:78e45a78fe372fb5",
+                "name": "SetOutput2",
+                "type": "Elsa.SetOutput",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 524,
+                            "y": -56.484375
+                        },
+                        "size": {
+                            "width": 321.828125,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "Set DispatchCorrelationIdentifier"
+                }
+            }
+        ],
+        "variables": [],
+        "connections": [
+            {
+                "source": {
+                    "activity": "56e941854b5a4899",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "99e6ae73de50f06e",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "99e6ae73de50f06e",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "431f371e079fc025",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "431f371e079fc025",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "78e45a78fe372fb5",
+                    "port": "In"
+                },
+                "vertices": []
+            }
+        ]
+    }
+}

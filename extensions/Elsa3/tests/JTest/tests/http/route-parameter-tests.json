@@ -1,0 +1,41 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Test an HTTP Endpoint that supports route parameters",
+        "description": "[BUG REPORT]: HttpEndpoint.Output.RouteData object keys contains only all-lowercase characters. The HttpEndpoint.Url contains route parameter {routeValue} (Capital 'V')"
+    },
+    "using": [],
+    "globals": {        
+        "endpoint": "qa/http-endpoints/route-parameter",
+        "routeValue": "routeSegmentArgument"
+    },
+    "tests": [
+        {
+            "name": "Test case: route argument is correctly received and accessible (however, only lowercase)",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act & Assert: Execute workflow",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}/{{ $.globals.routeValue }}",
+                    "method": "GET",                    
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": 202
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.routeData.routevalue }}",
+                            "expectedValue": "{{ $.globals.routeValue }}"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.body.routeData.routeValue }}"                            
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

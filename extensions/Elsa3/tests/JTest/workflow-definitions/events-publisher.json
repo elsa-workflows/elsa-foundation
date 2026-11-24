@@ -1,0 +1,249 @@
+{
+    "$schema": "https://elsaworkflows.io/schemas/workflow-definition/v3.0.0/schema.json",
+    "id": "ba7247c3684bcc33",
+    "definitionId": "5b805c0f98b60b08",
+    "name": "QA - JTest - Events - Publisher",
+    "createdAt": "2026-02-03T16:26:18.1359206\u002B00:00",
+    "version": 1,
+    "toolVersion": "3.6.0.0",
+    "variables": [
+        {
+            "id": "67d5c4baa074f29d",
+            "name": "EventListenerCorrelationId",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        }
+    ],
+    "inputs": [
+        {
+            "uiHint": "singleline",
+            "storageDriverType": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core",
+            "type": "Object",
+            "name": "InputData",
+            "displayName": "InputData",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outputs": [
+        {
+            "type": "Object",
+            "name": "EventListenerCorrelationIdentifier",
+            "displayName": "EventListenerCorrelationIdentifier",
+            "description": "",
+            "category": "Primitives"
+        }
+    ],
+    "outcomes": [],
+    "customProperties": {
+        "VariableTestValues": {}
+    },
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+        "autoUpdateConsumingWorkflows": false
+    },
+    "root": {
+        "id": "2def70dd3e517de7",
+        "nodeId": "Workflow1:2def70dd3e517de7",
+        "name": "Flowchart1",
+        "type": "Elsa.Flowchart",
+        "version": 1,
+        "customProperties": {
+            "notFoundConnections": [],
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+        },
+        "metadata": {},
+        "activities": [
+            {
+                "correlationId": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return newGuid();"
+                    }
+                },
+                "id": "3ee4b2211adaf2f2",
+                "nodeId": "Workflow1:2def70dd3e517de7:3ee4b2211adaf2f2",
+                "name": "Correlate1",
+                "type": "Elsa.Correlate",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -839,
+                            "y": -120
+                        },
+                        "size": {
+                            "width": 153.828125,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "variable": {
+                    "id": "67d5c4baa074f29d",
+                    "name": "EventListenerCorrelationId",
+                    "typeName": "Object",
+                    "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+                },
+                "value": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return newGuid();"
+                    }
+                },
+                "id": "1e9be0995f30006c",
+                "nodeId": "Workflow1:2def70dd3e517de7:1e9be0995f30006c",
+                "name": "SetVariable1",
+                "type": "Elsa.SetVariable",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -579,
+                            "y": -120
+                        },
+                        "size": {
+                            "width": 312.828125,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "Set EventListener Correlation Id"
+                }
+            },
+            {
+                "eventName": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Event1"
+                    }
+                },
+                "correlationId": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getEventListenerCorrelationId();"
+                    }
+                },
+                "isLocalEvent": null,
+                "payload": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getInputData();"
+                    }
+                },
+                "id": "41742ece5a8fdf2c",
+                "nodeId": "Workflow1:2def70dd3e517de7:41742ece5a8fdf2c",
+                "name": "PublishEvent1",
+                "type": "Elsa.PublishEvent",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -160,
+                            "y": -120
+                        },
+                        "size": {
+                            "width": 183.578125,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "outputName": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "EventListenerCorrelationIdentifier"
+                    }
+                },
+                "outputValue": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getEventListenerCorrelationId();"
+                    }
+                },
+                "id": "73c720e61d4f8f0d",
+                "nodeId": "Workflow1:2def70dd3e517de7:73c720e61d4f8f0d",
+                "name": "SetOutput1",
+                "type": "Elsa.SetOutput",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 142.2890625,
+                            "y": -120
+                        },
+                        "size": {
+                            "width": 164.328125,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            }
+        ],
+        "variables": [],
+        "connections": [
+            {
+                "source": {
+                    "activity": "41742ece5a8fdf2c",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "73c720e61d4f8f0d",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "3ee4b2211adaf2f2",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "1e9be0995f30006c",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "1e9be0995f30006c",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "41742ece5a8fdf2c",
+                    "port": "In"
+                },
+                "vertices": []
+            }
+        ]
+    }
+}

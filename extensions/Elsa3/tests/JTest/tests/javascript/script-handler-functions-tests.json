@@ -1,0 +1,121 @@
+{
+  "version": "1.0",
+  "info": {
+    "name": "Testing functions registered in the Executor V3 code base",
+    "description": "Examples: getConfiguration, base64Encode, base64Decode"
+  },
+  "globals": {
+    "endpoint": "qa/javascript/script-handler-functions"
+  },
+  "tests": [
+    {
+      "name": "Execute test case 'getConfiguration'",
+      "description": "",
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "getConfiguration",
+            "settingKey": "BusinessSettings",
+            "settingSectionValueName": "systemEnvironment"
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": 202
+            },
+            {
+              "op": "exists",
+              "actualValue": "{{$.this.body.result }}"
+            },
+            {
+              "op": "length",
+              "actualValue": "{{$.this.body.result }}",
+              "expectedValue": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Execute FAIL test case 'getConfiguration'; path parameter is null",
+      "description": "",
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "getConfiguration",
+            "settingKey": null,
+            "settingSectionValueName": "systemEnvironment"
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": 500
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Execute test case 'base64Encode'",
+      "description": "",
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "base64Encode",
+            "text": "Test Value Text"
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": 202
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{$.this.body.result }}",
+              "expectedValue": "VGVzdCBWYWx1ZSBUZXh0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Execute test case 'base64Decode'",
+      "description": "",
+      "steps": [
+        {
+          "type": "http",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+          "method": "POST",
+          "body": {
+            "method": "base64Decode",
+            "base64": "VGVzdCBWYWx1ZSBUZXh0"
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": 202
+            },
+            {
+              "op": "equals",
+              "actualValue": "{{$.this.body.result }}",
+              "expectedValue": "Test Value Text"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Test case: performance dispatch baseline",
+        "description": "Measures the baseline performance when executing a simple dispatch activity"
+    },
+    "globals": {
+        "endpoint": "qa/jtest/performance/baseline/dispatch",
+        "workflowDefinitions": {
+            "root": {
+                "id": "e3b73ccc31170394",
+                "activityIdentifiers": [
+                    "9d3d3a0fa2e6173c",
+                    "4e9baf99d2b353c",
+                    "83974a2b6d74c11b",
+                    "564d916bd9e4238b"
+                ]
+            },
+            "sub": {
+                "id": "e3ec3010946b27c1",
+                "activityIdentifiers": [
+                    "9ee4adfcdf0c9167",
+                    "1609c066359d6d53",
+                    "ac60f07eaf11dd47"
+                ]
+            }
+        }
+    },
+    "categories": [
+        "performance",
+        "baseline"
+    ],
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Act - Execute workflow",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Execute",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": 202
+                        },
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.body.correlationId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Assert instance persistence",
+            "description": "Waits until instances are persisted to database with status 'Finished'",
+            "steps": [
+                {
+                    "type": "for",
+                    "name": "Assert status for each workflow definition",
+                    "items": [
+                        "{{ $.globals.workflowDefinitions.root.id }}",
+                        "{{ $.globals.workflowDefinitions.sub.id }}"
+                    ],
+                    "currentItemKey": "definitionId",
+                    "steps": [
+                        {
+                            "type": "while",
+                            "name": "Loop while instance status and sub status are not yet finished",
+                            "timeoutMs": 100000,
+                            "delayMs": 500,
+                            "condition": {
+                                "op": "notequals",
+                                "actualValue": "{{ $.{{ $.definitionId }}.workflowInstance_Status_And_SubStatus }}",
+                                "expectedValue": "Finished-Finished"
+                            },
+                            "steps": [
+                                {
+                                    "type": "use",
+                                    "name": "Find workflow instance",
+                                    "template": "elsa-search-workflow-instances",
+                                    "with": {
+                                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                                        "authHeader": "{{ $.globals.authHeader }}",
+                                        "workflowDefinitionId": "{{ $.definitionId }}",
+                                        "workflowDefinitionVersion": 1,
+                                        "correlationId": "{{ $.globals.correlationId }}"
+                                    },
+                                    "save": {
+                                        "$.{{ $.definitionId }}.workflowInstance_Status_And_SubStatus": "{{ $.this.instances[0].status }}-{{ $.this.instances[0].subStatus }}"
+                                    }
+                                }
+                            ],
+                            "assert": [
+                                {
+                                    "op": "equals",
+                                    "actualValue": "{{ $.{{ $.definitionId }}.workflowInstance_Status_And_SubStatus }}",
+                                    "expectedValue": "Finished-Finished",
+                                    "description": "Workfow instance should have status and subStatus set to 'Finished'"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

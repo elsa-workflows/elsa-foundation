@@ -1,0 +1,234 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Test an HTTP Endpoint that accepts request headers and returns response headers",
+        "description": ""
+    },
+    "using": [],
+    "globals": {
+        "endpoint": "qa/http-endpoints/custom-header",
+        "headerName": "custom-header",
+        "headerValue": "TestHeader1234",
+        "definitionId": "12758460d794cb4f",
+        "versionId": "d02519dfc1683769",
+        "version": 1,
+        "activityIds":{
+            "httpEndpoint": "63529e14d0c77073",
+            "writeHttpResponse": "1af36d41ef0f7879"
+        }
+    },
+    "tests": [
+        {
+            "name": "Act - Execute workflow definition",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Execute workflow and assert response",
+                    "description": "This workflow definition also sets a response header 'Correlation-ID' directly; This way we can assert request headers and response headers separately in case any of the two is modified by external components. Which is something we want to guard against.",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "GET",
+                    "headers": [
+                        {
+                            "name": "{{ $.globals.headerName }}",
+                            "value": "{{ $.globals.headerValue }}"
+                        }
+                    ],
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": 202
+                        },
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.body.correlationId }}",
+                            "description": "Correlation ID returned in request body"
+                        },
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.headers[?(@.name == '{{ $.globals.headerName }}')] }}",                            
+                            "description": "Response headers contain request header (pass-through)"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.headers[?(@.name == '{{ $.globals.headerName }}')].value }}",
+                            "expectedValue": "{{ $.globals.headerValue }}",
+                            "description": "Request header is returned as response header"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Required setup for activity yassertions",
+            "description": "Authenticate with Elsa API and get the executed workflow instance",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username']}}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.definitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.version }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionId }}",
+                            "expectedValue": "{{ $.globals.definitionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionVersionId }}",
+                            "expectedValue": "{{ $.globals.versionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].correlationId }}",
+                            "expectedValue": "{{ $.globals.correlationId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                }
+            ]
+        },
+
+        {
+            "name": "Assert: HttpEndpoint request headers assignment",
+            "description": "Asserts that the request headers are assigned to the output without any modifications",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get journal item: HttpEndpoint",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.httpEndpoint }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert HttpEndpoint activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.outputs.Headers['{{ $.globals.headerName }}'] }}",
+                            "description": "Custom request header is returned in response"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.outputs.Headers['{{ $.globals.headerName }}'] }}",
+                            "expectedValue": "{{ $.globals.headerValue }}",
+                            "description": "Request header value equals response header value"
+                        }
+                    ]
+                }
+            ]
+        },
+
+        {
+            "name": "Assert: WriteHttpResponse response headers assignment",
+            "description": "Asserts that the response headers are assigned to the input without any modifications",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get journal item: WriteHttpResponse",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.writeHttpResponse }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert HttpResponse activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityState.ResponseHeaders['Correlation-ID'] }}",
+                            "description": "Response header 'Correlation-ID' is returned as-is"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.ResponseHeaders['Correlation-ID'] }}",
+                            "expectedValue": "{{ $.globals.correlationId }}",
+                            "description": "Correlation ID in response header equals the one returned in the request body"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

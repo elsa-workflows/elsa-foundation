@@ -1,0 +1,185 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing the execute workflow activity: handling input",
+        "description": "This test requires await completion to be true. Hence, the await completion TRUE test case is implicitly tested"
+    },
+    "using": [],
+    "globals": {
+        "endpoint": "qa/composition/execute-workflow",
+        "workflowDefinitionId": "cd108818fa8414ac",
+        "workflowDefinitionVersion": 1,
+        "subWorkflowDefinitionId": "23004d23f02c0e7f",
+        "subWorkflowDefinitionVersion": 1,
+        "subWorkflowSetOutputActivityId": "5f274493e6770251",
+        "subworkflowInput": {
+            "CustomInput": {
+                "property1": "value1"
+            }
+        }
+    },
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Execute Test Case: Handling Input",
+            "description": "Testing whether input is correctly passed by the root workflow to sub workflow, and whether the sub workflow receives it. Workflow should be executed to completion regardless of the wait for completion setting",
+            "datasets": [
+                {
+                   "name": "When_WaitForCompletion_True",
+                   "case": {
+                      "waitForCompletion": true
+                    }
+                },
+                {
+                   "name": "When_WaitForCompletion_False",
+                   "case": {
+                      "waitForCompletion": false
+                    }
+                }
+            ],
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "headers": [
+                    ],
+                    "body": {
+                        "waitForCompletion": "{{ $.case.waitForCompletion }}",
+                        "workflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "subworkflowInput": "{{ $.globals.subworkflowInput }}",
+                        "millisecondsToDelaySubworkflowExecutionTime": 500
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.status}}",
+                            "expectedValue": 202
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.body.Output.CustomOutput.property1}}",
+                            "expectedValue": "{{ $.globals.subworkflowInput.CustomInput.property1 }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Execute ROOT-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Execute SUB-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.subWorkflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        }
+                    ],
+                    "save": {
+                        "$.subWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "wait",
+                    "ms": 500
+                },
+                {
+                    "type": "use",
+                    "name": "Get journal item of SubWorkflow.SetOutput workflow activity",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.subWorkflowInstanceId }}",
+                        "activityId": "{{$.globals.subWorkflowSetOutputActivityId}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },                
+                {
+                    "type": "use",
+                    "name": "Assert state of SetOutput activity",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.OutputValue.property1 }}",
+                            "expectedValue": "{{ $.globals.subworkflowInput.CustomInput.property1 }}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

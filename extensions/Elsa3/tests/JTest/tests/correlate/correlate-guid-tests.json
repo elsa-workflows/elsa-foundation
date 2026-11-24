@@ -1,0 +1,100 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing whether Correlate activity can accept type 'Guid'",
+        "description": ""
+    },
+    "globals": {
+        "endpoint": "qa/correlate-guid",
+        "definitionId": "18276fa5f694bf4c",
+        "versionId": "221952ddc0d34e65",
+        "version": 1
+    },
+    "tests": [
+        {
+            "name": "Act: Execute workflow definition",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Execute workflow",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "GET",
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": 202
+                        },
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.body.correlationId }}",
+                            "description": "Assert that the correlation ID is not empty; therefore successfully handled"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                }                
+            ]
+        },
+        {
+            "name": "Assert instance state",
+            "description": "Asserts whether the correlation ID returned by the API is correctly assigned to the instance",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username']}}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.definitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.version }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionId }}",
+                            "expectedValue": "{{ $.globals.definitionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionVersionId }}",
+                            "expectedValue": "{{ $.globals.versionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].correlationId }}",
+                            "expectedValue": "{{ $.globals.correlationId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                }
+            ]
+        }
+    ]
+}

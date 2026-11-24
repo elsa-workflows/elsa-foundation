@@ -1,0 +1,1221 @@
+{
+    "$schema": "https://elsaworkflows.io/schemas/workflow-definition/v3.0.0/schema.json",
+    "id": "d02519dfc1683769",
+    "definitionId": "12758460d794cb4f",
+    "name": "QA - JTest - Http Endpoints",
+    "createdAt": "2026-01-13T08:41:09.241188\u002B00:00",
+    "version": 1,
+    "toolVersion": "3.5.0.0",
+    "variables": [
+        {
+            "id": "ad3415464ce5bb54",
+            "name": "HttpEndpointRequestBody",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        },
+        {
+            "id": "d424192b4625613e",
+            "name": "HttpEndpointRequestHeaders",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        },
+        {
+            "id": "93f23c25b89523c",
+            "name": "QueryParameters",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        },
+        {
+            "id": "9249325de8ee45ac",
+            "name": "HttpEndpointRouteData",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        },
+        {
+            "id": "2e52f09d2d090a7d",
+            "name": "QueryValue",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        },
+        {
+            "id": "2ed3d6758c5eb3da",
+            "name": "FormFiles",
+            "typeName": "FormFile[]",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        },
+        {
+            "id": "7527d5cb4222ee80",
+            "name": "ParsedFormFiles",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        },
+        {
+            "id": "919bd16e8ca6ec03",
+            "name": "HttpResponseHeaders",
+            "typeName": "Object",
+            "isArray": false,
+            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+        }
+    ],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {
+        "VariableTestValues": {}
+    },
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+        "autoUpdateConsumingWorkflows": false
+    },
+    "root": {
+        "id": "b009b5929ae2f492",
+        "nodeId": "Workflow1:b009b5929ae2f492",
+        "name": "Flowchart1",
+        "type": "Elsa.Flowchart",
+        "version": 1,
+        "customProperties": {
+            "notFoundConnections": [],
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+        },
+        "metadata": {},
+        "activities": [
+            {
+                "path": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "qa/http-endpoints/query-parameter"
+                    }
+                },
+                "supportedMethods": {
+                    "typeName": "List\u003CString\u003E",
+                    "expression": {
+                        "type": "Object",
+                        "value": "[\u0022GET\u0022]"
+                    }
+                },
+                "authorize": {
+                    "typeName": "Boolean",
+                    "expression": {
+                        "type": "Literal",
+                        "value": false
+                    }
+                },
+                "policy": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal"
+                    }
+                },
+                "requestTimeout": null,
+                "requestSizeLimit": null,
+                "fileSizeLimit": null,
+                "allowedFileExtensions": null,
+                "blockedFileExtensions": null,
+                "allowedMimeTypes": null,
+                "exposeRequestTooLargeOutcome": false,
+                "exposeFileTooLargeOutcome": false,
+                "exposeInvalidFileExtensionOutcome": false,
+                "exposeInvalidFileMimeTypeOutcome": false,
+                "parsedContent": null,
+                "files": null,
+                "file": null,
+                "routeData": null,
+                "queryStringData": {
+                    "typeName": "ObjectDictionary",
+                    "memoryReference": {
+                        "id": "93f23c25b89523c"
+                    }
+                },
+                "headers": null,
+                "result": null,
+                "id": "d3455ed84645913",
+                "nodeId": "Workflow1:b009b5929ae2f492:d3455ed84645913",
+                "name": "HttpEndpoint6",
+                "type": "Elsa.HttpEndpoint",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -763.484375,
+                            "y": 344
+                        },
+                        "size": {
+                            "width": 353.640625,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "With query parameter: \u0022{queryValue}\u0022"
+                }
+            },
+            {
+                "path": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "qa/http-endpoints/form-files"
+                    }
+                },
+                "supportedMethods": {
+                    "typeName": "List\u003CString\u003E",
+                    "expression": {
+                        "type": "Object",
+                        "value": "[\u0022POST\u0022]"
+                    }
+                },
+                "authorize": {
+                    "typeName": "Boolean",
+                    "expression": {
+                        "type": "Literal",
+                        "value": false
+                    }
+                },
+                "policy": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal"
+                    }
+                },
+                "requestTimeout": null,
+                "requestSizeLimit": null,
+                "fileSizeLimit": null,
+                "allowedFileExtensions": null,
+                "blockedFileExtensions": null,
+                "allowedMimeTypes": null,
+                "exposeRequestTooLargeOutcome": false,
+                "exposeFileTooLargeOutcome": false,
+                "exposeInvalidFileExtensionOutcome": false,
+                "exposeInvalidFileMimeTypeOutcome": false,
+                "parsedContent": null,
+                "files": {
+                    "typeName": "FormFile[]",
+                    "memoryReference": {
+                        "id": "2ed3d6758c5eb3da"
+                    }
+                },
+                "file": null,
+                "routeData": null,
+                "queryStringData": null,
+                "headers": null,
+                "result": null,
+                "id": "584f5d7dec284365",
+                "nodeId": "Workflow1:b009b5929ae2f492:584f5d7dec284365",
+                "name": "HttpEndpoint8",
+                "type": "Elsa.HttpEndpoint",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -608.859375,
+                            "y": 214.46875
+                        },
+                        "size": {
+                            "width": 199.015625,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "With Form Files"
+                }
+            },
+            {
+                "variable": {
+                    "id": "2e52f09d2d090a7d",
+                    "name": "QueryValue",
+                    "typeName": "Object",
+                    "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+                },
+                "value": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getQueryParameters()[\u0027queryValue\u0027]"
+                    }
+                },
+                "id": "9a698d918a178b58",
+                "nodeId": "Workflow1:b009b5929ae2f492:9a698d918a178b58",
+                "name": "SetVariable1",
+                "type": "Elsa.SetVariable",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -289.9826354980469,
+                            "y": 344
+                        },
+                        "size": {
+                            "width": 263.59375,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "Set Query Value Variable"
+                }
+            },
+            {
+                "variable": {
+                    "id": "7527d5cb4222ee80",
+                    "name": "ParsedFormFilesContent",
+                    "typeName": "String",
+                    "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+                },
+                "value": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "const formFiles = getFormFiles();\r\n\r\nvar result = [];\r\nfor(var i=0;i\u003CformFiles.length;i\u002B\u002B)\r\n{\r\n    const formFile = formFiles[i];\r\n    const bytes = streamToBytes(formFile.openReadStream());\r\n    const content = bytesToString(bytes);\r\n    result[i] = {\r\n        name: formFile.name,\r\n        content: content\r\n    }\r\n}\r\n\r\nreturn result;"
+                    }
+                },
+                "id": "663cb5d5e47a8f6c",
+                "nodeId": "Workflow1:b009b5929ae2f492:663cb5d5e47a8f6c",
+                "name": "SetVariable4",
+                "type": "Elsa.SetVariable",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -308.2091979980469,
+                            "y": 214.46875
+                        },
+                        "size": {
+                            "width": 300.046875,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "Set Parsed FormFiles Content"
+                }
+            },
+            {
+                "path": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "qa/http-endpoints/multiple-methods"
+                    }
+                },
+                "supportedMethods": {
+                    "typeName": "List\u003CString\u003E",
+                    "expression": {
+                        "type": "Object",
+                        "value": "[\u0022GET\u0022,\u0022POST\u0022,\u0022PUT\u0022,\u0022HEAD\u0022,\u0022DELETE\u0022]"
+                    }
+                },
+                "authorize": {
+                    "typeName": "Boolean",
+                    "expression": {
+                        "type": "Literal",
+                        "value": false
+                    }
+                },
+                "policy": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal"
+                    }
+                },
+                "requestTimeout": null,
+                "requestSizeLimit": null,
+                "fileSizeLimit": null,
+                "allowedFileExtensions": null,
+                "blockedFileExtensions": null,
+                "allowedMimeTypes": null,
+                "exposeRequestTooLargeOutcome": false,
+                "exposeFileTooLargeOutcome": false,
+                "exposeInvalidFileExtensionOutcome": false,
+                "exposeInvalidFileMimeTypeOutcome": false,
+                "parsedContent": null,
+                "files": null,
+                "file": null,
+                "routeData": null,
+                "queryStringData": null,
+                "headers": null,
+                "result": null,
+                "id": "49314fd81c9b264a",
+                "nodeId": "Workflow1:b009b5929ae2f492:49314fd81c9b264a",
+                "name": "HttpEndpoint1",
+                "type": "Elsa.HttpEndpoint",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -700.09375,
+                            "y": -140
+                        },
+                        "size": {
+                            "width": 290.25,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "Multiple supported methods"
+                }
+            },
+            {
+                "path": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "qa/http-endpoints/request-body/post"
+                    }
+                },
+                "supportedMethods": {
+                    "typeName": "List\u003CString\u003E",
+                    "expression": {
+                        "type": "Object",
+                        "value": "[\u0022POST\u0022]"
+                    }
+                },
+                "authorize": {
+                    "typeName": "Boolean",
+                    "expression": {
+                        "type": "Literal",
+                        "value": false
+                    }
+                },
+                "policy": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal"
+                    }
+                },
+                "requestTimeout": null,
+                "requestSizeLimit": null,
+                "fileSizeLimit": null,
+                "allowedFileExtensions": null,
+                "blockedFileExtensions": null,
+                "allowedMimeTypes": null,
+                "exposeRequestTooLargeOutcome": false,
+                "exposeFileTooLargeOutcome": false,
+                "exposeInvalidFileExtensionOutcome": false,
+                "exposeInvalidFileMimeTypeOutcome": false,
+                "parsedContent": {
+                    "typeName": "Object",
+                    "memoryReference": {
+                        "id": "ad3415464ce5bb54"
+                    }
+                },
+                "files": null,
+                "file": null,
+                "routeData": null,
+                "queryStringData": null,
+                "headers": {
+                    "typeName": "ObjectDictionary",
+                    "memoryReference": {
+                        "id": "d424192b4625613e"
+                    }
+                },
+                "result": null,
+                "id": "fea2d465d8b5f9cd",
+                "nodeId": "Workflow1:b009b5929ae2f492:fea2d465d8b5f9cd",
+                "name": "HttpEndpoint10",
+                "type": "Elsa.HttpEndpoint",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -660,
+                            "y": -20
+                        },
+                        "size": {
+                            "width": 265.078125,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "POST: With request body"
+                }
+            },
+            {
+                "path": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "qa/http-endpoints/request-body/get"
+                    }
+                },
+                "supportedMethods": {
+                    "typeName": "List\u003CString\u003E",
+                    "expression": {
+                        "type": "Object",
+                        "value": "[\u0022GET\u0022]"
+                    }
+                },
+                "authorize": {
+                    "typeName": "Boolean",
+                    "expression": {
+                        "type": "Literal",
+                        "value": false
+                    }
+                },
+                "policy": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal"
+                    }
+                },
+                "requestTimeout": null,
+                "requestSizeLimit": null,
+                "fileSizeLimit": null,
+                "allowedFileExtensions": null,
+                "blockedFileExtensions": null,
+                "allowedMimeTypes": null,
+                "exposeRequestTooLargeOutcome": false,
+                "exposeFileTooLargeOutcome": false,
+                "exposeInvalidFileExtensionOutcome": false,
+                "exposeInvalidFileMimeTypeOutcome": false,
+                "parsedContent": {
+                    "typeName": "Object",
+                    "memoryReference": {
+                        "id": "ad3415464ce5bb54"
+                    }
+                },
+                "files": null,
+                "file": null,
+                "routeData": null,
+                "queryStringData": null,
+                "headers": null,
+                "result": null,
+                "id": "c6d838165d744b4a",
+                "nodeId": "Workflow1:b009b5929ae2f492:c6d838165d744b4a",
+                "name": "HttpEndpoint5",
+                "type": "Elsa.HttpEndpoint",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -649.953125,
+                            "y": 94.5
+                        },
+                        "size": {
+                            "width": 259.984375,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "GET: With Request Body"
+                }
+            },
+            {
+                "statusCode": {
+                    "typeName": "System.Net.HttpStatusCode, System.Net.Primitives",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Accepted"
+                    }
+                },
+                "content": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return {\r\n    \u0022queryValue\u0022: getQueryValue()\r\n}"
+                    }
+                },
+                "contentType": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": ""
+                    }
+                },
+                "responseHeaders": {
+                    "typeName": "HttpHeaders",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "{}"
+                    }
+                },
+                "id": "6e71fd97311834fb",
+                "nodeId": "Workflow1:b009b5929ae2f492:6e71fd97311834fb",
+                "name": "WriteHttpResponse3",
+                "type": "Elsa.WriteHttpResponse",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 41.546875,
+                            "y": 344
+                        },
+                        "size": {
+                            "width": 201.546875,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "statusCode": {
+                    "typeName": "System.Net.HttpStatusCode, System.Net.Primitives",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Accepted"
+                    }
+                },
+                "content": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return {\r\n    \u0022parsedFormFiles\u0022: getParsedFormFiles(),\r\n    \u0022count\u0022: getParsedFormFiles().length \r\n}"
+                    }
+                },
+                "contentType": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": ""
+                    }
+                },
+                "responseHeaders": {
+                    "typeName": "HttpHeaders",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "{}"
+                    }
+                },
+                "id": "79a7dc4052288fd7",
+                "nodeId": "Workflow1:b009b5929ae2f492:79a7dc4052288fd7",
+                "name": "WriteHttpResponse7",
+                "type": "Elsa.WriteHttpResponse",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 41.546875,
+                            "y": 214.46875
+                        },
+                        "size": {
+                            "width": 201.546875,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "statusCode": {
+                    "typeName": "System.Net.HttpStatusCode, System.Net.Primitives",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Accepted"
+                    }
+                },
+                "content": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getHttpEndpointRequestBody();"
+                    }
+                },
+                "contentType": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": ""
+                    }
+                },
+                "responseHeaders": {
+                    "typeName": "HttpHeaders",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "{}"
+                    }
+                },
+                "id": "9d448b7ad4b14e89",
+                "nodeId": "Workflow1:b009b5929ae2f492:9d448b7ad4b14e89",
+                "name": "WriteHttpResponse8",
+                "type": "Elsa.WriteHttpResponse",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -220,
+                            "y": 94.5
+                        },
+                        "size": {
+                            "width": 201.546875,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "statusCode": {
+                    "typeName": "System.Net.HttpStatusCode, System.Net.Primitives",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Accepted"
+                    }
+                },
+                "content": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getHttpEndpointRequestBody();"
+                    }
+                },
+                "contentType": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getHttpEndpointRequestHeaders()[\u0022Content-Type\u0022];"
+                    }
+                },
+                "responseHeaders": {
+                    "typeName": "HttpHeaders",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "{}"
+                    }
+                },
+                "id": "37e40f23ad23a8c8",
+                "nodeId": "Workflow1:b009b5929ae2f492:37e40f23ad23a8c8",
+                "name": "WriteHttpResponse2",
+                "type": "Elsa.WriteHttpResponse",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -220,
+                            "y": -9.5
+                        },
+                        "size": {
+                            "width": 201.546875,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "statusCode": {
+                    "typeName": "System.Net.HttpStatusCode, System.Net.Primitives",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Accepted"
+                    }
+                },
+                "content": null,
+                "contentType": null,
+                "responseHeaders": {
+                    "typeName": "HttpHeaders",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "{}"
+                    }
+                },
+                "id": "7f4a82ce61f6f0a3",
+                "nodeId": "Workflow1:b009b5929ae2f492:7f4a82ce61f6f0a3",
+                "name": "WriteHttpResponse1",
+                "type": "Elsa.WriteHttpResponse",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -220,
+                            "y": -160
+                        },
+                        "size": {
+                            "width": 201.546875,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "path": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "qa/http-endpoints/route-parameter/{routeValue}"
+                    }
+                },
+                "supportedMethods": {
+                    "typeName": "List\u003CString\u003E",
+                    "expression": {
+                        "type": "Object",
+                        "value": "[\u0022GET\u0022]"
+                    }
+                },
+                "authorize": {
+                    "typeName": "Boolean",
+                    "expression": {
+                        "type": "Literal",
+                        "value": false
+                    }
+                },
+                "policy": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal"
+                    }
+                },
+                "requestTimeout": null,
+                "requestSizeLimit": null,
+                "fileSizeLimit": null,
+                "allowedFileExtensions": null,
+                "blockedFileExtensions": null,
+                "allowedMimeTypes": null,
+                "exposeRequestTooLargeOutcome": false,
+                "exposeFileTooLargeOutcome": false,
+                "exposeInvalidFileExtensionOutcome": false,
+                "exposeInvalidFileMimeTypeOutcome": false,
+                "parsedContent": null,
+                "files": null,
+                "file": null,
+                "routeData": {
+                    "typeName": "ObjectDictionary",
+                    "memoryReference": {
+                        "id": "9249325de8ee45ac"
+                    }
+                },
+                "queryStringData": null,
+                "headers": null,
+                "result": null,
+                "id": "1d88f6d4a78245e0",
+                "nodeId": "Workflow1:b009b5929ae2f492:1d88f6d4a78245e0",
+                "name": "HttpEndpoint11",
+                "type": "Elsa.HttpEndpoint",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -997.84375,
+                            "y": 575.9375
+                        },
+                        "size": {
+                            "width": 347.890625,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "With route parameter: \u0022{routeValue}\u0022"
+                }
+            },
+            {
+                "correlationId": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return newGuid();"
+                    }
+                },
+                "id": "8a70eeb2cc8b58d1",
+                "nodeId": "Workflow1:b009b5929ae2f492:8a70eeb2cc8b58d1",
+                "name": "Correlate1",
+                "type": "Elsa.Correlate",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -235.09982299804688,
+                            "y": 879.9375
+                        },
+                        "size": {
+                            "width": 153.828125,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "statusCode": {
+                    "typeName": "System.Net.HttpStatusCode, System.Net.Primitives",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Accepted"
+                    }
+                },
+                "content": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return {\r\n    \u0022routeData\u0022: getHttpEndpointRouteData()\r\n}"
+                    }
+                },
+                "contentType": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": ""
+                    }
+                },
+                "responseHeaders": {
+                    "typeName": "HttpHeaders",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return getHttpEndpointRequestHeaders();"
+                    }
+                },
+                "id": "9bb71fd3c09d375",
+                "nodeId": "Workflow1:b009b5929ae2f492:9bb71fd3c09d375",
+                "name": "WriteHttpResponse4",
+                "type": "Elsa.WriteHttpResponse",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 80,
+                            "y": 575.9375
+                        },
+                        "size": {
+                            "width": 201.546875,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            },
+            {
+                "path": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "qa/http-endpoints/custom-header"
+                    }
+                },
+                "supportedMethods": {
+                    "typeName": "List\u003CString\u003E",
+                    "expression": {
+                        "type": "Object",
+                        "value": "[\u0022GET\u0022]"
+                    }
+                },
+                "authorize": {
+                    "typeName": "Boolean",
+                    "expression": {
+                        "type": "Literal",
+                        "value": false
+                    }
+                },
+                "policy": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "Literal"
+                    }
+                },
+                "requestTimeout": null,
+                "requestSizeLimit": null,
+                "fileSizeLimit": null,
+                "allowedFileExtensions": null,
+                "blockedFileExtensions": null,
+                "allowedMimeTypes": null,
+                "exposeRequestTooLargeOutcome": false,
+                "exposeFileTooLargeOutcome": false,
+                "exposeInvalidFileExtensionOutcome": false,
+                "exposeInvalidFileMimeTypeOutcome": false,
+                "parsedContent": null,
+                "files": null,
+                "file": null,
+                "routeData": null,
+                "queryStringData": null,
+                "headers": {
+                    "typeName": "ObjectDictionary",
+                    "memoryReference": {
+                        "id": "d424192b4625613e"
+                    }
+                },
+                "result": null,
+                "id": "63529e14d0c77073",
+                "nodeId": "Workflow1:b009b5929ae2f492:63529e14d0c77073",
+                "name": "HttpEndpoint9",
+                "type": "Elsa.HttpEndpoint",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": true,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": -760.609375,
+                            "y": 879.9375
+                        },
+                        "size": {
+                            "width": 347.890625,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "With headers"
+                }
+            },
+            {
+                "variable": {
+                    "id": "919bd16e8ca6ec03",
+                    "name": "HttpResponseHeaders",
+                    "typeName": "Object",
+                    "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+                },
+                "value": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "var result = JSON.parse(toJson(getHttpEndpointRequestHeaders()));\r\nresult[\u0027Correlation-ID\u0027] = getCorrelationId();\r\nreturn result;"
+                    }
+                },
+                "id": "95efd88b60a08c6",
+                "nodeId": "Workflow1:b009b5929ae2f492:95efd88b60a08c6",
+                "name": "SetVariable3",
+                "type": "Elsa.SetVariable",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 55.4921875,
+                            "y": 879.9375
+                        },
+                        "size": {
+                            "width": 173.65625,
+                            "height": 67.96875
+                        }
+                    },
+                    "displayText": "Set response headers"
+                }
+            },
+            {
+                "statusCode": {
+                    "typeName": "System.Net.HttpStatusCode, System.Net.Primitives",
+                    "expression": {
+                        "type": "Literal",
+                        "value": "Accepted"
+                    }
+                },
+                "content": {
+                    "typeName": "Object",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": "return {\r\n  correlationId: getCorrelationId()\r\n}"
+                    }
+                },
+                "contentType": {
+                    "typeName": "String",
+                    "expression": {
+                        "type": "JavaScript",
+                        "value": ""
+                    }
+                },
+                "responseHeaders": {
+                    "typeName": "HttpHeaders",
+                    "expression": {
+                        "type": "Variable",
+                        "value": {
+                            "id": "919bd16e8ca6ec03",
+                            "name": "HttpResponseHeaders",
+                            "typeName": "Object",
+                            "storageDriverTypeName": "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core"
+                        }
+                    }
+                },
+                "id": "1af36d41ef0f7879",
+                "nodeId": "Workflow1:b009b5929ae2f492:1af36d41ef0f7879",
+                "name": "WriteHttpResponse9",
+                "type": "Elsa.WriteHttpResponse",
+                "version": 1,
+                "customProperties": {
+                    "canStartWorkflow": false,
+                    "runAsynchronously": false
+                },
+                "metadata": {
+                    "designer": {
+                        "position": {
+                            "x": 401.546875,
+                            "y": 879.9375
+                        },
+                        "size": {
+                            "width": 201.546875,
+                            "height": 67.96875
+                        }
+                    }
+                }
+            }
+        ],
+        "variables": [],
+        "connections": [
+            {
+                "source": {
+                    "activity": "8a70eeb2cc8b58d1",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "95efd88b60a08c6",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "95efd88b60a08c6",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "1af36d41ef0f7879",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "63529e14d0c77073",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "8a70eeb2cc8b58d1",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "1d88f6d4a78245e0",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "9bb71fd3c09d375",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "584f5d7dec284365",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "663cb5d5e47a8f6c",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "49314fd81c9b264a",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "7f4a82ce61f6f0a3",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "d3455ed84645913",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "9a698d918a178b58",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "9a698d918a178b58",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "6e71fd97311834fb",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "663cb5d5e47a8f6c",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "79a7dc4052288fd7",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "c6d838165d744b4a",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "9d448b7ad4b14e89",
+                    "port": "In"
+                },
+                "vertices": []
+            },
+            {
+                "source": {
+                    "activity": "fea2d465d8b5f9cd",
+                    "port": "Done"
+                },
+                "target": {
+                    "activity": "37e40f23ad23a8c8",
+                    "port": "In"
+                },
+                "vertices": []
+            }
+        ]
+    }
+}

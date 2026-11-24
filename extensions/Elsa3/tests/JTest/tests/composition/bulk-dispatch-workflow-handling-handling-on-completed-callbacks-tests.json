@@ -1,0 +1,271 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing the Dispatch workflow activity. Case: handling completion callbacks",
+        "description": "IMPLICIT BEHAVIOUR NOTE: only when waitForCompletion is true, then callbacks are executed"
+    },
+    "globals": {
+        "endpoint": "qa/composition/bulk-dispatch",
+        "workflowDefinitionId": "ccb613931f8b60a",
+        "workflowDefinitionVersion": 1,
+        "subWorkflowDefinitionId": "32aa8cdf445d8276",
+        "subWorkflowDefinitionVersion": 1,
+        "correlationId": "bulk-dispatch-handling-on-completed-callbacks",
+        "subWorkflowInputItems": [
+            {
+                "ShouldFault": true,
+                "correlationIdSuffix": "_1"
+            },
+            {
+                "ShouldFault": false,
+                "correlationIdSuffix": "_2"
+            }
+        ],
+        "activityIds": {
+            "faultedEventCallbackWriteLine": "b5337b31b7a9b2b6",
+            "completedEventCallbackWriteLine": "4bd7f0ee5f3b24f0"
+        },
+        "authHeader": null
+    },
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Execute Case: handling completion callbacks",
+            "datasets": [
+                {
+                   "name": "waitForCompletion_true",
+                   "case": {
+                      "waitForCompletion": true,
+                      "expectedCallbackExecutionCount": 1,
+                      "description": "Asser that when we wait for completion of BulkDispatch activity, the callbacks are executed and completed"
+                    }
+                },
+                {
+                   "name": "waitForCompletion_false",
+                   "case": {
+                      "waitForCompletion": false,
+                      "expectedCallbackExecutionCount": 0,
+                      "description": "Asser that when we DON'T wait for completion of BulkDispatch activity, the callbacks are NEVER executed nor completed"
+                    }
+                }
+            ],
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "headers": [
+                    ],
+                    "body": {
+                        "subWorkflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "subWorkflowInputItems": "{{ $.globals.subWorkflowInputItems }}",
+                        "waitForCompletion": "{{ $.case.waitForCompletion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    }
+                },
+                {
+                  "type": "wait",
+                  "name": "Wait until instance is available",
+                  "ms": "{{ $.env.dispatchWaitTimeMilliseconds }}"
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert ROOT workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances[0].id }}"
+                        }
+                    ],
+                    "save": {
+                        "dispatchWorkflowInstance": "{{ $.this.instances[0].id }}"
+                    }
+                },                
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Faulted SUB-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.subWorkflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}{{ $.globals.subWorkflowInputItems[0].correlationIdSuffix }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].subStatus }}",
+                            "expectedValue": "Faulted"
+                        }
+                    ],
+                    "save": {
+                        "faultedSubWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Completed SUB-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.subWorkflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}{{ $.globals.subWorkflowInputItems[1].correlationIdSuffix }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].subStatus }}",
+                            "expectedValue": "Finished"
+                        }
+                    ],
+                    "save": {
+                        "completedSubWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Get FaultedCallbackWriteLine activity 'Started' count",
+                    "template": "elsa-activity-instance-get-count-started",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.dispatchWorkflowInstance }}",
+                        "activityId": "{{$.globals.activityIds.faultedEventCallbackWriteLine}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.count }}"
+                        },
+                        {
+                          "op": "equals",
+                          "actualValue": "{{ $.this.count }}",
+                          "expectedValue": "{{ $.case.expectedCallbackExecutionCount }}",
+                          "description": "{{ $.case.description }}"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get FaultedCallbackWriteLine activity 'Completed' count",
+                    "template": "elsa-activity-instance-get-count-completed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.dispatchWorkflowInstance }}",
+                        "activityId": "{{$.globals.activityIds.faultedEventCallbackWriteLine}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.count }}"
+                        },
+                        {
+                          "op": "equals",
+                          "actualValue": "{{ $.this.count }}",
+                          "expectedValue": "{{ $.case.expectedCallbackExecutionCount }}",
+                          "description": "{{ $.case.description }}"
+                        }
+                    ]
+                },                
+                {
+                    "type": "use",
+                    "name": "Get CompletedCallbackWriteLine activity 'Started' count",
+                    "template": "elsa-activity-instance-get-count-started",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.dispatchWorkflowInstance }}",
+                        "activityId": "{{$.globals.activityIds.completedEventCallbackWriteLine}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.count }}"
+                        },
+                        {
+                          "op": "equals",
+                          "actualValue": "{{ $.this.count }}",
+                          "expectedValue": "{{ $.case.expectedCallbackExecutionCount }}",
+                          "description": "{{ $.case.description }}"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get CompletedCallbackWriteLine activity 'Completed' count",
+                    "template": "elsa-activity-instance-get-count-completed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.dispatchWorkflowInstance }}",
+                        "activityId": "{{$.globals.activityIds.completedEventCallbackWriteLine}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.count }}"
+                        },
+                        {
+                          "op": "equals",
+                          "actualValue": "{{ $.this.count }}",
+                          "expectedValue": "{{ $.case.expectedCallbackExecutionCount }}",
+                          "description": "{{ $.case.description }}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

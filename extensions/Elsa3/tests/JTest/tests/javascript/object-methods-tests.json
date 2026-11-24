@@ -1,0 +1,170 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing the array methods in javascript",
+        "description": "We additionally assert that none of the array methods change the array Elsa variable"
+    },
+    "globals": {
+        "endpoint": "qa/javascript/object-methods",
+        "object": {
+            "key1": "test1",
+            "key2": "test2"
+        }
+    },
+    "tests": [
+        {
+            "name": "Execute test case for object method 'hasOwnProperty'",
+            "description": "",
+            "datasets": [
+                {
+                    "name": "true",
+                    "case": {
+                        "propertyName": "key1",
+                        "expectedResult": true
+                    }
+                },
+                {
+                    "name": "false",
+                    "case": {
+                        "propertyName": "unknown value",
+                        "expectedResult": false
+                    }
+                }
+            ],
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "hasOwnProperty",
+                        "object": "{{ $.globals.object }}",
+                        "hasOwnProperty": {
+                            "propertyName": "{{ $.case.propertyName }}"
+                        }
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.result }}",
+                            "expectedValue": "{{ $.case.expectedResult }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for object method 'keys'",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "keys",
+                        "object": "{{ $.globals.object }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "length",
+                            "actualValue": "{{ $.this.body.result }}",
+                            "expectedValue": 2
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.result[0] }}",
+                            "expectedValue": "key1"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.result[1] }}",
+                            "expectedValue": "key2"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for object method 'deleteProperty'",
+            "description": "The assertion proves that the 'delete' method in Javascript will in fact also update the Elsa variable",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "deleteProperty",
+                        "deleteProperty": {
+                            "name": "key1"
+                        },
+                        "object": "{{ $.globals.object }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.body.result.key1 }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.result }}",
+                            "expectedValue": "{{ $.this.body.objectVariable }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute test case for object method 'addOrUpdateProperty'",
+            "description": "The assertion proves that 'adding' or 'updating' by property indexes in Javascript will in fact also update the Elsa variable",
+            "datasets": [
+                {
+                    "name": "add",
+                    "case": {
+                        "addOrUpdateProperty": {
+                            "name": "new_key",
+                            "value": "new value"
+                        }
+                    }
+                },
+                {
+                    "name": "update",
+                    "case": {
+                        "addOrUpdateProperty": {
+                            "name": "key1",
+                            "value": "updated value"
+                        }
+                    }
+                }
+            ],
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": {
+                        "method": "addOrUpdateProperty",
+                        "addOrUpdateProperty": "{{ $.case.addOrUpdateProperty }}",
+                        "object": "{{ $.globals.object }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.result['{{ $.case.addOrUpdateProperty.name }}'] }}",
+                            "expectedValue": "{{ $.case.addOrUpdateProperty.value }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.result }}",
+                            "expectedValue": "{{ $.this.body.objectVariable }}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

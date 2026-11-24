@@ -1,0 +1,83 @@
+{
+  "version": "1.0",
+  "info": {
+    "name": "Testing that HTTP endpoints supporting the POST- and/or the GET-method can receive request bodies from various content types",
+    "description": "We see that XML content cannot be sent; Elsa throws an exception when reading the Content Stream"
+  },
+  "globals": {
+    "postEndpoint": "qa/http-endpoints/request-body/post",
+    "getEndpoint": "qa/http-endpoints/request-body/get"
+  },
+  "tests": [
+    {
+      "name": "Test by executing the workflow definition and asserting the response",
+      "description": "",
+      "datasets": [
+        {
+          "name": "xmlContent",
+          "case": {
+            "contentType": "application/xml",
+            "contentFile": "test-files/mock-data.xml",
+            "expectedStatusCode": 500
+          }
+        },        
+        {
+          "name": "htmlContent",
+          "case": {
+            "contentFile": "test-files/mock-data.html",
+            "contentType": "text/html",
+            "expectedStatusCode": 202
+          }
+        },
+        {
+          "name": "plainTextContent",
+          "case": {
+            "contentType": "text/plain",
+            "contentFile": "test-files/mock-data.txt",
+            "expectedStatusCode": 202
+          }
+        },
+        {
+          "name": "jsonContent",
+          "case": {
+            "contentType": "application/json",
+            "contentFile": "test-files/mock-data.json",
+            "expectedStatusCode": 202
+          }
+        }
+      ],
+      "steps": [
+        {
+          "type": "http",
+          "name": "Execute workflow (POST method) and assert response",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.postEndpoint }}",
+          "method": "POST",
+          "file": "{{ $.case.contentFile }}",
+          "contentType": "{{ $.case.contentType }}",
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": "{{ $.case.expectedStatusCode }}"
+            }
+          ]
+        },
+        {
+          "type": "http",
+          "name": "Execute workflow (GET method) and assert response",
+          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.getEndpoint }}",
+          "method": "GET",
+          "file": "{{ $.case.contentFile }}",
+          "contentType": "{{ $.case.contentType }}",
+          "assert": [
+            {
+              "op": "equals",
+              "actualValue": "{{ $.this.status }}",
+              "expectedValue": "{{ $.case.expectedStatusCode }}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

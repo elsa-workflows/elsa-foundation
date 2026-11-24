@@ -1,0 +1,101 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Composite Elsa Templates",
+        "description": ""
+    },
+    "components": {
+        "templates": [
+            {
+                "name": "elsa-composite-import-and-publish-workflow",
+                "description": "",
+                "params": {
+                    "username": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Username for authentication"
+                    },
+                    "password": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Password for authentication"
+                    },
+                    "baseUrl": {
+                        "required": true,
+                        "type": "string",
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "workflowDefinitionFile": {
+                        "required": true,
+                        "type": "string"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "use",
+                        "template": "elsa-authenticate",
+                        "with": {
+                            "username": "{{ $.username}}",
+                            "password": "{{ $.password }}",
+                            "baseUrl": "{{ $.baseUrl }}"
+                        },
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.this.authHeader }}",
+                                "mask": true
+                            }
+                        ],
+                        "save": {
+                            "authHeader": "{{ $.this.authHeader }}"
+                        }
+                    },
+                    {
+                        "type": "use",
+                        "template": "elsa-workflow-definition-import",
+                        "with": {
+                            "authHeader": "{{ $.authHeader }}",
+                            "baseUrl": "{{ $.baseUrl }}",
+                            "workflowDefinitionFile": "{{ $.workflowDefinitionFile }}"
+                        },
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{$.this.workflowDefinitionId}}"
+                            },
+                            {
+                                "op": "exists",
+                                "actualValue": "{{$.this.workflowDefinitionVersionId}}"
+                            },
+                            {
+                                "op": "exists",
+                                "actualValue": "{{$.this.workflowDefinition}}"
+                            }
+                        ],
+                        "save": {
+                            "workflowDefinition": "{{ $.this.workflowDefinition }}",
+                            "workflowDefinitionVersionId": "{{$.this.workflowDefinitionVersionId}}",
+                            "workflowDefinitionVersion": "{{$.this.workflowDefinitionVersion}}",
+                            "workflowDefinitionId": "{{$.this.workflowDefinitionId}}"
+                        }
+                    },
+                    {
+                        "type": "use",
+                        "template": "elsa-workflow-definition-publish",
+                        "with": {
+                            "authHeader": "{{ $.authHeader }}",
+                            "baseUrl": "{{ $.baseUrl }}",
+                            "workflowDefinition": "{{ $.workflowDefinition }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "authHeader": "{{ $.authHeader }}",
+                    "workflowDefinitionVersionId": "{{$.workflowDefinitionVersionId}}",
+                    "workflowDefinitionId": "{{$.workflowDefinitionId}}",
+                    "workflowDefinitionVersion": "{{$.workflowDefinitionVersion}}"
+                }
+            }
+        ]
+    }
+}

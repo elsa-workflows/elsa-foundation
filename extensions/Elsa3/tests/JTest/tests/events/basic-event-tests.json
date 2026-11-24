@@ -1,0 +1,120 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Test case - Can publish and listen to event"
+    },
+    "globals": {
+        "eventPublisherDefinitionId": "5b805c0f98b60b08",
+        "eventListenerDefinitionId": "c6fae2759f0fb6e8",
+        "eventPayload": {
+            "message": "Hello from event publisher!"
+        }
+    },
+    "categories": [
+        "performance",
+        "events"
+    ],
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Act & Assert - Execute workflow",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Execute",
+                    "url": "{{ $.env['elsaApi:baseUrl'] }}/elsa/api/workflow-definitions/{{ $.globals.eventPublisherDefinitionId }}/execute",
+                    "method": "POST",
+                    "body": {
+                        "input": {
+                            "InputData": "{{ $.globals.eventPayload }}"
+                        }
+                    },
+                    "headers": [
+                        {
+                            "name": "Authorization",
+                            "value": "{{ $.globals.authHeader }}"
+                        }
+                    ],
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.workflowState.status }}",
+                            "expectedValue": "Finished",
+                            "description": "Workflow state is finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.body.workflowState.subStatus }}",
+                            "expectedValue": "Finished",
+                            "description": "Workflow sub-state is finished"
+                        },
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.body.workflowState.output.EventListenerCorrelationIdentifier }}",
+                            "description": "EventListenerCorrelationIdentifier exists in output"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.eventListenerCorrelationId": "{{ $.this.body.workflowState.output.EventListenerCorrelationIdentifier }}"
+                    }
+                },
+                {
+                    "type": "wait",
+                    "ms": 1000
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "description": "Find event listener instance",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.eventListenerDefinitionId }}",
+                        "workflowDefinitionVersion": 1,
+                        "correlationId": "{{ $.globals.eventListenerCorrelationId }}"
+                    },
+                    "save": {
+                        "$.globals.eventListenerWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Get event listener workflow instance details",
+                    "template": "elsa-get-workflow-instance",
+                    "with": {
+                        "workflowInstanceId": "{{ $.globals.eventListenerWorkflowInstanceId }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instance.workflowState.output.Result }}"                            
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instance.workflowState.output.Result.message }}",
+                            "expectedValue": "{{ $.globals.eventPayload.message }}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

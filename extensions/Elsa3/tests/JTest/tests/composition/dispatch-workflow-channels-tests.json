@@ -1,0 +1,180 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "",
+        "description": ""
+    },
+    "using": [],
+    "globals": {
+        "endpoint": "qa/composition/dispatch",
+        "workflowDefinitionId": "ddd44c7b8d434a3b",
+        "workflowDefinitionVersion": 1,
+        "subWorkflowDefinitionId": "52d1bea42e264b2",
+        "subWorkflowDefinitionVersion": 1,
+        "expectedSubWorkflowOutput": {
+            "testProp1": "testValue1"
+        },
+        "activityIds": {
+            "dispatchWorkflow": "270b3a90801a8067"
+        },
+        "authHeader": null
+    },
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Execute Test Case: Channels",
+            "description": "Testing whether the dispatch workflow executes with the same behaviour when using different channels",
+            "datasets": [
+                {
+                    "name": "channel1",
+                    "case": {
+                        "channel": "{{ $.env.dispatch.chanels.channel_1 }}"
+                    }
+                },
+                {
+                    "name": "channel2",
+                    "case": {
+                        "channel": "{{ $.env.dispatch.chanels.channel_2 }}"
+                    }
+                },
+                {
+                    "name": "channel3",
+                    "case": {
+                        "channel": "{{ $.env.dispatch.chanels.channel_3 }}"
+                    }
+                },
+                {
+                    "name": "default",
+                    "case": {
+                        "channel": "{{ $.env.dispatch.chanels.channel_Default }}"                        
+                    }
+                }
+            ],
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "headers": [
+                    ],
+                    "body": {
+                        "waitForCompletion": true,
+                        "channel": "{{ $.case.channel }}",
+                        "subworkflowInput": {
+                            "CustomInput": "{{ $.globals.expectedSubWorkflowOutput }}"
+                        }
+                    },
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Dispatch workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.dispatchWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },                
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Dispatch SUB-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.subWorkflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}{{$.case.channel}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.dispatchSubWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Get journal item of Dispatch workflow activity",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.dispatchWorkflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.dispatchWorkflow}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "wait",
+                    "ms": 500
+                },
+                {
+                    "type": "use",
+                    "name": "Assert data successfully passed through sub-workflow",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.outputs.Result.CustomOutput.testProp1 }}",
+                            "expectedValue": "{{ $.globals.expectedSubWorkflowOutput.testProp1 }}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

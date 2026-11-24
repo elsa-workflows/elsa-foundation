@@ -1,0 +1,406 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing the Dispatch Workflow activity: handling input"        
+    },
+    "using": [],
+    "globals": {
+        "endpoint": "qa/composition/dispatch",
+        "workflowDefinitionId": "ddd44c7b8d434a3b",
+        "workflowDefinitionVersion": 1,
+        "subWorkflowDefinitionId": "52d1bea42e264b2",
+        "subWorkflowDefinitionVersion": 1,
+        "subWorkflowSetOutputActivityId": "55e94f817394ad6b",
+        "setVariableActivityId": "2c4ac2d2f1653f62",
+        "correlationId": "dispatch-handling-input-output",
+        "expectedSubWorkflowOutputName": "CustomOutput",
+        "subworkflowInput": {
+            "CustomInput": {
+                "property1": "value1"
+            }
+        }
+    },
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Execute Test Case: Handling Input - wait for completion true",
+            "description": "Testing whether the input is usable by subsequent activities when wait completion is set to true",            
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "headers": [
+                    ],
+                    "body": {
+                        "waitForCompletion": true,                        
+                        "subworkflowInput": "{{ $.globals.subworkflowInput }}",
+                        "correlationId": "{{ $.globals.correlationId }}-TRUE"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.status}}",
+                            "expectedValue": 200,
+                            "description": "Expecting 200 because the HTTP Response cannot exeute when awaiting the dispatched sub workflow"
+                        }
+                    ]
+                },
+                {
+                  "type": "wait",
+                  "name": "Wait until instance is available",
+                  "ms": 1000
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Execute ROOT-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}-TRUE"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Running"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].subStatus }}",
+                            "expectedValue": "Suspended",
+                            "description": "Suspended substatus because HTTP response activity was suspended"
+                        }
+                    ],
+                    "save": {
+                        "$.rootWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },                
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Execute SUB-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.subWorkflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}-TRUE"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        }
+                    ],
+                    "save": {
+                        "$.subWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "wait",
+                    "ms": 500,
+                    "name": "Ensure to wait so journal items are available"
+                },
+                {
+                    "type": "use",
+                    "name": "Get journal item of SubWorkflow.SetOutput activity",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.subWorkflowInstanceId }}",
+                        "activityId": "{{$.globals.subWorkflowSetOutputActivityId}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },                
+                {
+                    "type": "use",
+                    "name": "Assert state of SubWorkflow.SetOutput activity",
+                    "id": "Assert set output activity",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.OutputValue.property1 }}",
+                            "expectedValue": "{{ $.globals.subworkflowInput.CustomInput.property1 }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.OutputName }}",
+                            "expectedValue": "{{ $.globals.expectedSubWorkflowOutputName }}"
+                        }
+                    ]
+                },
+
+                {
+                    "type": "use",
+                    "name": "Get journal item of RootWorkflow.SetVariable activity",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.rootWorkflowInstanceId }}",
+                        "activityId": "{{$.globals.setVariableActivityId}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.setVariableActivityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },                
+                {
+                    "type": "use",
+                    "name": "Assert state of RootWorkflow.SetVariable activity",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.setVariableActivityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Value.{{ $.globals.expectedSubWorkflowOutputName }}.property1 }}",
+                            "expectedValue": "{{ $.globals.subworkflowInput.CustomInput.property1 }}",
+                            "description": "Assert that the variable value can be correctly taken from awaited sub-workflow output"
+                        }
+                    ]
+                }
+            ]
+        },
+
+        {
+            "name": "Execute Test Case: Handling Input - wait for completion false",
+            "description": "Testing whether the input is usable by subsequent activities when wait completion is set to true",            
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "headers": [
+                    ],
+                    "body": {
+                        "waitForCompletion": false,
+                        "subworkflowInput": "{{ $.globals.subworkflowInput }}",
+                        "correlationId": "{{ $.globals.correlationId }}-FALSE"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.status}}",
+                            "expectedValue": 202,
+                            "description": "Expecting 202 because the HTTP Response will exeute before the dispatched sub workflow completes"
+                        }
+                    ]
+                },
+                {
+                    "type": "wait",
+                    "ms": 1500,
+                    "name": "Wait for instance availability"
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Execute ROOT-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}-FALSE"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        }
+                    ],
+                    "save": {
+                        "$.rootWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },                
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Execute SUB-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.subWorkflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}-FALSE"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        }
+                    ],
+                    "save": {
+                        "$.subWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Get journal item of SubWorkflow.SetOutput workflow activity",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.subWorkflowInstanceId }}",
+                        "activityId": "{{$.globals.subWorkflowSetOutputActivityId}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },                
+                {
+                    "type": "use",
+                    "name": "Assert state of SetOutput activity",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.OutputValue.property1 }}",
+                            "expectedValue": "{{ $.globals.subworkflowInput.CustomInput.property1 }}",
+                            "description": "We can assert, that the output is still set after completion"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.OutputName }}",
+                            "expectedValue": "{{ $.globals.expectedSubWorkflowOutputName }}"
+                        }
+                    ]
+                },
+
+                {
+                    "type": "use",
+                    "name": "Get journal item of RootWorkflow.SetVariable activity",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.rootWorkflowInstanceId }}",
+                        "activityId": "{{$.globals.setVariableActivityId}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.setVariableActivityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },                
+                {
+                    "type": "use",
+                    "name": "Assert state of RootWorkflow.SetVariable activity",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.setVariableActivityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.activityState.Value }}",
+                            "description": "Assert that the variable value is null because the subworkflow with output has not yet completed before this activity started"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

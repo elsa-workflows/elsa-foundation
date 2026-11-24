@@ -1,0 +1,382 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing the Dispatch workflow activity. Case: await completion",
+        "description": "IMPLICIT BEHAVIOUR NOTE: case when waitForCompletion is true, then will not be able to execute HttpResponse due to HttpContext switching"
+    },
+    "globals": {
+        "endpoint": "qa/composition/dispatch",
+        "workflowDefinitionId": "ddd44c7b8d434a3b",
+        "workflowDefinitionVersionId": "db9703913d63baa7",
+        "workflowDefinitionVersion": 1,
+        "subWorkflowDefinitionId": "52d1bea42e264b2",
+        "subWorkflowDefinitionVersionId": "39b0911c24990d5c",
+        "subWorkflowDefinitionVersion": 1,
+        "correlationId": "dispatch-await-completion-",
+        "expectedSubWorkflowOutput": {
+            "testProp1": "testValue1"
+        },
+        "activityIds": {
+            "writeHttpResponse": "eb756639de47f75f",
+            "setVariable": "2c4ac2d2f1653f62"
+        },
+        "authHeader": null
+    },
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Execute Case: wait completion TRUE",
+            "description": "Wait for completion set to true",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "headers": [
+                    ],
+                    "body": {
+                        "waitForCompletion": true,
+                        "subworkflowInput": {
+                            "CustomInput": "{{ $.globals.expectedSubWorkflowOutput }}"
+                        },
+                        "correlationId": "{{ $.globals.correlationId }}-TRUE"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": 200,
+                            "description": "We should actually expect 202, but because of the bug the HTTP Response activity is never completed, hence not returning the status code that we would expect."
+                        }
+                    ]
+                },
+                {
+                  "type": "wait",
+                  "name": "Wait until instance is available",
+                  "ms": 1000
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Dispatch workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}-TRUE"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Running",
+                            "description": "Due to the bug: this should not actually be Running"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].subStatus }}",
+                            "expectedValue": "Suspended",
+                            "description": "Due to the bug: this should not actually be Suspended"
+                        }
+                    ],
+                    "save": {
+                        "$.dispatchWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Dispatch SUB-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.subWorkflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}-TRUE"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        }
+                    ],
+                    "save": {
+                        "$.dispatchSubWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Get journal item: WriteHttpResponse completed when Dispatched workflow completion awaited",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.dispatchWorkflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.writeHttpResponse}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert HttpResponse has expected state - but because of bug only the Event status 'Running' is incorrect",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Running",
+                            "description": "Status 'Completed' would be expected, but because of HttpContext switching the HTTP response activity can never complete"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.StatusCode }}",
+                            "expectedValue": "Accepted",
+                            "description": "This is indeed the status code we would expect"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get journal item: SetVariable",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.dispatchWorkflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.setVariable}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.setVariableActivityInstance": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert SetVariable has expected state; dispatch workflow is awaited and Output can be used",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.setVariableActivityInstance }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Value.CustomOutput.testProp1 }}",
+                            "expectedValue": "{{ $.globals.expectedSubWorkflowOutput.testProp1 }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Execute Case: wait completion FALSE",
+            "description": "Wait for completion set to FALSE",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "headers": [
+                    ],
+                    "body": {
+                        "waitForCompletion": false,
+                        "subworkflowInput": {
+                            "CustomInput": "{{ $.globals.expectedSubWorkflowOutput }}"
+                        },
+                        "correlationId": "{{ $.globals.correlationId }}-FALSE"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": 202
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Dispatch workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}-FALSE"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        }
+                    ],
+                    "save": {
+                        "$.dispatchWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Dispatch SUB-workflow instance created (but status does not have to be 'Finished')",
+                    "description": "We do not check the status of the instance here in the Test. The workflow definiton takes care of that, and executes the correct HttpResponse",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.subWorkflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}-FALSE"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        }
+                    ],
+                    "save": {
+                        "$.dispatchSubWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Get journal item: WriteHttpResponse when not awaiting dispatched workflow completion",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.dispatchWorkflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.writeHttpResponse}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert HttpResponse has expected state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.StatusCode }}",
+                            "expectedValue": "Accepted"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get journal item: SetVariable",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.dispatchWorkflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.setVariable}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.setVariableActivityInstance": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert SetVariable has expected state; dispatch workflow is NOT awaited, hence output cannot be used",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.setVariableActivityInstance }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.activityState.Value }}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

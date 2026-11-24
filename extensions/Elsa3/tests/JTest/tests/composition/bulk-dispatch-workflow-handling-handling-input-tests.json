@@ -1,0 +1,134 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Testing the BulkDispatch workflow activity. Case: handling input"
+    },
+    "using": [],
+    "globals": {
+        "endpoint": "qa/composition/bulk-dispatch",
+        "workflowDefinitionId": "ccb613931f8b60a",
+        "workflowDefinitionVersion": 1,
+        "subWorkflowDefinitionId": "32aa8cdf445d8276",
+        "subWorkflowDefinitionVersion": 1,
+        "correlationId": "bulk-dispatch-handling-input",
+        "subWorkflowInputItems": [
+            {
+                "ShouldFault": true
+            }
+        ]
+    },
+    "tests": [
+        {
+            "name": "Arrange: authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Execute Test Case: Handling Input",
+            "description": "Testing whether the input is correctly passed from root to sub workflow",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Act: Execute workflow definition",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "headers": [
+                    ],
+                    "body": {
+                        "subWorkflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "subWorkflowInputItems": "{{ $.globals.subWorkflowInputItems }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{$.this.status}}",
+                            "expectedValue": 202
+                        }
+                    ]
+                },                
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "name": "Assert Execute ROOT-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        }
+                    ],
+                    "save": {
+                        "$.rootWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                  "type": "wait",
+                  "name": "Wait until instance is available",
+                  "ms": 1500
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",                    
+                    "name": "Assert Execute SUB-workflow instance created",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.subWorkflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.subWorkflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        }
+                    ],
+                    "save": {
+                        "$.subWorkflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-get-workflow-instance",
+                    "name": "Assert Input correctly assigned to Sub Workflow Instance",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.subWorkflowInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instance }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instance.workflowState.input.ShouldFault }}",
+                            "expectedValue": "{{ $.globals.subWorkflowInputItems[0].ShouldFault }}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

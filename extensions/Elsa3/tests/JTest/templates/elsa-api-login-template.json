@@ -1,0 +1,79 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Elsa templates",
+        "description": ""
+    },
+    "components": {
+        "templates": [
+            {
+                "name": "elsa-authenticate",
+                "description": "",
+                "params": {
+                    "username": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Username for authentication"
+                    },
+                    "password": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Password for authentication"
+                    },
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL of the Elsa API"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Send authentication request",
+                        "method": "POST",
+                        "url": "{{$.baseUrl}}/elsa/api/identity/login",
+                        "headers": [
+                            {
+                                "name": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "username": "{{$.username}}",
+                            "password": "{{$.password}}"
+                        },
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200,
+                                "description": "Should return HTTP 200 OK"
+                            },
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.body.isAuthenticated}}",
+                                "expectedValue": true,
+                                "description": "Should be authenticated"
+                            },
+                            {
+                                "op": "exists",
+                                "actualValue": "{{$.this.body.accessToken}}",
+                                "description": "Access token should exist",
+                                "mask": true
+                            }
+                        ],
+                        "save": {
+                            "accessToken": "{{$.this.body.accessToken}}",
+                            "refreshToken": "{{$.this.body.refreshToken}}"
+                        }
+                    }
+                ],
+                "output": {
+                    "token": "{{$.accessToken}}",
+                    "authHeader": "Bearer {{$.accessToken}}",
+                    "refreshToken": "{{$.refreshToken}}"
+                }
+            }
+        ]
+    }
+}

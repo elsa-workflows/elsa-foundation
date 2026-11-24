@@ -1,0 +1,246 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Test: implicit branching",
+        "description": "No joins or forks are used. Conclusion: it seems when multiple implicit inbound paths lead to an activity, then the activity waits on all inbound paths in the same way a Join Activity with the mode 'WaitAny' does."
+    },
+    "globals": {
+        "authHeader": null,
+        "workflowInstanceId": null,
+        "expectedStatusCode": 202,
+        "endpoint": "qa/test-implicit-branching",
+        "definitionId": "1fd212d023250c3f",
+        "versionId": "d50fdd1399f8b13c",
+        "version": 1,
+        "activityIds": {
+            "httpEndpoint": "90a21363cda86c6c",
+            "httpResponse": "6ccf86b3e97652ef",
+            "correlate": "d09108c1192b89eb",
+            "decision": "d4c33058c5d68fcd",
+            "writeLine_1": "1bd511a7844e320",
+            "writeLine_2": "5465ce339d5a0bd3",
+            "writeLine_3": "73e5b1beccdde674",
+            "writeLine_4": "b4594e24f15815c5",
+            "writeLine_5": "5e3908112cec1e40",
+            "writeLine_6": "1941e6f7be214ae0",
+            "writeLine_7": "a42c3ad25be2c2bc",
+            "writeLine_8": "741723b377a73c3c"
+        },
+        "requestBody": {
+            "switchFlow": {
+                "case": "non-existing-case"
+            }
+        },
+        "expectedCompletedActivities": [
+            "{{ $.globals.activityIds.httpEndpoint }}",
+            "{{ $.globals.activityIds.httpResponse }}",
+            "{{ $.globals.activityIds.correlate }}",
+            "{{ $.globals.activityIds.decision }}",
+            "{{ $.globals.activityIds.writeLine_1 }}",
+            "{{ $.globals.activityIds.writeLine_2 }}",
+            "{{ $.globals.activityIds.writeLine_3 }}",
+            "{{ $.globals.activityIds.writeLine_4 }}",
+            "{{ $.globals.activityIds.writeLine_5 }}",
+            "{{ $.globals.activityIds.writeLine_6 }}",
+            "{{ $.globals.activityIds.writeLine_7 }}",
+            "{{ $.globals.activityIds.writeLine_8 }}"
+        ],
+        "expectedCompletedActivitiesCount": 12
+    },
+    "tests": [
+        {
+            "name": "Act: Execute workflow definition",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Execute workflow",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "POST",
+                    "body": "{{ $.globals.requestBody }}",
+                    "headers": [
+                    ],
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "{{ $.globals.expectedStatusCode }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.correlationId": "{{ $.this.body.correlationId }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Required setup for assertions",
+            "description": "Authenticate with Elsa API and get the executed workflow instance",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username']}}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.definitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.version }}",
+                        "correlationId": "{{ $.globals.correlationId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionId }}",
+                            "expectedValue": "{{ $.globals.definitionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionVersionId }}",
+                            "expectedValue": "{{ $.globals.versionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].correlationId }}",
+                            "expectedValue": "{{ $.globals.correlationId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Assert: expected activities completed",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "",
+                    "template": "elsa-activity-instance-assert-all-completed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityIdentifiers": "{{ $.globals.expectedCompletedActivities }}",
+                        "activityIdentifiersCount": "{{ $.globals.expectedCompletedActivitiesCount }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Assert: WriteLine 3 executed only once (even though 3 paths lead to its input)",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Count activities started",
+                    "template": "elsa-activity-instance-get-count-started",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{ $.globals.activityIds.writeLine_3 }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.count }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.count }}",
+                            "expectedValue": 1
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Assert: WriteLine 3 waits for all inbound paths",
+            "description": "In practical terms, it seems multiple implicit inbound paths leading to an activity are awaited in the same way as a Join Activity with the mode 'WaitAny'.",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get Journal Item of WriteLine 3 Activity",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{ $.globals.activityIds.writeLine_3 }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        },
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.startedAt }}"
+                        }
+                    ],
+                    "save": {
+                        "writeLine3_StartedAt": "{{ $.this.startedAt }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Get Journal Item of WriteLine 7 Activity",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{ $.globals.activityIds.writeLine_7 }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        },
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.completedAt }}"
+                        }
+                    ],
+                    "save": {
+                        "writeLine7_CompletedAt": "{{ $.this.completedAt }}"
+                    }
+                },
+                {
+                    "type": "assert",
+                    "name": "Assert: writeLine_3.startedAt is greater than writeLine_7.completedAt",
+                    "assert": [
+                        {
+                            "op": "greaterthan",
+                            "actualValue": "{{ $.writeLine3_StartedAt }}",
+                            "expectedValue": "{{ $.writeLine7_CompletedAt }}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

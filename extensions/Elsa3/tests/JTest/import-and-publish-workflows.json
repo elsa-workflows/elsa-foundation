@@ -1,0 +1,230 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Import & Publish Workflows",
+        "description": "Imports and publishes workflow definitions required for the test files"
+    },
+    "tests": [
+        {
+            "name": "Arrange: Import and Publish Workflow",
+            "datasets": [
+                {
+                    "name": "events/publisher",
+                    "case": {
+                        "filePath": "workflow-definitions/events-publisher.json"
+                    }
+                },
+                {
+                    "name": "events/listener",
+                    "case": {
+                        "filePath": "workflow-definitions/events-listener.json"
+                    }
+                },
+                {
+                    "name": "performance/minimal-baseline",
+                    "case": {
+                        "filePath": "workflow-definitions/performance-minimal-baseline.json"
+                    }
+                },
+                {
+                    "name": "performance/concurrency",
+                    "case": {
+                        "filePath": "workflow-definitions/performance-concurrency.json"
+                    }
+                },
+                {
+                    "name": "performance/commit-after-every-activity",
+                    "case": {
+                        "filePath": "workflow-definitions/performance-commit-after-every-activity.json"
+                    }
+                },
+                {
+                    "name": "performance/bigdata",
+                    "case": {
+                        "filePath": "workflow-definitions/performance-bigdata.json"
+                    }
+                },
+                {
+                    "name": "miscellaneous/simple-write-hello-world",
+                    "case": {
+                        "filePath": "workflow-definitions/simple-write-hello-world.json"
+                    }
+                },
+                {
+                    "name": "correlate/guid",
+                    "case": {
+                        "filePath": "workflow-definitions/correlate-guid.json"
+                    }
+                },
+                {
+                    "name": "branching/flows",
+                    "case": {
+                        "filePath": "workflow-definitions/branching-flows.json"
+                    }
+                },
+                {
+                    "name": "branching/fork-parallel",
+                    "case": {
+                        "filePath": "workflow-definitions/branching-fork-parallel.json"
+                    }
+                },
+                {
+                    "name": "branching/join-wait-all-active",
+                    "case": {
+                        "filePath": "workflow-definitions/branching-wait-all-active.json"
+                    }
+                },
+                {
+                    "name": "branching/join-wait-all",
+                    "case": {
+                        "filePath": "workflow-definitions/branching-wait-all.json"
+                    }
+                },
+                {
+                    "name": "branching/join-wait-any",
+                    "case": {
+                        "filePath": "workflow-definitions/branching-wait-any.json"
+                    }
+                },
+                {
+                    "name": "branching/implicit",
+                    "case": {
+                        "filePath": "workflow-definitions/branching-implicit.json"
+                    }
+                },
+                {
+                    "name": "single-outcomes",
+                    "case": {
+                        "filePath": "workflow-definitions/single-outcome-activities.json"
+                    }
+                },
+                {
+                    "name": "http-endpoint",
+                    "case": {
+                        "filePath": "workflow-definitions/http-endpoints.json"
+                    }
+                },
+                {
+                    "name": "javascript/array-methods",
+                    "case": {
+                        "filePath": "workflow-definitions/javascript-array-methods.json"
+                    }
+                },
+                {
+                    "name": "javascript/date-methods",
+                    "case": {
+                        "filePath": "workflow-definitions/javascript-date-methods.json"
+                    }
+                },
+                {
+                    "name": "javascript/elsa-functions",
+                    "case": {
+                        "filePath": "workflow-definitions/javascript-elsa-functions.json"
+                    }
+                },
+                {
+                    "name": "javascript/json-methods",
+                    "case": {
+                        "filePath": "workflow-definitions/javascript-json-methods.json"
+                    }
+                },
+                {
+                    "name": "javascript/object-methods",
+                    "case": {
+                        "filePath": "workflow-definitions/javascript-object-methods.json"
+                    }
+                },
+                {
+                    "name": "javascript/specialized-methods",
+                    "case": {
+                        "filePath": "workflow-definitions/javascript-specialized-methods-workflow.json"
+                    }
+                },
+                {
+                    "name": "javascript/script-handler-functions",
+                    "case": {
+                        "filePath": "workflow-definitions/javascript-script-handler-functions.json"
+                    }
+                },
+                {
+                    "name": "composition/dispatch-subworkflow",
+                    "case": {
+                        "filePath": "workflow-definitions/composition-dispatch-sub-workflow.json"
+                    }
+                },
+                {
+                    "name": "composition/dispatch-workflow",
+                    "case": {
+                        "filePath": "workflow-definitions/composition-dispatch-root-workflow.json"
+                    }
+                },
+                {
+                    "name": "composition/execute-workflow-root",
+                    "case": {
+                        "filePath": "workflow-definitions/composition-execute-workflow-root.json"
+                    }
+                },
+                {
+                    "name": "composition/execute-workflow-sub-workflow",
+                    "case": {
+                        "filePath": "workflow-definitions/composition-execute-workflow-sub-workflow.json"
+                    }
+                },
+                {
+                    "name": "composition/workflow-as-activity-sub",
+                    "case": {
+                        "filePath": "workflow-definitions/composition-workflow-as-activity-sub.json"
+                    }
+                },
+                {
+                    "name": "composition/workflow-as-activity-root",
+                    "case": {
+                        "filePath": "workflow-definitions/composition-workflow-as-activity-root.json"
+                    }
+                },
+                {
+                    "name": "composition/bulk-dispatch-root",
+                    "case": {
+                        "filePath": "workflow-definitions/composition-bulk-dispatch-root-workflow.json"
+                    }
+                },
+                {
+                    "name": "composition/bulk-dispatch-sub",
+                    "case": {
+                        "filePath": "workflow-definitions/composition-bulk-dispatch-sub-workflow.json"
+                    }
+                },
+                {
+                    "name": "logging-workflow.json",
+                    "case": {
+                        "filePath": "workflow-definitions/logging-workflow.json"
+                    }
+                },
+                {
+                    "name": "storage-drivers/variables-sub",
+                    "case": {
+                        "filePath": "workflow-definitions/storage-drivers-variables-sub-workflow.json"
+                    }
+                },
+                {
+                    "name": "storage-drivers/variables-root",
+                    "case": {
+                        "filePath": "workflow-definitions/storage-drivers-variables-root-workflow.json"
+                    }
+                }
+            ],
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-composite-import-and-publish-workflow",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "workflowDefinitionFile": "{{$.case.filePath}}"
+                    }
+                }
+            ]
+        }
+    ]
+}

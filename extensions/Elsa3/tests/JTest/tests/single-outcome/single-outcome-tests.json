@@ -1,0 +1,879 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Single Outcome Activities Tests",
+        "description": "Tests a single workflow that sequentially executes all single-outcome activities"
+    },
+    "using": [],
+    "globals": {
+        "workflowDefinitionFile": "workflow-definitions/single-outcome-activities.json",
+        "workflowDefinitionEndpoint": "qa/jtest/single-outcome-activities-test",
+        "workflowDefinitionVersionId": "3d6982c1e19aff18",
+        "workflowDefinitionVersion": 1,
+        "workflowDefinitionId": "b82759f221414c088f",
+        "authHeader": null,
+        "workflowInstanceId": null,
+        "runJavascript_OutputVariableId": "f098eaab5262c160",
+        "activityIds": {
+            "writeLine": "792e32f4465aa38c",
+            "forLoopOuterboundInclusiveFalse": "5fef05b866768757",
+            "forLoopOuterboundInclusiveFalse_WriteLine": "39db044f331f02e1",
+            "forLoopOuterboundInclusiveTrue": "ac6fe16a5efccd6",
+            "forLoopOuterboundInclusiveTrue_WriteLine": "5f6e6569d9b1c8bc",
+            "forEachLoop": "48ccf960df09ce5d",
+            "forEachLoop_WriteLine": "97587fc5c8bb34f1",
+            "parallelForEachLoop": "3de45efb20b3391a",
+            "parallelForEachLoop_WriteLine": "b4f4d88348efeb1",
+            "whileLoop": "31df7382a4bfe73f",
+            "whileLoop_InnerActivity": "74d7076ca4f57dd5",
+            "setVariable": "ef5be19eb907d195",
+            "runJavascript": "78bac322b21cb0c"
+        },
+        "workflowExecutionRequestBody": {
+            "writeLine": "Test WriteLine 3123",
+            "correlate": {
+                "id": "jtest-c302f762-65b4-47ba-acd3-f35985cfe3ef"
+            },
+            "forEachLoop": {
+                "items": [
+                    "item1",
+                    "item2"
+                ],
+                "expectedIterationCount": 2
+            },
+            "forLoop": {
+                "start": 0,
+                "end": 2,
+                "step": 1,
+                "expectedIterationCount_OuterBoundInclusive": 3,
+                "expectedIterationCount_OuterBoundExclusive": 2
+            },
+            "whileLoop": {
+                "loopCount": 6
+            },
+            "parallelForEachLoop": {
+                "items": [
+                    "parallelItem1",
+                    "parallelItem2"
+                ],
+                "expectedIterationCount": 2
+            },
+            "setName": {
+                "value": "Custom name set from JTEST"
+            },
+            "runJavascript": {
+                "outputVariableValue": "Custom value set by a Run Javascript activity"
+            },
+            "setVariable": {
+                "value": "Custom variable value 12373498"
+            }
+        }
+    },
+    "tests": [
+        {
+            "name": "Authenticate with Elsa API",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username'] }}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Act: Execute workflow definition",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Execute workflow",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.workflowDefinitionEndpoint }}",
+                    "method": "POST",
+                    "body": "{{ $.globals.workflowExecutionRequestBody }}",
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": 202
+                        }
+                    ]
+                },
+                {
+                    "type": "wait",
+                    "name": "Wait until instance data available",
+                    "ms": 1000
+                }
+            ]
+        },
+        {
+            "name": "Assert: Instance created correctly",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.workflowDefinitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.workflowDefinitionVersion }}",
+                        "correlationId": "{{ $.globals.workflowExecutionRequestBody.correlate.id }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].name }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.setName.value }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionId }}",
+                            "expectedValue": "{{ $.globals.workflowDefinitionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionVersionId }}",
+                            "expectedValue": "{{ $.globals.workflowDefinitionVersionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].version }}",
+                            "expectedValue": "{{ $.globals.workflowDefinitionVersion }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].correlationId }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.correlate.id }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Assert: WriteLine execution as expected",
+            "description": "",
+            "steps": [
+                {
+                    "type": "wait",
+                    "name": "Wait for journal availability",
+                    "ms": 1000
+                },
+                {
+                    "type": "use",
+                    "name": "Get journal item",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.writeLine}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Text }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.writeLine }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Assert: ForEach execution as expected",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get ForEach activity journal item",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.forEachLoop}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert ForEach activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Items[0] }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forEachLoop.items[0] }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Items[1] }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forEachLoop.items[1] }}"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get ForEach body WriteLine activity journal completed items",
+                    "template": "elsa-activity-instance-get-journal-items-completed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.forEachLoop_WriteLine}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.journalEntries }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.journalEntriesCount }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forEachLoop.expectedIterationCount }}"
+                        }
+                    ],
+                    "save": {
+                        "$.writeLineJournalEntries": "{{ $.this.journalEntries }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert ForEach body WriteLine 'Item1' activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.writeLineJournalEntries[0].activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Text }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forEachLoop.items[0] }}"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Assert ForEach body WriteLine 'Item2' activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.writeLineJournalEntries[1].activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Text }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forEachLoop.items[1] }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Assert: ForLoop_OuterBoundInclusive_TRUE execution as expected",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get ForLoop_OuterBoundInclusive_TRUE activity journal item",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.forLoopOuterboundInclusiveTrue}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert ForLoop_OuterBoundInclusive_TRUE activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Start }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forLoop.start }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.End }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forLoop.end }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Step }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forLoop.step }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.OuterBoundInclusive }}",
+                            "expectedValue": true
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get ForLoop_OuterBoundInclusive_TRUE body WriteLine activity journal completed items",
+                    "template": "elsa-activity-instance-get-journal-items-completed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.forLoopOuterboundInclusiveTrue_WriteLine}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.journalEntries }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.journalEntriesCount }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forLoop.expectedIterationCount_OuterBoundInclusive }}"
+                        }
+                    ],
+                    "save": {
+                        "$.writeLineJournalEntries": "{{ $.this.journalEntries }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert ForLoop_OuterBoundInclusive_TRUE body WriteLine 'Step0' activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.writeLineJournalEntries[0].activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Text }}",
+                            "expectedValue": "0"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Assert ForLoop_OuterBoundInclusive_TRUE body WriteLine 'Step1' activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.writeLineJournalEntries[1].activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Text }}",
+                            "expectedValue": "1"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Assert ForLoop_OuterBoundInclusive_TRUE body WriteLine 'Step2' activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.writeLineJournalEntries[2].activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Text }}",
+                            "expectedValue": "2"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Assert: ForLoop_OuterBoundInclusive_FALSE execution as expected",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get ForLoop_OuterBoundInclusive_FALSE activity journal item",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.forLoopOuterboundInclusiveFalse}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert ForLoop_OuterBoundInclusive_FALSE activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Start }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forLoop.start }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.End }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forLoop.end }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Step }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forLoop.step }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.OuterBoundInclusive }}",
+                            "expectedValue": false
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get ForLoop_OuterBoundInclusive_FALSE body WriteLine activity journal completed items",
+                    "template": "elsa-activity-instance-get-journal-items-completed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.forLoopOuterboundInclusiveFalse_WriteLine}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.journalEntries }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.journalEntriesCount }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.forLoop.expectedIterationCount_OuterBoundExclusive }}"
+                        }
+                    ],
+                    "save": {
+                        "$.writeLineJournalEntries": "{{ $.this.journalEntries }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert ForLoop_OuterBoundInclusive_FALSE body WriteLine 'Step0' activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.writeLineJournalEntries[0].activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Text }}",
+                            "expectedValue": "0"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Assert ForLoop_OuterBoundInclusive_FALSE body WriteLine 'Step1' activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.writeLineJournalEntries[1].activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Text }}",
+                            "expectedValue": "1"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Assert: WhileLoop execution as expected",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get WhileLoop activity journal item",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.whileLoop}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert WhileLoop activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Condition }}",
+                            "expectedValue": false
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Assert WhileLoop inner activity executed expected number of times",
+                    "template": "elsa-activity-instance-get-count-completed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.whileLoop_InnerActivity}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.count }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.whileLoop.loopCount }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Assert: ParallelForEach execution as expected",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get ParallelForEach activity journal item",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.parallelForEachLoop}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert ParallelForEach activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Items[0] }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.parallelForEachLoop.items[0] }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Items[1] }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.parallelForEachLoop.items[1] }}"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Assert ParallelForEach body WriteLine activity executed expected number of times",
+                    "template": "elsa-activity-instance-get-count-completed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.parallelForEachLoop_WriteLine}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.count }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.parallelForEachLoop.expectedIterationCount }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Assert: RunJavascript execution as expected",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get journal item",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.runJavascript}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Assert script has set variable successfully (using dynamic set{VariableName} method)",
+                    "template": "elsa-get-variable-value-from-instance",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "variableId": "{{ $.globals.runJavascript_OutputVariableId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.variableValue }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.runJavascript.outputVariableValue }}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Assert: SetVariable execution as expected",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "Get journal item",
+                    "template": "elsa-activity-instance-get-journal-item",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityId": "{{$.globals.activityIds.setVariable}}"
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.activityInstanceId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.activityInstanceId": "{{ $.this.activityInstanceId }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "name": "Assert activity instance state",
+                    "template": "elsa-activity-instance-get",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "activityInstanceId": "{{ $.activityInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "Completed"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.activityState.Value }}",
+                            "expectedValue": "{{ $.globals.workflowExecutionRequestBody.setVariable.value }}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

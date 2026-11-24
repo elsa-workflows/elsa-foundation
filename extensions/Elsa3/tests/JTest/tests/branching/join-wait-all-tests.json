@@ -1,0 +1,155 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Test Join with WaitAll mode",
+        "description": "We will expect the following result. If there are inbound paths that can never be executed, this workflow will never execute to its end and start/complete neither Join nor HttpResponse activity."
+    },
+    "globals": {
+        "authHeader": null,
+        "workflowInstanceId": null,
+        "endpoint": "qa/branching/wait-all",
+        "versionId": "eea36ed7ebf12c38",
+        "definitionId": "7c3751d00f707633",
+        "version": 1,
+        "expectedStatusCode": 200,
+        "expectedCompletedActivities": [
+            "{{ $.globals.activityIds.httpEndpoint }}",
+            "{{ $.globals.activityIds.correlate }}",
+            "{{ $.globals.activityIds.decision_AlwaysTrue }}",
+            "{{ $.globals.activityIds.fork }}",
+            "{{ $.globals.activityIds.fork_SubBranch1_RunJavascript }}",
+            "{{ $.globals.activityIds.fork_SubBranch2_WriteLine }}",
+            "{{ $.globals.activityIds.fork_SubBranch3_WriteLine }}"
+        ],
+        "expectedCompletedActivitiesCount": 7,
+        "expectedActivitiesNeverExecuted": [
+            "{{ $.globals.activityIds.writeLine_PathThatNeverExecutes }}",
+            "{{ $.globals.activityIds.join }}",
+            "{{ $.globals.activityIds.httpResponse_Final }}"
+        ],
+        "activityIds": {
+            "httpEndpoint": "8a1a086771335e5a",
+            "correlate": "a6e37d9980ab51a3",
+            "decision_AlwaysTrue": "1f6e2e455ba35d4f",
+            "writeLine_PathThatNeverExecutes": "ca525c538176493b",
+            "fork": "c48d023baf3158d6",
+            "fork_SubBranch1_RunJavascript": "327675988ad9a07d",
+            "fork_SubBranch2_WriteLine": "ae919f146c26ad4a",
+            "fork_SubBranch3_WriteLine": "cba7b6a948339708",
+            "join": "b30911da0e0c6dfc",
+            "httpResponse_Final": "c7a083e4b01a1c28"
+        }
+    },
+    "tests": [
+        {
+            "name": "Act: Execute workflow definition",
+            "description": "",
+            "steps": [
+                {
+                    "type": "http",
+                    "name": "Execute workflow",
+                    "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
+                    "method": "GET",
+                    "headers": [
+                    ],
+                    "assert": [
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.status }}",
+                            "expectedValue": "{{ $.globals.expectedStatusCode }}",
+                            "description": "If status code is 200, it proves indeed that the Elsa Workflow is cut short, an empty body is returned, because the HTTP response activity can never be executed; because the join before it is also awaiting a branch that can never execute."
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Required setup for assertions",
+            "description": "Authenticate with Elsa API and get the executed workflow instance",
+            "steps": [
+                {
+                    "type": "use",
+                    "template": "elsa-authenticate",
+                    "with": {
+                        "username": "{{ $.env['elsaApi:username']}}",
+                        "password": "{{ $.env['elsaApi:password'] }}",
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}"
+                    },
+                    "save": {
+                        "$.globals.authHeader": "{{ $.this.authHeader }}"
+                    }
+                },
+                {
+                    "type": "use",
+                    "template": "elsa-search-workflow-instances",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.definitionId }}",
+                        "workflowDefinitionVersion": "{{ $.globals.version }}",
+                        "correlationId": ""
+                    },
+                    "assert": [
+                        {
+                            "op": "exists",
+                            "actualValue": "{{ $.this.instances }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].status }}",
+                            "expectedValue": "Finished"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionId }}",
+                            "expectedValue": "{{ $.globals.definitionId }}"
+                        },
+                        {
+                            "op": "equals",
+                            "actualValue": "{{ $.this.instances[0].definitionVersionId }}",
+                            "expectedValue": "{{ $.globals.versionId }}"
+                        }
+                    ],
+                    "save": {
+                        "$.globals.workflowInstanceId": "{{ $.this.instances[0].id }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Assert: expected activities completed",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "",
+                    "template": "elsa-activity-instance-assert-all-completed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityIdentifiers": "{{ $.globals.expectedCompletedActivities }}",
+                        "activityIdentifiersCount": "{{ $.globals.expectedCompletedActivitiesCount }}"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Assert: expected activities never executed",
+            "description": "",
+            "steps": [
+                {
+                    "type": "use",
+                    "name": "",
+                    "template": "elsa-activity-instance-assert-none-executed",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
+                        "activityIdentifiers": "{{ $.globals.expectedActivitiesNeverExecuted }}"
+                    }
+                }
+            ]
+        }
+    ]
+}
