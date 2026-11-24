@@ -201,7 +201,7 @@ start with `EfMigrationLockStaleException` naming the `DELETE` that clears it. E
 only evidence of a holder, so nothing proves it dead. A host that migrates a SQLite store outside `EfDatabaseMigrator` calls
 `EfSqliteMigrationLock.MigrateAsync(context, EfMigrateOptions)` rather than `Database.MigrateAsync`; the options come from
 `EfMigrateOptions.FromConfiguration` where there is no options pipeline (`dotnet elsa persistence apply` reads the host's
-configuration that way, and Workbench's OpenIddict store does the same). `dotnet elsa persistence apply` sends the bound in its
+configuration that way, and the OpenIddict token store, `Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore`, does the same). `dotnet elsa persistence apply` sends the bound in its
 version-1 request (`sqliteMigrationLockStaleAfter`, read from the host's `appsettings.json`), so a host whose persistence build
 predates that field gets the default bound for `apply`: the tool probes for the field, leaves it out, and prints a warning.
 Caveats: skipping when nothing is pending leans on EF writing a migration's history row after its operations, which holds for a
