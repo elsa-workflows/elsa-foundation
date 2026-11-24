@@ -1,5 +1,7 @@
+using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Xunit;
 
@@ -7,6 +9,26 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed partial class WorkflowExecutableInputValidatorTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Generated_enum_defaults_use_the_shared_relaxed_encoder_for_omitted_and_explicit_null_inputs(bool omitted)
+    {
+        var registry = Registry(("BaselineDefaultEnum", typeof(BaselineDefaultEnum)));
+        var validator = new WorkflowExecutableInputValidator(registry);
+        var result = validator.Validate(Contract(new WorkflowDeclaredInput("value", new("BaselineDefaultEnum"), false)),
+            omitted ? [] : [Pair("value", Json("null"))], new(DefaultOnNull: true));
+
+        Assert.True(result.IsValid);
+        Assert.Equal("\"<+>\"", result.NormalizedInputs["value"].GetRawText());
+        var normalized = NullPolicyDefaults.NormalizeNull(ValueEnvelope.Null(new("BaselineDefaultEnum"), ValueProtectionPolicy.InstanceInline),
+            acceptsNull: false, new(DefaultOnNull: true), "value", registry);
+        Assert.Equal("\"<+>\"", normalized.InlineValue!.Value.GetRawText());
+    }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum BaselineDefaultEnum { [JsonStringEnumMemberName("<+>")] Default }
+
     [Fact]
     public void Complete_bag_materializes_optional_null_and_scalar_type_defaults()
     {

@@ -131,9 +131,9 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
             if (requireCompleteInputBag && !normalized.Any(input => StringComparer.Ordinal.Equals(input.Key, declaration.Name)))
             {
                 if (declaration.IsNullable)
-                    normalized.Add(new(declaration.Name, JsonSerializer.SerializeToElement<object?>(null)));
+                    normalized.Add(new(declaration.Name, JsonSerializer.SerializeToElement<object?>(null, JsonBaseline.Options)));
                 else if (NullPolicyDefaults.TryGetTypeDefault(targetType, out var defaultValue))
-                    normalized.Add(new(declaration.Name, JsonSerializer.SerializeToElement(defaultValue, targetType)));
+                    normalized.Add(new(declaration.Name, JsonSerializer.SerializeToElement(defaultValue, targetType, JsonBaseline.Options)));
                 else
                     return WorkflowExecutableInputValidation.Failure([
                         new(WorkflowExecutableInputValidationReasonCodes.IncompatibleValue,
@@ -152,7 +152,7 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
 
                     if (policies.DefaultOnNull && NullPolicyDefaults.TryGetTypeDefault(targetType, out var defaultValue))
                     {
-                        normalized[index] = new(input.Key, JsonSerializer.SerializeToElement(defaultValue, targetType));
+                        normalized[index] = new(input.Key, JsonSerializer.SerializeToElement(defaultValue, targetType, JsonBaseline.Options));
                         continue;
                     }
 

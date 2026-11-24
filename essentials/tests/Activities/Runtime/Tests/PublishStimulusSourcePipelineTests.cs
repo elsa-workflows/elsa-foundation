@@ -67,16 +67,16 @@ public sealed class PublishStimulusSourcePipelineTests
         Assert.Equal(1, routed.StartedCount); Assert.Equal(1, routed.ResumedCount);
         var started = Assert.Single(harness.Actors.Accepted, item => item.Command.Kind == WorkflowExecutionCommandKind.Start);
         var resumed = Assert.Single(harness.Actors.Accepted, item => item.Command.Kind == WorkflowExecutionCommandKind.ResumeBookmark);
-        var startPayload = started.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
-        var resumePayload = resumed.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var startPayload = started.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
+        var resumePayload = resumed.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(pending.Intent.HistoryCausation, startPayload.HistoryCausation);
         Assert.Equal(pending.Intent.HistoryCausation, resumePayload.HistoryCausation);
         Assert.Null(startPayload.HistoryCapturePolicy); Assert.Null((await harness.Executions.FindAsync("existing"))!.HistoryCapturePolicy);
         Assert.Equal("wait", resumePayload.ExpectedBookmarkResume!.BookmarkId);
         if (!stamped)
         {
-            Assert.False(started.Command.Payload!.Value.TryGetProperty("HistoryCausation", out _));
-            Assert.False(resumed.Command.Payload!.Value.TryGetProperty("HistoryCausation", out _));
+            Assert.False(started.Command.Payload!.Value.TryGetProperty("historyCausation", out _));
+            Assert.False(resumed.Command.Payload!.Value.TryGetProperty("historyCausation", out _));
         }
         await harness.Router.RouteSourceAsync(source);
         Assert.Equal(2, harness.Actors.Accepted.Count); // Actual mailbox keys keep the original accepted inputs.

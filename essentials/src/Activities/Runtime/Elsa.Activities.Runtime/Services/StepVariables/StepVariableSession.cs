@@ -358,7 +358,7 @@ internal sealed class StepVariableSession : IStepVariableSession
         if (envelope.Presence == ValuePresence.Absent &&
             !NullPolicyDefaults.AcceptsNull(envelope.Type.ToTypeReference(), _registry, _typeDescriptors) &&
             NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, _registry, out var typeDefault))
-            return ValueEnvelope.Inline(envelope.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType()), envelope.Policy);
+            return ValueEnvelope.Inline(envelope.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType(), JsonBaseline.Options), envelope.Policy);
         return envelope;
     }
 
@@ -466,6 +466,10 @@ internal sealed class StepVariableSession : IStepVariableSession
             throw Fault(new InvalidOperationException(
                 $"The value written to variable '{variable.Name}' on node '{_node.ExecutableNodeId}' does not match its type '{value.Type.Alias}': " +
                 string.Join(" ", validation.Findings.Select(finding => finding.Message))));
+        var protect = value.Policy.IsSensitive || value.Policy.RequiresEncryption ||
+                      !string.IsNullOrWhiteSpace(value.Policy.RedactionMode) || !string.IsNullOrWhiteSpace(value.Policy.RetentionPolicy);
+        foreach (var warning in validation.Warnings)
+            _warnings?.Report(protect ? warning.ProtectedForm ?? warning : warning);
     }
 
     // ---- resolution ----

@@ -26,7 +26,9 @@ public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider, 
             new PublicationCandidateSnapshot(
                 state,
                 layout.OrderBy(record => record.NodeId, StringComparer.Ordinal).ToArray()),
-            _ => null);
+            value => value is WorkflowDefinitionState authored
+                ? new { authored.Variables, authored.RootActivity, authored.Inputs, authored.Outputs, authored.StrategyOptions }
+                : null);
         return $"sha256:{JsonHashInput.Hash(snapshot)}";
     }
 

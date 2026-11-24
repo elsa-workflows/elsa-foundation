@@ -759,7 +759,7 @@ public sealed class WorkflowIntrinsicExecutor(
                 : ValueEnvelope.Inline(binding.TargetType, evaluated.Value, evaluated.EffectivePolicy);
             envelope = NormalizeTargetNull(binding, envelope, executable.ValuePolicies, warnings, targetLabel);
             if (validateAssignmentPayload)
-                ValidateAssignmentPayload(binding, envelope, intrinsicState.Execution.ExecutableNodeId);
+                ValidateAssignmentPayload(binding, envelope, intrinsicState.Execution.ExecutableNodeId, warnings);
             return await ApplyStorageAsync(
                 workflowState.WorkflowExecutionId,
                 intrinsicState.InvocationId,
@@ -834,7 +834,7 @@ public sealed class WorkflowIntrinsicExecutor(
             : _valueConversionExecutor.Convert(conversionSource, binding.ConversionPlan);
         combined = NormalizeTargetNull(binding, combined, executable.ValuePolicies, warnings, targetLabel);
         if (validateAssignmentPayload)
-            ValidateAssignmentPayload(binding, combined, intrinsicState.Execution.ExecutableNodeId);
+            ValidateAssignmentPayload(binding, combined, intrinsicState.Execution.ExecutableNodeId, warnings);
         return await ApplyStorageAsync(
             workflowState.WorkflowExecutionId,
             intrinsicState.InvocationId,
@@ -882,7 +882,7 @@ public sealed class WorkflowIntrinsicExecutor(
                 try
                 {
                     value = binding.ConversionPlan is null ? member.Retype(binding.TargetType) : _valueConversionExecutor.Convert(member, binding.ConversionPlan);
-                    ValidateAssignmentPayload(binding, value, nodeId);
+                    ValidateAssignmentPayload(binding, value, nodeId, context.Warnings);
                 }
                 catch (Exception exception) when (RuntimeReadSelectionException.IsFitFailure(exception))
                 {
@@ -903,7 +903,7 @@ public sealed class WorkflowIntrinsicExecutor(
             source.ExternalReference?.StorageProfile);
     }
 
-    private void ValidateAssignmentPayload(RuntimeInputBinding binding, ValueEnvelope value, string nodeId)
+    private void ValidateAssignmentPayload(RuntimeInputBinding binding, ValueEnvelope value, string nodeId, IExecutionWarningSink? warnings)
     {
         if (value.Presence != ValuePresence.Present || value.Policy.RequiresEncryption ||
             value.Type is { CollectionKind: CollectionKind.Single } && TypeAliasConvention.IsAny(value.Type.Alias))
@@ -919,6 +919,10 @@ public sealed class WorkflowIntrinsicExecutor(
         if (!validation.IsValid)
             throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' on node '{nodeId}' does not match '{binding.TargetType.Alias}': " +
                 string.Join(" ", validation.Findings.Select(finding => finding.Message)));
+        var protect = value.Policy.IsSensitive || value.Policy.RequiresEncryption ||
+                      !string.IsNullOrWhiteSpace(value.Policy.RedactionMode) || !string.IsNullOrWhiteSpace(value.Policy.RetentionPolicy);
+        foreach (var warning in validation.Warnings)
+            warnings?.Report(protect ? warning.ProtectedForm ?? warning : warning);
     }
 
     private ValueEnvelope NormalizeTargetNull(RuntimeInputBinding binding, ValueEnvelope value,

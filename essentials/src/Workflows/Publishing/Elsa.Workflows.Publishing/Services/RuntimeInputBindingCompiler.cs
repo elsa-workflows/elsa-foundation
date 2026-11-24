@@ -1227,7 +1227,9 @@ public sealed class RuntimeInputBindingCompiler(
 
         ValidateNull(inputDefinition, inputType, converted, nodeId);
         // Validate a typed copy; the executable carries the original data, including unmatched members and raw tokens.
-        var literalValue = value.Value is JsonElement original ? original.Clone() : ConversionFor(inputType, inputDefinition).Write(converted, inputType);
+        var literalValue = value.Value is JsonElement original ? original.Clone()
+            : converted is null ? JsonValueConversion.SerializeToElement<object?>(null)
+            : ConversionFor(inputType, inputDefinition).Write(converted, inputType);
         var targetType = ToValueTypeDescriptor(inputDefinition);
         var literal = converted is null ? ValueEnvelope.Null(targetType, policy)
             : ValueEnvelope.Inline(targetType, literalValue, policy);
@@ -1303,7 +1305,8 @@ public sealed class RuntimeInputBindingCompiler(
             structured = authored.ValueKind == JsonValueKind.String
                 ? JsonValueConversion.Deserialize<JsonElement>(authored.GetString()!)
                 : authored;
-            converted = ConversionFor(inputType, inputDefinition).Read(structured, inputType, diagnostic => ReportConversion(diagnostic, inputDefinition));
+            converted = structured.ValueKind == JsonValueKind.Null ? null
+                : ConversionFor(inputType, inputDefinition).Read(structured, inputType, diagnostic => ReportConversion(diagnostic, inputDefinition));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {

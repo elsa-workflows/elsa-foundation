@@ -765,7 +765,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             // A completing container's scope is no longer live for runtime expressions; mark it completed
             // and retain its final variable values as inspection evidence only through the configured
             // capture/retention policy (#210).
-            currentParentState = currentParentState.WithWarnings((context.Warnings as ExecutionWarningCollector)?.Warnings ?? []);
             containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
                 payloadCapturePolicy, scopeService, parentExecutableNode, currentParentState,
                 workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, TimeProvider.GetUtcNow());

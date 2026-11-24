@@ -582,7 +582,6 @@ public sealed class ExecutableNodeCompiler(
         {
             var outputName = nameArgument.Value switch
             {
-                string text => text,
                 JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
                 _ => null
             };

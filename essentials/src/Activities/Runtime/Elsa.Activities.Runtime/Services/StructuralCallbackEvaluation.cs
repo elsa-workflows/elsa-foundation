@@ -451,7 +451,6 @@ internal static class StructuralCallbackEvaluation
                     .ToArray();
             }
 
-            currentParentState = currentParentState.WithWarnings((resolvedContext.Warnings as ExecutionWarningCollector)?.Warnings ?? []);
             containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
                 payloadCapturePolicy, scopeService, parentExecutableNode, currentParentState,
                 workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, timeProvider.GetUtcNow());
