@@ -158,9 +158,8 @@ public sealed partial class EfStore
     /// The Worker qualifies immediate completion through its regular turn path.</summary>
     internal ValueTask<Committed> CommitFirstRootAsync(string tenant, string reference, Message creator,
         PartitionFence fence, TimeSpan lease, string? state, int stateVersion, string typeData,
-        IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken = default, long terminalGrowth = 0) =>
-        CommitPreparedRootAsync(fence, lease, PrepareFirstRoot(tenant, reference, creator, fence, state, stateVersion, typeData, labels, journal,
-            terminalGrowth: terminalGrowth), cancellationToken);
+        IReadOnlyDictionary<string, string> labels, string journal, CancellationToken cancellationToken = default) =>
+        CommitPreparedRootAsync(fence, lease, PrepareFirstRoot(tenant, reference, creator, fence, state, stateVersion, typeData, labels, journal), cancellationToken);
 
     private PreparedRoot PrepareFirstRoot(string tenant, string reference, Message creator,
         PartitionFence fence, string? state, int stateVersion, string typeData,
@@ -257,7 +256,7 @@ public sealed partial class EfStore
     {
         await using var db = create();
         var family = RootStateFamily(db);
-        if (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol)
+        if (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol || db.UsesRootStableBody)
             await RequireStoreVersionsAsync(db, cancellationToken);
         FormattableString query = $"""
             SELECT i."Id", b."Creation", i."State", /*root-wire*/ AS "Wire", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",

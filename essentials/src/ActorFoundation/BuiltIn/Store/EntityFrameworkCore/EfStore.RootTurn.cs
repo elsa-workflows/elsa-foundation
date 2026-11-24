@@ -141,9 +141,8 @@ public sealed partial class EfStore
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, TimeSpan lease, InstanceStatus status, string? state, int stateVersion,
-        string typeData, IReadOnlyDictionary<string, string> labels, string? journal, CancellationToken cancellationToken = default, long terminalGrowth = 0) =>
-        CommitPreparedRootAsync(fence, lease, PrepareRootTurn(tenant, reference, current, inputs, fence, status, state, stateVersion, typeData, labels,
-            journal, terminalGrowth: terminalGrowth), cancellationToken);
+        string typeData, IReadOnlyDictionary<string, string> labels, string? journal, CancellationToken cancellationToken = default) =>
+        CommitPreparedRootAsync(fence, lease, PrepareRootTurn(tenant, reference, current, inputs, fence, status, state, stateVersion, typeData, labels, journal), cancellationToken);
 
     private PreparedRoot PrepareRootTurn(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,

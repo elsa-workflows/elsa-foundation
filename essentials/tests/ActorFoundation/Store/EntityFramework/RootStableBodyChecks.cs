@@ -14,6 +14,7 @@ internal static class RootStableBodyChecks
         var lease = TimeSpan.FromMinutes(2);
         var ingress = new PostgresRootAdmission(create, lease);
         await ingress.InstallAsync();
+        await store.BindWorkerPartitionAsync(0, default);
         var taken = (await store.TakeAsync(0, "stable-body", lease))!;
         var fence = new PartitionFence(0, taken.Epoch, taken.Position);
         var small = new Dictionary<string, string>();
@@ -62,12 +63,23 @@ internal static class RootStableBodyChecks
             "the exactly reserved live edit settles its input");
         Advance();
 
+        var suspend = await AdmitControl(target.Reference, "pause", Kinds.Suspend);
+        await Reject(() => SetSuspended(target.Creator.Target.Id, suspend, true, reservedGrowth + 1));
+        Check((await Read(target)) is { Revision: 2, Suspended: false } && await Position() == fence.Position &&
+              await ingress.ReadDueRootOperatorAsync(tenant, target.Reference, default) == suspend,
+            "one byte above the declared suspension reserve preserves the row and command");
+        Check((await SetSuspended(target.Creator.Target.Id, suspend, true, reservedGrowth)).Landed, "the exact suspended checkpoint lands");
+        Advance();
+        var resume = await AdmitControl(target.Reference, "resume", Kinds.Resume);
+        Check((await SetSuspended(target.Creator.Target.Id, resume, false, reservedGrowth)).Landed, "the exact resumed checkpoint lands");
+        Advance();
+
         var last = await Add(target, "finish");
         Check((await Write(target, last, final, ended: true)).Landed, "reshaping the saved text spends the reserved growth");
         var stored = await Bytes(target);
         var terminal = await Read(target);
         Check(stored.Total == cap && stored.WireBytes == Encoding.UTF8.GetByteCount(final) &&
-              terminal is { TerminalRevision: 3, Status: InstanceStatus.Finished } && terminal.State == final &&
+              terminal is { TerminalRevision: 5, Status: InstanceStatus.Finished } && terminal.State == final &&
               terminal.TypeData == maxType && terminal.Labels.OrderBy(pair => pair.Key).SequenceEqual(maxLabels.OrderBy(pair => pair.Key)),
             "the largest header and changed opaque body land at the exact physical cap");
         Console.WriteLine($"stable wire {stored.WireBytes} bytes, checkpoint {stored.Total} bytes");
@@ -78,9 +90,18 @@ internal static class RootStableBodyChecks
             return (receipt.Reference, (await ingress.ReadPendingCreatorAsync(tenant, receipt.Reference))!);
         }
 
-        ValueTask<Committed> Birth((string Reference, Message Creator) root, string? state, long growth = 0) =>
-            store.CommitFirstRootAsync(tenant, root.Reference, root.Creator, fence, lease, state, 1, "", small, """["birth"]""",
-                terminalGrowth: growth);
+        ValueTask<Committed> Birth((string Reference, Message Creator) root, string? state, long growth = 0)
+        {
+            var start = root.Creator.Start!;
+            var header = new FoundationHeaderChange("", small);
+            var row = new InstanceRow(root.Creator.Target.Id, start.Model, start.Definition, InstanceStatus.Running, "null", 1, null,
+                History: start.History, StateVersion: 1, Creation: 1,
+                StartIntent: CreationProtocol.Fingerprint(start, root.Creator.Kind, root.Creator.Payload)).WithFoundationState(state) with
+            {
+                FoundationDispatchHeader = new(tenant, root.Reference, header, growth)
+            };
+            return Submit(new(row.Id, row, null, [root.Creator.InboxKey], [], [], [], [], """["birth"]""") { FoundationHeader = header });
+        }
 
         async Task<Message> Add((string Reference, Message Creator) root, string operation)
         {
@@ -88,10 +109,36 @@ internal static class RootStableBodyChecks
             return (await ingress.ReadPendingDirectAsync(tenant, root.Reference)).Single();
         }
 
-        async ValueTask<Committed> Write((string Reference, Message Creator) root, Message input, string state, bool ended, long growth = 0) =>
-            await store.CommitRootTurnAsync(tenant, root.Reference, await Read(root), [input], fence, lease,
-                ended ? InstanceStatus.Finished : InstanceStatus.Running, state, 1, ended ? maxType : "", ended ? maxLabels : small,
-                ended ? """["end"]""" : """["advance"]""", terminalGrowth: growth);
+        async ValueTask<Committed> Write((string Reference, Message Creator) root, Message input, string state, bool ended, long growth = 0)
+        {
+            var previous = (await store.LoadAsync([root.Creator.Target.Id])).Single();
+            var header = new FoundationHeaderChange(ended ? maxType : "", ended ? maxLabels : small);
+            var row = previous.WithFoundationState(state) with
+            {
+                Revision = previous.Revision + 1,
+                Status = ended ? InstanceStatus.Finished : InstanceStatus.Running,
+                FoundationDispatchHeader = new(tenant, root.Reference, header, growth)
+            };
+            return await Submit(new(row.Id, row, previous.Revision, [], [input.InboxKey], [], [], [],
+                ended ? """["end"]""" : """["advance"]""", Unsubscribe: ended) { FoundationHeader = header });
+        }
+
+        async Task<Message> AdmitControl(string reference, string operation, string kind)
+        {
+            await ingress.AdmitRootOperatorAsync(tenant, reference, operation, kind, null, null, default);
+            return (await ingress.ReadDueRootOperatorAsync(tenant, reference, default))!;
+        }
+
+        async ValueTask<Committed> SetSuspended(string actor, Message input, bool suspended, long growth)
+        {
+            var previous = (await store.LoadAsync([actor])).Single();
+            var header = previous.FoundationDispatchHeader! with { TerminalGrowth = growth };
+            var row = previous with { Revision = previous.Revision + 1, Suspended = suspended, FoundationDispatchHeader = header };
+            return await Submit(new(row.Id, row, previous.Revision, [], [input.InboxKey], [], [], [], null) { FoundationRootOperator = input });
+        }
+
+        ValueTask<Committed> Submit(TurnCommit turn) => store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, lease,
+            false, [turn], [], []));
 
         async Task<EfStore.RootImage> Read((string Reference, Message Creator) root) =>
             (await cold.ReadFirstRootAsync(tenant, root.Reference))!;

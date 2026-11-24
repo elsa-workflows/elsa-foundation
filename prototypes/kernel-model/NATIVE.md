@@ -662,7 +662,8 @@ UTF-16 units. The encoded body has the same byte count as the Foundation's UTF-8
 budget. Live writes reserve the declared terminal body growth and maximum encoded
 terminal header. Terminal writes check their actual encoded size. The body, header
 and state transition share the fenced commit. Format-11 owners and readers refuse
-format 12. The Core Preview continues to use its current format.
+format 12. A format-12 reader verifies the store marker before selecting the body
+column. The Core Preview continues to use its current format.
 
 Use `--stable-body` with the store conformance command above. For the live Native
 termination replay, use `pg-root-terminate owned checked stable-body`. Use
