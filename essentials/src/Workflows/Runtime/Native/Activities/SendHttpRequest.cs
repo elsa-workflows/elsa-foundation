@@ -85,6 +85,7 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             foreach (var (name, value) in await resolve(connection, context.CancellationToken))
                 if (!request.Headers.TryAddWithoutValidation(name, value)) request.Content?.Headers.TryAddWithoutValidation(name, value);
         }
+        var sent = request.RequestUri;     // a client that follows a redirect rewrites the request it sends
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
         deadline.CancelAfter(timeout ?? TimeSpan.FromMilliseconds(DefaultTimeoutMilliseconds));
         try
@@ -93,9 +94,9 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             using var response = client is HttpClient http
                 ? await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token)
                 : await client.SendAsync(request, deadline.Token);
-            // The request the response answers is the one sent, unless the client followed a redirect, which would have
-            // carried this request's headers to another host (NativeHttpOptions says the client must not).
-            if (response.RequestMessage?.RequestUri is { } answered && answered != request.RequestUri)
+            // The response answers the URI sent, unless the client followed a redirect, which carried this request's headers
+            // to the URI it landed on. This only reports the leak; NativeHttpOptions.CreateClient's client prevents it.
+            if (response.RequestMessage?.RequestUri is { } answered && answered != sent)
                 return Fault("http.client.redirects", $"The host's HTTP client followed a redirect to {answered.GetLeftPart(UriPartial.Authority)}; it must not (NativeHttpOptions.CreateClient).");
             var headers = ResponseHeaders(response);
             var status = (int)response.StatusCode;

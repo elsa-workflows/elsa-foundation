@@ -147,6 +147,12 @@ internal static partial class NativeHttpEdgeChecks
                     $"{mode}: with a longer job deadline, the HTTP client's own timeout completes the activity on Timeout ({longJob.Outcome} in {elapsed} ms)");
             }
 
+        using (var created = NativeHttpOptions.CreateClient())
+        {
+            var settings = typeof(HttpMessageInvoker).GetField("_handler", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.GetValue(created) as SocketsHttpHandler;
+            Check(created.Timeout == Timeout.InfiniteTimeSpan && settings is { AllowAutoRedirect: false, UseCookies: false },
+                "NativeHttpOptions.CreateClient builds a client with no timeout of its own, no redirects and no cookies");
+        }
         await using (var bare = await SendHost.StartAsync(new WorkflowRegistry().Add(Sends("unhosted", Wf.Http("send", "https://partner.example/ok"))), null, token))
             Check((await bare.RunAsync("unhosted", Modes.Balanced)).Faulted, "without a host HTTP client the activity faults");
         Console.WriteLine(failures == 0 ? "native http send: all passed" : $"native http send: {failures} failed");
@@ -221,8 +227,9 @@ internal static partial class NativeHttpEdgeChecks
                 ok.Headers.Add("Set-Cookie", "session=partner-secret");
                 return ok;
             case "/redirect":
-                // What a client that follows redirects hands back: the answer of the request it was redirected to.
-                return new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = new HttpRequestMessage(HttpMethod.Get, "https://elsewhere.example/landing") };
+                // What a client that follows redirects does: it rewrites the request it sent to the URI it lands on.
+                request.RequestUri = new Uri("https://elsewhere.example/landing");
+                return new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = request };
             case "/stream":
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new EndlessStream()) };
             case "/reset":

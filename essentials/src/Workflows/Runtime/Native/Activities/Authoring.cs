@@ -172,8 +172,12 @@ public sealed class NativeHttpOptions
 
     public HttpMessageInvoker? Client { get; init; }
 
-    /// <summary>A client as the activity needs one: it follows no redirect and keeps no cookie.</summary>
-    public static HttpClient CreateClient() => new(new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
+    /// <summary>
+    /// A client as the activity needs one: it follows no redirect, keeps no cookie, and has no timeout of its own, since the
+    /// activity's Timeout and its job's deadline bound each call (an HttpClient's default 100 s would cut a longer one short).
+    /// </summary>
+    public static HttpClient CreateClient() =>
+        new(new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
 
     /// <summary>A longer response body completes the activity on its ResponseTooLarge outcome, with no body.</summary>
     public int MaxResponseBytes { get; init; } = DefaultMaxResponseBytes;
