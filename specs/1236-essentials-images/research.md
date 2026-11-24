@@ -203,3 +203,20 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
   second engine binary and the "same composition" promise rests on two builds staying in step); an engine host that
   also loads derived lists and a second package feed (no image needs it; the Nuplane shared-assembly list would have to
   admit the derived packages' EF dependencies).
+
+## R-13 Shared OpenIddict token store (spec Q10)
+
+- **Decision**: move the Workbench's OpenIddict vendor store, `apps/Elsa.Workbench/OpenIddict/`,
+  `apps/Elsa.Workbench/OpenIddictEngines/` and the `WorkbenchOpenIddict*` registration files, into one library,
+  `essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore`,
+  next to the existing `AspNetCoreIdentity/EntityFrameworkCore` store. It exposes the four registrations the Workbench
+  calls today (vendor, store provider, migration policy, pruning) under neutral names. Both hosts call them; neither
+  composes them as a feature, so the identity feature still registers no store (Program.cs:137–140).
+- **Behaviour preserved**: the migrations move with their identifiers unchanged, so an existing Workbench store
+  migrates as before; the Workbench's tests that cover the store (`essentials/tests/Workbench/`) move or keep running
+  against the library; the S-15 run is unaffected.
+- **Admission**: the library resolves `OpenIddict.EntityFrameworkCore` and EF Core, so it is admitted in
+  `EfCoreDependencyGuardTests` the way the Workbench is today, and the Workbench's admission for those packages is
+  removed if nothing else in it needs them. Whether the library is packed follows the identity domain's other
+  EntityFrameworkCore projects.
+- **Alternatives**: copying the store into the essentials host (two copies of migrations and a store that drift).

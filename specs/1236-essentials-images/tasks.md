@@ -51,6 +51,13 @@ worktree path on Windows (MSB3030).
 - [ ] T008 Restore the new projects' `packages.lock.json` (only the affected projects) and run `EfCoreDependencyGuardTests`
   and `FeatureCompositionTests`; admit the library where §2.20 requires it, with the reason.
 
+- [ ] T008a Move the OpenIddict vendor store out of the Workbench into
+  `essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/` (R-13): the DbContext, the SQLite migrations with
+  their identifiers unchanged, the initializer, the store provider, the migration policy and pruning, with neutral
+  registration names. Make `apps/Elsa.Workbench/Program.cs` call the library, move or repoint the Workbench's store
+  tests, update `EfCoreDependencyGuardTests` admissions, and confirm the Workbench's tests and an existing Workbench
+  SQLite token store still migrate and issue tokens unchanged (FR-017).
+
 **Checkpoint**: the list, its assemblies and the merge exist and are guarded; the CLI spec can reference the library.
 
 ## Phase 3: User Story 1 - Start the engine with my own files (P1) 🎯 MVP
@@ -69,7 +76,7 @@ publishes `/app/migrated/workflows`.
   policy reading `Cors:AllowedOrigins`, the root health endpoint, and the host registrations the listed features rely
   on: `AddEfPersistenceResources`, `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection`,
   `AddShellStartupValidation`, `AddAuthentication`/`AddAuthorization`, and the OpenIddict vendor store (EF DbContext,
-  SQLite migrations, store initializer, store provider, migration policy, pruning) as spec Q10 decides. Copy nothing
+  SQLite migrations, store initializer, store provider, migration policy, pruning) from the shared library (T008a, Q10). Copy nothing
   else Workbench-specific (boot timeline, composition observation endpoints, Weaver, OpenTelemetry bridge).
 - [ ] T010 [US1] Write `apps/Elsa.Essentials.Server/appsettings.json`: persistence resource `Elsa` on
   `Data Source=/app/data/elsa.db`, every EF feature on that resource, OpenIddict's SQLite token store at `/app/data/elsa-identity.db`,
@@ -182,7 +189,8 @@ publishes `/app/migrated/workflows`.
   settings, how to add a feature, and that the composition cannot be edited.
 - [ ] T034 Regenerate the solution filters and check maps (`dotnet run --project tools/maps/Elsa.Maps.Generator -- check`;
   on Windows compare with `git diff --stat`).
-- [ ] T035 Confirm the Workbench, its image, its compose files and S-15's Workbench run are unchanged (FR-017).
+- [ ] T035 Confirm the Workbench's behaviour, its image contents, its compose files and S-15's Workbench run are
+  unchanged after the token-store move (FR-017).
 - [ ] T036 Set the spec status to Implemented in the PR that finishes the work.
 
 ## Dependencies
