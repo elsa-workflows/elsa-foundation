@@ -12,7 +12,7 @@ using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.OpenIddict;
-using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
+using Elsa.Foundation.Identity.Tests.OpenIddict.VendorStore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Elsa.Foundation.Identity.Oidc;
 using Elsa.Foundation.Identity.Oidc.Extensions;

@@ -18,7 +18,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class EfCoreDependencyGuardTests
 {
     private static readonly string[] RestoreConfigurations = ["Release", "Debug"];
-    private static readonly string[] AllowedEfConsumers = ["Elsa.Foundation.Host", "Elsa.Workbench.Host"];
+    private static readonly string[] AllowedEfConsumers = ["Elsa.Essentials.Host", "Elsa.Foundation.Host", "Elsa.Workbench.Host"];
 
     /// <summary>
     /// <c>Elsa.Foundation.Host</c> carries EF Core (#2151, #2191) for its opt-in
@@ -37,6 +37,27 @@ public sealed class EfCoreDependencyGuardTests
         "Microsoft.EntityFrameworkCore.SqlServer",
         "MySql.EntityFrameworkCore",
         "Npgsql.EntityFrameworkCore.PostgreSQL"
+    ];
+
+    /// <summary>
+    /// <c>Elsa.Essentials.Host</c> compiles in the curated workflow features, whose EF modules are admitted below, the Foundation
+    /// host's membership and key store, and the OpenIddict token store with its in-memory demo store. No design-time package:
+    /// the token store keeps that private, and migrations are scaffolded from the module projects, never from this host.
+    /// </summary>
+    private static readonly string[] AllowedEssentialsHostEfPackages =
+    [
+        "Microsoft.EntityFrameworkCore",
+        "Microsoft.EntityFrameworkCore.Abstractions",
+        "Microsoft.EntityFrameworkCore.Analyzers",
+        "Microsoft.EntityFrameworkCore.InMemory",
+        "Microsoft.EntityFrameworkCore.Relational",
+        "Microsoft.EntityFrameworkCore.Sqlite",
+        "Microsoft.EntityFrameworkCore.Sqlite.Core",
+        "Microsoft.EntityFrameworkCore.SqlServer",
+        "MySql.EntityFrameworkCore",
+        "Npgsql.EntityFrameworkCore.PostgreSQL",
+        "OpenIddict.EntityFrameworkCore",
+        "OpenIddict.EntityFrameworkCore.Models"
     ];
 
     private static readonly string[] AllowedWorkbenchEfPackages =
@@ -122,6 +143,7 @@ public sealed class EfCoreDependencyGuardTests
 
     private static string[] ReviewedEfPackages(string host) => host switch
     {
+        "Elsa.Essentials.Host" => AllowedEssentialsHostEfPackages,
         "Elsa.Foundation.Host" => AllowedFoundationHostEfPackages,
         "Elsa.Workbench.Host" => AllowedWorkbenchEfPackages,
         _ => throw new ArgumentOutOfRangeException(nameof(host), host, "An admitted EF consumer needs a reviewed EF closure of its own.")
@@ -158,6 +180,10 @@ public sealed class EfCoreDependencyGuardTests
     [Fact]
     public void Every_admitted_saved_Dashboard_project_resolves_only_its_reviewed_EF_closure() =>
         AssertReviewedModuleClosure(Spec1217DashboardEf.ExpectedEfPackagesByProject, "saved Dashboard definitions (#3604)");
+
+    [Fact]
+    public void The_admitted_OpenIddict_token_store_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(OpenIddictTokenStoreEf.ExpectedEfPackagesByProject, "host-composed OpenIddict token store");
 
     private static void AssertReviewedModuleClosure(IReadOnlyDictionary<string, string[]> projects, string module)
     {
@@ -762,6 +788,7 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073RepositoryFirstEf.IsProjectPath(relativePath) ||
                     Spec1179ConnectionsEf.IsProjectPath(relativePath) ||
                     Spec1217DashboardEf.IsProjectPath(relativePath) ||
+                    OpenIddictTokenStoreEf.IsProjectPath(relativePath) ||
                     Spec1225ReleaseArchiveEf.IsProjectPath(relativePath) ||
                     Spec1179AgentEf.IsProjectPath(relativePath) ||
                     Spec1189WeaverEf.IsProjectPath(relativePath) ||
@@ -1314,12 +1341,19 @@ public sealed class EfCoreDependencyGuardTests
                 ["essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
                 ["essentials/tests/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                // The OpenIddict token store's native-engine suites run here too, so the store package's closure
+                // (OpenIddictTokenStoreEf: its SQLite, in-memory and OpenIddict EF packages) comes with them.
                 ["essentials/tests/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [
                     .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.InMemory",
+                    "Microsoft.EntityFrameworkCore.Sqlite",
+                    "Microsoft.EntityFrameworkCore.Sqlite.Core",
                     "Microsoft.EntityFrameworkCore.SqlServer",
                     "MySql.EntityFrameworkCore",
-                    "Npgsql.EntityFrameworkCore.PostgreSQL"
+                    "Npgsql.EntityFrameworkCore.PostgreSQL",
+                    "OpenIddict.EntityFrameworkCore",
+                    "OpenIddict.EntityFrameworkCore.Models"
                 ],
                 ["essentials/tests/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
@@ -1638,6 +1672,26 @@ public sealed class EfCoreDependencyGuardTests
                 ["essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj"] =
                     [.. CorePackages, "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core",
                      "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
+            };
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+    }
+
+    // Owner decision 2026-11-24: the OpenIddict vendor EF token store Workbench owned moves into one opt-in, host-composed package,
+    // so every host that enables FoundationIdentityOpenIddict (Workbench, Essentials) composes the same store. OpenIddict's own EF
+    // model with SQLite, SQL Server and PostgreSQL migrations, and the in-memory demo store; MySQL is refused. The OpenIddict
+    // feature package and its behavior project stay EF-free (OpenIddictPersistenceArchitectureTests).
+    internal static class OpenIddictTokenStoreEf
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj"] =
+                [
+                    "Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers",
+                    "Microsoft.EntityFrameworkCore.Design", "Microsoft.EntityFrameworkCore.InMemory", "Microsoft.EntityFrameworkCore.Relational",
+                    "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core", "Microsoft.EntityFrameworkCore.SqlServer",
+                    "Npgsql.EntityFrameworkCore.PostgreSQL", "OpenIddict.EntityFrameworkCore", "OpenIddict.EntityFrameworkCore.Models"
+                ]
             };
         public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
     }

@@ -36,7 +36,6 @@
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
 		<PackageReference Include="MySql.EntityFrameworkCore" />
 		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-		<PackageReference Include="OpenIddict.EntityFrameworkCore" />
 		<PackageReference Include="Nuplane" />
 		<PackageReference Include="Nuplane.Admin" />
 		<PackageReference Include="Nuplane.Loading" />
@@ -166,6 +165,8 @@
 		<ProjectReference Include="../../essentials/src/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
 		<ProjectReference Include="../../essentials/src/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="../../essentials/src/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
+		<!-- The host-composed OpenIddict token store (EF Core, SQLite/SQL Server/PostgreSQL), composed in Program.cs. -->
+		<ProjectReference Include="../../essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="../../essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="../../essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="../../essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
