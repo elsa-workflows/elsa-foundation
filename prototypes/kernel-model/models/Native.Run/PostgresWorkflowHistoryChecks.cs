@@ -256,23 +256,23 @@ internal static class PostgresWorkflowHistoryChecks
         }
         async Task CheckInstallSchema()
         {
-            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA fixture_history_setup", ct);
+            await db.Database.ExecuteSqlRawAsync("""CREATE SCHEMA "Public" """, ct);
             var schema = await db.Database.SqlQueryRaw<string>("SELECT current_schema() AS \"Value\"").SingleAsync(ct);
             using var identifiers = new NpgsqlCommandBuilder();
             var shadowConnection = new NpgsqlConnectionStringBuilder(connection)
             {
-                SearchPath = "fixture_history_setup," + identifiers.QuoteIdentifier(schema)
+                SearchPath = identifiers.QuoteIdentifier("Public") + "," + identifiers.QuoteIdentifier(schema)
             }.ConnectionString;
             var shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(shadowConnection).Options;
             var shadow = Store(() => new KernelDb(shadowOptions));
             await RequireFormatRefusal(() => shadow.InstallPreviewRootSchemaAsync(ct));
             await RequireFormatRefusal(() => shadow.InstallRootWorkflowHistoryAsync(ct));
             Check(await db.Database.SqlQueryRaw<bool>("""
-                SELECT to_regclass('fixture_history_setup."FoundationRootIssuer"') IS NULL
-                    AND to_regclass('fixture_history_setup."FoundationActorList"') IS NULL
-                    AND to_regclass('fixture_history_setup."FoundationWorkflowHistoryFormat"') IS NULL AS "Value"
+                SELECT to_regclass('"Public"."FoundationRootIssuer"') IS NULL
+                    AND to_regclass('"Public"."FoundationActorList"') IS NULL
+                    AND to_regclass('"Public"."FoundationWorkflowHistoryFormat"') IS NULL AS "Value"
                 """).SingleAsync(ct), "setup refuses a different creation schema without creating preview relations");
-            await db.Database.ExecuteSqlRawAsync("DROP SCHEMA fixture_history_setup", ct);
+            await db.Database.ExecuteSqlRawAsync("""DROP SCHEMA "Public" """, ct);
         }
         async Task CheckTrigger()
         {

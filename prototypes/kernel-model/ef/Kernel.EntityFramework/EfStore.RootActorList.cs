@@ -22,7 +22,8 @@ public sealed partial class EfStore
                     ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'), ('"FoundationRootReceipts"'),
                     ('"FoundationActorList"'), ('"FoundationWorkflowHistory"'), ('"FoundationWorkflowHistoryFormat"')) expected(name)
                 JOIN pg_catalog.pg_class relation ON relation.oid = to_regclass(expected.name)
-                WHERE relation.relnamespace IS DISTINCT FROM to_regnamespace(current_schema())
+                JOIN pg_catalog.pg_namespace ns ON ns.oid = relation.relnamespace
+                WHERE ns.nspname IS DISTINCT FROM pg_catalog.current_schema()
             ) AS "Value"
             """).SingleAsync(token))
             throw new StoreFormatException("PostgreSQL preview installation requires the store relations in the active schema.");
