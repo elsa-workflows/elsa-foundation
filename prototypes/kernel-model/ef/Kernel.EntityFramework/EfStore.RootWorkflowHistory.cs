@@ -20,6 +20,7 @@ public sealed partial class EfStore
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(token);
         await RequireStoreVersionsAsync(db, token, FormatLock.Shared);
+        await RequirePreviewInstallSchemaAsync(db, token);
         await db.Database.ExecuteSqlRawAsync("""
             SELECT pg_advisory_xact_lock(48602345, 1);
             CREATE TABLE IF NOT EXISTS "FoundationWorkflowHistoryFormat" (
@@ -36,9 +37,11 @@ public sealed partial class EfStore
                 AND (NOT {installed} OR to_regclass('"FoundationWorkflowHistory"') IS NOT NULL)
                 AND EXISTS (
                     SELECT 1 FROM pg_catalog.pg_trigger source
+                    JOIN pg_catalog.pg_class relation ON relation.oid = source.tgrelid
+                    JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
+                        AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
                     WHERE source.tgrelid = to_regclass('"Instances"')
                         AND source.tgname::text = ANY({required}) AND source.tgenabled IN ('O', 'A')
-                        AND source.tgfoid = to_regprocedure(source.tgname::text || '()')
                     GROUP BY source.tgrelid HAVING count(*) = {required.Length}
                 ) AS "Value"
             """).SingleAsync(token))
@@ -110,9 +113,13 @@ public sealed partial class EfStore
                     -- A renamed source can still serve its projection until a canonical source replaces it.
                     SELECT EXISTS (
                         SELECT 1 FROM pg_catalog.pg_trigger source
-                        WHERE (to_regclass('"Instances"') IS NULL OR source.tgrelid = to_regclass('"Instances"'))
+                        JOIN pg_catalog.pg_class relation ON relation.oid = source.tgrelid
+                        JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
+                            AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
+                        WHERE relation.relnamespace = (SELECT relnamespace FROM pg_catalog.pg_class
+                                WHERE oid = to_regclass('"FoundationWorkflowHistory"'))
+                            AND (to_regclass('"Instances"') IS NULL OR source.tgrelid = to_regclass('"Instances"'))
                             AND source.tgname::text = ANY({WorkflowHistorySourceTriggers}) AND source.tgenabled IN ('O', 'A')
-                            AND source.tgfoid = to_regprocedure(source.tgname::text || '()')
                         GROUP BY source.tgrelid HAVING count(*) = {WorkflowHistorySourceTriggers.Length}
                     ) AS "TriggerEnabled"
                 ), page AS (

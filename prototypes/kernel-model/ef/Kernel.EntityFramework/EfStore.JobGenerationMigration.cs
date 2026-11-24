@@ -49,7 +49,11 @@ public sealed partial class EfStore
             SELECT to_regclass('"FoundationRootBirths"') IS NOT NULL
                 AND to_regclass('"FoundationActorList"') IS NULL AS "Value"
             """).SingleAsync(token);
-        if (missing) await InstallRootActorListAsync(db, token);
+        if (missing)
+        {
+            await RequirePreviewInstallSchemaAsync(db, token);
+            await InstallRootActorListAsync(db, token);
+        }
     }
 
     private async Task AddGenerationColumns(KernelDb db, CancellationToken token)

@@ -6,6 +6,7 @@ using Kernel.Native.Preview;
 using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Actor = Kernel.WorkflowActor.WorkflowActor;
 using PublicKinds = Kernel.Foundation.Contracts.Kinds;
 
@@ -163,16 +164,75 @@ internal static class PostgresRootListChecks
             (await api.ListAsync(blue, query with { Type = "wrong" }, cancellationToken: ct)).Items.Count == 0,
             "actor type and park state each restrict the list");
 
+        var ready = await api.ListAsync(blue, query, cancellationToken: ct);
+        Check(ready is { Items.Count: 2, Next: not null }, "a ready list issues a continuation");
         await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_project_root_actor_list""", ct);
-        try
-        {
-            await api.GetAsync(blue, completed, ct);
-            throw new InvalidOperationException("Point lookup accepted a disabled projection.");
-        }
-        catch (StoreFormatException) { }
+        await RequireUnavailable("point", () => api.GetAsync(blue, completed, ct).AsTask());
+        await RequireUnavailable("first page", () => api.ListAsync(blue, query, cancellationToken: ct).AsTask());
+        await RequireUnavailable("empty page", () => api.ListAsync(blue, query with { Type = "wrong" }, cancellationToken: ct).AsTask());
+        await RequireUnavailable("continuation", () => api.ListAsync(blue, query, ready.Next, ct).AsTask());
         await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" ENABLE TRIGGER kernel_project_root_actor_list""", ct);
-        Check(await api.GetAsync(blue, completed, ct) is { Header.Status: ActorStatus.Finished },
-            "point lookup requires an enabled source trigger and resumes after it is restored without intervening writes");
+
+        var installationSchema = await db.Database.SqlQueryRaw<string>("""
+            SELECT ns.nspname AS "Value" FROM pg_catalog.pg_class relation
+            JOIN pg_catalog.pg_namespace ns ON ns.oid = relation.relnamespace
+            WHERE relation.oid = to_regclass('"Instances"')
+            """).SingleAsync(ct);
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE SCHEMA fixture_list_shadow;
+            CREATE FUNCTION fixture_list_shadow.kernel_project_root_actor_list() RETURNS trigger LANGUAGE plpgsql AS $fn$
+            BEGIN RETURN NULL; END;
+            $fn$;
+            """, ct);
+        using var identifiers = new NpgsqlCommandBuilder();
+        var shadowConnection = new NpgsqlConnectionStringBuilder(connection)
+        {
+            SearchPath = "fixture_list_shadow," + identifiers.QuoteIdentifier(installationSchema)
+        }.ConnectionString;
+        var shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(shadowConnection).Options;
+        var shadowStore = new EfStore(() => KernelDb.ForPostgresRootOperators(shadowOptions), postgres: true, fenceInBatch: inBatch);
+        var shadowReads = await shadowStore.OpenPreviewRootReadsAsync(pageSize: 2, cancellationToken: ct);
+        Check((await shadowReads.ListAsync(blue, query, cancellationToken: ct)).Items.Count == 2 &&
+            await shadowReads.GetAsync(blue, completed, ct) is { Header.Status: ActorStatus.Finished },
+            "an earlier schema's same-named function leaves the installed projection readable");
+
+        await db.Database.ExecuteSqlRawAsync("""
+            ALTER TRIGGER kernel_project_root_actor_list ON "Instances" RENAME TO fixture_original_projection;
+            """, ct);
+        await RequireUnavailable("missing projection trigger", () => api.ListAsync(blue, query, cancellationToken: ct).AsTask());
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE TRIGGER kernel_project_root_actor_list AFTER UPDATE ON "Instances"
+                FOR EACH ROW EXECUTE FUNCTION fixture_list_shadow.kernel_project_root_actor_list();
+            """, ct);
+        await RequireUnavailable("list with a trigger bound to another schema",
+            () => shadowReads.ListAsync(blue, query, cancellationToken: ct).AsTask());
+        await RequireUnavailable("point with a trigger bound to another schema",
+            () => shadowReads.GetAsync(blue, completed, ct).AsTask());
+        await db.Database.ExecuteSqlRawAsync("""
+            DROP TRIGGER kernel_project_root_actor_list ON "Instances";
+            ALTER TRIGGER fixture_original_projection ON "Instances" RENAME TO kernel_project_root_actor_list;
+            DROP FUNCTION fixture_list_shadow.kernel_project_root_actor_list();
+            DROP SCHEMA fixture_list_shadow;
+            """, ct);
+        await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_require_root_checkpoint_writer""", ct);
+        await RequireUnavailable("disabled checkpoint guard", () => api.ListAsync(blue, query, cancellationToken: ct).AsTask());
+        await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" ENABLE TRIGGER kernel_require_root_checkpoint_writer""", ct);
+        Check(await api.GetAsync(blue, completed, ct) is { Header.Status: ActorStatus.Finished } &&
+            (await api.ListAsync(blue, query, ready.Next, ct)).Items.Count == 2,
+            "point and list resume with the trusted source restored and no intervening checkpoint writes");
+
+        static async Task RequireUnavailable(string read, Func<Task> call)
+        {
+            try
+            {
+                await call();
+                throw new InvalidOperationException($"Actor projection accepted {read} while a required trigger was unavailable.");
+            }
+            catch (StoreFormatException error) when (error.Message.Contains("required trigger", StringComparison.Ordinal))
+            {
+                Console.WriteLine($"ok actor projection refuses {read} while a required trigger is unavailable");
+            }
+        }
 
         await db.Database.ExecuteSqlRawAsync("""UPDATE "KernelStoreVersions" SET "StoreSchema" = "StoreSchema" + 1""", ct);
         try
