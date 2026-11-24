@@ -10,7 +10,7 @@
 and the check's `--self-test`. The skill text itself is verified by the walkthrough (T029–T031). No test framework
 beyond xunit.
 
-**Dependencies outside this spec**: T033 and the *port* part of case 17 need spec 1240 implemented. T021 takes the migration image's name and tags from spec 1237. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
+**Dependencies outside this spec**: T021 takes the migration image's name and tags from spec 1237. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
 need spec 1237's `report.json` schema agreed. Everything else can start once this spec is approved.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -36,8 +36,7 @@ need spec 1237's `report.json` schema agreed. Everything else can start once thi
 ## Phase 2: Foundational — sample and check (blocks US3)
 
 Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T008, T013 and T014 also register in
-`AcmeFeature`, so they run one after another after T004, and the case 18 region is final only after T014 (after T033, when it runs; T033 then
-re-copies the case 18 block in the catalog). All live in `Migration/Sample/` and
+`AcmeFeature`, so they run one after another after T004, and the case 18 region is final only after T014. All live in `Migration/Sample/` and
 `Migration/Sample.Tests/`; tasks touching different files are [P].
 
 - [ ] T004 Feature registration (case 18): `AcmeFeature` as a `[ShellFeature]` `IShellFeature`; a test that the
@@ -65,9 +64,6 @@ re-copies the case 18 block in the catalog). All live in `Migration/Sample/` and
   the dotted alias.
 - [ ] T015 [P] Tests (case 19): the region is one of the tests above, chosen as the example of building an activity
   execution context and calling the activity.
-- [ ] T033 Storage driver (case 17), after spec 1240 is implemented: a durable-value storage driver registered in
-  `AcmeFeature` (after T014, same file); test that a value round-trips through it. If spec 1240 is not approved, drop
-  this task and keep case 17 *redesign*.
 - [ ] T016 `tools/skills/check_migration_skill.py` per [contracts/catalog-entry.md](contracts/catalog-entry.md), with
   `--self-test` covering every failure rule.
 - [ ] T017 Add a step running the check (self-test, then real) next to `Check catalog and module README links` in
@@ -83,7 +79,8 @@ re-copies the case 18 block in the catalog). All live in `Migration/Sample/` and
 - [ ] T018 [US3] Write `skill/porting-catalog.md`: an introduction (how to use a case, the verdicts, apply cases in
   order), then cases 01–19 in the [entry shape](contracts/catalog-entry.md) with the FR-014 verdicts and the R-2
   evidence turned into plain guidance. Case 14 states the replaced-global rules of research R-2. *Port* "after" blocks are copied from the sample regions; *redesign* parts name
-  the alternatives and offer no workaround code. Elsa 3 "before" examples are written for the catalog, synthetic.
+  the alternatives and offer no workaround code. Case 17 is an *interview*: find the Elsa 4 features that keep a
+  value from being persisted, verify them in the code, and write the questions and the per-objective guidance. Elsa 3 "before" examples are written for the catalog, synthetic.
 - [ ] T019 [US3] Run the check; fix until it passes. Review that every case's search finds the "before" example.
   SC-006: rename an Elsa 4 member a region uses in a scratch commit, confirm the sample build or the check fails, then
   drop the commit.

@@ -24,6 +24,5 @@ global as a JavaScript-function component; the skill needs nothing special for t
 A refusal to run (exit code 2) writes no report: the skill reads the `docker run` exit code and the tool's one-line
 reason on standard error (spec 1237's command-line contract) and stops (FR-022).
 
-Once spec 1240 is implemented, a missing storage driver is reported at publication, not by the converter. Spec
-1237's report still gives that finding the storage-driver component kind, the driver key as component name and the
-build-a-component remedy, so the skill reads it like any other component finding.
+A storage-driver finding names the driver as a storage-driver component; the skill answers it with the case 17
+interview, not with a port.

@@ -43,8 +43,9 @@ need the user's decision recorded in the row.
 | Search | The focused search (R-6) |
 | Before | Elsa 3 example (markdown only) |
 | After | For *port*: the sample region `case-NN`, verbatim |
-| Verdict | `port`, `redesign`, or both with the part each covers |
+| Verdict | `port`, `redesign` or `interview`, or port and redesign with the part each covers |
 | Redesign alternatives | For *redesign* |
+| Interview | For *interview*: the questions, and per objective the Elsa 4 features and how to use them |
 
 ## Compiled sample (repository)
 

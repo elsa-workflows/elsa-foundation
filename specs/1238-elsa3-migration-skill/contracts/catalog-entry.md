@@ -5,7 +5,7 @@
 ```markdown
 ## Case NN: <title>
 
-**Verdict**: port | redesign | port (<part>); redesign (<part>)
+**Verdict**: port | redesign | interview | port (<part>); redesign (<part>)
 
 **Applies when**: <what in the Elsa 3 source triggers it>
 
@@ -24,6 +24,9 @@
 **Steps**: <numbered patch steps>
 
 **Redesign**: <alternatives; only when the verdict has a redesign part>
+
+**Interview**: <questions that find the objective; per objective, the Elsa 4 features and how to use them, or "plan
+your own solution"; only for an interview verdict>
 ```
 
 Cases appear in order 01–19. The marker comment `<!-- sample: case-NN -->` appears only on *port* parts.

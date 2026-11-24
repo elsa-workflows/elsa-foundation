@@ -182,6 +182,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   that component.
 - A case marked *redesign* applies: the skill does not write workaround code; it records the redesign in the plan and
   the user decides.
+- A case marked *interview* applies (case 17): the skill asks the user's objective per variable, input or output,
+  records the answer and the chosen Elsa 4 feature or the link to the user's own plan, and writes no workaround code.
 
 ## Requirements *(mandatory)*
 
@@ -254,8 +256,10 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 
 - **FR-014**: The porting catalog MUST hold the 19 cases below, each with: when it applies, the Elsa 3 "before"
   example, the Elsa 4 counterpart and "after" example, the focused search that finds it in Elsa 3 source, and its
-  verdict, *port* or *redesign*. A *port* case's "after" example MUST be an excerpt of the compiled sample (FR-016).
-  A *redesign* case MUST name the Elsa 4 alternatives and MUST NOT offer workaround code.
+  verdict, *port*, *redesign* or *interview*. A *port* case's "after" example MUST be an excerpt of the compiled sample
+  (FR-016). A *redesign* case MUST name the Elsa 4 alternatives and MUST NOT offer workaround code. An *interview*
+  case MUST give the questions that find the user's objective and, per objective, the Elsa 4 features that reach it
+  and how to use them; it carries no "after" example and no workaround code.
 
   | # | Case | Elsa 4 counterpart | Verdict |
   |---|------|--------------------|---------|
@@ -275,7 +279,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   | 14 | JavaScript functions | A JavaScript host function declaration with a `prefix.name`, effect-free, JSON in and out, that names the Elsa 3 global it replaces; the converter rewrites direct calls only, so other references to the global are turned into direct calls in the Elsa 3 definition first | port; redesign as an activity when the function has effects |
   | 15 | Liquid filters and other expression additions | Liquid filters: none, filter registration is closed to modules. A new expression syntax: the public expression descriptor and portable expression handler extension points | redesign (Liquid filters: a JavaScript host function or an activity); a new syntax is named with its extension points but carries no example |
   | 16 | Variable type registration | A variable type descriptor provider registering the type under a dotted alias | port |
-  | 17 | Storage drivers | Follows spec 1240: a durable-value storage driver registered in the feature, under the driver key the converter keeps for the Elsa 3 driver. Until spec 1240 is implemented, publication refuses non-default variable storage | port once spec 1240 is implemented; redesign (default durable storage) before that |
+  | 17 | Storage drivers | None per variable: workflow variables, inputs and outputs use the default durable storage, and Elsa 3's default drivers need nothing. A variable, input or output on the memory driver or on a custom driver starts an interview: what did the user want? A value that is never persisted: the Elsa 4 features that reach that, and how to use them. Any other objective (for example values kept in blob storage): the user plans their own solution, and the plan records it with a link | interview |
   | 18 | Feature registration | An Elsa 4 shell feature in a Nuplane package, enabled in `appsettings.json`; activities are discovered from the feature's assembly | port |
   | 19 | Tests | xunit tests that build an activity execution context and call the activity directly | port |
 
@@ -345,10 +349,6 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   call.
 - The user has Docker, and the .NET SDK to build their feature packages. The only network calls are NuGet restore
   and image pulls.
-- Spec 1240 decides whether workflow variables, inputs and outputs can use a registered storage driver and how
-  the converter carries Elsa 3 drivers over. Case 17 follows it: if spec 1240 is not approved, case 17 stays
-  *redesign* and its sample task is dropped. Spec 1240 removes the converter's unmapped-storage-driver codes, so a
-  missing driver is then reported at publication instead; spec 1237's report treats that finding as a
-  storage-driver component (driver key as its name) whose remedy is building a component, so storage drivers keep
-  reaching the inventory and the plan.
+- Storage drivers reach the inventory through the converter's storage-driver findings, which name the driver as a
+  storage-driver component; the skill reads the kind and name, not the codes.
 - The sample is never packed or published.
