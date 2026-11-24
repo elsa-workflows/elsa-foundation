@@ -261,6 +261,12 @@
       "elsa.workflows.runtime.graph": {
         "type": "Project"
       },
+      "elsa.workflows.runtime.statecharts.orderfixture": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Statecharts.Native": "[1.0.0, )"
+        }
+      },
       "Kernel.Foundation.InMemory": {
         "type": "Project",
         "dependencies": {

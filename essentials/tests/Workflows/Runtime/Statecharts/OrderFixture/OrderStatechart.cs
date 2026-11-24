@@ -1,12 +1,16 @@
+using System.Text.Json;
 using Kernel.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 
-internal static class OrderStatechart
-{
-    internal const string Definition = "order", Node = "order-machine";
+namespace Elsa.Workflows.Runtime.Statecharts.OrderFixture;
 
-    internal static Workflow Build(bool omitStockRelease = false)
+public static class OrderStatechart
+{
+    public const string Definition = "order";
+    private const string Node = "order-machine";
+
+    public static Workflow Build(bool omitStockRelease = false)
     {
         var chart = new StructuralDefinition(
             [new("Order", NodeKind.Root, Initial: "AwaitingPayment"),
@@ -26,5 +30,19 @@ internal static class OrderStatechart
                 Wf.WriteLine("reverse-shipment", Binding.Literal("release shipment")),
                 Wf.WriteLine("release-stock", Binding.Literal("release stock")));
         return Wf.Workflow(Definition, machine);
+    }
+
+    public static (string Frame, string Visit) SettledConfiguration(string checkpoint, string expected)
+    {
+        var native = JsonSerializer.Deserialize<NativeState>(checkpoint)!;
+        var frame = native.Frames.Values.Single(f => f.Node == Node);
+        var chart = frame.State?.Deserialize<MachineState>();
+        if (native.Mode != Modes.Balanced || native.Agenda.Count != 0 ||
+            chart is not { Active: [var state], Pending: null, Visits: [var visit] } ||
+            state != expected || visit.State != expected ||
+            !visit.Occurrence.StartsWith(frame.Id + "/state/", StringComparison.Ordinal))
+            throw new InvalidOperationException($"Expected the persisted order machine to be settled in {expected}.");
+
+        return (frame.Id, visit.Occurrence);
     }
 }
