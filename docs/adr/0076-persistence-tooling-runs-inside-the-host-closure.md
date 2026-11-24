@@ -11,8 +11,8 @@ amendment_context: 2026-09-29, decided by Sipke Schoorstra on #2093 and delivere
 # Persistence tooling runs inside the host's closure
 
 Amendment (further entry points), proposed: the worker may reach one further frozen entry point per command group, each
-named, versioned and refused by name when missing (D14), and a group that runs in a reference host the tool publishes
-may restore that pinned package on first use (D10). The first case is the Elsa 3 migration CLI.
+named, versioned and refused by name when missing (D14). The first case is the Elsa 3 migration CLI, which runs inside
+the Elsa 3 migration image. D10 is unchanged.
 
 Status: accepted (2026-09-21). Sipke Schoorstra accepted ADR 0076 after the design it records — the
 out-of-process worker, the `[EfModule]` descriptor, and the two-gate activation guard — was
@@ -693,16 +693,6 @@ frozen `EfToolingHost` contract is untouched. Spec 171 FR-083 to FR-086 specify 
 still rules out is unchanged: an *implicit* restore, triggered by an empty install root or a stale
 state file rather than by the operator.
 
-**A second exception, for a host the tool brings itself.** A command group whose work runs in a reference host that
-the tool publishes, rather than in an operator's host, may restore that host's package on first use. The Elsa 3
-migration group's reference host is the case in point. The restore takes exactly one package id at exactly the tool's
-own version into the NuGet global packages folder, and reuses a cached copy without touching the network. It refuses
-by name when the package is neither cached nor restorable. It never touches an operator's host, install root or state
-file, so the risk this decision guards against, an artifact that depends on feed state when it was produced, does not
-arise: the package is pinned to the tool's version. A user's own packages for such a group are never downloaded. They
-come from a folder the user names, read as a directory feed into a run-scoped install root that is deleted after the
-run.
-
 Reason: the issue asks the tool to avoid silently falling back to a different provider or migration
 set, and an implicit restore is the same category of surprise applied to packages instead of
 providers — a script generated today should reflect exactly the packages an operator already pinned,
@@ -808,8 +798,8 @@ loading product code into the tool. Each such entry point:
 - lives in the assembly that owns its product code, so the tool and the worker gain no reference to it. In particular
   an entry point that runs Elsa 3 code lives under `extensions/Elsa3/`, which keeps Elsa 3 behind the import boundary
   (Elsa constitution §E2.7);
-- reuses the worker's package loading (D1, D10, D12) unchanged. A group that needs packages the host does not record
-  loads them as D10 allows.
+- reuses the worker's package loading (D1, D10, D12) unchanged. A group that loads packages the host does not record
+  reads them from folders already on disk, never from a feed.
 
 The first such entry point is `Elsa3.Migration.Tooling.Elsa3MigrationToolingHost`, for the
 `elsa3-migration workflows` group.
