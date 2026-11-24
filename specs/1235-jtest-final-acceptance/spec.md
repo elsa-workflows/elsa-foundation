@@ -128,7 +128,7 @@ blocks it, and J-001 through J-005 are open in the tasks.
 ### Functional Requirements
 
 Wherever this specification, its scenarios or its success criteria speak of every or all suites or definitions,
-they mean the acceptance set: the 41 suites and 34 definitions left after the exclusion in Q13.
+they mean the acceptance set: the 39 suites and 32 definitions left after the exclusions in Q13 and Q15.
 
 **Corpus**
 
@@ -238,8 +238,9 @@ they mean the acceptance set: the 41 suites and 34 definitions left after the ex
 | ID | Question | Decision |
 |---|---|---|
 | Q1 | Which material is the complete corpus? | The JTest-Nexxbiz repository at `b1cde13`. 36 definitions and 42 suites. |
-| Q13 | What about the baseline-dispatch performance case, whose definitions the setup suite never imports? | Excluded from acceptance: `performance-baseline-dispatch.json` and `performance-baseline-dispatch-sub.json` and their only suite, `performance/baseline-dispatch-tests.json`, are copied with the corpus but neither run nor bucketed. The acceptance set is 34 definitions and 41 suites. |
+| Q13 | What about the baseline-dispatch performance case, whose definitions the setup suite never imports? | Excluded from acceptance: `performance-baseline-dispatch.json` and `performance-baseline-dispatch-sub.json` and their only suite, `performance/baseline-dispatch-tests.json`, are copied with the corpus but neither run nor bucketed. The acceptance set is 34 definitions and 41 suites (reduced by Q15). |
 | Q14 | The storage-drivers root definition says version 2, the Elsa 3 import numbers it 1 and its suite expects 1, while Elsa 4 keeps 2. How is that settled? | The definition is patched to version 1 in the corpus copy. Elsa 3 ignores the file's version on import, so its behaviour is unchanged, and Elsa 4 then publishes `1.0.0`, which the suite expects. It is the one approved edit to an original definition; any other edit to an original needs the same coordinator approval and must leave Elsa 3 behaviour unchanged. |
+| Q15 | The Elsa 3.6.3 baseline fails the implicit-merge and `WaitAllActive` join suites (baseline failures B1–B8): 3.6.3 runs the implicit merge once per arriving path, and the `WaitAllActive` join after a fork never starts. Do they stay in acceptance? | No. `branching/implicit-tests.json` and `branching/join-wait-all-active-tests.json`, with `branching-implicit.json` and `branching-wait-all-active.json`, are excluded from acceptance and re-evaluated on Elsa 4 once its join behaviour is decided (JOIN work, #4193); Elsa 4-only workflows and suites may then guard that decision instead. The acceptance set is 39 suites and 32 definitions. Coordinator decision, 2026-11-24 (PR #5662). |
 | Q2 | Where does the suite live? | In the Elsa 3 converter test area, because the flow is reconcile-then-run. A broader Elsa 4-native workflow-regression suite is a later, separate piece of work. |
 | Q3 | Can the corpus be committed? | Yes, unchanged; it carries no secrets. |
 | Q4 | What is the Elsa 3 baseline? | The suite assertions, made green on an Elsa server built from elsa-core tag `3.6.3` (the pinned baseline version). No paired dual-host runs. |
@@ -256,11 +257,11 @@ they mean the acceptance set: the 41 suites and 34 definitions left after the ex
 
 ### Measurable Outcomes
 
-- **SC-001 - Baseline**: Every one of the 41 suites in the acceptance set (Q13) passes on the Elsa 3.6.3 baseline server, or is marked blocked by a named
+- **SC-001 - Baseline**: Every one of the 39 suites in the acceptance set (Q13, Q15) passes on the Elsa 3.6.3 baseline server, or is marked blocked by a named
   defect of that version, with every suite change approved and reasoned.
 - **SC-002 - Engine-neutral**: Every suite file is identical between the Elsa 3 and Elsa 4 runs, and still passes on
   the Elsa 3 baseline.
-- **SC-003 - Dispositions**: All 34 definitions in the acceptance set (Q13) have exactly one bucket with its evidence (definitions whose suites
+- **SC-003 - Dispositions**: All 32 definitions in the acceptance set (Q13, Q15) have exactly one bucket with its evidence (definitions whose suites
   are JOIN-blocked or value-capture-blocked are bucketed when the JOIN and value-capture tasks close).
 - **SC-004 - Non-JOIN milestone**: Every suite not blocked by JOIN behaviour, by value capture (FR-024), by a 3.6.3
   defect (SC-001) or by an

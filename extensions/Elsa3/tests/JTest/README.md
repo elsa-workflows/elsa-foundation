@@ -10,8 +10,8 @@ This README holds the run procedures; task T044 completes it.
 
 | Path | Content |
 |---|---|
-| `workflow-definitions/` | The 36 Elsa 3 definitions (34 in the acceptance set, spec Q13) |
-| `tests/` | 42 suite files (41 in the acceptance set) |
+| `workflow-definitions/` | The 36 Elsa 3 definitions (32 in the acceptance set, spec Q13 and Q15) |
+| `tests/` | 42 suite files (39 in the acceptance set) |
 | `import-and-publish-workflows.json` | Elsa 3 setup suite: imports and publishes the definitions |
 | `templates-elsa3/`, `environments/elsa3.json`, `global-configuration.elsa3.json` | Elsa 3 template set and configuration |
 | `test-files/` | Files the suites upload |
@@ -19,6 +19,15 @@ This README holds the run procedures; task T044 completes it.
 
 The corpus was copied byte for byte (`git archive` with `core.autocrlf=false`; `.gitattributes` marks this folder
 `-text`). It holds no secrets: credentials and base URLs are `${VARIABLE}` references (T002).
+
+**Excluded from acceptance, to re-evaluate on Elsa 4**: `tests/branching/implicit-tests.json` and
+`tests/branching/join-wait-all-active-tests.json`, with `branching-implicit.json` and `branching-wait-all-active.json`
+(coordinator decision 2026-11-24, spec Q15). They encode implicit-merge and `WaitAllActive` join behaviour that
+Elsa 3.6.3 does not show; what Elsa 4 does there is decided with the JOIN work (#4193), and these suites, or Elsa 4-only
+suites written for that decision, come back then. The baseline-dispatch case stays excluded too (spec Q13).
+
+Fixes to the original corpus files (ledger `baseline-failures.md`, `suite-changes.md`) go back to the JTest-Nexxbiz
+repository at the end of the initiative (task T047).
 
 ## Tools
 
@@ -54,7 +63,7 @@ $env:ADMIN_USERNAME = 'admin'; $env:ADMIN_PASSWORD = 'password'
 $env:CORRELATION_ID = [guid]::NewGuid().ToString('N'); $env:DATE_NOW_ISO_STRING = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
 $env:JTEST_CONFIG_FILE = "$PWD/global-configuration.elsa3.json"
 jtest run import-and-publish-workflows.json --env-file environments/elsa3.json
-jtest run "tests/**/*" "!tests/performance/baseline-dispatch-tests.json" --env-file environments/elsa3.json
+jtest run "tests/**/*" "!tests/performance/baseline-dispatch-tests.json" "!tests/branching/implicit-tests.json" "!tests/branching/join-wait-all-active-tests.json" --env-file environments/elsa3.json
 docker stop elsa3-jtest
 ```
 
@@ -68,8 +77,8 @@ shell stays unchanged. See *Elsa 4 run configuration* below (task T007).
 
 From this folder, in a PowerShell session of its own. The block deletes the Workbench's SQLite stores, then sets the run's
 configuration as process environment variables, which override `shells.json`: `Elsa3JsonReconciliation` with
-`SourceId` `jtest` and a `Files` list of the 34 acceptance definitions (the files the Elsa 3 setup suite imports, in
-its order; an adjusted copy replaces its original here, task T036), `Elsa3ImportActivitiesEntityFrameworkCore` on the
+`SourceId` `jtest` and a `Files` list of the 32 acceptance definitions (the files the Elsa 3 setup suite imports, in
+its order, without the two excluded by spec Q15; an adjusted copy replaces its original here, task T036), `Elsa3ImportActivitiesEntityFrameworkCore` on the
 shared `Elsa` connection (the import commits in one transaction with the Activities Design store, so it must use the same
 database), and `WorkflowsRuntimeCheckpointPersistence` in `Durable` mode.
 
@@ -83,8 +92,9 @@ Set-RunVariable 'ASPNETCORE_URLS' 'http://localhost:5095'
 Set-RunVariable "${feature}Elsa3JsonReconciliation__Options__SourceId" 'jtest'
 Set-RunVariable "${feature}Elsa3ImportActivitiesEntityFrameworkCore__ConnectionName" 'Elsa'
 Set-RunVariable "${feature}WorkflowsRuntimeCheckpointPersistence__Mode" 'Durable'
-# The acceptance set (spec Q13): the 34 definitions the Elsa 3 setup suite imports, in its order.
-$files = [regex]::Matches((Get-Content import-and-publish-workflows.json -Raw), '"filePath":\s*"(workflow-definitions/[^"]+)"') | ForEach-Object { $_.Groups[1].Value }
+# The acceptance set (spec Q13, Q15): the definitions the Elsa 3 setup suite imports, in its order, without the two excluded.
+$excluded = 'workflow-definitions/branching-implicit.json', 'workflow-definitions/branching-wait-all-active.json'
+$files = @([regex]::Matches((Get-Content import-and-publish-workflows.json -Raw), '"filePath":\s*"(workflow-definitions/[^"]+)"') | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -notin $excluded })
 for ($i = 0; $i -lt $files.Count; $i++) {
     Set-RunVariable "${feature}Elsa3JsonReconciliation__Options__Files__${i}__Order" "$i"
     Set-RunVariable "${feature}Elsa3JsonReconciliation__Options__Files__${i}__FilePath" (Join-Path $PWD $files[$i])
@@ -119,3 +129,32 @@ Invoke-RestMethod -Method Put "$base/runtime/workflows/diagnostics/settings" -He
 
 The response's `effective` block shows the levels in force; host policy caps every value at bounded snapshots
 (`snapshotLimits`).
+
+## For the Nexxbiz workspace (T047)
+
+Changes and decisions to take back to the JTest-Nexxbiz repository and the Nexxbiz workflows at the end of the
+initiative. The ledger rows hold the evidence.
+
+**Corpus fixes to bring back** (`ledger/baseline-failures.md`, applied in this folder):
+
+- B9 `tests/branching/join-wait-all-tests.json`: expect instance status `Running`, not `Finished` (Elsa 3.5.2+ `WaitAll`).
+- B10, B11 the two dispatch `channels` suites: typo `chanels` → `channels`. The Elsa 3 environment's channel values are
+  empty here because a stock 3.6.3 server registers no dispatch channels; the Nexxbiz executor keeps its own channel names.
+- B12, B13 `tests/http/headers-tests.json`, `tests/logging/logging-tests.json`: read response headers as
+  `$.this.headers['<name>']` (JTest 2.x).
+- B14 `javascript-script-handler-functions.json`: `base64Encode(...)` → `stringToBase64(...)`, `base64Decode(...)` →
+  `stringFromBase64(...)`; its suite no longer has the `getConfiguration` cases.
+- Q14 `storage-drivers-variables-root-workflow.json`: version 1.
+
+**To reconsider for Nexxbiz on Elsa 4**:
+
+- Replace the Executor V3 `base64Encode`/`base64Decode` calls in all Nexxbiz workflows with the Elsa 3 natives
+  `stringToBase64`/`stringFromBase64` (same UTF-8 Base64). Elsa 4 has both as built-ins and the conversion keeps them as
+  written; the Executor V3 names are refused as unknown host functions.
+- `getConfiguration()` (for example `getConfiguration("BusinessSettings")[name]`) has no Elsa 3 or Elsa 4 equivalent:
+  Elsa 3's `getConfig` returns one string value, and the Elsa 4 conversion refuses configuration reads. Direction
+  (coordinator, 2026-11-24): a Nexxbiz feature of its own on Elsa 4 with purpose-specific functions such as
+  `getBusinessSettings()`, so workflows stop indexing raw configuration. Until then workflows that call it are refused
+  on import.
+- The implicit-merge and `WaitAllActive` join suites are excluded here (spec Q15) and come back, or are replaced by
+  Elsa 4-only suites, once the Elsa 4 join behaviour is decided (#4193).

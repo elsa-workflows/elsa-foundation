@@ -9,61 +9,6 @@
   },
   "tests": [
     {
-      "name": "Execute test case 'getConfiguration'",
-      "description": "",
-      "steps": [
-        {
-          "type": "http",
-          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
-          "method": "POST",
-          "body": {
-            "method": "getConfiguration",
-            "settingKey": "BusinessSettings",
-            "settingSectionValueName": "systemEnvironment"
-          },
-          "assert": [
-            {
-              "op": "equals",
-              "actualValue": "{{ $.this.status }}",
-              "expectedValue": 202
-            },
-            {
-              "op": "exists",
-              "actualValue": "{{$.this.body.result }}"
-            },
-            {
-              "op": "length",
-              "actualValue": "{{$.this.body.result }}",
-              "expectedValue": 1
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Execute FAIL test case 'getConfiguration'; path parameter is null",
-      "description": "",
-      "steps": [
-        {
-          "type": "http",
-          "url": "{{ $.env['elsaExecutorApi:baseUrl'] }}/{{ $.globals.endpoint }}",
-          "method": "POST",
-          "body": {
-            "method": "getConfiguration",
-            "settingKey": null,
-            "settingSectionValueName": "systemEnvironment"
-          },
-          "assert": [
-            {
-              "op": "equals",
-              "actualValue": "{{ $.this.status }}",
-              "expectedValue": 500
-            }
-          ]
-        }
-      ]
-    },
-    {
       "name": "Execute test case 'base64Encode'",
       "description": "",
       "steps": [

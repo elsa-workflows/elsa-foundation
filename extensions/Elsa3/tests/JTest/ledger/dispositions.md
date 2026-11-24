@@ -6,8 +6,8 @@ One row per definition (spec 1235, data-model.md). Buckets stay `unclassified` u
 |---|---|---|---|---|---|---|---|
 | `branching-flows.json` | `123751d0e5707622` v1 | unclassified | - | - | - | `branching/if-then-else-tests.json`, `branching/switch-match-any-mode-tests.json`, `branching/switch-match-first-mode-tests.json`, `branching/switchflow-case-default-tests.json`, `branching/switchflow-case-fail-tests.json` | contains join or fork (not yet assessed) |
 | `branching-fork-parallel.json` | `1827851ae82eae1096` v1 | unclassified | - | - | - | `branching/fork-parallel-tests.json` | contains join or fork (not yet assessed) |
-| `branching-implicit.json` | `1fd212d023250c3f` v1 | unclassified | - | - | - | `branching/implicit-tests.json` | none |
-| `branching-wait-all-active.json` | `33427851d00eai876` v1 | unclassified | - | - | - | `branching/join-wait-all-active-tests.json` | contains join or fork (not yet assessed) |
+| `branching-implicit.json` | `1fd212d023250c3f` v1 | excluded (re-evaluate on Elsa 4) | - | - | - | `branching/implicit-tests.json` | none |
+| `branching-wait-all-active.json` | `33427851d00eai876` v1 | excluded (re-evaluate on Elsa 4) | - | - | - | `branching/join-wait-all-active-tests.json` | contains join or fork (not yet assessed) |
 | `branching-wait-all.json` | `7c3751d00f707633` v1 | unclassified | - | - | - | `branching/join-wait-all-tests.json` | contains join or fork (not yet assessed) |
 | `branching-wait-any.json` | `16253948d00ea5633` v1 | unclassified | - | - | - | `branching/join-wait-any-tests.json` | contains join or fork (not yet assessed) |
 | `composition-bulk-dispatch-root-workflow.json` | `ccb613931f8b60a` v1 | unclassified | - | - | - | `composition/bulk-dispatch-workflow-channels-tests.json`, `composition/bulk-dispatch-workflow-handling-handling-await-completion-tests.json`, `composition/bulk-dispatch-workflow-handling-handling-correlation-id-function-tests.json`, `composition/bulk-dispatch-workflow-handling-handling-input-tests.json`, `composition/bulk-dispatch-workflow-handling-handling-on-completed-callbacks-tests.json` | contains join or fork (not yet assessed) |
@@ -45,3 +45,11 @@ One row per definition (spec 1235, data-model.md). Buckets stay `unclassified` u
 
 - `performance-minimal-baseline.json` is imported by the setup suite but no suite or other definition references it.
 - `storage-drivers-variables-root-workflow.json` is patched to version 1 in T017 (spec Q14).
+- `branching-implicit.json` and `branching-wait-all-active.json` are excluded from acceptance, to re-evaluate on Elsa 4
+  with the JOIN work (#4193); coordinator decision 2026-11-24, see `suites.md` Notes.
+- `javascript-script-handler-functions.json`: `base64Encode`/`base64Decode` (Nexxbiz Executor V3 host functions) are
+  replaced by the Elsa 3 natives `stringToBase64`/`stringFromBase64`, which Elsa 4 has as built-ins and the converter
+  keeps as written (coordinator-approved correction, 2026-11-24; to apply in the Nexxbiz workflows too). `getConfiguration`
+  stays in the definition: it has no native equivalent (baseline-failures B14). Its suite cases are removed; the definition
+  itself still calls it, so the Elsa 4 conversion refuses it (`VF-IMP-005`) until an adjusted copy without that branch is
+  approved (T036) or Nexxbiz replaces the call.
