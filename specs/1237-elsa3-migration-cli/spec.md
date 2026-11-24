@@ -178,7 +178,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - A dispatched-workflow or execute-workflow target that is not in the export is listed as Take into account. It is not
   a refusal.
 - C# and Python expressions are refused with the existing value-flow code and its guidance.
-- A script refers to a declared JavaScript global without calling it (assigns it, passes it as a callback). The
+- A script refers to an Elsa 3 global that a registered prefixed host function carries as its member name without calling it (assigns it, passes it as a callback). The
   converter rewrites only direct calls, so it reports such a reference with a diagnostic of its own (see
   *Dependencies and boundaries*). The CLI scans no scripts itself.
 - A converted reusable activity always depends on other activity versions, because its body is made of catalog
@@ -282,11 +282,15 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   marks it so: an Info the converter adds to every definition, such as the null-policy record.
 - **FR-016a**: A component finding MUST name its component from structured diagnostic data, never by parsing a
   message. Every component diagnostic carries a `ComponentName` metadata entry (the Elsa 3 activity type, function name,
-  variable type name or storage driver key). The converter attaches it to its component diagnostics. The converter does not refuse Elsa 3 storage
-  drivers: it converts the value to the default `elsa.json` storage and warns. A custom driver is reported as
+  variable type name or the trimmed Elsa 3 storage driver type). The converter attaches it to its component
+  diagnostics. This specification relies on the converter's storage-driver change (see *Dependencies and boundaries*),
+  after which the converter does not refuse Elsa 3 storage drivers: it converts the value to the default `elsa.json`
+  storage and warns. A custom driver is reported as
   `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED`, a `storage-driver` component whose `ComponentName` is the trimmed Elsa
   3 driver type. It is a Reconsider finding, not a blocker. The Elsa 3 memory driver is reported as
-  `ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED`, also Reconsider, and is not a component. An Elsa 4 publication error that carries
+  `ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED`, also Reconsider and also a `storage-driver` component, whose
+  `ComponentName` is the trimmed Elsa 3 memory driver type: the user chose it in Elsa 3, and the migration has to
+  decide what replaces it. An Elsa 4 publication error that carries
   no structured metadata is never used to name a component. A call of an undeclared JavaScript function gets
   its own code, separate from the forbidden-capability code it otherwise shares, so that refused capabilities (forbidden globals) do not count as
   components.
@@ -379,7 +383,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 | Q8 | Does a Must fix finding mean patching the definition or building a component? | Each code's remedy comes from one code table, kept with the diagnostic codes and enforced by a completeness test. |
 | Q9 | How do the user's packages load without the network? | From the mounted `--packages` folder, read as a directory feed into a run-scoped install root. A missing dependency refuses the run. |
 | Q10 | What about a user with their own Elsa 4 host? | No `--host` option. They bring their features as packages, as everyone else does. |
-| Q11 | Who finds a declared JavaScript global that is referenced but not called? | The converter, with a diagnostic of its own that names the global at the reference's JSON path. The CLI only reports codes, so the finding reaches the report as a `javascript-function` component finding. |
+| Q11 | Who finds an Elsa 3 global that a registered prefixed host function carries as its member name that is referenced but not called? | The converter, with a diagnostic of its own that names the global at the reference's JSON path. The CLI only reports codes, so the finding reaches the report as a `javascript-function` component finding. |
 | Q13 | What do the CLI's own findings (unreadable input file, no published version) use as codes? | Codes of the tooling's own, `ELS3-MIGRATION-*`, in the same code table. An existing code such as `ELS3-MIGRATION-UNSUPPORTED-INPUT` is reused where it fits. |
 | Q12 | What does a run need that the engine refuses to start without? | Generated, run-only values for the engine's required secret settings (FR-008a). Where the user's settings set them, the user's values win. |
 
@@ -413,14 +417,16 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   image, and its composition starts from the feature list. The `appsettings.json` merge comes from that specification
   too. The engine must also include JSON activity reconciliation, so that `migrated/activities/` loads, and it must
   carry `Nuplane.Sources.Directory`, so that directory feeds load.
-- **Converter diagnostics this specification relies on.** The converter maps declared Elsa 3 JavaScript globals to
-  prefixed host functions (direct calls only), and diagnoses unregistered variable types. It converts Elsa 3 storage
-  drivers to the default storage with a Reconsider warning: `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED`, which
-  carries the driver type as `StorageDriverType` and `ComponentName`, and `ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED`.
+- **Converter diagnostics this specification relies on.** The converter maps a direct call of an Elsa 3 global to the
+  registered prefixed host function that carries the same member name (direct calls only), and diagnoses unregistered
+  variable types. Its storage-driver change converts Elsa 3 storage drivers to the default storage with a Reconsider
+  warning: `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` and `ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED`, each carrying
+  the driver type as `StorageDriverType` and `ComponentName`. The member-name matching and the storage-driver change
+  are converter changes outside this specification, and implementation waits for both.
   These supply
   the codes from which the custom-component inventory is built, and this specification adds their entries to the code
   table.
-- **Converter diagnostic for non-call references.** A declared global that a script references without calling it is
+- **Converter diagnostic for non-call references.** A global that a host function carries, referenced without a call, is
   not rewritten, and it fails at run time. The converter refuses it as `ELS3-REPLACED-FUNCTION-REFERENCE` (Q11), and
   this specification adds its entry to the code table.
 - **Component metadata in the converter** (FR-016a): `ComponentName` metadata on component diagnostics, and a code of

@@ -53,7 +53,7 @@ one refusal line, `elsa3-migration: refused: <reason>`, with a reason code from 
 | `arguments` | An invalid combination of options. |
 | `package-unresolved` | A package dependency is in neither `--packages` nor the image. The reason names the id and range. |
 | `settings-unreadable` | `--settings` is missing, or is not valid JSON. |
-| `entry-point-missing` | The migration tooling assembly or its entry point type is not in the loaded package set (an image build defect). |
+| `entry-point-missing` | The migration tooling assembly or its entry point type is in neither the host closure nor the loaded package set (an image build defect). |
 | `composition-failed` | A user package or setting the composition cannot boot. The reason names the feature, package or setting key, never a value. |
 
 ## Output layout

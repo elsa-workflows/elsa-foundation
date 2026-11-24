@@ -93,7 +93,7 @@ wrapper, imported for its findings but neither published nor exported, as in sta
 reusable version's activity is published and exported) and `ELS3-MIGRATION-RUN-REFUSED` (Error, remedy
 `patch-definition`: a selected definition that a run-level refusal kept from being applied). The table lists `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` as a `storage-driver` component code
 (a Reconsider warning; its remedy, `build-component`, applies only if it is ever emitted at Error).
-`ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED` is not a component code. `fixedText` is the
+`ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED` is a `storage-driver` component code too. `fixedText` is the
 report text for a code the converter does not own. Every Elsa 3 code needs an entry, whatever its severity. An Elsa 4
 code with no entry gets `patch-definition` and a default fixed text. Every skip is reported as an `error` finding. Codes with an `ELS3-BEHAVIOUR-` prefix are
 `reconsider` by severity rule; their entries still carry a remedy, used only if one is ever emitted at Error. Every component code needs a kind. The completeness test enforces both rules. `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY` has remedy

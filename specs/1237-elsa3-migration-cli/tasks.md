@@ -7,6 +7,9 @@
 
 - this specification is approved, and the ADR 0076 amendment is agreed (spec Q4);
 - the essentials engine image and feature list of specification 1236 exist on the initiative branch;
+- the converter's member-name matching of Elsa 3 globals to prefixed host functions, and its storage-driver change
+  (the two `ELS3-BEHAVIOUR-*-STORAGE-*` codes with `StorageDriverType` and `ComponentName`), are on the initiative
+  branch;
 
 T032 also waits on the engine gap of spec Q2, for its composite case only.
 
@@ -80,7 +83,7 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   component diagnostic: unmapped activity types, undeclared and replaced-function references, unregistered variable
   types and custom storage drivers. That includes giving `Elsa3ExpressionRewriteIssue` metadata. Where
   `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` already carries `ComponentName`, leave it; test that the inventory
-  lists a custom driver and does not list the memory driver. Give a call of an
+  lists both the custom driver and the memory driver as storage-driver components. Give a call of an
   undeclared JavaScript function a code of its own, separate from the forbidden-capability code, and update the
   mapping README and the affected converter tests. The report builder reads `componentName` only from that metadata.
 - [ ] T005 Extract `Elsa3ImportRun` from `Elsa3FolderImportTask` in
@@ -127,10 +130,10 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
 
   (FR-008 to FR-010, SC-003.)
 - [ ] T010 Add the `elsa3-migration` command family to `essentials/src/Cli/Worker/WorkerContract.cs`, and resolution of
-  the second entry point to `ToolingEntryPoint.cs`. The worker finds the `Elsa3.Migration.Tooling` assembly among the
-  loaded package set's assemblies, then calls `Assembly.GetType`. A missing assembly or type is the
-  `entry-point-missing` refusal (exit 2), which names the type and the minimum version. Test it with a package set
-  that lacks the assembly.
+  the second entry point to `ToolingEntryPoint.cs`. The worker looks for the `Elsa3.Migration.Tooling` assembly in the host
+  closure and among the loaded package set's assemblies, then calls `Assembly.GetType`. Only when both lack it is it
+  the `entry-point-missing` refusal (exit 2), which names the type and the minimum version. Test both sources and the
+  missing-from-both refusal.
 - [ ] T011 Add `essentials/src/Cli/Elsa.Cli/Elsa3MigrationCommands.cs`, with:
   - the two commands;
   - the argument rules and refusal reasons of [contracts/cli.md](contracts/cli.md);
@@ -212,7 +215,8 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   per workflow definition, the wrapper workflow of each reusable among them, and one activities file in dependency
   order. A reusable's `exportedTo` is the activities file, and its `wrapperExportedTo` is the wrapper's file. Every
   published reusable version goes into `activities.json`, older pinned ones included. Add a fixture case of a workflow
-  that pins an older reusable version, and test that it loads (T024). It sets `exportedTo`, and sets
+  that pins an older reusable version, and assert that the older version is in `activities.json`; that it loads is
+  T032's composite case. It sets `exportedTo`, and sets
   `needsCompositeSourceSupport` on every reusable, its wrapper, and every workflow that uses one. It leaves out refused and blocked
   definitions. It always creates `migrated/workflows/` and always writes `migrated/activities/activities.json`, as
   `[]` when no reusable is exported. Test the layout, the absence, and a run that exports no workflow and no reusable.
@@ -258,7 +262,7 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
 ## Phase 8: Polish and acceptance
 
 - [ ] T032 Once the spec Q2 engine gap is fixed on the initiative branch, flip T024's composite case to assert that it
-  loads (SC-004).
+  loads, including the workflow that pins an older reusable version (T022) (SC-004).
 - [ ] T033 Run `inventory --all-versions` over the specification 1235 acceptance set (34 definitions) in the
   migration image. Check that every definition has one bucket, and that the published versions equal what startup
   reconciliation publishes from the same input on the same composition (SC-002). Record the result in the PR evidence, and check the two-minute goal.
