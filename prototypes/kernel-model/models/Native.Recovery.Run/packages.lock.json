@@ -33,7 +33,7 @@
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
-      "kernel.foundation.inmemory": {
+      "Kernel.Foundation.InMemory": {
         "type": "Project",
         "dependencies": {
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",

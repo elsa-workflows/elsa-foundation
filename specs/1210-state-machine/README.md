@@ -30,7 +30,7 @@ Approvals, revisions and withdrawal remain sample application concepts, not Elsa
 
 The visit-scope result retains its original source/tree proof. Its 55 cases are separately
 labelled as 24 actual workflows, 17 literal fixtures and 14 seeded context refusals; the runner
-[documents commands and limits](../../prototypes/kernel-model/models/Statecharts.Run/README.md).
+[documents commands and limits](../../essentials/tests/ActorFoundation/Statecharts/Run/README.md).
 The [values proposal](contracts/values.md) keeps Action-after-Exit visibility explicit as engineering direction.
 
 Fresh bounded qualification of exact resulting main `722d6fba94296b9e7b6aa603e7b1848040e62395` passed 49 stages,
@@ -83,12 +83,12 @@ The [selection and phase contract](contracts/selection.md) remains an engineerin
 and native phases above qualify a bounded subset. Ordinary trigger/rearming, automatic/completion arbitration, loop
 recovery and complete source grouping remain open; neither the engine nor its phase proof closes Q1.
 
-The private [internal-progress protocol](../../prototypes/kernel-model/models/Statecharts.Run/README.md#internal-progress-protocol)
+The private [internal-progress protocol](../../essentials/tests/ActorFoundation/Statecharts/Run/README.md#internal-progress-protocol)
 extends that same compiled selector with explicit automatic/completion categories, once-per-visit local completion,
 phase gates, ready ordering and an experimental sticky causal limit. Its pure configuration/JSON fixtures do not
 qualify actual native internal progress, ordinary guard/loop incidents, recovery or durable restart. Native hydration
 refuses those categories without the explicit opt-in execution profile. The separate bounded
-[native internal driver](../../prototypes/kernel-model/models/Statecharts.Run/README.md#native-internal-driver-private-b7b-profile)
+[native internal driver](../../essentials/tests/ActorFoundation/Statecharts/Run/README.md#native-internal-driver-private-b7b-profile)
 exercises automatic/completion progress, guard/loop incidents, native recovery and model-store restart with that
 profile. This supplies no product limit, provider durability, source-owner agreement, ordinary-trigger rearming or
 change to Q1/M0 and the full StateMachine/Studio scope.
