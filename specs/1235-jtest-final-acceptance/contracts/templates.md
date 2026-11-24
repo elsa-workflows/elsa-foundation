@@ -29,6 +29,11 @@ them from the activity execution's value snapshots, mapping each converted input
 with the converter's member map, and keeps values as the suite compares them (for example `StatusCode` as the Elsa 3
 enum name `Accepted`). A key with no Elsa 4 counterpart fails the template with the key named.
 
+**Snapshot limits.** Elsa 4 caps capture at diagnostic snapshots by host policy: bounded values (strings, arrays, objects, depth and
+size are limited) marked `Truncated` or `OmittedCount` when cut. Templates read the snapshot's full value fields and
+fail with the key named when a value is truncated or only a preview exists; each such value is recorded as an
+FR-011 gap. Raising the host policy to full payloads is a separate decision, taken only if gaps appear.
+
 Other values suites read **inside** an output beyond the fields above (for example
 `instance.workflowState.activityExecutionContexts[0].properties.Variables[...]`) are Elsa 3 internals. They are not
 projected: the engine-neutral refactor moves those reads behind a template, existing or new, before the Elsa 4 work.
@@ -43,8 +48,8 @@ Parameters and outputs are copied from the corpus files.
 | `elsa-search-workflow-instances` | `baseUrl`, `authHeader`, `workflowDefinitionId`, `workflowDefinitionVersion`, `correlationId`, `pageSize` | `instances` | `GET /runtime/workflows/instances/page`, version filtered in the template, items projected | no server-side version filter |
 | `elsa-assert-workflow-instance-not-exists` | `baseUrl`, `authHeader`, `workflowDefinitionId`, `workflowDefinitionVersion`, `correlationId` | none | as search, expecting zero | as search |
 | `elsa-get-workflow-instance` | `baseUrl`, `authHeader`, `workflowInstanceId` | `workflowStatus`, `workflowSubStatus`, `instance` | `GET /runtime/workflows/instances/{id}` | `instance` keeps the Elsa 4 shape; reads inside it are refactor scope |
-| `elsa-get-variable-value-from-instance` | `baseUrl`, `authHeader`, `workflowInstanceId`, `variableId` | `variableValue` | `GET .../instances/{id}/variables`, then the write payload | needs variable payload capture on for the run |
-| `elsa-activity-instance-get` | `baseUrl`, `authHeader`, `activityInstanceId` | `activityState`, `status`, `id`, `startedAt`, `completedAt`, `outputs` | `GET .../instances/{wf}/activity-executions/{id}` | needs the workflow instance id (added parameter, below); `activityState`/`outputs` come from value snapshots and need capture on |
+| `elsa-get-variable-value-from-instance` | `baseUrl`, `authHeader`, `workflowInstanceId`, `variableId` | `variableValue` | `GET .../instances/{id}/variables`, then the write payload | needs a `variableWrites` capture override set for the run; snapshot limits apply |
+| `elsa-activity-instance-get` | `baseUrl`, `authHeader`, `activityInstanceId` | `activityState`, `status`, `id`, `startedAt`, `completedAt`, `outputs` | `GET .../instances/{wf}/activity-executions/{id}` | needs the workflow instance id (added parameter, below); `activityState`/`outputs` come from value snapshots, set to snapshot level for the run; snapshot limits apply |
 | `elsa-activity-instance-find` | `baseUrl`, `authHeader`, `workflowInstanceId`, `activityId` | as get | activity execution list filtered by node, then get | as get |
 | `elsa-activity-instance-get-journal-item` | `baseUrl`, `authHeader`, `workflowInstanceId`, `activityId` | `activityInstanceId`, `startedAt`, `completedAt` | activity execution list filtered by node | one execution per item, not one journal event |
 | `elsa-activity-instance-get-count-started` | `baseUrl`, `authHeader`, `workflowInstanceId`, `activityId` | `count` | executions with `startedAt` set | Durable persistence |

@@ -94,8 +94,10 @@ repository unless they name the corpus.
   a bearer token; `GET /design/workflows/definitions/{id}` for definition lookups; `/runtime/workflows/instances/...`
   for instances, activity executions and variables. The import and publish templates are not implemented for Elsa 4;
   the reconciliation receipt shows publication. Counts of started or completed activities are computed from the activity
-  execution list. Per-activity outputs and variable values come from value snapshots and variable write payloads,
-  which require capture to be on for the run.
+  execution list. Per-activity outputs and variable values come from value snapshots and variable write payloads.
+  Capture is runtime state set through `PUT /runtime/workflows/diagnostics/settings` (in memory, lost on restart), so
+  the run sets it after each fresh start; the host policy caps it at bounded snapshots, and a truncated value is a
+  reported gap, not an approximation.
 - **Rationale**: Every Elsa 3 output has an Elsa 4 source with the same meaning except the ones listed in the
   contract as gaps; those are reported (FR-011), not approximated.
 - **Alternatives considered**: The execution-evidence long-poll stream, which could replace fixed waits; rejected for

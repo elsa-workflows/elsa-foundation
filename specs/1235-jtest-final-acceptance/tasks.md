@@ -47,9 +47,10 @@ recorded approval before the tasks after them start.
   commit any changed solution filters; build the Workbench and run the architecture tests that cover feature
   composition and the Elsa 3 boundary (`Essentials/tests/Architecture/Tests/`).
 - [ ] T007 Find and verify the configuration override that enables `Elsa3JsonReconciliation` (`SourceId`, `Files` or
-  `FolderPath`) together with `Elsa3ImportActivitiesEntityFrameworkCore`, sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` and turns on value and variable payload
-  capture for one Workbench run without editing the committed `shells.json` (environment variables or a run-specific
-  shells file, R-5). Record the exact commands in `JTest/README.md`.
+  `FolderPath`) together with `Elsa3ImportActivitiesEntityFrameworkCore`, and sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` for one Workbench run without editing the
+  committed `shells.json` (environment variables or a run-specific shells file, R-5); after start, set activity input
+  and output capture to snapshot level and a `variableWrites` override with `PUT /runtime/workflows/diagnostics/settings`
+  (in-memory, so after every start). Record the exact commands in `JTest/README.md`.
 
 **Checkpoint**: the Workbench starts with the reconciliation enabled for a run and logs its summary.
 
@@ -122,7 +123,8 @@ recorded approval before the tasks after them start.
 
 ## Phase 5: User Story 3 - Converted definitions pass on Elsa 4 (Priority: P1)
 
-**Goal**: the Elsa 4 template set and run; every suite not blocked by JOIN or an approved incompatibility passes.
+**Goal**: the Elsa 4 template set and run; every suite not blocked by JOIN behaviour, a 3.6.3 defect or an approved
+incompatibility passes.
 
 **Independent test**: fresh Workbench with reconciliation, `jtest run` with the Elsa 4 configuration, ledger read.
 

@@ -60,7 +60,7 @@ the engine-neutral refactor adds.
 | P-1 | Layout | R-3: the corpus's own layout under `extensions/Elsa3/tests/JTest/`, plus `templates-elsa4/`, `environments/elsa4.json`, `global-configuration.elsa4.json`, `adjusted/`, `ledger/`, `README.md`. |
 | P-2 | Runner | R-1, R-4: latest `jtest run`, by hand. |
 | P-3 | Elsa 3 baseline | R-2: image built from elsa-core `3.6.3`; the corpus's setup suite imports the definitions. |
-| P-4 | Elsa 4 host | R-5: Workbench plus the reconciliation feature (reference and catalog entry), enabled only for the run together with the import persistence feature, with Durable persistence and capture on. |
+| P-4 | Elsa 4 host | R-5: Workbench plus the reconciliation feature (reference and catalog entry), enabled only for the run together with the import persistence feature, with Durable persistence; capture set through the diagnostics settings API after each start. |
 | P-5 | Trigger URLs | R-6: environment value only. |
 | P-6 | Ids | R-7: definition ids carry over; Elsa 4 templates match short activity ids against node-id suffixes. |
 | P-7 | Vocabulary | R-8: templates translate status and version words; table in [contracts/templates.md](contracts/templates.md). |

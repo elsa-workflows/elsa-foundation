@@ -179,7 +179,8 @@ blocks it, and J-001 through J-005 are open in the tasks.
 - **FR-014**: The Elsa 4 run MUST start a fresh host with the Elsa 3 startup reconciliation reading the corpus's
   definitions, with each approved adjusted copy taking the place of its original, and MUST keep the reconciliation receipt with the run.
 - **FR-015**: Every definition MUST end with exactly one bucket: `convert-as-is` (unchanged source passes its suites, or, for a
-  definition no suite exercises, is imported and published unchanged with no diagnostic),
+  definition no suite exercises or whose only suites are blocked by a 3.6.3 defect, is imported and published unchanged
+  with no diagnostic),
   `convert-with-adjustments` (an adjusted copy, kept next to the unchanged original, with the exact change and reason,
   approved by the coordinator) or `incompatible` (refused with a diagnostic and guidance, or a feature with no Elsa 4
   equivalent). Execution status and JOIN blocking MUST be recorded separately from the bucket.
@@ -188,7 +189,8 @@ blocks it, and J-001 through J-005 are open in the tasks.
   behaviour MUST follow one rule: a template defect is fixed in the template; a converter defect or Elsa 4 gap gets
   its own issue and the suite is `blocked: <issue>` until it is fixed, an approved adjusted copy passes, or the
   definition is bucketed `incompatible`; missing setup is `blocked: <prerequisite>`, never incompatible. Only suites
-  blocked by JOIN behaviour or by a 3.6.3 defect are exempt from the non-JOIN milestone (SC-004).
+  blocked by JOIN behaviour or a 3.6.3 defect, or carrying an approved incompatibility, are exempt from the non-JOIN
+  milestone (SC-004).
 - **FR-017**: Where an adjusted copy is needed, the converter MUST NOT gain a workaround for it; a construct that
   cannot convert faithfully MUST be refused with guidance, and a genuine Elsa 4 gap gets its own issue.
 
