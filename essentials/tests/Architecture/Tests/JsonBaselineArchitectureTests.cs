@@ -542,7 +542,7 @@ public sealed class JsonBaselineArchitectureTests
         var storageRoots = JsonBaselineConstructionContexts.ReadSources(RepoPaths.RepoRoot, projects);
         var paths = storageRoots.Select(root => root.SyntaxTree.FilePath).ToArray();
         Assert.NotEmpty(paths);
-        var constructionContexts = new JsonBaselineConstructionContexts(storageRoots, projects, configuration);
+        var constructionContexts = new JsonBaselineConstructionContexts(storageRoots, projects, configuration, shipping.Assemblies);
         var rootsByPath = storageRoots.ToDictionary(root => root.SyntaxTree.FilePath, StringComparer.Ordinal);
         var packagePaths = projects.SelectMany(project => project.PackageSources ?? new Dictionary<string, string>())
             .GroupBy(pair => pair.Key, OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)

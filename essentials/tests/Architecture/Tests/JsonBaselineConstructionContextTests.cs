@@ -1,11 +1,79 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using System.Reflection;
+using System.Runtime.Loader;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
 
 public sealed class JsonBaselineConstructionContextTests
 {
+    [Theory]
+    [InlineData("owner-context")]
+    [InlineData("wrong-version")]
+    [InlineData("unresolved-context")]
+    [InlineData("unresolved-standalone")]
+    [InlineData("missing-file-witness")]
+    public void Noncopied_library_dependencies_use_the_owning_binding_and_refuse_wrong_or_unwitnessed_images(string mode)
+    {
+        var dependencyName = "S9ConstructionContextTargets_" + Guid.NewGuid().ToString("N");
+        using var fixture = new Sources("using External; public class C { public static object Make() => new Holder(new()); }", """
+            using System.Text.Json;
+            [assembly: System.Reflection.AssemblyVersion("1.0.0.0")]
+            namespace External;
+            public class Holder { public Holder(JsonSerializerOptions options) {} }
+            """, external: true, dependencyName: dependencyName);
+        var directory = Path.Join(fixture.RepositoryRoot, "context-dependencies");
+        Directory.CreateDirectory(directory);
+        var selected = Path.Join(directory, dependencyName + ".dll");
+        File.Move(fixture.DependencyImage, selected);
+        Assert.False(File.Exists(fixture.DependencyImage)); // The original failing class-library shape.
+        if (mode == "wrong-version")
+        {
+            File.WriteAllText(fixture.Linked, """
+                [assembly: System.Reflection.AssemblyVersion("2.0.0.0")]
+                namespace External;
+                public class Holder { public Holder(object business) {} }
+                """);
+            File.WriteAllBytes(selected, FixtureCompiler.CompilePortable(dependencyName, fixture.Linked).Image);
+        }
+        var binding = new FixtureBindingContext(dependencyName, mode == "unresolved-context" ? null : selected,
+            fromStream: mode == "missing-file-witness");
+        try
+        {
+            var owner = binding.LoadFromAssemblyPath(fixture.Image);
+            if (mode == "wrong-version") _ = binding.LoadFromAssemblyPath(selected);
+            var roots = fixture.Roots();
+            var contexts = new JsonBaselineConstructionContexts(roots, [fixture.Record(roots)], "Debug",
+                mode == "unresolved-standalone" ? null : [owner]);
+            if (mode == "owner-context")
+            {
+                Assert.Equal("construction", Assert.Single(JsonBaselineSourceScan.Scan(roots[0], roots, contexts)).Setting);
+                Assert.True(binding.Resolutions > 0);
+            }
+            else
+            {
+                var error = Assert.Throws<InvalidOperationException>(() => JsonBaselineSourceScan.Scan(roots[0], roots, contexts));
+                if (mode == "wrong-version") Assert.Contains("2.0.0.0", error.Message);
+            }
+        }
+        finally { binding.Unload(); }
+    }
+
+    private sealed class FixtureBindingContext(string dependencyName, string? dependencyPath, bool fromStream)
+        : AssemblyLoadContext("S9 construction binding " + Guid.NewGuid().ToString("N"), isCollectible: true)
+    {
+        internal int Resolutions { get; private set; }
+        protected override Assembly? Load(AssemblyName name)
+        {
+            if (name.Name != dependencyName || dependencyPath is null) return null;
+            Resolutions++;
+            if (!fromStream) return LoadFromAssemblyPath(dependencyPath);
+            using var stream = File.OpenRead(dependencyPath);
+            return LoadFromStream(stream);
+        }
+    }
+
     [Fact]
     public void Repeated_physical_TPA_entries_are_one_reference_and_conflicting_images_are_never_arbitrarily_selected()
     {
@@ -285,17 +353,21 @@ public sealed class JsonBaselineConstructionContextTests
     {
         private readonly string root = Path.Join(Path.GetTempPath(), "elsa-json-construction-targets-" + Guid.NewGuid().ToString("N"));
         private readonly bool external;
+        private readonly string dependencyName;
         private readonly string[] defines;
         internal string RepositoryRoot => root;
         internal string Source { get; }
         internal string Linked { get; }
         private string Project { get; }
         internal string Image { get; }
+        internal string DependencyImage => Path.Join(Path.GetDirectoryName(Image), dependencyName + ".dll");
         private string? Globals { get; }
 
-        internal Sources(string source, string linked, bool external = false, string? globals = null, string[]? symbols = null, string? linkedPath = null)
+        internal Sources(string source, string linked, bool external = false, string? globals = null, string[]? symbols = null, string? linkedPath = null,
+            string dependencyName = "ExternalTargets")
         {
             this.external = external;
+            this.dependencyName = dependencyName;
             defines = symbols ?? [];
             Source = Path.Join(root, "essentials", "src", "Owner", "Source.cs");
             Linked = linkedPath ?? Path.Join(root, "tools", "Linked", "Contract.cs");
@@ -318,7 +390,7 @@ public sealed class JsonBaselineConstructionContextTests
 
         internal void Build()
         {
-            var dependency = external ? FixtureCompiler.CompilePortable("ExternalTargets", Linked) : null;
+            var dependency = external ? FixtureCompiler.CompilePortable(dependencyName, Linked) : null;
             var inputs = Globals is { } globals ? new[] { Source, Linked, globals } : new[] { Source, Linked };
             var compiled = dependency is null ? FixtureCompiler.CompilePortableConfigured("Owner", [], defines, inputs)
                 : FixtureCompiler.CompilePortableWithReferenceImages("Owner", [dependency.Image], Source);
@@ -326,8 +398,8 @@ public sealed class JsonBaselineConstructionContextTests
             File.WriteAllBytes(Path.ChangeExtension(Image, ".pdb"), compiled.Symbols);
             if (dependency is not null)
             {
-                File.WriteAllBytes(Path.Join(Path.GetDirectoryName(Image), "ExternalTargets.dll"), dependency.Image);
-                File.WriteAllBytes(Path.Join(Path.GetDirectoryName(Image), "ExternalTargets.pdb"), dependency.Symbols);
+                File.WriteAllBytes(DependencyImage, dependency.Image);
+                File.WriteAllBytes(Path.ChangeExtension(DependencyImage, ".pdb"), dependency.Symbols);
             }
         }
 

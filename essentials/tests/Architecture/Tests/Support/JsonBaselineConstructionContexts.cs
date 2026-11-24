@@ -17,11 +17,16 @@ internal sealed class JsonBaselineConstructionContexts
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> owners;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<SyntaxTree>> sources;
     private readonly IReadOnlyDictionary<string, string> images;
+    private readonly IReadOnlyDictionary<string, Assembly> bindings;
+    private readonly IReadOnlyDictionary<string, string?> imageHashes;
     private readonly IReadOnlyList<SyntaxNode> snapshotRoots;
     private readonly IReadOnlyDictionary<string, CSharpParseOptions> parseOptions;
     private readonly Dictionary<string, IReadOnlyList<SyntaxNode>> parsedRoots = new(StringComparer.Ordinal);
     private readonly Dictionary<string, IReadOnlyList<SyntaxNode>> storageViews = new(StringComparer.Ordinal);
     private readonly Dictionary<string, CSharpCompilation> compilations = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ReferenceImage> referenceImages = new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    private IReadOnlyDictionary<string, string>? frameworkPaths;
+    private readonly Dictionary<string, MetadataReference> frameworkReferences = new(StringComparer.Ordinal);
     private readonly string configuration;
 
     internal static IReadOnlyList<SyntaxNode> ReadSources(string repoRoot, IReadOnlyList<ShippingHashAssemblies.Project> projects)
@@ -68,11 +73,20 @@ internal sealed class JsonBaselineConstructionContexts
     }
 
     internal JsonBaselineConstructionContexts(IReadOnlyList<SyntaxNode> roots, IReadOnlyList<ShippingHashAssemblies.Project> projects,
-        string configuration)
+        string configuration, IReadOnlyList<Assembly>? shippingAssemblies = null)
     {
         this.configuration = configuration;
         snapshotRoots = roots;
         images = projects.ToDictionary(project => Path.GetFullPath(project.Path), project => project.AssemblyPath, StringComparer.Ordinal);
+        imageHashes = projects.ToDictionary(project => Path.GetFullPath(project.Path), project => project.ImageSha256, StringComparer.Ordinal);
+        var shippingByName = shippingAssemblies?.GroupBy(assembly => assembly.GetName().Name!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        bindings = shippingAssemblies is null ? new Dictionary<string, Assembly>() : projects.ToDictionary(project => Path.GetFullPath(project.Path), project =>
+        {
+            var candidates = shippingByName!.GetValueOrDefault(Path.GetFileNameWithoutExtension(project.AssemblyPath)) ?? [];
+            var matches = candidates.Where(assembly => ShippingHashAssemblies.MatchesImage(assembly, project.AssemblyPath)).ToArray();
+            return matches.Length == 1 ? matches[0] : throw new InvalidOperationException("A JSON construction owner has no unique authenticated shipping assembly: " + project.Path);
+        }, StringComparer.Ordinal);
         parseOptions = projects.ToDictionary(project => Path.GetFullPath(project.Path), project => ReadParseOptions(project.AssemblyPath), StringComparer.Ordinal);
         var folders = projects.Select(project => (Project: Path.GetFullPath(project.Path), Folder: Path.GetDirectoryName(Path.GetFullPath(project.Path))! + Path.DirectorySeparatorChar))
             .OrderByDescending(project => project.Folder.Length).ToArray();
@@ -141,7 +155,8 @@ internal sealed class JsonBaselineConstructionContexts
                 Path.GetFileNameWithoutExtension(project) + ".GlobalUsings.g.cs");
             // This is the SDK's actual per-project generated source, not a guessed ambient import set.
             if (File.Exists(globals)) trees.Add(CSharpSyntaxTree.ParseText(File.ReadAllText(globals), parseOptions[project], path: globals));
-            compilation = CSharpCompilation.Create(Path.GetFileNameWithoutExtension(image), trees, References(image),
+            compilation = CSharpCompilation.Create(Path.GetFileNameWithoutExtension(image), trees,
+                References(image, bindings.GetValueOrDefault(project), imageHashes[project]),
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true,
                     nullableContextOptions: NullableContextOptions.Enable));
             compilations.Add(project, compilation);
@@ -227,54 +242,123 @@ internal sealed class JsonBaselineConstructionContexts
             .Where(Path.IsPathRooted).Select(Path.GetFullPath).ToHashSet(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
     }
 
-    private static IReadOnlyList<MetadataReference> References(string image)
+    private IReadOnlyList<MetadataReference> References(string image, Assembly? owner, string? ownerSha256)
     {
         var platform = (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string trusted
             ? trusted.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries) : [typeof(object).Assembly.Location])
             .Where(File.Exists).ToArray();
         var frameworkFolders = new[] { typeof(object).Assembly.Location, typeof(Microsoft.AspNetCore.Builder.WebApplication).Assembly.Location }
             .Select(path => Path.GetDirectoryName(path)!).ToHashSet(StringComparer.Ordinal);
-        var references = PlatformReferences(platform.Where(path => frameworkFolders.Contains(Path.GetDirectoryName(path)!)));
+        frameworkPaths ??= PlatformReferences(platform.Where(path => frameworkFolders.Contains(Path.GetDirectoryName(path)!)));
+        foreach (var (name, path) in frameworkPaths)
+            if (!frameworkReferences.ContainsKey(name)) frameworkReferences.Add(name, MetadataReference.CreateFromFile(path));
+        var references = new Dictionary<string, MetadataReference>(frameworkReferences, StringComparer.Ordinal);
+        var selectedImages = new Dictionary<string, ReferenceImage>(StringComparer.Ordinal);
         var resolver = new AssemblyDependencyResolver(image);
-        var pending = new Queue<string>();
-        var inspected = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Queue<(ReferenceImage Image, Assembly? Binding)>();
+        var inspected = new HashSet<(string Path, AssemblyLoadContext? Context)>();
         var output = Path.GetDirectoryName(image)!;
-        foreach (var file in Directory.EnumerateFiles(output, "*.dll"))
+        var own = Reference(image, owner);
+        if (ownerSha256 is not null && own.Sha256 != ownerSha256)
+            throw new InvalidOperationException("A JSON construction owner differs from its shipping image witness: " + image);
+        pending.Enqueue((own, owner));
+        while (pending.TryDequeue(out var current))
         {
-            try
+            if (!inspected.Add((current.Image.Path, current.Binding is { } loaded ? AssemblyLoadContext.GetLoadContext(loaded) : null))) continue;
+            foreach (var requested in current.Image.Dependencies)
             {
-                var name = AssemblyName.GetAssemblyName(file).Name!;
-                if (name != Path.GetFileNameWithoutExtension(image)) references[name] = file;
-            }
-            catch (BadImageFormatException) { } // Native dependencies carry no C# signatures.
-        }
-        pending.Enqueue(image);
-        while (pending.TryDequeue(out var file))
-        {
-            if (!inspected.Add(file)) continue;
-            using var stream = File.OpenRead(file);
-            using var pe = new PEReader(stream);
-            var reader = pe.GetMetadataReader();
-            foreach (var handle in reader.AssemblyReferences)
-            {
-                var dependency = reader.GetAssemblyReference(handle);
-                var name = reader.GetString(dependency.Name);
-                if (name == Path.GetFileNameWithoutExtension(image)) continue;
-                if (references.TryGetValue(name, out var existing))
+                var name = requested.Name!;
+                if (name == own.Name.Name || frameworkReferences.ContainsKey(name)) continue;
+                Assembly? binding = null;
+                string? path;
+                if (current.Binding is not null)
                 {
-                    if (!frameworkFolders.Contains(Path.GetDirectoryName(existing)!)) pending.Enqueue(existing);
-                    continue;
+                    // Studio has a private ABI. Use the actual requesting assembly's context,
+                    // including shared backend contracts, rather than the testhost's closure.
+                    try
+                    {
+                        var context = AssemblyLoadContext.GetLoadContext(current.Binding)
+                            ?? throw new InvalidOperationException("A JSON construction owner has no load context: " + current.Binding.FullName);
+                        binding = context.LoadFromAssemblyName(requested);
+                    }
+                    catch (Exception error) when (error is FileNotFoundException or FileLoadException or BadImageFormatException)
+                    {
+                        throw new InvalidOperationException($"JSON construction context cannot bind {requested.FullName} for {current.Image.Path}.", error);
+                    }
+                    if (binding.IsDynamic) throw new InvalidOperationException("A JSON construction dependency has no file witness: " + binding.FullName);
+                    path = binding.Location;
                 }
-                var selected = resolver.ResolveAssemblyToPath(new AssemblyName(name) { Version = dependency.Version });
-                if (selected is null)
-                    throw new InvalidOperationException($"JSON construction target dependency is unresolved for {image}: {name}, {dependency.Version}");
-                references.Add(name, selected);
-                pending.Enqueue(selected);
+                else
+                {
+                    // Synthetic controls have no shipping ALC. Their explicit output/deps
+                    // closure remains supported, without borrowing arbitrary host assemblies.
+                    var copy = Path.Join(output, name + ".dll");
+                    path = File.Exists(copy) ? copy : resolver.ResolveAssemblyToPath(requested);
+                }
+                if (string.IsNullOrWhiteSpace(path))
+                    throw new InvalidOperationException($"JSON construction target dependency is unresolved for {image}: {requested.FullName}");
+                var selected = Reference(path, binding, requested);
+                if (selectedImages.TryGetValue(name, out var previous))
+                {
+                    if (!SameIdentity(previous.Name, selected.Name) || previous.Sha256 != selected.Sha256)
+                        throw new InvalidOperationException($"JSON construction dependency has incompatible context images for {name}: {previous.Path}, {selected.Path}");
+                }
+                else
+                {
+                    selectedImages.Add(name, selected);
+                    references.Add(name, selected.Metadata);
+                }
+                pending.Enqueue((selected, binding));
             }
         }
         return references.OrderBy(pair => pair.Key, StringComparer.Ordinal)
-            .Select(pair => (MetadataReference)MetadataReference.CreateFromFile(pair.Value)).ToArray();
+            .Select(pair => pair.Value).ToArray();
     }
+
+    private sealed record ReferenceImage(string Path, AssemblyName Name, Guid Mvid, string Sha256,
+        MetadataReference Metadata, IReadOnlyList<AssemblyName> Dependencies);
+
+    private ReferenceImage Reference(string path, Assembly? binding, AssemblyName? requested = null)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            throw new InvalidOperationException("A JSON construction binding has no file witness: " + (binding?.FullName ?? path));
+        path = Path.GetFullPath(path);
+        if (!referenceImages.TryGetValue(path, out var selected))
+        {
+            var bytes = File.ReadAllBytes(path);
+            using var pe = new PEReader(new MemoryStream(bytes, writable: false));
+            var reader = pe.GetMetadataReader();
+            var definition = reader.GetAssemblyDefinition();
+            var name = Identity(reader, definition.Name, definition.Version, definition.Culture, definition.PublicKey, publicKey: true);
+            selected = new(path, name, reader.GetGuid(reader.GetModuleDefinition().Mvid), Convert.ToHexStringLower(SHA256.HashData(bytes)),
+                MetadataReference.CreateFromImage(bytes, filePath: path), reader.AssemblyReferences.Select(handle =>
+                {
+                    var dependency = reader.GetAssemblyReference(handle);
+                    return Identity(reader, dependency.Name, dependency.Version, dependency.Culture, dependency.PublicKeyOrToken,
+                        (dependency.Flags & AssemblyFlags.PublicKey) != 0);
+                }).ToArray());
+            referenceImages.Add(path, selected);
+        }
+        if (requested is not null && !SameIdentity(selected.Name, requested))
+            throw new InvalidOperationException($"JSON construction dependency identity differs: requested {requested.FullName}, selected {selected.Name.FullName} at {path}.");
+        if (binding is not null && (binding.IsDynamic || !SameIdentity(selected.Name, binding.GetName()) || selected.Mvid != binding.ManifestModule.ModuleVersionId))
+            throw new InvalidOperationException("A JSON construction metadata file differs from its actual loaded binding: " + path);
+        return selected;
+    }
+
+    private static AssemblyName Identity(MetadataReader reader, StringHandle name, Version version, StringHandle culture,
+        BlobHandle key, bool publicKey)
+    {
+        var identity = new AssemblyName(reader.GetString(name)) { Version = version, CultureName = culture.IsNil ? "" : reader.GetString(culture) };
+        var bytes = reader.GetBlobBytes(key);
+        if (publicKey && bytes.Length != 0) identity.SetPublicKey(bytes);
+        else identity.SetPublicKeyToken(bytes);
+        return identity;
+    }
+
+    private static bool SameIdentity(AssemblyName left, AssemblyName right) => left.Name == right.Name && left.Version == right.Version &&
+        string.Equals(left.CultureName ?? "", right.CultureName ?? "", StringComparison.OrdinalIgnoreCase) && left.ContentType == right.ContentType &&
+        (left.GetPublicKeyToken() ?? []).AsSpan().SequenceEqual(right.GetPublicKeyToken() ?? []);
 
     internal static Dictionary<string, string> PlatformReferences(IEnumerable<string> paths)
     {
