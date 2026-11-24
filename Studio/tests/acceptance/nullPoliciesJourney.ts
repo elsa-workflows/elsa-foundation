@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 type Member = { referenceKey: string; name: string; type: { alias: string }; isRequired: boolean; default: { syntax: string; value: unknown } | null };
@@ -12,6 +12,8 @@ type Node = Record<string, unknown> & { nodeId: string };
 export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: Capture, registerWorkflow: (id: string) => void) {
   const backend = process.env.ELSA_WORKBENCH_URL!;
   const proof: Record<string, unknown> = { sourceSha: process.env.UX_SOURCE_SHA, project: info.project.name, cases: [] };
+  const keyboardActions: string[] = [];
+  proof.keyboardActions = keyboardActions;
   const requests: { url: string; body: unknown }[] = [];
   page.on("request", request => {
     if (request.method() === "POST" && request.url().endsWith("/test-runs")) requests.push({ url: request.url(), body: request.postDataJSON() });
@@ -58,20 +60,32 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
   const row = () => page.locator('[data-contract-row-kind="input"][data-contract-reference-key="note"]');
   const required = () => row().locator('[data-contract-field="isRequired"]');
   const views = () => page.getByRole("tablist", { name: "Activity Definition authoring views" });
+  async function activate(control: Locator, name: string) {
+    await expect(control).toBeEnabled(); await control.focus(); await expect(control).toBeFocused(); await page.keyboard.press("Enter");
+    keyboardActions.push(`Enter: ${name}`);
+  }
+  async function selectWithKeyboard(control: Locator, value: string) {
+    const options = await control.locator("option:not([disabled])").evaluateAll(items => items.map(item => (item as HTMLOptionElement).value));
+    expect(options).toContain(value);
+    await expect(control).toBeEnabled(); await control.focus(); await page.keyboard.press("Home");
+    for (let index = 0; index < options.indexOf(value); index++) await page.keyboard.press("ArrowDown");
+    await expect(control).toHaveValue(value);
+    keyboardActions.push(`Home/ArrowDown: ${value}`);
+  }
   async function inputs() {
-    await views().getByRole("tab", { name: /^Inputs/ }).click();
+    await activate(views().getByRole("tab", { name: /^Inputs/ }), "Inputs tab");
     const toggle = row().locator('[data-member-reference-key="note"]');
-    if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+    if (await toggle.getAttribute("aria-expanded") !== "true") await activate(toggle, "Expand Note");
     await row().scrollIntoViewIfNeeded();
   }
   async function chooseDefault(value: string) {
     const control = page.getByRole("combobox", { name: "Default", exact: true });
-    await control.focus();
-    await control.selectOption(value);
+    await selectWithKeyboard(control, value);
   }
   async function apply() {
     const button = page.getByRole("button", { name: "Apply default", exact: true });
-    await button.focus(); await page.keyboard.press("Enter");
+    await expect(button).toBeEnabled(); await page.keyboard.press("Tab"); await expect(button).toBeFocused(); await page.keyboard.press("Enter");
+    keyboardActions.push("Tab to Apply default; Enter");
   }
   try {
     await page.goto(activityRoute); await inputs();
@@ -80,7 +94,9 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     await capture(page, info, "reference");
     await chooseDefault("literal");
     const value = page.getByRole("textbox", { name: "Value", exact: true });
-    await value.focus(); await page.keyboard.type("saved default"); await apply();
+    await page.keyboard.press("Tab"); await expect(value).toBeFocused();
+    keyboardActions.push("Tab from Default to Value");
+    await page.keyboard.type("saved default"); await apply();
     await expect.poll(async () => (await note()).default?.value).toBe("saved default");
     await expect(required()).not.toBeChecked(); await expect(required()).toBeDisabled();
     await expect(page.getByText("A member with a default is optional", { exact: true })).toBeVisible();
@@ -94,7 +110,7 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     await page.reload(); await inputs();
     await expect(required()).toBeChecked(); await expect(required()).toBeDisabled();
     const recover = page.getByRole("button", { name: "Make optional", exact: true });
-    await recover.focus(); await page.keyboard.press("Enter");
+    await activate(recover, "Make optional");
     await expect.poll(async () => (await note()).isRequired).toBe(false);
     expect((await note()).default?.value).toBe("saved default");
     await capture(page, info, "contract-recovery");
@@ -102,23 +118,27 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     await expect(required()).toBeEnabled(); await required().focus(); await page.keyboard.press("Space");
     await expect.poll(async () => (await note()).isRequired).toBe(true);
     // A local candidate is cancelled by restoring No default, without applying it.
-    await chooseDefault("literal"); await value.fill("not saved"); await chooseDefault("none");
+    await chooseDefault("literal"); await page.keyboard.press("Tab"); await expect(value).toBeFocused();
+    await page.keyboard.type("not saved"); await page.keyboard.press("Shift+Tab");
+    await expect(page.getByRole("combobox", { name: "Default", exact: true })).toBeFocused();
+    keyboardActions.push("Tab to Value; Shift+Tab to Default; cancel without applying");
+    await chooseDefault("none");
     expect((await note()).default).toBeNull();
     await expect(page.getByRole("combobox", { name: "Default", exact: true })).toBeFocused();
     await capture(page, info, "contract-required");
 
-    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Open Test Run");
     const dialog = page.getByRole("dialog");
     const runTest = dialog.getByRole("button", { name: "Run test", exact: true });
     await expect(runTest).toBeEnabled(); const beforeActivity = requests.length;
-    await runTest.click(); await expect(dialog.getByRole("alert").filter({ hasText: "Note is required" })).toBeVisible();
+    await activate(runTest, "Run activity test"); await expect(dialog.getByRole("alert").filter({ hasText: "Note is required" })).toBeVisible();
     expect(requests.length).toBe(beforeActivity);
-    await dialog.getByRole("combobox", { name: "Note", exact: true }).selectOption("Null");
+    await selectWithKeyboard(dialog.getByRole("combobox", { name: "Note", exact: true }), "Null");
     await expect(dialog.getByRole("combobox", { name: "Count", exact: true }).locator('option[value="Null"]')).toBeDisabled();
     await capture(page, info, "activity-test-inputs");
-    await runTest.click(); await expect(dialog.getByRole("region", { name: "Test run result", exact: true })).toContainText("Completed", { timeout: 30_000 });
+    await activate(runTest, "Run activity test"); await expect(dialog.getByRole("region", { name: "Test run result", exact: true })).toContainText("Completed", { timeout: 30_000 });
     proof.activityTestRequest = requests.at(-1);
-    await dialog.getByRole("button", { name: "Close", exact: true }).first().click();
+    await activate(dialog.getByRole("button", { name: "Close", exact: true }).first(), "Close Test Run");
 
     // A type edit must persist and change the reopened test-drive contract.
     const countRow = () => page.locator('[data-contract-row-kind="input"][data-contract-reference-key="count"]');
@@ -126,21 +146,21 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     await expect.poll(async () => (await saved()).contract.inputs.find(member => member.referenceKey === "count")!.type.alias).toBe("String");
     await page.reload(); await inputs();
     await expect(countRow().locator('[data-contract-field="type.alias"]')).toHaveValue("String");
-    await page.getByRole("button", { name: "Test Run", exact: true }).click();
-    await dialog.getByRole("combobox", { name: "Note", exact: true }).selectOption("Null");
+    await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Open Test Run");
+    await selectWithKeyboard(dialog.getByRole("combobox", { name: "Note", exact: true }), "Null");
     const changedCount = dialog.getByRole("combobox", { name: "Count", exact: true });
-    await expect(changedCount.locator('option[value="Null"]')).toBeEnabled(); await changedCount.selectOption("Null");
+    await expect(changedCount.locator('option[value="Null"]')).toBeEnabled(); await selectWithKeyboard(changedCount, "Null");
     await capture(page, info, "contract-type-nullable");
-    await runTest.click(); await expect(dialog.getByRole("region", { name: "Test run result", exact: true })).toContainText("Completed", { timeout: 30_000 });
+    await activate(runTest, "Run activity test"); await expect(dialog.getByRole("region", { name: "Test run result", exact: true })).toContainText("Completed", { timeout: 30_000 });
     proof.changedTypeRequest = requests.at(-1);
-    await dialog.getByRole("button", { name: "Close", exact: true }).first().click();
+    await activate(dialog.getByRole("button", { name: "Close", exact: true }).first(), "Close Test Run");
     await countRow().locator('[data-contract-field="type.alias"]').selectOption("Int32");
     await expect.poll(async () => (await saved()).contract.inputs.find(member => member.referenceKey === "count")!.type.alias).toBe("Int32");
     await page.reload(); await inputs();
-    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Open Test Run");
     await expect(dialog.getByRole("combobox", { name: "Count", exact: true }).locator('option[value="Null"]')).toBeDisabled();
     await capture(page, info, "contract-type-nonnullable");
-    await dialog.getByRole("button", { name: "Close", exact: true }).first().click();
+    await activate(dialog.getByRole("button", { name: "Close", exact: true }).first(), "Close Test Run");
 
     const workflow = await api<{ definition: { id: string }; draft: { id: string } }>("/design/workflows/definitions", "POST", {
       name: `Null admission ${info.project.name} ${Date.now()}`, initialState: { variables: [], inputs: [
@@ -154,10 +174,10 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     expect(admissionDraft.state.rootActivity.nodeId).toBe("root");
     expect(admissionDraft.state.inputs.map(input => input.referenceKey)).toEqual(["topic", "count", "memo"]);
     await page.goto(`/workflows/definitions?definition=${workflow.definition.id}&section=editor&draft=${workflow.draft.id}`);
-    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Open Test Run");
     const start = page.getByRole("button", { name: "Start Test Run", exact: true });
     await expect(start).toBeEnabled(); const beforeWorkflow = requests.length;
-    await start.click(); await expect(page.getByRole("alert").filter({ hasText: "Topic is required" })).toBeVisible();
+    await activate(start, "Start workflow test run"); await expect(page.getByRole("alert").filter({ hasText: "Topic is required" })).toBeVisible();
     expect(requests.length).toBe(beforeWorkflow);
     await page.getByRole("button", { name: "Send null for Topic", exact: true }).focus(); await page.keyboard.press("Enter");
     await expect(page.getByRole("alert").filter({ hasText: "Topic is required" })).toHaveCount(0);
@@ -165,7 +185,7 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     await expect(page.getByRole("button", { name: "Send null for Count", exact: true })).toHaveCount(0);
     await capture(page, info, "workflow-test-inputs");
     const testResponse = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/test-runs"));
-    await start.click(); const tested = await testResponse;
+    await activate(start, "Start workflow test run"); const tested = await testResponse;
     expect(tested.ok(), await tested.text()).toBe(true);
     expect(tested.request().postDataJSON().inputs).toEqual({ topic: null });
     let testRun = await tested.json() as { testRunId: string; workflowExecutionId?: string };
@@ -186,7 +206,7 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     const metadataUrl = (url: URL) => url.pathname.endsWith(`/runtime/workflows/executables/${published.artifactId}`);
     await page.route(metadataUrl, async route => { await metadataGate; await route.abort("failed"); });
     const heldMetadata = page.waitForRequest(request => request.method() === "GET" && metadataUrl(new URL(request.url())));
-    await page.getByRole("button", { name: "Run", exact: true }).click(); await heldMetadata;
+    await activate(page.getByRole("button", { name: "Run", exact: true }), "Open published Run"); await heldMetadata;
     await expect(page.getByRole("dialog", { name: "Run workflow", exact: true })).toHaveCount(0);
     await capture(page, info, "published-metadata-loading");
     releaseMetadata(); await expect(page.getByRole("heading", { name: "The executable could not be run", exact: true })).toBeVisible();
@@ -195,12 +215,12 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     const runCases: unknown[] = [];
     for (const memo of [null, "null", ""]) {
       await page.goto(`/workflows/executables/${published.artifactId}?ref=${encodeURIComponent(published.sourceReferenceId)}`);
-      await page.getByRole("button", { name: "Run", exact: true }).click();
+      await activate(page.getByRole("button", { name: "Run", exact: true }), "Open published Run");
       await expect(page.getByRole("dialog", { name: "Run workflow", exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Send null for Topic", exact: true }).click();
-      await page.getByRole("button", { name: "Send null for Memo", exact: true }).click();
-      await page.getByRole("button", { name: "Omit for Memo", exact: true }).click();
-      if (memo === null) await page.getByRole("button", { name: "Send null for Memo", exact: true }).click();
+      await activate(page.getByRole("button", { name: "Send null for Topic", exact: true }), "Send null for Topic");
+      await activate(page.getByRole("button", { name: "Send null for Memo", exact: true }), "Send null for Memo");
+      await activate(page.getByRole("button", { name: "Omit for Memo", exact: true }), "Omit for Memo");
+      if (memo === null) await activate(page.getByRole("button", { name: "Send null for Memo", exact: true }), "Send null for Memo");
       else {
         const field = page.getByRole("textbox", { name: "Memo", exact: true });
         await field.focus();
@@ -211,7 +231,7 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
       }
       if (memo === null) await capture(page, info, "published-run-inputs");
       const response = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith(`/runtime/workflows/executables/${published.artifactId}/execute`));
-      await page.getByRole("button", { name: "Run workflow", exact: true }).click();
+      await activate(page.getByRole("button", { name: "Run workflow", exact: true }), "Run published workflow");
       const admitted = await response; expect(admitted.ok(), await admitted.text()).toBe(true);
       expect(admitted.request().postDataJSON().inputs).toEqual({ topic: null, memo });
       const started = await admitted.json() as { workflowExecutionId: string };
