@@ -348,7 +348,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 - Spec 1240 decides whether workflow variables, inputs and outputs can use a registered storage driver and how
   the converter carries Elsa 3 drivers over. Case 17 follows it: if spec 1240 is not approved, case 17 stays
   *redesign* and its sample task is dropped. Spec 1240 removes the converter's unmapped-storage-driver codes, so a
-  missing driver is then reported at publication instead; the case 17 port path needs spec 1237's report to treat
-  that publication code as a storage-driver component (driver key as its name) whose remedy is building a
-  component, so storage drivers keep reaching the inventory and the plan.
+  missing driver is then reported at publication instead; spec 1237's report treats that finding as a
+  storage-driver component (driver key as its name) whose remedy is building a component, so storage drivers keep
+  reaching the inventory and the plan.
 - The sample is never packed or published.
