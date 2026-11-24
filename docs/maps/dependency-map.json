@@ -15160,6 +15160,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.ActorFoundation.Contracts",
+          "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.ActorFoundation.Hosting",
           "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj"
         },
