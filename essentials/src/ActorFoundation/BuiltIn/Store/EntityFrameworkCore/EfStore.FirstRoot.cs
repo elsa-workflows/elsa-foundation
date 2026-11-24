@@ -137,8 +137,8 @@ public sealed partial class EfStore
                 IF TG_OP = 'UPDATE' AND NEW."FoundationWriteRevision" = OLD."Revision" + 1
                     AND NEW."Revision" = NEW."FoundationWriteRevision"
                     AND NEW."FoundationReference" = OLD."FoundationReference" AND NEW."FoundationTenant" = OLD."FoundationTenant"
-                    AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired"
-                    AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR /*root-park-continues*/ OR
+                    AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired" /*root-park-generation*/
+                    AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR /*root-park-continues*/ OR /*root-park-recover*/ OR
                         (/*root-retirement*/ AND NEW."Retired" AND NEW."State" = 'null' AND NEW."FoundationHeader" IS NULL /*root-retirement-wire*/
                             AND ((OLD."Status" <> 0 AND NEW."Status" = OLD."Status"
                                 AND NEW."FoundationTerminalRevision" = OLD."FoundationTerminalRevision"
@@ -175,8 +175,24 @@ public sealed partial class EfStore
                 """ : "false", StringComparison.Ordinal)
             .Replace("/*root-park-journal*/", db.UsesRootParkArrivals ? """
                 (i."Status" = 2 AND NOT i."Retired" AND NEW."Partition" = i."Partition" AND NEW."Revision" = i."Revision" + 1
-                    AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0 AND NEW."Entries" = '["parked"]')
+                    AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0
+                    AND (NEW."Entries" = '["parked"]' /*root-park-recover-journal*/))
                 """ : "false", StringComparison.Ordinal)
+            // Only a recover leaves Faulted for Running. It clears the Park mark and moves the release generation by one.
+            .Replace("/*root-park-generation*/", db.UsesRootParkRecovery ? """
+                AND (NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" OR (OLD."Status" = 2 AND NEW."Status" = 0
+                    AND NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" + 1))
+                """ : "", StringComparison.Ordinal)
+            .Replace("/*root-park-recover*/", db.UsesRootParkRecovery ? """
+                (OLD."Status" = 2 AND NEW."Status" = 0 AND NOT NEW."Retired" AND NOT OLD."Suspended" AND NOT NEW."Suspended"
+                    AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
+                    AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL AND NEW."Fault" IS NULL
+                    AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
+                    AND NEW."History" IS NOT DISTINCT FROM OLD."History")
+                """ : "false", StringComparison.Ordinal)
+            .Replace("/*root-park-recover-journal*/", db.UsesRootParkRecovery
+                // The raw command is formatted, so the literal brace is doubled.
+                ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'""" : "", StringComparison.Ordinal)
             .Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)

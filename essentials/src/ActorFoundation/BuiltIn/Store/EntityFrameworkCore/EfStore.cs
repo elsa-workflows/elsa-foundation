@@ -788,9 +788,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (root.Discover)
             {
                 var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
-                return ToGeneratedPoll(page, root, db);
+                return await WithRootParkFactsAsync(db, ToGeneratedPoll(page, root, db), cancellationToken);
             }
-            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db);
+            return await WithRootParkFactsAsync(db, ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db), cancellationToken);
         }
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
     }
@@ -807,7 +807,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
                  WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired"
-                   {(db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL""" : "")})))
+                   {(db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL""" : "")}
+                   {(db.UsesRootParkRecovery ? RootReleasedCohortFilter : "")})))
             """;
     // Commands are exposed only when database time makes them due. On a suspended root the
     // first due command can pass withheld ordinary inputs. Running roots first clear their ready FIFO prefix.

@@ -127,6 +127,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                     : """ "FoundationKeptBy" = 0 """, StringComparison.Ordinal), cancellationToken);
         if (db.UsesRootParkArrivals)
             await EfStore.InstallRootParkArrivalReasonAsync(db, cancellationToken);
+        if (db.UsesRootParkRecovery)
+            await EfStore.InstallRootParkRecoveryAsync(db, cancellationToken);
         if (db.UsesRootValueProtocol)
             await EfStore.InstallRootValuesAsync(db, cancellationToken);
         await EfStore.InstallRootActorListAsync(db, cancellationToken);

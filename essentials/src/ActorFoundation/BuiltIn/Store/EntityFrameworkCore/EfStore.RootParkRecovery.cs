@@ -1,0 +1,198 @@
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.EntityFrameworkCore;
+
+namespace Kernel.EntityFramework;
+
+public sealed partial class EfStore
+{
+    // Protocol 22 resolves a qualified root's Park in one page with Recover (Resume). A released row carries the
+    // generation of the recover that restored it, and the root's current generation names the cohort that goes first.
+    internal static Task InstallRootParkRecoveryAsync(KernelDb db, CancellationToken token) =>
+        db.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkGeneration" bigint NOT NULL DEFAULT 0
+                CHECK ("FoundationParkGeneration" >= 0);
+            ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "FoundationReleasedBy" bigint
+                CHECK ("FoundationReleasedBy" IS NULL OR ("FoundationReleasedBy" > 0 AND "InboxScope" = -4));
+            CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_Released" ON "Messages" ("Partition", "Target", "FoundationReleasedBy", "Seq")
+                WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationReleasedBy" IS NOT NULL;
+            """, token);
+
+    // While released rows of the current generation are pending, the poll offers only them, in Seq order.
+    private const string RootReleasedCohortFilter = """
+        AND NOT EXISTS (SELECT 1 FROM "Messages" c WHERE c."Partition" = m."Partition" AND c."Target" = m."Target"
+            AND c."InboxScope" = -4 AND c."EventMatch" IS NULL AND NOT c."Done" AND c."FoundationReleasedBy" = i."FoundationParkGeneration"
+            AND m."FoundationReleasedBy" IS DISTINCT FROM i."FoundationParkGeneration")
+        """;
+
+    // The kept envelope digest: the fields a restore keeps, read the same way when polled and when bound.
+    private const string KeptDigest = """
+        encode(sha256(convert_to(ROW(k."Seq", k."Kind", k."Start", k."Payload", k."Due", k."ReplyTo", k."KeepUntil", k."FoundationKeptBy")::text, 'UTF8')), 'hex')
+        """;
+
+    private sealed record KeptRow(string Id, short KeptBy, string Digest, long Bytes);
+
+    private sealed record ParkMarkRow(long? At, long? Revision);
+
+    private static Task<List<KeptRow>> ReadKeptAsync(KernelDb db, string actor, int partition, bool lockRows, CancellationToken token) =>
+        db.Database.SqlQueryRaw<KeptRow>($"""
+            SELECT k."Id", k."FoundationKeptBy" AS "KeptBy", {KeptDigest} AS "Digest", coalesce(octet_length(k."Payload"), 0)::bigint AS "Bytes"
+            FROM "Messages" k WHERE k."Target" = {"{0}"} AND k."Partition" = {"{1}"}
+                AND k."InboxScope" = -4 AND k."EventMatch" IS NULL AND k."Done" AND k."FoundationKeptBy" IS NOT NULL
+            ORDER BY k."Seq", k."Id" COLLATE "C" {(lockRows ? "FOR UPDATE" : "")}
+            """, actor, partition).ToListAsync(token);
+
+    private static string KeptSetDigest(IEnumerable<KeptRow> kept) => Convert.ToHexString(SHA256.HashData(
+        Encoding.UTF8.GetBytes(string.Join('\n', kept.Select(row => row.Id + " " + row.Digest)))));
+
+    // A recover is decided on the Park facts read with it, and the bind refuses the commit when the kept set has changed since.
+    private async Task<Polled> WithRootParkFactsAsync(KernelDb db, Polled polled, CancellationToken token)
+    {
+        if (!db.UsesRootParkRecovery || !polled.Messages.Any(item => item.Message.Operator?.RootParkMark is not null)) return polled;
+        var messages = new List<Stored>(polled.Messages.Count);
+        foreach (var item in polled.Messages)
+        {
+            if (item.Message is not { Operator: { RootParkMark: not null } command } message)
+            {
+                messages.Add(item);
+                continue;
+            }
+            var park = await db.Database.SqlQuery<ParkMarkRow>($"""
+                SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision" FROM "Instances"
+                WHERE "Id" = {message.Target.Id} AND "Partition" = {message.Target.Partition} AND NOT "Retired"
+                """).SingleOrDefaultAsync(token);
+            var kept = await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token);
+            var bytes = kept.Sum(row => row.Bytes) + kept.Count * ParkRecoveryCredit.StoredBytes(0);
+            var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
+                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived), kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
+                kept.Count <= InMemoryStore.ParkPageLimit && bytes <= ParkRecoveryCredit.LimitBytes, KeptSetDigest(kept));
+            messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
+        }
+        return polled with { Messages = messages };
+    }
+
+    private async Task<PreparedRoot?> PrepareRootParkRecoverAsync(WorkerRoot root, TurnCommit turn, CancellationToken token)
+    {
+        var command = turn.FoundationRootOperator!;
+        if (turn.Row is not { FoundationDispatchHeader: { } header } row || turn.Expected is not { } expected || turn.Journal is null ||
+            command.Operator is not { RootParkMark: { } mark, RootParkFacts: { } facts } || turn.Done is not [var key] ||
+            key != command.InboxKey || !root.Owns(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
+            turn.Consumed.Count + turn.Sent.Count + turn.Subscribed.Count + turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
+            turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
+                turn.Journal, Held: turn.Held) { FoundationRootOperator = command })
+            throw RootShape();
+        var recovered = !turn.Journal.StartsWith("""{"Outcome":"refused",""", StringComparison.Ordinal);
+        if (recovered ? row.Status != InstanceStatus.Running || facts.Mark != mark || !facts.FitsPage || turn.Journal != Json.Write(
+                new { Outcome = "recovered", Operation = command.Id, Restored = facts.Arrived, Cleared = facts.Consumed, AlreadyRearmed = 0 })
+            : !new[] { "selection", "plan", "page" }.Any(reason => turn.Journal == Json.Write(new { Outcome = "refused", Operation = command.Id, Reason = reason })))
+            throw RootShape();
+
+        var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
+        if (current?.Revision != expected || current.Suspended ||
+            current.Status != (recovered ? InstanceStatus.Faulted : row.Status)) return null;
+        var next = WorkerRow(root, current) with
+        {
+            Status = row.Status, Revision = checked(expected + 1), Fault = recovered ? null : current.Fault, FoundationDispatchHeader = header
+        };
+        if (row != next || header.Tenant != root.Tenant || header.Reference != root.Reference ||
+            header.Header.TypeData != current.TypeData || header.Header.Labels.Count != current.Labels.Count ||
+            current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))
+            throw RootShape();
+        return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal),
+            new RootParkRecover(root, expected, command, recovered, current.Status));
+    }
+
+    private sealed record LockedRecover(long? At, long? Revision, long Generation, string? Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
+
+    // One fenced commit: the root becomes Running with its Park mark cleared, the arrivals return to the inbox as the
+    // next generation's cohort, and the fault input stays settled. A refusal moves only the revision and settles the command.
+    private sealed record RootParkRecover(WorkerRoot Root, long Expected, Message Command, bool Recovered, InstanceStatus Prior)
+        : QualifiedRootCheckpoint(checked(Expected + 1))
+    {
+        internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
+        {
+            if (!db.UsesRootParkRecovery) return false;
+            var locked = await db.Database.SqlQuery<LockedRecover>($"""
+                SELECT i."FoundationParkAt" AS "At", i."FoundationParkRevision" AS "Revision", i."FoundationParkGeneration" AS "Generation",
+                    i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
+                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion"
+                FROM "Instances" i JOIN "FoundationRootBirths" b
+                    ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
+                    AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
+                WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND NOT i."Suspended"
+                    AND i."Status" = {(int)Prior} AND i."Revision" = {Expected}
+                    AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
+                FOR UPDATE OF i
+                """).ToListAsync(token);
+            var facts = Command.Operator!.RootParkFacts!;
+            if (locked is not [var prior] || (prior.At is null) != (Prior == InstanceStatus.Running)) return false;
+            var kept = Recovered ? await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token) : [];
+            if (Recovered && (facts.Mark != new FoundationParkMark(prior.Revision ?? 0, prior.At ?? 0) || KeptSetDigest(kept) != facts.KeptDigest))
+                return false;
+            var envelope = Command with { Operator = Command.Operator with { RootParkFacts = null } };
+            if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [envelope], null, false, token))
+                return false;
+
+            var generation = Recovered ? checked(prior.Generation + 1) : prior.Generation;
+            if (await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
+                    "Status" = CASE WHEN {Recovered} THEN {(int)InstanceStatus.Running} ELSE "Status" END,
+                    "Fault" = CASE WHEN {Recovered} THEN NULL ELSE "Fault" END,
+                    "FoundationParkAt" = CASE WHEN {Recovered} THEN NULL ELSE "FoundationParkAt" END,
+                    "FoundationParkRevision" = CASE WHEN {Recovered} THEN NULL ELSE "FoundationParkRevision" END,
+                    "FoundationParkGeneration" = {generation}
+                WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
+                """, token) != 1) return false;
+
+            var arrived = kept.Where(row => row.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
+            var cleared = kept.Where(row => row.KeptBy == (short)ParkKeepReason.Consumed).Select(row => row.Id).ToArray();
+            if (arrived.Length + cleared.Length != kept.Count) return false;
+            var restoredIds = arrived.Select(row => row.Id).ToArray();
+            if (Recovered && !await RestoreAsync()) return false;
+            long? at = Recovered ? null : prior.At, revision = Recovered ? null : prior.Revision;
+            var fault = Recovered ? null : prior.Fault;
+            var status = Recovered ? InstanceStatus.Running : Prior;
+            return await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
+                        AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision} AND "Status" = {(int)status}
+                        AND "Fault" IS NOT DISTINCT FROM {fault}::text AND "FoundationParkAt" IS NOT DISTINCT FROM {at}::bigint
+                        AND "FoundationParkRevision" IS NOT DISTINCT FROM {revision}::bigint AND "FoundationParkGeneration" = {generation}
+                        AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
+                        AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest})
+                    AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({cleared}) AND "Target" = {Root.Actor}
+                        AND "Partition" = {Root.Partition} AND "InboxScope" = -4 AND "Done" AND "FoundationKeptBy" IS NULL
+                        AND "Payload" IS NULL AND "Start" IS NULL) = {cleared.Length}
+                    AND NOT ({Recovered} AND EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {Root.Actor}
+                        AND "Partition" = {Root.Partition} AND "InboxScope" = -4 AND "FoundationKeptBy" IS NOT NULL))
+                    AND EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference}
+                        AND "Status" = {(int)status} AND "ParkAt" IS NOT DISTINCT FROM {at}::bigint
+                        AND "ParkFault" IS NOT DISTINCT FROM {fault}::text AND "ParkRevision" IS NOT DISTINCT FROM {revision}::bigint)
+                AS "Value"
+                """).SingleAsync(token);
+
+            async Task<bool> RestoreAsync()
+            {
+                if (await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Done" = false, "FoundationKeptBy" = NULL, "Seen" = 0, "Trial" = 0, "Attempts" = 0,
+                        "FoundationReleasedBy" = {generation}
+                    WHERE "Id" = ANY({restoredIds}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
+                        AND "InboxScope" = -4 AND "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Arrived}
+                    """, token) != restoredIds.Length) return false;
+                if (await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "FoundationKeptBy" = NULL, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL
+                    WHERE "Id" = ANY({cleared}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
+                        AND "InboxScope" = -4 AND "EventMatch" IS NULL AND "Done" AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
+                    """, token) != cleared.Length) return false;
+                // A restored envelope keeps its kept digest once the cleared kept reason is put back in.
+                var digests = await db.Database.SqlQueryRaw<string>($"""
+                    SELECT {KeptDigest.Replace("k.\"FoundationKeptBy\"", $"{(short)ParkKeepReason.Arrived}::smallint", StringComparison.Ordinal)} AS "Value"
+                    FROM "Messages" k WHERE k."Id" = ANY({"{0}"}) AND k."Target" = {"{1}"} AND k."Partition" = {"{2}"}
+                        AND k."InboxScope" = -4 AND k."EventMatch" IS NULL AND NOT k."Done" AND k."FoundationKeptBy" IS NULL
+                        AND k."FoundationReleasedBy" = {"{3}"} AND k."Seen" = 0 AND k."Trial" = 0 AND k."Attempts" = 0
+                    ORDER BY k."Seq", k."Id" COLLATE "C"
+                    """, restoredIds, Root.Actor, Root.Partition, generation).ToListAsync(token);
+                return digests.SequenceEqual(arrived.Select(row => row.Digest));
+            }
+        }
+    }
+}
