@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Http.Core.Models;
 using Elsa.Http.Core.Contracts;
 using Elsa.Serialization.Core;
@@ -12,6 +13,29 @@ namespace Elsa.Http.Tests;
 
 public sealed class JsonHttpContentParserTests
 {
+    [Theory]
+    [InlineData(typeof(JsonObject), "{\"key\":1}")]
+    [InlineData(typeof(JsonArray), "[1,null]")]
+    [InlineData(typeof(JsonValue), "42")]
+    [InlineData(typeof(JsonNode), "{\"key\":1}")]
+    [InlineData(typeof(JsonNode), "[1,null]")]
+    public async Task Explicit_mutable_JSON_targets_follow_the_requested_type(Type target, string raw)
+    {
+        var parsed = await Parser().ReadAsync(Context(raw, target));
+        Assert.True(target.IsInstanceOfType(parsed), $"Expected {target}, received {parsed?.GetType()}.");
+    }
+
+    [Theory]
+    [InlineData(typeof(JsonObject), "[]")]
+    [InlineData(typeof(JsonArray), "{}")]
+    [InlineData(typeof(JsonValue), "{}")]
+    public async Task Explicit_mutable_JSON_targets_refuse_incompatible_shapes(Type target, string raw) =>
+        await Assert.ThrowsAsync<JsonException>(() => Parser().ReadAsync(Context(raw, target)));
+
+    [Fact]
+    public async Task Explicit_mutable_JSON_null_keeps_its_existing_null_result() =>
+        Assert.Null(await Parser().ReadAsync(Context("null", typeof(JsonObject))));
+
     [Theory]
     [InlineData("{ \"UpperKey\":\"Ren\\u00e9<+>\", \"n\":1.0, \"wide\":12345678901234567890123456789012345, \"x\":null }")]
     [InlineData("[ 1e0, null, { \"CaseKey\":\"\\u0061\" } ]")]
