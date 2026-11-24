@@ -116,7 +116,7 @@ public sealed class ActivityInputHydrator
                 {
                     var warning = Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{input.Key}");
                     var policy = envelope.Policy;
-                    warnings?.Report(policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode)
+                    warnings?.Report(policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) || !string.IsNullOrWhiteSpace(policy.RetentionPolicy)
                         ? warning.ProtectedForm! : warning);
                 });
         }

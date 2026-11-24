@@ -16,6 +16,34 @@ public sealed partial class StepVariableSessionUnitTests
 {
     private const string RawValidationValue = """{ "known":1, "SecretBranch": { "n":1.00, "nil":null, "large":9007199254740993, "text":"\u0041 <+>" } }""";
 
+    [Fact]
+    public void Retention_only_typed_reads_protect_warning_paths_without_changing_the_stored_value()
+    {
+        var registry = SerializationServices.TypeRegistry();
+        registry.RegisterType(typeof(ValidationWarningRecord), "ValidationWarningRecord");
+        var type = new ValueTypeDescriptor("ValidationWarningRecord");
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, retentionPolicy: "retain");
+        using var document = JsonDocument.Parse(RawValidationValue);
+        var frame = Root((CountKey, ValueEnvelope.Inline(type, document.RootElement, policy)));
+        var session = Session(frame, registry: registry, countType: type);
+        var warnings = new ExecutionWarningCollector(); // The actual value policy must protect even this public sink.
+        session.SetWarnings(warnings);
+        Assert.False(session.HasReadProtectedValue);
+
+        var value = session.Get(new VariableReference<ValidationWarningRecord>("count", "workflow", CountKey));
+
+        Assert.Equal(1, value.Known);
+        Assert.True(session.HasReadProtectedValue);
+        Assert.Empty(session.Intents);
+        Assert.Null(session.PendingFault);
+        Assert.Equal(policy, frame.Values[CountKey].Policy);
+        Assert.Equal(RawValidationValue, frame.Values[CountKey].InlineValue!.Value.GetRawText());
+        var warning = Assert.Single(warnings.Warnings);
+        Assert.Equal("json-unmatched-member", warning.Code);
+        Assert.Equal("variables.count", warning.Details!["path"]);
+        Assert.DoesNotContain("SecretBranch", JsonSerializer.Serialize(warning, JsonBaseline.Options), StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("public")]
     [InlineData("sensitive")]

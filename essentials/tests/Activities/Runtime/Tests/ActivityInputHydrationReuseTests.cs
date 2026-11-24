@@ -20,14 +20,16 @@ public sealed class ActivityInputHydrationReuseTests(ITestOutputHelper output)
     private static readonly ValueTypeDescriptor StringType = new("String");
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Each_hydration_uses_the_actual_envelopes_protection_policy(bool sensitive)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Each_hydration_uses_the_actual_envelopes_protection_policy(bool sensitive, bool retained)
     {
         var type = new ValueTypeDescriptor("test/order");
         var contract = Contract(type);
         using var document = JsonDocument.Parse("""{"name":"Ada","privateCustomerKey":42}""");
-        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: sensitive);
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline,
+            isSensitive: sensitive, retentionPolicy: retained ? "retain" : null);
         var snapshot = new ActivityInputSnapshot("invocation", contract.SchemaFingerprint, "bindings",
             new Dictionary<string, ValueEnvelope> { ["message"] = ValueEnvelope.Inline(type, document.RootElement.Clone(), policy) }, DateTimeOffset.UnixEpoch);
         // The collector was created before rematerialization, when the parent had no protected input.
@@ -37,8 +39,10 @@ public sealed class ActivityInputHydrationReuseTests(ITestOutputHelper output)
         Assert.Equal("Ada", activity.Message?.Name);
         var warning = Assert.Single(warnings.Warnings);
         Assert.Equal("json-unmatched-member", warning.Code);
-        Assert.Equal(sensitive ? "args.message" : "args.message[\"privateCustomerKey\"]", warning.Details!["path"]);
-        if (sensitive) Assert.DoesNotContain("privateCustomerKey", warning.Message);
+        Assert.Equal(sensitive || retained ? "args.message" : "args.message[\"privateCustomerKey\"]", warning.Details!["path"]);
+        if (sensitive || retained) Assert.DoesNotContain("privateCustomerKey", warning.Message);
+        Assert.Equal(policy, snapshot.Values["message"].Policy);
+        Assert.Equal(document.RootElement.GetRawText(), snapshot.Values["message"].InlineValue!.Value.GetRawText());
     }
 
     [Fact]

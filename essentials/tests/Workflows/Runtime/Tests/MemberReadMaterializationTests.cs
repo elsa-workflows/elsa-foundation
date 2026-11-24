@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -35,6 +37,48 @@ public sealed class MemberReadMaterializationTests
     private static readonly DurableValueExternalReference CustomerReference = new("external", "customers/c-1", new Dictionary<string, string>());
 
     public static TheoryData<string, bool> Roles => new() { { "request", false }, { "request", true }, { "variable", false }, { "variable", true } };
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Retention_only_typed_input_conversions_hide_nested_warning_keys_and_keep_raw_snapshots(bool expression)
+    {
+        const string raw = """{ "known":1, "SecretBranch": { "n":1.00, "nil":null, "large":9007199254740993, "text":"\u0041 <+>" } }""";
+        using var value = JsonDocument.Parse(raw);
+        using var source = JsonDocument.Parse("{\"selected\":" + raw + "}");
+        var type = new ValueTypeDescriptor("RetainedWarningOrder");
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, retentionPolicy: "retain");
+        var binding = expression
+            ? new RuntimeInputBinding("message", type, policy, RuntimeInputBindingSource.Expression,
+                expression: new RuntimeExpressionBinding("Test", "raw"))
+            : new RuntimeInputBinding("message", type, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.WorkflowRequestMember,
+                Deferred(["selected"]), workflowRequest: new RuntimeWorkflowRequestReference("source"));
+        var warnings = new ExecutionWarningCollector(); // Neither reader may rely on a protecting parent sink.
+        var context = new RuntimeInputBindingResolutionContext("workflow", "invocation-1",
+            workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+            {
+                ["source"] = ValueEnvelope.Inline(Customer, source.RootElement, policy)
+            }) { Warnings = warnings };
+        var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new TypeRegistry(),
+            new RetainedWarningExpressionEvaluator(value.RootElement));
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(Node(binding, inputType: type), "invocation-1", context, Now);
+
+        var retained = snapshot.Values["message"];
+        Assert.Equal(raw, retained.InlineValue!.Value.GetRawText());
+        Assert.Equal(policy.Lifecycle, retained.Policy.Lifecycle);
+        Assert.Equal(policy.Storage, retained.Policy.Storage);
+        Assert.Equal(policy.RetentionPolicy, retained.Policy.RetentionPolicy);
+        Assert.False(retained.Policy.IsSensitive);
+        Assert.False(retained.Policy.RequiresEncryption);
+        Assert.Null(retained.Policy.RedactionMode);
+        Assert.True(RuntimeModelMetadata.AreEqual(policy.Metadata, retained.Policy.Metadata));
+        Assert.Equal(ValuePresence.Present, retained.Presence);
+        var warning = Assert.Single(warnings.Warnings);
+        Assert.Equal("json-unmatched-member", warning.Code);
+        Assert.Equal("args.message", warning.Details!["path"]);
+        Assert.DoesNotContain("SecretBranch", JsonSerializer.Serialize(warning, JsonBaseline.Options), StringComparison.Ordinal);
+    }
 
     [Theory]
     [InlineData(false, "inline")]
@@ -573,7 +617,8 @@ public sealed class MemberReadMaterializationTests
     {
         private static readonly Dictionary<string, Type> Types = new(StringComparer.Ordinal)
         {
-            ["String"] = typeof(string), ["Int32"] = typeof(int), ["Any"] = typeof(System.Text.Json.JsonElement), ["Customer"] = typeof(object)
+            ["String"] = typeof(string), ["Int32"] = typeof(int), ["Any"] = typeof(System.Text.Json.JsonElement), ["Customer"] = typeof(object),
+            ["RetainedWarningOrder"] = typeof(RetainedWarningOrder)
         };
 
         public void RegisterType(Type type, string alias) => throw new NotSupportedException();
@@ -592,6 +637,13 @@ public sealed class MemberReadMaterializationTests
             type = known ?? typeof(object);
             return found;
         }
+    }
+
+    public sealed class RetainedWarningOrder { public int Known { get; set; } }
+
+    private sealed class RetainedWarningExpressionEvaluator(JsonElement value) : IPortableExpressionEvaluator
+    {
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) => ValueTask.FromResult(value.Clone());
     }
 
     private sealed class NoPayloadSerializer : IPayloadSerializer

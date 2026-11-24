@@ -119,7 +119,8 @@ internal sealed class StepVariableSession : IStepVariableSession
     }
 
     public bool HasReadProtectedValue => ReadPolicies.Any(policy =>
-        policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode));
+        policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) ||
+        !string.IsNullOrWhiteSpace(policy.RetentionPolicy));
 
     public void ObservePendingRead(StepVariableTarget target)
     {
@@ -305,7 +306,8 @@ internal sealed class StepVariableSession : IStepVariableSession
                 {
                     var warning = Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"variables.{variable.Name}");
                     var policy = envelope.Policy;
-                    _warnings?.Report(policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) ? warning.ProtectedForm! : warning);
+                    _warnings?.Report(policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) ||
+                        !string.IsNullOrWhiteSpace(policy.RetentionPolicy) ? warning.ProtectedForm! : warning);
                 })!;
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)

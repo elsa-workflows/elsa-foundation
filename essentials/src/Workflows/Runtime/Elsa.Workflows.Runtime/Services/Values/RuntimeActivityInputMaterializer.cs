@@ -782,7 +782,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     private static void ReportConversion(JsonConversionDiagnostic diagnostic, string inputName, ValueProtectionPolicy policy, RuntimeInputBindingResolutionContext context)
     {
         var warning = ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{inputName}");
-        context.Warnings?.Report(policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) ? warning.ProtectedForm! : warning);
+        context.Warnings?.Report(policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) ||
+            !string.IsNullOrWhiteSpace(policy.RetentionPolicy) ? warning.ProtectedForm! : warning);
     }
 
     private static object? DeserializeObjectExpression(RuntimeExpressionBinding expression, string nodeId, string inputName)
