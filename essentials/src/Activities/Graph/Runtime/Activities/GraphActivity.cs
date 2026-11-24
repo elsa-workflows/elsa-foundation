@@ -402,7 +402,7 @@ public sealed class GraphActivity(
                 var captured = await scope.ReadVariableAsync(variable.ReferenceKey, cancellationToken);
                 var variableType = ReadType(variable.Type);
                 object? initial = null;
-                if (variableType.CollectionKind == CollectionKind.Single &&
+                if (!NullPolicyDefaults.AcceptsNull(variableType.ToTypeReference(), _wellKnownTypeRegistry, _typeDescriptors) &&
                     _wellKnownTypeRegistry?.TryGetTypeOrDefault(variableType.Alias, out var clrType) == true)
                     NullPolicyDefaults.TryGetTypeDefault(clrType, out initial);
                 ambientVariables.Add(variable.Name, captured.Exists ? ToJsonElement(captured.Value) : JsonSerializer.SerializeToElement(initial));

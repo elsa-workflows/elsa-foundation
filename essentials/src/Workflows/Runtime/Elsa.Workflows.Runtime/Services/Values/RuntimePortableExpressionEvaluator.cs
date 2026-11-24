@@ -20,7 +20,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
     IPortableExpressionEvaluator? portableExpressionEvaluator,
     IExternalPayloadStore? externalPayloadStore,
     IRuntimeValueConversionExecutor? valueConversionExecutor = null,
-    IWellKnownTypeRegistry? wellKnownTypeRegistry = null)
+    IWellKnownTypeRegistry? wellKnownTypeRegistry = null,
+    IVariableTypeDescriptorCatalog? typeDescriptors = null)
 {
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
 
@@ -75,7 +76,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
             // parameters and nothing else.
             fallback = expression.VariableReadFallback is null
                 ? null
-                : await RuntimeVariableReadFallback.LoadAsync(resolutionContext.VisibleVariables, externalPayloadStore, cancellationToken, wellKnownTypeRegistry);
+                : await RuntimeVariableReadFallback.LoadAsync(resolutionContext.VisibleVariables, externalPayloadStore, cancellationToken, wellKnownTypeRegistry, typeDescriptors);
             request = new ExpressionEvaluationRequest(definition, parameters.Values, fallback, cancellationToken)
             {
                 Warnings = warnings,
@@ -410,7 +411,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
         // Spec 1222 FR-006: a script reads a declared variable with no value as JSON null, never undefined.
         if (binding.IsVariablesSurface && envelope.Presence == ValuePresence.Absent && envelope.Policy.Lifecycle != DurableValueLifecycle.None)
         {
-            var value = envelope.Type.CollectionKind == CollectionKind.Single && NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, wellKnownTypeRegistry, out var typeDefault)
+            var value = !NullPolicyDefaults.AcceptsNull(envelope.Type.ToTypeReference(), wellKnownTypeRegistry, typeDescriptors) &&
+                NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, wellKnownTypeRegistry, out var typeDefault)
                 ? JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType())
                 : JsonSerializer.SerializeToElement<object?>(null);
             return new PortableExpressionParameter(value, envelope.Policy);

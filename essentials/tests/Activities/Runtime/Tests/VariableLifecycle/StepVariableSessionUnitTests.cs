@@ -1,3 +1,5 @@
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Testing;
 using System.Text.Json;
@@ -40,6 +42,33 @@ public sealed class StepVariableSessionUnitTests
         else Assert.Equal((UnassignedStatus)0, session.Get(new VariableReference<UnassignedStatus>("count", "workflow", CountKey)));
         Assert.Empty(session.Intents);
         Assert.Null(session.PendingFault);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Activated_nullable_unassigned_enum_reads_null_without_assigning_the_frame(bool script)
+    {
+        var registry = SerializationServices.TypeRegistry(); registry.RegisterType(typeof(UnassignedStatus), "Acme.Status");
+        var type = new ValueTypeDescriptor("Acme.Status");
+        var frame = Root((CountKey, ValueEnvelope.Absent(type, ValueProtectionPolicy.InstanceInline)));
+        var session = Session(frame, engineConsumer: script, registry: registry, countType: type, descriptors: new NullableEnumCatalog());
+        if (script)
+        {
+            Assert.True(session.TryResolve("count", out var target));
+            Assert.Null(session.ReadJson(target));
+        }
+        else Assert.Null(session.Get(new VariableReference<UnassignedStatus?>("count", "workflow", CountKey)));
+        Assert.Equal(ValuePresence.Absent, frame.Values[CountKey].Presence);
+        Assert.Empty(session.Intents);
+        Assert.Null(session.PendingFault);
+    }
+
+    private sealed class NullableEnumCatalog : IVariableTypeDescriptorCatalog
+    {
+        public IEnumerable<TypeDescriptor> GetDescriptors() =>
+            [new("Acme.Status", typeof(UnassignedStatus), "Status", "Test", "select", new HashSet<CollectionKind>([CollectionKind.Single]), true, true, new HashSet<string> { "elsa.json" })];
+        public IEnumerable<IGrouping<string, TypeDescriptor>> GetDescriptorsByCategory() => GetDescriptors().GroupBy(item => item.Category);
     }
 
     private enum UnassignedStatus { First = 1 }
@@ -274,8 +303,8 @@ public sealed class StepVariableSessionUnitTests
         Dictionary<(string, string), bool>? bound = null,
         bool suspends = false,
         bool engineConsumer = false,
-        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null) =>
-        Session([root], mode, bound, suspends, engineConsumer, policies, registry, countType);
+        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null, IVariableTypeDescriptorCatalog? descriptors = null) =>
+        Session([root], mode, bound, suspends, engineConsumer, policies, registry, countType, descriptors);
 
     private static StepVariableSession Session(
         VariableFrameState[] frames,
@@ -283,7 +312,7 @@ public sealed class StepVariableSessionUnitTests
         Dictionary<(string, string), bool>? bound = null,
         bool suspends = false,
         bool engineConsumer = false,
-        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null)
+        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null, IVariableTypeDescriptorCatalog? descriptors = null)
     {
         var node = StepVariableTestGraph.CountLeaf("node-root", typeof(SessionIncrementActivity), mode: mode);
         var executable = WorkflowExecutionHarness.NewExecutable(node,
@@ -301,6 +330,6 @@ public sealed class StepVariableSessionUnitTests
         return new StepVariableSession(new RuntimeVisibleVariableFrames(frames), executable, invocation, node, validator: null,
             attemptId: "attempt-1", suspends: suspends,
             boundReferences: bound ?? new Dictionary<(string, string), bool> { [("workflow", CountKey)] = true },
-            engineConsumer: engineConsumer, registry: registry);
+            engineConsumer: engineConsumer, registry: registry, typeDescriptors: descriptors);
     }
 }

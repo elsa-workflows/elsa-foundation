@@ -347,7 +347,8 @@ internal sealed class StepVariableSession : IStepVariableSession
             _readOrder.Add(read);
         }
 
-        if (envelope.Presence == ValuePresence.Absent && envelope.Type.CollectionKind == CollectionKind.Single &&
+        if (envelope.Presence == ValuePresence.Absent &&
+            !NullPolicyDefaults.AcceptsNull(envelope.Type.ToTypeReference(), _registry, _typeDescriptors) &&
             NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, _registry, out var typeDefault))
             return ValueEnvelope.Inline(envelope.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType()), envelope.Policy);
         return envelope;

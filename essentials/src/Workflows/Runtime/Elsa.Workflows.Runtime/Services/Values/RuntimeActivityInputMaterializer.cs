@@ -51,14 +51,15 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         IWellKnownTypeRegistry? wellKnownTypeRegistry = null,
         IPortableExpressionEvaluator? portableExpressionEvaluator = null,
         IRuntimeValueConversionExecutor? valueConversionExecutor = null,
-        IExternalPayloadStore? externalPayloadStore = null)
+        IExternalPayloadStore? externalPayloadStore = null,
+        IVariableTypeDescriptorCatalog? typeDescriptors = null)
     {
         ArgumentNullException.ThrowIfNull(inputBindingResolver);
         _inputBindingResolver = inputBindingResolver;
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
         _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor, _wellKnownTypeRegistry);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor, _wellKnownTypeRegistry, typeDescriptors);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
         _structurePolicies = IndexStructurePolicies(structurePolicies);
     }

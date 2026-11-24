@@ -46,7 +46,8 @@ internal sealed class RuntimeVariableReadFallback : IExpressionVariableReader
     public static async ValueTask<RuntimeVariableReadFallback> LoadAsync(
         IReadOnlyList<RuntimeReadableVariable> visibleVariables,
         IExternalPayloadStore? externalPayloadStore,
-        CancellationToken cancellationToken, IWellKnownTypeRegistry? registry = null)
+        CancellationToken cancellationToken, IWellKnownTypeRegistry? registry = null,
+        IVariableTypeDescriptorCatalog? typeDescriptors = null)
     {
         ArgumentNullException.ThrowIfNull(visibleVariables);
         var values = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
@@ -55,7 +56,8 @@ internal sealed class RuntimeVariableReadFallback : IExpressionVariableReader
             var envelope = variable.Envelope;
             if (envelope.Presence == ValuePresence.Withheld || envelope.Policy.Lifecycle == DurableValueLifecycle.None)
                 continue;
-            if (envelope.Presence == ValuePresence.Absent && envelope.Type.CollectionKind == CollectionKind.Single &&
+            if (envelope.Presence == ValuePresence.Absent &&
+                !NullPolicyDefaults.AcceptsNull(envelope.Type.ToTypeReference(), registry, typeDescriptors) &&
                 NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, registry, out var typeDefault))
                 values[variable.Name] = JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType());
             else if (envelope.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull)

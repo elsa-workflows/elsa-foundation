@@ -840,6 +840,30 @@ public sealed class GraphActivityExecutionTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData("Acme.NullableStatus", "null")]
+    [InlineData("Acme.NullableRecord", "null")]
+    [InlineData("Acme.Status", "0")]
+    public async Task Retained_missing_graph_variable_rows_use_activated_nullability(string alias, string expected)
+    {
+        var registry = _serviceProvider.GetRequiredService<IWellKnownTypeRegistry>();
+        registry.RegisterType(alias == "Acme.NullableRecord" ? typeof(NullableRecord) : typeof(NullableStatus), alias);
+        var descriptor = Descriptor(variables: [new GraphActivityVariableDescriptor("status", "Status", Type(alias),
+            WellKnownRuntimeDurableValueStorageDrivers.Json, InitialValue: null)],
+            outputs: [Output("result")], outputMappings: [Mapping("result", new GraphActivityExpression(
+                TestExpressionHandler.Syntax, JsonSerializer.SerializeToElement("read-retained-status")))], requiredOutputReferenceKeys: ["result"]);
+        await using var lease = await ActivateGraphAsync(descriptor);
+        var graph = Assert.IsType<GraphActivity>(lease.Activity);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("retained-boundary"));
+        // Rehydrate without entry preparation: no newly initialized variable row can hide the retained fallback.
+        var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result);
+        Assert.Equal(expected, Assert.IsType<JsonElement>(result["result"]).GetRawText());
+        var output = Assert.Single(preparation.DurableValueChanges).State!;
+        Assert.Equal("output", output.Metadata[RuntimeMetadataKeys.BoundaryValueRole]);
+    }
+
     private readonly record struct NullableRecord(int Value);
     private enum NullableStatus { First = 1 }
     private sealed class NullableRecordCatalog : IVariableTypeDescriptorCatalog
@@ -1091,6 +1115,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
                 "constant" => 42,
                 "read-variable" => ReadVariable(request, "RunningTotal").GetInt32() + 2,
                 "read-optional" => request.ParameterValues["Optional"],
+                "read-retained-status" => ReadVariable(request, "Status"),
                 "wrong-type" => "not-an-int",
                 _ => throw new InvalidOperationException("Unexpected expression source.")
             };

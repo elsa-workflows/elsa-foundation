@@ -43,14 +43,17 @@ public sealed class ScriptVariableReadMaterializationTests
     [InlineData("Int32", "0")]
     [InlineData("Boolean", "false")]
     [InlineData("Acme.Status", "0")]
-    public async Task Pinned_and_computed_unassigned_scalar_reads_have_the_same_supported_type_default(string alias, string expected)
+    [InlineData("Acme.Status", "null", true)]
+    public async Task Pinned_and_computed_unassigned_scalar_reads_have_the_same_supported_type_default(string alias, string expected, bool? supportsNull = null)
     {
         var visible = new[] { new RuntimeReadableVariable("unset", "workflow", "unset", ValueEnvelope.Absent(new(alias), ValueProtectionPolicy.InstanceInline)) };
         foreach (var computed in new[] { false, true })
         {
             var snapshot = await MaterializeAsync(new Script(request => computed ? request.VariableReader!.Read("unset").Value : request.ParameterValues["variables.unset"]),
-                pinned: computed ? null : ("unset", "workflow", "unset"), computed: computed, visible: visible, registry: new EnumRegistry());
-            Assert.Equal(expected, snapshot.Values["value"].InlineValue!.Value.GetRawText());
+                pinned: computed ? null : ("unset", "workflow", "unset"), computed: computed, visible: visible, registry: new EnumRegistry(), descriptors: supportsNull.HasValue ? new EnumCatalog(supportsNull.Value) : null);
+            Assert.Equal(ValuePresence.Absent, visible[0].Envelope.Presence);
+            if (expected == "null") Assert.Equal(ValuePresence.ExplicitNull, snapshot.Values["value"].Presence);
+            else Assert.Equal(expected, snapshot.Values["value"].InlineValue!.Value.GetRawText());
         }
     }
 
@@ -221,7 +224,7 @@ public sealed class ScriptVariableReadMaterializationTests
         bool computed = false,
         CountingPayloadStore? store = null,
         RuntimeVariableReadRecorder? recorder = null,
-        IReadOnlyList<RuntimeReadableVariable>? visible = null, IWellKnownTypeRegistry? registry = null)
+        IReadOnlyList<RuntimeReadableVariable>? visible = null, IWellKnownTypeRegistry? registry = null, IVariableTypeDescriptorCatalog? descriptors = null)
     {
         visible ??= Visible;
         var parameters = new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal);
@@ -241,7 +244,7 @@ public sealed class ScriptVariableReadMaterializationTests
             [],
             wellKnownTypeRegistry: registry,
             portableExpressionEvaluator: script,
-            externalPayloadStore: store ?? new CountingPayloadStore());
+            externalPayloadStore: store ?? new CountingPayloadStore(), typeDescriptors: descriptors);
         return await materializer.MaterializeSnapshotAsync(
             Consumer(binding),
             "consumer",
@@ -292,6 +295,13 @@ public sealed class ScriptVariableReadMaterializationTests
         public string GetAliasOrDefault(Type type) => type == typeof(Status) ? "Acme.Status" : type.FullName!;
         public Type GetTypeOrDefault(string alias) => alias == "Acme.Status" ? typeof(Status) : typeof(object);
         public bool TryGetTypeOrDefault(string alias, out Type type) { type = GetTypeOrDefault(alias); return type != typeof(object); }
+    }
+
+    private sealed class EnumCatalog(bool supportsNull) : IVariableTypeDescriptorCatalog
+    {
+        public IEnumerable<TypeDescriptor> GetDescriptors() =>
+            [new("Acme.Status", typeof(Status), "Status", "Test", "select", new HashSet<CollectionKind>([CollectionKind.Single]), supportsNull, true, new HashSet<string> { "elsa.json" })];
+        public IEnumerable<IGrouping<string, TypeDescriptor>> GetDescriptorsByCategory() => GetDescriptors().GroupBy(item => item.Category);
     }
 
     private sealed class Script(Func<ExpressionEvaluationRequest, JsonElement> run) : IPortableExpressionEvaluator
