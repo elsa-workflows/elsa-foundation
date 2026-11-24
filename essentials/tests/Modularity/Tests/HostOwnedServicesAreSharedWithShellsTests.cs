@@ -10,7 +10,6 @@ using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Readability;
 using Elsa.Foundation.DataProtection.EntityFrameworkCore;
 using Elsa.ExtensionBuilder.Api.Extensions;
-using Elsa.Foundation.Host.ModuleManagement;
 using Elsa.Foundation.Hosting;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.Schema.SchemaFinalization;
@@ -471,7 +470,8 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
 
     private static Assembly EntryAssembly(string host) => host == "Elsa.Workbench"
         ? Assembly.Load("Elsa.Workbench")
-        : typeof(ModuleManagementOptions).Assembly;
+        // Foundation.Host compiles no type of its own beside its entry point; the test references the project, so it loads by name.
+        : Assembly.Load("Elsa.Foundation.Host");
 
     /// <summary>A content root of the host's own settings and a shell file of its own, so the shell that is activated enables no feature.</summary>
     private sealed class ContentRoot : IDisposable

@@ -802,9 +802,11 @@ input pending.
 Run `pg-root-park-opening owned checked` from a locked Release build of
 Native.Run against an empty PostgreSQL database. Repeat with each writer
 and fence mode in its own database. The fixture uses a generated root and
-direct input. The next provider increments cover fresh arrivals while
-parked, public inspection and recovery controls, and composition with the
-Workbench preview.
+direct input. Public inspection and fresh arrivals while parked are covered
+by the [Park inspection](#postgresql-park-inspection) and
+[Park arrivals](#postgresql-park-arrivals) sections below, and one-page
+recovery by the [Park recovery](#postgresql-park-recovery) section. Multi-page
+recovery and composition with the Workbench preview are later increments.
 
 ### PostgreSQL Park inspection
 
@@ -821,6 +823,103 @@ PostgreSQL database. The fixture drives a real opening first, refuses an
 opening with its projection trigger disabled, and reads the result after
 a new owner takes over. Recovery controls and authentication of Park
 selections have their own increments.
+
+### PostgreSQL Park arrivals
+
+Protocol 21 lets a parked generated root accept ordinary direct input
+through the public ingress. The owner keeps each new occurrence in a fenced
+continuation without calling the actor. The kept reason is Arrived, and the
+Park time, opening revision, fault and checkpoint stay as the opening wrote
+them. The continuation adds no journal entry. An input already buffered
+when the Park opened is kept as Arrived by the same owner. An expired
+operation id is accepted on a parked root here as a new occurrence with its
+own handle, while protocols 19 and 20 refuse it. An occurrence that reaches its
+attempt limit re-parks the same Park: its taken inputs are kept as Consumed
+and one Park journal entry is added. When a taken batch mixes an exhausted
+occurrence with a fresh arrival, the whole batch re-parks and both are kept
+as Consumed, matching the in-memory poison path.
+
+Run `pg-root-park-arrivals owned checked` from the locked Release build of
+Native.Run against an empty dedicated PostgreSQL database. Repeat with each
+writer and fence mode in its own database. The fixture refuses stale,
+changed and rewritten keep and re-park batches, shows that an admission
+waits while the root row is locked for update, and checks that protocol 20
+and protocol 21 refuse each other's stores. Recovery, discard, operator
+selection, and timers, jobs and children while parked remain open.
+
+### PostgreSQL Park recovery
+
+Protocol 22 adds Recover in Resume mode for a parked generated root. Its
+format carries the Park opening, inspection and arrival capabilities, the
+new Park recovery capability, and operator occurrence admission. It admits
+no other operator command. A parked root's public view returns a Park
+selection that seals the tenant, reference, opening revision and Park time.
+The ingress refuses Retry, RetryAll, handles, a reason, ThenDelete and a due
+time, since Recover is immediate. Under a
+share lock on the root it accepts a selection only while the root is
+Faulted with that exact Park mark, and it writes an operator receipt with
+the occurrence, so a repeated operation id is a duplicate.
+
+The owner reads the Park mark and kept set when it polls the command and
+decides there. When the mark still matches, the actor's restore plan is
+empty and the kept set fits one page, one fenced commit makes the root
+Running, clears the fault, the Park mark and its projection, and increments
+the root's release generation. A page restores at most 170 rows and 4 MiB.
+Both bounds count only the rows the page restores, the Arrived rows, as the
+design charges a page for its restored rows; the Consumed fault input is
+cleared, never restored, and is not charged. Each row's stored size is
+counted as the inbox inspection does (id, kind, header and payload), and the
+first restored row always fits, so a single arrival over 4 MiB is restored
+alone. The commit puts each Arrived row back in the
+inbox with that generation and clears the Consumed fault input, which stays
+settled. Both take the ordinary admission window from the commit as their
+KeepUntil; the recover carries that window from its admission. The journal
+gets the in-memory recovery entry. A stale mark, a restore plan or a larger
+kept set consumes the command and journals a refusal at the next revision,
+and the Park stays as it was. A mismatched instance or creation is refused
+as "target". A recover that reaches a root that has ended, for example one
+that a released arrival finished, settles like any other operator command on
+an ended root: it is consumed with no checkpoint write. The checkpoint
+trigger accepts a "recovered" entry only with the Faulted to Running write
+that moves the release generation by exactly one, and a "refused" entry
+only with the row unchanged apart from its revision. A deferred constraint
+trigger on the journal checks each outcome entry at commit: the root's row
+must be at the entry's revision, and for "recovered" it must be Running with
+its Park mark cleared. So an outcome entry inserted without its checkpoint
+write never commits and cannot block later writes at that revision.
+While released rows of the current generation are pending, the poll and the
+settled prefix offer only them, in Seq order, so they reach the model before
+any later input. An earlier operator row does not hold them back; it is
+offered once the cohort has drained. When a recover commits, the owner drops
+the inputs it had already read for that root, so the next poll reads them
+again behind the cohort.
+
+Run `pg-root-park-recovery owned checked` from the locked Release build of
+Native.Run against an empty dedicated PostgreSQL database. Repeat with each
+writer and fence mode in its own database. The fixture recovers through the
+public ingress with the selection from the public view, moves a fresh
+post-recover input ahead of the released rows by raw SQL, and shows a second
+recover refused once the root runs. It rolls back recover commits for a
+stale epoch, a kept payload changed after the poll, a vetoed restore, a
+rewritten state, a disabled projection trigger and a Park mark moved before
+the bind, probes the trigger branches with raw writes, and refuses an
+oversized kept set built from filler rows. It refuses a delayed recover and
+an old selection after the root parks again, recovers that second Park at
+generation 2 with the second recover moved ahead of the released row by raw
+SQL, and shows that second recover settle on the Finished root. The trigger
+probes include a refused entry beside a recovered entry on the recover
+write, which only the refused-row rule refuses, and a lone recovered or
+refused entry committed with no checkpoint write, which the deferred trigger
+refuses while the root stays writable. A neighbor root then shows the byte
+bound: parked on a fault input over 4 MiB, with one small arrival and a raw
+arrival over 4 MiB, it is refused as "page"; without the raw arrival the
+fault input is not charged and it recovers with the small arrival. The
+released-cohort filter has no suspended conjunct and no Due bound, since
+format 22 has neither a suspended parked root nor a released row that is not
+yet due; composition with Suspend or delayed inputs must revisit both. The multi-page drain under a cursor, with
+only released inputs eligible during it, remains open, as do Retry and
+RetryAll, timers, jobs and subscriptions in the restore plan, Park expiry,
+discard, and terminate or delete of a parked root.
 
 ## 10. Private durable lexical-resource probe
 

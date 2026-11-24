@@ -1,7 +1,6 @@
 using Elsa.Attention.Core;
-using Elsa.Foundation.Hosting;
 
-namespace Elsa.Foundation.Host.Shells;
+namespace Elsa.Foundation.Hosting;
 
 /// <summary>
 /// One Attention item for every recorded activation failure whose shell is not currently active: a warning for a fault, critical

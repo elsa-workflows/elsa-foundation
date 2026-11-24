@@ -1,4 +1,6 @@
-namespace Elsa.Foundation.Host.ModuleManagement;
+using Microsoft.Extensions.Configuration;
+
+namespace Elsa.Foundation.Hosting;
 
 /// <summary>
 /// Configuration for optional extra #1, the module-management surface (reconcile + shell reload endpoints).

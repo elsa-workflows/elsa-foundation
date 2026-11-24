@@ -5,13 +5,13 @@ using Elsa.Attention.Core;
 using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
 using Elsa.Foundation.DataProtection;
-using Elsa.Foundation.Host.Health;
-using Elsa.Foundation.Host.ModuleManagement;
-using Elsa.Foundation.Host.Shells;
 using Elsa.Foundation.Hosting;
 using Elsa.Modularity.Api.ModuleManagement;
 using Nuplane.Admin;
 using Nuplane.Reconciliation;
+
+// The owner every endpoint this host maps is attributed to.
+const string HostOwner = "Elsa.Foundation.Host";
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -83,7 +83,7 @@ var moduleManagement = ModuleManagementOptions.Read(configuration);
 if (moduleManagement.Enabled)
     builder.Services.AddNuplaneAdmin();
 if (moduleManagement.Enabled)
-    builder.Services.AddElsaModuleManagement(options => options.HostOwner = "Elsa.Foundation.Host");
+    builder.Services.AddElsaModuleManagement(options => options.HostOwner = HostOwner);
 
 // Admin operations use the same coordinator as the host, not one created in a shell's container (#2159).
 if (moduleManagement.Enabled)
@@ -92,12 +92,12 @@ if (moduleManagement.Enabled)
 var app = builder.Build();
 
 // Host-level probes: liveness (process up) + readiness (configured shells are settled and current).
-app.MapHostHealth();
+app.MapFoundationHealth(HostOwner);
 
 if (moduleManagement.Enabled)
 {
     app.MapElsaModuleManagement();
-    app.MapModuleManagementApi(moduleManagement);
+    app.MapModuleManagementApi(moduleManagement, HostOwner);
 }
 
 // Maps the shell resolution middleware + the dynamic shell endpoint source. Each shell's own middleware and
