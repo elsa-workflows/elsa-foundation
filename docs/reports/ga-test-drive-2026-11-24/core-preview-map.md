@@ -47,9 +47,10 @@ release 1 milestone on [#4229](https://github.com/elsa-workflows/elsa-foundation
 
 Without these cases, K13 could pass with every gate green while a designer user still cannot build W1. The
 program plan now carries one case for each gap: gap 2 in the K6 row, gap 3 in the K8 row and gap 1 in the K10 row.
-Route templates carry over from the old core, which matches `orders/{id}`; how a template maps to the kernel's
-subscription keys is a design decision still to come. Whether `SendHttpRequest` returns its response, which activities
-make the release 1 list, and whether Studio's toolbox hides the rest on a kernel host are owner decisions still to come.
+Route templates carry over from the old core, which matches `orders/{id}`. Later the same day the owner decided the
+three open design cards ([#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7145147047),
+design in [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702)): route templates by resolved waits,
+`SendHttpRequest` as a Background job, and 26 activities on the kernel with 8 hidden from the toolbox.
 
 ## Status of the milestones this map relies on
 
@@ -71,7 +72,7 @@ make the release 1 list, and whether Studio's toolbox hides the rest on a kernel
 | Workflow | Step | Native model today | Missing | Milestone |
 |---|---|---|---|---|
 | All | Designed in Studio, published, runs | ❌ | Publications to the kernel, with their routes | K10 |
-| All | HTTP request reaches the kernel in Workbench | 🟡 test-only Kestrel edge | A shipped route host in the Workbench | K8 |
+| All | HTTP request reaches the kernel in Workbench | 🟡 test-only Kestrel edge | A shipped route host in the Workbench | K10 |
 | All | Flowchart root starts from its HttpEndpoint (built in code until K10) | ❌ only a root or first-in-Sequence endpoint registers | Start routes found inside a Flowchart | K8 |
 | W1 `GET /hello?name=` | Read a query parameter | ❌ | Query string on `HttpRequest` | K8 |
 | W1 | Expression builds the greeting | 🟡 built-in language | JavaScript, as the designer offers it | K12 item 3 |
@@ -96,7 +97,7 @@ make the release 1 list, and whether Studio's toolbox hides the rest on a kernel
 | Check | Core Preview | Milestone |
 |---|---|---|
 | Build, validate and lay out a workflow | Core-independent; works today on the old core | n/a |
-| Test-run from the designer | ❌ no path from a draft to the kernel | K10 (**No case**) |
+| Test-run from the designer | ❌ no path from a draft to the kernel | **No case** |
 | Toolbox shows only what the kernel runs | ❌ the toolbox lists activities the kernel lacks or will not have (compensation) | **No case**; an owner decision first |
 | Expression editor | 🟡 JavaScript in the designer, built-in language in the kernel | K12 item 3 |
 
@@ -105,13 +106,13 @@ make the release 1 list, and whether Studio's toolbox hides the rest on a kernel
 | Check | Core Preview | Milestone |
 |---|---|---|
 | Publish v2 while v1 instances wait | ❌ blocked by gap 1; the kernel keeps a model state version per instance | **No case** |
-| Migrate an instance to v2 | 🟡 migration plans in `WorkflowActor` | **Out** (moves with the plan runner) |
+| Migrate an instance to v2 | 🟡 migration plans in `WorkflowActor` | **Out**, by Claude's reading of the trimmed scope (moves with the plan runner) |
 | Instance list with filters | 🟡 `GET /runtime/core-preview/workflows/instances`, filters on definition and status | K9, K10 |
 | Timeline and journal view | ❌ in Studio | K10 (tail read, catch-up) |
 | Incident view and retry | 🟡 incidents and retry in the model | K11 (inspection and the one-page recover), K10; Park retry selection and discard are **Out** |
 | Cancel or terminate | 🟡 terminate exists in the kernel; terminate of a parked root comes later in critical-path step 1 | Composition slice S5, by Claude's reading of the trimmed scope |
 | Delete and retention | 🟡 retention pass in code | K11 |
-| Export, import, copy, rename definitions | Core-independent, but what is exported cannot run on the kernel | K6/K10 (**No case**) |
+| Export, import, copy, rename definitions | Core-independent, but what is exported cannot run on the kernel | **No case** |
 
 ## Runtime pass
 
@@ -122,7 +123,7 @@ make the release 1 list, and whether Studio's toolbox hides the rest on a kernel
 | About 200 requests a second on W1 | ❌ no admission or route host | K11 (admission), K12 item 1 (sustained arrivals) |
 | Duplicate POST | 🟡 replay dedup by event id proven; HTTP start dedup needs a caller key | **No case** |
 | Large request body | ❌ bodies sit in state, under the checkpoint cap | **Out** (values by reference) |
-| Two workflows on one route | ❌ the later one silently wins | K8 (refused at publishing) |
+| Two workflows on one route | ❌ the later one silently wins | K8 (refused when the route table is built) |
 | 404 and 405 | 🟡 an unmatched event returns 404 in the edge check; no 405 | K8 for 404; **No case** for 405 |
 | Suspends before responding | ✅ 500 when a held response's turn parks; 504 at the reply deadline | K8 |
 | SQLite Embedded, then PostgreSQL with two nodes | 🟡 PostgreSQL only in the preview; Cluster demo exists separately | K4, K5; SQL Server and MySQL are **Out** |
