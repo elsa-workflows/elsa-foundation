@@ -536,7 +536,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
         // A Declared shape is advisory authoring help. Unless the query opts in, it gets the answer a declared type
         // had before it was described: unbound, without members, typed only as the whole value.
         if (owned is { State: ActivitySerializedShapeState.Declared } && !includeDeclaredMembers)
-            owned = Unknown(memberPath.IsDefaultOrEmpty ? owned.Type : null, owned.SourceContractRevision, "activity.shape.serialization-profile-unbound");
+            owned = Unknown(memberPath.IsDefaultOrEmpty ? owned.Type : null, owned.SourceContractRevision, "activity.shape.serialization-profile-unbound")
+                with { IsSensitive = owned.IsSensitive, IsCredential = owned.IsCredential };
         var shape = owned ?? Unknown(memberPath.IsDefaultOrEmpty ? source.Type : null, document.ContractRevision, "NoMetadataOwner");
         return shape with { IsNullable = memberPath.IsDefaultOrEmpty ? source.IsNullable ?? shape.IsNullable : shape.IsNullable,
             IsSensitive = source.IsSensitive == true ? true : shape.IsSensitive,

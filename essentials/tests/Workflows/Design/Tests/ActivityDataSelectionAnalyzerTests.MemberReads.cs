@@ -346,6 +346,19 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     }
 
     [Fact]
+    public async Task Without_the_opt_in_a_declared_shape_keeps_its_protection_flags()
+    {
+        using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(new DeclaredVariableShape { Protected = true }));
+
+        var result = await Analyzer(provider).AnalyzeAsync(VariableDocument(), new("consumer", "CustomerId"), new());
+
+        var source = Assert.Single(result.Sources, source => source.Id.EndsWith(":customer", StringComparison.Ordinal));
+        Assert.Equal(ActivitySerializedShapeState.Unknown, source.Shape.State);
+        Assert.True(source.Shape.IsSensitive);
+        Assert.True(source.Shape.IsCredential);
+    }
+
+    [Fact]
     public async Task Without_the_opt_in_a_declared_shape_is_the_unbound_answer_and_spends_no_member_budget()
     {
         using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(new DeclaredVariableShape()));
@@ -408,6 +421,8 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     {
         /// <summary>When set, every result is a Known object with this many scalar members; otherwise results are not owned.</summary>
         public int? ResultMembers { get; init; }
+        /// <summary>When true, every declared shape is marked sensitive and credential.</summary>
+        public bool Protected { get; init; }
 
         public ValueTask<ActivitySerializedShape?> DescribeResultAsync(IActivityDefinitionVersion admittedVersion, string projectionKey,
             ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) =>
@@ -432,7 +447,12 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
                     { ReasonCode = "activity.shape.serialization-profile-unbound" }
             });
 
-        private static ActivitySerializedShape Declared(ActivitySerializedValueKind kind, TypeReference type, string owner) =>
-            new(ActivitySerializedShapeState.Declared, kind, type, owner, "profile", "metadata") { ReasonCode = "activity.shape.declared-type" };
+        private ActivitySerializedShape Declared(ActivitySerializedValueKind kind, TypeReference type, string owner) =>
+            new(ActivitySerializedShapeState.Declared, kind, type, owner, "profile", "metadata")
+            {
+                ReasonCode = "activity.shape.declared-type",
+                IsSensitive = Protected ? true : null,
+                IsCredential = Protected ? true : null
+            };
     }
 }
