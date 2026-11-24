@@ -61,7 +61,8 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
         var draft = new WorkflowDefinitionDraft
         {
             Id = "draft", WorkflowDefinitionId = "workflow", LastModifiedAt = DateTimeOffset.UnixEpoch,
-            State = new([new("customer-key", "customer", new("shop.address"), null, null), Variable("count")], root, [], [], null)
+            State = new([new("customer-key", "customer", new("shop.address"), null, null), Variable("count")], root,
+                [new InputDefinition("order-key", "order", new TypeReference("shop.address"), null, "Order", null, true)], [], null)
         };
         var source = CreateSource([new SingleDraftStore(draft)], structure, new ScopedVariablePicker(new ScopedVariableResolver(structure)),
             configure: services => services.AddSingleton<IActivitySerializedShapeSource>(new DeclaredVariableShape()));
@@ -79,6 +80,9 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
         var count = Assert.Single(context.RootSymbols, s => s.Kind == ExpressionSymbolKind.Variable && s.Name == "count");
         Assert.Equal(ExpressionValueKind.Scalar, count.ValueShape!.Kind);
         Assert.Empty(count.ValueShape.Members ?? []);
+        var input = Assert.Single(context.RootSymbols, s => s.Kind == ExpressionSymbolKind.WorkflowInput && s.Name == "order");
+        Assert.Equal("From the declared type `shop.address`; the stored value may differ.",
+            Assert.Single(input.ValueShape!.Members!, m => m.Name == "city").Documentation);
     }
 
     private sealed class DeclaredVariableShape : IActivitySerializedShapeSource

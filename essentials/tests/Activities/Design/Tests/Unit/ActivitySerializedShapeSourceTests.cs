@@ -256,6 +256,30 @@ public sealed class ActivitySerializedShapeSourceTests
     }
 
     [Fact]
+    public async Task Declared_type_members_are_read_without_reading_assembly_files()
+    {
+        // A dynamic assembly has no file, so any file read or hash would fail and fall back to the unbound answer.
+        var module = System.Reflection.Emit.AssemblyBuilder.DefineDynamicAssembly(new("declared-shape-dynamic"),
+            System.Reflection.Emit.AssemblyBuilderAccess.RunAndCollect).DefineDynamicModule("declared-shape-dynamic");
+        var builder = module.DefineType("DynamicPayload", System.Reflection.TypeAttributes.Public | System.Reflection.TypeAttributes.Sealed);
+        builder.DefineDefaultConstructor(System.Reflection.MethodAttributes.Public);
+        var field = builder.DefineField("_label", typeof(string), System.Reflection.FieldAttributes.Private);
+        var property = builder.DefineProperty("Label", System.Reflection.PropertyAttributes.None, typeof(string), null);
+        var getter = builder.DefineMethod("get_Label", System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.SpecialName |
+            System.Reflection.MethodAttributes.HideBySig, typeof(string), Type.EmptyTypes);
+        var il = getter.GetILGenerator();
+        il.Emit(System.Reflection.Emit.OpCodes.Ldarg_0);
+        il.Emit(System.Reflection.Emit.OpCodes.Ldfld, field);
+        il.Emit(System.Reflection.Emit.OpCodes.Ret);
+        property.SetGetMethod(getter);
+        using var host = new Host([Descriptor("shop.dynamic", builder.CreateType())]);
+        var shape = (await host.Source.DescribeDeclaredTypeAsync(new("shop.dynamic"), "owner", [], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Declared, shape.State);
+        Assert.Equal(["label"], shape.Members.Select(x => x.SerializedName));
+        Assert.NotEmpty(shape.MetadataRevision);
+    }
+
+    [Fact]
     public async Task Declared_recursive_and_scalar_types_stay_bounded_and_member_free()
     {
         using var host = new Host([Descriptor("shop.recursive", typeof(SerializedRecursive)), Descriptor("String", typeof(string))]);

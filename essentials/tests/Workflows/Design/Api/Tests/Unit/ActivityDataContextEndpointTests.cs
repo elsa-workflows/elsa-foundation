@@ -386,6 +386,8 @@ public sealed class ActivityDataContextEndpointTests
         var selected = Assert.Single(member.Body.Analysis!.Sources);
         Assert.Equal(ActivitySerializedShapeState.Unknown, selected.Shape.State);
         Assert.Null(selected.Shape.Type);
+        Assert.Null(selected.Shape.IsNullable);
+        Assert.Empty(selected.Shape.Members);
     }
 
     private static ActivityNode Node(string id) => new(id, "test", [], []);

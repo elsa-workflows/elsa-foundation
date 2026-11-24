@@ -103,7 +103,6 @@ internal sealed class ActivityDataSelectionContextService(
                 return Reply("denied", "activity-data.catalog-denied");
             var analysis = await authorities[0].AnalyzeAsync(document, request.Target, request.Query, cancellationToken);
             if (analysis.ContractRevision != snapshotHash) return Reply("unavailable", "activity-data.analysis-invalid");
-            analysis = analysis.WithoutDeclaredMembers(request.Query?.MemberPath ?? []);
             // Recheck after asynchronous metadata work; browsing never refreshes or writes the draft.
             var latest = await drafts.FindAsync(request.DraftId, cancellationToken);
             if (latest is null || latest.Id != request.DraftId || latest.DefinitionId != definitionId ||

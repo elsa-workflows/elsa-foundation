@@ -82,6 +82,14 @@ public sealed record ActivityDataSelectionQuery
         init => _memberPath = value.IsDefault ? [] : value;
     }
     public ActivitySerializedShapeLimits ShapeLimits { get; init; } = new();
+    /// <summary>
+    /// Server-only opt-in for expression authoring help. When true, a source's
+    /// <see cref="ActivitySerializedShapeState.Declared"/> shape (advisory members of its declared type) is returned
+    /// as described. When false, the default, it is answered as the profile-unbound Unknown shape without members,
+    /// so pickers, validation and publication see only what the stored value proves. Ignored by JSON.
+    /// </summary>
+    [JsonIgnore]
+    public bool IncludeDeclaredMembers { get; init; }
 }
 
 /// <summary>Actual target metadata. It intentionally contains no authored literal or runtime business value.</summary>
@@ -143,27 +151,6 @@ public sealed record ActivityDataSelectionAnalysis(
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ActivityBindingConversionPreview? BindingConversion { get; init; }
-
-    /// <summary>
-    /// The analysis an Activity Data picker discloses. A <see cref="ActivitySerializedShapeState.Declared"/> source
-    /// shape carries advisory declared-type members for expression completion; the picker receives it as the
-    /// unbound Unknown answer without members, keeping the declared type only for a whole-value query.
-    /// </summary>
-    /// <param name="memberPath">The member path the analysis was queried with.</param>
-    public ActivityDataSelectionAnalysis WithoutDeclaredMembers(ImmutableArray<string> memberPath) =>
-        Sources.Any(source => source.Shape.State == ActivitySerializedShapeState.Declared)
-            ? this with { Sources = [.. Sources.Select(source => source.Shape.State != ActivitySerializedShapeState.Declared ? source : source with
-            {
-                Shape = new(ActivitySerializedShapeState.Unknown, ActivitySerializedValueKind.Unknown,
-                    memberPath.IsDefaultOrEmpty ? source.Shape.Type : null, source.Shape.SourceContractRevision, string.Empty, string.Empty)
-                {
-                    ReasonCode = "activity.shape.serialization-profile-unbound",
-                    IsNullable = source.Shape.IsNullable,
-                    IsSensitive = source.Shape.IsSensitive,
-                    IsCredential = source.Shape.IsCredential
-                }
-            })] }
-            : this;
 }
 
 /// <summary>

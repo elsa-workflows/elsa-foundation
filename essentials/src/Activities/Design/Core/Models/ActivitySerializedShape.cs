@@ -11,8 +11,9 @@ public enum ActivitySerializedShapeState
     Truncated,
     Unavailable,
     /// <summary>
-    /// The shape describes the declared type's members. The names come from the declared type and are not proven
-    /// for the stored value, so a consumer that validates must treat this state as unknown.
+    /// The shape describes the declared type's members, within the requested limits, so the list may be partial.
+    /// The names come from the declared type and are not proven for the stored value, so a consumer that validates
+    /// or browses stored values must treat this state as unknown.
     /// </summary>
     Declared
 }

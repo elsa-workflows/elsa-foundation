@@ -167,7 +167,7 @@ internal sealed class ClrActivitySerializedShapeSource(
             return Answer(unbound);
         try
         {
-            var shape = new ClrSerializedShapeReader(ownerContractIdentity, limits, cancellationToken).Read(descriptors[0].ClrType, declaredType, memberPath);
+            var shape = new ClrSerializedShapeReader(ownerContractIdentity, limits, cancellationToken, hashAssets: false).Read(descriptors[0].ClrType, declaredType, memberPath);
             return Answer(shape.State is ActivitySerializedShapeState.Known or ActivitySerializedShapeState.Truncated
                 ? shape with { State = ActivitySerializedShapeState.Declared, ReasonCode = "activity.shape.declared-type" }
                 : unbound);

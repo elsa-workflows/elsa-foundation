@@ -71,7 +71,6 @@ internal sealed class ActivityDataContextService(IServiceProvider services)
             var catalogRevision = await CatalogRevisionAsync(snapshot.State.RootActivity, structures, lookup, ct);
             var analysis = await analyzer.AnalyzeAsync(document, new(request.NodeId, request.InputKey), request.Query, ct);
             if (analysis.ContractRevision != document.ContractRevision) return Failure("unavailable", "invalid-analysis");
-            analysis = analysis.WithoutDeclaredMembers(request.Query?.MemberPath ?? []);
             // A refused source or target is disclosed with its findings, after the same rechecks as a supported answer.
             var invalid = analysis.Target is null || !analysis.Findings.IsEmpty;
             var queryRevision = WorkflowAuthoringRevision.JsonDigest(JsonSerializer.SerializeToElement(

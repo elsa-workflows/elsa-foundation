@@ -107,7 +107,9 @@ Provider-owned, bounded outgoing serialized metadata for admitted source contrac
 and `DescribeDeclaredTypeAsync(TypeReference declaredType, string ownerContractIdentity, ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken)`
 both return `ValueTask<ActivitySerializedShape?>`. Resource/catalog/disclosure authorization remains with
 the caller. Null declines ownership; a matching opaque/missing contract returns Unknown/Unavailable;
-multiple matching owners are refused. Providers must not instantiate business values, getters,
+multiple matching owners are refused. `DescribeDeclaredTypeAsync` may return `Declared`: advisory members of
+the declared type that the stored value does not prove. Consumers treat `Declared` as Unknown unless they offer
+authoring help; the Activity Data analyzer returns it only to a query with `IncludeDeclaredMembers`. Providers must not instantiate business values, getters,
 attributes/converters or install Runtime aliases to discover fields.
 
 `ClrActivitySerializedShapeSource`, registered scoped by CLR reconciliation with `TryAddEnumerable`, is

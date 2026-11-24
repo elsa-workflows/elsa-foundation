@@ -88,12 +88,14 @@ public sealed class PersistedExpressionAuthoringContextSource(
         for (var skip = 0; ; skip += 100)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var page = await analyzer.AnalyzeAsync(candidate, target, new() { Skip = skip, Take = 100, ShapeLimits = new(4, remainingMembers) }, cancellationToken);
+            var page = await analyzer.AnalyzeAsync(candidate, target, new() { Skip = skip, Take = 100, ShapeLimits = new(4, remainingMembers), IncludeDeclaredMembers = true }, cancellationToken);
             if (page.ContractRevision != candidate.ContractRevision || page.Target is null || !page.Findings.IsEmpty) return null;
             foreach (var source in page.Sources)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                remainingMembers = Math.Max(0, remainingMembers - CountMembers(source.Shape));
+                // Declared members are advisory and bounded per page by the analyzer; only proven members spend this budget.
+                if (source.Shape.State != ActivitySerializedShapeState.Declared)
+                    remainingMembers = Math.Max(0, remainingMembers - CountMembers(source.Shape));
                 revisions.Add(WorkflowAuthoringRevision.JsonDigest(JsonSerializer.SerializeToElement(source,
                     WorkflowsDesignJsonOptions.WireContext.ActivityDataSelectionSourceFacts)));
                 var symbol = await ToSymbol(source, inputNames, canonical.State.RootActivity, cancellationToken);

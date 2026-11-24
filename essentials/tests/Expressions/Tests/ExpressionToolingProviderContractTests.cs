@@ -112,13 +112,16 @@ public sealed class ExpressionToolingProviderContractTests
         const string note = "From the declared type `shop.address`; the stored value may differ.";
         var provider = new JavaScriptExpressionToolingProvider();
         var customerShape = new ExpressionValueShape("shop.address", ExpressionValueKind.Object,
-            Members: [new("city", new("String", ExpressionValueKind.Scalar, false), note)]);
+            Members: [new("city", new("String", ExpressionValueKind.Scalar, false), note),
+                new("home", new("shop.street", ExpressionValueKind.Object, Members: [new("street", new("String", ExpressionValueKind.Scalar, false), note)]), note)]);
         var scope = CreateScope("JavaScript", [new("customer", "customer", ExpressionSymbolKind.Variable, customerShape)]);
 
         var completion = await provider.GetCompletionsAsync(new(scope, "variables.customer.ci", new(0, 21)), CancellationToken.None);
         var validation = await provider.ValidateAsync(new(scope, "variables.customer.cty"), CancellationToken.None);
         var hover = await provider.GetHoverAsync(new(scope, "variables.customer.city", new(0, 23)), CancellationToken.None);
 
+        var nested = await provider.GetCompletionsAsync(new(scope, "variables.customer.home.", new(0, 24)), CancellationToken.None);
+        Assert.Equal("street", Assert.Single(nested.Payload!.Items).Label);
         var item = Assert.Single(completion.Payload!.Items);
         Assert.Equal("city", item.Label);
         Assert.Equal("String", item.Detail);
