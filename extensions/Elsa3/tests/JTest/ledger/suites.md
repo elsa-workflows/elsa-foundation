@@ -26,12 +26,12 @@ One row per suite file under `tests/` (spec 1235, data-model.md). Results: see d
 | `composition/workflow-as-activity-tests.json` | composition-workflow-as-activity-root.json, composition-workflow-as-activity-sub.json | pass | not run | 11 |
 | `correlate/correlate-guid-tests.json` | correlate-guid.json | pass | not run | 11 |
 | `events/basic-event-tests.json` | events-listener.json, events-publisher.json | pass | not run | 11 |
-| `http/form-files-tests.json` | http-endpoints.json | pass | not run | 11 |
-| `http/headers-tests.json` | http-endpoints.json | pass | not run | 11 |
-| `http/multiple-supported-methods-tests.json` | http-endpoints.json | pass | not run | 11 |
-| `http/query-parameter-tests.json` | http-endpoints.json | pass | not run | 11 |
-| `http/request-body-tests.json` | http-endpoints.json | pass | not run | 11 |
-| `http/route-parameter-tests.json` | http-endpoints.json | pass | not run | 11 |
+| `http/form-files-tests.json` | http-endpoints.json | pass | fail (definition refused: `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`) | 11, 12 |
+| `http/headers-tests.json` | http-endpoints.json | pass | fail (definition refused: `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`) | 11, 12 |
+| `http/multiple-supported-methods-tests.json` | http-endpoints.json | pass | fail (definition refused: `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`) | 11, 12 |
+| `http/query-parameter-tests.json` | http-endpoints.json | pass | fail (definition refused: `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`) | 11, 12 |
+| `http/request-body-tests.json` | http-endpoints.json | pass | fail (definition refused: `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`) | 11, 12 |
+| `http/route-parameter-tests.json` | http-endpoints.json | pass | fail (definition refused: `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`) | 11, 12 |
 | `javascript/array-methods-tests.json` | javascript-array-methods.json | pass | not run | 11 |
 | `javascript/date-methods-tests.json` | javascript-date-methods.json | pass | not run | 11 |
 | `javascript/elsa-functions-tests.json` | javascript-elsa-functions.json | pass | not run | 11 |

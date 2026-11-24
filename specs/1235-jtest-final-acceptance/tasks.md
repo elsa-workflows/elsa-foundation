@@ -141,10 +141,10 @@ an approved incompatibility passes.
 case-insensitive lookup, and normalizes nothing the contract's translation table does not list; an output Elsa 4
 cannot produce with the same meaning fails the template with the output named (FR-011, FR-013).
 
-- [ ] T023 [P] [US3] Create `JTest/environments/elsa4.json` (same keys as `elsa3.json`, differing only in
+- [X] T023 [P] [US3] Create `JTest/environments/elsa4.json` (same keys as `elsa3.json`, differing only in
   engine-specific values; the executor base `{base}/workflows/http` comes from `ELSA_EXECUTOR_BASE_URL`) and `JTest/global-configuration.elsa4.json` (template search path `templates-elsa4/*`)
   per contracts/run-hosts.md.
-- [ ] T024 [P] [US3] Write `templates-elsa4/elsa-api-login-template.json`: `elsa-authenticate` per
+- [X] T024 [P] [US3] Write `templates-elsa4/elsa-api-login-template.json`: `elsa-authenticate` per
   contracts/templates.md.
 - [ ] T025 [P] [US3] Write the Elsa 4 versions of the templates added in T020, in `templates-elsa4/`, with outputs of
   the same meaning (the execute template follows contracts/templates.md, *Execute*: resolve the published artifact, start, read the

@@ -1,0 +1,17 @@
+{
+    "elsaApi:baseUrl": "${ELSA_API_BASE_URL}",
+    "elsaApi:username": "${ADMIN_USERNAME}",
+    "elsaApi:password": "${ADMIN_PASSWORD}",
+    "elsaExecutorApi:baseUrl": "${ELSA_EXECUTOR_BASE_URL}",
+    "correlationId": "${CORRELATION_ID}",
+    "dateNowIsoString": "${DATE_NOW_ISO_STRING}",
+    "dispatch": {
+        "channels": {
+            "channel_1": "",
+            "channel_2": "",
+            "channel_3": "",
+            "channel_Default": ""
+        }
+    },
+    "dispatchWaitTimeMilliseconds": 60000
+}
