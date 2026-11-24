@@ -482,6 +482,13 @@ The initiative issue's description is the board. It holds navigation and status 
 approvers and who is needed where. Analyses, discussion and evidence live in the PRs. Only the coordinator, or the
 recorded delegate, edits it.
 
+**A new board states the problem, not a solution.** When an initiative starts, its *Problem*, *Goal* and *Sources for
+research* sections describe what is wrong today (with one concrete example), what must be true when the initiative is
+done, and where each participant can start their own research (ADRs, code, specs, the case that surfaced it). They
+carry no proposed solution, design direction, recommendation or assumption about the outcome: those are kick-off
+inputs and analyses, so that the participants shape the scope together. An initiative that the first stable release
+needs carries the `ga-blocker` label.
+
 ```markdown
 Last synced <date> by the coordinator. Newer updates are in the comments below.
 
@@ -493,8 +500,14 @@ Last synced <date> by the coordinator. Newer updates are in the comments below.
 
 **Branch:** `initiative/<n>-<slug>`. Main merged in at `<main commit>` on <date>.
 
+## Problem
+<what is wrong or missing today, as observed facts, with one concrete example; no solutions>
+
 ## Goal
-<one paragraph: what the objective is and how we will know it is reached>
+<one paragraph: what the objective is and how we will know it is reached; no solutions>
+
+## Sources for research
+<links to the ADRs, code, specs and cases each participant can start from>
 
 ## Approvers
 | Person | Capacity | Designated by |
