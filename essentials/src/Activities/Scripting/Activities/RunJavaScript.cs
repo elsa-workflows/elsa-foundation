@@ -152,9 +152,11 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
             // script, which a protected input can supply, so it keeps its text only when no input is protected.
             var isParseError = exception.GetType().Name is "ScriptPreparationException" or "ParseErrorException";
             if (context.HasProtectedInputs || ((session?.HasReadProtectedValue == true || workflowState?.HasReadProtectedValue == true) && !isParseError))
-                throw new RedactedScriptFailureException(exception is Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure valueFree
-                    ? valueFree.ValueFreeMessage
-                    : $"The script failed ({exception.GetType().Name}). Its message is withheld because a value it read is protected.");
+            {
+                if (exception is Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure valueFree)
+                    throw new RedactedScriptFailureException(valueFree.ValueFreeMessage);
+                throw new InvalidOperationException($"The script failed ({exception.GetType().Name}). Its message is withheld because a value it read is protected.");
+            }
             throw;
         }
 

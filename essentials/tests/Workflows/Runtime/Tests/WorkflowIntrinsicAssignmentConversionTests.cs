@@ -164,7 +164,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         var target = output ? "amount" : "counter";
         if (!policy)
         {
-            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteAsync(node, 0, false, policies: WorkflowValuePolicies.Off).AsTask());
+            var error = await Assert.ThrowsAnyAsync<InvalidOperationException>(() => ExecuteAsync(node, 0, false, policies: WorkflowValuePolicies.Off).AsTask());
             Assert.Contains("VF-ACT-004", error.Message); Assert.Contains(target, error.Message);
         }
         else

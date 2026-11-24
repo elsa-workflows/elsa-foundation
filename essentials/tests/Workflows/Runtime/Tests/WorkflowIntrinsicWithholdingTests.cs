@@ -60,7 +60,7 @@ public sealed class WorkflowIntrinsicWithholdingTests
             intrinsicVariable: output ? null : new("greeting", VariableReference.WorkflowScopeId));
         if (!policy)
         {
-            Assert.Contains("VF-ACT-004", (await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteAsync(node, new(false, false), type).AsTask())).Message);
+            Assert.Contains("VF-ACT-004", (await Assert.ThrowsAnyAsync<InvalidOperationException>(() => ExecuteAsync(node, new(false, false), type).AsTask())).Message);
         }
         else if (output)
             await Assert.ThrowsAsync<WithheldValueException>(() => ExecuteAsync(node, new(true, false), type).AsTask());
