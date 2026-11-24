@@ -79,7 +79,7 @@ silent misreads of a changed report.
 ## R-5 Where the check runs
 
 **Decision**: `tools/skills/check_migration_skill.py` runs (self-test, then real) as its own step next to
-`Check catalog and module README links` in `.github/workflows/ci.yml`. `plugins/**/*.md` joins the documentation-only
+`Check catalog and module README links` in `.github/workflows/ci.yml`. `plugins/**` joins the documentation-only
 paths in `tools/ci/change_scope.py`, so a catalog edit gets the fast run. The sample's build and tests run in the PR
 tier like any test project.
 
@@ -95,7 +95,9 @@ API change is a code change, so the full build runs and breaks the sample.
 named `Type` in namespace `Ns`; `[Activity("Ns"` on a class named `Type` (the second string argument of the common
 three-argument form is the category, not the type); `Type = "Type"` in an activity attribute; or the five-argument
 form `[Activity("Ns", "Type", <version>, ...)]`. A
-JavaScript function by `SetValue("name"`; a variable type by `AddVariableTypeAndAlias<` with the alias; a storage
+JavaScript function by `SetValue("name"`; a variable type by the alias in `AddVariableTypeAndAlias<`/`AddTypeAlias<`,
+or, because `AddVariableTypeAndAlias<T>(category)` and `AddVariableType<T>` use the class name as the alias, by a
+class named like the alias inside `AddVariableType<`, `AddVariableTypes(` or `AddVariableTypeAndAlias<`; a storage
 driver by the type name before the comma in its assembly-qualified name.
 
 **Rationale**: Elsa 3 forms the type name as `{attribute namespace or CLR namespace}.{attribute type or class name}`.

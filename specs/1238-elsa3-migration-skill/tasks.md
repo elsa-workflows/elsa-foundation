@@ -7,11 +7,11 @@
 **Sample root**: `extensions/Elsa3/tests/Migration/` (written `Migration/` below).
 
 **Tests**: The sample's xunit tests (framework §2.23: they prove each *port* example behaves as the catalog says)
-and the check's `--self-test`. The skill text itself is verified by the walkthrough (T030–T032). No test framework
+and the check's `--self-test`. The skill text itself is verified by the walkthrough (T029–T031). No test framework
 beyond xunit.
 
-**Dependencies outside this spec**: T030–T032 need spec 1237's `inventory` and `assess` commands. T020 and T021
-need spec 1237's `report.json` schema agreed. T013 needs the converter's replaced-global declaration member merged. Everything else can start once this spec is approved.
+**Dependencies outside this spec**: T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
+need spec 1237's `report.json` schema agreed. Everything else can start once this spec is approved.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -49,13 +49,13 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
   in `AcmeFeature`; tests for trigger delivery and stimulus description.
 - [ ] T009 [P] Services (case 10): an activity taking `IInvoiceClient` by constructor; test with a fake.
 - [ ] T010 [P] Variables and workflow state (case 11, port part): `VariableReference<decimal>` read and write through
-  `context.Variables`; an `[AccessesWorkflowState]` activity setting an output; tests with fake step variables and
+  `context.Variables`; an `[AccessesUndeclaredVariables]` read by name; an `[AccessesWorkflowState]` activity setting an output; tests with fake step variables and
   workflow state.
 - [ ] T011 [P] Background (case 12): an activity marked `[BackgroundExecutionSafe]` that honours the cancellation token
   and keys its effect on the invocation id; test for cancellation.
 - [ ] T012 [P] Cancellation and faults (case 13): fault and cancel transitions; tests for each.
-- [ ] T013 [P] JavaScript host function (case 14): `acme.lookupCustomer` declared in `AcmeFeature`, naming the
-  replaced Elsa 3 global `lookupCustomer`; test calling the
+- [ ] T013 [P] JavaScript host function (case 14): `acme.lookupCustomer` declared in `AcmeFeature` with
+  `ReplacesGlobalFunctions = ["lookupCustomer"]`; test calling the
   implementation with JSON arguments.
 - [ ] T014 [P] Variable type (case 16): a descriptor provider registering `acme.Invoice`; test that the descriptor has
   the dotted alias.
@@ -64,7 +64,7 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
 - [ ] T016 `tools/skills/check_migration_skill.py` per [contracts/catalog-entry.md](contracts/catalog-entry.md), with
   `--self-test` covering every failure rule.
 - [ ] T017 Add a step running the check (self-test, then real) next to `Check catalog and module README links` in
-  `.github/workflows/ci.yml`, and add `plugins/**/*.md` to the documentation-only paths in `tools/ci/change_scope.py`
+  `.github/workflows/ci.yml`, and add `plugins/**` to the documentation-only paths in `tools/ci/change_scope.py`
   with a case in its `--self-test`.
 
 **Checkpoint**: sample builds, its tests pass, self-test passes.
@@ -88,7 +88,7 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
 ## Phase 4: User Story 1 — the guided journey (P1)
 
 - [ ] T020 [US1] Write `skill/migration-plan-template.md` per [contracts/plan-template.md](contracts/plan-template.md)
-  and [data-model.md](data-model.md), with one example row per table using `Acme` names.
+  and [data-model.md](data-model.md), with one example row per table using `Acme` names; the accepted-refusal example uses the placeholder `<code>`.
 - [ ] T021 [US1] Write `skill/SKILL.md`: front matter per [contracts/adapters.md](contracts/adapters.md); then, in
   order, the privacy statement (FR-005, FR-006: what reaches the AI provider; ask before each new raw definition or
   source file, naming the file and the JSON path), what the skill does and does not do (FR-021), "read the plan first" (FR-007),
@@ -128,12 +128,12 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
 
 ## Phase 9: Walkthrough and finish (needs spec 1237)
 
-- [ ] T030 Build a synthetic Elsa 3 export and Elsa 3 source (one custom activity, one JavaScript function, one variable
+- [ ] T029 Build a synthetic Elsa 3 export and Elsa 3 source (one custom activity, one JavaScript function, one variable
   type, one storage driver) outside the repository; no customer material.
-- [ ] T031 SC-001: a reviewer with no AI follows the README and `SKILL.md`, runs the inventory and ports the activity.
-- [ ] T032 SC-002 and SC-005: run the skill with two different AI assistants; compare plans; stop and resume one
+- [ ] T030 SC-001: a reviewer with no AI follows the README and `SKILL.md`, runs the inventory and ports the activity.
+- [ ] T031 SC-002 and SC-005: run the skill with two different AI assistants; compare plans; stop and resume one
   session mid-`prepare`. Fix the skill text where the plans differ. Post the evidence on the PR.
-- [ ] T033 Set `**Status**: Implemented` in `spec.md` in the last implementation PR.
+- [ ] T032 Set `**Status**: Implemented` in `spec.md` in the last implementation PR.
 
 ## Dependencies
 

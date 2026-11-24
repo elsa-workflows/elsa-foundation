@@ -161,7 +161,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   skill asks for more source or records the user's decision to redesign or drop the definitions that use it.
 - A component exists in the source but no definition uses it: it is not migrated (inventory comes only from the
   report).
-- Docker is not available, or the migration image for the skill's tool version cannot be pulled: the skill stops
+- Docker is not available, or the migration image tagged with the plan's Elsa 4 version cannot be pulled: the skill stops
   before running anything and says what to install or which version to use.
 - A JavaScript global is used other than as a direct call (assigned to a variable, passed as a callback): the
   converter does not rewrite it, so it would fail at run time. The converter reports such a reference as an ordinary
@@ -200,7 +200,9 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 **Privacy**
 
 - **FR-005**: Before reading any file, the skill MUST tell the user what can reach the AI provider: the redacted
-  report; raw definitions and source files only after the user agrees, each time it is a new file.
+  report; everything else only after the user agrees. It asks once per Elsa 3 source folder before searching it
+  (FR-009), and before each raw definition and each other file it opens, naming the file. It never reads the user's
+  `appsettings.json` without asking, and warns that the file can hold connection strings and secrets.
 - **FR-006**: The skill MUST rely on the report being complete without an AI and always redacted (spec 1237).
 
 **The journey**
@@ -212,23 +214,23 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   (FR-022) on the export and take the custom components only from the report's inventory: activity types, JavaScript functions, variable types
   and storage drivers, with usage counts. A component no definition uses is not migrated.
 - **FR-009**: The skill MUST ask for the folders or repositories of the user's Elsa 3 source and match each
-  component to its implementation by a focused search: an activity by its Elsa 3 type name (namespace and class, or
-  the namespace and type its activity attribute sets), a JavaScript function by its global name, a variable type by
-  its alias, a storage driver by its type name. It records the source location, or "not found", in the plan.
+  component to its implementation by a focused search (research R-6): an activity by its Elsa 3 type name (namespace
+  and class, or what its activity attribute sets), a JavaScript function by its global name, a variable type by its
+  alias or by a class of that name in a variable type registration, a storage driver by its type name. It records the source location, or "not found", in the plan.
 - **FR-010**: **Prepare.** For each component the skill MUST record in the plan its Elsa 4 target name, the Elsa 4
   feature and package it belongs to, the porting cases that apply, the tests to port, and its status; then port it
   by following the applicable catalog cases. The JavaScript prefix choice is a recorded step: the user picks one or
   more prefixes and the plan records which function takes which.
-- **FR-011**: Before running the assessment, the skill MUST check that every custom feature in the plan is enabled
-  in the user's `appsettings.json`; after it, that each appears in the report's closure section. It reports any
-  missing one.
+- **FR-011**: Before running the assessment, the skill MUST have the user confirm that every custom feature in the
+  plan is enabled in their `appsettings.json` (reading the file only with consent, FR-005); after it, it MUST check
+  that each appears among the features the report says the run loaded. It reports any missing one.
 - **FR-012**: **Test migration.** The skill MUST run `elsa3-migration workflows assess` in the Elsa 3 migration image
   (FR-022) with the user's packages folder and settings file, record the report path in the plan, and work through the report: Must fix, then Reconsider,
   then Take into account; root causes before definitions blocked by a dependency. It reruns until every remaining
   definition converts or carries a refusal the user accepted, recorded in the plan with the reason.
 - **FR-013**: The skill MUST NOT hard-code diagnostic knowledge. It reads each finding's code, message, JSON path and
   guidance from the report, and it reads the categories and buckets the report defines (spec 1237). The skill folder
-  contains no diagnostic code literal.
+  contains no diagnostic code literal; examples use a placeholder such as `<code>`.
 
 - **FR-022**: **Running the tool.** The command-line tool runs inside the Elsa 3 migration image (spec 1237); the
   skill starts it with `docker run`, mounting the export, the packages folder, the `appsettings.json` and the output
@@ -315,7 +317,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   with the same components, target names and applicable cases.
 - **SC-003**: All 19 catalog cases carry a verdict and before and after examples; every *port* example matches its
   sample region and the sample's tests pass.
-- **SC-004**: The skill folder contains zero diagnostic code literals and zero references to one AI vendor.
+- **SC-004**: The skill folder contains zero diagnostic code literals and zero references to one AI vendor; the
+  check enforces the Elsa 3 conversion and value-flow code prefixes, and review covers the rest.
 - **SC-005**: A session started halfway resumes from the plan without repeating a finished step.
 - **SC-006**: Renaming an Elsa 4 API a *port* case uses makes CI fail.
 
@@ -325,7 +328,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   report contract, and the categories and buckets. This spec only references that schema.
 - Spec 1236 delivers the essentials engine image the handoff names; spec 1237 delivers the Elsa 3 migration image,
   built from it, that runs the tool.
-- The converter diagnoses unregistered variable types and unmapped storage drivers and maps declared JavaScript
+- The converter, on the initiative branch, diagnoses unregistered variable types and unmapped storage drivers and maps declared JavaScript
   functions to prefixed host functions; the skill relies on the guidance those diagnostics carry.
 - The user has Docker, and the .NET SDK to build their feature packages. The only network calls are NuGet restore
   and image pulls.
