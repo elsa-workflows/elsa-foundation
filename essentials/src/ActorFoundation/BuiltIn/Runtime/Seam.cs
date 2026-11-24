@@ -42,7 +42,9 @@ public sealed class ScopeOwnershipLostException(string message) : InvalidOperati
 public interface IScopeHostRun
 {
     /// <summary>After the last pass, end admitted off-turn work before the runtime gives up its scopes.
-    /// Cancellation abandons the wait and a release already issued may still finish.</summary>
+    /// Cancellation abandons the wait and a release already issued may still finish. A
+    /// <see cref="ScopeOwnershipLostException"/>, thrown once the work has ended, means a scope's fence was lost meanwhile:
+    /// the runtime still releases the rest, completes the run and reports it. Any other exception abandons the run.</summary>
     ValueTask PrepareToStopAsync(CancellationToken cancellationToken = default);
 
     /// <summary>The attached run completed its shutdown releases. The host can accept a fresh attachment.</summary>

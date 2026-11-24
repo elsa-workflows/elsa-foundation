@@ -80,9 +80,11 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             }
             if (stopping is not null)
             {
-                // A stop abandoned at its deadline completes as cancelled; the next round refuses the restart.
+                // A stop abandoned at its deadline completes as cancelled; the next round refuses the restart. A stop that
+                // released and then reported a lost fence ended its run: the queued start goes on, without that loss.
                 try { await stopping.WaitAsync(cancellationToken); }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && stopping.IsCanceled) { }
+                catch (ScopeOwnershipLostException) when (!cancellationToken.IsCancellationRequested) { }
             }
             else if (counted is not null)
             {
@@ -157,8 +159,9 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         Task? operation = null, abandoned = null;
         try
         {
-            // A direct caller may stop with a pass or an activation under way: the drain must not judge answers or the
-            // fence beside it. RuntimeNode has joined its loops already, so this finds nothing in flight there.
+            // A direct caller may stop with a pass, an activation, a balance round (with its set gain or release), a give-up
+            // or a node pass under way: the drain must not judge answers or the fence beside it, and nothing may be gained
+            // after the release. RuntimeNode has joined its loops already, so this finds nothing in flight there.
             _closing = true;
             operation = IdleAsync();
             await operation.WaitAsync(cancellationToken);
@@ -166,8 +169,10 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             {
                 operation = hostRun.PrepareToStopAsync(cancellationToken).AsTask();
                 // A drain that lost a fence still ends its jobs first. Release what is still held, then report the loss.
+                // A loss that arrives with the deadline is the deadline's: the run is abandoned, as on any cancellation.
                 try { await operation.WaitAsync(cancellationToken); }
                 catch (ScopeOwnershipLostException error) when (!cancellationToken.IsCancellationRequested) { drainFailure = error; }
+                catch (ScopeOwnershipLostException) when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
             }
             if (beforeRelease is not null)
             {
@@ -187,7 +192,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             else
                 for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++)
                 {
-                    operation = DeactivateAsync(scope, cancellationToken);
+                    operation = GiveUpAsync(scope);
                     await operation.WaitAsync(cancellationToken);
                 }
             if (cancellationToken.IsCancellationRequested) return;
@@ -307,6 +312,13 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// <summary>Give the scope up. Whoever takes it next finds no death.</summary>
     public async Task DeactivateAsync(int scope, CancellationToken cancellationToken = default)
     {
+        if (!BeginWork()) return;     // a stop under way gives every scope up itself
+        try { await GiveUpAsync(scope); }
+        finally { EndWork(); }
+    }
+
+    private async Task GiveUpAsync(int scope)
+    {
         if (_releasing[scope] || Activation(scope) is not { } activation) return;
         _releasing[scope] = true;
         _active[scope] = null;
@@ -322,10 +334,14 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// </summary>
     public async Task BalanceAsync(CancellationToken cancellationToken = default)
     {
-        if (_balancing) return;
+        if (_balancing || !BeginWork()) return;     // a stop joins a round under way, set gains and releases included
         _balancing = true;
         try { await BalanceRoundAsync(cancellationToken); }
-        finally { _balancing = false; }
+        finally
+        {
+            _balancing = false;
+            EndWork();
+        }
     }
 
     private async Task BalanceRoundAsync(CancellationToken cancellationToken)
@@ -358,7 +374,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
                 cancellationToken.ThrowIfCancellationRequested();
                 // Earlier give-ups may have awaited the store while a pass started on this worker.
                 if (_passing[surplus] || _activating[surplus] || !Owns(surplus)) continue;
-                await DeactivateAsync(surplus, cancellationToken);
+                await GiveUpAsync(surplus);
             }
         }
         if (take.Count > 1 && _host is IScopeSetGain { SupportsSetGain: true } gains)
@@ -427,9 +443,13 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// </summary>
     public async Task NodePassAsync(CancellationToken cancellationToken = default)
     {
-        if (_host is not INodeLeaseHost { NodeLease: not null } host) return;
-        foreach (var scope in await host.PassAsync(cancellationToken))
-            if ((uint)scope < (uint)partitions && !Owns(scope) && !_activating[scope]) await ActivateAsync(scope, cancellationToken);
+        if (_host is not INodeLeaseHost { NodeLease: not null } host || !BeginWork()) return;
+        try
+        {
+            foreach (var scope in await host.PassAsync(cancellationToken))
+                if ((uint)scope < (uint)partitions && !Owns(scope) && !_activating[scope]) await ActivateAsync(scope, cancellationToken);
+        }
+        finally { EndWork(); }
     }
 
     /// <summary>One pass of a scope this node holds, never two at once. Null when it holds none, or a pass is under way.</summary>
