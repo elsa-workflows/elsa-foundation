@@ -45,6 +45,12 @@ public sealed partial class EfStore
         return row.Id == StoredJobId(message.InboxKey) && row.Payload == message.Payload ? message : throw RootShape();
     }
 
+    private static void RequireRootTimedIssuance(TurnCommit turn, InstanceRow row)
+    {
+        if (row.Status == InstanceStatus.Faulted || turn.Sent.Count != 0 && !RootJobTicket.StartsTimedPair(turn.Sent, row.Id, row.Model))
+            throw RootShape();
+    }
+
     private async Task<PreparedRoot?> PrepareRootTimedTurnAsync(WorkerRoot root, TurnCommit turn, InstanceRow row, string? state,
         RootImage current, PartitionFence fence, Message[] wires, CancellationToken token)
     {

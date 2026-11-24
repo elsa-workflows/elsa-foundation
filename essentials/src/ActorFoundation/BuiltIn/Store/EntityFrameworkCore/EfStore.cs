@@ -132,8 +132,10 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     private sealed class RootValueDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootReplyDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootTimedJobSettlementDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootTimedJobPreviewDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     internal StoreFormat RequiredFormat => this switch
     {
+        RootTimedJobPreviewDb => StoreFormat.RootTimedJobPreview,
         RootTimedJobSettlementDb => StoreFormat.RootTimedJobSettlement,
         RootReplyDb => StoreFormat.RootReplies,
         RootValueDb => StoreFormat.RootValues,
@@ -152,10 +154,13 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
         _ => StoreFormat.Current
     };
     internal bool UsesRootSelfProtocol => this is RootSelfDb or RootTimerDb;
-    internal bool UsesRootJobProtocol => this is RootJobDb or RootTimedJobIssuanceDb or RootTimedJobSettlementDb;
+    internal bool UsesRootJobProtocol => this is RootJobDb or RootTimedJobIssuanceDb || UsesRootTimedJobSettlement;
     internal bool UsesRootJobPreview => this is RootJobDb;
     internal bool UsesRootTimedJobIssuance => this is RootTimedJobIssuanceDb;
-    internal bool UsesRootTimedJobSettlement => this is RootTimedJobSettlementDb;
+    internal bool UsesRootTimedJobPreview => this is RootTimedJobPreviewDb;
+    internal bool UsesRootTimedJobSettlement => this is RootTimedJobSettlementDb || UsesRootTimedJobPreview;
+    internal bool SupportsCorePreview => RequiredFormat == StoreFormat.Current || UsesRootJobPreview || UsesRootTimedJobPreview;
+    internal static KernelDb ForPostgresRootTimedJobPreview(DbContextOptions<KernelDb> options) => new RootTimedJobPreviewDb(options);
     internal bool UsesRootReplyProtocol => this is RootReplyDb;
     internal static KernelDb ForPostgresRootReplies(DbContextOptions<KernelDb> options) => new RootReplyDb(options);
     internal bool UsesRootValueProtocol => this is RootValueDb;

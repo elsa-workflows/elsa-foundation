@@ -276,7 +276,7 @@ public sealed partial class EfStore
             throw new NotSupportedException("Generated-root preview installation requires PostgreSQL.");
 
         await using var db = create();
-        if (!db.Database.IsNpgsql() || (db.RequiredFormat != StoreFormat.Current && !db.UsesRootJobPreview))
+        if (!db.Database.IsNpgsql() || !db.SupportsCorePreview)
             throw new NotSupportedException("Installation requires the ordinary or Native job PostgreSQL Core Preview format.");
         await PostgresRootAdmission.InstallAsync(db, cancellationToken, exclusiveFormat: true);
     }
@@ -322,7 +322,7 @@ public sealed partial class EfStore
             throw new NotSupportedException("Generated-root preview ingress requires PostgreSQL.");
 
         await using var db = create();
-        if (!db.Database.IsNpgsql() || (db.RequiredFormat != StoreFormat.Current && !db.UsesRootJobPreview))
+        if (!db.Database.IsNpgsql() || !db.SupportsCorePreview)
             throw new NotSupportedException("Ingress requires the ordinary or Native job PostgreSQL Core Preview format.");
         await PostgresRootAdmission.OpenJournalCursorAsync(db, cancellationToken);
         return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true), actorType);
