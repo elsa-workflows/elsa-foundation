@@ -1,6 +1,7 @@
 """Bind complete current SDK/store prior-cancellation cuts; never rewrite the historical witness."""
 import argparse
 import base64
+from contextlib import closing
 import gzip
 import importlib.util
 import json
@@ -11,6 +12,9 @@ import subprocess
 _spec = importlib.util.spec_from_file_location('fault_capture', Path(__file__).with_name('record-current-bpmn-fault-fixtures.py'))
 fault = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(fault)
+_canonical_spec = importlib.util.spec_from_file_location('canonical_fixture', Path(__file__).with_name('generate-variable-hash-vectors.py'))
+canonical = importlib.util.module_from_spec(_canonical_spec)
+_canonical_spec.loader.exec_module(canonical)
 sha = fault.sha
 STAGES = ['pending-outer-result', 'deferred-original-result', 'settled-after-restart']
 WRITERS = fault.WRITERS | {'Elsa.Activities.Bpmn.Core.dll', 'Elsa.Activities.Scheduling.dll',
@@ -39,7 +43,7 @@ def require(condition, message):
 
 def inspect(database, report):
     require(not any(Path(str(database) + suffix).exists() for suffix in ['-wal', '-shm', '-journal']), 'Unbound SQLite sidecars')
-    with sqlite3.connect(database.as_uri() + '?mode=ro&immutable=1', uri=True) as connection:
+    with closing(sqlite3.connect(database.as_uri() + '?mode=ro&immutable=1', uri=True)) as connection:
         connection.row_factory = sqlite3.Row
         require([tuple(row) for row in connection.execute('PRAGMA integrity_check')] == [('ok',)], 'Corrupt SQLite capture')
         require(not connection.execute('PRAGMA foreign_key_check').fetchall(), 'Foreign-key violation')
@@ -68,6 +72,19 @@ def inspect(database, report):
         physical = stores['native'][state['workflowExecutionId']]
         for field in ['pinnedExecutable', 'parentWorkflowExecutionId', 'tenantId', 'partition', 'authority']:
             require(physical[field] == encoded(state[field]), 'Physical native identity differs: ' + field)
+        for field in ['createdAt', 'startedAt', 'updatedAt', 'completedAt']:
+            require(physical[field] == state[field], 'Physical native date differs: ' + field)
+        require(physical['status'] == ['Pending', 'Running', 'Suspended', 'Completed', 'Faulted', 'Cancelled'][state['status']], 'Physical native status differs')
+    observed = report['observations']['cancellation']
+    physical = stores['outbox'][observed['outboxItemId']]
+    require(physical['outboxItemId'] == encoded(report['observations']['source']), 'Observed cancellation source differs')
+    require(physical['status'] == ['Pending', 'Delivering', 'Delivered', 'FailedRetryable', 'FailedFinal', 'Cancelled'][observed['status']], 'Observed cancellation status differs')
+    for field in ['recordedAt', 'deliveredAt', 'deliveryAttemptCount', 'deliveryFencingToken']:
+        require(physical[field] == observed[field], 'Observed cancellation differs: ' + field)
+    require(physical['intent']['payload'] == observed['intent']['payload'], 'Observed cancellation payload differs')
+    require(physical['intent']['recordedAt'] == observed['intent']['recordedAt'], 'Observed cancellation intent time differs')
+    for field in ['intentId', 'workflowExecutionId', 'kind', 'activityExecutionId', 'idempotencyKey']:
+        require(physical['intent'][field] == encoded(observed['intent'][field]), 'Observed cancellation intent differs: ' + field)
     return stores, counts
 
 
@@ -100,6 +117,14 @@ def verify_history(reports, stores):
         require(physical['payload'] == command['payload'], 'Physical queued payload differs')
         source = stores[index]['outbox'][original['source']]
         require(source['status'] == 'FailedRetryable' and source['deliveredAt'] is None, 'Earlier cancellation was acknowledged before settlement')
+    for store in stores:
+        intent = store['outbox'][original['source']]['intent']
+        require(intent['kind'] == encoded('Elsa.Bpmn.CancelEmbedded.v1') and intent['workflowExecutionId'] == encoded(original['middle']), 'Earlier source is not the original middle cancellation')
+        payload = intent['payload']
+        require(payload['executionId'] == 'u16:' + encoded(original['inner']) and
+                payload['scope'] == {'value': 'u16:' + encoded(first['state']['scope']['value'])}, 'Earlier cancellation targets another model or scope')
+        require(payload['model']['executable'] == {key: 'u16:' + encoded(value) for key, value in original['innerState']['executable'].items()} and
+                payload['model']['materialIncarnationId'] == 'u16:' + encoded(original['innerState']['materialIncarnationId']), 'Earlier cancellation targets another model pin')
     pending_claim, claim = [store['queue'][0] for store in stores[:2]]
     require(pending_claim['ClaimToken'] == 0 and pending_claim['ClaimOwnerId'] is None, 'Initial original result must be unclaimed')
     require(claim['Id'] == pending_claim['Id'] and claim['ClaimToken'] == 1 and claim['ClaimOwnerId'] is not None and
@@ -107,6 +132,14 @@ def verify_history(reports, stores):
     require(not stores[2]['queue'], 'Final original result remains queued')
     accepted = stores[2]['inputs'][command['commandId']]
     require(accepted['result']['status'] == 'Accepted' and accepted['executionId'] == encoded(original['outer']), 'Original result lacks its accepted physical receipt')
+    require(accepted['inputKind'] == encoded('native-result') and accepted['acceptedRevision'] == final['state']['revision'] and
+            accepted['invocationId'] == encoded(origin['invocationId']) and accepted['attemptId'] == encoded(origin['attemptId']), 'Accepted result lineage differs from original invocation')
+    queued = command['payload']
+    projected = {key: encoded(value) for key, value in queued.items() if key != 'payload'}
+    projected['authority'] = dict(projected['authority'], metadata={encoded(key): encoded(value) for key, value in queued['authority']['metadata'].items()})
+    projected['payload'] = queued['payload']
+    preimage = canonical.canonical(canonical.load_json(json.dumps(dict(format=encoded('elsa.model.input.v1'), command=projected))))
+    require(accepted['contentFingerprint'] == encoded(sha(preimage.encode('utf-8'))), 'Accepted result fingerprint differs from original queued command')
     # .NET ticks start at ordinal day one; the helper uses ordinal day one at 86400 seconds.
     require(fault.instant(accepted['acceptedAt']) - 86400 * 10_000_000 >= claim['VisibleAfterUtcTicks'], 'Recovery bypassed the original positive claim expiry')
     cancellation = stores[2]['outbox'][original['source']]
@@ -126,7 +159,7 @@ def record(repo, capture, output):
     historical = (repo / HISTORICAL).read_bytes()
     require(sha(historical) == HISTORICAL_GZIP and sha(gzip.decompress(historical)) == HISTORICAL_RAW, 'Historical original changed')
     recipes = {}
-    for file in [Path(__file__).resolve(), Path(fault.__file__).resolve()]:
+    for file in [Path(__file__).resolve(), Path(fault.__file__).resolve(), Path(canonical.__file__).resolve()]:
         relative = file.relative_to(repo).as_posix()
         committed = subprocess.check_output(['git', 'show', head + ':' + relative], cwd=repo)
         require(committed.replace(b'\r\n', b'\n') == file.read_bytes().replace(b'\r\n', b'\n'), 'Commit exact packager source before recording')
