@@ -2232,16 +2232,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (!Owns) return;
         var generation = _generation;
+        Task entered;
+        lock (_turnSync)
+            entered = Task.WhenAll(_slots.Values.Where(slot => slot is { Driving: true, EnteredTurn: not null })
+                .Select(slot => slot.EnteredTurn!));
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (Volatile.Read(ref _answered) is not null) await AnsweredAsync(cancellationToken);
             RequireDrainFence();
-
-            Task entered;
-            lock (_turnSync)
-                entered = Task.WhenAll(_slots.Values.Where(slot => slot is { Driving: true, EnteredTurn: not null })
-                    .Select(slot => slot.EnteredTurn!));
             if (_queue.Count > 0) await FlushAsync(cancellationToken);
             RequireDrainFence();
             cancellationToken.ThrowIfCancellationRequested();
@@ -2250,8 +2250,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (entered.IsCompleted)
             {
                 await entered;
-                return;
+                if (_queue.Count == 0) return;
             }
+            if (_queue.Count > 0) continue;
             await Task.WhenAny(entered, Task.Delay(_options.Lease / 3, cancellationToken));
         }
 
