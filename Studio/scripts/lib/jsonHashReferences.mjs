@@ -20,7 +20,7 @@ function scanResolvedReferences({ repoRoot, rootNames, options = {}, gateways = 
   const program = ts.createProgram(rootNames.map(file => resolve(file)), {
     target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler, lib: ["lib.es2022.d.ts", "lib.dom.d.ts"],
-    skipLibCheck: true, strict: true, noEmit: true, ...options
+    skipLibCheck: true, strict: true, noEmit: true, ...options, allowJs: true, checkJs: false
   });
   const checker = program.getTypeChecker();
   const references = [], moduleEdges = [], errors = [], roles = new Map(), assignments = new Map(), memberAssignments = new Map(), selections = new Map(), unresolvedWrites = [];
@@ -43,10 +43,14 @@ function scanResolvedReferences({ repoRoot, rootNames, options = {}, gateways = 
     }
     return symbol;
   };
+  const normalizedPosition = node => node.getSourceFile().text.slice(0, node.pos).replace(/\r\n/g, "\n").length;
   const id = symbol => {
     symbol = unalias(symbol);
     const declaration = symbol?.declarations?.[0];
-    return declaration ? `${rel(declaration.getSourceFile().fileName)}::${symbol.getName()}@${declaration.pos}` : "unresolved";
+    if (!declaration) return "unresolved";
+    const file = declaration.getSourceFile();
+    const position = normalizedPosition(declaration);
+    return `${rel(file.fileName)}::${symbol.getName()}@${position}`;
   };
   const seedModule = (definition, role) => {
     const file = program.getSourceFile(resolve(definition.file));
@@ -462,7 +466,7 @@ function scanResolvedReferences({ repoRoot, rootNames, options = {}, gateways = 
   const owner = node => {
     for (let parent = node.parent; parent; parent = parent.parent) {
       if (ts.isFunctionDeclaration(parent) || ts.isMethodDeclaration(parent) || ts.isGetAccessorDeclaration(parent) || ts.isSetAccessorDeclaration(parent))
-        return parent.name?.getText() ?? `<function@${parent.pos}>`;
+        return parent.name?.getText() ?? `<function@${normalizedPosition(parent)}>`;
       if ((ts.isArrowFunction(parent) || ts.isFunctionExpression(parent)) && ts.isVariableDeclaration(parent.parent)) return parent.parent.name.getText();
     }
     return "<module>";
@@ -533,5 +537,5 @@ function scanResolvedReferences({ repoRoot, rootNames, options = {}, gateways = 
     };
     visit(file);
   }
-  return { references, moduleEdges, errors };
+  return { references, moduleEdges, errors, sourceFiles: program.getSourceFiles().map(file => file.fileName) };
 }
