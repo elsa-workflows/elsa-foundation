@@ -1975,8 +1975,11 @@
         "dependencies": {
           "CShells.AspNetCore": "[0.0.31, )",
           "CShells.Nuplane": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Attention.Core": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Nuplane": "[0.0.13, )",
+          "Nuplane.Admin": "[0.0.13, )",
           "Nuplane.Loading": "[0.0.13, )",
           "Nuplane.Sources.Directory": "[0.0.13, )"
         }

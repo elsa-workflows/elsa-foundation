@@ -22,4 +22,24 @@ Configure the package feeds and assembly loading under `Nuplane`, and shell blue
 
 Hosts that want the shared Nuplane feed and loading setup but own their own CShells profile can call `AddNuplaneHostIntegration(configuration)` and configure `NuplaneIntegrationOptions` separately. The optional configuration argument selects the settings root used for Nuplane feeds and reload notifications; when omitted, the builder's configuration is used.
 
-Eager activation and automatic shell reload after package changes are enabled by default. To opt out, set `Elsa:Boot:EagerShellActivation:Enabled` or `Elsa:Shells:ReloadOnPackageChange` to `false`, respectively. The library does not map health or module-management endpoints or configure the application's authentication, cluster membership, or key storage.
+Eager activation and automatic shell reload after package changes are enabled by default. To opt out, set `Elsa:Boot:EagerShellActivation:Enabled` or `Elsa:Shells:ReloadOnPackageChange` to `false`, respectively. The library configures none of the application's authentication, cluster membership, or key storage. It maps nothing on its own; a host that wants the Foundation host surface opts in to each piece:
+
+```csharp
+const string HostOwner = "My.Host";
+
+var shellActivation = builder.AddFoundationShellHosting(shells => shells
+    .WithWebRouting(options => options.ExcludePaths = ["/health/live", "/health/ready"]));
+
+// The shell-activation Attention item, served by every active shell's Attention endpoint.
+builder.Services.AddSingleton<IAttentionContributor>(new ShellActivationAttentionContributor(shellActivation));
+
+var app = builder.Build();
+app.MapFoundationHealth(HostOwner); // /health/live and /health/ready
+
+// Reconcile and reload behind a static API key; read once at startup.
+var moduleManagement = ModuleManagementOptions.Read(builder.Configuration);
+if (moduleManagement.Enabled)
+    app.MapModuleManagementApi(moduleManagement, HostOwner);
+```
+
+The module-management endpoints need `AddNuplaneAdmin()` and the host's `ManualReconcileCoordinator` and `INuplaneAdminOperations` shared with shells, as `Elsa.Foundation.Host` composes them.
