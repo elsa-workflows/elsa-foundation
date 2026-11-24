@@ -1,10 +1,12 @@
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { expectedStudioDate, selectStudioTimeZone } from "./studioDateAssertions";
 import type { QuestionDefinition, QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
 import { attachDashboardJson, canonicalDashboardDefinition, dashboardBackend, observeNativeWeaverBoundary, registerDashboardCleanup, seedDashboardRuns, tag, type Capture, type Resource } from "./dashboardJourneySupport";
 
 /** Derive period membership from the independent runtime inspection API, never Dashboard results. */
 export async function dashboardComparisonJourney(page: Page, info: TestInfo, capture: Capture) {
   const backend = await dashboardBackend(page.request);
+  await selectStudioTimeZone(page, "Europe/Amsterdam");
   const boundary = observeNativeWeaverBoundary(page);
   const seeded = await seedDashboardRuns(backend, `comparison-${Date.now()}`);
   let saved: Resource | undefined;
@@ -101,6 +103,25 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
       expect(result.rows[0].values).toMatchObject({ definitionId: { value: seeded.definitionId }, total: { value: String(expectedCurrent.length) }, "baseline.total": { value: String(expectedBaseline.length) }, "delta.total": { value: String(delta) } });
     };
     check(included.result);
+    async function checkPeriodDates(zone: string) {
+      expect(included.result.periods, "Actual query period boundaries").toHaveLength(2);
+      for (const period of included.result.periods!) {
+        expect(period.timeZone).toBe("UTC");
+        const caption = page.locator(".named-preview > .named-result .named-result-provenance > p").filter({ hasText: new RegExp(`^${period.role}:`) });
+        for (const [index, instant] of [period.from, period.to].entries()) {
+          const matching = caption.locator("time").nth(index);
+          await expect(matching).toHaveAttribute("datetime", instant);
+          await expect(matching).toHaveText((await expectedStudioDate(page, instant, zone)).full);
+        }
+      }
+    }
+    await checkPeriodDates("Europe/Amsterdam");
+    await selectStudioTimeZone(page, "UTC");
+    await checkPeriodDates("UTC");
+    await expect(page.getByLabel("Time zone", { exact: true })).toHaveValue("UTC");
+    await expect(page.getByLabel("Start time (UTC, inclusive)", { exact: true })).toHaveValue(periods.from);
+    await expect(page.getByLabel("End time (UTC, exclusive)", { exact: true })).toHaveValue(periods.to);
+    await selectStudioTimeZone(page, "Europe/Amsterdam");
     await capture(page, info, "comparison-included");
     await captureValues("comparison-included");
     const saving = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/_elsa/studio/questions"));

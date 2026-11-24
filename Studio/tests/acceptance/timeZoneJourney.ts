@@ -1,4 +1,5 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
+import { expectedStudioDate } from "./studioDateAssertions";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 
@@ -24,15 +25,20 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
   });
 
   await page.goto("/settings/appearance");
+  const expectedDate = (instant: string, zone: string) => expectedStudioDate(page, instant, zone);
+  const preview = page.locator(".settings-card").filter({ has: page.getByRole("heading", { name: "Time zone", exact: true }) }).locator("time");
   const picker = () => page.getByLabel("Time zone", { exact: true });
   await expect(picker()).toHaveValue("browser");
+  expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe("America/New_York");
+  await expect(preview).toHaveText((await expectedDate((await preview.getAttribute("datetime"))!, "America/New_York")).full);
   await capture(page, info, "settings-browser");
   await picker().focus();
   await picker().press("Home");
   await picker().press("ArrowDown");
   await expect(picker()).toHaveValue("UTC");
   await picker().selectOption("Europe/Amsterdam");
-  await expect(page.locator("time")).toContainText(/UTC\+0[12]:00/);
+  await expect(preview).toContainText(/UTC\+0[12]:00/);
+  await expect(preview).toHaveText((await expectedDate((await preview.getAttribute("datetime"))!, "Europe/Amsterdam")).full);
   await capture(page, info, "settings-amsterdam");
   await page.reload();
   await expect(picker()).toHaveValue("Europe/Amsterdam");
@@ -119,20 +125,36 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
   await run("2026-01-15T09:30", "2026-01-15T09:30+01:00", "run-winter");
   await run("2026-07-15T09:30", "2026-07-15T09:30+02:00", "run-summer");
   const amsterdamRun = await run("2026-10-25T02:30", "2026-10-25T02:30+02:00", "run-fold");
-  async function inspectCreated(runId: string, offset: RegExp, name: string) {
+  async function inspectCreated(runId: string, zone: string, name: string) {
+    const retained = await api<{ instance: { createdAt: string; startedAt: string; completedAt: string } }>(`/runtime/workflows/instances/${runId}`);
     await page.goto(`/workflows/instances/${runId}`);
     const panel = page.getByRole("complementary", { name: "Run details panel", exact: true });
     await expect(panel).toBeVisible();
     await panel.getByRole("tab", { name: "Details", exact: true }).click();
-    const created = panel.locator("dt").filter({ hasText: /^Created$/ }).locator("xpath=following-sibling::dd[1]");
-    await expect(created).toContainText(offset);
+    const created = panel.locator("dt").filter({ hasText: /^Created$/ }).locator("xpath=following-sibling::dd[1]").locator("time");
+    await expect(created).toHaveAttribute("datetime", retained.instance.createdAt);
+    const expected = await expectedDate(retained.instance.createdAt, zone);
+    await expect(created).toHaveAttribute("title", expected.full);
+    await expect(created.locator(".studio-timestamp-date")).toHaveText(expected.date);
+    await expect(created.locator(".studio-timestamp-time")).toHaveText(expected.time);
     await capture(page, info, name);
+    return { created, instant: retained.instance.createdAt };
   }
-  await inspectCreated(amsterdamRun, /UTC\+0[12]:00/, "run-result-amsterdam");
-  await page.goto("/settings/appearance");
-  await picker().selectOption("UTC");
+  const mounted = await inspectCreated(amsterdamRun, "Europe/Amsterdam", "run-result-amsterdam");
+  // A real second Settings tab changes the preference while the details view stays mounted.
+  const settings = await page.context().newPage();
+  try {
+    await settings.goto("/settings/appearance");
+    await settings.getByLabel("Time zone", { exact: true }).selectOption("UTC");
+    await expect(mounted.created).toHaveAttribute("datetime", mounted.instant);
+    const expected = await expectedDate(mounted.instant, "UTC");
+    await expect(mounted.created).toHaveAttribute("title", expected.full);
+    await expect(mounted.created.locator(".studio-timestamp-date")).toHaveText(expected.date);
+    await expect(mounted.created.locator(".studio-timestamp-time")).toHaveText(expected.time);
+    await capture(page, info, "run-mounted-zone-change");
+  } finally { await settings.close(); }
   const lastRun = await run("2026-07-15T09:30:12.345", "2026-07-15T09:30:12.345+00:00", "run-utc", true);
-  await inspectCreated(lastRun, /UTC\+00:00/, "run-result");
+  await inspectCreated(lastRun, "UTC", "run-result");
 
   const rejected = await page.request.post(executeUrl, { data: { sourceReferenceId: publication.sourceReferenceId, inputs: { when: "2026-01-15T09:30" } } });
   expect(rejected.status()).toBe(400);

@@ -62,6 +62,7 @@ export function AppearancePage({
   const sidebarColorTitle = navMode === "top" ? "Navigation bar color" : "Sidebar color";
   const modeOptions = appearanceModePreferences.filter(option => option === "system" || supportedModes.includes(option));
   const zones = [...new Set(["UTC", timeZone === "browser" ? "UTC" : timeZone, ...Intl.supportedValuesOf("timeZone")])];
+  const previewInstant = new Date();
 
   return (
     <section className="studio-page settings-page" aria-labelledby="settings-appearance-title">
@@ -73,7 +74,7 @@ export function AppearancePage({
           <option value="browser">Browser ({resolveStudioTimeZone("browser")})</option>
           {zones.map(zone => <option key={zone} value={zone}>{zone}</option>)}
         </select>
-        <p><time dateTime={new Date().toISOString()}>{formatStudioDate(new Date(), timeZone)}</time></p>
+        <p><time dateTime={previewInstant.toISOString()}>{formatStudioDate(previewInstant, timeZone)}</time></p>
       </AppearanceCard>
 
       <AppearanceCard title="Studio presets" description="Start with a complete look, then adjust each choice below.">

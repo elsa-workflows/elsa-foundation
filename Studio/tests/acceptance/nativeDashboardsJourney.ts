@@ -1,4 +1,6 @@
 import { chromium, expect, type Locator, type Page, type Request, type TestInfo } from "@playwright/test";
+import { expectedStudioDate, selectStudioTimeZone } from "./studioDateAssertions";
+import type { QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
 import { attachDashboardJson, dashboardBackend, registerDashboardCleanup, observeNativeWeaverBoundary, seedDashboardRuns, signInDashboardReader, tag, type Capture, type Resource, type Result } from "./dashboardJourneySupport";
 
 async function openQuerySection(page: Page, path: string) {
@@ -18,6 +20,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
   const expectResourceLocation = (kind: "questions" | "dashboards", id: string) => expect(page).toHaveURL(url =>
     url.pathname === `/${kind}/${id}` && url.searchParams.get("backend") === backendSelection);
   const backend = await dashboardBackend(page.request);
+  await selectStudioTimeZone(page, "Europe/Amsterdam");
   const suffix = `${info.project.name}-${Date.now()}`;
   // Own the independent reader browser; trace:on records both contexts in the runner trace.
   const readerBrowser = await chromium.launch();
@@ -222,7 +225,18 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await history.getByRole("button", { name: `Inspect revision ${saved.revision}`, exact: true }).click();
       await history.getByText("View technical definition", { exact: true }).click();
       await expect(history.locator("pre")).toContainText("workflow.started-count");
+      const revisions = await backend.api<{ items: { revision: string; updatedAt: string }[] }>(`/_elsa/studio/questions/${saved.id}/revisions`);
+      const retainedRevision = revisions.items.find(item => item.revision === saved.revision)!;
+      expect(retainedRevision, "Owned saved revision timestamp").toBeTruthy();
+      const revisionTime = history.locator(".named-history-detail time");
+      await expect(revisionTime).toHaveAttribute("datetime", retainedRevision.updatedAt);
+      await expect(revisionTime).toHaveText((await expectedStudioDate(page, retainedRevision.updatedAt, "Europe/Amsterdam")).full);
       await capture(page, info, "question-history");
+      await selectStudioTimeZone(page, "UTC");
+      await expect(revisionTime).toHaveAttribute("datetime", retainedRevision.updatedAt);
+      await expect(revisionTime).toHaveText((await expectedStudioDate(page, retainedRevision.updatedAt, "UTC")).full);
+      await capture(page, info, "question-history-time-zone-utc");
+      await selectStudioTimeZone(page, "Europe/Amsterdam");
       await history.getByRole("button", { name: `Restore revision ${saved.revision}`, exact: true }).click();
       await expect(history).toContainText("Unsaved changes will be replaced");
       await capture(page, info, "question-history-restore-confirmation");
@@ -240,7 +254,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await expectResourceLocation("questions", copied.id); await capture(page, info, "question-copy");
       await page.getByRole("combobox", { name: "Query form", exact: true }).selectOption("records");
       const columns = page.getByRole("group", { name: "Columns", exact: true });
-      for (const label of ["Run", "Current status", "Run kind"]) await columns.getByLabel(label, { exact: true }).check();
+      for (const label of ["Run", "Current status", "Run kind", "Started at", "Completed at"]) await columns.getByLabel(label, { exact: true }).check();
       await openQuerySection(page, "visualization");
       await page.getByRole("combobox", { name: "Visualization", exact: true }).selectOption("table");
       await page.getByRole("listbox", { name: "Value columns", exact: true }).selectOption([]);
@@ -248,9 +262,30 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("button", { name: "Preview question", exact: true }).click();
       const recordsReply = await recordsResponse;
       expect(recordsReply.request().headers()["if-match"]).toBe(tag(copied.revision)["If-Match"]);
-      const records = await recordsReply.json() as Result;
+      const records = await recordsReply.json() as QueryResult;
       expect(records.rows).toHaveLength(4);
       expect(new Set(records.rows.map(row => row.values.executionId.value))).toEqual(new Set(seeded.executionIds));
+      const recordTable = page.getByRole("region", { name: "Exact result values", exact: true });
+      const timestampColumns = ["startedAt", "completedAt"].map(id => ({ id, index: records.columns.findIndex(column => column.id === id) }));
+      async function checkRecordDates(zone: string) {
+        for (const row of records.rows) {
+          const displayed = recordTable.getByRole("row").filter({ has: page.getByRole("cell", { name: row.values.executionId.value!, exact: true }) });
+          for (const column of timestampColumns) {
+            expect(column.index).toBeGreaterThanOrEqual(0);
+            const value = row.values[column.id]; expect(value.type).toBe("instant");
+            if (column.id === "startedAt") expect(value.value).toBeTruthy();
+            await expect(displayed.getByRole("cell").nth(column.index)).toHaveText(value.value === null
+              ? value.nullReason ?? "Missing" : (await expectedStudioDate(page, value.value, zone)).full);
+          }
+        }
+        expect(records.generatedAt, "Actual result generation instant").toBeTruthy();
+        await expect(page.locator(`.named-preview > .named-result time[datetime="${records.generatedAt}"]`))
+          .toHaveText((await expectedStudioDate(page, records.generatedAt!, zone)).full);
+      }
+      await checkRecordDates("Europe/Amsterdam");
+      await selectStudioTimeZone(page, "UTC");
+      await checkRecordDates("UTC");
+      await selectStudioTimeZone(page, "Europe/Amsterdam");
       await capture(page, info, "question-records");
       const dashboardNavigation = page.getByRole("navigation", { name: "Operate", exact: true }).getByRole("link", { name: "Dashboards", exact: true });
       async function revealDashboardNavigation() {

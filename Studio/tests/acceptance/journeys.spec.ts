@@ -199,7 +199,9 @@ test.beforeEach(async ({ page }, info) => {
   const errors: string[] = [];
   browserErrors.set(page, errors);
   ownedCleanups.set(page, []);
-  page.on("pageerror", error => errors.push(error.message));
+  const observeErrors = (owned: Page) => owned.on("pageerror", error => errors.push(`${owned.url()}: ${error.message}`));
+  page.context().pages().forEach(observeErrors);
+  page.context().on("page", observeErrors);
   // Keep browser runtime errors actionable without accepting an assertion-only green result.
   await info.attach("source", { body: process.env.UX_SOURCE_SHA ?? "unknown", contentType: "text/plain" });
   await signIn(page);
@@ -1174,8 +1176,11 @@ test("script variable may-write analysis survives editing and reopening", async 
   await scriptVariableWritesJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
-test("timezone preferences preserve run instants and date filters", async ({ page }, info) => {
-  await timeZoneJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+test.describe("timezone presentation", () => {
+  test.use({ timezoneId: "America/New_York" });
+  test("timezone preferences preserve run instants and date filters", async ({ page }, info) => {
+    await timeZoneJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+  });
 });
 
 test("workflow state native and imported authoring and inspection", async ({ page }, info) => {
