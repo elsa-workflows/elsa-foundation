@@ -54,7 +54,7 @@ internal static class PostgresMultiRootClient
     // Each process has exactly one configured public ingress identity.
     internal static async Task<int> SecondaryAsync(string[] args)
     {
-        var scope = FixedTenantScope.Bind(Secondary);
+        var scope = EmbeddedTenant.Bind(Secondary);
         var open = Database(durable: args is ["missing-durable", _], operators: args is ["operator-start"] or ["operator-resume", _] or ["operator-list", _, _]);
         var store = new EfStore(open, postgres: true);
         var ingress = new PostgresRootAdmission(open, TimeSpan.FromHours(1));

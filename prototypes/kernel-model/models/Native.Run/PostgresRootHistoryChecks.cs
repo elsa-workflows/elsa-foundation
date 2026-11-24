@@ -28,7 +28,7 @@ internal static class PostgresRootHistoryChecks
         var journal = new PostgresRootReads(reader, await admissions.OpenJournalCursorAsync(ct), 128);
         var api = new PostgresPreviewFoundation(admissions, journal, PublicActor.ActorType);
         var reads = await reader.OpenPreviewRootReadsAsync(pageSize: 128, cancellationToken: ct);
-        var scope = FixedTenantScope.Bind("preview-history");
+        var scope = EmbeddedTenant.Bind("preview-history");
         var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
         Task<long> Position() => db.Partitions.Select(p => p.Position).SingleAsync(ct);
         Task<long> Clock() => db.Database.SqlQueryRaw<long>("""SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value" """).SingleAsync(ct);

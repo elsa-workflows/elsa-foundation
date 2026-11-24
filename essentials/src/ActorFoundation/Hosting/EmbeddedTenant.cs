@@ -2,10 +2,19 @@ using Kernel.Foundation.Contracts;
 
 namespace Elsa.ActorFoundation.Hosting;
 
-/// <summary>Holds the configured tenant for an Embedded foundation host.</summary>
-/// <remarks>Construct this during host composition using trusted configuration.</remarks>
-public sealed class EmbeddedTenant(string configuredTenant)
+/// <summary>Binds the configured tenant of an Embedded foundation host.</summary>
+public static class EmbeddedTenant
 {
-    /// <summary>The fixed scope used by the host for ingress and reads.</summary>
-    public BoundScope Scope { get; } = new(configuredTenant);
+    private static BoundScope? _scope;
+
+    /// <summary>Binds the process to one configured tenant for ingress and reads.</summary>
+    /// <remarks>Call during host composition with the tenant from trusted configuration.</remarks>
+    public static BoundScope Bind(string configuredTenant)
+    {
+        var configured = new BoundScope(configuredTenant);
+        var existing = Interlocked.CompareExchange(ref _scope, configured, null);
+        if (existing is null) return configured;
+        if (existing.Tenant == configured.Tenant) return existing;
+        throw new InvalidOperationException("The Embedded host is already bound to its configured tenant.");
+    }
 }

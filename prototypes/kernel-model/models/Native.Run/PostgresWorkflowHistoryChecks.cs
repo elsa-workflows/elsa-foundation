@@ -28,7 +28,7 @@ internal static class PostgresWorkflowHistoryChecks
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var ct = timeout.Token;
-        var scope = FixedTenantScope.Bind(phase == "tenant" ? PostgresMultiRootClient.Secondary : "history-blue");
+        var scope = EmbeddedTenant.Bind(phase == "tenant" ? PostgresMultiRootClient.Secondary : "history-blue");
         var query = new WorkflowRunQuery(DirectApprovalWorkflow.Definition, Contract.ActorStatus.Running);
         await using var db = Open();
         if (phase == "birth")

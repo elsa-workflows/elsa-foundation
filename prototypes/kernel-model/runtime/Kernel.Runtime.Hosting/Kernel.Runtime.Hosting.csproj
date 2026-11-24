@@ -6,7 +6,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Native.Run" />
     <InternalsVisibleTo Include="Kernel.Statecharts.Run" />
-    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
     <ProjectReference Include="../../src/Kernel.Runtime/Kernel.Runtime.csproj" />
   </ItemGroup>
 </Project>

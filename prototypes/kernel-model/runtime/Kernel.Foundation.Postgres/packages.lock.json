@@ -487,12 +487,6 @@
       "elsa.actorfoundation.contracts": {
         "type": "Project"
       },
-      "elsa.actorfoundation.hosting": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
-        }
-      },
       "kernel.durable": {
         "type": "Project",
         "dependencies": {
@@ -523,7 +517,7 @@
       "kernel.runtime.hosting": {
         "type": "Project",
         "dependencies": {
-          "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
           "Kernel.Runtime": "[1.0.0, )"
         }
       }

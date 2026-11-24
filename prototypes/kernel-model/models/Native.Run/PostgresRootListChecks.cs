@@ -31,7 +31,7 @@ internal static class PostgresRootListChecks
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var ct = timeout.Token;
-        var blue = FixedTenantScope.Bind("list-blue");
+        var blue = EmbeddedTenant.Bind("list-blue");
         var query = ApprovalQuery();
         await using var db = Open();
         if (saved is null)

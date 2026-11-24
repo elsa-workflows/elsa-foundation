@@ -50,7 +50,7 @@ internal static class PostgresWriteBudget
         var verifyIngress = await observer.OpenPreviewRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1), stop);
         var verifyApi = await observer.OpenPreviewRootReadsAsync(64, stop);
         var verifyRuntime = new WorkflowRuntime(verifyIngress, verifyApi);
-        var scope = FixedTenantScope.Bind("write-budget");
+        var scope = EmbeddedTenant.Bind("write-budget");
         var definition = Reference.WriteLines(Lines);
         var registry = new WorkflowRegistry().Add(definition);
 

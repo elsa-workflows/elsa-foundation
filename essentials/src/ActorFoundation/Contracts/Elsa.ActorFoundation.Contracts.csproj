@@ -9,6 +9,6 @@
     <InternalsVisibleTo Include="Elsa.ActorFoundation.TestSupport" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="../README.md" Pack="true" PackagePath="/" />
+    <None Update="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

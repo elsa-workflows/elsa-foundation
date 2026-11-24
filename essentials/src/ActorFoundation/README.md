@@ -4,7 +4,7 @@
 adds the execution-model contract and depends on the foundation contract. Execution models work through these
 contracts on any implementation that supports them.
 
-The hosting adapter uses `Elsa.ActorFoundation.Hosting` to bind its configured Embedded tenant before making
+The hosting adapter uses `Elsa.ActorFoundation.Hosting` to bind one configured Embedded tenant for the process before making
 ingress or read calls. The constructor of `BoundScope` is internal. The model package has no hosting dependency.
 
 See the [foundation contract](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/foundation-contract.md) for the complete behavior and

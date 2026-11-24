@@ -28,7 +28,7 @@ internal static class PostgresDiscoveryChecks
             await admission.InstallAsync(stop);
         }
         var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 64), WorkflowActor.WorkflowActor.ActorType);
-        var scope = FixedTenantScope.Bind(Primary);
+        var scope = EmbeddedTenant.Bind(Primary);
         var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
         var turns = new List<(string Actor, string Input)>();
         var prepared = await PostgresNativeRootOwner.PreparePartitionAsync(store, "discover-" + Environment.ProcessId, partition, registry, 1, stop,

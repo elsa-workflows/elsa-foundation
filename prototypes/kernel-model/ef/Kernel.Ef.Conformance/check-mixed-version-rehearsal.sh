@@ -32,7 +32,7 @@ build_driver() {
     local name=$1 revision=$2
     local destination="$scratch/$name"
     mkdir -p "$destination"
-    git -C "$repo" -c core.fsmonitor=false archive "$revision" prototypes/kernel-model | tar -xf - -C "$destination"
+    git -C "$repo" -c core.fsmonitor=false archive "$revision" | tar -xf - -C "$destination"
     local tree="$destination/prototypes/kernel-model"
     if [[ "$name" != new ]]; then
         # The disposable driver and its database guard are the only additions to the archived test project.

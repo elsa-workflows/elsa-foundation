@@ -5,7 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
-    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Model/Elsa.ActorFoundation.Model.Contracts.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
     <ProjectReference Include="../Graph/Kernel.Graph.csproj" />
     <ProjectReference Include="../Native.Activities/Kernel.Native.Activities.csproj" />
   </ItemGroup>

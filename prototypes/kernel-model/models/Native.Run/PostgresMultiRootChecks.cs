@@ -26,7 +26,7 @@ internal static class PostgresMultiRootChecks
         var foundation = new PostgresPreviewFoundation(ingress,
             new(store, await ingress.OpenJournalCursorAsync(stop), 64), WorkflowActor.WorkflowActor.ActorType);
         var registry = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
-        var scope = FixedTenantScope.Bind(Primary);
+        var scope = EmbeddedTenant.Bind(Primary);
         string[] tenants = [Primary, Secondary, Primary];
         Contract.ActorRef[] actors = birth ? [await Start(foundation, scope, "start", stop),
             new(await CallSecondaryAsync(stop, "start")), await Start(foundation, scope, "unbound", stop)]

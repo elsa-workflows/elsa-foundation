@@ -54,7 +54,7 @@ internal static class PostgresRootTimedJobSettlement
 
         var api = new PostgresPreviewFoundation(admission, new(firstStore, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType);
-        var scope = FixedTenantScope.Bind(Tenant);
+        var scope = EmbeddedTenant.Bind(Tenant);
         var receipt = await new WorkflowRuntime(api, api).StartAsync(scope, "issue", NativeExecutionModel.Start(Definition), cancellationToken: stop);
         var actor = receipt.Actor ?? throw new InvalidOperationException("The Native workflow was not admitted.");
         Check(receipt.Outcome == Contract.AdmissionOutcome.Accepted, "The fixture must admit a fresh root.");

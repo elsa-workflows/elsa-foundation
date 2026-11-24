@@ -241,10 +241,12 @@
   <Folder Name="/essentials/src/ActorFoundation/">
     <Project Path="essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
     <Project Path="essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
-    <Project Path="essentials/src/ActorFoundation/Model/Elsa.ActorFoundation.Model.Contracts.csproj" />
   </Folder>
-  <Folder Name="/essentials/tests/ActorFoundation/">
-    <Project Path="essentials/tests/ActorFoundation/Fixtures/Elsa.ActorFoundation.TestSupport.csproj" />
+  <Folder Name="/essentials/src/ActorFoundation/Model/">
+    <Project Path="essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/ActorFoundation/TestSupport/">
+    <Project Path="essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Activities/">
     <Project Path="essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />

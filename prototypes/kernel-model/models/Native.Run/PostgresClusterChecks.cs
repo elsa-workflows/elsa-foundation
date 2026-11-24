@@ -85,7 +85,7 @@ internal static class PostgresClusterChecks
             return 0;
         }
 
-        var scope = FixedTenantScope.Bind("cluster");
+        var scope = EmbeddedTenant.Bind("cluster");
         Contract.IIngress ingress;
         Contract.IActorReads reads;
         if (specialized)

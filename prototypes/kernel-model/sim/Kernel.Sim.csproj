@@ -6,7 +6,7 @@
     <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../essentials/tests/ActorFoundation/Fixtures/Elsa.ActorFoundation.TestSupport.csproj" />
+    <ProjectReference Include="../../../essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
     <Using Include="Elsa.ActorFoundation.TestSupport" />
   </ItemGroup>
   <ItemGroup>
