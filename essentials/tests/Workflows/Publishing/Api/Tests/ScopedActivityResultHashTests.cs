@@ -39,7 +39,7 @@ public sealed class ScopedActivityResultHashTests
 
     // Regenerated once by S-9 before the first stable release; frozen from that release.
     internal const string ExpectedExecutableHash = "sha256:d1f37f9aa352c6ada3256a4e4941e80bac9fa2a2ac79aae9ba4e63d878fa7f3e";
-    internal const string ExpectedTemplateHash = "sha256:5ecbae548b89c178896e9a3d6d15bc4d638b89893ededed38803bfa2a3ec536e";
+    internal const string ExpectedTemplateHash = "sha256:401735d71f390f6ed9a0da1e01488b3e0697b4dd26df105630f6c6e301cf51c2";
 
     /// <summary>
     /// A reference without a scope leaves the member out of its stored form, reads back with none, and hashes apart

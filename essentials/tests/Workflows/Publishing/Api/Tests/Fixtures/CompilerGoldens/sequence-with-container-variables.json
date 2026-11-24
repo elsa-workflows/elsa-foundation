@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:a1d202673959f4189e4a3b2d9a653e837662cd40202411d55dccdad1183d1035",
-    "artifactId": "artifact-a1d202673959",
+    "artifactHash": "sha256:ba29200f961988858893a120b75b9a35f21eb9a1d523ee0438785191e49f0a60",
+    "artifactId": "artifact-ba29200f9619",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -114,13 +114,11 @@
                 "sourceType": {
                   "alias": "String",
                   "collectionKind": "Single",
-                  "schema": null,
                   "schemaVersion": null
                 },
                 "targetType": {
                   "alias": "String",
                   "collectionKind": "Single",
-                  "schema": null,
                   "schemaVersion": null
                 }
               },
@@ -152,7 +150,6 @@
                 "type": {
                   "alias": "String",
                   "collectionKind": "Single",
-                  "schema": null,
                   "schemaVersion": null
                 }
               },
@@ -164,7 +161,6 @@
               "targetType": {
                 "alias": "String",
                 "collectionKind": "Single",
-                "schema": null,
                 "schemaVersion": null
               },
               "variable": null,
@@ -183,7 +179,6 @@
             "type": {
               "alias": "String",
               "collectionKind": "Single",
-              "schema": null,
               "schemaVersion": null
             },
             "variableKey": "var-counter"

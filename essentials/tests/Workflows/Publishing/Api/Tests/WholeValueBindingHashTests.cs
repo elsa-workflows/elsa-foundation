@@ -17,9 +17,9 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed class WholeValueBindingHashTests
 {
     internal const string ExpectedNodePayloadHash = "sha256:44e2c240280a2c6ce31c662f54a85311ff7a670d024465994b191c73c9905111";
-    internal const string ExpectedExecutableHash = "sha256:7d92bfc3137b805dc75dcc434370eb2023b9c0de3421e178e15aea959da07e18";
-    internal const string ExpectedTemplateHash = "sha256:fa20530c5493f4159134c46b584ff782ae66fbfca47c81a088aa055272a9e993";
-    internal const string ExpectedBindingFingerprint = "sha256:7dc805658de8eec17062f5fde590a520010694e86a71d84f14653ae22ec3489e";
+    internal const string ExpectedExecutableHash = "sha256:ea1846f2f3564128178dc83cdfe3bb69f0c8641ca35b3dffc0571f37d1a7de35";
+    internal const string ExpectedTemplateHash = "sha256:ca706207f62664f232d2f6c3f4c1d8d38ba119a3807aa09c73793de5eb390a3e";
+    internal const string ExpectedBindingFingerprint = "sha256:ae671a51c5b7fefe07679c2a5258c4002adcf04eafadecf210c419efc3951589";
 
     [Fact]
     public void Every_whole_value_kind_keeps_its_node_payload_hash() =>

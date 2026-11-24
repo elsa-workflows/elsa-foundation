@@ -347,10 +347,10 @@ public sealed partial class WorkflowExecutableCompilerTests
             SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity), new WorkflowArgumentState("Text", ArgumentValue.FromClr(JsonSerializer.SerializeToElement("hello"), "Literal"), null, null, null, null)),
             [typeof(TestWriteLineActivity)]);
 
-        Pin("sha256:f224a242d3e87a95da6890a5a32cc6bfe00830f19225becfb6d4d531d3145838", unbound.RootActivity.ActivityContract!.SchemaFingerprint);
+        Pin("sha256:eadb27272b5b400e8ba3560cc70e7ae9e545d0ea592efd1df5ec6e61a1051811", unbound.RootActivity.ActivityContract!.SchemaFingerprint);
         Assert.Equal(unbound.RootActivity.ActivityContract.SchemaFingerprint, literal.RootActivity.ActivityContract!.SchemaFingerprint);
-        Pin("sha256:74adb9b8800e57c21cd8e70a18649246cc87a488773d0b65131f59060d0f926c", unbound.Identity.ArtifactHash);
-        Pin("sha256:0ebcb066839829c092c8cbedcca35debcf6661eb92b260ff11c98a81645f8fd7", literal.Identity.ArtifactHash);
+        Pin("sha256:20dfb2b786da9b7a33db97bc46290644a1fc0e4a4091a4d0872d0ad2305bb6dd", unbound.Identity.ArtifactHash);
+        Pin("sha256:c85b8e878532897f76801ceaf0e28f6c52556ae1c6b8b4c21df866e042fcae70", literal.Identity.ArtifactHash);
         AssertLegacyHash(unbound, "sha256:0e1f299d066b2d136264598e6b1725ba9a28e974807cd7db0df8a7330b4a67ff");
         AssertLegacyHash(literal, "sha256:7b4d6b3a6d8b5c00b228dcb91f73de2f775839f9adc14beddd0b3639d96adf0d");
 
