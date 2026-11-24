@@ -279,8 +279,29 @@ fixture disables trial withdrawal support at the actor-type boundary and detects
 the unrelated actor running before callback exit.
 
 This covers the legacy relational actor protocol. In that path a Worker completion consumes the original issued
-ticket and commits the actor's result directly in its checkpoint and journal. The public generated-root path
-still needs a qualified writer for tracked job generations and private ticket, deadline and result envelopes.
+ticket and commits the actor's result directly in its checkpoint and journal. Generated-root job envelopes and
+public qualified-command ordering have separate cases.
+
+### Run the same schedule on the relational providers
+
+The store conformance runner uses the same Worker fixture. From `prototypes/kernel-model`:
+
+```sh
+project=../../essentials/tests/ActorFoundation/Store/EntityFramework
+dotnet restore "$project" --locked-mode
+dotnet build -c Release "$project" --no-restore
+runner=$project/bin/Release/net10.0/Kernel.Ef.Conformance.dll
+dotnet "$runner" sqlite timed-job-worker --owned-commit --checked-fence
+dotnet "$runner" sqlserver "$connection" timed-job-worker --owned-commit --checked-fence
+dotnet "$runner" mysql "$connection" timed-job-worker --owned-commit --checked-fence
+dotnet "$runner" postgres "$connection" timed-job-worker --owned-commit --checked-fence
+```
+
+Each invocation creates and removes a dedicated database. Set `connection` for the named server.
+Use `--ef-commit` for the EF writer and `--fence-in-batch` for the other fence. Append
+`--without-trial-withdrawal` for the failing control. SQL Server and MySQL checks match the
+issued binary keys and their inbox scopes. PostgreSQL also compares the transaction IDs of
+the ticket, timer, checkpoint and waiting journal row.
 
 ## PostgreSQL Core Preview
 
