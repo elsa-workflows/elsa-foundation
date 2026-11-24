@@ -101,7 +101,7 @@ internal sealed partial class PostgresRootAdmission
             if (selected)
             {
                 await PinRootNamespaceAsync(db, token);
-                var cursor = await ReadJournalCursorAsync(db, token);
+                var cursor = await ReadSelectionCursorAsync(db, token);
                 if (deletion)
                 {
                     terminal = PostgresRootSelection.OpenTerminal(cursor, selection, tenant, reference);

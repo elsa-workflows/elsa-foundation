@@ -129,6 +129,13 @@ public class KernelDb : DbContext
     private static KernelDb Profile(DbContextOptions<KernelDb> options, StoreFormat format) =>
         new(options, format, RootProfiles.CapabilitiesOf(format));
 
+    // A capability set that no shipped format carries, for database-backed composition guards only. Its format must be unshipped,
+    // so that its marker is refused by every shipped profile.
+    internal static KernelDb ForUnshippedComposition(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) =>
+        RootProfiles.Formats.ContainsKey(format)
+            ? throw new ArgumentOutOfRangeException(nameof(format), format, "A shipped format carries its own capabilities.")
+            : new(options, format, capabilities);
+
     internal StoreFormat RequiredFormat { get; }
     internal RootCapabilities Capabilities { get; }
     private bool Has(RootCapabilities capability) => (Capabilities & capability) != 0;
@@ -151,6 +158,11 @@ public class KernelDb : DbContext
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
+    // Workflow history removes no row of a retired root, and outside a pinned namespace it does not bind its reads to a
+    // qualified list. Until the composed install provides both, a qualified list carries history only in a pinned namespace
+    // without retirement, so the shipped formats 13 to 17 refuse it as before.
+    internal bool SupportsRootWorkflowHistory => !(UsesRootTerminalSelection || UsesRootRetirement) ||
+        RequiresPinnedRootNamespace && !UsesRootRetirement;
     internal static KernelDb ForPostgresRootParkOpening(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkOpening);
     internal bool UsesRootReplyProtocol => Has(RootCapabilities.ReplyProtocol);
     internal static KernelDb ForPostgresRootReplies(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootReplies);
