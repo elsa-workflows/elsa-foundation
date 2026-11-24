@@ -22,30 +22,58 @@ plan: the ADR's non-goals for release 1, and anything not named there.
 
 ### Trimmed scope (owner, 24 November 2026)
 
-Sipke trimmed the program to two parts, the **Actor Foundation** and the **Elsa engine**, and set the goal as end-to-end
-delivery through gate 4, the default switch, and gate 5, old-core removal. Each gate still needs his decision.
-[Owner decision on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7142657677)
+Sipke trimmed the program to the **Actor Foundation** and the **Elsa engine**. He set the goal as end-to-end delivery
+through gate 4, the default switch, and gate 5, old-core removal, with his decision at each gate
+([owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7142657677)). This section
+replaces the release 1 scope of ADR 0099 section 10 where the two differ. Milestone acceptance, including K13's "K1 to
+K12 accepted on main", is measured against the rows as trimmed here.
+
+His decisions:
 
 - **Actor Foundation:** the foundation contract and the Built-in Actor Foundation. This covers the durable layer,
-  store, runtime, hosting, placement and node lease, and K5 graceful stop of entered jobs.
+  store, runtime, hosting, placement, node lease and K5 graceful stop of entered jobs.
 - **Elsa engine:** the workflow instance actor, the Native model and activities, and Graph/Flowchart.
-- **Providers:** PostgreSQL and SQLite. One composed shipped format runs on both
+- **Providers:** PostgreSQL and SQLite, with one composed shipped format on both. It carries the operator, job and Park
+  capabilities, self-sends and timers, direct held replies and workflow history. Values by reference is cut by
+  the K11 answer below. That answer supersedes the earlier composition decision to ship it
   ([composition decisions](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7135533849)).
-  Besides the operator, job and Park capabilities, it carries self-sends and timers, direct held replies and workflow history.
-- **Kept milestones:** K8 synchronous HTTP, K9 read models and the API read path, and K10 Studio on the projector for
-  Native and Flowchart.
-- **Park:** opening, inspection, arrivals and one-page recover. Terminate and delete of a parked root come with
-  profile composition.
+- **Kept:** K8 synchronous HTTP; K9 read models and the API read path; K10 Studio on the projector; the rest of K11
+  (admission and its ingress threshold, retention and delete, basic trace context and metrics, parked-work inspection);
+  and K12 qualification for the trimmed scope.
+- **Cut, moved after the release:**
+  - the StateMachine engine with invariants S1 to S4;
+  - Park operations beyond the one-page recover: the multi-page drain, discard (including expiry as an automatic
+    discard) and retry selection. The drain prototype is kept as a deferred draft,
+    [#5692](https://github.com/elsa-workflows/elsa-foundation/pull/5692);
+  - the K11 extras: traces and metrics beyond the basics, the migration-plan runner with its plan-outcome read model,
+    and values by reference.
 
-These items move after the release. Where a milestone row or condition below names one of them, it applies after the release:
+Claude's reading of these decisions, which the owner can correct:
 
-- the StateMachine engine with invariants S1 to S4, and its Studio journeys;
-- Park operations beyond the one-page recover: the multi-page drain, discard, expiry and retry selection. The
-  drain prototype is kept as a deferred draft, [#5692](https://github.com/elsa-workflows/elsa-foundation/pull/5692);
-- the K11 extras: traces and metrics beyond the basics, the migration-plan runner and its plan-outcome read model,
-  and values by reference;
-- SQL Server and MySQL, with the conditions that only they carry: RP collations, MySQL TLS cancellation and Entra
-  qualification. MongoDB stays on hold.
+- Terminate and delete of a parked root stay in scope, because a parked root must be endable. The design defines both
+  as bounded drains. Until the drain returns, they are bounded to one page as recover is, and a Park larger than one
+  page is refused with a recorded reason.
+- K10's StateMachine journeys go with the StateMachine engine.
+- Work for SQL Server, MySQL and MongoDB moves after the release. That includes:
+  - condition RP;
+  - the SQL Server and MySQL legs of NL-C1;
+  - MySQL TLS cancellation;
+  - the `max_allowed_packet` start refusal;
+  - SQL Server sizing and Entra qualification;
+  - the three-engine deadlock cases.
+
+  MongoDB stays on hold.
+
+Rows that mix kept and cut work keep only their kept part until the release:
+
+- K4 runs on PostgreSQL and SQLite.
+- K7 is Flowchart G1 to G5.
+- K9 drops the plan-outcome read model.
+- K10 drops the StateMachine journeys.
+- K11's "parked-work inspect, retry and discard" keeps inspection and the one-page recover.
+- FC-C4 is judged on the instance list and the retention worker.
+- The `pad=` values-by-reference run in "Release 1 qualification" moves after the release.
+- So do the StateMachine demo increment and the #3815 carry-over row.
 
 ## How the work lands
 
