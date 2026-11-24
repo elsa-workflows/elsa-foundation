@@ -1917,8 +1917,11 @@
         "dependencies": {
           "CShells.AspNetCore": "[0.0.31, )",
           "CShells.Nuplane": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Attention.Core": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Nuplane": "[0.0.13, )",
+          "Nuplane.Admin": "[0.0.13, )",
           "Nuplane.Loading": "[0.0.13, )",
           "Nuplane.Sources.Directory": "[0.0.13, )"
         }
@@ -2043,6 +2046,19 @@
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "OpenIddict.Abstractions": "[7.5.0, )",
           "OpenIddict.AspNetCore": "[7.5.0, )"
+        }
+      },
+      "elsa.foundation.identity.openiddict.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells": "[0.0.31, )",
+          "Elsa.Foundation.Identity.OpenIddict.Behavior": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore.InMemory": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.10, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.0, )",
+          "OpenIddict.EntityFrameworkCore": "[7.5.0, )"
         }
       },
       "elsa.foundation.identity.persistence.entityframeworkcore": {
@@ -2583,6 +2599,7 @@
           "Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Oidc": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.OpenIddict": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Http": "[4.0.0-dev, )",
           "Elsa.Http.JavaScript": "[4.0.0-dev, )",
@@ -2656,8 +2673,7 @@
           "Nuplane": "[0.0.13, )",
           "Nuplane.Admin": "[0.0.13, )",
           "Nuplane.Loading": "[0.0.13, )",
-          "Nuplane.Sources.Directory": "[0.0.13, )",
-          "OpenIddict.EntityFrameworkCore": "[7.5.0, )"
+          "Nuplane.Sources.Directory": "[0.0.13, )"
         }
       },
       "elsa.workflows.dashboard": {
