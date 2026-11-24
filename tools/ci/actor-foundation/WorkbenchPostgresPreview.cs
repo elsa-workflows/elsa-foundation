@@ -227,26 +227,28 @@ internal static class WorkbenchPostgresPreview
 
         internal static WorkbenchProcess Start(string executable, string connection, bool enabled)
         {
-            var assembly = Path.GetFullPath(executable);
+            var binary = Path.GetFullPath(executable);
             var workspace = Directory.CreateTempSubdirectory("elsa-workbench-core-preview-");
-            var source = Path.GetDirectoryName(assembly)!;
+            var source = Path.GetDirectoryName(binary)!;
             foreach (var file in new[] { "appsettings.json", "appsettings.Development.json", "shells.json", "shells.Development.json" })
                 if (File.Exists(Path.Combine(source, file)))
                     File.Copy(Path.Combine(source, file), Path.Combine(workspace.FullName, file));
             workspace.CreateSubdirectory("packages");
-            var start = new ProcessStartInfo(Environment.ProcessPath ?? "dotnet")
+            var start = new ProcessStartInfo(binary)
             {
                 WorkingDirectory = workspace.FullName,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false
             };
-            foreach (var argument in new[] { assembly, "--contentRoot", workspace.FullName, "--urls", "http://127.0.0.1:0" })
+            foreach (var argument in new[] { "--contentRoot", workspace.FullName, "--urls", "http://127.0.0.1:0" })
                 start.ArgumentList.Add(argument);
             // Workbench reads database and module configuration from its environment at startup.
             start.Environment.Clear();
             foreach (var name in new[] { "HOME", "USERPROFILE", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "DOTNET_CLI_HOME", "TMPDIR" })
                 start.Environment[name] = workspace.FullName;
+            start.Environment["DOTNET_ROOT"] = Path.GetFullPath(Path.Combine(
+                System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(), "..", "..", ".."));
             start.Environment["DOTNET_ENVIRONMENT"] = "Development";
             start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
             start.Environment["Nuplane__Setup__StateFilePath"] = Path.Combine(workspace.FullName, ".nuplane", "store-state.json");

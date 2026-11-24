@@ -13,9 +13,9 @@ dotnet restore --locked-mode "$app"
 dotnet restore --locked-mode "$runner"
 dotnet build -c "$configuration" --no-restore "$app"
 dotnet build -c "$configuration" --no-restore "$runner"
-KERNEL_PREVIEW_WORKBENCH="$root/$app/bin/$configuration/net10.0/Elsa.Workbench.dll"
+KERNEL_PREVIEW_WORKBENCH="$root/$app/bin/$configuration/net10.0/Elsa.Workbench"
 export KERNEL_PREVIEW_WORKBENCH
-dll="$runner/bin/$configuration/net10.0/Kernel.Native.Run.dll"
+client="$runner/bin/$configuration/net10.0/Kernel.Native.Run"
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/elsa-core-preview.XXXXXXXX")
 container=
@@ -42,7 +42,7 @@ sentinel="$scratch/caller-identity.sqlite"
 export CShells__Shells__default__Features__FoundationIdentityOpenIddict__IsDevelopmentOrDemo=false
 export CShells__Shells__default__Features__FoundationIdentityOpenIddict__ConnectionString="Data Source=$sentinel"
 for phase in disabled birth restart; do
-  dotnet "$dll" pg-workbench-core-preview "$phase" "$scratch/waiting.json"
+  "$client" pg-workbench-core-preview "$phase" "$scratch/waiting.json"
   if [[ -e "$sentinel" ]]; then
     echo "Workbench inherited the caller's identity database configuration." >&2
     exit 1
