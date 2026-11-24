@@ -107,6 +107,27 @@ public sealed class ExpressionToolingProviderContractTests
     }
 
     [Fact]
+    public async Task Typed_variable_members_complete_after_variables_dot_and_never_produce_member_diagnostics()
+    {
+        const string note = "From the declared type `shop.address`; the stored value may differ.";
+        var provider = new JavaScriptExpressionToolingProvider();
+        var customerShape = new ExpressionValueShape("shop.address", ExpressionValueKind.Object,
+            Members: [new("city", new("String", ExpressionValueKind.Scalar, false), note)]);
+        var scope = CreateScope("JavaScript", [new("customer", "customer", ExpressionSymbolKind.Variable, customerShape)]);
+
+        var completion = await provider.GetCompletionsAsync(new(scope, "variables.customer.ci", new(0, 21)), CancellationToken.None);
+        var validation = await provider.ValidateAsync(new(scope, "variables.customer.cty"), CancellationToken.None);
+        var hover = await provider.GetHoverAsync(new(scope, "variables.customer.city", new(0, 23)), CancellationToken.None);
+
+        var item = Assert.Single(completion.Payload!.Items);
+        Assert.Equal("city", item.Label);
+        Assert.Equal("String", item.Detail);
+        Assert.Equal(note, item.Documentation);
+        Assert.Empty(validation.Payload!.Diagnostics);
+        Assert.Contains("the stored value may differ", hover.Payload!.Contents, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Providers_resolve_dotted_activity_results_as_nested_namespaces()
     {
         var symbol = new ExpressionSymbol(

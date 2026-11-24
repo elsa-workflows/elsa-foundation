@@ -163,18 +163,29 @@ public sealed class PersistedExpressionAuthoringContextSource(
         return new($"activity-result:{producer}:{projection}", $"{producer}.{name}", ExpressionSymbolKind.ActivityResult, shape, "Activity output");
     }
 
-    private static ExpressionValueShape ToShape(ActivitySerializedShape shape) => new(shape.Type?.Alias,
-        shape.State is not (ActivitySerializedShapeState.Known or ActivitySerializedShapeState.Truncated) ? ExpressionValueKind.Unknown : shape.Kind switch {
-            ActivitySerializedValueKind.Scalar => ExpressionValueKind.Scalar,
-            ActivitySerializedValueKind.Object => ExpressionValueKind.Object,
-            ActivitySerializedValueKind.Map => ExpressionValueKind.Map,
-            ActivitySerializedValueKind.Collection => ExpressionValueKind.Array,
-            _ => ExpressionValueKind.Unknown
-        }, shape.IsNullable ?? true, shape.State != ActivitySerializedShapeState.Known,
-        shape.Element is null ? null : ToShape(shape.Element),
-        shape.MapValue is null ? null : new("String", ExpressionValueKind.Scalar, false),
-        shape.MapValue is null ? null : ToShape(shape.MapValue),
-        shape.Members.Select(member => new ExpressionValueMember(member.SerializedName, ToShape(member.Shape))).ToArray());
+    /// <summary>
+    /// Maps a source shape for expression tooling. A <see cref="ActivitySerializedShapeState.Declared"/> root carries
+    /// advisory members of its declared type: they are offered with a note on every member, so completion and hover
+    /// say the stored value may differ, and they are never loaded lazily.
+    /// </summary>
+    private static ExpressionValueShape ToShape(ActivitySerializedShape shape, string? declaredNote = null)
+    {
+        if (declaredNote is null && shape.State == ActivitySerializedShapeState.Declared)
+            declaredNote = $"From the declared type `{shape.Type?.Alias}`; the stored value may differ.";
+        var trusted = shape.State is ActivitySerializedShapeState.Known or ActivitySerializedShapeState.Truncated or ActivitySerializedShapeState.Declared;
+        return new(shape.Type?.Alias,
+            !trusted ? ExpressionValueKind.Unknown : shape.Kind switch {
+                ActivitySerializedValueKind.Scalar => ExpressionValueKind.Scalar,
+                ActivitySerializedValueKind.Object => ExpressionValueKind.Object,
+                ActivitySerializedValueKind.Map => ExpressionValueKind.Map,
+                ActivitySerializedValueKind.Collection => ExpressionValueKind.Array,
+                _ => ExpressionValueKind.Unknown
+            }, shape.IsNullable ?? true, declaredNote is null && shape.State != ActivitySerializedShapeState.Known,
+            shape.Element is null ? null : ToShape(shape.Element, declaredNote),
+            shape.MapValue is null ? null : new("String", ExpressionValueKind.Scalar, false),
+            shape.MapValue is null ? null : ToShape(shape.MapValue, declaredNote),
+            shape.Members.Select(member => new ExpressionValueMember(member.SerializedName, ToShape(member.Shape, declaredNote), declaredNote)).ToArray());
+    }
 
     private static int CountMembers(ActivitySerializedShape shape) => shape.Members.Sum(member => 1 + CountMembers(member.Shape))
         + (shape.Element is { } element ? 1 + CountMembers(element) : 0)

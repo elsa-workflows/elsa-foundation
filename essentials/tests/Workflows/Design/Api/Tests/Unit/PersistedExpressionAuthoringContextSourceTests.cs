@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Workflows.Design.Validations;
@@ -49,6 +50,56 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
             contextFilters: [new DenyContextFilter()], configure: services => services.AddSingleton<IActivitySerializedShapeSource>(guard));
         Assert.Null(await source.TryResolveAsync(new(ExpressionToolingContractVersion.V1, "draft", "target", "text", "JavaScript", "document"), new(true), CancellationToken.None));
         Assert.Equal(0, guard.Calls);
+    }
+
+    [Fact]
+    public async Task A_declared_variable_type_supplies_labeled_members()
+    {
+        var target = new ActivityNode("target", "activity", [], []);
+        var root = new ActivityNode("root", "container", [], []);
+        var structure = new RankedStructureService(root, [target], new Dictionary<string, string[]>());
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft", WorkflowDefinitionId = "workflow", LastModifiedAt = DateTimeOffset.UnixEpoch,
+            State = new([new("customer-key", "customer", new("shop.address"), null, null), Variable("count")], root, [], [], null)
+        };
+        var source = CreateSource([new SingleDraftStore(draft)], structure, new ScopedVariablePicker(new ScopedVariableResolver(structure)),
+            configure: services => services.AddSingleton<IActivitySerializedShapeSource>(new DeclaredVariableShape()));
+
+        var context = await source.TryResolveAsync(new(ExpressionToolingContractVersion.V1, "draft", "target", "text", "JavaScript", "document"), new(true), CancellationToken.None);
+
+        var symbol = Assert.Single(context!.RootSymbols, s => s.Kind == ExpressionSymbolKind.Variable && s.Name == "customer");
+        Assert.Equal(ExpressionValueKind.Object, symbol.ValueShape!.Kind);
+        Assert.False(symbol.ValueShape.HasLazyChildren);
+        var city = Assert.Single(symbol.ValueShape.Members!, m => m.Name == "city");
+        Assert.Equal("From the declared type `shop.address`; the stored value may differ.", city.Documentation);
+        Assert.Equal("String", city.Shape.DisplayName);
+        var street = Assert.Single(Assert.Single(symbol.ValueShape.Members!, m => m.Name == "home").Shape.Members!);
+        Assert.Equal("From the declared type `shop.address`; the stored value may differ.", street.Documentation);
+        var count = Assert.Single(context.RootSymbols, s => s.Kind == ExpressionSymbolKind.Variable && s.Name == "count");
+        Assert.Equal(ExpressionValueKind.Scalar, count.ValueShape!.Kind);
+        Assert.Empty(count.ValueShape.Members ?? []);
+    }
+
+    private sealed class DeclaredVariableShape : IActivitySerializedShapeSource
+    {
+        public ValueTask<ActivitySerializedShape?> DescribeResultAsync(IActivityDefinitionVersion admittedVersion, string projectionKey,
+            ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivitySerializedShape?>(null);
+
+        public ValueTask<ActivitySerializedShape?> DescribeDeclaredTypeAsync(TypeReference declaredType, string ownerContractIdentity,
+            ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default)
+        {
+            ActivitySerializedShape Scalar() => new(ActivitySerializedShapeState.Known, ActivitySerializedValueKind.Scalar, new("String"), ownerContractIdentity, "profile", "metadata");
+            var declared = declaredType.Alias == "shop.address"
+                ? new ActivitySerializedShape(ActivitySerializedShapeState.Declared, ActivitySerializedValueKind.Object, declaredType, ownerContractIdentity, "profile", "metadata")
+                {
+                    Members = [new("city", "City", Scalar()), new("home", "Home", new(ActivitySerializedShapeState.Known, ActivitySerializedValueKind.Object,
+                        new("shop.street"), ownerContractIdentity, "profile", "metadata") { Members = [new("street", "Street", Scalar())] })]
+                }
+                : new ActivitySerializedShape(ActivitySerializedShapeState.Declared, ActivitySerializedValueKind.Scalar, declaredType, ownerContractIdentity, "profile", "metadata");
+            return ValueTask.FromResult<ActivitySerializedShape?>(declared with { ReasonCode = "activity.shape.declared-type" });
+        }
     }
 
     [Fact]
