@@ -916,10 +916,78 @@ arrival over 4 MiB, it is refused as "page"; without the raw arrival the
 fault input is not charged and it recovers with the small arrival. The
 released-cohort filter has no suspended conjunct and no Due bound, since
 format 22 has neither a suspended parked root nor a released row that is not
-yet due; composition with Suspend or delayed inputs must revisit both. The multi-page drain under a cursor, with
-only released inputs eligible during it, remains open, as do Retry and
-RetryAll, timers, jobs and subscriptions in the restore plan, Park expiry,
-discard, and terminate or delete of a parked root.
+yet due; composition with Suspend or delayed inputs must revisit both. Protocol 23 below adds the
+multi-page drain. Retry and RetryAll, timers, jobs and subscriptions in the
+restore plan, Park expiry, discard, and terminate or delete of a parked root
+remain open.
+
+### PostgreSQL Park drain
+
+Protocol 23 adds a multi-page drain to recover. Its format carries the
+protocol 22 capabilities and a new Park drain capability. A recover whose
+kept set fits one page behaves as in protocol 22: one commit, journaled
+"recovered". When the Arrived rows exceed one page, the recover opens a drain
+where protocol 22 refuses "page".
+
+The Open is one fenced commit. It makes the root Running, clears the fault
+and the Park mark, increments the release generation, restores the first
+page, clears the Consumed fault input and consumes the recover. It records
+the drain on the root row: the Seq and Id of the last restored row as the
+cursor, and the restored and cleared totals. It inserts a drain control, an
+operator occurrence with the recover's operation, kind and Park mark, bound
+to the new generation. The journal gets
+`{"Outcome":"recovering","Operation":…,"Restored":…,"Cleared":…}`.
+
+Each drain control is polled like any operator row and taken alone. A
+pending released row goes before every operator row, so the control is
+offered only once the previous page's rows are consumed, and each page has
+the whole credit: 170 rows and 4 MiB, with the first row always admitted. A
+Page commit restores the next page after the cursor, advances the cursor and
+the restored total, consumes the control and inserts the next one. It writes
+no journal entry. The control that finds no kept row after the cursor
+completes the drain: the commit clears the drain columns and journals
+`{"Outcome":"recovered","Operation":…,"Restored":…,"Cleared":…,"AlreadyRearmed":0}`
+with the totals. After Complete the cohort rule of protocol 22 applies.
+
+While the drain is open, the poll, the operator FIFO check and the settled
+prefix offer only operator rows and the rows the open generation released.
+Every other input waits until Complete, whatever its Seq. A second recover
+admitted before Open finds the root Running and is journaled as refused with
+reason "selection". The ingress refuses a new recover, since the Park mark is
+cleared. A drain control that reaches a root whose drain has closed, or whose
+generation has moved, is refused as "selection".
+
+The checkpoint trigger pins the drain columns. They change only at Open
+(Faulted to Running with a "recovering" entry), at a Page (the cursor
+strictly advances, the restored total grows, the checkpoint fields stay and
+no journal entry exists at that revision) and at Complete (the drain closes
+with a "recovered" entry). The generation stays fixed while the drain is
+open. A CHECK keeps the four drain columns all set or all null, and allows an
+open drain only on a Running root. A separate trigger closes the drain when
+a write moves the root out of Running, so a Park, an end or a termination
+during the drain leaves the rows after the cursor kept. The deferred outcome
+trigger requires a "recovered" entry to leave no drain open, and a
+"recovering" entry to leave one open on the Running root.
+
+Run `pg-root-park-drain owned checked` and the three other writer and fence
+lanes, each in its own empty database. The fixture parks a root, keeps 402
+arrivals (two real ones and 400 copied from the first by raw SQL, each under
+its own operation and occurrence) and recovers through the public ingress.
+It admits a fresh input after Open and moves it below every released row by
+raw SQL. On the first Page commit it refuses a stale epoch and a trigger
+veto of one restore, and probes the drain rules of the checkpoint trigger
+with raw writes. Once that page lands, the owner's commits stop landing, and
+a new owner epoch takes over and finishes the drain from the durable cursor.
+The fixture checks the journal entries, a cursor that advances over three
+pages, that every arrival is restored once and consumed once in Seq order,
+that the fresh input is consumed only after Complete, and that a page-sized
+recover of a later Park commits at once at generation 2.
+
+The public view does not show the open resolution yet:
+`ParkView.OpenResolution` needs a projector change, and another session owns
+the projector. This profile admits no delete, terminate or suspend, so their
+interaction with an open drain is not built, and the close trigger for a
+root that leaves Running during the drain has no fixture lane yet.
 
 ## 10. Private durable lexical-resource probe
 
