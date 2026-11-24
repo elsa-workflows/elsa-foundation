@@ -24,7 +24,8 @@ worktree path on Windows (MSB3030).
 - [ ] T002 [P] Create `apps/Elsa.Essentials.Server/Elsa.Essentials.Server.csproj` referencing
   `Elsa.Essentials.Composition`, `Elsa.Foundation.Hosting` and the Nuplane/CShells hosting packages the Workbench uses,
   importing `apps/ComputedProductionSettings.targets` as the Workbench does; add it to
-  `HostProvidedPackagesGuardTests.SharingHosts`, to `Elsa.Server.slnx` and to the guard's `ExpectedProjectPath` and `ExpectedSolutionFolder`.
+  `HostProvidedPackagesGuardTests.SharingHosts`, to `Elsa.Server.slnx`, to the guard's `ExpectedProjectPath` and
+  `ExpectedSolutionFolder`, and its reviewed EF closure to `EfCoreDependencyGuardTests.AllowedEfConsumers`.
 - [ ] T003 [P] Create `Studio/src/apps/Elsa.Studio.Essentials/Elsa.Studio.Essentials.csproj` modelled on
   `Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj`, referencing only the Studio modules R-8 lists; add it to
   the Studio solution.
@@ -78,7 +79,8 @@ publishes `/app/migrated/workflows`.
   wiring, which is not a feature: the readiness endpoint `/health/ready` with eager activation of the default shell at
   startup (the Workbench's `Readiness/` `DefaultShellWarmup` and `MapShellReadiness`, not its lazy default), the CORS
   policy reading `Cors:AllowedOrigins`, the root health endpoint, and the host registrations the listed features rely
-  on: `AddEfPersistenceResources`, `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection`,
+  on: `AddEfPersistenceResources` (with an essentials `IEfToolingShellDefaults` type and its
+  `[assembly: EfToolingShellDefaults(...)]` attribute, as `WorkbenchEfToolingShellDefaults` is for the Workbench), `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection`,
   `AddShellStartupValidation`, `AddAuthentication`/`AddAuthorization`, and the OpenIddict vendor store (EF DbContext,
   SQLite migrations, store initializer, store provider, migration policy, pruning) from the shared library (T008a, Q10). Copy nothing
   else Workbench-specific (boot timeline, composition observation endpoints, Weaver, OpenTelemetry bridge).
