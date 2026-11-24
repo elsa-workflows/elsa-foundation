@@ -146,6 +146,15 @@ internal sealed partial class PostgresRootAdmission
 
     internal static async Task PinSelectedOperatorSchemaAsync(KernelDb db, CancellationToken token)
     {
+        try { await PinSelectedOperatorSourceAsync(db, token); }
+        catch (PostgresException error) when (IsUnavailableSelectedSchema(error))
+        {
+            throw new StoreFormatException("The selected operator admission schema is unreadable.", error);
+        }
+    }
+
+    private static async Task PinSelectedOperatorSourceAsync(KernelDb db, CancellationToken token)
+    {
         var marker = await db.Database.SqlQuery<SelectedOperatorStore>($"""
             SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", ns.nspname AS "Namespace"
             FROM "KernelStoreVersions" v
@@ -165,15 +174,17 @@ internal sealed partial class PostgresRootAdmission
             """, token);
         if (db.UsesRootRetirement)
             await db.Database.ExecuteSqlRawAsync("""
-                LOCK TABLE "Partitions", "Journal", "Subscriptions", "FoundationDirectReceipts" IN ACCESS SHARE MODE
+                LOCK TABLE "Partitions", "Nodes", "Journal", "Subscriptions", "FoundationDirectReceipts", "FoundationActorList"
+                IN ACCESS SHARE MODE
                 """, token);
         var sameSchema = await db.Database.SqlQuery<bool>($"""
-            SELECT count(*) = {(db.UsesRootRetirement ? 10 : 6)} AS "Value"
+            SELECT count(*) = {(db.UsesRootRetirement ? 12 : 6)} AS "Value"
             FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
-                ('"Instances"'), ('"FoundationOperatorReceipts"'), ('"Messages"'), ('"Partitions"'), ('"Journal"'), ('"Subscriptions"'), ('"FoundationDirectReceipts"')) required(name)
+                ('"Instances"'), ('"FoundationOperatorReceipts"'), ('"Messages"'), ('"Partitions"'), ('"Nodes"'), ('"Journal"'), ('"Subscriptions"'),
+                ('"FoundationDirectReceipts"'), ('"FoundationActorList"')) required(name)
             JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name)
             JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace AND ns.nspname = {source}
-            WHERE {db.UsesRootRetirement} OR required.name NOT IN ('"Partitions"', '"Journal"', '"Subscriptions"', '"FoundationDirectReceipts"')
+            WHERE {db.UsesRootRetirement} OR required.name NOT IN ('"Partitions"', '"Nodes"', '"Journal"', '"Subscriptions"', '"FoundationDirectReceipts"', '"FoundationActorList"')
             """).SingleAsync(token);
         if (!sameSchema)
             throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");

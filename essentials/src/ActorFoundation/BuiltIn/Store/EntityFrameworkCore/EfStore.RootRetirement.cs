@@ -1,9 +1,27 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
+    // Keep the marker lock and the pinned PostgreSQL namespace for the whole operation.
+    private static async ValueTask<IDbContextTransaction?> BeginRootRetirementOperationAsync(KernelDb db, CancellationToken token)
+    {
+        if (!db.UsesRootRetirement) return null;
+        var transaction = await db.Database.BeginTransactionAsync(token);
+        try
+        {
+            await PostgresRootAdmission.PinSelectedOperatorSchemaAsync(db, token);
+            return transaction;
+        }
+        catch
+        {
+            await transaction.DisposeAsync();
+            throw;
+        }
+    }
+
     private sealed record RootRetirement(WorkerRoot Root, RootImage Current, Message Command, long Position = 0)
         : QualifiedRootCheckpoint(-1)
     {
@@ -49,7 +67,8 @@ public sealed partial class EfStore
             return await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Journal" ("Instance", "Partition", "Position", "Revision", "Entries")
                 SELECT {Root.Actor}, {Root.Partition}, {Position}, -1, '["delete"]'
-                WHERE NOT EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
+                WHERE NOT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference})
+                    AND NOT EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
                     AND NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                         AND (NOT "Done" OR "Payload" IS NOT NULL OR "Start" IS NOT NULL OR "ReplyTo" IS NOT NULL))
                 """, token) == 1;

@@ -695,7 +695,11 @@ generated root through the host and real Worker. The model's deletion protection
 receives the committed terminal time. A successful fenced retirement keeps the
 identity marker and deduplication window, removes the public projection and
 physical state, clears pending payloads, and replaces that actor's history with
-one deletion marker. The runnable fixture is
+one deletion marker. Ownership, checkpoint reads and retirement use the schema
+of the same format marker. The commit verifies that the projection and payloads
+are gone and that the deletion marker was inserted. The fixture also exercises
+same-owner deletion, original receipt replay and complete rollback when a store
+write is suppressed. The runnable fixture is
 `pg-root-retirement owned checked` against an empty PostgreSQL database.
 
 This profile qualifies generated roots with no attached work. Protected ThenDelete,

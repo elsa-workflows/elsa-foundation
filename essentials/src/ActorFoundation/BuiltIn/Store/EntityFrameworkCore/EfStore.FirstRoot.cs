@@ -265,9 +265,7 @@ public sealed partial class EfStore
     {
         await using var db = create();
         // The model's protection decision must see the same physical checkpoint as retirement.
-        await using var transaction = db.UsesRootRetirement ? await db.Database.BeginTransactionAsync(cancellationToken) : null;
-        if (transaction is not null)
-            await PostgresRootAdmission.PinSelectedOperatorSchemaAsync(db, cancellationToken);
+        await using var transaction = await BeginRootRetirementOperationAsync(db, cancellationToken);
         var family = RootStateFamily(db);
         if (transaction is null && (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol || db.UsesRootStableBody))
             await RequireStoreVersionsAsync(db, cancellationToken);

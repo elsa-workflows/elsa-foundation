@@ -91,10 +91,15 @@ internal static class PostgresRootRetirementChecks
         var pendingDelete = (await admission.ReadDueRootOperatorAsync(tenant.Tenant, target.Id, stop))!;
         var pendingProtected = (await admission.ReadDueRootOperatorAsync(tenant.Tenant, protectedActor.Id, stop))!;
         var neighborHistory = await cold.ReadJournalOfAsync(0, untouched.Actor.Id, 0, stop);
-        await LateMarkerRefusalRollsBack(before, pendingDelete, pending, suppress: false);
-        await LateMarkerRefusalRollsBack(before, pendingDelete, pending, suppress: true);
+        await RetirementRollback(before, pendingDelete, pending, RetirementRejection.MarkerError);
+        await RetirementRollback(before, pendingDelete, pending, RetirementRejection.MarkerSuppressed);
+        await RetirementRollback(before, pendingDelete, pending, RetirementRejection.ProjectionSuppressed);
 
+        var lease = (await cold.TakeAsync(0, "canonical-control", Defaults.Lease, stop))!;
         var shadow = await OpenShadowAsync();
+        Check(await shadow.TakeAsync(0, "shadow-candidate", Defaults.Lease, stop) is null,
+            "ownership cannot be taken from a shadow partition while the canonical lease is held");
+        await cold.ReleaseAsync(0, lease.Epoch, stop);
         await using (var owner = await Own("successor", shadow))
         {
             Check(((Worker)owner).Epoch > staleEpoch, "a successor owns the deletion partition");
@@ -168,6 +173,7 @@ internal static class PostgresRootRetirementChecks
                   (await cold.ReadJournalOfAsync(0, sameBefore.Actor.Id, 0, stop)) is [{ Revision: -1 }],
                 "same-owner deletion uses the committed stamp and drops a second polled delete without resetting");
         }
+        await CheckUnreadableSchemaAsync();
         return 0;
 
         async Task<Contract.ActorRef> Start(string id, string definition) =>
@@ -184,6 +190,11 @@ internal static class PostgresRootRetirementChecks
             await db.Database.ExecuteSqlRawAsync("""
                 CREATE SCHEMA retirement_shadow;
                 CREATE TABLE retirement_shadow."Instances" AS TABLE "Instances";
+                CREATE TABLE retirement_shadow."Partitions" (LIKE "Partitions" INCLUDING ALL);
+                INSERT INTO retirement_shadow."Partitions" SELECT * FROM "Partitions";
+                UPDATE retirement_shadow."Partitions" SET "Owner" = NULL, "Epoch" = "Epoch" - 1;
+                CREATE TABLE retirement_shadow."Nodes" (LIKE "Nodes" INCLUDING ALL);
+                INSERT INTO retirement_shadow."Nodes" SELECT * FROM "Nodes";
                 """, stop);
             var altered = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE retirement_shadow."Instances" AS target
@@ -201,7 +212,32 @@ internal static class PostgresRootRetirementChecks
                 { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         }
 
-        async Task LateMarkerRefusalRollsBack(EfStore.RootImage current, Message command, Message future, bool suppress)
+        async Task CheckUnreadableSchemaAsync()
+        {
+            await using var db = Open();
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "KernelStoreVersions" RENAME TO "SavedKernelVersions" """, stop);
+            try
+            {
+                await RequiresFormatError(async () => _ = await cold.ReadFirstRootAsync(tenant.Tenant, neighbor.Id, stop));
+                await RequiresFormatError(async () => _ = await ingress.SendAsync(tenant, new Contract.Target.Ref(neighbor),
+                    "unavailable-store", "ordinary", null, cancellationToken: stop));
+                Console.WriteLine("ok an already-open adapter reports typed format errors for direct send and checkpoint read");
+            }
+            finally
+            {
+                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "SavedKernelVersions" RENAME TO "KernelStoreVersions" """, cleanup.Token);
+            }
+
+            static async Task RequiresFormatError(Func<Task> attempt)
+            {
+                try { await attempt(); }
+                catch (StoreFormatException) { return; }
+                throw new InvalidOperationException("Expected a typed format error.");
+            }
+        }
+
+        async Task RetirementRollback(EfStore.RootImage current, Message command, Message future, RetirementRejection rejection)
         {
             var store = Store();
             await store.BindWorkerPartitionAsync(0, stop);
@@ -226,19 +262,28 @@ internal static class PostgresRootRetirementChecks
                     END
                     $fn$;
                     """, stop);
-                await db.Database.ExecuteSqlRawAsync(suppress ? """
-                    CREATE TRIGGER fixture_refuse_deletion_marker BEFORE INSERT ON "Journal"
-                    FOR EACH ROW WHEN (NEW."Revision" = -1) EXECUTE FUNCTION fixture_refuse_deletion_marker('suppress');
-                    """ : """
-                    CREATE TRIGGER fixture_refuse_deletion_marker BEFORE INSERT ON "Journal"
-                    FOR EACH ROW WHEN (NEW."Revision" = -1) EXECUTE FUNCTION fixture_refuse_deletion_marker('throw');
-                    """, stop);
+                await db.Database.ExecuteSqlRawAsync(rejection switch
+                {
+                    RetirementRejection.MarkerError => """
+                        CREATE TRIGGER fixture_refuse_deletion_marker BEFORE INSERT ON "Journal"
+                        FOR EACH ROW WHEN (NEW."Revision" = -1) EXECUTE FUNCTION fixture_refuse_deletion_marker('throw');
+                        """,
+                    RetirementRejection.MarkerSuppressed => """
+                        CREATE TRIGGER fixture_refuse_deletion_marker BEFORE INSERT ON "Journal"
+                        FOR EACH ROW WHEN (NEW."Revision" = -1) EXECUTE FUNCTION fixture_refuse_deletion_marker('suppress');
+                        """,
+                    _ => """
+                        CREATE TRIGGER fixture_refuse_projection_delete BEFORE DELETE ON "FoundationActorList"
+                        FOR EACH ROW EXECUTE FUNCTION fixture_refuse_deletion_marker('suppress');
+                        """
+                }, stop);
                 try
                 {
                     var result = await store.CommitAsync(new(0, lease.Epoch, lease.Position, Defaults.Lease, false, [retirement], [], []), stop);
-                    if (!suppress || result.Landed) throw new InvalidOperationException("The marker refusal did not roll back the commit.");
+                    if (rejection == RetirementRejection.MarkerError || result.Landed)
+                        throw new InvalidOperationException("The fixture refusal did not roll back the commit.");
                 }
-                catch (StoreException error) when (!suppress && error.Failure == Failure.Definite &&
+                catch (StoreException error) when (rejection == RetirementRejection.MarkerError && error.Failure == Failure.Definite &&
                     error.InnerException?.GetBaseException() is PostgresException
                         { SqlState: PostgresErrorCodes.CheckViolation, MessageText: "fixture refused deletion marker" }) { }
 
@@ -249,8 +294,7 @@ internal static class PostgresRootRetirementChecks
                     (await cold.ReadJournalOfAsync(0, current.Actor.Id, 0, stop)).SequenceEqual(priorHistory) &&
                     !(await Inbox(command)).Done && !waiting.Done && waiting.Payload == future.Payload &&
                     await db.Partitions.Select(partition => partition.Position).SingleAsync(stop) == lease.Position,
-                    suppress ? "a suppressed marker rolls back the checkpoint, inbox, projection, journal and fence" :
-                        "a late marker refusal rolls back the checkpoint, inbox, projection, journal and fence");
+                    $"{rejection} rolls back the checkpoint, inbox, projection, journal and fence");
             }
             finally
             {
@@ -258,6 +302,7 @@ internal static class PostgresRootRetirementChecks
                 await using var db = Open();
                 await db.Database.ExecuteSqlRawAsync("""
                     DROP TRIGGER IF EXISTS fixture_refuse_deletion_marker ON "Journal";
+                    DROP TRIGGER IF EXISTS fixture_refuse_projection_delete ON "FoundationActorList";
                     DROP FUNCTION IF EXISTS fixture_refuse_deletion_marker();
                     """, cleanup.Token);
                 await store.ReleaseAsync(0, lease.Epoch, cleanup.Token);
@@ -292,6 +337,8 @@ internal static class PostgresRootRetirementChecks
                 row.Id == message.InboxKey.Id, stop);
         }
     }
+
+    private enum RetirementRejection { MarkerError, MarkerSuppressed, ProjectionSuppressed }
 
     private sealed record PhysicalMarker(string State, int? WireBytes, string? Header, bool Retired, long Revision);
 

@@ -380,9 +380,11 @@ public sealed partial class EfStore
         }
         var mine = string.Join(" OR ", owned.Select(f => FormattableString.Invariant($"""({Pid} = {f.Partition} AND "Epoch" = {f.Epoch})""")));
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         await db.Database.ExecuteSqlRawAsync(postgres && Engine is null
             ? $"""{Locked(ids)}UPDATE "Partitions" SET "Owner" = NULL FROM l WHERE {Pid} = l."Id" AND ({mine})"""
             : Q($"""UPDATE "Partitions" SET "Owner" = NULL WHERE "Id" IN ({ids}) AND ({mine})"""), cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
     }
 
     /// <summary>One query over an owned set: the one-partition poll with its predicate over the set, each row compared with its own partition's epoch.</summary>
@@ -397,6 +399,7 @@ public sealed partial class EfStore
         }
         var single = Q("""m."Partition" = {0} AND m."Seen" < {1}""");
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         var poll = PollSql(db.UsesRootOperatorProtocol);
         if (!poll.Contains(single, StringComparison.Ordinal)) throw new InvalidOperationException("The poll has no partition predicate where the set poll replaces it.");
         var set = Q($"""m."Partition" IN ({List(owned.Select(f => f.Partition).Order())}) AND m."Seen" < {EpochOf(owned, "m.\"Partition\"")}""");

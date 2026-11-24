@@ -388,7 +388,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        await RequireStoreVersionsAsync(db, cancellationToken);
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
+        if (pinned is null) await RequireStoreVersionsAsync(db, cancellationToken);
         return await db.Partitions.CountAsync(cancellationToken);
     }
 
@@ -452,10 +453,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         var now = Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken) : (await db.Database.SqlQueryRaw<long>(
             $"""INSERT INTO "Nodes" ("Id", "SeenAt", {NodeAdvertisement.Columns}) VALUES ({"{0}"}, {Now}, {NodeAdvertisement.Parameters}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", {NodeAdvertisement.Update} RETURNING "SeenAt" AS "Value" """,
             NodeAdvertisement.Arguments(node, messageProtocol: db.RequiredFormat.MessageProtocol)).ToListAsync(cancellationToken))[0];
-        return await MembershipAsync(db, now, window, cancellationToken);
+        var membership = await MembershipAsync(db, now, window, cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
+        return membership;
     }
 
     // The membership reads: the nodes heard within the window, and the free partitions. Under the node lease a partition
@@ -470,7 +474,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Partitions" SET "Owner" = NULL WHERE "Id" = {0} AND "Epoch" = {1}"""), [partition, epoch], cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
     }
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
@@ -749,6 +755,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private async Task<bool> HoldsAsync(CommitBatch batch, CancellationToken cancellationToken)
     {
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         var fenced = batch.Fenced;
         var ids = fenced.Select(f => f.Partition).ToList();
         var rows = await db.Partitions.AsNoTracking().Where(p => ids.Contains(p.Id)).Select(p => new PartitionFence(p.Id, p.Epoch, p.Position)).ToListAsync(cancellationToken);
@@ -758,6 +765,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         // A plain read. The left join returns database time even when no message does.
         var sql = PollSql(db.UsesRootOperatorProtocol);
         if (_ordinaryRoots is { } root)
