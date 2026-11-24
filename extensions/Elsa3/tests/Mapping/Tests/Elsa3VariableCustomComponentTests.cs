@@ -35,7 +35,8 @@ public sealed class Elsa3VariableCustomComponentTests
         Assert.Equal("order", info.Metadata["VariableName"]);
         Assert.Contains("Variable 'order'", info.Message);
         Assert.Contains("'Acme.Orders.OrderDto, Acme.Orders'", info.Message);
-        Assert.Contains("runs as Any until an Elsa 4 feature registers the type under a dotted alias", info.Message);
+        Assert.Contains("its Elsa 4 type is Any", info.Message);
+        Assert.Contains("until an Elsa 4 feature registers the type under a dotted alias and the workflow is converted again", info.Message);
     }
 
     [Fact]
@@ -59,6 +60,7 @@ public sealed class Elsa3VariableCustomComponentTests
     [InlineData("List<Acme.Orders.OrderDto>", false, "Acme.Orders.OrderDto")]
     [InlineData("List<Acme.Orders.OrderDto[]>", false, "Acme.Orders.OrderDto")]
     [InlineData("System.DayOfWeek", false, "System.DayOfWeek")]
+    [InlineData("OrderDto", false, "OrderDto")]
     [InlineData("List<List<String>>", false, null)]
     [InlineData("ObjectDictionary[]", false, null)]
     [InlineData("Object", false, null)]
@@ -75,8 +77,37 @@ public sealed class Elsa3VariableCustomComponentTests
         {
             Assert.NotNull(notice);
             Assert.Contains($"'{typeName}'", notice.Message);
-            Assert.Contains($"register '{unregistered}'", notice.Guidance);
+            if (typeName != unregistered)
+                Assert.Contains($"whose element type '{unregistered}'", notice.Message);
         }
+    }
+
+    /// <summary>
+    /// The guidance matches how the converter finds a type: an assembly-qualified name by loading it, a dotted name by that
+    /// exact alias, and a bare name not at all, since Elsa 4 refuses bare aliases for module types.
+    /// </summary>
+    [Theory]
+    [InlineData("Acme.Orders.OrderDto, Acme.Orders", "with its assembly loaded in the host that converts")]
+    [InlineData("Acme.Orders.OrderDto", "under the alias 'Acme.Orders.OrderDto'")]
+    [InlineData("OrderDto", "cannot register the bare name 'OrderDto'")]
+    public void The_guidance_says_how_this_name_can_keep_its_type(string typeName, string guidance)
+    {
+        var notice = Elsa3VariableMapper.DescribeUnregisteredType(ConversionServices.TypeRegistry(), new Elsa3Variable { Id = "v", Name = "v", TypeName = typeName });
+
+        Assert.Contains(guidance, notice!.Guidance);
+    }
+
+    /// <summary>A dotted Elsa 3 name without an assembly keeps its type once a feature registers it under that exact alias, as the guidance says.</summary>
+    [Fact]
+    public void A_dotted_name_registered_under_that_alias_keeps_its_type()
+    {
+        var registry = ConversionServices.TypeRegistry();
+        registry.RegisterType(typeof(OrderDto), "Acme.Orders.OrderDto");
+        var source = new Elsa3Variable { Id = "order", Name = "order", TypeName = "Acme.Orders.OrderDto" };
+
+        Assert.Null(Elsa3VariableMapper.DescribeUnregisteredType(registry, source));
+        Assert.True(Elsa3VariableMapper.TryMap(registry, ObjectConverter, source, out var variable, out var refusal), refusal?.Message);
+        Assert.Equal(new TypeReference("Acme.Orders.OrderDto"), variable.Type);
     }
 
     [Fact]
@@ -98,7 +129,8 @@ public sealed class Elsa3VariableCustomComponentTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         Assert.Null(Assert.Single(result.Value!.State.Variables).StorageDriverType);
-        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.VariableStorageDriverUnmapped);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic =>
+            diagnostic.Code is Elsa3ImportDiagnosticCodes.VariableStorageDriverUnmapped or Elsa3ImportDiagnosticCodes.VariableTypeUnregistered);
     }
 
     [Fact]

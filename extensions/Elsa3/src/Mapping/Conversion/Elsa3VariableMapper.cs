@@ -90,8 +90,23 @@ internal static class Elsa3VariableMapper
 
         var which = string.Equals(unregistered, typeName, StringComparison.Ordinal) ? "which" : $"whose element type '{unregistered}'";
         return new(
-            $"Variable '{source.Name}' has the Elsa 3 type '{typeName}', {which} is not registered in Elsa 4, so the variable converts as Any. It runs as Any until an Elsa 4 feature registers the type under a dotted alias.",
-            $"To keep the type, register '{unregistered}' in Elsa 4's well-known type registry under a dotted alias with a feature, then convert the workflow again. Otherwise no action is needed.");
+            $"Variable '{source.Name}' has the Elsa 3 type '{typeName}', {which} is not registered in Elsa 4, so its Elsa 4 type is Any. It stays Any until an Elsa 4 feature registers the type under a dotted alias and the workflow is converted again.",
+            RegistrationGuidance(unregistered));
+    }
+
+    /// <summary>
+    /// How to keep an unregistered type. The converter finds an Elsa 3 name in Elsa 4's registry by that exact text, or loads
+    /// an assembly-qualified CLR name and looks up its type; module types take dotted aliases, so a bare name cannot be
+    /// registered as it is.
+    /// </summary>
+    private static string RegistrationGuidance(string typeName)
+    {
+        const string otherwise = " Otherwise no action is needed: the value is held as JSON.";
+        if (typeName.Contains(','))
+            return $"To keep the type, have an Elsa 4 feature register it under a dotted alias, with its assembly loaded in the host that converts, then convert the workflow again.{otherwise}";
+        if (typeName.Contains('.'))
+            return $"To keep the type, have an Elsa 4 feature register it under the alias '{typeName}', then convert the workflow again.{otherwise}";
+        return $"Elsa 4 cannot register the bare name '{typeName}' as a type alias. To keep the type, name it in the Elsa 3 workflow by its assembly-qualified CLR name, have an Elsa 4 feature register it under a dotted alias, then convert again.{otherwise}";
     }
 
     /// <summary>Maps <paramref name="source"/>, or returns <c>false</c> with the refusal when it cannot be converted: a resource type, a storage driver Elsa 4 does not register, or a starting value that cannot start as it did in Elsa 3.</summary>

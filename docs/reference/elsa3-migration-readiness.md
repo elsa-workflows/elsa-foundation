@@ -25,8 +25,8 @@ Variables of date/time, TimeSpan or Guid types without a starting value report
 3.6.3 has no required/default metadata on workflow inputs, so its inputs convert as optional.
 
 A variable of a custom type Elsa 4 does not register converts as Any and reports the info
-`ELS3-VARIABLE-TYPE-UNREGISTERED`; register the type under a dotted alias in an Elsa 4 feature and convert again to keep
-it. A variable on a custom Elsa 3 storage driver Elsa 4 does not register is refused with
+`ELS3-VARIABLE-TYPE-UNREGISTERED`; to keep the type, register it under a dotted alias in an Elsa 4 feature and convert
+again. The diagnostic's guidance says how for the name the workflow uses. A variable on a custom Elsa 3 storage driver Elsa 4 does not register is refused with
 `ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED`; use the default storage, or register the driver, before converting.
 
 Built-in null audit: WriteLine Text and SendHttpRequest Method now declare the null their implementations already

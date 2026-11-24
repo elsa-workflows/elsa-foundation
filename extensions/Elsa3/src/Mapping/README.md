@@ -98,8 +98,10 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
 
   A custom type Elsa 4 does not register (the type itself, or the innermost element of a collection of it, such as
   `Acme.Orders.OrderDto` or `List<Acme.Orders.OrderDto>`) gets the info `ELS3-VARIABLE-TYPE-UNREGISTERED`, naming the
-  variable and the type: it runs as Any until an Elsa 4 feature registers the type under a dotted alias and the workflow
-  is converted again (#5666). A nesting Elsa 4 cannot express (`List<List<String>>`, `ObjectDictionary[]`) gets none;
+  variable and the type: its Elsa 4 type is Any until an Elsa 4 feature registers the type under a dotted alias and the
+  workflow is converted again (#5666). The converter finds an assembly-qualified name by loading its type, and a dotted
+  name only under that exact alias; a bare name (`OrderDto`) cannot be registered, since module types take dotted
+  aliases. The info is raised even when the variable is also refused, so every custom type is reported. A nesting Elsa 4 cannot express (`List<List<String>>`, `ObjectDictionary[]`) gets none;
   registering a type would not change it.
 
   A variable on an Elsa 3 storage driver other than the default (`WorkflowInstanceStorageDriver`), whose type Elsa 4 does
