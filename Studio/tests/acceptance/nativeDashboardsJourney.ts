@@ -120,10 +120,14 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("combobox", { name: "Visualization", exact: true }).selectOption("bar");
       await page.getByRole("combobox", { name: "Horizontal axis", exact: true }).selectOption("status");
       await page.getByRole("listbox", { name: "Value columns", exact: true }).selectOption(["started", "failed", "rate"]);
-      await page.getByRole("region", { name: "Ask Weaver", exact: true }).getByLabel("Your question", { exact: true }).fill("A provider-disabled native question remains editable");
-      await expect(page.getByRole("button", { name: "Ask Weaver", exact: true })).toBeDisabled();
+      await page.locator(".named-weaver-disclosure > summary").click();
+      const unavailableAuthoring = page.getByRole("region", { name: "Ask Weaver", exact: true });
+      await expect(unavailableAuthoring.getByRole("status")).toContainText(/unavailable|connection|provider|configured/i);
+      await expect(unavailableAuthoring.getByRole("textbox", { name: "Your question", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("combobox", { name: "Visualization", exact: true })).toBeEnabled();
       await capture(page, info, "question-controls");
       // A real native validation response identifies the invalid field and moves focus there.
+      await openQuerySection(page, "query.sort");
       const limit = page.getByLabel("Maximum result rows/groups", { exact: true });
       await limit.fill("0");
       const invalidResponse = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/dashboard-queries/validate"));

@@ -76,22 +76,32 @@ export function formatStudioDate(value: string | number | Date | null | undefine
   const date = value instanceof Date ? value : new Date(value);
   if (!Number.isFinite(date.getTime())) return String(value);
   const zone = resolveStudioTimeZone(preference);
-  return `${new Intl.DateTimeFormat(undefined, { timeZone: zone, dateStyle: "medium", timeStyle: "medium" }).format(date)} UTC${offsetText(offsetMinutes(date, zone))}`;
+  const beforeCommonEra = date.getUTCFullYear() <= 1 && wallParts(date, zone)[0] <= 0;
+  const options: Intl.DateTimeFormatOptions = beforeCommonEra
+    ? { calendar: "gregory", year: "numeric", month: "short", day: "numeric", era: "short", hour: "numeric", minute: "2-digit", second: "2-digit" }
+    : { dateStyle: "medium", timeStyle: "medium" };
+  return `${new Intl.DateTimeFormat(undefined, { timeZone: zone, ...options }).format(date)} UTC${offsetText(offsetMinutes(date, zone))}`;
 }
 
 /** The shared timestamp keeps its date/time layout while using the selected zone and a visible offset. */
 export function formatStudioDateParts(date: Date, preference = getStudioTimeZonePreference()) {
   const timeZone = resolveStudioTimeZone(preference);
+  const beforeCommonEra = date.getUTCFullYear() <= 1 && wallParts(date, timeZone)[0] <= 0;
+  const dateOptions: Intl.DateTimeFormatOptions = beforeCommonEra
+    ? { calendar: "gregory", year: "numeric", month: "short", day: "numeric", era: "short" }
+    : { dateStyle: "medium" };
   return {
-    date: new Intl.DateTimeFormat(undefined, { timeZone, dateStyle: "medium" }).format(date),
+    date: new Intl.DateTimeFormat(undefined, { timeZone, ...dateOptions }).format(date),
     time: `${new Intl.DateTimeFormat(undefined, { timeZone, timeStyle: "medium" }).format(date)} UTC${offsetText(offsetMinutes(date, timeZone))}`,
     dateTime: formatStudioDate(date, preference)
   };
 }
 
 function wallParts(date: Date, timeZone: string): number[] {
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(date);
-  return ["year", "month", "day", "hour", "minute", "second"].map(type => Number(parts.find(part => part.type === type)?.value));
+  const parts = new Intl.DateTimeFormat("en-US", { calendar: "gregory", timeZone, era: "short", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(date);
+  const values = ["year", "month", "day", "hour", "minute", "second"].map(type => Number(parts.find(part => part.type === type)?.value));
+  if (parts.find(part => part.type === "era")?.value === "BC") values[0] = 1 - values[0];
+  return values;
 }
 
 /** Converts a wall time using that date's zone offset. A DST gap is refused; a repeated hour uses its earlier instant. */
@@ -114,7 +124,12 @@ export function localDateTimeToIso(value: string, preference = getStudioTimeZone
       throw new RangeError("Enter a valid date and offset between -14:00 and +14:00.");
     return value;
   }
-  if (originalInstant && studioLocalDateTime(originalInstant, preference) === value) {
+  let originalWall: string | undefined;
+  if (originalInstant && /(?:Z|[+-]\d{2}:\d{2})$/.test(originalInstant)) {
+    try { originalWall = studioLocalDateTime(originalInstant, preference); }
+    catch (error) { if (!(error instanceof RangeError)) throw error; }
+  }
+  if (originalInstant && originalWall === value) {
     localDateTimeToIso(originalInstant, preference); // Validate the original explicit instant, including .NET range.
     const offset = offsetMinutes(new Date(originalInstant), resolveStudioTimeZone(preference));
     if (!Number.isInteger(offset)) throw new RangeError("This historical zone offset cannot be sent as a .NET date.");
@@ -138,6 +153,7 @@ export function studioLocalDateTime(value: string, preference = getStudioTimeZon
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return value;
   const [year, month, day, hour, minute, second] = wallParts(date, resolveStudioTimeZone(preference));
+  if (year < 1 || year > 9999) throw new RangeError("The selected-zone date must fall between years 0001 and 9999. Choose UTC or another zone.");
   const fraction = /\.(\d{1,7})(?:Z|[+-]\d{2}:\d{2})$/.exec(value)?.[1];
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}${fraction ? `.${fraction}` : ""}`;
 }

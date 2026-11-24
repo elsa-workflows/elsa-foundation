@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { formatStudioDate, getStudioTimeZonePreference, isStudioTimeZone, localDateTimeToIso, setStudioTimeZonePreference, studioLocalDateTime, studioTimeZoneStorageKey, useStudioTimeZone } from "../sdk/timeZone";
+import { formatStudioDate, formatStudioDateParts, getStudioTimeZonePreference, isStudioTimeZone, localDateTimeToIso, setStudioTimeZonePreference, studioLocalDateTime, studioTimeZoneStorageKey, useStudioTimeZone } from "../sdk/timeZone";
 import { readAppearancePreferences, resetAppearancePreferences, writeAppearancePreferences } from "../app/themes/appearance";
 
 beforeEach(() => { localStorage.clear(); setStudioTimeZonePreference("browser"); });
@@ -31,6 +31,37 @@ describe("Studio date conversion", () => {
     expect(formatStudioDate("2026-07-15T12:30:00Z", "Europe/Amsterdam")).toContain("UTC+02:00");
     expect(formatStudioDate("1900-01-01T00:00:00Z", "Europe/Paris")).toContain("UTC+00:09:21");
     expect(formatStudioDate("bad date", "UTC")).toBe("bad date");
+  });
+  it("keeps the era visible when a minimum .NET instant crosses into BCE in the selected zone", () => {
+    const instant = "0001-01-01T00:00:00Z";
+    const date = new Date(instant);
+    const expectedEra = new Intl.DateTimeFormat(undefined, { calendar: "gregory", timeZone: "America/New_York", era: "short" })
+      .formatToParts(date).find(part => part.type === "era")!.value;
+    expect(formatStudioDate(instant, "America/New_York")).toContain(expectedEra);
+    const parts = formatStudioDateParts(date, "America/New_York");
+    expect(parts.date).toContain(expectedEra);
+    expect(parts.dateTime).toContain(expectedEra);
+    expect(parts.time).toContain("UTC-04:56:02");
+  });
+  it.each([
+    ["0001-01-01T00:00:00Z", "America/New_York"],
+    ["9999-12-31T23:59:59Z", "Pacific/Kiritimati"]
+  ])("refuses an unrepresentable selected-zone editable year for %s in %s", (instant, zone) => {
+    expect(() => studioLocalDateTime(instant, zone)).toThrow(/years 0001 and 9999/);
+    expect(studioLocalDateTime(instant, "UTC")).toBe(instant.replace(/Z$/, ""));
+  });
+  it.each([
+    ["0001-01-01T00:00:00Z", "America/New_York", "2026-07-15T12:30-04:00"],
+    ["9999-12-31T23:59:59Z", "Pacific/Kiritimati", "2026-07-15T12:30+14:00"]
+  ])("accepts a valid replacement for an original unrepresentable wall date %s", (original, zone, expected) => {
+    expect(localDateTimeToIso("2026-07-15T12:30", zone, original)).toBe(expected);
+  });
+  it.each(["UTC", "America/New_York"])("ignores a zoneless original hint when the browser zone is %s", browserZone => {
+    vi.stubEnv("TZ", browserZone);
+    try {
+      expect(localDateTimeToIso("2026-10-25T02:30:00", "Europe/Amsterdam", "2026-10-25T01:30:00"))
+        .toBe("2026-10-25T02:30:00+02:00");
+    } finally { vi.unstubAllEnvs(); }
   });
 });
 
