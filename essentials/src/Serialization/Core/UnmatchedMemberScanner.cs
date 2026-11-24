@@ -47,6 +47,20 @@ public static class UnmatchedMemberScanner
         if (value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array)) return;
         var options = operation.GetOptions(contract);
         var info = options.GetTypeInfo(type);
+        var discriminator = info.PolymorphismOptions?.TypeDiscriminatorPropertyName;
+        if (customConverter is null && discriminator is not null && value.ValueKind == JsonValueKind.Object && value.TryGetProperty(discriminator, out var token))
+        {
+            var selected = info.PolymorphismOptions!.DerivedTypes.FirstOrDefault(x =>
+                x.TypeDiscriminator is string text && token.ValueKind == JsonValueKind.String && token.GetString() == text ||
+                x.TypeDiscriminator is int number && token.ValueKind == JsonValueKind.Number && token.TryGetInt32(out var actual) && actual == number);
+            if (selected.DerivedType is { } derived)
+            {
+                // The runtime subtype supplies the shape, while the declared boundary keeps its scope.
+                // Inspect opaque derived converters through the same coverage branch as other converters.
+                declaredType = type = derived;
+                info = options.GetTypeInfo(derived);
+            }
+        }
         if (customConverter is not null || info.Kind == JsonTypeInfoKind.None)
         {
             var converter = customConverter ?? info.Converter;
@@ -57,6 +71,7 @@ public static class UnmatchedMemberScanner
             {
                 foreach (var property in value.EnumerateObject())
                 {
+                    if (property.Name == discriminator) continue;
                     var memberPath = MemberPath(path, property.Name);
                     if (matcher.TryGetMemberType(property.Name, out var memberType)) Visit(property.Value, memberType, operation.ChildContract(memberType, contract), memberPath, result, operation);
                     else Unmatched(memberPath, type, contract, result);
@@ -87,14 +102,6 @@ public static class UnmatchedMemberScanner
             return;
         }
         if (value.ValueKind != JsonValueKind.Object) return;
-        var discriminator = info.PolymorphismOptions?.TypeDiscriminatorPropertyName;
-        if (discriminator is not null && value.TryGetProperty(discriminator, out var token))
-        {
-            var selected = info.PolymorphismOptions!.DerivedTypes.FirstOrDefault(x =>
-                x.TypeDiscriminator is string text && token.ValueKind == JsonValueKind.String && token.GetString() == text ||
-                x.TypeDiscriminator is int number && token.ValueKind == JsonValueKind.Number && token.TryGetInt32(out var actual) && actual == number);
-            if (selected.DerivedType is not null) info = operation.GetOptions(contract).GetTypeInfo(selected.DerivedType);
-        }
         var comparison = options.PropertyNameCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         foreach (var property in value.EnumerateObject())
         {
@@ -120,7 +127,7 @@ public static class UnmatchedMemberScanner
                 var selection = member.AttributeProvider as System.Reflection.MemberInfo;
                 var scoped = JsonConversionContract.HasSelection(member.PropertyType, selection);
                 // A member converter may consume a shape unrelated to its CLR properties.
-                Visit(property.Value, member.PropertyType, scoped ? JsonConversionContract.For(member.PropertyType, selection) : contract, MemberPath(path, property.Name), result, operation, scoped ? null : member.CustomConverter);
+                Visit(property.Value, member.PropertyType, scoped ? JsonConversionContract.For(member.PropertyType, selection) : operation.ChildContract(member.PropertyType, contract), MemberPath(path, property.Name), result, operation, scoped ? null : member.CustomConverter);
                 continue;
             }
             if (info.Properties.Any(x => x.IsExtensionData)) continue;

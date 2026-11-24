@@ -27,11 +27,23 @@ public sealed class JsonConversionContract
         this.memberOverride = memberOverride;
     }
 
+    // An unannotated polymorphic child keeps its enclosing scope, but needs its own metadata root
+    // so discriminator participants are ordinary object contracts in the native STJ dispatch table.
+    private JsonConversionContract(JsonConversionContract parent, Type rootType)
+    {
+        namingPolicy = parent.namingPolicy;
+        caseInsensitive = parent.caseInsensitive;
+        RefuseUnmatchedMembers = parent.RefuseUnmatchedMembers;
+        mappings = [];
+        this.rootType = rootType;
+    }
+
     private JsonSerializerOptions CreateOptions(Operation operation, Type? converterRootType = null)
     {
         var options = JsonBaseline.CreateCopy();
         options.PropertyNamingPolicy = Naming(namingPolicy);
         options.PropertyNameCaseInsensitive = caseInsensitive;
+        var polymorphicTypes = PolymorphicTypes(converterRootType ?? rootType);
         // A member overrides this occurrence only. A recursive child selects the type's annotation again,
         // just as the scanner does. Ordinary type contracts need no additional boundary or option set.
         var recursiveTypeContract = memberOverride && rootType is not null && HasSelection(rootType) ? For(rootType) : null;
@@ -44,7 +56,9 @@ public sealed class JsonConversionContract
                 {
                     property.NumberHandling = JsonNumberHandling.Strict;
                     if (property.AttributeProvider is not MemberInfo member) continue;
-                    var mapping = info.Type == rootType ? mappings.FirstOrDefault(x => x.Member == member.Name) : default;
+                    // A discriminator chooses the runtime shape within this declared conversion scope.
+                    // Its derived metadata must retain the same naming, matching and member mappings.
+                    var mapping = info.Type == rootType || polymorphicTypes.Contains(info.Type) ? mappings.FirstOrDefault(x => x.Member == member.Name) : default;
                     if (mapping.Member is not null) property.Name = mapping.Json;
                     var temporalType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
                     if (temporalType == typeof(DateTime) || temporalType == typeof(DateTimeOffset) || temporalType == typeof(DateOnly) || temporalType == typeof(TimeOnly) || temporalType == typeof(TimeSpan))
@@ -53,12 +67,16 @@ public sealed class JsonConversionContract
                         property.CustomConverter = CreateBoundaryConverter(property.PropertyType, For(property.PropertyType, member), operation);
                     else if (recursiveTypeContract is not null && (Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType) == rootType)
                         property.CustomConverter = CreateBoundaryConverter(property.PropertyType, recursiveTypeContract, operation);
-                    else if (recursiveTypeContract is not null && property.CustomConverter is null && !HasSelection(property.PropertyType) && ContainsCollectionElement(property.PropertyType, rootType!))
+                    else if (property.CustomConverter is null && polymorphicTypes.Contains(Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType) && HasSelection(property.PropertyType))
+                        property.CustomConverter = CreateBoundaryConverter(property.PropertyType, For(property.PropertyType), operation);
+                    else if (property.CustomConverter is null && !HasSelection(property.PropertyType) &&
+                        (recursiveTypeContract is not null && ContainsCollectionElement(property.PropertyType, rootType!) ||
+                         polymorphicTypes.Any(type => HasSelection(type) && ContainsCollectionElement(property.PropertyType, type))))
                         property.CustomConverter = (JsonConverter)Activator.CreateInstance(typeof(RecursiveCollectionConverter<>).MakeGenericType(property.PropertyType), this, operation)!;
                 }
             } }
         };
-        options.Converters.Insert(0, new ScopedConverterFactory(converterRootType ?? rootType, operation));
+        options.Converters.Insert(0, new ScopedConverterFactory(converterRootType ?? rootType, polymorphicTypes, this, operation));
         StrictDateTimeConverters.Configure(options);
         options.MakeReadOnly();
         return options;
@@ -143,10 +161,13 @@ public sealed class JsonConversionContract
     private static JsonConverter CreateBoundaryConverter(Type type, JsonConversionContract contract, Operation operation) =>
         (JsonConverter)Activator.CreateInstance(typeof(BoundaryConverter<>).MakeGenericType(type), contract, operation)!;
 
-    private sealed class ScopedConverterFactory(Type? rootType, Operation operation) : JsonConverterFactory
+    private sealed class ScopedConverterFactory(Type? rootType, HashSet<Type> polymorphicTypes, JsonConversionContract parent, Operation operation) : JsonConverterFactory
     {
-        public override bool CanConvert(Type typeToConvert) => typeToConvert != rootType && typeToConvert.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null;
-        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) => CreateBoundaryConverter(typeToConvert, For(typeToConvert), operation);
+        // STJ requires object metadata for discriminator-selected types. A converter around a derived
+        // type disables that metadata, even when its annotation is merely inherited from this root.
+        public override bool CanConvert(Type typeToConvert) => typeToConvert != rootType && !polymorphicTypes.Contains(typeToConvert) &&
+            (HasSelection(typeToConvert) || HasPolymorphicShape(typeToConvert));
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) => CreateBoundaryConverter(typeToConvert, operation.ChildContract(typeToConvert, parent), operation);
     }
 
     private interface IContractAdapter { }
@@ -172,6 +193,20 @@ public sealed class JsonConversionContract
     }
 
     internal static bool IsRecursiveCollectionConverter(JsonConverter? converter) => converter is IRecursiveCollectionConverter;
+
+    private static HashSet<Type> PolymorphicTypes(Type? root)
+    {
+        var result = new HashSet<Type>();
+        if (root is null) return result;
+        var pending = new Stack<Type>();
+        pending.Push(root);
+        while (pending.TryPop(out var type))
+            foreach (var derived in type.GetCustomAttributes<JsonDerivedTypeAttribute>(inherit: false))
+                if (derived.DerivedType != root && result.Add(derived.DerivedType)) pending.Push(derived.DerivedType);
+        return result;
+    }
+
+    private static bool HasPolymorphicShape(Type type) => (Nullable.GetUnderlyingType(type) ?? type).GetCustomAttributes<JsonDerivedTypeAttribute>(inherit: false).Any();
 
     private static bool ContainsCollectionElement(Type type, Type elementType)
     {
@@ -210,7 +245,7 @@ public sealed class JsonConversionContract
             {
                 var key = (type, parent);
                 if (children.TryGetValue(key, out var existing)) return existing;
-                var selected = HasSelection(type) ? For(type) : parent;
+                var selected = HasSelection(type) ? For(type) : HasPolymorphicShape(type) ? new JsonConversionContract(parent, type) : parent;
                 children.Add(key, selected);
                 return selected;
             }
