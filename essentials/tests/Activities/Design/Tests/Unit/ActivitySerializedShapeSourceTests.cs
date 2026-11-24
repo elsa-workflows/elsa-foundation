@@ -217,6 +217,7 @@ public sealed class ActivitySerializedShapeSourceTests
         Assert.Equal(ActivitySerializedValueKind.Object, shape.Kind);
         Assert.Equal(new TypeReference("shop.address"), shape.Type);
         Assert.Equal(["city", "zipCode"], shape.Members.Select(x => x.SerializedName).Order());
+        Assert.All(shape.Members, member => Assert.Equal(ActivitySerializedShapeState.Declared, member.Shape.State));
         Assert.Equal(ActivityValueJsonProfile.Revision, shape.ProfileRevision);
         Assert.Equal("owner", shape.SourceContractRevision);
         var city = (await host.Source.DescribeDeclaredTypeAsync(new("shop.address"), "owner", ["city"], new()))!;

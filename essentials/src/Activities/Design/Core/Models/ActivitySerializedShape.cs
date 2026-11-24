@@ -12,6 +12,7 @@ public enum ActivitySerializedShapeState
     Unavailable,
     /// <summary>
     /// The shape describes the declared type's members, within the requested limits, so the list may be partial.
+    /// Every proven node below a Declared root is Declared as well.
     /// The names come from the declared type and are not proven for the stored value, so a consumer that validates
     /// or browses stored values must treat this state as unknown.
     /// </summary>
@@ -81,7 +82,8 @@ public sealed record ActivitySerializedShape(
 
 /// <summary>Bounds the complete returned tree, including collection elements and map values.</summary>
 /// <remarks>
-/// MaximumMembers is one global budget for the entire query, not a separate allowance for each node.
+/// MaximumMembers is one global budget for the entire query, not a separate allowance for each node. A query that
+/// opts into advisory <see cref="ActivitySerializedShapeState.Declared"/> members gives those a second budget of the same size.
 /// A literal member path is never split on dots or truncated to satisfy these response limits.
 /// </remarks>
 public sealed record ActivitySerializedShapeLimits(int MaximumDepth = 4, int MaximumMembers = 128);

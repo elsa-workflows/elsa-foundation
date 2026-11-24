@@ -390,6 +390,23 @@ public sealed class ActivityDataContextEndpointTests
         Assert.Empty(selected.Shape.Members);
     }
 
+    [Fact]
+    public async Task A_client_cannot_opt_the_picker_into_declared_members()
+    {
+        using var host = new Host(services => services.AddSingleton<IActivitySerializedShapeSource>(new DeclaredShape()));
+        var snapshot = new WorkflowDefinitionStateView([new("customer", "customer", new("shop.address"), null, null)],
+            Sequence(Node("producer"), Node("consumer")));
+        var json = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(host.Request() with { Snapshot = snapshot, Query = new() }, Web))!.AsObject();
+        json["query"]!.AsObject()["includeDeclaredMembers"] = true;
+
+        var result = await host.InvokeJson(json.ToJsonString());
+
+        Assert.Equal("supported", result.Body.State);
+        var source = Assert.Single(result.Body.Analysis!.Sources, source => source.Id.EndsWith(":customer", StringComparison.Ordinal));
+        Assert.Equal(ActivitySerializedShapeState.Unknown, source.Shape.State);
+        Assert.Empty(source.Shape.Members);
+    }
+
     private static ActivityNode Node(string id) => new(id, "test", [], []);
     private static readonly JsonSerializerOptions Web = CreateWeb();
     private static JsonSerializerOptions CreateWeb()

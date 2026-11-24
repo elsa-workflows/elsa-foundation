@@ -169,7 +169,7 @@ internal sealed class ClrActivitySerializedShapeSource(
         {
             var shape = new ClrSerializedShapeReader(ownerContractIdentity, limits, cancellationToken, hashAssets: false).Read(descriptors[0].ClrType, declaredType, memberPath);
             return Answer(shape.State is ActivitySerializedShapeState.Known or ActivitySerializedShapeState.Truncated
-                ? shape with { State = ActivitySerializedShapeState.Declared, ReasonCode = "activity.shape.declared-type" }
+                ? AsDeclared(shape) with { ReasonCode = "activity.shape.declared-type" }
                 : unbound);
         }
         catch (Exception exception) when (MetadataFailure(exception))
@@ -177,6 +177,15 @@ internal sealed class ClrActivitySerializedShapeSource(
             return Answer(unbound);
         }
     }
+
+    // Every proven node of a declared-type tree becomes Declared, so no member below the root reads as proven.
+    private static ActivitySerializedShape AsDeclared(ActivitySerializedShape shape) => shape with
+    {
+        State = shape.State is ActivitySerializedShapeState.Known or ActivitySerializedShapeState.Truncated ? ActivitySerializedShapeState.Declared : shape.State,
+        Members = [.. shape.Members.Select(member => member with { Shape = AsDeclared(member.Shape) })],
+        Element = shape.Element is null ? null : AsDeclared(shape.Element),
+        MapValue = shape.MapValue is null ? null : AsDeclared(shape.MapValue)
+    };
 
     private static ActivitySerializedShape Unavailable(string revision, string reason) =>
         new(ActivitySerializedShapeState.Unavailable, ActivitySerializedValueKind.Unknown, null, revision, ActivityValueJsonProfile.Revision, string.Empty)

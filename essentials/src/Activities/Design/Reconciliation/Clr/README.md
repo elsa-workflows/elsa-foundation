@@ -61,7 +61,8 @@ segments retain dots and empty names, and selected subtrees preserve nullable/op
 
 Profile/source/metadata revisions are separate from existing catalog hashes. Metadata revisions cover
 consulted declarations, inherited/interface/attribute assets and framed returned facts; file/module
-identity checks refuse changed assets behind an already loaded selectable type. Existing scanner
+identity checks refuse changed assets behind an already loaded selectable type. Declared-type shapes are advisory and
+read on every authoring request, so they identify assemblies by loaded module version id and read no files. Existing scanner
 catalog projections and input nullability WriteState remain unchanged. The shape query needs the existing
 catalog hasher to verify exact result-source projections; without that authority it returns unavailable.
 

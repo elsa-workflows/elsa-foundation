@@ -113,7 +113,8 @@ authoring help; the Activity Data analyzer returns it only to a query with `Incl
 attributes/converters or install Runtime aliases to discover fields.
 
 `ClrActivitySerializedShapeSource`, registered scoped by CLR reconciliation with `TryAddEnumerable`, is
-the shipped implementation *(cross-domain — CLR reconciliation)*. It binds exact metadata assets and
+the shipped implementation *(cross-domain — CLR reconciliation)*. It binds exact metadata assets (declared-type
+shapes, which are advisory, identify assemblies by module version id instead of file hashes) and
 the unchanged activity-value profile independently of old catalog hashes, includes typed `$result`
 without named Output rows, describes a single declared input/variable type's members as advisory
 `Declared` shapes, and reports every other declared type as profile-unbound. Shared
