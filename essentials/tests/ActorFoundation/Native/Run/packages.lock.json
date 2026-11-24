@@ -273,6 +273,12 @@
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.runtime.native.migration.selectionfixture": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime.native.migration.sqlitefixture": {
         "type": "Project",
         "dependencies": {
