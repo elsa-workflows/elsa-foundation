@@ -207,6 +207,7 @@ internal static class PostgresRootParkOpeningChecks
                     tailOccurrence = physical.Single(row => row.Kind == "ordinary").Id;
                     var failed = physical.Single(row => row.Kind == "fail");
                     var journalBeforePark = await store.ReadJournalOfAsync(0, park.Instance, 0, stop);
+                    await Refused(ownerStore, batch with { Epoch = batch.Epoch - 1 }, "a stale epoch refuses the whole Park", token);
                     var selected = db.Messages.Where(row => row.Id == failed.Id);
                     await selected.ExecuteUpdateAsync(update => update.SetProperty(row => row.Payload, "changed"), token);
                     try { await Refused(ownerStore, batch, "the same-key changed envelope rolls Park back", token); }
