@@ -22,15 +22,16 @@ internal static class HttpSurfaceChecks
             Query = HttpFields.Query([new("name", "Ada"), new("name", "Lin"), new("Name", "other"), new("", "nameless")]),
             Headers = HttpFields.RequestHeaders([new("X-Tenant", "acme"), new("x-tenant", "beta"), new("Authorization", "Bearer secret"), new("COOKIE", "s=1"), new("X-Api-Key", "k")]),
         };
-        check(request.Query.Count == 1 && request.Query["NAME"] == "Ada,Lin,other" && request.Query.Keys.Single() == "name",
-            "query names ignore case as ASP.NET reads them, keep their first spelling, join repeats with ',' and leave a nameless pair out");
+        check(request.Query.Count == 2 && request.Query["name"] == "Ada,Lin" && request.Query["Name"] == "other" && !request.Query.ContainsKey("NAME") &&
+              Values.Path(Values.From(request), "Query.name")?.GetValue<string>() == "Ada,Lin",
+            "query names are kept exactly as sent, so a binding reads Query.name; repeats join with ',' and a nameless pair is left out");
         check(request.Headers.Count == 1 && request.Headers["X-TENANT"] == "acme, beta" && request.Headers.Keys.Single() == "x-tenant",
             "header names are stored in lower case, looked up without case, and repeats join with ', '");
         var json = Json.Write(request);
         var back = Values.To<HttpRequest>(JsonNode.Parse(json))!;
         check(!json.Contains("secret", StringComparison.Ordinal) && !json.Contains("s=1", StringComparison.Ordinal) && back.Headers["X-Tenant"] == "acme, beta" &&
-              back.Query["Name"] == "Ada,Lin,other" && Values.Path(Values.From(request), "Headers.x-tenant")?.GetValue<string>() == "acme, beta",
-            "credentials are not kept; the fields survive a round trip, case-insensitive, and a binding path reads Headers.x-tenant");
+              back.Query["name"] == "Ada,Lin" && !back.Query.ContainsKey("NAME") && Values.Path(Values.From(request), "Headers.x-tenant")?.GetValue<string>() == "acme, beta",
+            "credentials are not kept; the fields and their comparers survive a round trip, and a binding path reads Headers.x-tenant");
         var direct = Json.Write(new HttpRequest("POST", "x")
             { Headers = new Dictionary<string, string> { ["Authorization"] = "Bearer secret", ["Cookie"] = "s=secret", ["X-Kept"] = "kept" } });
         var stored = Json.Read<HttpRequest>("""{"Method":"POST","Path":"x","Headers":{"Authorization":"Bearer secret","X-Kept":"kept"}}""")!;

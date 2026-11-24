@@ -9,10 +9,10 @@ namespace Kernel.Native;
 /// <summary>
 /// The rules for the header fields and query parameters an HTTP request carries in and a response carries out. A
 /// request sits in instance state, so each collection is bounded well below the store's content cap. Header names are
-/// stored in lower case, as HTTP/2 sends them, so a binding path reads them one way (<c>Headers.x-tenant</c>). Query
-/// names keep the spelling they first arrived with and, as ASP.NET reads them, ignore case. Lookups in code ignore case
-/// on both. A repeated header's values are joined with ", ", a repeated query parameter's with ",". A value is visible
-/// ASCII, space or tab, as Kestrel accepts by default.
+/// stored in lower case, as HTTP/2 sends them, so a binding path reads them one way (<c>Headers.x-tenant</c>), and a
+/// lookup in code ignores their case. Query names are kept exactly as sent and compared with case, as a URL's query
+/// is, so <c>Query.page</c> reads <c>?page=</c> and not <c>?Page=</c>. A repeated header's values are joined with ", ",
+/// a repeated query parameter's with ",". A header value is visible ASCII, space or tab, as Kestrel accepts by default.
 /// </summary>
 /// <remarks>
 /// The rules also run when a stored request or response is read back, so they may be loosened later, never tightened:
@@ -44,6 +44,7 @@ public static class HttpFields
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     internal static readonly IReadOnlyDictionary<string, string> None = new Dictionary<string, string>().ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+    private static readonly IReadOnlyDictionary<string, string> NoQuery = new Dictionary<string, string>().ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The request headers as the model keeps them: lower-case names, credentials dropped, bounded.</summary>
     public static IReadOnlyDictionary<string, string> RequestHeaders(IEnumerable<KeyValuePair<string, string>>? fields) =>
@@ -58,17 +59,17 @@ public static class HttpFields
         return headers;
     }
 
-    /// <summary>The query parameters as the model keeps them: first spelling of each name, case ignored, bounded. A parameter without a name is left out.</summary>
+    /// <summary>The query parameters as the model keeps them: names exactly as sent, bounded. A parameter without a name is left out.</summary>
     public static IReadOnlyDictionary<string, string> Query(IEnumerable<KeyValuePair<string, string>>? fields)
     {
-        if (fields is null) return None;
-        var query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (fields is null) return NoQuery;
+        var query = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (name, value) in fields)
         {
             if (string.IsNullOrEmpty(name)) continue;
             query[name] = query.TryGetValue(name, out var earlier) ? earlier + "," + value : value ?? "";
         }
-        return Bounded(query, "query string");
+        return query.Count == 0 ? NoQuery : Bounded(query, "query string");
     }
 
     /// <summary>
@@ -116,10 +117,10 @@ public static class HttpFields
 
     private static IReadOnlyDictionary<string, string> Bounded(Dictionary<string, string> fields, string what)
     {
-        if (fields.Count > MaxFields) throw new HttpFieldsException($"The {what} has {fields.Count} fields; at most {MaxFields} are kept.");
+        if (fields.Count > MaxFields) throw new HttpFieldsException($"The {what} has {fields.Count} fields; at most {MaxFields} are kept.", overBound: true);
         var bytes = 0L;
         foreach (var (name, value) in fields) bytes += Encoding.UTF8.GetByteCount(name) + Encoding.UTF8.GetByteCount(value);
-        if (bytes > MaxBytes) throw new HttpFieldsException($"The {what} takes {bytes} bytes; at most {MaxBytes} are kept.");
+        if (bytes > MaxBytes) throw new HttpFieldsException($"The {what} takes {bytes} bytes; at most {MaxBytes} are kept.", overBound: true);
         return fields.Count == 0 ? None : new ReadOnlyDictionary<string, string>(fields);
     }
 
@@ -142,4 +143,8 @@ public static class HttpFields
 }
 
 /// <summary>A request's or response's headers or query string broke one of the <see cref="HttpFields"/> rules.</summary>
-public sealed class HttpFieldsException(string message) : ArgumentException(message);
+public sealed class HttpFieldsException(string message, bool overBound = false) : ArgumentException(message)
+{
+    /// <summary>True when the collection was over <see cref="HttpFields.MaxFields"/> or <see cref="HttpFields.MaxBytes"/>, false when a name or value was not allowed.</summary>
+    public bool OverBound { get; } = overBound;
+}

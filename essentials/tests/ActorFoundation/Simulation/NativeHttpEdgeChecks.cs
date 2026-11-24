@@ -192,14 +192,14 @@ internal static partial class NativeHttpEdgeChecks
                 "The start registration accepted one response. Timed-out and disconnected registrations kept their original outcome.");
             Require(transport.WrongDestination is null, "Every transport reply targeted the receiving node.");
 
-            using (var hello = await client.GetAsync("hello?name=Ada&Name=Lin&=nameless", token))
+            using (var hello = await client.GetAsync("hello?name=Ada&Name=Other&name=Lin&=nameless", token))
             {
                 var greeting = await hello.Content.ReadAsStringAsync(token);
-                Require(hello.StatusCode == HttpStatusCode.OK && greeting == "hello Ada,Lin" && hello.Headers.TryGetValues("x-greeting", out _) &&
+                Require(hello.StatusCode == HttpStatusCode.OK && greeting == "hello Ada,Lin" &&
                         hello.Headers.TryGetValues("x-greeting", out var said) && said.Single() == "hi" &&
                         hello.Headers.CacheControl?.NoStore == true && hello.Headers.RetryAfter?.Delta == TimeSpan.FromSeconds(120) &&
                         hello.Content.Headers.ContentType?.MediaType == "text/plain",
-                    $"A GET start reads its repeated query parameter, case ignored and a nameless pair left out, and the response carries its authored headers. Observed {(int)hello.StatusCode} '{greeting}'.");
+                    $"A GET start reads its repeated query parameter under the name as sent, a nameless pair left out, and the response carries its authored headers. Observed {(int)hello.StatusCode} '{greeting}'.");
             }
             var rawEcho = await RawPostAsync("echo-headers", "X-Tenant: acme", "x-tenant: beta");
             Require(rawEcho.Status == 200 && JsonNode.Parse(rawEcho.Body)?["x-tenant"]?.GetValue<string>() == "acme, beta",
@@ -215,6 +215,9 @@ internal static partial class NativeHttpEdgeChecks
                 Require(resumed.StatusCode == HttpStatusCode.OK && said == "Ada@acme" &&
                         resumed.Headers.TryGetValues("x-resumed", out var resumedHeader) && resumedHeader.Single() == "yes",
                     $"A request that resumes a wait as an event carries its query and headers, and its answer carries its headers. Observed {(int)resumed.StatusCode} '{said}'.");
+                Require(store.FoundationEvents.Values.All(e => e.Payload?.Contains("secret", StringComparison.Ordinal) != true) &&
+                        store.EventRows.Values.All(e => e.Payload?.Contains("secret", StringComparison.Ordinal) != true),
+                    "The resuming request's credentials are in no stored event or publication.");
             }
             using (var echoed = await SendWithHeadersAsync("echo-headers", ("X-Tenant", "acme"), ("x-tenant", "beta"), ("Authorization", "Bearer secret"),
                        ("Cookie", "session=secret"), ("X-Api-Key", "secret")))
@@ -230,6 +233,9 @@ internal static partial class NativeHttpEdgeChecks
                 Require(tooMany.StatusCode == HttpStatusCode.RequestHeaderFieldsTooLarge &&
                         (await tooMany.Content.ReadAsStringAsync(token)).Contains($"at most {HttpFields.MaxFields}", StringComparison.Ordinal),
                     $"A request over the model's header bound is refused with 431 before it reaches a workflow. Observed {(int)tooMany.StatusCode}.");
+            var control = await RawPostAsync("echo-headers", "X-Bad: a\u0001b");
+            Require(control.Status == 400,
+                $"A request header the model's rules refuse, here a control character Kestrel lets through, is answered 400. Observed {control.Status}.");
             using (var refused = await PostAsync("bad-headers"))
                 Require(refused.StatusCode == HttpStatusCode.InternalServerError &&
                         await refused.Content.ReadAsStringAsync(token) == "the workflow faulted",
@@ -306,9 +312,9 @@ internal static partial class NativeHttpEdgeChecks
         // Each pair goes in on its own and in order, so the model's rules join the repeats and keep a name's first spelling
         // (Request.Query has merged them already, under the last spelling).
         try { query = HttpFields.Query(QueryPairs(request.QueryString.Value)); }
-        catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: StatusCodes.Status414UriTooLong); }
+        catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: refused.OverBound ? StatusCodes.Status414UriTooLong : 400); }
         try { headers = HttpFields.RequestHeaders(request.Headers.SelectMany(field => field.Value.Select(value => KeyValuePair.Create(field.Key, value ?? "")))); }
-        catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: StatusCodes.Status431RequestHeaderFieldsTooLarge); }
+        catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: refused.OverBound ? StatusCodes.Status431RequestHeaderFieldsTooLarge : 400); }
         var message = new Kernel.Native.HttpRequest(request.Method, request.Path, body) { Query = query, Headers = headers };
         var id = Guid.NewGuid().ToString("N");
         var options = new Contract.RequestOptions(null, deadline, routes.BeforeCommit(message.Method, message.Path));

@@ -484,7 +484,7 @@ public sealed record HttpRequest(string Method, string Path, JsonNode? Body = nu
     private readonly IReadOnlyDictionary<string, string> _query = HttpFields.None;
     private readonly IReadOnlyDictionary<string, string> _headers = HttpFields.None;
 
-    /// <summary>The query parameters by name, case ignored, each under its first spelling; a repeated parameter's values joined with ",".</summary>
+    /// <summary>The query parameters by name, exactly as sent; a repeated parameter's values joined with ",".</summary>
     public IReadOnlyDictionary<string, string> Query { get => _query; init => _query = HttpFields.Query(value); }
 
     /// <summary>The header fields by lower-case name, credentials left out; a repeated field's values joined with ", ".</summary>
