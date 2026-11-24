@@ -69,15 +69,9 @@ public sealed class JsonModuleReflectionTests
             var host = JsonBaseline.CreateCopy();
             var converters = host.Converters.ToArray();
             var chain = host.TypeInfoResolverChain.ToArray();
-            var claims = new List<string>();
-            foreach (var (resolver, owner) in resolvers)
-            {
-                if (resolver.GetTypeInfo(type, host) is not { } info) continue;
-                claims.Add(resolver.GetType().FullName!);
-                Assert.Same(host, info.Options);
-                Assert.True(IsOwned(type, owner), $"{resolver.GetType().FullName} claimed foreign {type.FullName} outside {owner}.");
-            }
-            Assert.True(claims.Count <= 1, $"Resolver overlap for {type.FullName}: {string.Join(", ", claims)}");
+            var errors = ClaimErrors(type, resolvers, host);
+            Assert.True(errors.Count == 0, string.Join('
+', errors));
             Assert.Equal(converters, host.Converters);
             Assert.Equal(chain, host.TypeInfoResolverChain);
             Assert.Null(host.DictionaryKeyPolicy);
@@ -85,6 +79,34 @@ public sealed class JsonModuleReflectionTests
             Assert.Equal(JsonIgnoreCondition.Never, host.DefaultIgnoreCondition);
             Assert.Same(JavaScriptEncoder.UnsafeRelaxedJsonEscaping, host.Encoder);
         }
+    }
+
+    [Fact]
+    public void A_resolver_claiming_a_foreign_type_or_overlapping_another_is_refused()
+    {
+        var host = JsonBaseline.CreateCopy();
+        var owned = typeof(JsonModuleReflectionTests);
+        Assert.Empty(ClaimErrors(owned, [(new DefaultJsonTypeInfoResolver(), "Elsa.Architecture")], host));
+        Assert.Contains(ClaimErrors(typeof(Uri), [(new DefaultJsonTypeInfoResolver(), "Elsa.Architecture")], host),
+            error => error.Contains("claimed foreign System.Uri", StringComparison.Ordinal));
+        Assert.Contains(ClaimErrors(owned, [(new DefaultJsonTypeInfoResolver(), "Elsa.Architecture"), (new DefaultJsonTypeInfoResolver(), "Elsa.Architecture")], host),
+            error => error.StartsWith("Resolver overlap", StringComparison.Ordinal));
+    }
+
+    // US7 scenario 3: a module resolver may describe only its own contracts, and at most one resolver claims a type.
+    private static List<string> ClaimErrors(Type type, IReadOnlyList<(IJsonTypeInfoResolver Resolver, string Owner)> resolvers, JsonSerializerOptions host)
+    {
+        var errors = new List<string>();
+        var claims = new List<string>();
+        foreach (var (resolver, owner) in resolvers)
+        {
+            if (resolver.GetTypeInfo(type, host) is not { } info) continue;
+            claims.Add(resolver.GetType().FullName!);
+            if (!ReferenceEquals(host, info.Options)) errors.Add($"{resolver.GetType().FullName} described {type.FullName} with foreign options.");
+            if (!IsOwned(type, owner)) errors.Add($"{resolver.GetType().FullName} claimed foreign {type.FullName} outside {owner}.");
+        }
+        if (claims.Count > 1) errors.Add($"Resolver overlap for {type.FullName}: {string.Join(", ", claims)}");
+        return errors;
     }
 
     private static IReadOnlyList<JsonSerializerContext> Contexts()

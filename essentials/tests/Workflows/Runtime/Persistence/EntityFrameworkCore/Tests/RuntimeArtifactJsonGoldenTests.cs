@@ -11,7 +11,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// <summary>
 /// T021 / FR-023: the runtime store's byte-level golden fixture. The store writer moved from the Web defaults to the
 /// JSON baseline before the first stable release. Fixed rows show both directions keep the same meaning, a carried
-/// data value keeps its text, and a stored offset-less <see cref="DateTime"/> is refused when read into a typed value.
+/// data value keeps its text, and an offset-less <see cref="DateTime"/> kept in stored state (here a durable value) is
+/// refused when read into a typed value.
 /// If these fail, regenerate the goldens and migrations in place: no upcaster, family-version bump or run-time check.
 /// </summary>
 public sealed class RuntimeArtifactJsonGoldenTests
@@ -90,8 +91,10 @@ public sealed class RuntimeArtifactJsonGoldenTests
     {
         var stored = RuntimeArtifactJson.Deserialize<DurableValueState>(CurrentRow).InlineValue!.Value.GetProperty("at");
         Assert.Equal("\"2026-10-28T09:15:00\"", stored.GetRawText());
-        Assert.ThrowsAny<Exception>(() => JsonConversionContract.For(typeof(DateTime)).Read(stored, typeof(DateTime)));
-        Assert.ThrowsAny<Exception>(() => JsonConversionContract.For(typeof(DateTimeOffset)).Read(stored, typeof(DateTimeOffset)));
+        Assert.Equal("json-datetime-offset-missing",
+            Assert.Throws<JsonConversionException>(() => JsonConversionContract.For(typeof(DateTime)).Read(stored, typeof(DateTime))).Code);
+        Assert.Equal("json-datetime-offset-missing",
+            Assert.Throws<JsonConversionException>(() => JsonConversionContract.For(typeof(DateTimeOffset)).Read(stored, typeof(DateTimeOffset))).Code);
     }
 
     // The durable-value body shape the store reads and writes (RuntimeArtifactJson.DurableValueStateData).
