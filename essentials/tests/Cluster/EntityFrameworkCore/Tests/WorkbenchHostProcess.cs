@@ -5,7 +5,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// <summary>The built Workbench running as an isolated child process with the same lifecycle helper as Foundation.Host.</summary>
 internal sealed class WorkbenchHostProcess : IAsyncDisposable
 {
-    private const string Host = "Elsa.Workbench";
+    private const string Host = "Elsa.Workbench.Host";
     private static readonly string SourceDirectory = Path.Join(ChildHostProcess.RepoRoot, "apps", Host);
     private readonly ChildHostProcess _process;
 

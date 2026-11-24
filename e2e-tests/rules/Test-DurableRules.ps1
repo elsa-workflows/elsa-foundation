@@ -9,7 +9,7 @@
     semantic refusal. This does not claim REST publication provenance, package provenance beyond the supplied
     deployment receipt, or parent cancellation while an invocation is waiting.
 .EXAMPLE
-    pwsh ./e2e-tests/rules/Test-DurableRules.ps1 -AssemblyPath <rebuilt-Elsa.Workbench.dll> `
+    pwsh ./e2e-tests/rules/Test-DurableRules.ps1 -AssemblyPath <rebuilt-Elsa.Workbench.Host.dll> `
         -DeploymentReceiptPath <package-deployment-receipt.json> -EvidencePath ./artifacts/rules-e2e.json
 #>
 [CmdletBinding()]
@@ -29,7 +29,7 @@ param(
 
 $assemblyItem = Get-Item -LiteralPath $AssemblyPath -ErrorAction Stop
 if ($assemblyItem.PSIsContainer -or $assemblyItem.Extension -ne '.dll') {
-    throw '-AssemblyPath must identify a rebuilt Elsa.Workbench.dll file.'
+    throw '-AssemblyPath must identify a rebuilt Elsa.Workbench.Host.dll file.'
 }
 $assemblyPath = [IO.Path]::GetFullPath($assemblyItem.FullName)
 $receiptItem = Get-Item -LiteralPath $DeploymentReceiptPath -ErrorAction Stop

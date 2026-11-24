@@ -75,8 +75,10 @@ public static class Wf
     public static Node HttpEndpoint(string id, Binding path, string method = "POST", bool respondBeforeCommit = false) =>
         Node<HttpEndpoint>(id, ("Path", path), ("Method", method), ("RespondBeforeCommit", respondBeforeCommit));
 
-    public static Node Respond(string id, Binding body, int status = 200, string contentType = "text/plain") =>
-        Node<WriteHttpResponse>(id, ("StatusCode", status), ("ContentType", contentType), ("Body", body));
+    public static Node Respond(string id, Binding body, int status = 200, string contentType = "text/plain", Binding? headers = null) =>
+        headers is null
+            ? Node<WriteHttpResponse>(id, ("StatusCode", status), ("ContentType", contentType), ("Body", body))
+            : Node<WriteHttpResponse>(id, ("StatusCode", status), ("ContentType", contentType), ("Body", body), ("Headers", headers));
 
     public static Workflow Workflow(string id, Node root, params (string Name, object? Value)[] variables) =>
         new(id, root, variables.ToDictionary(v => v.Name, v => Values.From(v.Value)));
