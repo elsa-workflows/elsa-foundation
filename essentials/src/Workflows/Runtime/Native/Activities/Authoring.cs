@@ -10,7 +10,17 @@ public sealed class InputAttribute : Attribute;
 
 /// <summary>Elsa 4's background placement: the leaf runs as a background job (the kernel's <c>StartJob</c>), not inside the turn.</summary>
 [AttributeUsage(AttributeTargets.Class)]
-public sealed class BackgroundAttribute : Attribute;
+public sealed class BackgroundAttribute : Attribute
+{
+    /// <summary>The input whose time span is the job's timeout (the <c>StartJob</c> deadline), when the node sets no timeout itself.</summary>
+    public string? TimeoutInput { get; init; }
+
+    /// <summary>The job's timeout when <see cref="TimeoutInput"/> is unbound or not positive, in milliseconds; 0 for none.</summary>
+    public long DefaultTimeoutMilliseconds { get; init; }
+
+    /// <summary>The outcome the activity completes on when its job's deadline passes; without one, the deadline faults it.</summary>
+    public string? TimeoutOutcome { get; init; }
+}
 
 /// <summary>Elsa 4's side-effect profile External: an attempt is not safe to replay. In Durable mode it is committed before it runs.</summary>
 [AttributeUsage(AttributeTargets.Class)]
@@ -101,6 +111,27 @@ public class ActivityContext
     /// </summary>
     public string EffectKey { get; }
     public CancellationToken CancellationToken { get; }
+
+    /// <summary>The host's outbound HTTP, for an activity that runs as a background job; null where the host composes none.</summary>
+    public NativeHttpOptions? Http { get; internal init; }
+}
+
+/// <summary>
+/// The host's outbound HTTP for <see cref="SendHttpRequest"/>'s job: the client it sends with, the most response bytes it
+/// keeps, and how it turns a Connection name into credential headers, which never sit in the job's stored arguments.
+/// </summary>
+public sealed class NativeHttpOptions
+{
+    /// <summary>The default for <see cref="MaxResponseBytes"/>: 256 KiB.</summary>
+    public const int DefaultMaxResponseBytes = 256 * 1_024;
+
+    public HttpMessageInvoker? Client { get; init; }
+
+    /// <summary>A longer response body completes the activity on its ResponseTooLarge outcome, with no body.</summary>
+    public int MaxResponseBytes { get; init; } = DefaultMaxResponseBytes;
+
+    /// <summary>The credential headers for a Connection name, resolved when the job runs.</summary>
+    public Func<string, CancellationToken, ValueTask<IReadOnlyDictionary<string, string>>>? Connection { get; init; }
 }
 
 public sealed class StartContext<TTrigger> : ActivityContext
