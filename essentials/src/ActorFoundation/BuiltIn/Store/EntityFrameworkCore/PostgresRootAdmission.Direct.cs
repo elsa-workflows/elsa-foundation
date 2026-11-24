@@ -55,7 +55,8 @@ internal sealed partial class PostgresRootAdmission
     internal async ValueTask<long> ReadReplyTimeAsync(CancellationToken cancellationToken)
     {
         await using var db = create();
-        if (!db.UsesRootReplyProtocol) throw new NotSupportedException("This profile does not hold direct requests.");
+        if (!db.UsesRootReplyProtocol && !db.UsesRootOperatorReplies)
+            throw new NotSupportedException("This profile does not hold requests.");
         return await db.Database.SqlQueryRaw<long>("""
             SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value"
             """).SingleAsync(cancellationToken);

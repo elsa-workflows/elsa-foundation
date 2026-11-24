@@ -73,6 +73,23 @@ public sealed partial class EfStore
                 """).ToListAsync(token);
             if (updated is not [var terminalAt]) return false;
 
+            if (db.UsesRootOperatorReplies)
+            {
+                // Admission holds a shared lock on this root. The retirement lock fixes the set of remaining callers.
+                var waiting = await db.Messages.FromSqlInterpolated($"""
+                    SELECT * FROM "Messages" WHERE "InboxScope" = {occurrence} AND "Target" = {Root.Actor}
+                        AND "Partition" = {Root.Partition} AND NOT "Done" AND "ReplyTo" IS NOT NULL
+                        AND "Id" LIKE 'operator/%' AND "Payload" IS NULL
+                    ORDER BY "Seq" FOR UPDATE
+                    """).AsNoTracking().ToListAsync(token);
+                foreach (var row in waiting)
+                {
+                    var message = PostgresRootAdmission.DecodeOperator(db, row, Root.Reference);
+                    if (message.ReplyTo is { } route)
+                        (db.RetiredOperatorReplies ??= []).Add(new(row.Id, new(route, Root.Tenant)));
+                }
+            }
+
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Done" = true, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL
                 WHERE "InboxScope" = {occurrence} AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND NOT "Done";

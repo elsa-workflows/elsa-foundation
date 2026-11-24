@@ -722,9 +722,31 @@ delivery and checks model protection against the committed checkpoint before
 it retires an eligible root. Build Native.Run in Release with a locked restore
 and run `pg-root-retention owned checked` against an empty PostgreSQL database.
 
-These profiles qualify generated roots with no attached work. Descendant and job
-cascades, parked work, retention scheduling and held operator replies have
-separate acceptance cases.
+The opt-in format-17 fixture holds a selected operator request through
+`IIngress.RequestAsync`. Admission stores the tenant-bound reply address with
+the exact command. A fenced commit binds the response or refusal to that
+envelope. If retirement settles another queued held operator, the transaction
+locks that envelope and returns its registration to the Worker for a live
+`missing` result. The preview admits at most 64 pending held operators per
+root. Duplicates can still replay their receipts, and one-way operator
+admission uses its existing rules. The
+fixture observes plain Terminate, standalone Delete, Terminate then delete,
+protected Delete, competing operators and rollback followed by takeover.
+
+The host starts the request deadline on a monotonic clock anchored to a
+bounded PostgreSQL startup sample. Admission I/O uses the same deadline.
+A stalled admission acknowledgement cannot delay a timely reply or a timeout.
+After a known admission, a bounded read can attach the exact creation's
+committed status observed when resolving the timeout. The fixture does not
+establish historical status at the deadline for a transaction crossing it.
+An expired reply is dropped even when the operator later commits. Replies
+use the live fixture transport and can be lost on process death or an
+unknown commit outcome. Build Native.Run in Release with a locked restore
+and run `pg-held-operator owned checked` against an empty PostgreSQL database.
+
+These profiles qualify generated roots with no attached work. Descendant and
+job cascades, parked work, retention scheduling and production reply transport
+have separate acceptance cases.
 
 ## 10. Private durable lexical-resource probe
 

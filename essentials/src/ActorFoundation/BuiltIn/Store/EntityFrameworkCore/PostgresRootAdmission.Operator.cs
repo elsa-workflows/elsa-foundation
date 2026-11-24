@@ -9,6 +9,7 @@ namespace Kernel.EntityFramework;
 internal sealed partial class PostgresRootAdmission
 {
     private const string OperatorPrefix = "!kernel-operator/1:";
+    private const string HeldOperatorPrefix = "!kernel-held-operator/1:";
     private const string TerminateThenDeletePrefix = "!kernel-operator/2:";
     private const string RetentionDeletePrefix = "!kernel-operator/3:";
     private const string RetentionOperationPrefix = "~retention-";
@@ -21,7 +22,7 @@ internal sealed partial class PostgresRootAdmission
     internal const string OperatorOccurrencePrefix = "operator/";
     internal static bool IsStoredOperator(string? header) => header is not null &&
         (header.StartsWith(OperatorPrefix, StringComparison.Ordinal) || header.StartsWith(TerminateThenDeletePrefix, StringComparison.Ordinal) ||
-         header.StartsWith(RetentionDeletePrefix, StringComparison.Ordinal));
+         header.StartsWith(RetentionDeletePrefix, StringComparison.Ordinal) || header.StartsWith(HeldOperatorPrefix, StringComparison.Ordinal));
     internal static bool IsOperatorOccurrence(InboxKey key) => key.Scope == InboxKey.FoundationOccurrenceScope && key.Match is null &&
         key.Id.StartsWith(OperatorOccurrencePrefix, StringComparison.Ordinal);
 
@@ -50,8 +51,14 @@ internal sealed partial class PostgresRootAdmission
         };
     }
 
+    internal sealed record OperatorReply(string Address, long Deadline);
+    internal sealed class OperatorReplyExpired : Exception;
+    internal sealed class OperatorReplyCapacity : Exception;
+    internal const int HeldReplyLimit = 64;
+
     internal async Task<Receipt?> AdmitRootOperatorAsync(string tenant, string reference, string operation, string kind, long? due,
-        TimeSpan? keepFor, CancellationToken token, string? selection = null, bool thenDelete = false, bool retentionDelete = false)
+        TimeSpan? keepFor, CancellationToken token, string? selection = null, bool thenDelete = false, bool retentionDelete = false,
+        OperatorReply? reply = null)
     {
         if (kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete) || !retentionDelete && !FoundationMetadataLimits.IsOutsideMessageId(operation))
             throw new ArgumentException("Expected a one-way exact-root operator command.");
@@ -64,6 +71,8 @@ internal sealed partial class PostgresRootAdmission
         if (deletion && !db.UsesRootRetirement || thenDelete && (kind != Kinds.Terminate || !db.UsesRootTerminateThenDelete) ||
             retentionDelete && (!deletion || !db.UsesRootRetention)) return null;
         var selected = deletion || db.UsesRootTerminalSelection && kind == Kinds.Terminate;
+        if (reply is not null && (!selected || !db.UsesRootOperatorReplies || retentionDelete ||
+            !ValidOperatorReply(reply.Address, reply.Deadline))) return null;
         if (selected != (selection is not null)) return null;
 
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
@@ -84,7 +93,12 @@ internal sealed partial class PostgresRootAdmission
             }
             else
                 await EfStore.RequireStoreVersionsAsync(db, token);
-            var address = await RootAddressAsync(db, tenant, reference, token);
+            // Serialize only held admissions for the same birth. NO KEY UPDATE remains compatible with receipt FKs.
+            var address = reply is null ? await RootAddressAsync(db, tenant, reference, token) :
+                await db.Database.SqlQuery<CreationAddress>($"""
+                    SELECT "Actor" AS "Id", "Creation" FROM "FoundationRootBirths"
+                    WHERE "Tenant" = {tenant} AND "Reference" = {reference} FOR NO KEY UPDATE
+                    """).SingleOrDefaultAsync(token);
             if (address is null)
             {
                 await tx.RollbackAsync(token);
@@ -122,6 +136,23 @@ internal sealed partial class PostgresRootAdmission
                 await tx.RollbackAsync(token);
                 return null;
             }
+            if (reply is not null)
+            {
+                var withinDeadline = await db.Database.SqlQuery<bool>($"""
+                    SELECT ({reply.Deadline} > floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
+                    """).SingleAsync(token);
+                if (!withinDeadline) throw new OperatorReplyExpired();
+
+                var atCapacity = await db.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM "Messages"
+                        WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                            AND "Target" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
+                            AND NOT "Done" AND "ReplyTo" IS NOT NULL AND "Id" LIKE 'operator/%'
+                        OFFSET {HeldReplyLimit - 1} LIMIT 1) AS "Value"
+                    """).SingleAsync(token);
+                if (atCapacity) throw new OperatorReplyCapacity();
+            }
+
             var receipt = await db.Database.SqlQuery<long>($"""
                 INSERT INTO "FoundationOperatorReceipts" AS r ("Tenant","Operation","Reference","Until")
                 VALUES ({tenant},{digest},{reference},floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
@@ -141,11 +172,12 @@ internal sealed partial class PostgresRootAdmission
             var actor = new InstanceRef(address.Id);
             var id = $"{OperatorOccurrencePrefix}{reference}/{digest}/{Guid.NewGuid():N}";
             var prefix = retentionDelete ? RetentionDeletePrefix : thenDelete ? TerminateThenDeletePrefix : OperatorPrefix;
-            var header = prefix +
+            var replyAddress = reply?.Address;
+            var header = (replyAddress is null ? "" : HeldOperatorPrefix) + prefix +
                 DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0) { Terminal = terminal });
             await db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial")
-                VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0)
+                INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial", "ReplyTo")
+                VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0, {replyAddress})
                 """, token);
             await tx.CommitAsync(token);
             return new(reference, false);
@@ -234,35 +266,63 @@ internal sealed partial class PostgresRootAdmission
                 AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" LIKE 'operator/%' AND NOT m."Done"
                 AND m."Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint ORDER BY m."Seq" LIMIT 1
             """).AsNoTracking().SingleOrDefaultAsync(token);
-        return row is null ? null : DecodeOperator(row, reference, db.UsesRootTermination, db.UsesRootRetirement, db.UsesRootTerminateThenDelete, db.UsesRootRetention);
+        return row is null ? null : DecodeOperator(db, row, reference);
     }
 
-    internal static Message DecodeOperator(MessageEntity row, string reference, bool terminations, bool retirements, bool terminateThenDelete, bool retentionDeletes = false)
+    internal static Message DecodeOperator(KernelDb db, MessageEntity row, string reference) =>
+        DecodeOperator(row, reference, db.UsesRootTermination, db.UsesRootRetirement, db.UsesRootTerminateThenDelete,
+            db.UsesRootRetention, db.UsesRootOperatorReplies);
+
+    internal static Message DecodeOperator(MessageEntity row, string reference, bool terminations, bool retirements, bool terminateThenDelete,
+        bool retentionDeletes = false, bool operatorReplies = false)
     {
         if (!IsOperatorOccurrence(new(row.Id, row.InboxScope)) || !IsStoredOperator(row.Start) || row.Kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete) ||
-            row.Kind == Kinds.Terminate && !terminations || row.Kind == Kinds.Delete && !retirements || row.EventMatch is not null || row.Payload is not null || row.ReplyTo is not null || row.Sender is not null ||
+            row.Kind == Kinds.Terminate && !terminations || row.Kind == Kinds.Delete && !retirements || row.EventMatch is not null || row.Payload is not null || row.Sender is not null ||
             row.JobGeneration != 0 || row.KeepUntil is not { } until)
             throw new StoreException(Failure.Definite, "Unexpected stored one-way operator envelope.");
-        var thenDelete = row.Start!.StartsWith(TerminateThenDeletePrefix, StringComparison.Ordinal);
-        var retentionDelete = row.Start.StartsWith(RetentionDeletePrefix, StringComparison.Ordinal);
+        var held = row.Start!.StartsWith(HeldOperatorPrefix, StringComparison.Ordinal);
+        if (held != (row.ReplyTo is not null) || held && (!operatorReplies || !ValidOperatorReply(row.ReplyTo!) ||
+            row.Kind is not (Kinds.Terminate or Kinds.Delete)))
+            throw new StoreException(Failure.Definite, "Unexpected stored operator reply route.");
+        var wire = held ? row.Start[HeldOperatorPrefix.Length..] : row.Start;
+        var thenDelete = wire.StartsWith(TerminateThenDeletePrefix, StringComparison.Ordinal);
+        var retentionDelete = wire.StartsWith(RetentionDeletePrefix, StringComparison.Ordinal);
         var prefix = retentionDelete ? RetentionDeletePrefix : thenDelete ? TerminateThenDeletePrefix : OperatorPrefix;
+        if (!wire.StartsWith(prefix, StringComparison.Ordinal))
+            throw new StoreException(Failure.Definite, "Unexpected stored operator framing.");
         StoredOperator? header;
-        try { header = DurableKeyJson.Read<StoredOperator>(row.Start[prefix.Length..]); }
+        try { header = DurableKeyJson.Read<StoredOperator>(wire[prefix.Length..]); }
         catch (JsonException error) { throw new StoreException(Failure.Definite, "Invalid stored operator framing.", error); }
         if (header is null) throw new StoreException(Failure.Definite, "Invalid stored operator framing.");
         if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != row.Kind ||
             (row.Kind == Kinds.Delete ? header.Terminal is not { Revision: > 0 } : header.Terminal is not null) ||
             thenDelete && (!terminateThenDelete || row.Kind != Kinds.Terminate) ||
-            retentionDelete && (!retentionDeletes || row.Kind != Kinds.Delete) ||
+            retentionDelete && (!retentionDeletes || row.Kind != Kinds.Delete || held) ||
             header.ExplicitZeroDue && row.Due != 0 || !MatchesDirectOccurrence(reference, header.Operation, row.Id[OperatorOccurrencePrefix.Length..], retentionDelete))
             throw new StoreException(Failure.Definite, "The operator occurrence differs from its bound reference and operation.");
         var suffix = row.Id.LastIndexOf('/');
         return FoundationIngressAddress.Occurrence(header.Operation, row.Id[..suffix], row.Id[(suffix + 1)..],
-            new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, null, new(null)
+            new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, row.ReplyTo, new(null)
             {
                 QualifiedTerminal = header.Terminal, DeleteTarget = thenDelete ? reference : null,
-                RootThenDelete = thenDelete, RetentionDelete = retentionDelete
+                RootThenDelete = thenDelete, RetentionDelete = retentionDelete, RootHeldReply = held
             });
+    }
+
+    private static bool ValidOperatorReply(string address, long? expectedDeadline = null) =>
+        ReplyTo.Parse(address) is { Node.Length: > 0, Request.Length: > 0, Deadline: > 0, BeforeCommit: false } route &&
+        (expectedDeadline is null || route.Deadline == expectedDeadline);
+
+    internal async Task<InstanceStatus?> ReadOperatorTimeoutStatusAsync(string tenant, string reference, CancellationToken token)
+    {
+        await using var db = create();
+        await using var pinned = await EfStore.BeginRootRetirementOperationAsync(db, token);
+        return await db.Database.SqlQuery<InstanceStatus?>($"""
+            SELECT i."Status" AS "Value"
+            FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
+            WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1
+                AND i."FoundationTenant" = b."Tenant" AND i."FoundationReference" = b."Reference"
+            """).SingleOrDefaultAsync(token);
     }
 
     internal async Task<int> SweepOperatorReceiptsAsync(CancellationToken token)

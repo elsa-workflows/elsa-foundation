@@ -213,7 +213,8 @@ public sealed partial class EfStore
         }
     }
 
-    private sealed record TerminalRootInputs(WorkerRoot Root, IReadOnlyList<InboxKey> Keys, FoundationSelfIssuer? Issue) : QualifiedRootCheckpoint(0)
+    private sealed record TerminalRootInputs(WorkerRoot Root, IReadOnlyList<InboxKey> Keys, FoundationSelfIssuer? Issue,
+        Message? HeldOperator) : QualifiedRootCheckpoint(0)
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -230,7 +231,8 @@ public sealed partial class EfStore
                             AND starts_with(i."State", {TimedRootStateFamily})))
                     AND i."FoundationTerminalAt" IS NOT NULL AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
                 """).ToListAsync(cancellationToken);
-            return terminal.Count == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys, null, Issue, false, cancellationToken);
+            return terminal.Count == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys,
+                HeldOperator is null ? null : [HeldOperator], Issue, false, cancellationToken);
         }
     }
 
@@ -357,12 +359,16 @@ public sealed partial class EfStore
         if (turn.Delete) return await PrepareRootRetirementAsync(root, turn, cancellationToken);
         if (turn.Row is null)
         {
+            var held = turn.FoundationRootOperator;
+            if (held is not null && (held.Operator?.RootHeldReply != true || held.Target.Id != root.Actor ||
+                held.TargetCreation != 1 || turn.Done is not [var key] || key != held.InboxKey || turn.Consumed.Count != 0))
+                throw RootShape();
             var ended = new TurnCommit(root.Actor, null, null, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed,
-                turn.Unsubscribed, null, Held: turn.Held);
+                turn.Unsubscribed, null, Held: turn.Held) { FoundationRootOperator = held };
             if (turn != ended || turn.Done.Count + turn.Consumed.Count == 0 || turn.Sent.Count != 0 ||
                 turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
                 !InputsMatch(root, turn)) throw RootShape();
-            return new(null, new TerminalRootInputs(root, [.. turn.Done, .. turn.Consumed], RootSelfIssuer));
+            return new(null, new TerminalRootInputs(root, [.. turn.Done, .. turn.Consumed], RootSelfIssuer, held));
         }
         var row = turn.Row;
         var recalls = turn.FoundationSelfRecalls;
@@ -436,7 +442,7 @@ public sealed partial class EfStore
         var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
         var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
             (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == RootSelfScope || RootJobsEnabled && m.InboxScope == RootJobScope) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
-        var inputs = records.Select(record => DecodeRootInput(record, root.Reference, RootSelfIssuer, RootJobsEnabled, replies: db.UsesRootReplyProtocol, terminations: db.UsesRootTermination, retirements: db.UsesRootRetirement, terminateThenDelete: db.UsesRootTerminateThenDelete, retentionDeletes: db.UsesRootRetention)).ToArray();
+        var inputs = records.Select(record => DecodeRootInput(db, record, root.Reference, RootSelfIssuer, RootJobsEnabled)).ToArray();
         if (!SameInputs(inputs, turn.Done.Concat(turn.Consumed))) return null;
         if (turn.FoundationRootOperator is { } command)
         {
