@@ -438,6 +438,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [InlineData("acme.getWorkflowInstanceId", "[getWorkflowInstanceId][0]")]
     [InlineData("acme.variables", "Object.keys(variables).length")]
     [InlineData("acme.hasOwnProperty", "hasOwnProperty('x')")]
+    [InlineData("acme.__proto__", "__proto__ === Object.prototype")]
     [InlineData("acme.target", "(() => { function F() { return new.target ? 1 : 0; } return F(); })()")]
     public async Task A_host_function_named_like_a_native_or_converted_global_is_not_matched(string hostFunction, string expression)
     {

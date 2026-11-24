@@ -1024,7 +1024,7 @@ public sealed class Elsa3ExpressionRewriter(
             "SuppressedError", "Temporal", "arguments",
             // The global object inherits Object.prototype, so Elsa 3 ran these bare calls natively too.
             "toString", "toLocaleString", "valueOf", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "constructor",
-            "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__",
+            "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__", "__proto__",
         };
 
         /// <summary>
