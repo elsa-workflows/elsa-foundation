@@ -11,7 +11,7 @@
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Native.RetentionFixture" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Native.Migration.Run" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Native.Migration.SqliteFixture" />
-    <InternalsVisibleTo Include="Kernel.Native.Run" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Native.Migration.SelectionFixture" />
     <ProjectReference Include="../../../ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
     <ProjectReference Include="../../../ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
   </ItemGroup>

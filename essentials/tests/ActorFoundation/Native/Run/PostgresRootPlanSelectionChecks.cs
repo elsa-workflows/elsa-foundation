@@ -1,10 +1,11 @@
-using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Elsa.ActorFoundation.TestSupport;
+using Elsa.Workflows.Runtime.Native.Migration.SelectionFixture;
 using Kernel.EntityFramework;
 using Kernel.Native.Preview;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 using PublicModel = Kernel.Model.Contracts;
 using PublicActor = Kernel.WorkflowActor.WorkflowActor;
@@ -39,14 +40,12 @@ internal static class PostgresRootPlanSelectionChecks
         var ingress = new PostgresRootIngress(admission, PublicActor.ActorType);
         var reads = await store.OpenPreviewRootReadsAsync(pageSize: 16, cancellationToken: stop);
         var runtime = new WorkflowRuntime(ingress, reads);
-        var key = RandomNumberGenerator.GetBytes(32);
-        var planModel = new MigrationPlanModel(new MigrationPlanAuthority(key), (model, from, to) =>
-            model is NativeExecutionModel.ModelKey or OtherModel.ModelKey && from == Source && to == Target);
+        var fixture = new MigrationSelectionFixture(Source, Target, NativeExecutionModel.ModelKey, OtherModel.ModelKey);
         var registry = new WorkflowRegistry()
             .Add(Wf.Workflow(Source, Wf.If("finish-or-wait", Binding.Expr("input.complete"),
                 Wf.Sequence("finished"), Wf.Node<PostgresRootTerminateChecks.InvocationWait>("wait"))))
             .Add(Wf.Workflow(Target, Wf.Node<PostgresRootTerminateChecks.InvocationWait>("wait")));
-        var actorType = new PublicActor([new NativeExecutionModel(registry), new OtherModel(), planModel]);
+        var actorType = new PublicActor([new NativeExecutionModel(registry), new OtherModel(), fixture.PlanModel]);
 
         var eligible = await Start(blue, "eligible", NativeSource(complete: false));
         var colliding = await Start(blue, "other-model", new(OtherModel.ModelKey, Source));
@@ -67,53 +66,21 @@ internal static class PostgresRootPlanSelectionChecks
         await Drive(red, foreign, Contract.ActorStatus.Running);
         await Drive(blue, ended, Contract.ActorStatus.Finished);
 
-        var service = Operator(reads);
-        var exact = await StartPlan(service, "exact-native", NativeExecutionModel.ModelKey);
-        var runner = service.Open(blue, exact);
-        Check(await runner.AdvanceAsync(stop) == MigrationPlanStep.SelectionAdmitted,
-            "the real operator admits a signed selection through PostgreSQL ingress");
-        Check((await Batches(reads, exact)).Count == 0,
-            "admission alone does not expose the uncommitted selection in the public plan journal");
-        var selected = await DriveBatch(reads, exact, 1);
-        Check(selected is { AllSelected: true, After: null } && selected.Actors.SequenceEqual([eligible]),
-            "a Native plan selects exactly the eligible reference and excludes the wrong model, definition, status and tenant");
-        var afterCommit = await Operator(reads).Open(blue, exact).ReadOutcomesAsync(stop);
-        Check(afterCommit is { Closed: false } && afterCommit.Pending.SequenceEqual([eligible]),
-            "a fresh operator reports the exact committed selection as pending from PostgreSQL journal reads");
+        var ephemeralRefused = false;
+        try { await runtime.StartAsync(blue, "ephemeral", NativeExecutionModel.Start(Source, Modes.Ephemeral), cancellationToken: stop); }
+        catch (NotSupportedException) { ephemeralRefused = true; }
+        Check(ephemeralRefused, "the PostgreSQL timer profile refuses an ephemeral workflow start");
+        var clock = (await reads.GetAsync(blue, eligible, stop))!.AsOf;
+        var future = await ingress.SendAsync(blue, new Contract.Target.Start(PublicActor.Start(NativeSource(complete: false))),
+            "unborn-source", Contract.Kinds.Start, options: new(clock + 120_000), cancellationToken: stop);
+        Check(future is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } futureRef } &&
+            await reads.GetAsync(blue, futureRef, stop) is null, "an admitted source without a committed model version is absent from the projection");
+        Check((await store.ReadFirstRootAsync(blue.Tenant, eligible.Id, stop))?.State is not null,
+            "the candidate has an authoritative body before the read-path isolation");
 
-        // A one-row list has two source rows. Target the later row's model so the first
-        // page commits an empty batch, which can advance without migration dispatch.
-        var pageReads = await store.OpenPreviewRootReadsAsync(pageSize: 1, cancellationToken: stop);
-        var query = new Contract.ActorQuery(PublicActor.ActorType, Contract.ActorStatus.Running,
-            new Dictionary<string, string> { ["definition"] = Source });
-        var first = await pageReads.ListAsync(blue, query, cancellationToken: stop);
-        Check(first is { Items: [var earlier], Next: not null } &&
-            (earlier.Header.Ref == eligible || earlier.Header.Ref == colliding), "the real PostgreSQL list issues a continuation for the two source rows");
-        var firstRef = first.Items.Single().Header.Ref;
-        var selectedRef = firstRef == eligible ? colliding : eligible;
-        var modelForLater = selectedRef == eligible ? NativeExecutionModel.ModelKey : OtherModel.ModelKey;
-        var paginated = await StartPlan(Operator(pageReads), "resumed-selection", modelForLater);
-        Check(await Operator(pageReads).Open(blue, paginated).AdvanceAsync(stop) == MigrationPlanStep.SelectionAdmitted,
-            "a signed selection is admitted even when the first page has no eligible actors");
-        var emptyPage = await DriveBatch(pageReads, paginated, 1);
-        Check(emptyPage is { Actors: [], AllSelected: false, After.Value.Length: > 0 and <= 1_024 },
-            "the real plan persists the opaque continuation for its empty selection page");
-        var bookmarkRejected = false;
-        try { await pageReads.ListAsync(red, query, emptyPage.After, stop); }
-        catch (ArgumentException error) when (error.ParamName == "from") { bookmarkRejected = true; }
-        Check(bookmarkRejected, "the committed list continuation cannot be reused in another tenant");
-        var resumedReads = await Store().OpenPreviewRootReadsAsync(pageSize: 1, cancellationToken: stop);
-        var resumed = Operator(resumedReads).Open(blue, paginated);
-        Check(await resumed.AdvanceAsync(stop) == MigrationPlanStep.SelectionAdmitted,
-            "a fresh store reader and operator advance using the committed continuation");
-        var last = await DriveBatch(resumedReads, paginated, 2);
-        Check(last is { AllSelected: true, After: null } && last.Actors.SequenceEqual([selectedRef]) &&
-            await resumed.ReadOutcomesAsync(stop) is { Closed: false } outcome && outcome.Pending.SequenceEqual([selectedRef]),
-            "the resumed plan reaches its last page and reports only the selected opaque actor reference");
+        await fixture.RunAsync(ingress, (pageSize, token) => Store().OpenPreviewRootReadsAsync(pageSize, token),
+            blue, red, eligible, colliding, Next, WithoutOwnerBody, stop);
         return 0;
-
-        MigrationPlanOperator Operator(Contract.IActorReads sourceReads) =>
-            new(ingress, sourceReads, planModel, new MigrationPlanAuthority(key), scope => ReferenceEquals(scope, blue), () => true);
 
         static PublicModel.WorkflowStart NativeSource(bool complete) =>
             NativeExecutionModel.Start(Source, input: new JsonObject { ["complete"] = complete });
@@ -122,53 +89,67 @@ internal static class PostgresRootPlanSelectionChecks
             (await runtime.StartAsync(scope, id, start, cancellationToken: stop)).Actor
             ?? throw new InvalidOperationException("The fixture actor was not admitted.");
 
-        async Task<Contract.ActorRef> StartPlan(MigrationPlanOperator service, string id, string model)
-        {
-            var clock = (await reads.GetAsync(blue, eligible, stop))!.AsOf;
-            var actor = (await service.StartAsync(blue, id, new(Source, Target, clock + 120_000, model), stop)).Actor
-                ?? throw new InvalidOperationException("The fixture plan was not admitted.");
-            await Drive(blue, actor, Contract.ActorStatus.Running);
-            return actor;
-        }
-
         async Task Drive(Contract.BoundScope scope, Contract.ActorRef actor, Contract.ActorStatus status)
         {
             for (var pass = 0; pass < 24; pass++)
             {
                 if ((await reads.GetAsync(scope, actor, stop))?.Header.Status == status) return;
-                await Next();
+                await Next(stop);
             }
             throw new InvalidOperationException($"The fixture actor did not reach {status}.");
         }
 
-        async Task<MigrationPlanJournal.Selected> DriveBatch(Contract.IActorReads reader, Contract.ActorRef plan, long number)
+        async Task Next(CancellationToken token)
         {
-            for (var pass = 0; pass < 24; pass++)
-            {
-                if ((await Batches(reader, plan)).SingleOrDefault(batch => batch.Number == number) is { } selected) return selected;
-                await Next();
-            }
-            throw new InvalidOperationException($"The fixture plan did not commit selection batch {number}.");
+            await owner.WokenAsync(null, token);
+            await owner.RunAsync(token);
         }
 
-        async Task Next()
+        async Task WithoutOwnerBody(Func<Task> select)
         {
-            await owner.WokenAsync(null, stop);
-            await owner.RunAsync(stop);
+            try
+            {
+                await SetOwnerBodyHidden(true, stop);
+                var ownerReadFailed = false;
+                try { await store.ReadFirstRootAsync(blue.Tenant, eligible.Id, stop); }
+                catch (PostgresException error) when (error.SqlState == PostgresErrorCodes.UndefinedColumn) { ownerReadFailed = true; }
+                Check(ownerReadFailed, "the real owner cannot hydrate the candidate while the selector runs");
+                await select();
+            }
+            finally
+            {
+                using var restoration = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                await SetOwnerBodyHidden(false, restoration.Token);
+            }
         }
 
-        async Task<List<MigrationPlanJournal.Selected>> Batches(Contract.IActorReads reader, Contract.ActorRef plan)
+        async Task SetOwnerBodyHidden(bool hide, CancellationToken token)
         {
-            var batches = new List<MigrationPlanJournal.Selected>();
-            Contract.PageToken? after = null;
-            while (true)
+            // Keep the relation, identity and journal available. The scheduler is idle in this window.
+            await using var db = Open();
+            await using var change = await db.Database.BeginTransactionAsync(token);
+            var visible = await CountOwnerColumns();
+            if (visible != (hide ? 0 : 3))
             {
-                var page = await reader.TailAsync(blue, plan, after, stop);
-                if (page.Items.Count == 0) return batches;
-                batches.AddRange(page.Items.Select(row => MigrationPlanJournal.Read(row.Entry)).OfType<MigrationPlanJournal.Selected>());
-                if (page.Next is null || page.Next == after) throw new InvalidOperationException("The fixture journal did not advance.");
-                after = page.Next;
+                await db.Database.ExecuteSqlRawAsync(hide ? """
+                    ALTER TABLE "Instances" RENAME COLUMN "State" TO "FixtureSelectionState";
+                    ALTER TABLE "Instances" RENAME COLUMN "StateVersion" TO "FixtureSelectionVersion";
+                    ALTER TABLE "Instances" RENAME COLUMN "FoundationHeader" TO "FixtureSelectionHeader";
+                    """ : """
+                    ALTER TABLE "Instances" RENAME COLUMN "FixtureSelectionState" TO "State";
+                    ALTER TABLE "Instances" RENAME COLUMN "FixtureSelectionVersion" TO "StateVersion";
+                    ALTER TABLE "Instances" RENAME COLUMN "FixtureSelectionHeader" TO "FoundationHeader";
+                    """, token);
+                visible = await CountOwnerColumns();
             }
+            if (visible != (hide ? 0 : 3)) throw new InvalidOperationException("The owner body schema did not reach the requested state.");
+            await change.CommitAsync(token);
+
+            Task<int> CountOwnerColumns() => db.Database.SqlQueryRaw<int>("""
+                SELECT count(*)::int AS "Value" FROM pg_catalog.pg_attribute
+                WHERE attrelid = to_regclass('"Instances"') AND NOT attisdropped
+                  AND attname IN ('State', 'StateVersion', 'FoundationHeader')
+                """).SingleAsync(token);
         }
     }
 

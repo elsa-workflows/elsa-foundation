@@ -731,12 +731,16 @@ and run `pg-root-retention owned checked` against an empty PostgreSQL database.
 
 The `pg-root-plan-selection owned checked` fixture uses the separate PostgreSQL
 generated-root timer profile. The real migration operator selects from projected
-workflow headers and commits its signed selection to a plan actor's Full journal
-through the PostgreSQL worker. A second plan records an empty page and an opaque
-continuation. A fresh operator and public PostgreSQL reader recover the cursor and
-report the exact eligible reference as pending. The fixture covers selection for
-FC-C4. Production host composition, PostgreSQL `Migrate` dispatch and target
-application retain their own K9 and K11 acceptance.
+workflow headers while the owner body and header are unavailable, and admits a
+signed control. The plan actor validates the control and the PostgreSQL worker
+commits the selected references and cursor to its Full journal. A second plan
+records an empty page and an opaque continuation. A fresh operator and public
+PostgreSQL reader recover the cursor and report the exact eligible reference as
+pending. The timer profile refuses ephemeral starts and excludes roots awaiting
+their first turn. Separate header guard controls cover missing versions, ephemeral
+workflows and other actor types. The fixture covers selection for FC-C4. Production
+host composition, PostgreSQL `Migrate` dispatch and target application retain
+their own K9 and K11 acceptance.
 
 The opt-in format-17 fixture holds a selected operator request through
 `IIngress.RequestAsync`. Admission stores the tenant-bound reply address with

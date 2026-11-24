@@ -955,6 +955,7 @@
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Native/Migration/">
     <Project Path="essentials/tests/Workflows/Runtime/Native/Migration/Run/Elsa.Workflows.Runtime.Native.Migration.Run.csproj" />
+    <Project Path="essentials/tests/Workflows/Runtime/Native/Migration/SelectionFixture/Elsa.Workflows.Runtime.Native.Migration.SelectionFixture.csproj" />
     <Project Path="essentials/tests/Workflows/Runtime/Native/Migration/SqliteFixture/Elsa.Workflows.Runtime.Native.Migration.SqliteFixture.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Native/Scopes/">
