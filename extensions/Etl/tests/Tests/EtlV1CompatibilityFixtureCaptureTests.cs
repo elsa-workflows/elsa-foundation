@@ -104,6 +104,7 @@ public sealed partial class EtlRuntimeJourneyTests
         var runtimeDirectory = Path.Combine(destination!, "runtime");
         Directory.CreateDirectory(publishedDirectory);
         Directory.CreateDirectory(runtimeDirectory);
+        var captureJson = currentWriter ? Elsa.Serialization.Core.JsonBaseline.Options : V1FixtureJson;
         if (currentWriter)
         {
             await BackupCurrentEtlDatabaseAsync(published.WorkflowDatabase, Path.Combine(publishedDirectory, "workflow.db"));
@@ -115,9 +116,14 @@ public sealed partial class EtlRuntimeJourneyTests
             File.Copy(published.EtlDesignDatabase, Path.Combine(publishedDirectory, "etl-design.db"));
         }
         File.WriteAllBytes(Path.Combine(destination!, "etl-artifact.json"),
-            JsonSerializer.SerializeToUtf8Bytes(published.OriginalArtifact, V1FixtureJson));
+            JsonSerializer.SerializeToUtf8Bytes(published.OriginalArtifact, captureJson));
         File.WriteAllBytes(Path.Combine(destination!, "workflow-executable.json"),
-            JsonSerializer.SerializeToUtf8Bytes(published.Executable, V1FixtureJson));
+            JsonSerializer.SerializeToUtf8Bytes(published.Executable, captureJson));
+        if (currentWriter)
+        {
+            using var writtenArtifact = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(destination!, "etl-artifact.json")));
+            Assert.Equal(published.OriginalArtifact.Pipeline.GetRawText(), writtenArtifact.RootElement.GetProperty("pipeline").GetRawText());
+        }
 
         if (currentWriter)
             await BackupCurrentEtlDatabaseAsync(Path.Combine(Directory.GetParent(files.SnapshotRoot)!.FullName, "runtime.db"), Path.Combine(runtimeDirectory, "runtime.db"));
@@ -126,7 +132,7 @@ public sealed partial class EtlRuntimeJourneyTests
         EtlV1CompatibilityFixture.CopyDirectory(files.SnapshotRoot, Path.Combine(runtimeDirectory, "snapshots"));
         EtlV1CompatibilityFixture.CopyDirectory(files.OutputRoot, Path.Combine(runtimeDirectory, "output"));
         File.WriteAllBytes(Path.Combine(runtimeDirectory, "acceptance.json"),
-            JsonSerializer.SerializeToUtf8Bytes(receipt.Acceptance, V1FixtureJson));
+            JsonSerializer.SerializeToUtf8Bytes(receipt.Acceptance, captureJson));
 
         var publicationPath = published.RootDirectory;
         AssertNoHostPaths(destination!, runtimePath, publicationPath);
@@ -189,7 +195,7 @@ public sealed partial class EtlRuntimeJourneyTests
             retainedRun.OutstandingBytes,
             EtlV1CompatibilityFixture.DescribeFiles(destination!));
         File.WriteAllBytes(Path.Combine(destination!, "manifest.json"),
-            JsonSerializer.SerializeToUtf8Bytes(manifest, V1FixtureJson));
+            JsonSerializer.SerializeToUtf8Bytes(manifest, captureJson));
         AssertNoHostPaths(destination!, runtimePath, publicationPath);
     }
 
