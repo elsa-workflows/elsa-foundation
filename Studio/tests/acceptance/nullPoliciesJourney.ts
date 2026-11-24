@@ -468,17 +468,28 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
       await inspector.getByRole("tablist", { name: "Activity execution views", exact: true }).getByRole("tab", { name: "Data", exact: true }).click();
       const section = inspector.getByTestId("execution-warnings"); await expect(section).toBeVisible(); await section.scrollIntoViewIfNeeded(); return section;
     }
+    async function captureWarningCard(section: Locator, edge: "first" | "last", name: string) {
+      const cards = section.getByRole("listitem");
+      const card = edge === "first" ? cards.first() : cards.last();
+      const message = card.locator("p");
+      await message.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest" }));
+      await expect(card.locator("header")).toBeInViewport({ ratio: 1 });
+      await expect(message).toBeInViewport({ ratio: 1 });
+      const facts = card.locator("dl");
+      if (await facts.count() > 0) await expect(facts).toBeInViewport({ ratio: 1 });
+      await capture(page, info, name);
+    }
     let section = await warnings("substitute-input"); await expect(section).toContainText("Information · VF-NULL-001"); await capture(page, info, "run-null-information");
     section = await warnings("substitute"); await expect(section).toContainText("VF-NULL-001"); await expect(section).toContainText("count");
     await capture(page, info, "run-variable-null-information");
     section = await warnings("boundary");
     for (const code of ["VF-UNDEF-002", "VF-UNDEF-003", "VF-NUM-001"]) await expect(section).toContainText(code);
     await expect(section).toContainText("customer.privateKey");
-    await captureAt(section.getByRole("listitem").first(), "run-boundary-warnings");
-    await captureAt(section.getByRole("listitem").last(), "run-boundary-warnings-end");
+    await captureWarningCard(section, "first", "run-boundary-warnings");
+    await captureWarningCard(section, "last", "run-boundary-warnings-end");
     section = await warnings("protected-boundary"); await expect(section).toContainText("VF-UNDEF-002"); await expect(section).not.toContainText("customer.privateKey");
-    await captureAt(section.getByRole("listitem").first(), "run-protected-warning");
-    await captureAt(section.getByRole("listitem").last(), "run-protected-warning-end");
+    await captureWarningCard(section, "first", "run-protected-warning");
+    await captureWarningCard(section, "last", "run-protected-warning-end");
     proof.diagnostics = { publication: diagPublication, run, inspectedNodes: ["substitute-input", "substitute", "boundary", "protected-boundary"] };
 
     const activity = await saved();
@@ -499,8 +510,18 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     for (const name of ["Note", "Nullable result"]) await expect(historical().locator("li").filter({ hasText: name })).toContainText("Allows null");
     for (const name of ["Count", "Number result"]) await expect(historical().locator("li").filter({ hasText: name })).toContainText("Non-null");
     await expect(historical().locator("input, select, textarea")).toHaveCount(0);
-    await captureAt(historical().locator(".ad-historical-contract-groups > section").filter({ has: page.getByRole("heading", { name: "Inputs", exact: true }) }), "contract-historical");
-    await captureAt(historical().locator(".ad-historical-contract-groups > section").filter({ has: page.getByRole("heading", { name: "Outputs", exact: true }) }), "contract-historical-outputs");
+    async function captureHistoricalMembers(title: "Inputs" | "Outputs", name: string) {
+      const group = historical().locator(".ad-historical-contract-groups > section").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+      const members = group.getByRole("listitem");
+      // Center actual content; a section's rounded padding can sit fractionally outside the scrollport.
+      await members.last().evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest" }));
+      await expect(group.getByRole("heading", { name: title, exact: true })).toBeInViewport({ ratio: 1 });
+      await expect(members.first()).toBeInViewport({ ratio: 1 });
+      await expect(members.last()).toBeInViewport({ ratio: 1 });
+      await capture(page, info, name);
+    }
+    await captureHistoricalMembers("Inputs", "contract-historical");
+    await captureHistoricalMembers("Outputs", "contract-historical-outputs");
 
     async function clrContract(key: string, versionId: string, inputKey: string, nullable: boolean, captureName: string) {
       const exact = await api<{ contract: { inputs: { referenceKey: string; name: string; displayName: string | null; type: { alias: string; supportsNull: boolean } }[] } }>(`/design/activities/versions/${versionId}`);

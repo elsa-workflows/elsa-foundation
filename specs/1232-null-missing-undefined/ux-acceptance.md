@@ -38,8 +38,9 @@ T035a runs these journeys on an owned Workbench/Studio host built from the commi
 following [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md). Extend the composed suite where
 its existing journeys do not cover the rows above; isolated client fixtures provide supporting evidence only.
 
-The implementation PR links the exact Actions run and downloadable artifact, identifies tested source/merge SHA
-and PR head, and retains screenshots, accessibility snapshots and traces. An independent reviewer opens the
+With CI explicitly deferred, the implementation PR links the source-bound downloadable local proof, identifies
+the tested source SHA and PR head, and retains screenshots, accessibility snapshots and traces. Any later Actions
+evidence identifies its own exact run and artifact. An independent reviewer opens the
 screenshots, inspects the complete affected experience and records the guide's acceptance receipt on that PR.
 Failures, omissions, skips and uninspected states remain failed or incomplete. Fix and rerun the affected whole
 suites and journeys on the final head, then refresh the independent inspection before delivery is accepted.
