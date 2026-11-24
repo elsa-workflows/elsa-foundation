@@ -2,7 +2,8 @@
 
 The suites call templates by name. Each engine has one implementation of every template the suites use, with the
 **same name, the same parameters and the same outputs with the same meaning**. The Elsa 3 set is the corpus's
-`templates/` folder, unchanged except for recorded fixes. The Elsa 4 set lives in `templates-elsa4/`.
+`templates/` folder, renamed `templates-elsa3/` in the copy and unchanged except for recorded fixes. The Elsa 4 set
+lives in `templates-elsa4/`.
 
 A template may change how it obtains a value. It may not change what the value means. Where Elsa 4 cannot produce an
 output with the same meaning, the template fails with a message naming the output; it never returns an approximation.

@@ -26,7 +26,9 @@ repository unless they name the corpus.
 
 - **Decision**: `extensions/Elsa3/tests/JTest/`, keeping the corpus's own layout (`workflow-definitions/`, `tests/`,
   `templates/`, `environments/`, `test-files/`, `global-configuration.json`, `import-and-publish-workflows.json`).
-  The corpus's `pipelines/` folder and Nexxbiz README are not copied. Elsa 4 additions sit next to it:
+  The corpus's `pipelines/` folder and Nexxbiz README are not copied. After the copy commit the Elsa 3 files are
+  renamed to carry their engine (`templates-elsa3/`, `environments/elsa3.json`, `global-configuration.elsa3.json`), and
+  the Elsa 4 additions sit next to them:
   `templates-elsa4/`, `environments/elsa4.json`, `global-configuration.elsa4.json`, `adjusted/`, `ledger/` and a
   `README.md` with run instructions.
 - **Rationale**: Keeping the original layout makes the first commit a plain copy and the later hand-over to the

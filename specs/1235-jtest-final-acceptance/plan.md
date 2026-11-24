@@ -57,7 +57,7 @@ the engine-neutral refactor adds.
 
 | # | Decision | Detail |
 |---|---|---|
-| P-1 | Layout | R-3: the corpus's own layout under `extensions/Elsa3/tests/JTest/`, plus `templates-elsa4/`, `environments/elsa4.json`, `global-configuration.elsa4.json`, `adjusted/`, `ledger/`, `README.md`. |
+| P-1 | Layout | R-3: the corpus's own layout under `extensions/Elsa3/tests/JTest/`, with the Elsa 3 files renamed to `templates-elsa3/`, `environments/elsa3.json` and `global-configuration.elsa3.json`, plus `templates-elsa4/`, `environments/elsa4.json`, `global-configuration.elsa4.json`, `adjusted/`, `ledger/`, `README.md`. |
 | P-2 | Runner | R-1, R-4: latest `jtest run`, by hand. |
 | P-3 | Elsa 3 baseline | R-2: image built from elsa-core `3.6.3`; the corpus's setup suite imports the definitions. |
 | P-4 | Elsa 4 host | R-5: Workbench plus the reconciliation feature (reference and catalog entry), enabled only for the run together with the import persistence feature, with Durable persistence; capture set through the diagnostics settings API after each start. |
@@ -94,13 +94,13 @@ specs/1235-jtest-final-acceptance/
 ```text
 extensions/Elsa3/tests/JTest/
 ├── README.md                          # run instructions (from quickstart.md, with the verified Elsa 4 override)
-├── global-configuration.json          # corpus: Elsa 3 template search path
+├── global-configuration.elsa3.json    # corpus (renamed): Elsa 3 template search path
 ├── global-configuration.elsa4.json    # Elsa 4 template search path
 ├── import-and-publish-workflows.json  # corpus: Elsa 3 setup suite only
 ├── environments/
-│   ├── dev.json                       # corpus: Elsa 3 environment
+│   ├── elsa3.json                     # corpus dev.json (renamed): Elsa 3 environment
 │   └── elsa4.json
-├── templates/                         # corpus: Elsa 3 templates
+├── templates-elsa3/                   # corpus templates/ (renamed): Elsa 3 templates
 ├── templates-elsa4/                   # same names, parameters and outputs
 ├── test-files/                        # corpus
 ├── tests/                             # corpus: 42 suites

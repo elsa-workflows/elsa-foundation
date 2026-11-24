@@ -1,6 +1,8 @@
 # Final JTest acceptance intake
 
-Companion to [spec.md](spec.md). It records what the corpus contains, so the plan and tasks can rely on counts
+Companion to [spec.md](spec.md). Names below are as in the source repository; the copy renames the Elsa 3 templates,
+environment file and global configuration to carry `elsa3` (see [data-model.md](data-model.md)).
+It records what the corpus contains, so the plan and tasks can rely on counts
 instead of assumptions. Decisions are in the spec's *Spec decisions* table.
 
 ## Corpus at source commit `b1cde13`

@@ -29,7 +29,10 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
   conversion must be off, or LF files come out as CRLF): `workflow-definitions/`, `tests/`, `templates/`,
   `environments/`, `test-files/`, `global-configuration.json`, `import-and-publish-workflows.json`; leave out
   `pipelines/` and the repository README. Commit the attribute and the copy alone, with the source commit in the message, and check with
-  `git ls-files --eol` that every file matches the source index (FR-001).
+  `git ls-files --eol` that every file matches the source index (FR-001). Then, in a second commit, give the Elsa 3
+  side the same naming as Elsa 4: rename `templates/` to `templates-elsa3/`, `environments/dev.json` to
+  `environments/elsa3.json` and `global-configuration.json` to `global-configuration.elsa3.json`, and point its
+  template search path at `templates-elsa3/*` (renames only, no content change).
 - [ ] T002 Check `JTest/` for secrets: credentials and base URLs are `${VARIABLE}` references; other literals in the
   environment files (dispatch channels, wait times, engine-specific expected values) are not secrets (FR-004).
 - [ ] T003 [P] Create the ledger files with their table headers from data-model.md: `JTest/ledger/suites.md` (one row
@@ -89,7 +92,7 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
   corpus definitions use that no suite covers in the *Notes* section of `JTest/ledger/baseline-failures.md`.
 - [ ] T016 [US1] **Approval gate**: post the classified list on the PR and get the coordinator's approval of the whole
   list; record the approval link in `JTest/ledger/baseline-failures.md`.
-- [ ] T017 [US1] Apply the approved fixes to `JTest/tests/` and `JTest/templates/`, and set `"version": 1` in
+- [ ] T017 [US1] Apply the approved fixes to `JTest/tests/` and `JTest/templates-elsa3/`, and set `"version": 1` in
   `JTest/workflow-definitions/storage-drivers-variables-root-workflow.json` (spec Q14, approved),
   one commit, with the ledger row named per change; mark 3.6.3-defect suites `blocked: 3.6.3 defect <defect>` in
   `JTest/ledger/suites.md` (FR-008).
@@ -115,9 +118,9 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
   templates must supply (contracts/templates.md); write the list to `JTest/ledger/refactor-scope.md`.
 - [ ] T020 [US2] For each Elsa 4 template that needs a parameter its Elsa 3 version lacks (for example the workflow
   instance id for `elsa-activity-instance-get`, contracts/templates.md), add the parameter to the Elsa 3 template in
-  `JTest/templates/` without changing its outputs; for each direct API call or internal read listed in T019, add a new
-  Elsa 3 template in `JTest/templates/` that returns the value with a stated meaning.
-- [ ] T021 [US2] Move each listed value behind a template output, an environment value in `JTest/environments/dev.json`
+  `JTest/templates-elsa3/` without changing its outputs; for each direct API call or internal read listed in T019, add a new
+  Elsa 3 template in `JTest/templates-elsa3/` that returns the value with a stated meaning.
+- [ ] T021 [US2] Move each listed value behind a template output, an environment value in `JTest/environments/elsa3.json`
   or a suite parameter, and pass any new template parameters, in `JTest/tests/**`; no expected business value or
   assertion changes (FR-010).
 - [ ] T022 [US2] Rerun the 41 suites of the acceptance set on a fresh 3.6.3 container; the same suites pass as after T018 (SC-002 part 1);
@@ -138,7 +141,7 @@ an approved incompatibility passes.
 case-insensitive lookup, and normalizes nothing the contract's translation table does not list; an output Elsa 4
 cannot produce with the same meaning fails the template with the output named (FR-011, FR-013).
 
-- [ ] T023 [P] [US3] Create `JTest/environments/elsa4.json` (same keys as `dev.json`, differing only in
+- [ ] T023 [P] [US3] Create `JTest/environments/elsa4.json` (same keys as `elsa3.json`, differing only in
   engine-specific values; the executor base `{base}/workflows/http` comes from `ELSA_EXECUTOR_BASE_URL`) and `JTest/global-configuration.elsa4.json` (template search path `templates-elsa4/*`)
   per contracts/run-hosts.md.
 - [ ] T024 [P] [US3] Write `templates-elsa4/elsa-api-login-template.json`: `elsa-authenticate` per
@@ -185,7 +188,7 @@ cannot produce with the same meaning fails the template with the output named (F
   make the qualifying run: the 41 suites of the acceptance set on a fresh Workbench from that head. Record it as the non-JOIN milestone run
   (FR-020, SC-004) only when every acceptance-set suite that SC-004 does not exempt passed in it; otherwise record it
   as a qualifying run and repeat T038 once the blocking issues or prerequisites are closed. Before recording it, confirm with `git diff` that `JTest/tests/**` differs from the T022 state
-  only by approved T029 rows, that `JTest/templates/` differs only by approved rows too, and rerun the changed suites
+  only by approved T029 rows, that `JTest/templates-elsa3/` differs only by approved rows too, and rerun the changed suites
   on 3.6.3 (SC-002).
 
 **Checkpoint**: non-JOIN milestone, once T038 records it. The specification stays Draft/in progress while J-tasks are open.

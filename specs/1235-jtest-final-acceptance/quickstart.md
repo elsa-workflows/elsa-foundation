@@ -24,9 +24,9 @@ docker run -d --rm --name elsa3-jtest -e ASPNETCORE_ENVIRONMENT=Development -e H
 $env:ELSA_API_BASE_URL = 'http://localhost:13000'; $env:ELSA_EXECUTOR_BASE_URL = 'http://localhost:13000/workflows'
 $env:ADMIN_USERNAME = 'admin'; $env:ADMIN_PASSWORD = '<baseline admin password>'
 $env:CORRELATION_ID = [guid]::NewGuid().ToString('N'); $env:DATE_NOW_ISO_STRING = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
-$env:JTEST_CONFIG_FILE = "$PWD/global-configuration.json"
-jtest run import-and-publish-workflows.json --env-file environments/dev.json
-jtest run "tests/**/*" "!tests/performance/baseline-dispatch-tests.json" --env-file environments/dev.json
+$env:JTEST_CONFIG_FILE = "$PWD/global-configuration.elsa3.json"
+jtest run import-and-publish-workflows.json --env-file environments/elsa3.json
+jtest run "tests/**/*" "!tests/performance/baseline-dispatch-tests.json" --env-file environments/elsa3.json
 docker stop elsa3-jtest
 ```
 

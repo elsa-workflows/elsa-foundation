@@ -10,6 +10,7 @@ PR diff; no tooling parses it.
 | Source | JTest-Nexxbiz repository, commit `b1cde13` |
 | Copied | `workflow-definitions/`, `tests/`, `templates/`, `environments/`, `test-files/`, `global-configuration.json`, `import-and-publish-workflows.json` |
 | Not copied | `pipelines/` and the repository README (Nexxbiz delivery files, not test content) |
+| Renamed after the copy | `templates/` → `templates-elsa3/`, `environments/dev.json` → `environments/elsa3.json`, `global-configuration.json` → `global-configuration.elsa3.json`, so both engines' files carry their engine in the name |
 | Change rule | Every change after the copy commit is a separate, reviewed diff with its reason in the ledger |
 
 ## Suite (`ledger/suites.md`, one row per suite file)
@@ -46,7 +47,7 @@ returns to `not run`.
 | Reason | why it is needed, which engine needs it |
 | Approved | coordinator approval (FR-012) |
 
-Also recorded here, with the engine set they change: any change to the Elsa 3 `templates/` folder after the refactor,
+Also recorded here, with the engine set they change: any change to the Elsa 3 `templates-elsa3/` folder after the refactor,
 and a timing change (a raised wait) in either set. Writing and fixing the Elsa 4 templates otherwise needs no row: they
 are checked by the suites they serve.
 
