@@ -472,25 +472,32 @@ internal static class PostgresRootTerminateChecks
                     """, stop);
             await RequireUnavailable(async () => { _ = await shadow.OpenPreviewRootReadsAsync(cancellationToken: stop); });
 
-            await using var formatDb = Open();
-            await formatDb.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationOperatorReceipts" RENAME TO "HiddenOperatorReceipts" """, stop);
-            try
-            {
-                await RequireUnavailable(async () => { _ = await Control(tenant, operation, Contract.Kinds.Terminate); });
-            }
-            finally
-            {
-                await formatDb.Database.ExecuteSqlRawAsync("""ALTER TABLE "HiddenOperatorReceipts" RENAME TO "FoundationOperatorReceipts" """, stop);
-            }
+            await MissingRelationRefuses(
+                """ALTER TABLE "FoundationOperatorReceipts" RENAME TO "HiddenOperatorReceipts" """,
+                """ "HiddenOperatorReceipts" """.Trim(),
+                """ALTER TABLE "HiddenOperatorReceipts" RENAME TO "FoundationOperatorReceipts" """);
+            await MissingRelationRefuses(
+                """ALTER TABLE "KernelStoreVersions" RENAME TO "HiddenStoreVersions" """,
+                """ "HiddenStoreVersions" """.Trim(),
+                """ALTER TABLE "HiddenStoreVersions" RENAME TO "KernelStoreVersions" """);
+        }
 
-            await formatDb.Database.ExecuteSqlRawAsync("""ALTER TABLE "KernelStoreVersions" RENAME TO "HiddenStoreVersions" """, stop);
+        async Task MissingRelationRefuses(string hide, string hiddenName, string restore)
+        {
             try
             {
+                await using var formatDb = Open();
+                await formatDb.Database.ExecuteSqlRawAsync(hide, stop);
                 await RequireUnavailable(async () => { _ = await Control(tenant, operation, Contract.Kinds.Terminate); });
             }
             finally
             {
-                await formatDb.Database.ExecuteSqlRawAsync("""ALTER TABLE "HiddenStoreVersions" RENAME TO "KernelStoreVersions" """, stop);
+                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                await using var formatDb = Open();
+                if (await formatDb.Database.SqlQuery<bool>($"""
+                    SELECT pg_catalog.to_regclass({hiddenName}) IS NOT NULL AS "Value"
+                    """).SingleAsync(cleanup.Token))
+                    await formatDb.Database.ExecuteSqlRawAsync(restore, cleanup.Token);
             }
         }
 
