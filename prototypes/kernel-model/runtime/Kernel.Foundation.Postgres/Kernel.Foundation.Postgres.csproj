@@ -7,7 +7,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
     <ProjectReference Include="../../ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
     <ProjectReference Include="../../src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
-    <ProjectReference Include="../Kernel.Runtime.Hosting/Kernel.Runtime.Hosting.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Runtime.Hosting.csproj" />
     <InternalsVisibleTo Include="Kernel.Native.Run" />
   </ItemGroup>
 </Project>

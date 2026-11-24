@@ -1198,6 +1198,9 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.actorfoundation.builtin.runtime": {
+        "type": "Project"
+      },
       "elsa.actorfoundation.contracts": {
         "type": "Project"
       },

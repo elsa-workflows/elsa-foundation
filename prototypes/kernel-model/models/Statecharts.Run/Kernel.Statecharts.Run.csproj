@@ -7,6 +7,6 @@
   <ItemGroup>
     <ProjectReference Include="../Statecharts.Native/Kernel.Statecharts.Native.csproj" />
     <ProjectReference Include="../../sim/Kernel.Sim.csproj" />
-    <ProjectReference Include="../../runtime/Kernel.Runtime.Hosting/Kernel.Runtime.Hosting.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Runtime.Hosting.csproj" />
   </ItemGroup>
 </Project>

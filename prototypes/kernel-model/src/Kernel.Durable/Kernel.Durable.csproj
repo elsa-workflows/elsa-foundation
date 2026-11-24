@@ -4,7 +4,7 @@
     <RootNamespace>Kernel.Durable</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../Kernel.Runtime/Kernel.Runtime.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj" />
     <InternalsVisibleTo Include="Kernel.Foundation.InMemory" />
     <InternalsVisibleTo Include="Kernel.EntityFramework" />
     <InternalsVisibleTo Include="Kernel.Foundation.Postgres" />

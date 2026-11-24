@@ -15,6 +15,9 @@
           "Bpmn.Model": "0.5.0"
         }
       },
+      "elsa.actorfoundation.builtin.runtime": {
+        "type": "Project"
+      },
       "elsa.actorfoundation.contracts": {
         "type": "Project"
       },
@@ -34,11 +37,8 @@
       "kernel.durable": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Runtime": "[1.0.0, )"
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )"
         }
-      },
-      "kernel.runtime": {
-        "type": "Project"
       },
       "kernel.workflows": {
         "type": "Project",

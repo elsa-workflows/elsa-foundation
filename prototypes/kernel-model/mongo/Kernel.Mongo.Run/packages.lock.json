@@ -45,6 +45,9 @@
         "resolved": "0.7.3",
         "contentHash": "U9Ix4l4cl58Kzz1rJzj5hoVTjmbx1qGMwzAcbv1j/d3NzrFaESIurQyg+ow4mivCgkE3S413y+U9k4WdnEIkRA=="
       },
+      "elsa.actorfoundation.builtin.runtime": {
+        "type": "Project"
+      },
       "elsa.actorfoundation.contracts": {
         "type": "Project"
       },
@@ -63,7 +66,7 @@
       "kernel.durable": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Runtime": "[1.0.0, )"
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )"
         }
       },
       "kernel.mongo": {
@@ -72,9 +75,6 @@
           "Kernel.Durable": "[1.0.0, )",
           "MongoDB.Driver": "[3.9.0, )"
         }
-      },
-      "kernel.runtime": {
-        "type": "Project"
       },
       "kernel.store.conformance": {
         "type": "Project",

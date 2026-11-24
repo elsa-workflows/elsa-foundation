@@ -39,7 +39,7 @@ the release placement of standalone Jobs.
 - **Job poison (decision 9).** Tickets are tried like messages. A ticket past the attempt threshold parks its instance
   (`Worker.cs`, the `MaxAttempts` check before `_type.Park`). The older rule, an error result with the instance going on
   (FINDINGS section 7), survives only as the mutation `Flaw.JobPoisonAsError`
-  ([Addresses.cs](../../prototypes/kernel-model/src/Kernel.Runtime/Addresses.cs)), which the simulation must catch.
+  ([Addresses.cs](../../essentials/src/ActorFoundation/BuiltIn/Runtime/Addresses.cs)), which the simulation must catch.
 - **The effect key.** `EffectKey.For` in [EffectKey.cs](../../prototypes/kernel-model/src/Kernel.Workflows/EffectKey.cs)
   (layer 3), checked by the simulation's N7 ([NATIVE.md](../../prototypes/kernel-model/NATIVE.md), section 6) and
   described in [ownership and fencing](ownership-and-fencing.md#side-effects).
