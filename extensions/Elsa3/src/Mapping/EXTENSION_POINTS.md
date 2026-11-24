@@ -82,8 +82,10 @@ Replace both: implement both contracts on one class, or register a node converte
   `getSettings()` converts to `acme.getSettings()`. A name two namespaces carry, a name that is also a variable's or
   input's generated accessor (the converter cannot tell whether Elsa 3 had a custom function of that name), or a script
   that declares the namespace root is refused with `VF-IMP-002`. A standard JavaScript global, an Elsa 4 built-in or an
-  Elsa 3 built-in the converter converts itself is never matched; an Elsa 3 built-in it refuses
-  (`getConfig`, `getLastResult`, …) is matched like a custom function.
+  Elsa 3 built-in the converter converts itself, the outcome setters, the instance-state helpers and the CLR, lodash
+  and moment globals are never matched; the byte and stream helpers, `getConfig`, the definition readers
+  (`getWorkflowDefinitionId`, `getWorkflowDefinitionVersionId`, `getWorkflowDefinitionVersion`) and `getLastResult` are
+  matched like custom functions.
 - **When to use:** register each Elsa 3 custom JavaScript function a host rebuilt for Elsa 4 under its Elsa 3 name with a
   namespace prefix; the migration plan records the prefix. Registering or removing such a function alters converter
   output (spec 235's converter revision rule).

@@ -438,13 +438,30 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [InlineData("acme.isNaN", "isNaN(1)")]
     [InlineData("acme.isNullOrEmpty", "['a', ''].filter(isNullOrEmpty)")]
     [InlineData("acme.getWorkflowInstanceId", "[getWorkflowInstanceId][0]")]
+    [InlineData("acme.variables", "Object.keys(variables).length")]
     public async Task A_host_function_named_like_a_native_or_converted_global_is_not_matched(string hostFunction, string expression)
     {
-        var result = await ConvertTextAsync(expression, [new JavaScriptHostFunctionDeclaration(hostFunction, _ => default)]);
+        var withHostFunction = await ConvertTextAsync(expression, [new JavaScriptHostFunctionDeclaration(hostFunction, _ => default)]);
+        var without = await ConvertTextAsync(expression);
 
-        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ReplacedFunctionReference);
-        if (result.Succeeded)
-            Assert.DoesNotContain(hostFunction, ReadExpression(result).Source, StringComparison.Ordinal);
+        Assert.Equal(without.Succeeded, withHostFunction.Succeeded);
+        Assert.Equal(
+            without.Diagnostics.Select(diagnostic => diagnostic.Code).Order(StringComparer.Ordinal),
+            withHostFunction.Diagnostics.Select(diagnostic => diagnostic.Code).Order(StringComparer.Ordinal));
+        if (withHostFunction.Succeeded)
+            Assert.Equal(ReadExpression(without).Source, ReadExpression(withHostFunction).Source);
+    }
+
+    /// <summary>A refused call to a name no host function can take over gets no advice to register one.</summary>
+    [Theory]
+    [InlineData("encodeURIComponent('a b')")]
+    [InlineData("Guid()")]
+    public async Task A_refused_unmatchable_global_gets_no_registration_guidance(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Guidance?.Contains("register a host function", StringComparison.Ordinal) == true);
     }
 
     /// <summary>

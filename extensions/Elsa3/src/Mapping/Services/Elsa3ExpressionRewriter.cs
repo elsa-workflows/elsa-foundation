@@ -63,6 +63,13 @@ public sealed class Elsa3ExpressionRewriter(
         "under one namespace only; the converter then rewrites the call. " +
         "Otherwise compute the value with JavaScript or an Elsa 4 built-in function, or in an activity, in the Elsa 3 workflow before import.";
 
+    /// <summary>
+    /// What to do about a refused call to a name no host function can take over (a standard JavaScript global, a CLR
+    /// global): registering a host function of that member name would not change the result.
+    /// </summary>
+    private const string UnmatchableFunctionGuidance =
+        "Compute the value with JavaScript or an Elsa 4 built-in function, or in an activity, in the Elsa 3 workflow before import.";
+
     private static Elsa3ConversionOptions Validated(Elsa3ConversionOptions options)
     {
         options.Validate();
@@ -717,7 +724,8 @@ public sealed class Elsa3ExpressionRewriter(
         /// <summary>
         /// Each member name of a prefixed host function, with the functions that carry it: the Elsa 3 globals they replace. An Elsa 3
         /// built-in the converter converts itself (<c>getVariable</c>, the setters, <c>getCorrelationId</c>, …) keeps that
-        /// conversion; Elsa 3 functions the converter refuses (<c>getConfig</c>, …) can be replaced.
+        /// conversion (see <c>ConvertedGlobals</c>). Of the Elsa 3 functions the converter refuses, the byte and stream
+        /// helpers, <c>getConfig</c>, the definition readers and <c>getLastResult</c> can be replaced.
         /// </summary>
         public IReadOnlyDictionary<string, string[]> ReplacedGlobals { get; init; } = new Dictionary<string, string[]>(StringComparer.Ordinal);
 
@@ -1007,13 +1015,16 @@ public sealed class Elsa3ExpressionRewriter(
             "WeakMap", "WeakSet", "WeakRef", "Symbol", "BigInt", "Promise", "Proxy", "Reflect", "Function",
             "Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "AggregateError",
             "ArrayBuffer", "DataView", "Int8Array", "Uint8Array", "Uint8ClampedArray", "Int16Array", "Uint16Array",
-            "Int32Array", "Uint32Array", "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array",
+            "Int32Array", "Uint32Array", "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array", "Float16Array",
+            "SharedArrayBuffer", "Atomics", "Iterator", "FinalizationRegistry", "DisposableStack", "AsyncDisposableStack",
+            "SuppressedError", "Temporal", "arguments",
         };
 
         /// <summary>
-        /// Names never matched to a host function (#5664): the globals the converter converts or refuses itself before or
-        /// after the match (Elsa 3 built-ins, Elsa 4 built-ins, <c>toJson</c>, the outcome setters, the CLR globals) and the
-        /// standard JavaScript globals. A host function with one of them as its member name does not take it over, and a
+        /// Names never matched to a host function (#5664): the Elsa 3 and Elsa 4 built-ins the converter converts itself, the
+        /// outcome setters and instance-state helpers, the CLR, lodash and moment globals, the read roots
+        /// (<c>variables</c>, <c>args</c>, …) and the standard JavaScript globals. The other Elsa 3 functions it refuses (byte and stream helpers, <c>getConfig</c>, the definition readers,
+        /// <c>getLastResult</c>) are matched. A host function with one of them as its member name does not take it over, and a
         /// reference to one is not refused as a replaced function.
         /// </summary>
         private static readonly HashSet<string> ConvertedGlobals = new(
@@ -1022,7 +1033,7 @@ public sealed class Elsa3ExpressionRewriter(
                 .Concat(["toJson", "setOutcome", "setOutcomes", "Date", "getVariable", "setVariable", "getInput", "getOutputFrom"])
                 .Concat(StateSetters).Concat(StateGetters).Concat(SetterCalls)
                 .Concat(InlineHelpers.Keys).Concat(InstanceMembers.Keys)
-                .Concat(ElsaThreeGlobals).Concat(NativeJavaScriptGlobals),
+                .Concat(ElsaThreeGlobals).Concat(NativeJavaScriptGlobals).Concat(JavaScriptBuiltInFunctions.ReadRoots),
             StringComparer.Ordinal);
 
         private static Elsa3ExpressionRewriteIssue UnavailableGlobal(string name) => new(
@@ -1637,7 +1648,7 @@ public sealed class Elsa3ExpressionRewriter(
                     Issues.Add(new Elsa3ExpressionRewriteIssue(
                         Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                         $"JavaScript calls unknown or unapproved host function '{callee.Name}'.",
-                        UndeclaredFunctionGuidance(callee.Name)));
+                        ConvertedGlobals.Contains(callee.Name) ? UnmatchableFunctionGuidance : UndeclaredFunctionGuidance(callee.Name)));
                     return;
                 }
             }
