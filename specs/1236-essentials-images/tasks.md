@@ -16,12 +16,13 @@ worktree path on Windows (MSB3030).
 
 - [ ] T001 Create `apps/Elsa.Essentials.Composition/Elsa.Essentials.Composition.csproj` (no feature class, internal
   by default) and `essentials/tests/Essentials/Tests/Elsa.Essentials.Tests.csproj` (xunit); add
-  both to `Elsa.Server.slnx`, register the test project as PR tier in `tools/ci/test-tiers.json`, run
-  `ArchitectureGuardTests.Project_paths_match_domain_tree_convention` and move the library if the guard refuses the
-  path (R-2; record the final path in plan.md).
+  both to `Elsa.Server.slnx`, register the test project as PR tier in `tools/ci/test-tiers.json`, add
+  `Elsa.Essentials.Composition` and the test project to `ArchitectureGuardTests.ExpectedProjectPath` and
+  `ExpectedSolutionFolder` the way `Elsa.Foundation.Host` is listed, add `Elsa.Essentials` to the host and test groupings
+  in constitution §E2.1, and run `ArchitectureGuardTests.Project_paths_match_domain_tree_convention` (R-2).
 - [ ] T002 [P] Create `apps/Elsa.Essentials.Server/Elsa.Essentials.Server.csproj` referencing
   `Elsa.Essentials.Composition`, `Elsa.Foundation.Hosting` and the Nuplane/CShells hosting packages the Workbench uses;
-  add it to `Elsa.Server.slnx`.
+  add it to `Elsa.Server.slnx` and to the guard's `ExpectedProjectPath` and `ExpectedSolutionFolder`.
 - [ ] T003 [P] Create `Studio/src/apps/Elsa.Studio.Essentials/Elsa.Studio.Essentials.csproj` modelled on
   `Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj`, referencing only the Studio modules R-8 lists; add it to
   the Studio solution.
@@ -113,7 +114,8 @@ publishes `/app/migrated/workflows`.
   engine `essentials` (data model, *Acceptance run record*).
 - [ ] T020 [US2] For every suite that passes on the Workbench and fails here, find the cause; add the missing feature
   or setting to `essentials.features.json` with its reason (and its project reference, T005), or fix the host; run
-  again. A converter cause belongs to S-15's failure rule, not here.
+  again. A converter cause belongs to S-15's failure rule, and an export or `migrated/` writing cause to the
+  migration CLI's specification (FR-020), not here.
 - [ ] T021 [US2] Record the final comparison (SC-001): zero suites pass on one engine and fail on the other; S-15
   exemptions carried as they are.
 

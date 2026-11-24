@@ -185,8 +185,9 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
   the default `dotnet Elsa.Essentials.Server.dll`, which a derived image replaces.
 - **Rationale**: the Elsa 3 migration image is built `FROM` the engine at the same version (Joey on PR #5669, spec Q7).
   It starts no web host: its worker composes the lists and reconciles its own packages (spec 1237). So it needs the
-  list, the merge and the assemblies at known paths, not an engine host that loads extra lists and packages. That
-  engine-side extension is not built until an image that runs the engine with additions exists.
+  list, the merge and the assemblies at known paths, not an engine host that loads extra packages. The engine host
+  reads the whole folder only because it uses the same `Read`; loading derived packages is not built until an image
+  that runs the engine with additions exists.
 - **Library packaging**: `Elsa.Essentials.Composition` is not packed. It ships only in `/app` of the engine image.
   Code that loads it through Nuplane in a derived image (the migration tooling) declares it a shared assembly in its own
   Nuplane setup; the migration CLI specification owns that. Its public surface is the three members in

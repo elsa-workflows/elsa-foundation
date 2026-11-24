@@ -46,7 +46,7 @@ Workbench unchanged (FR-017); no JTest CI tier (FR-023).
 | §E2.2 Runtime takes no Design reference | PASS | No runtime project changes; the host composes existing features. |
 | §E5 packaging, reserved `Elsa.Server` name | PASS | New names do not take the reserved name (R-1). The library and hosts have no hand-written version. |
 | §E7 CI test tiers | PASS | The new test project goes into `tools/ci/test-tiers.json` as PR tier; no child host of 2 minutes or more. |
-| §2.2 project paths follow the domain tree | PASS (to verify) | Library next to the hosts in `apps/` (a host grouping, not a domain, R-2); hosts under `apps/` and `Studio/src/apps/` like their siblings; tests under `essentials/tests/Essentials/` like the Workbench's. T001 runs the guard. |
+| §2.2 project paths follow the domain tree; §E2.1 groupings | PASS with an in-unit amendment | `ArchitectureGuardTests.ExpectedProjectPath` and `ExpectedSolutionFolder` name each `apps/` host explicitly (`Elsa.Workbench`, `Elsa.Foundation.Host`); T001/T002 add entries for `Elsa.Essentials.Composition` and `Elsa.Essentials.Server`. §E2.1 lists the host and test groupings that are not domains (`Elsa.Workbench`, `Elsa.Architecture`, `Elsa.Samples`, `Elsa.Testing`); the implementing PR adds `Elsa.Essentials` to that list (constitution updates happen in the unit that needs them). |
 | §2.5, §2.23.1 every feature composes | PASS | No feature added; the library carries none. |
 | §2.20 EF Core admission | PASS | The library references EF feature projects only through project references; it resolves no EF package itself. If the guard counts transitive resolution, the library is admitted like the Workbench. |
 | §2.23 risk-based tests | PASS | Tests cover drift, Elsa 3 leakage, merge order and secret refusal (R-6). |
@@ -121,7 +121,9 @@ docker/compose/
 ├── docker-compose.essentials.yml
 └── essentials/
     ├── appsettings.example.json
-    └── workflows/hello.json
+    └── migrated/
+        ├── workflows/hello.json
+        └── activities/activities.json   # []
 
 .github/workflows/docker.yml               # + elsa-server-essentials
 .github/workflows/studio-docker.yml        # + elsa-studio-essentials

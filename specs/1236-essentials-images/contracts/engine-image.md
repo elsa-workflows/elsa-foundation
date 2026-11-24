@@ -43,8 +43,9 @@ index 0.
 | `/app/Elsa.Essentials.Composition.dll` and the listed features' assemblies | engine image | What a derived tool composes from. |
 | Entry point `dotnet Elsa.Essentials.Server.dll` | engine image | A derived image replaces it. |
 
-A derived image uses the same version tag as its base. The engine host does not load lists or packages a derived
-image adds (R-12).
+A derived image uses the same version tag as its base. The engine host reads every list in `/app/composition/` but
+loads no packages a derived image adds; a derived image that runs the engine with an added list puts that list's
+assemblies in `/app` (R-12).
 
 ## `elsaworkflows/elsa-studio-essentials`
 

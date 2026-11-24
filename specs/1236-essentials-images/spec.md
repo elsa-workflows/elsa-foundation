@@ -230,7 +230,7 @@ activities file).
   `elsaworkflows/elsa-studio-essentials` by the existing image workflows, with the same tags and version stamping the
   Workbench and Studio images get.
 - **FR-016**: A compose file MUST start both images with mounts for `appsettings.json`, the packages folder, the
-  workflows folder and the data volume, and MUST need no other configuration than the example `appsettings.json`.
+  `migrated/` folder and the data volume, and MUST need no other configuration than the example `appsettings.json`.
 - **FR-017**: The Workbench, its image and the S-15 acceptance on the Workbench MUST NOT change.
 
 **One list**
@@ -243,8 +243,9 @@ activities file).
   listed feature's assemblies in `/app`, an entry point a derived image can replace. An image built `FROM` it adds its
   own baked list file next to the essentials list, without changing or copying it, and reads both through the
   composition library (FR-006, FR-018). The Elsa 3 migration image, which starts no web host and belongs to the
-  migration CLI's specification, is the only such image; the engine host itself does not load packages or lists a
-  derived image adds, because nothing needs that yet.
+  migration CLI's specification, is the only such image. The engine host reads every list in the folder, so a derived
+  image that runs the engine with an added list must also add that list's assemblies to `/app`; the engine does not load
+  packages a derived image adds, because nothing needs that yet.
 
 **Acceptance**
 
@@ -253,7 +254,9 @@ activities file).
   Elsa 4 templates and an environment that differs from the Workbench one only in base URL and credentials.
 - **FR-020**: Every suite that passes on the S-15 Workbench run on the same head MUST pass on the engine image. A suite
   the S-15 rules exempt (JOIN, value capture, a 3.6.3 defect, an approved incompatibility) keeps its exemption and
-  status here. A suite that passes on the Workbench and fails on the engine image is a defect of this specification.
+  status here. A suite that passes on the Workbench and fails on the engine image is a defect of this specification when the cause
+  is the composition, a setting or the host; when the cause is how the migration CLI exports or writes `migrated/`, it
+  is a defect of the CLI's specification; a converter cause follows the S-15 failure rule.
 - **FR-021**: Each acceptance run MUST be recorded with the commit, image digest, CLI version, `jtest` version and
   per-suite result next to the S-15 runs, without secret values. A failed run MUST stay recorded.
 - **FR-022**: Until the migration CLI exists, the engine image MUST be checked with one hand-written Elsa 4 workflow
@@ -288,7 +291,7 @@ activities file).
 
 - **SC-001**: On one initiative head, every suite of the S-15 acceptance set that passes on the Workbench also passes on
   the essentials engine image; zero suites pass on one and fail on the other.
-- **SC-002**: A user starts both images and runs a workflow from the workflows folder by writing only one
+- **SC-002**: A user starts both images and runs a workflow from the `migrated/` folder by writing only one
   `appsettings.json` from the documented example, with zero edits to a composition file.
 - **SC-003**: Every feature in the essentials list has a recorded reason, and none of the Workbench extras FR-002 names
   is in it.
@@ -306,7 +309,8 @@ activities file).
 - The migration CLI (`dotnet elsa elsa3-migration workflows inventory|assess`, specified in parallel) runs inside the
   Elsa 3 migration image, built `FROM` the engine (FR-024) with its Dockerfile under `extensions/Elsa3/`. It consumes
   the feature list (FR-018) and the settings merge (FR-006), and writes the `migrated/` folder FR-010 and FR-025 describe. The
-  final acceptance run (FR-019) needs its `inventory` command.
+  final acceptance run (FR-019) needs its `inventory` command. The CLI always writes `activities/activities.json`, as
+  `[]` when there are no reusables (FR-025).
 - The engine fix for source-owned composites with activity dependencies (a separate issue, handed to the coordinator)
   is needed by User Story 1 scenario 7 and by every acceptance suite whose definitions use a reusable workflow.
 - [Elsa constitution](../../.specify/memory/constitution.md) E2.7 keeps Elsa 3 behind the import boundary; the engine

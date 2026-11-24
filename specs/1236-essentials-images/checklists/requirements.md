@@ -33,5 +33,5 @@
 
 - The spec names images, Docker, SQLite, Nuplane and JTest. These are the product surface this feature delivers
   (published images, the existing acceptance corpus), not implementation choices, so they stay.
-- Q1 (new hosts) was answered by Joey; Q2 (definitions via the CLI's `converted/`) was the recommendation after Joey
+- Q1 (new hosts) was answered by Joey; Q2 (definitions via the CLI's `migrated/`) was the recommendation after Joey
   gave no preference.
