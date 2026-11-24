@@ -320,7 +320,8 @@ an owner with a different format. The first process saves an approval wait and s
 process takes the same actor at a higher epoch. Replaying the first approval leaves checkpoint bytes
 and the journal unchanged. A new approval advances the workflow. In the timed profile the approval
 atomically issues the ticket and deadline, the owner records the chosen outcome, and a separate
-Native turn applies it. The timeout workflow catches its job fault and finishes. The timed profile
+Native turn applies it. The completion workflow also starts a successor job in the first result's commit.
+The timeout workflow catches its job fault and finishes. The timed profile
 also runs an ordinary job-free workflow on the same node.
 
 The receipt checks the job insertion, result, journal and physical ticket removal. The client prints

@@ -11,6 +11,7 @@ internal sealed class DirectApprovalWorkflow : CompositeActivity, ISignalledComp
     internal const string TimeoutDefinition = "direct-approval-with-timeout";
     internal const string TimeoutBoundary = "catch-timeout";
     internal const string JobNode = "approval-job";
+    internal const string SuccessorJobNode = "approval-follow-up";
     internal const string JobResult = "approval processed";
     internal const string WaitEntry = "awaiting-approval:";
     public DirectApprovalWorkflow() { }
@@ -26,9 +27,12 @@ internal sealed class DirectApprovalWorkflow : CompositeActivity, ISignalledComp
         {
             JobTimeout = TimeSpan.FromSeconds(timesOut ? 2 : 20)
         };
-        if (timesOut) work = Wf.Node<CatchTimeout>(TimeoutBoundary).With(work);
-        return Wf.Workflow(timesOut ? TimeoutDefinition : TimedDefinition,
-            Wf.Sequence("main", Wf.Node<DirectApprovalWorkflow>("approve"), work));
+        var approve = Wf.Node<DirectApprovalWorkflow>("approve");
+        if (timesOut)
+            return Wf.Workflow(TimeoutDefinition, Wf.Sequence("main", approve, Wf.Node<CatchTimeout>(TimeoutBoundary).With(work)));
+
+        var followUp = new Node(SuccessorJobNode, typeof(ProcessApproval)) { JobTimeout = TimeSpan.FromSeconds(20) };
+        return Wf.Workflow(TimedDefinition, Wf.Sequence("main", approve, work, followUp));
     }
 
     [Background]

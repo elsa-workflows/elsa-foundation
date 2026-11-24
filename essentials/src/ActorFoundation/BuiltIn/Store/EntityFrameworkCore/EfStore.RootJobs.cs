@@ -68,9 +68,14 @@ public sealed partial class EfStore
         return row.Id == StoredJobId(key) && RootJobTicket.Read(message, row.Target, ticket.Model, timed) is not null ? message : throw RootShape();
     }
 
-    private static Message EncodeRootTimedJob(Message message) =>
+    private Message[] EncodeRootTimedSends(IReadOnlyList<Message> sends) =>
+        RootTimedJobPreviewEnabled && sends is [var deadline, var ticket] && deadline.Kind == Kinds.JobDeadline && ticket.Kind == Kinds.Job
+            ? [EncodeRootTimedJob(deadline, ticket.JobGeneration), EncodeRootTimedJob(ticket, ticket.JobGeneration)]
+            : sends.Select(message => EncodeRootTimedJob(message, message.JobGeneration)).ToArray();
+
+    private static Message EncodeRootTimedJob(Message message, long generation) =>
         (new Message(StoredJobId(message.InboxKey), message.Target, message.Kind, message.Payload, message.Sender, Due: message.Due)
-            { JobGeneration = message.JobGeneration }).WithInboxScope(RootTimedJobScope).AsKernelTicket();
+            { JobGeneration = generation }).WithInboxScope(RootTimedJobScope).AsKernelTicket();
 
     // The qualification profile keeps both rows outside store polling. The first process exits before local handover.
     internal async Task<(Message Ticket, Message Deadline, long Now)> ReadRootTimedJobIssuanceAsync(WorkerRoot root, CancellationToken token)

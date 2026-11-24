@@ -158,7 +158,7 @@ internal static class WorkbenchPostgresPreview
                 var frame = WaitFrame(initial);
                 Require(await Approve(actor, "approval-1", "Ada", frame) == Contract.AdmissionOutcome.Accepted, "first approval was admitted");
                 var waiting = await WaitFor(actor, 2);
-                Require(Native(waiting).Frames[frame].State!.AsArray().Select(item => item!.GetValue<string>()).SequenceEqual(["Ada"]),
+                Require(Native(waiting, timed).Frames[frame].State!.AsArray().Select(item => item!.GetValue<string>()).SequenceEqual(["Ada"]),
                     "the checkpoint holds the first approval");
                 var journal = await reads.TailAsync(scope, actor, cancellationToken: token);
                 Require(journal.Next is not null && journal.Items.Count(entry => Entry(entry) == "approved:approval-1" && entry.Revision == 2) == 1,
@@ -186,10 +186,12 @@ internal static class WorkbenchPostgresPreview
                     "the replay leaves checkpoint bytes and the full journal unchanged");
                 Require(await Approve(actor, "approval-2", "Grace", previous.Frame) == Contract.AdmissionOutcome.Accepted,
                     "a new approval was admitted");
-                var finalRevision = timed ? 5L : nativeJobs ? 4L : 3L;
+                var chained = timed && !timesOut;
+                var finalRevision = chained ? 7L : timed ? 5L : nativeJobs ? 4L : 3L;
                 var completion = await WaitFor(actor, finalRevision);
+                var native = Native(completion, timed);
                 Require(await reads.GetAsync(scope, actor, token) is { Header.Status: Contract.ActorStatus.Finished } &&
-                    Native(completion).Results["approve"]!.AsArray().Select(item => item!.GetValue<string>()).SequenceEqual(["Ada", "Grace"]),
+                    native.Results["approve"]!.AsArray().Select(item => item!.GetValue<string>()).SequenceEqual(["Ada", "Grace"]),
                     "the persisted result contains both approvals exactly once");
                 var suffix = await reads.TailAsync(scope, actor, bookmark, token);
                 Require(suffix.Items.Where(entry => Entry(entry) == "approved:approval-2").Select(entry => entry.Revision).SequenceEqual([3L]) &&
@@ -198,39 +200,61 @@ internal static class WorkbenchPostgresPreview
                 if (nativeJobs)
                 {
                     var resultNode = timesOut ? DirectApprovalWorkflow.TimeoutBoundary : DirectApprovalWorkflow.JobNode;
-                    Require(Native(completion).Results[resultNode]?.GetValue<string>() == (timesOut ? "timeout" : DirectApprovalWorkflow.JobResult),
+                    Require(native.Results[resultNode]?.GetValue<string>() == (timesOut ? "timeout" : DirectApprovalWorkflow.JobResult),
                         "the restarted Workbench persisted the expected job outcome");
-                    Require(suffix.Items.Where(entry => Entry(entry).StartsWith(timesOut ? "f:" : "c:", StringComparison.Ordinal) &&
-                            Entry(entry).EndsWith(":" + DirectApprovalWorkflow.JobNode, StringComparison.Ordinal))
-                            .Select(entry => entry.Revision).SequenceEqual([finalRevision]) &&
+                    var firstResultRevision = timed ? 5L : 4L;
+                    Require(OutcomeRevisions(DirectApprovalWorkflow.JobNode, timesOut).SequenceEqual([firstResultRevision]) &&
                         suffix.Items.Where(entry => Entry(entry) == "end").Select(entry => entry.Revision).SequenceEqual([finalRevision]),
-                        "one job outcome and one end appear in the final revision");
+                        "the journal records the first job outcome and one end at the expected revisions");
+                    if (chained)
+                        Require(native.Results[DirectApprovalWorkflow.SuccessorJobNode]?.GetValue<string>() == DirectApprovalWorkflow.JobResult &&
+                            OutcomeRevisions(DirectApprovalWorkflow.SuccessorJobNode, faulted: false).SequenceEqual([finalRevision]),
+                            "the successor job result advances the same workflow once");
+
+                    IEnumerable<long> OutcomeRevisions(string node, bool faulted) => suffix.Items
+                        .Where(entry => Entry(entry).StartsWith(faulted ? "f:" : "c:", StringComparison.Ordinal) &&
+                            Entry(entry).EndsWith(":" + node, StringComparison.Ordinal)).Select(entry => entry.Revision);
                     await using var observation = OpenObservation();
+                    var jobCount = chained ? 2 : 1;
                     var settled = await observation.Database.SqlQuery<bool>($"""
-                        SELECT i."Jobs" IS NULL AND i."NextJobGeneration" = 1 AND NOT EXISTS (
+                        SELECT i."Jobs" IS NULL AND i."NextJobGeneration" = {jobCount} AND NOT EXISTS (
                             SELECT 1 FROM "Messages" m WHERE m."Partition" = i."Partition" AND m."Target" = i."Id"
                                 AND (m."InboxScope" = {ticketScope} OR NOT m."Done")
                         ) AS "Value" FROM "Instances" i
                         WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
                         """).SingleAsync(token);
                     Require(settled, "settlement clears the job registry and physically removes the job ticket");
-                    var issuance = await observation.Database.SqlQuery<bool>($"""
-                        SELECT count(*) = {(timed ? 2 : 1)} AND bool_and(w."Generation" = 0 AND j."Revision" = 3)
-                            AND count(*) FILTER (WHERE w."Kind" = 'kernel.job' AND w."Due" = 0) = 1
-                            AND count(*) FILTER (WHERE w."Kind" = 'kernel.job-deadline' AND w."Due" > 0) = {(timed ? 1 : 0)} AS "Value"
-                        FROM "WorkbenchJobWitness" w JOIN "Instances" i ON i."Partition" = w."Partition" AND i."Id" = w."Target"
-                        JOIN "Journal" j ON j."Partition" = w."Partition" AND j."Instance" = w."Target" AND j.xmin = w."Transaction"
-                        WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
-                        """).SingleAsync(token);
-                    Require(issuance, "the approval commit inserted the generation-zero job and its expected deadline");
+                    await CheckIssuance(generation: 0, revision: 3);
+                    if (chained) await CheckIssuance(generation: 1, revision: 5);
+
+                    async Task CheckIssuance(long generation, long revision)
+                    {
+                        var issuance = await observation.Database.SqlQuery<bool>($"""
+                            SELECT count(*) = {(timed ? 2 : 1)} AND bool_and(w."Generation" = {generation})
+                                AND count(*) FILTER (WHERE w."Kind" = 'kernel.job' AND w."Due" = 0) = 1
+                                AND count(*) FILTER (WHERE w."Kind" = 'kernel.job-deadline' AND w."Due" > 0) = {(timed ? 1 : 0)} AS "Value"
+                            FROM "WorkbenchJobWitness" w JOIN "Instances" i ON i."Partition" = w."Partition" AND i."Id" = w."Target"
+                            JOIN "Journal" j ON j."Partition" = w."Partition" AND j."Instance" = w."Target" AND j.xmin = w."Transaction"
+                            WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id} AND j."Revision" = {revision}
+                            """).SingleAsync(token);
+                        Require(issuance, $"revision {revision} inserted job generation {generation} and its expected deadline");
+                    }
                     if (timed)
                     {
+                        var error = timesOut ? "timeout" : null;
+                        var completed = timesOut ? null : DirectApprovalWorkflow.JobResult;
                         var result = await observation.Database.SqlQuery<bool>($"""
-                            SELECT count(*) = 1 AND bool_and(w."Generation" = 0 AND w."Transaction" <> i.xmin AND w."Due" = 0)
-                                AS "Value" FROM "WorkbenchJobWitness" w JOIN "Instances" i ON i."Partition" = w."Partition" AND i."Id" = w."Target"
+                            SELECT count(*) = {jobCount} AND count(DISTINCT w."Generation") = {jobCount} AND bool_and(
+                                w."Generation" >= 0 AND w."Generation" < {jobCount} AND w."Due" = 0
+                                AND c."Revision" = 4 + 2 * w."Generation" AND c."Status" = 0
+                                AND (w."Payload"::jsonb ->> 'Error') IS NOT DISTINCT FROM {error}
+                                AND ((w."Payload"::jsonb ->> 'Result')::jsonb ->> 'Result') IS NOT DISTINCT FROM {completed}) AS "Value"
+                            FROM "WorkbenchJobWitness" w JOIN "Instances" i ON i."Partition" = w."Partition" AND i."Id" = w."Target"
+                            JOIN "WorkbenchCheckpointWitness" c ON c."Partition" = w."Partition" AND c."Target" = w."Target"
+                                AND c."Transaction" = w."Transaction"
                             WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id} AND w."Kind" = 'job-finished'
                             """).SingleAsync(token);
-                        Require(result, "one physical timed result was recorded before the Native application commit");
+                        Require(result, "each timed generation recorded the expected result in its own running checkpoint");
                     }
                 }
                 last = completion;
@@ -402,16 +426,25 @@ internal static class WorkbenchPostgresPreview
     private static Task<int> InstallJobWitnessAsync(KernelDb db, int ticketScope, CancellationToken token)
     {
         var sql = FormattableString.Invariant($"""
-            CREATE TABLE "WorkbenchJobWitness" ("Partition" int, "Target" text, "Generation" bigint, "Transaction" xid, "Kind" text, "Due" bigint);
+            CREATE TABLE "WorkbenchJobWitness" ("Partition" int, "Target" text, "Generation" bigint, "Transaction" xid, "Kind" text, "Due" bigint, "Payload" text);
+            CREATE TABLE "WorkbenchCheckpointWitness" ("Partition" int, "Target" text, "Revision" bigint, "Status" integer, "Transaction" xid);
             CREATE FUNCTION capture_workbench_job() RETURNS trigger LANGUAGE plpgsql AS $fn$
             BEGIN
                 IF NEW."InboxScope" = {ticketScope} THEN
-                    INSERT INTO "WorkbenchJobWitness" VALUES (NEW."Partition", NEW."Target", NEW."JobGeneration", NEW.xmin, NEW."Kind", NEW."Due");
+                    INSERT INTO "WorkbenchJobWitness" VALUES (NEW."Partition", NEW."Target", NEW."JobGeneration", NEW.xmin, NEW."Kind", NEW."Due", NEW."Payload");
                 END IF;
                 RETURN NEW;
             END;
             $fn$;
             CREATE TRIGGER capture_workbench_job AFTER INSERT ON "Messages" FOR EACH ROW EXECUTE FUNCTION capture_workbench_job();
+            CREATE FUNCTION capture_workbench_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $fn$
+            BEGIN
+                INSERT INTO "WorkbenchCheckpointWitness" VALUES (NEW."Partition", NEW."Id", NEW."Revision", NEW."Status", NEW.xmin);
+                RETURN NEW;
+            END;
+            $fn$;
+            CREATE TRIGGER capture_workbench_checkpoint AFTER UPDATE OF "Revision" ON "Instances" FOR EACH ROW
+                EXECUTE FUNCTION capture_workbench_checkpoint();
             """);
         return db.Database.ExecuteSqlRawAsync(sql, token);
     }
@@ -432,11 +465,9 @@ internal static class WorkbenchPostgresPreview
         return parsed.RootElement.ValueKind == JsonValueKind.String ? parsed.RootElement.GetString()! : "";
     }
 
-    private static NativeState Native(Checkpoint checkpoint)
+    private static NativeState Native(Checkpoint checkpoint, bool timed)
     {
-        const string timed = "!kernel-state/6:public-root-timed-jobs:";
-        const string ordinary = "!kernel-state/4:public-root:";
-        var prefix = checkpoint.State.StartsWith(timed, StringComparison.Ordinal) ? timed : ordinary;
+        var prefix = timed ? "!kernel-state/6:public-root-timed-jobs:" : "!kernel-state/4:public-root:";
         Require(checkpoint.State.StartsWith(prefix, StringComparison.Ordinal), "the state uses the expected preview framing");
         return JsonSerializer.Deserialize<NativeState>(checkpoint.State[prefix.Length..])!;
     }

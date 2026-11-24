@@ -254,7 +254,7 @@ public sealed partial class EfStore
     }
 
     private sealed record RootCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> Commands, IReadOnlyDictionary<string, long> Revisions,
-        bool JobProfile, bool TimedJobIssuance, bool TimedJobSettlement, bool ValueProfile, IReadOnlySet<string> DeferredJournal)
+        bool JobProfile, bool TimedJobIssuance, bool TimedJobSettlement, bool TimedJobPreview, bool ValueProfile, IReadOnlySet<string> DeferredJournal)
         : QualifiedRootCheckpoint(0)
     {
         internal override long RevisionFor(string actor) => Revisions[actor];
@@ -267,7 +267,8 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             if (db.UsesRootJobProtocol != JobProfile || db.UsesRootTimedJobIssuance != TimedJobIssuance ||
-                db.UsesRootTimedJobSettlement != TimedJobSettlement || db.UsesRootValueProtocol != ValueProfile) return false;
+                db.UsesRootTimedJobSettlement != TimedJobSettlement || db.UsesRootTimedJobPreview != TimedJobPreview ||
+                db.UsesRootValueProtocol != ValueProfile) return false;
             foreach (var command in Commands)
                 if (!await command.BindCheckpointAsync(db, cancellationToken)) return false;
             return true;
@@ -340,7 +341,7 @@ public sealed partial class EfStore
             commands.Add(checkpoint);
         }
         return (batch with { Turns = turns, Seen = [], Trial = [] },
-            new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled, RootTimedJobSettlementEnabled, RootValuesEnabled, deferred));
+            new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled, RootTimedJobSettlementEnabled, RootTimedJobPreviewEnabled, RootValuesEnabled, deferred));
     }
 
     private static bool InputsMatch(WorkerRoot root, TurnCommit turn, bool jobs = false) =>
@@ -407,7 +408,7 @@ public sealed partial class EfStore
 
         if (RootTimedJobIssuanceEnabled && turn.Expected is not null ||
             RootTimedJobs && !RootTimedJobPreviewEnabled && turn.Expected is null && !RootJobTicket.StartsTimedPair(turn.Sent, root.Actor, row.Model)) throw RootShape();
-        var wires = RootTimedJobs ? turn.Sent.Select(EncodeRootTimedJob).ToArray() :
+        var wires = RootTimedJobs ? EncodeRootTimedSends(turn.Sent) :
             turn.Sent.Select((message, index) => RootJobsEnabled && message.Kind == Kinds.Job
                 ? EncodeRootJob(message, root, row.Model) : EncodeRootSelf(root, row.Revision, index, message)).ToArray();
         var jobState = RootJobsEnabled ? new RootJobState(row.Jobs, row.NextJobGeneration) : null;
