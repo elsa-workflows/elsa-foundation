@@ -232,7 +232,7 @@ internal static class ActivitiesDesignProviderSmoke
             Assert.False(await context.ActivityDefinitionManagementProjections
                 .Where(x => x.ResourceId == escapedProjection.ResourceId)
                 .Select(x => x.ContentAuthorityIsValid).SingleAsync());
-            await context.Database.ExecuteSqlRawAsync(string.Concat("UPDATE ", table, " SET ", authorityKeyTokenColumn, " = {0} WHERE ", resourceColumn, " = {1}"), JsonSerializer.Serialize(escapedProjection.ContentAuthority!.AuthorityKey), escapedProjection.ResourceId);
+            await context.Database.ExecuteSqlRawAsync(string.Concat("UPDATE ", table, " SET ", authorityKeyTokenColumn, " = {0} WHERE ", resourceColumn, " = {1}"), JsonSerializer.Serialize(escapedProjection.ContentAuthority!.AuthorityKey, Elsa.Serialization.Core.JsonBaseline.Options), escapedProjection.ResourceId);
             Assert.True(await context.ActivityDefinitionManagementProjections
                 .Where(x => x.ResourceId == escapedProjection.ResourceId)
                 .Select(x => x.ContentAuthorityIsValid).SingleAsync());

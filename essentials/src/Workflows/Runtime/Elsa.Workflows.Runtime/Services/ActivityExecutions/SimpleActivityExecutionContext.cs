@@ -98,15 +98,6 @@ public sealed class SimpleActivityExecutionContext(
     private readonly List<RuntimeParentNotificationRequest> _parentNotificationRequests = [];
     private readonly List<RuntimeAncestorNotificationRequest> _ancestorNotificationRequests = [];
 
-    public Elsa.Expressions.Core.Contracts.IExecutionWarningSink? Warnings { get; private set; }
-
-    /// <summary>Connects orchestration conversion/evaluation warnings to the owning durable checkpoint.</summary>
-    public SimpleActivityExecutionContext WithWarnings(Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings)
-    {
-        Warnings = warnings;
-        return this;
-    }
-
     public IActivity Activity { get; } = activity;
     public CancellationToken CancellationToken { get; } = cancellationToken;
     public string WorkflowExecutionId { get; } = workflowExecutionId ?? string.Empty;

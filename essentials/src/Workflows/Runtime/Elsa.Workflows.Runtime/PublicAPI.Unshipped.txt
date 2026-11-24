@@ -272,7 +272,6 @@ Elsa.Workflows.Runtime.Services.ActivityExecutions.SimpleActivityExecutionContex
 Elsa.Workflows.Runtime.Services.ActivityExecutions.SimpleActivityExecutionContext.TryReadScopedVariableValue(string! variableName, out Elsa.Workflows.Runtime.Core.Models.ValueEnvelope? envelope) -> bool
 Elsa.Workflows.Runtime.Services.ActivityExecutions.SimpleActivityExecutionContext.VariableScope.get -> Elsa.Expressions.Core.Models.VariableScope?
 Elsa.Workflows.Runtime.Services.ActivityExecutions.SimpleActivityExecutionContext.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
-Elsa.Workflows.Runtime.Services.ActivityExecutions.SimpleActivityExecutionContext.WithWarnings(Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings) -> Elsa.Workflows.Runtime.Services.ActivityExecutions.SimpleActivityExecutionContext!
 Elsa.Workflows.Runtime.Services.ActivityExecutions.SimpleActivityExecutionContext.WorkflowExecutionId.get -> string!
 Elsa.Workflows.Runtime.Services.ActivityExecutions.ValidateActivityExecutionHierarchyCursorCodecStartupTask
 Elsa.Workflows.Runtime.Services.ActivityExecutions.ValidateActivityExecutionHierarchyCursorCodecStartupTask.ExecuteAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!

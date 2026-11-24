@@ -128,12 +128,46 @@ internal static class ArchivedEtlRows
             var values = new List<string>();
             while (await rows.ReadAsync())
             {
-                var row = new object[rows.FieldCount];
-                rows.GetValues(row);
+                var row = Enumerable.Range(0, rows.FieldCount).Select(index => Cell(rows.GetValue(index))).ToArray();
                 values.Add(JsonSerializer.Serialize(row, Elsa.Serialization.Core.JsonBaseline.Options));
             }
             result.AddRange(values.Order(StringComparer.Ordinal).Select(value => table + ":" + value));
         }
         return result.ToArray();
+    }
+
+    private static object Cell(object value) => value switch
+    {
+        DBNull => new { storageClass = "null", value = (object?)null },
+        byte[] bytes => new { storageClass = "blob", value = (object)bytes },
+        string text => new { storageClass = "text", value = (object)text },
+        long integer => new { storageClass = "integer", value = (object)integer },
+        double number => new { storageClass = "real", value = (object)number },
+        _ => throw new InvalidDataException("Unexpected SQLite storage class: " + value.GetType())
+    };
+}
+
+public sealed class ArchivedEtlRowsStorageClassTests
+{
+    [Fact]
+    public async Task A_blob_and_its_base64_text_cannot_share_a_physical_row_snapshot()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "s9-etl-storage-class-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var database = Path.Combine(directory, "rows.db");
+            await using var connection = new SqliteConnection($"Data Source={database};Pooling=False");
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "CREATE TABLE witness(value); INSERT INTO witness VALUES(X'0102');";
+            await command.ExecuteNonQueryAsync();
+            var blob = await ArchivedEtlRows.ReadAsync(database);
+            command.CommandText = "UPDATE witness SET value='AQI=';";
+            await command.ExecuteNonQueryAsync();
+            var text = await ArchivedEtlRows.ReadAsync(database);
+            Assert.NotEqual(Assert.Single(blob), Assert.Single(text));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
     }
 }
