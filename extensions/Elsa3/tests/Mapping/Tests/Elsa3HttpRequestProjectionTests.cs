@@ -207,7 +207,7 @@ public sealed class Elsa3HttpRequestProjectionTests
 
     private static ExpressionDefinition ReadExpression(ArgumentState argument) =>
         (argument.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(argument.Value.Value))
-        .Deserialize<ExpressionDefinition>()!;
+        .Deserialize<ExpressionDefinition>(Elsa.Serialization.Core.JsonBaseline.Options)!;
 
     private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertAsync(Elsa3Activity root, params Elsa3Variable[] variables) =>
         ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: variables));

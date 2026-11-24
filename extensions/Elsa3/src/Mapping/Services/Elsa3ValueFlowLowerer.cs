@@ -256,7 +256,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                     {
                         referenceKey = variableMatches[0].Id,
                         declaringScopeId = VariableReference.WorkflowScopeId,
-                    }));
+                    }, JsonBaseline.Options));
                 continue;
             }
 
@@ -314,7 +314,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                     {
                         declaringScopeId = producer.ActivityNodeId,
                         referenceKey = producer.StablePropertyKey,
-                    }));
+                    }, JsonBaseline.Options));
                 continue;
             }
 
@@ -352,7 +352,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                     producerNodeId = producer.ActivityNodeId,
                     projectionKey = producer.StablePropertyKey,
                     producerScopeId = producer.StructuralFrameId,
-                }));
+                }, JsonBaseline.Options));
         }
 
         return diagnostics;
@@ -542,7 +542,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
         void Bind(string scope, string key) =>
             property.Activity.AdditionalProperties[property.PropertyName] = CreateArgument(property.Value, "Variable",
-                JsonSerializer.SerializeToElement(new { referenceKey = key, declaringScopeId = scope }));
+                JsonSerializer.SerializeToElement(new { referenceKey = key, declaringScopeId = scope }, JsonBaseline.Options));
 
         void Refuse(string code, string message, string guidance, string? id = null) =>
             diagnostics.Add(CreateDiagnostic(input, property, code, message, guidance, path, id));
@@ -681,7 +681,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         property.Activity.AdditionalProperties[property.PropertyName] = CreateArgument(
             property.Value,
             rewrite.Definition!.Language,
-            JsonSerializer.SerializeToElement(rewrite.Definition));
+            JsonSerializer.SerializeToElement(rewrite.Definition, JsonBaseline.Options));
         AddConversionNotes(input, property, rewrite, diagnostics);
 
         // Spec 1222 FR-031: a computed read is served by the Elsa 4 run-time lookup, nearest scope first. Where a name
@@ -775,7 +775,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 {
                     referenceKey = memoryId,
                     declaringScopeId = VariableReference.WorkflowScopeId,
-                }));
+                }, JsonBaseline.Options));
             return;
         }
 
@@ -815,7 +815,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 {
                     declaringScopeId = loop.ActivityNodeId,
                     referenceKey = loop.StablePropertyKey,
-                }));
+                }, JsonBaseline.Options));
             return;
         }
 
@@ -947,14 +947,14 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
         var members = argumentParameters.Keys
             .Order(StringComparer.Ordinal)
-            .Select(name => $"{JsonSerializer.Serialize(name)}: {ArgumentAccess(name)}");
+            .Select(name => $"{JsonSerializer.Serialize(name, JsonBaseline.Options)}: {ArgumentAccess(name)}");
         var argumentsType = inputTypeOf?.Invoke(property.Activity, ScriptArgumentsKey) ?? new TypeReference(TypeAliasConvention.AnyAlias);
         var arguments = new ExpressionDefinition(
             "JavaScript",
             $"({{ {string.Join(", ", members)} }})",
             argumentsType,
             argumentParameters,
-            JsonSerializer.SerializeToElement(new { }),
+            JsonSerializer.SerializeToElement(new { }, JsonBaseline.Options),
             ExpressionCapabilityProfiles.BindingReadonlyV1);
         property.Activity.AdditionalProperties[ScriptArgumentsKey] = JsonSerializer.SerializeToElement(new JsonObject
         {
@@ -1031,9 +1031,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             return;
 
         var original = possibleOutcomesKey is null
-            ? JsonSerializer.SerializeToElement(new { typeName = "System.Collections.Generic.ICollection`1[[System.String]]" })
+            ? JsonSerializer.SerializeToElement(new { typeName = "System.Collections.Generic.ICollection`1[[System.String]]" }, JsonBaseline.Options)
             : property.Activity.AdditionalProperties[possibleOutcomesKey];
-        property.Activity.AdditionalProperties[key] = Elsa3Literal(original, JsonSerializer.Serialize(declared));
+        property.Activity.AdditionalProperties[key] = Elsa3Literal(original, JsonSerializer.Serialize(declared, JsonBaseline.Options));
 
         if (conversion.CatchAll is { } catchAll)
         {
@@ -1058,7 +1058,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         name.Length > 0 && (char.IsLetter(name[0]) || name[0] is '_' or '$') &&
         name.Skip(1).All(character => char.IsLetterOrDigit(character) || character is '_' or '$')
             ? $"args.{name}"
-            : $"args[{JsonSerializer.Serialize(name)}]";
+            : $"args[{JsonSerializer.Serialize(name, JsonBaseline.Options)}]";
 
     private static Elsa3ExpressionParameterResolution ResolveAmbient(
         Elsa3WorkflowDefinition definition,
