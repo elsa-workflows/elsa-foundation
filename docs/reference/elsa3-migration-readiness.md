@@ -24,6 +24,11 @@ Variables of date/time, TimeSpan or Guid types without a starting value report
 `ELS3-INPUT-DEFAULT-REQUIRED`. Declare a starting default or type the member String / Any before converting. Elsa 3
 3.6.3 has no required/default metadata on workflow inputs, so its inputs convert as optional.
 
+A variable of a custom type Elsa 4 does not register converts as Any and reports the info
+`ELS3-VARIABLE-TYPE-UNREGISTERED`; register the type under a dotted alias in an Elsa 4 feature and convert again to keep
+it. A variable on a custom Elsa 3 storage driver Elsa 4 does not register is refused with
+`ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED`; use the default storage, or register the driver, before converting.
+
 Built-in null audit: WriteLine Text and SendHttpRequest Method now declare the null their implementations already
 handle (blank line and GET). URL/path, event name and workflow-definition identifiers still need real values; the
 converter retains its existing per-member refusal/default corrections. No type default is invented for a non-nullable

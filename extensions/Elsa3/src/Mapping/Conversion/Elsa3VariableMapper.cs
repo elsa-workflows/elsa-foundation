@@ -5,12 +5,16 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Core.Options;
+using Elsa3.Mapping.Services;
 using Elsa3.Models;
 
 namespace Elsa3.Mapping.Conversion;
 
-/// <summary>Why a variable's starting value is refused, and how to fix it in the Elsa 3 workflow.</summary>
-internal sealed record Elsa3VariableRefusal(string Message, string Guidance);
+/// <summary>Why a variable is refused, and how to fix it in the Elsa 3 workflow; <paramref name="Code"/> is the diagnostic code.</summary>
+internal sealed record Elsa3VariableRefusal(string Message, string Guidance, string Code = Elsa3ActivityDiagnosticCodes.VariableValueUnconvertible);
+
+/// <summary>Something a migrator should know about a variable that converts: what changed, and what to do about it.</summary>
+internal sealed record Elsa3VariableNotice(string Message, string Guidance);
 
 /// <summary>
 /// Maps an Elsa 3 variable declaration to an Elsa 4 <see cref="VariableDefinition"/> (spec 264). Elsa 3 stored a
@@ -73,7 +77,24 @@ internal static class Elsa3VariableMapper
         return typeName is "Elsa.Workflows.WorkflowInstanceStorageDriver" or "WorkflowInstanceStorageDriver";
     }
 
-    /// <summary>Maps <paramref name="source"/>, or returns <c>false</c> with the refusal when its starting value cannot start as it did in Elsa 3.</summary>
+    /// <summary>
+    /// The info a variable whose Elsa 3 type Elsa 4 does not register gets (#5666): it converts as Any, and keeps its type
+    /// once an Elsa 4 feature registers the type. <c>null</c> for a type Elsa 4 knows, and for a shape that is Any
+    /// whatever is registered (a nested collection, a collection of dictionaries).
+    /// </summary>
+    internal static Elsa3VariableNotice? DescribeUnregisteredType(IWellKnownTypeRegistry wellKnownTypeRegistry, Elsa3Variable source)
+    {
+        var typeName = string.IsNullOrWhiteSpace(source.TypeName) ? Elsa3ObjectTypeName : source.TypeName.Trim();
+        if (Resolve(wellKnownTypeRegistry, typeName, source.IsArray).UnregisteredType is not { } unregistered)
+            return null;
+
+        var which = string.Equals(unregistered, typeName, StringComparison.Ordinal) ? "which" : $"whose element type '{unregistered}'";
+        return new(
+            $"Variable '{source.Name}' has the Elsa 3 type '{typeName}', {which} is not registered in Elsa 4, so the variable converts as Any. It runs as Any until an Elsa 4 feature registers the type under a dotted alias.",
+            $"To keep the type, register '{unregistered}' in Elsa 4's well-known type registry under a dotted alias with a feature, then convert the workflow again. Otherwise no action is needed.");
+    }
+
+    /// <summary>Maps <paramref name="source"/>, or returns <c>false</c> with the refusal when it cannot be converted: a resource type, a storage driver Elsa 4 does not register, or a starting value that cannot start as it did in Elsa 3.</summary>
     public static bool TryMap(
         IWellKnownTypeRegistry wellKnownTypeRegistry,
         IObjectConverter objectConverter,
@@ -98,6 +119,17 @@ internal static class Elsa3VariableMapper
             refusal = new(
                 $"Variable '{source.Name}' has the type '{typeName}', a resource (a file, a stream or raw bytes) Elsa 4 cannot hold yet, so it cannot be converted.",
                 "Elsa 4 has no counterpart for resource variables yet; they are tracked in #3194. Remove the variable from the Elsa 3 workflow, or convert this workflow once Elsa 4 supports it.");
+            return false;
+        }
+
+        // A storage driver other than Elsa 3's default kept the value somewhere Elsa 4 knows nothing about unless a feature
+        // registers the driver, so it is refused here instead of failing at publish or run (#5666).
+        if (storageDriverType is not null && !IsRegistered(wellKnownTypeRegistry, source.StorageDriverTypeName!))
+        {
+            refusal = new(
+                $"Variable '{source.Name}' uses the Elsa 3 storage driver '{source.StorageDriverTypeName!.Trim()}', which is not registered in Elsa 4, so it cannot be converted.",
+                "In the Elsa 3 workflow, set the variable's storage back to the default (the workflow instance), or have an Elsa 4 feature register the driver type under a dotted alias, then convert again.",
+                Elsa3ImportDiagnosticCodes.VariableStorageDriverUnmapped);
             return false;
         }
 
@@ -212,7 +244,7 @@ internal static class Elsa3VariableMapper
         if (isCollection)
         {
             if (!TryResolveKnown(registry, elementName, out var elementType, out var elementAlias))
-                return new(ShapeKind.Unknown, new TypeReference(AnyAlias), null);
+                return new(ShapeKind.Unknown, new TypeReference(AnyAlias), null, UnregisteredType: InnermostUnregistered(registry, elementName));
             return new(
                 ShapeKind.Collection,
                 new TypeReference(elementAlias, kind),
@@ -227,7 +259,29 @@ internal static class Elsa3VariableMapper
             return new(ShapeKind.Scalar, TypeReferenceFactory.FromClrType(scalarType, registry.GetAliasOrDefault), scalarType);
 
         // A type Elsa 4's registry does not know runs as Any.
-        return new(ShapeKind.Unknown, new TypeReference(AnyAlias), null);
+        return new(ShapeKind.Unknown, new TypeReference(AnyAlias), null, UnregisteredType: typeName);
+    }
+
+    /// <summary>
+    /// The innermost element of a collection whose element Elsa 4 does not know, when that element is itself unregistered.
+    /// <c>null</c> when only the nesting is unsupported (<c>List&lt;List&lt;String&gt;&gt;</c>, <c>ObjectDictionary[]</c>):
+    /// registering a type would not change that.
+    /// </summary>
+    private static string? InnermostUnregistered(IWellKnownTypeRegistry registry, string elementName)
+    {
+        // Each step strips a List<> or [] from a non-empty name, so the loop ends.
+        while (TryReadCollection(elementName, out var inner, out _))
+            elementName = inner;
+        return IsObjectAlias(elementName) || DictionaryTypes.ContainsKey(elementName) || TryResolveKnown(registry, elementName, out _, out _)
+            ? null
+            : elementName;
+    }
+
+    /// <summary>Whether Elsa 4's registry knows the type <paramref name="typeName"/> resolves to.</summary>
+    private static bool IsRegistered(IWellKnownTypeRegistry registry, string typeName)
+    {
+        var type = LegacyClrTypeResolver.Resolve(registry, typeName.Trim());
+        return type != typeof(object) && registry.TryGetTypeOrDefault(registry.GetAliasOrDefault(type), out _);
     }
 
     /// <summary>Whether <paramref name="typeName"/>, or the element of a collection of it, is a <see cref="ResourceTypes">resource</see>.</summary>
@@ -356,5 +410,6 @@ internal static class Elsa3VariableMapper
     private enum ShapeKind { Text, Scalar, Collection, Dictionary, Unknown, Resource }
 
     /// <param name="ClrType">The CLR type the starting value converts to; <c>null</c> when it is kept as parsed JSON (a dictionary) or the type is unknown.</param>
-    private sealed record VariableShape(ShapeKind Kind, TypeReference Type, Type? ClrType, bool ElementIsText = true, string? Example = null);
+    /// <param name="UnregisteredType">For an unknown shape, the Elsa 3 type name Elsa 4 does not register; <c>null</c> when only the nesting is unsupported.</param>
+    private sealed record VariableShape(ShapeKind Kind, TypeReference Type, Type? ClrType, bool ElementIsText = true, string? Example = null, string? UnregisteredType = null);
 }
