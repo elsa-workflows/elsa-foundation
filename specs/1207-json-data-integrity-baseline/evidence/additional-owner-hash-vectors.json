@@ -1,0 +1,2470 @@
+[
+  {
+    "name": "selection/base",
+    "assembly": "Elsa.Activities.Design.Api",
+    "type": "Elsa.Activities.Design.Api.Services.ActivityDataSelectionSnapshot",
+    "method": "Hash",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "sha256:4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "fork-material/base",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityForkMaterialFingerprint",
+    "method": "Compute",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "sha256:4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "default/base",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "DefaultHash",
+    "arguments": [
+      {
+        "typedJson": "{\"syntax\":\"Literal\",\"value\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}}"
+      }
+    ],
+    "canonical": "{\"syntax\":\"Literal\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}}",
+    "expected": "sha256-c5bd8b3bfb8943a762d3caf7c708c906000c88b7515acc56232a6c92abe9051f"
+  },
+  {
+    "name": "element/base",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashElement",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "sha256-4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "ui/base",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashUi",
+    "arguments": [
+      {
+        "text": "json-editor"
+      },
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"hint\":\"json-editor\",\"specifications\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}}",
+    "expected": "sha256-d80fcc6a1ac02b6a223611528fee6fd01ca87d18c5253383219e92ac0b3d3ad5"
+  },
+  {
+    "name": "atomic-command/base",
+    "assembly": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.EfDesignAtomicCommand",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "4AD5669C9E2C2D62B13796DBC77609FBE0CBF90D7350123AD5D6409B94E1B91F"
+  },
+  {
+    "name": "human-review/base",
+    "assembly": "Elsa.Agent.Review",
+    "type": "Elsa.Agent.Review.Services.ReviewDecisionCodec",
+    "method": "HashContent",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "weaver-typed/base",
+    "assembly": "Elsa.Weaver",
+    "type": "Elsa.Weaver.Services.WeaverInvocationIntegrity",
+    "method": "Digest",
+    "arguments": [
+      {
+        "typedJson": "{\"typeId\":\"form-\u00e9\",\"schemaVersion\":\"1\",\"data\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}}"
+      }
+    ],
+    "canonical": "{\"data\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]},\"schemaVersion\":\"1\",\"typeId\":\"form-\\u00E9\"}",
+    "expected": "832e17d82096eabdad9c484a0e7b2188b6e9dabeb4a08a88cf21fa1f90ccfbc6",
+    "genericType": "Elsa.Weaver.Core.Models.WeaverPayload",
+    "genericAssembly": "Elsa.Weaver.Core"
+  },
+  {
+    "name": "layout/base",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityLayoutHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "typedJson": "[{\"nodeId\":\"node-B\",\"data\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}},{\"nodeId\":\"node-A\",\"data\":null}]"
+      }
+    ],
+    "canonical": "[{\"data\":null,\"nodeId\":\"node-A\"},{\"data\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]},\"nodeId\":\"node-B\"}]",
+    "expected": "sha256-fcb853d93e77816671475bd2e5e836f566960378b17ed45904a482f67c64a15e",
+    "frameHex": "060000006e6f64652d41040000006e756c6c060000006e6f64652d42410000007b224f776e65724b6579223a2252656e5c7530304539222c226e223a3930303731393932353437343039393365302c22726f7773223a5b3165302c6e756c6c5d7d"
+  },
+  {
+    "name": "selection/spelling",
+    "assembly": "Elsa.Activities.Design.Api",
+    "type": "Elsa.Activities.Design.Api.Services.ActivityDataSelectionSnapshot",
+    "method": "Hash",
+    "arguments": [
+      {
+        "rawJson": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "sha256:4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "fork-material/spelling",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityForkMaterialFingerprint",
+    "method": "Compute",
+    "arguments": [
+      {
+        "rawJson": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "sha256:4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "default/spelling",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "DefaultHash",
+    "arguments": [
+      {
+        "typedJson": "{\"syntax\":\"Literal\",\"value\": { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } }"
+      }
+    ],
+    "canonical": "{\"syntax\":\"Literal\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}}",
+    "expected": "sha256-c5bd8b3bfb8943a762d3caf7c708c906000c88b7515acc56232a6c92abe9051f"
+  },
+  {
+    "name": "element/spelling",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashElement",
+    "arguments": [
+      {
+        "rawJson": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "sha256-4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "ui/spelling",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashUi",
+    "arguments": [
+      {
+        "text": "json-editor"
+      },
+      {
+        "rawJson": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"hint\":\"json-editor\",\"specifications\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}}",
+    "expected": "sha256-d80fcc6a1ac02b6a223611528fee6fd01ca87d18c5253383219e92ac0b3d3ad5"
+  },
+  {
+    "name": "atomic-command/spelling",
+    "assembly": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.EfDesignAtomicCommand",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "text": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "4AD5669C9E2C2D62B13796DBC77609FBE0CBF90D7350123AD5D6409B94E1B91F"
+  },
+  {
+    "name": "human-review/spelling",
+    "assembly": "Elsa.Agent.Review",
+    "type": "Elsa.Agent.Review.Services.ReviewDecisionCodec",
+    "method": "HashContent",
+    "arguments": [
+      {
+        "rawJson": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "weaver-typed/spelling",
+    "assembly": "Elsa.Weaver",
+    "type": "Elsa.Weaver.Services.WeaverInvocationIntegrity",
+    "method": "Digest",
+    "arguments": [
+      {
+        "typedJson": "{\"typeId\":\"form-\u00e9\",\"schemaVersion\":\"1\",\"data\": { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } }"
+      }
+    ],
+    "canonical": "{\"data\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]},\"schemaVersion\":\"1\",\"typeId\":\"form-\\u00E9\"}",
+    "expected": "832e17d82096eabdad9c484a0e7b2188b6e9dabeb4a08a88cf21fa1f90ccfbc6",
+    "genericType": "Elsa.Weaver.Core.Models.WeaverPayload",
+    "genericAssembly": "Elsa.Weaver.Core"
+  },
+  {
+    "name": "layout/spelling",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityLayoutHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "typedJson": "[{\"nodeId\":\"node-B\",\"data\": { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } },{\"nodeId\":\"node-A\",\"data\":null}]"
+      }
+    ],
+    "canonical": "[{\"data\":null,\"nodeId\":\"node-A\"},{\"data\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]},\"nodeId\":\"node-B\"}]",
+    "expected": "sha256-fcb853d93e77816671475bd2e5e836f566960378b17ed45904a482f67c64a15e",
+    "frameHex": "060000006e6f64652d41040000006e756c6c060000006e6f64652d42410000007b224f776e65724b6579223a2252656e5c7530304539222c226e223a3930303731393932353437343039393365302c22726f7773223a5b3165302c6e756c6c5d7d"
+  },
+  {
+    "name": "selection/missing",
+    "assembly": "Elsa.Activities.Design.Api",
+    "type": "Elsa.Activities.Design.Api.Services.ActivityDataSelectionSnapshot",
+    "method": "Hash",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "sha256:aaa637899be4a75616df0a78eb3c8c9798349e57095043d932e117ee654e8c4c"
+  },
+  {
+    "name": "fork-material/missing",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityForkMaterialFingerprint",
+    "method": "Compute",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "sha256:aaa637899be4a75616df0a78eb3c8c9798349e57095043d932e117ee654e8c4c"
+  },
+  {
+    "name": "default/missing",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "DefaultHash",
+    "arguments": [
+      {
+        "typedJson": "{\"syntax\":\"Literal\",\"value\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}}"
+      }
+    ],
+    "canonical": "{\"syntax\":\"Literal\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}}",
+    "expected": "sha256-e2d4fd0d16e67c592af2f33a8001532821d8b2e0ed72d68ff93a766d5d170756"
+  },
+  {
+    "name": "element/missing",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashElement",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "sha256-aaa637899be4a75616df0a78eb3c8c9798349e57095043d932e117ee654e8c4c"
+  },
+  {
+    "name": "ui/missing",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashUi",
+    "arguments": [
+      {
+        "text": "json-editor"
+      },
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"hint\":\"json-editor\",\"specifications\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}}",
+    "expected": "sha256-e6a95079ee7279fd4d903ded19c8e0b6b42adced659c1f07d4c233885f083a91"
+  },
+  {
+    "name": "atomic-command/missing",
+    "assembly": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.EfDesignAtomicCommand",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "AAA637899BE4A75616DF0A78EB3C8C9798349E57095043D932E117EE654E8C4C"
+  },
+  {
+    "name": "human-review/missing",
+    "assembly": "Elsa.Agent.Review",
+    "type": "Elsa.Agent.Review.Services.ReviewDecisionCodec",
+    "method": "HashContent",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "aaa637899be4a75616df0a78eb3c8c9798349e57095043d932e117ee654e8c4c"
+  },
+  {
+    "name": "weaver-typed/missing",
+    "assembly": "Elsa.Weaver",
+    "type": "Elsa.Weaver.Services.WeaverInvocationIntegrity",
+    "method": "Digest",
+    "arguments": [
+      {
+        "typedJson": "{\"typeId\":\"form-\u00e9\",\"schemaVersion\":\"1\",\"data\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}}"
+      }
+    ],
+    "canonical": "{\"data\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0},\"schemaVersion\":\"1\",\"typeId\":\"form-\\u00E9\"}",
+    "expected": "d30f5433942cc7efea6d7af49b5c44298f55b198d2303d5de7392ce71bfc09ec",
+    "genericType": "Elsa.Weaver.Core.Models.WeaverPayload",
+    "genericAssembly": "Elsa.Weaver.Core"
+  },
+  {
+    "name": "layout/missing",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityLayoutHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "typedJson": "[{\"nodeId\":\"node-B\",\"data\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}},{\"nodeId\":\"node-A\",\"data\":null}]"
+      }
+    ],
+    "canonical": "[{\"data\":null,\"nodeId\":\"node-A\"},{\"data\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0},\"nodeId\":\"node-B\"}]",
+    "expected": "sha256-38c82855397f075db943b0a502569d395bec15ec76e049a45de03e6c287f7cb8",
+    "frameHex": "060000006e6f64652d41040000006e756c6c060000006e6f64652d422f0000007b224f776e65724b6579223a2252656e5c7530304539222c226e223a3930303731393932353437343039393365307d"
+  },
+  {
+    "name": "selection/null",
+    "assembly": "Elsa.Activities.Design.Api",
+    "type": "Elsa.Activities.Design.Api.Services.ActivityDataSelectionSnapshot",
+    "method": "Hash",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "sha256:d27f0ae7fbcebdf5018ac5f421bcf1a7d9f1b006a4fd41df36d51e818fb828cc"
+  },
+  {
+    "name": "fork-material/null",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityForkMaterialFingerprint",
+    "method": "Compute",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "sha256:d27f0ae7fbcebdf5018ac5f421bcf1a7d9f1b006a4fd41df36d51e818fb828cc"
+  },
+  {
+    "name": "default/null",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "DefaultHash",
+    "arguments": [
+      {
+        "typedJson": "{\"syntax\":\"Literal\",\"value\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}}"
+      }
+    ],
+    "canonical": "{\"syntax\":\"Literal\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}}",
+    "expected": "sha256-091f46477ec65312b66d2fda87507c90419d018cd6e223a8a80f16c2d1066ad9"
+  },
+  {
+    "name": "element/null",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashElement",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "sha256-d27f0ae7fbcebdf5018ac5f421bcf1a7d9f1b006a4fd41df36d51e818fb828cc"
+  },
+  {
+    "name": "ui/null",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashUi",
+    "arguments": [
+      {
+        "text": "json-editor"
+      },
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"hint\":\"json-editor\",\"specifications\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}}",
+    "expected": "sha256-f0ced08fb412c690f91ad780de43b2958ca59a49fb34ee20a1b5a387ed97ad38"
+  },
+  {
+    "name": "atomic-command/null",
+    "assembly": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.EfDesignAtomicCommand",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "D27F0AE7FBCEBDF5018AC5F421BCF1A7D9F1B006A4FD41DF36D51E818FB828CC"
+  },
+  {
+    "name": "human-review/null",
+    "assembly": "Elsa.Agent.Review",
+    "type": "Elsa.Agent.Review.Services.ReviewDecisionCodec",
+    "method": "HashContent",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "d27f0ae7fbcebdf5018ac5f421bcf1a7d9f1b006a4fd41df36d51e818fb828cc"
+  },
+  {
+    "name": "weaver-typed/null",
+    "assembly": "Elsa.Weaver",
+    "type": "Elsa.Weaver.Services.WeaverInvocationIntegrity",
+    "method": "Digest",
+    "arguments": [
+      {
+        "typedJson": "{\"typeId\":\"form-\u00e9\",\"schemaVersion\":\"1\",\"data\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}}"
+      }
+    ],
+    "canonical": "{\"data\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null},\"schemaVersion\":\"1\",\"typeId\":\"form-\\u00E9\"}",
+    "expected": "56857d5b8a6945cd2f774f2dc6a4ead18868b618ce83880f3073ff95d862e913",
+    "genericType": "Elsa.Weaver.Core.Models.WeaverPayload",
+    "genericAssembly": "Elsa.Weaver.Core"
+  },
+  {
+    "name": "layout/null",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityLayoutHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "typedJson": "[{\"nodeId\":\"node-B\",\"data\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}},{\"nodeId\":\"node-A\",\"data\":null}]"
+      }
+    ],
+    "canonical": "[{\"data\":null,\"nodeId\":\"node-A\"},{\"data\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null},\"nodeId\":\"node-B\"}]",
+    "expected": "sha256-5bba93f6213cd31ad31e11233cdad62159f3db38c06f1ef7a53820af29eab4c6",
+    "frameHex": "060000006e6f64652d41040000006e756c6c060000006e6f64652d423b0000007b224f776e65724b6579223a2252656e5c7530304539222c226e223a3930303731393932353437343039393365302c22726f7773223a6e756c6c7d"
+  },
+  {
+    "name": "selection/order",
+    "assembly": "Elsa.Activities.Design.Api",
+    "type": "Elsa.Activities.Design.Api.Services.ActivityDataSelectionSnapshot",
+    "method": "Hash",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "sha256:7c885ecab394c5329fe59ec3d1f437035c7ab30dcb26ed2cb9a69fd1d4149ac7"
+  },
+  {
+    "name": "fork-material/order",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityForkMaterialFingerprint",
+    "method": "Compute",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "sha256:7c885ecab394c5329fe59ec3d1f437035c7ab30dcb26ed2cb9a69fd1d4149ac7"
+  },
+  {
+    "name": "default/order",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "DefaultHash",
+    "arguments": [
+      {
+        "typedJson": "{\"syntax\":\"Literal\",\"value\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}}"
+      }
+    ],
+    "canonical": "{\"syntax\":\"Literal\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}}",
+    "expected": "sha256-61729153a8b73afeb6bfbe5907226e133e9ee382660347fc3fe6569583984e9d"
+  },
+  {
+    "name": "element/order",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashElement",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "sha256-7c885ecab394c5329fe59ec3d1f437035c7ab30dcb26ed2cb9a69fd1d4149ac7"
+  },
+  {
+    "name": "ui/order",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashUi",
+    "arguments": [
+      {
+        "text": "json-editor"
+      },
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"hint\":\"json-editor\",\"specifications\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}}",
+    "expected": "sha256-5ddc60a0467e4a0b6286fb9c28a5fbc7442a18142258c0080ab82ec9f7e8bc43"
+  },
+  {
+    "name": "atomic-command/order",
+    "assembly": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.EfDesignAtomicCommand",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "7C885ECAB394C5329FE59EC3D1F437035C7AB30DCB26ED2CB9A69FD1D4149AC7"
+  },
+  {
+    "name": "human-review/order",
+    "assembly": "Elsa.Agent.Review",
+    "type": "Elsa.Agent.Review.Services.ReviewDecisionCodec",
+    "method": "HashContent",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "7c885ecab394c5329fe59ec3d1f437035c7ab30dcb26ed2cb9a69fd1d4149ac7"
+  },
+  {
+    "name": "weaver-typed/order",
+    "assembly": "Elsa.Weaver",
+    "type": "Elsa.Weaver.Services.WeaverInvocationIntegrity",
+    "method": "Digest",
+    "arguments": [
+      {
+        "typedJson": "{\"typeId\":\"form-\u00e9\",\"schemaVersion\":\"1\",\"data\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}}"
+      }
+    ],
+    "canonical": "{\"data\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]},\"schemaVersion\":\"1\",\"typeId\":\"form-\\u00E9\"}",
+    "expected": "8ceef8c08d50de159f1ed8d108628db4b97c5cd9c794f658a0b207b724ac72c8",
+    "genericType": "Elsa.Weaver.Core.Models.WeaverPayload",
+    "genericAssembly": "Elsa.Weaver.Core"
+  },
+  {
+    "name": "layout/order",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityLayoutHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "typedJson": "[{\"nodeId\":\"node-B\",\"data\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}},{\"nodeId\":\"node-A\",\"data\":null}]"
+      }
+    ],
+    "canonical": "[{\"data\":null,\"nodeId\":\"node-A\"},{\"data\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]},\"nodeId\":\"node-B\"}]",
+    "expected": "sha256-fd6585125ef17213ea6bb95ff2af3b4101765ed07c0b28819ec0130061cf5c64",
+    "frameHex": "060000006e6f64652d41040000006e756c6c060000006e6f64652d42410000007b224f776e65724b6579223a2252656e5c7530304539222c226e223a3930303731393932353437343039393365302c22726f7773223a5b6e756c6c2c3165305d7d"
+  },
+  {
+    "name": "selection/number",
+    "assembly": "Elsa.Activities.Design.Api",
+    "type": "Elsa.Activities.Design.Api.Services.ActivityDataSelectionSnapshot",
+    "method": "Hash",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "sha256:999da9c38e8633d9bdc022381ed82ff9640e0b8d71de94c3f859ec6fb0b7fb9d"
+  },
+  {
+    "name": "fork-material/number",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityForkMaterialFingerprint",
+    "method": "Compute",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "sha256:999da9c38e8633d9bdc022381ed82ff9640e0b8d71de94c3f859ec6fb0b7fb9d"
+  },
+  {
+    "name": "default/number",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "DefaultHash",
+    "arguments": [
+      {
+        "typedJson": "{\"syntax\":\"Literal\",\"value\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}}"
+      }
+    ],
+    "canonical": "{\"syntax\":\"Literal\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}}",
+    "expected": "sha256-b4bdf672900929f1c9f964da70ecd3189632f0ed57fb6cf3d339f0beb8dff84e"
+  },
+  {
+    "name": "element/number",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashElement",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "sha256-999da9c38e8633d9bdc022381ed82ff9640e0b8d71de94c3f859ec6fb0b7fb9d"
+  },
+  {
+    "name": "ui/number",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashUi",
+    "arguments": [
+      {
+        "text": "json-editor"
+      },
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"hint\":\"json-editor\",\"specifications\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}}",
+    "expected": "sha256-1c501073a03cc8926e88ad03a8faed74a4890c8dc72720cb65a972533e0be147"
+  },
+  {
+    "name": "atomic-command/number",
+    "assembly": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.EfDesignAtomicCommand",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "999DA9C38E8633D9BDC022381ED82FF9640E0B8D71DE94C3F859EC6FB0B7FB9D"
+  },
+  {
+    "name": "human-review/number",
+    "assembly": "Elsa.Agent.Review",
+    "type": "Elsa.Agent.Review.Services.ReviewDecisionCodec",
+    "method": "HashContent",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "999da9c38e8633d9bdc022381ed82ff9640e0b8d71de94c3f859ec6fb0b7fb9d"
+  },
+  {
+    "name": "weaver-typed/number",
+    "assembly": "Elsa.Weaver",
+    "type": "Elsa.Weaver.Services.WeaverInvocationIntegrity",
+    "method": "Digest",
+    "arguments": [
+      {
+        "typedJson": "{\"typeId\":\"form-\u00e9\",\"schemaVersion\":\"1\",\"data\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}}"
+      }
+    ],
+    "canonical": "{\"data\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]},\"schemaVersion\":\"1\",\"typeId\":\"form-\\u00E9\"}",
+    "expected": "1b1bd92d18034794ab102379ebc6ca85cc514816b8832c9c904145bd5057ac8b",
+    "genericType": "Elsa.Weaver.Core.Models.WeaverPayload",
+    "genericAssembly": "Elsa.Weaver.Core"
+  },
+  {
+    "name": "layout/number",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityLayoutHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "typedJson": "[{\"nodeId\":\"node-B\",\"data\":{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}},{\"nodeId\":\"node-A\",\"data\":null}]"
+      }
+    ],
+    "canonical": "[{\"data\":null,\"nodeId\":\"node-A\"},{\"data\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]},\"nodeId\":\"node-B\"}]",
+    "expected": "sha256-fc73e56368842dddd359d4cb9cbf04bfa0fb2736ee1c96049543c5643d41e005",
+    "frameHex": "060000006e6f64652d41040000006e756c6c060000006e6f64652d42410000007b224f776e65724b6579223a2252656e5c7530304539222c226e223a3930303731393932353437343039393265302c22726f7773223a5b3165302c6e756c6c5d7d"
+  },
+  {
+    "name": "processing-group/ordered-fields",
+    "assembly": "Acme.Processing",
+    "type": "Acme.Processing.ProcessingDashboardSource",
+    "method": "GroupKey",
+    "arguments": [
+      {
+        "json": [
+          "OwnerKey",
+          "Count"
+        ]
+      },
+      {
+        "json": {
+          "OwnerKey": {
+            "type": "string",
+            "literal": "Ren\u00e9"
+          },
+          "Count": {
+            "type": "integer",
+            "literal": "1"
+          }
+        }
+      }
+    ],
+    "canonical": "[{\"key\":\"OwnerKey\",\"literal\":\"Ren\\u00E9\",\"type\":\"string\"},{\"key\":\"Count\",\"literal\":\"1\",\"type\":\"integer\"}]",
+    "expected": "00f5d45b99f3acc13a89f27a2aba87e4b85e81e4c5b1a5d92aa49cf38098fef2"
+  },
+  {
+    "name": "management-scope/opaque-strings",
+    "assembly": "Elsa.Activities.Design.Api",
+    "type": "Elsa.Activities.Design.Api.Services.ActivityDefinitionManagementProjectionService",
+    "method": "Scope",
+    "arguments": [
+      {
+        "objectArray": [
+          "tenant-\u00e9",
+          "reader",
+          "Mixed"
+        ]
+      }
+    ],
+    "canonical": "[{\"representation\":\"clr\",\"value\":\"dABlAG4AYQBuAHQALQDpAA==\"},{\"representation\":\"clr\",\"value\":\"cgBlAGEAZABlAHIA\"},{\"representation\":\"clr\",\"value\":\"TQBpAHgAZQBkAA==\"}]",
+    "expected": "00544c9ba05c27c8dd8ed391b588596244ff5c856b457544d9c03cff137b8c15"
+  },
+  {
+    "name": "dependency-snapshot/owned-fields",
+    "assembly": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores.EfActivityDesignStores",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "json": {
+          "rebuildId": "rebuild-\u00e9",
+          "sequence": 3,
+          "asOf": "2026-07-15T09:30:00+00:00",
+          "items": []
+        }
+      }
+    ],
+    "canonical": "{\"asOf\":\"2026-07-15T09:30:00\\u002B00:00\",\"items\":[],\"rebuildId\":\"rebuild-\\u00E9\",\"sequence\":3e0}",
+    "expected": "6815BEC5DF77BAD82C5FD3D48847E284CBC72A0B154B7F25EB629B93A2E1806F"
+  },
+  {
+    "name": "agent-operation/missing-tenant",
+    "assembly": "Elsa.Agent.Core",
+    "type": "Elsa.Agent.Core.Models.AgentTurnDocument",
+    "method": "CalculateOperationKey",
+    "arguments": [
+      {
+        "json": {
+          "tenantId": null,
+          "persistencePartition": "partition",
+          "workflowExecutionId": "run",
+          "activityExecutionId": "activity",
+          "operationKey": "operation",
+          "artifactId": "artifact",
+          "artifactHash": "artifact-hash",
+          "definitionVersionId": "version",
+          "templateHash": "template"
+        }
+      }
+    ],
+    "canonical": "{\"operationKey\":\"operation\",\"persistencePartition\":\"partition\",\"tenantId\":null,\"workflowExecutionId\":\"run\"}",
+    "expected": "d7a5a0a779955e194d77e656259611e922b70a43714ec62b9c77708e46fa223a"
+  },
+  {
+    "name": "agent-operation/tenant",
+    "assembly": "Elsa.Agent.Core",
+    "type": "Elsa.Agent.Core.Models.AgentTurnDocument",
+    "method": "CalculateOperationKey",
+    "arguments": [
+      {
+        "json": {
+          "tenantId": "tenant-\u00e9",
+          "persistencePartition": "partition",
+          "workflowExecutionId": "run",
+          "activityExecutionId": "activity",
+          "operationKey": "operation",
+          "artifactId": "artifact",
+          "artifactHash": "artifact-hash",
+          "definitionVersionId": "version",
+          "templateHash": "template"
+        }
+      }
+    ],
+    "canonical": "{\"operationKey\":\"operation\",\"persistencePartition\":\"partition\",\"tenantId\":\"tenant-\\u00E9\",\"workflowExecutionId\":\"run\"}",
+    "expected": "806e8530a3d4fca55605905b8580b150b336c8babb17d356626ee60b581dc7fe"
+  },
+  {
+    "name": "absent/HashElement",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashElement",
+    "arguments": [
+      {
+        "json": null
+      }
+    ],
+    "expected": null
+  },
+  {
+    "name": "absent/HashUi",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashUi",
+    "arguments": [
+      {
+        "json": null
+      },
+      {
+        "json": null
+      }
+    ],
+    "expected": null
+  },
+  {
+    "name": "explicit-root-null/HashElement",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashElement",
+    "arguments": [
+      {
+        "rawJson": "null"
+      }
+    ],
+    "canonical": "null",
+    "expected": "sha256-74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+  },
+  {
+    "name": "explicit-root-null/HashUi",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityVersionDiffer",
+    "method": "HashUi",
+    "arguments": [
+      {
+        "json": null
+      },
+      {
+        "rawJson": "null"
+      }
+    ],
+    "canonical": "{\"hint\":null,\"specifications\":null}",
+    "expected": "sha256-b223bfa9777150c3eaa67ebe52491d7eb55caa2181bde2a6cc57fb654acee30e"
+  },
+  {
+    "name": "decision-design/json-base",
+    "assembly": "Elsa.Decisions.Design",
+    "type": "Elsa.Decisions.Design.DecisionDesignService",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}}",
+    "expected": "fe7e98774b88ec42837532b3bc528d9a17d80d34136de818dd61c062e9c1d55c"
+  },
+  {
+    "name": "decision-store/json-base",
+    "assembly": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Decisions.Persistence.EntityFrameworkCore.EfDecisionStore`1",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}}",
+    "expected": "fe7e98774b88ec42837532b3bc528d9a17d80d34136de818dd61c062e9c1d55c",
+    "declaringType": "Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext",
+    "declaringAssembly": "Elsa.Decisions.Persistence.EntityFrameworkCore"
+  },
+  {
+    "name": "etl-runtime-text/base",
+    "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EtlRuntimeRecordCodec",
+    "method": "HashText",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "etl-result/invocation-base",
+    "assembly": "Elsa.Etl.Core",
+    "type": "Elsa.Etl.Core.Runtime.EtlRuntimeJson",
+    "method": "ResultEnvelopeHash",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      },
+      {
+        "text": "{\"status\":\"Completed\"}"
+      }
+    ],
+    "canonical": "{\"invocation\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]},\"purpose\":\"etl-result-envelope-v1\",\"result\":{\"status\":\"Completed\"}}",
+    "expected": "4e04b99bf8d7dafb9b39c813539dd478d1bdac901e32ab52dafe39415fb62c4f"
+  },
+  {
+    "name": "etl-result/result-base",
+    "assembly": "Elsa.Etl.Core",
+    "type": "Elsa.Etl.Core.Runtime.EtlRuntimeJson",
+    "method": "ResultEnvelopeHash",
+    "arguments": [
+      {
+        "text": "{\"invocationId\":\"call-\u00e9\"}"
+      },
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"invocation\":{\"invocationId\":\"call-\\u00E9\"},\"purpose\":\"etl-result-envelope-v1\",\"result\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}}",
+    "expected": "e8eefd244d78d651b9b026b98ec08f00d1fd704b25a185453aee6f8e401694d7"
+  },
+  {
+    "name": "etl-route/Http-base",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 1
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "etl-route/Sql-base",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 3
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "etl-route/RabbitMq-base",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 4
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "etl-route/Csv-base",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 0
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "3d4bcc780579dd8646b5004d9eae05973118dd5482b6ddebde6e6a18c047b6b9"
+  },
+  {
+    "name": "etl-route/Jsonl-base",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 2
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "3d4bcc780579dd8646b5004d9eae05973118dd5482b6ddebde6e6a18c047b6b9"
+  },
+  {
+    "name": "etl-input-verifier/base",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorInputBatchBuilder",
+    "method": "HasJsonHash",
+    "arguments": [
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      },
+      {
+        "text": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+      }
+    ],
+    "expected": true
+  },
+  {
+    "name": "decision-design/json-spelling",
+    "assembly": "Elsa.Decisions.Design",
+    "type": "Elsa.Decisions.Design.DecisionDesignService",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "rawJson": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}}",
+    "expected": "fe7e98774b88ec42837532b3bc528d9a17d80d34136de818dd61c062e9c1d55c"
+  },
+  {
+    "name": "decision-store/json-spelling",
+    "assembly": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Decisions.Persistence.EntityFrameworkCore.EfDecisionStore`1",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "rawJson": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}}",
+    "expected": "fe7e98774b88ec42837532b3bc528d9a17d80d34136de818dd61c062e9c1d55c",
+    "declaringType": "Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext",
+    "declaringAssembly": "Elsa.Decisions.Persistence.EntityFrameworkCore"
+  },
+  {
+    "name": "etl-runtime-text/spelling",
+    "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EtlRuntimeRecordCodec",
+    "method": "HashText",
+    "arguments": [
+      {
+        "text": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "etl-result/invocation-spelling",
+    "assembly": "Elsa.Etl.Core",
+    "type": "Elsa.Etl.Core.Runtime.EtlRuntimeJson",
+    "method": "ResultEnvelopeHash",
+    "arguments": [
+      {
+        "text": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      },
+      {
+        "text": "{\"status\":\"Completed\"}"
+      }
+    ],
+    "canonical": "{\"invocation\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]},\"purpose\":\"etl-result-envelope-v1\",\"result\":{\"status\":\"Completed\"}}",
+    "expected": "4e04b99bf8d7dafb9b39c813539dd478d1bdac901e32ab52dafe39415fb62c4f"
+  },
+  {
+    "name": "etl-result/result-spelling",
+    "assembly": "Elsa.Etl.Core",
+    "type": "Elsa.Etl.Core.Runtime.EtlRuntimeJson",
+    "method": "ResultEnvelopeHash",
+    "arguments": [
+      {
+        "text": "{\"invocationId\":\"call-\u00e9\"}"
+      },
+      {
+        "text": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"invocation\":{\"invocationId\":\"call-\\u00E9\"},\"purpose\":\"etl-result-envelope-v1\",\"result\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}}",
+    "expected": "e8eefd244d78d651b9b026b98ec08f00d1fd704b25a185453aee6f8e401694d7"
+  },
+  {
+    "name": "etl-route/Http-spelling",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 1
+      },
+      {
+        "utf8": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "etl-route/Sql-spelling",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 3
+      },
+      {
+        "utf8": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "etl-route/RabbitMq-spelling",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 4
+      },
+      {
+        "utf8": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+  },
+  {
+    "name": "etl-route/Csv-spelling",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 0
+      },
+      {
+        "utf8": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "e126f9b75ce61a2843c4bf54af2ab0ac0474f8e664ee9fd7abb4e7c8ab18789f"
+  },
+  {
+    "name": "etl-route/Jsonl-spelling",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 2
+      },
+      {
+        "utf8": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "e126f9b75ce61a2843c4bf54af2ab0ac0474f8e664ee9fd7abb4e7c8ab18789f"
+  },
+  {
+    "name": "etl-input-verifier/spelling",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorInputBatchBuilder",
+    "method": "HasJsonHash",
+    "arguments": [
+      {
+        "utf8": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      },
+      {
+        "text": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+      }
+    ],
+    "expected": true
+  },
+  {
+    "name": "decision-design/json-missing",
+    "assembly": "Elsa.Decisions.Design",
+    "type": "Elsa.Decisions.Design.DecisionDesignService",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}}",
+    "expected": "72f0f43e7a1cec261983f8a96ee78a52a022edc3b7d26d2d877523c202034ba8"
+  },
+  {
+    "name": "decision-store/json-missing",
+    "assembly": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Decisions.Persistence.EntityFrameworkCore.EfDecisionStore`1",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}}",
+    "expected": "72f0f43e7a1cec261983f8a96ee78a52a022edc3b7d26d2d877523c202034ba8",
+    "declaringType": "Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext",
+    "declaringAssembly": "Elsa.Decisions.Persistence.EntityFrameworkCore"
+  },
+  {
+    "name": "etl-runtime-text/missing",
+    "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EtlRuntimeRecordCodec",
+    "method": "HashText",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "aaa637899be4a75616df0a78eb3c8c9798349e57095043d932e117ee654e8c4c"
+  },
+  {
+    "name": "etl-result/invocation-missing",
+    "assembly": "Elsa.Etl.Core",
+    "type": "Elsa.Etl.Core.Runtime.EtlRuntimeJson",
+    "method": "ResultEnvelopeHash",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      },
+      {
+        "text": "{\"status\":\"Completed\"}"
+      }
+    ],
+    "canonical": "{\"invocation\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0},\"purpose\":\"etl-result-envelope-v1\",\"result\":{\"status\":\"Completed\"}}",
+    "expected": "e277e3df1dbd1bf8e8785d0c9ec3a4f953680a191a89c728ddca0c9608a824ca"
+  },
+  {
+    "name": "etl-result/result-missing",
+    "assembly": "Elsa.Etl.Core",
+    "type": "Elsa.Etl.Core.Runtime.EtlRuntimeJson",
+    "method": "ResultEnvelopeHash",
+    "arguments": [
+      {
+        "text": "{\"invocationId\":\"call-\u00e9\"}"
+      },
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"invocation\":{\"invocationId\":\"call-\\u00E9\"},\"purpose\":\"etl-result-envelope-v1\",\"result\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}}",
+    "expected": "e60dba4ba8e1b996178f5adc6ab0be60bfb673ea3123123bc0f33a2fe679ba34"
+  },
+  {
+    "name": "etl-route/Http-missing",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 1
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "aaa637899be4a75616df0a78eb3c8c9798349e57095043d932e117ee654e8c4c"
+  },
+  {
+    "name": "etl-route/Sql-missing",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 3
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "aaa637899be4a75616df0a78eb3c8c9798349e57095043d932e117ee654e8c4c"
+  },
+  {
+    "name": "etl-route/RabbitMq-missing",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 4
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "aaa637899be4a75616df0a78eb3c8c9798349e57095043d932e117ee654e8c4c"
+  },
+  {
+    "name": "etl-route/Csv-missing",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 0
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "ad4f48e251d99f31e9e6e6633c2b299c31ffb9ae25c730d6d8ac7c4f48bc236c"
+  },
+  {
+    "name": "etl-route/Jsonl-missing",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 2
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "ad4f48e251d99f31e9e6e6633c2b299c31ffb9ae25c730d6d8ac7c4f48bc236c"
+  },
+  {
+    "name": "etl-input-verifier/missing",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorInputBatchBuilder",
+    "method": "HasJsonHash",
+    "arguments": [
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      },
+      {
+        "text": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+      }
+    ],
+    "expected": false
+  },
+  {
+    "name": "decision-design/json-null",
+    "assembly": "Elsa.Decisions.Design",
+    "type": "Elsa.Decisions.Design.DecisionDesignService",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}}",
+    "expected": "91f4b1f8f7c98982308189984a9b6acad1db58dc1e343573b672064334e3882d"
+  },
+  {
+    "name": "decision-store/json-null",
+    "assembly": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Decisions.Persistence.EntityFrameworkCore.EfDecisionStore`1",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}}",
+    "expected": "91f4b1f8f7c98982308189984a9b6acad1db58dc1e343573b672064334e3882d",
+    "declaringType": "Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext",
+    "declaringAssembly": "Elsa.Decisions.Persistence.EntityFrameworkCore"
+  },
+  {
+    "name": "etl-runtime-text/null",
+    "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EtlRuntimeRecordCodec",
+    "method": "HashText",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "d27f0ae7fbcebdf5018ac5f421bcf1a7d9f1b006a4fd41df36d51e818fb828cc"
+  },
+  {
+    "name": "etl-result/invocation-null",
+    "assembly": "Elsa.Etl.Core",
+    "type": "Elsa.Etl.Core.Runtime.EtlRuntimeJson",
+    "method": "ResultEnvelopeHash",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      },
+      {
+        "text": "{\"status\":\"Completed\"}"
+      }
+    ],
+    "canonical": "{\"invocation\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null},\"purpose\":\"etl-result-envelope-v1\",\"result\":{\"status\":\"Completed\"}}",
+    "expected": "8464d73f1c7f65efd87adb3149d33f0b98853fc41e578c07e05f53b504b1280e"
+  },
+  {
+    "name": "etl-result/result-null",
+    "assembly": "Elsa.Etl.Core",
+    "type": "Elsa.Etl.Core.Runtime.EtlRuntimeJson",
+    "method": "ResultEnvelopeHash",
+    "arguments": [
+      {
+        "text": "{\"invocationId\":\"call-\u00e9\"}"
+      },
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"invocation\":{\"invocationId\":\"call-\\u00E9\"},\"purpose\":\"etl-result-envelope-v1\",\"result\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}}",
+    "expected": "3daa2398eb47a4d55942a9c3e6cc785272a3932c7df099b6e492e9f17ea4a3d3"
+  },
+  {
+    "name": "etl-route/Http-null",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 1
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "d27f0ae7fbcebdf5018ac5f421bcf1a7d9f1b006a4fd41df36d51e818fb828cc"
+  },
+  {
+    "name": "etl-route/Sql-null",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 3
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "d27f0ae7fbcebdf5018ac5f421bcf1a7d9f1b006a4fd41df36d51e818fb828cc"
+  },
+  {
+    "name": "etl-route/RabbitMq-null",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 4
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "d27f0ae7fbcebdf5018ac5f421bcf1a7d9f1b006a4fd41df36d51e818fb828cc"
+  },
+  {
+    "name": "etl-route/Csv-null",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 0
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "03bdd414b574794dc70454bb068e8c420bf9fe1c5f2efe1cd9738c4dd930ffec"
+  },
+  {
+    "name": "etl-route/Jsonl-null",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 2
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "03bdd414b574794dc70454bb068e8c420bf9fe1c5f2efe1cd9738c4dd930ffec"
+  },
+  {
+    "name": "etl-input-verifier/null",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorInputBatchBuilder",
+    "method": "HasJsonHash",
+    "arguments": [
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      },
+      {
+        "text": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+      }
+    ],
+    "expected": false
+  },
+  {
+    "name": "decision-design/json-order",
+    "assembly": "Elsa.Decisions.Design",
+    "type": "Elsa.Decisions.Design.DecisionDesignService",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}}",
+    "expected": "92e899acd8ec875365e404f5be6d5b06cb26298b46722dac46ab1443280fb553"
+  },
+  {
+    "name": "decision-store/json-order",
+    "assembly": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Decisions.Persistence.EntityFrameworkCore.EfDecisionStore`1",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}}",
+    "expected": "92e899acd8ec875365e404f5be6d5b06cb26298b46722dac46ab1443280fb553",
+    "declaringType": "Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext",
+    "declaringAssembly": "Elsa.Decisions.Persistence.EntityFrameworkCore"
+  },
+  {
+    "name": "etl-runtime-text/order",
+    "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EtlRuntimeRecordCodec",
+    "method": "HashText",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "7c885ecab394c5329fe59ec3d1f437035c7ab30dcb26ed2cb9a69fd1d4149ac7"
+  },
+  {
+    "name": "etl-result/invocation-order",
+    "assembly": "Elsa.Etl.Core",
+    "type": "Elsa.Etl.Core.Runtime.EtlRuntimeJson",
+    "method": "ResultEnvelopeHash",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      },
+      {
+        "text": "{\"status\":\"Completed\"}"
+      }
+    ],
+    "canonical": "{\"invocation\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]},\"purpose\":\"etl-result-envelope-v1\",\"result\":{\"status\":\"Completed\"}}",
+    "expected": "e14d976d3761777a78a31ee2913780fd65e387b303d221fac2428d1a90caa65e"
+  },
+  {
+    "name": "etl-result/result-order",
+    "assembly": "Elsa.Etl.Core",
+    "type": "Elsa.Etl.Core.Runtime.EtlRuntimeJson",
+    "method": "ResultEnvelopeHash",
+    "arguments": [
+      {
+        "text": "{\"invocationId\":\"call-\u00e9\"}"
+      },
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"invocation\":{\"invocationId\":\"call-\\u00E9\"},\"purpose\":\"etl-result-envelope-v1\",\"result\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}}",
+    "expected": "a25fc69122d3643a709a5690f607133e08005e63efd43e446d82f593aee62340"
+  },
+  {
+    "name": "etl-route/Http-order",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 1
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "7c885ecab394c5329fe59ec3d1f437035c7ab30dcb26ed2cb9a69fd1d4149ac7"
+  },
+  {
+    "name": "etl-route/Sql-order",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 3
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "7c885ecab394c5329fe59ec3d1f437035c7ab30dcb26ed2cb9a69fd1d4149ac7"
+  },
+  {
+    "name": "etl-route/RabbitMq-order",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 4
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "7c885ecab394c5329fe59ec3d1f437035c7ab30dcb26ed2cb9a69fd1d4149ac7"
+  },
+  {
+    "name": "etl-route/Csv-order",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 0
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "2d2f3417477a0ff8b75cd233de10b13c2220a90455ef52ddd36e120ae46c79ac"
+  },
+  {
+    "name": "etl-route/Jsonl-order",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 2
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "2d2f3417477a0ff8b75cd233de10b13c2220a90455ef52ddd36e120ae46c79ac"
+  },
+  {
+    "name": "etl-input-verifier/order",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorInputBatchBuilder",
+    "method": "HasJsonHash",
+    "arguments": [
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      },
+      {
+        "text": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+      }
+    ],
+    "expected": false
+  },
+  {
+    "name": "decision-design/json-number",
+    "assembly": "Elsa.Decisions.Design",
+    "type": "Elsa.Decisions.Design.DecisionDesignService",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}}",
+    "expected": "6a2fe9d63c8d6e1d5768d2b73e59f35b5c06c561d3356c3fbbf6cbb3d43c947f"
+  },
+  {
+    "name": "decision-store/json-number",
+    "assembly": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Decisions.Persistence.EntityFrameworkCore.EfDecisionStore`1",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}}",
+    "expected": "6a2fe9d63c8d6e1d5768d2b73e59f35b5c06c561d3356c3fbbf6cbb3d43c947f",
+    "declaringType": "Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext",
+    "declaringAssembly": "Elsa.Decisions.Persistence.EntityFrameworkCore"
+  },
+  {
+    "name": "etl-runtime-text/number",
+    "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EtlRuntimeRecordCodec",
+    "method": "HashText",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "999da9c38e8633d9bdc022381ed82ff9640e0b8d71de94c3f859ec6fb0b7fb9d"
+  },
+  {
+    "name": "etl-result/invocation-number",
+    "assembly": "Elsa.Etl.Core",
+    "type": "Elsa.Etl.Core.Runtime.EtlRuntimeJson",
+    "method": "ResultEnvelopeHash",
+    "arguments": [
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      },
+      {
+        "text": "{\"status\":\"Completed\"}"
+      }
+    ],
+    "canonical": "{\"invocation\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]},\"purpose\":\"etl-result-envelope-v1\",\"result\":{\"status\":\"Completed\"}}",
+    "expected": "3ec401016bde9ba8301b8dca1f3febd381b068dc9db8b3bf30413097a0781e6f"
+  },
+  {
+    "name": "etl-result/result-number",
+    "assembly": "Elsa.Etl.Core",
+    "type": "Elsa.Etl.Core.Runtime.EtlRuntimeJson",
+    "method": "ResultEnvelopeHash",
+    "arguments": [
+      {
+        "text": "{\"invocationId\":\"call-\u00e9\"}"
+      },
+      {
+        "text": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"invocation\":{\"invocationId\":\"call-\\u00E9\"},\"purpose\":\"etl-result-envelope-v1\",\"result\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}}",
+    "expected": "fb3793e00b312b42ac096b5fbc5a4c64c88b68a61d6f8de4506c3c3084595977"
+  },
+  {
+    "name": "etl-route/Http-number",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 1
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "999da9c38e8633d9bdc022381ed82ff9640e0b8d71de94c3f859ec6fb0b7fb9d"
+  },
+  {
+    "name": "etl-route/Sql-number",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 3
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "999da9c38e8633d9bdc022381ed82ff9640e0b8d71de94c3f859ec6fb0b7fb9d"
+  },
+  {
+    "name": "etl-route/RabbitMq-number",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 4
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "999da9c38e8633d9bdc022381ed82ff9640e0b8d71de94c3f859ec6fb0b7fb9d"
+  },
+  {
+    "name": "etl-route/Csv-number",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 0
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "bd8fa2a69facab85cb532139272703b1c9c686905bf70ab8e975eb8de355988b"
+  },
+  {
+    "name": "etl-route/Jsonl-number",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorOutputProcessor",
+    "method": "RouteHash",
+    "arguments": [
+      {
+        "json": 2
+      },
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "bd8fa2a69facab85cb532139272703b1c9c686905bf70ab8e975eb8de355988b"
+  },
+  {
+    "name": "etl-input-verifier/number",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorInputBatchBuilder",
+    "method": "HasJsonHash",
+    "arguments": [
+      {
+        "utf8": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      },
+      {
+        "text": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+      }
+    ],
+    "expected": false
+  },
+  {
+    "name": "etl-input-verifier/malformed",
+    "assembly": "Elsa.Etl.Runtime",
+    "type": "Elsa.Etl.Runtime.Execution.EtlConnectorInputBatchBuilder",
+    "method": "HasJsonHash",
+    "arguments": [
+      {
+        "utf8": "{\"x\":"
+      },
+      {
+        "text": "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f"
+      }
+    ],
+    "expected": false
+  },
+  {
+    "name": "decision-design/clr-record",
+    "assembly": "Elsa.Decisions.Design",
+    "type": "Elsa.Decisions.Design.DecisionDesignService",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "clrType": "Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle",
+        "clrAssembly": "Elsa.Decisions.Persistence.Core",
+        "json": {
+          "assetId": "asset-\u00e9",
+          "expectedRevision": "revision"
+        }
+      }
+    ],
+    "canonical": "{\"representation\":\"clr\",\"value\":{\"assetId\":\"YQBzAHMAZQB0AC0A6QA=\",\"expectedRevision\":\"cgBlAHYAaQBzAGkAbwBuAA==\"}}",
+    "expected": "a957946ab6e5d8257b59f96f57c6865e7b3265bd6b6bcb0221ff77b5190260c8"
+  },
+  {
+    "name": "decision-design/json-record-lookalike",
+    "assembly": "Elsa.Decisions.Design",
+    "type": "Elsa.Decisions.Design.DecisionDesignService",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "json": {
+          "assetId": "asset-\u00e9",
+          "expectedRevision": "revision"
+        }
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"assetId\":\"asset-\\u00E9\",\"expectedRevision\":\"revision\"}}",
+    "expected": "4164de5167a9180db2c8e538a4197766d76f43497e67cd59c44f26c219398939"
+  },
+  {
+    "name": "decision-store/clr-record",
+    "assembly": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Decisions.Persistence.EntityFrameworkCore.EfDecisionStore`1",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "clrType": "Elsa.Decisions.Persistence.Core.DecisionAssetLifecycle",
+        "clrAssembly": "Elsa.Decisions.Persistence.Core",
+        "json": {
+          "assetId": "asset-\u00e9",
+          "expectedRevision": "revision"
+        }
+      }
+    ],
+    "canonical": "{\"representation\":\"clr\",\"value\":{\"assetId\":\"YQBzAHMAZQB0AC0A6QA=\",\"expectedRevision\":\"cgBlAHYAaQBzAGkAbwBuAA==\"}}",
+    "expected": "a957946ab6e5d8257b59f96f57c6865e7b3265bd6b6bcb0221ff77b5190260c8",
+    "declaringType": "Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext",
+    "declaringAssembly": "Elsa.Decisions.Persistence.EntityFrameworkCore"
+  },
+  {
+    "name": "decision-store/json-record-lookalike",
+    "assembly": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Decisions.Persistence.EntityFrameworkCore.EfDecisionStore`1",
+    "method": "Fingerprint",
+    "arguments": [
+      {
+        "json": {
+          "assetId": "asset-\u00e9",
+          "expectedRevision": "revision"
+        }
+      }
+    ],
+    "canonical": "{\"representation\":\"json\",\"value\":{\"assetId\":\"asset-\\u00E9\",\"expectedRevision\":\"revision\"}}",
+    "expected": "4164de5167a9180db2c8e538a4197766d76f43497e67cd59c44f26c219398939",
+    "declaringType": "Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext",
+    "declaringAssembly": "Elsa.Decisions.Persistence.EntityFrameworkCore"
+  },
+  {
+    "name": "decision-operation/base",
+    "assembly": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Decisions.Persistence.EntityFrameworkCore.EfDecisionStore`1",
+    "method": "OperationId",
+    "arguments": [
+      {
+        "json": {
+          "tenantId": "tenant-\u00e9",
+          "actorId": "actor-\u00e9",
+          "operationId": "operation"
+        }
+      }
+    ],
+    "canonical": "[\"actor-\\u00E9\",\"operation\"]",
+    "expected": "7a111895efdf4409ef1e1639d383f8dd7cfbf89aa779791991acafa25472a058",
+    "declaringType": "Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext",
+    "declaringAssembly": "Elsa.Decisions.Persistence.EntityFrameworkCore"
+  },
+  {
+    "name": "decision-operation/tenant-only",
+    "assembly": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Decisions.Persistence.EntityFrameworkCore.EfDecisionStore`1",
+    "method": "OperationId",
+    "arguments": [
+      {
+        "json": {
+          "tenantId": "other",
+          "actorId": "actor-\u00e9",
+          "operationId": "operation"
+        }
+      }
+    ],
+    "canonical": "[\"actor-\\u00E9\",\"operation\"]",
+    "expected": "7a111895efdf4409ef1e1639d383f8dd7cfbf89aa779791991acafa25472a058",
+    "declaringType": "Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext",
+    "declaringAssembly": "Elsa.Decisions.Persistence.EntityFrameworkCore"
+  },
+  {
+    "name": "decision-operation/actor",
+    "assembly": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Decisions.Persistence.EntityFrameworkCore.EfDecisionStore`1",
+    "method": "OperationId",
+    "arguments": [
+      {
+        "json": {
+          "tenantId": "tenant-\u00e9",
+          "actorId": "other-actor",
+          "operationId": "operation"
+        }
+      }
+    ],
+    "canonical": "[\"other-actor\",\"operation\"]",
+    "expected": "bcec6c1655a6fccb78acac46fe7214df5d3bec87bbd4fcbdc8a98cbca923c9c5",
+    "declaringType": "Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext",
+    "declaringAssembly": "Elsa.Decisions.Persistence.EntityFrameworkCore"
+  },
+  {
+    "name": "decision-operation/operation",
+    "assembly": "Elsa.Decisions.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Decisions.Persistence.EntityFrameworkCore.EfDecisionStore`1",
+    "method": "OperationId",
+    "arguments": [
+      {
+        "json": {
+          "tenantId": "tenant-\u00e9",
+          "actorId": "actor-\u00e9",
+          "operationId": "other-operation"
+        }
+      }
+    ],
+    "canonical": "[\"actor-\\u00E9\",\"other-operation\"]",
+    "expected": "6d205496d25259b1ef093fbd77f99258ff560a77b7f2b0822ba888555de223d5",
+    "declaringType": "Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext",
+    "declaringAssembly": "Elsa.Decisions.Persistence.EntityFrameworkCore"
+  },
+  {
+    "name": "etl-source-watermark/base",
+    "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EfEtlRuntimeStore",
+    "method": "SourceWatermarkKey",
+    "arguments": [
+      {
+        "json": {
+          "definitionId": "definition-\u00e9",
+          "sourceAlias": "source",
+          "sourceHandle": "handle",
+          "table": "events",
+          "column": "sequence"
+        }
+      }
+    ],
+    "canonical": "{\"column\":\"cwBlAHEAdQBlAG4AYwBlAA==\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgAtAOkA\",\"formatVersion\":1e0,\"sourceAlias\":\"cwBvAHUAcgBjAGUA\",\"sourceHandle\":\"aABhAG4AZABsAGUA\",\"table\":\"ZQB2AGUAbgB0AHMA\"}",
+    "expected": "640101c6f668964cdd6c98c7fed842044c4e3ed091872dbc14bdf61f2220b5cc"
+  },
+  {
+    "name": "etl-source-watermark/definitionId",
+    "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EfEtlRuntimeStore",
+    "method": "SourceWatermarkKey",
+    "arguments": [
+      {
+        "json": {
+          "definitionId": "definition-\u00e9|changed",
+          "sourceAlias": "source",
+          "sourceHandle": "handle",
+          "table": "events",
+          "column": "sequence"
+        }
+      }
+    ],
+    "canonical": "{\"column\":\"cwBlAHEAdQBlAG4AYwBlAA==\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgAtAOkAfABjAGgAYQBuAGcAZQBkAA==\",\"formatVersion\":1e0,\"sourceAlias\":\"cwBvAHUAcgBjAGUA\",\"sourceHandle\":\"aABhAG4AZABsAGUA\",\"table\":\"ZQB2AGUAbgB0AHMA\"}",
+    "expected": "6d84b4336c279568a200afd2d5e1caecf1d74c3f31b8bc4f24a579295a87390e"
+  },
+  {
+    "name": "etl-source-watermark/sourceAlias",
+    "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EfEtlRuntimeStore",
+    "method": "SourceWatermarkKey",
+    "arguments": [
+      {
+        "json": {
+          "definitionId": "definition-\u00e9",
+          "sourceAlias": "source|changed",
+          "sourceHandle": "handle",
+          "table": "events",
+          "column": "sequence"
+        }
+      }
+    ],
+    "canonical": "{\"column\":\"cwBlAHEAdQBlAG4AYwBlAA==\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgAtAOkA\",\"formatVersion\":1e0,\"sourceAlias\":\"cwBvAHUAcgBjAGUAfABjAGgAYQBuAGcAZQBkAA==\",\"sourceHandle\":\"aABhAG4AZABsAGUA\",\"table\":\"ZQB2AGUAbgB0AHMA\"}",
+    "expected": "ca27ab505e9c9fc2eb0c4f78596f6e60965b7e6d9c2bd94fe0ac64e739d1c3f8"
+  },
+  {
+    "name": "etl-source-watermark/sourceHandle",
+    "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EfEtlRuntimeStore",
+    "method": "SourceWatermarkKey",
+    "arguments": [
+      {
+        "json": {
+          "definitionId": "definition-\u00e9",
+          "sourceAlias": "source",
+          "sourceHandle": "handle|changed",
+          "table": "events",
+          "column": "sequence"
+        }
+      }
+    ],
+    "canonical": "{\"column\":\"cwBlAHEAdQBlAG4AYwBlAA==\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgAtAOkA\",\"formatVersion\":1e0,\"sourceAlias\":\"cwBvAHUAcgBjAGUA\",\"sourceHandle\":\"aABhAG4AZABsAGUAfABjAGgAYQBuAGcAZQBkAA==\",\"table\":\"ZQB2AGUAbgB0AHMA\"}",
+    "expected": "21235df27f394dd8d9e6b6b112321a454da6034531ccb1b0e8f7915058a97941"
+  },
+  {
+    "name": "etl-source-watermark/table",
+    "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EfEtlRuntimeStore",
+    "method": "SourceWatermarkKey",
+    "arguments": [
+      {
+        "json": {
+          "definitionId": "definition-\u00e9",
+          "sourceAlias": "source",
+          "sourceHandle": "handle",
+          "table": "events|changed",
+          "column": "sequence"
+        }
+      }
+    ],
+    "canonical": "{\"column\":\"cwBlAHEAdQBlAG4AYwBlAA==\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgAtAOkA\",\"formatVersion\":1e0,\"sourceAlias\":\"cwBvAHUAcgBjAGUA\",\"sourceHandle\":\"aABhAG4AZABsAGUA\",\"table\":\"ZQB2AGUAbgB0AHMAfABjAGgAYQBuAGcAZQBkAA==\"}",
+    "expected": "79e7ef31143f47b361b34c68922f80840c9498b340b24fddf584ec4a2643c2ad"
+  },
+  {
+    "name": "etl-source-watermark/column",
+    "assembly": "Elsa.Etl.Persistence.EntityFrameworkCore",
+    "type": "Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EfEtlRuntimeStore",
+    "method": "SourceWatermarkKey",
+    "arguments": [
+      {
+        "json": {
+          "definitionId": "definition-\u00e9",
+          "sourceAlias": "source",
+          "sourceHandle": "handle",
+          "table": "events",
+          "column": "sequence|changed"
+        }
+      }
+    ],
+    "canonical": "{\"column\":\"cwBlAHEAdQBlAG4AYwBlAHwAYwBoAGEAbgBnAGUAZAA=\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgAtAOkA\",\"formatVersion\":1e0,\"sourceAlias\":\"cwBvAHUAcgBjAGUA\",\"sourceHandle\":\"aABhAG4AZABsAGUA\",\"table\":\"ZQB2AGUAbgB0AHMA\"}",
+    "expected": "e956c6d6142e5a8d3b24920b19a9c73925cacda4b466f1e456f79c1e5b48b29d"
+  },
+  {
+    "name": "etl-native-run/none",
+    "assembly": "Elsa.Etl.Workflows.Runtime",
+    "type": "Elsa.Etl.Workflows.Runtime.Services.EtlNativeBoundary",
+    "method": "RunId",
+    "arguments": [
+      {
+        "json": {
+          "tenantId": null,
+          "persistencePartition": "partition-\u00e9"
+        }
+      },
+      {
+        "text": "workflow"
+      },
+      {
+        "text": "activity"
+      }
+    ],
+    "canonical": "{\"activityId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"format\":\"ZQB0AGwALQBuAGEAdABpAHYAZQAtAHIAdQBuAC0AdgAxAA==\",\"scope\":{\"persistencePartition\":\"cABhAHIAdABpAHQAaQBvAG4ALQDpAA==\",\"tenantId\":null},\"workflowId\":\"dwBvAHIAawBmAGwAbwB3AA==\"}",
+    "expected": "etl-cefc637cae9fc81802a9c0a7c155599ed27519f12e84acb74638ba3cbe2bc265"
+  },
+  {
+    "name": "etl-native-run/tenant",
+    "assembly": "Elsa.Etl.Workflows.Runtime",
+    "type": "Elsa.Etl.Workflows.Runtime.Services.EtlNativeBoundary",
+    "method": "RunId",
+    "arguments": [
+      {
+        "json": {
+          "tenantId": "tenant-\u00e9",
+          "persistencePartition": "partition-\u00e9"
+        }
+      },
+      {
+        "text": "workflow"
+      },
+      {
+        "text": "activity"
+      }
+    ],
+    "canonical": "{\"activityId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"format\":\"ZQB0AGwALQBuAGEAdABpAHYAZQAtAHIAdQBuAC0AdgAxAA==\",\"scope\":{\"persistencePartition\":\"cABhAHIAdABpAHQAaQBvAG4ALQDpAA==\",\"tenantId\":\"dABlAG4AYQBuAHQALQDpAA==\"},\"workflowId\":\"dwBvAHIAawBmAGwAbwB3AA==\"}",
+    "expected": "etl-d535891193b7bc4abb1ad91b1fce4817d7f807f8f35f5311a33a2490bfeae819"
+  },
+  {
+    "name": "agent-retention/prepared",
+    "assembly": "Elsa.Agent.Core",
+    "type": "Elsa.Agent.Core.Models.AgentRetentionRules",
+    "method": "Snapshot",
+    "arguments": [
+      {
+        "json": {
+          "handle": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "key": "f0add75a0615885f62c38128a6007b5ba69dda953bb9a159af766ce307d1edc1",
+          "requestHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "identity": {
+            "tenantId": null,
+            "persistencePartition": "partition-\u00e9",
+            "workflowExecutionId": "run",
+            "activityExecutionId": "activity",
+            "operationKey": "operation",
+            "artifactId": "artifact",
+            "artifactHash": "hash",
+            "definitionVersionId": "version",
+            "templateHash": "template"
+          },
+          "protectedRequest": "opaque",
+          "deadline": "2026-07-15T09:30:00+02:00",
+          "status": "Prepared",
+          "childInvocationId": null,
+          "fence": null,
+          "protectedResult": null,
+          "failureCode": null,
+          "maximumModelCalls": 1,
+          "modelRequests": null,
+          "responseObservation": null,
+          "conversation": null
+        }
+      }
+    ],
+    "canonical": "{\"childInvocationId\":null,\"conversation\":null,\"deadline\":\"2026-07-15T09:30:00\\u002B02:00\",\"failureCode\":null,\"fence\":null,\"handle\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"identity\":{\"activityExecutionId\":\"activity\",\"artifactHash\":\"hash\",\"artifactId\":\"artifact\",\"definitionVersionId\":\"version\",\"operationKey\":\"operation\",\"persistencePartition\":\"partition-\\u00E9\",\"templateHash\":\"template\",\"tenantId\":null,\"workflowExecutionId\":\"run\"},\"key\":\"f0add75a0615885f62c38128a6007b5ba69dda953bb9a159af766ce307d1edc1\",\"maximumModelCalls\":1e0,\"modelRequests\":null,\"protectedRequest\":\"opaque\",\"protectedResult\":null,\"requestHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"responseObservation\":null,\"status\":\"Prepared\"}",
+    "expected": "6f3c596e88791cdba5228a2ba323241f44be1108b39ebe4033f33ae4318330c7",
+    "validateWith": {
+      "assembly": "Elsa.Agent.Core",
+      "type": "Elsa.Agent.Core.Models.AgentTurnDocumentRules",
+      "method": "Validate"
+    }
+  },
+  {
+    "name": "agent-retention/retained-authorities",
+    "assembly": "Elsa.Agent.Core",
+    "type": "Elsa.Agent.Core.Models.AgentRetentionRules",
+    "method": "Snapshot",
+    "arguments": [
+      {
+        "json": {
+          "handle": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "key": "f0add75a0615885f62c38128a6007b5ba69dda953bb9a159af766ce307d1edc1",
+          "requestHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "identity": {
+            "tenantId": null,
+            "persistencePartition": "partition-\u00e9",
+            "workflowExecutionId": "run",
+            "activityExecutionId": "activity",
+            "operationKey": "operation",
+            "artifactId": "artifact",
+            "artifactHash": "hash",
+            "definitionVersionId": "version",
+            "templateHash": "template"
+          },
+          "protectedRequest": null,
+          "deadline": "2026-07-15T09:30:00+02:00",
+          "status": "Accepted",
+          "childInvocationId": "child",
+          "fence": "fence",
+          "protectedResult": null,
+          "failureCode": null,
+          "maximumModelCalls": 1,
+          "modelRequests": null,
+          "responseObservation": null,
+          "conversation": null,
+          "contentPurgedAt": "2026-07-16T09:30:00+02:00",
+          "deliveryProtocol": 1,
+          "deliveries": [
+            {
+              "identity": {
+                "tenantId": null,
+                "persistencePartition": "partition-\u00e9",
+                "workflowExecutionId": "run",
+                "activityExecutionId": "activity",
+                "operationKey": "operation",
+                "artifactId": "artifact",
+                "artifactHash": "hash",
+                "definitionVersionId": "version",
+                "templateHash": "template"
+              },
+              "childInvocationId": "child"
+            }
+          ],
+          "applications": [
+            {
+              "identity": {
+                "tenantId": null,
+                "persistencePartition": "partition-\u00e9",
+                "workflowExecutionId": "run",
+                "activityExecutionId": "activity",
+                "operationKey": "operation",
+                "artifactId": "artifact",
+                "artifactHash": "hash",
+                "definitionVersionId": "version",
+                "templateHash": "template"
+              },
+              "childInvocationId": "child",
+              "sourceId": "source",
+              "sourceFingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "appliedAt": "2026-07-15T09:30:00+02:00"
+            }
+          ],
+          "activeDeliveryActivityId": "activity",
+          "admissionGeneration": 2,
+          "leaseExpiresAt": "2026-07-15T09:30:00+02:00"
+        }
+      }
+    ],
+    "canonical": "{\"activeDeliveryActivityId\":\"activity\",\"admissionGeneration\":2e0,\"applications\":[{\"appliedAt\":\"2026-07-15T09:30:00\\u002B02:00\",\"childInvocationId\":\"child\",\"identity\":{\"activityExecutionId\":\"activity\",\"artifactHash\":\"hash\",\"artifactId\":\"artifact\",\"definitionVersionId\":\"version\",\"operationKey\":\"operation\",\"persistencePartition\":\"partition-\\u00E9\",\"templateHash\":\"template\",\"tenantId\":null,\"workflowExecutionId\":\"run\"},\"sourceFingerprint\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"sourceId\":\"source\"}],\"childInvocationId\":\"child\",\"contentPurgedAt\":\"2026-07-16T09:30:00\\u002B02:00\",\"conversation\":null,\"deadline\":\"2026-07-15T09:30:00\\u002B02:00\",\"deliveries\":[{\"childInvocationId\":\"child\",\"identity\":{\"activityExecutionId\":\"activity\",\"artifactHash\":\"hash\",\"artifactId\":\"artifact\",\"definitionVersionId\":\"version\",\"operationKey\":\"operation\",\"persistencePartition\":\"partition-\\u00E9\",\"templateHash\":\"template\",\"tenantId\":null,\"workflowExecutionId\":\"run\"}}],\"deliveryProtocol\":1e0,\"failureCode\":null,\"fence\":\"fence\",\"handle\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"identity\":{\"activityExecutionId\":\"activity\",\"artifactHash\":\"hash\",\"artifactId\":\"artifact\",\"definitionVersionId\":\"version\",\"operationKey\":\"operation\",\"persistencePartition\":\"partition-\\u00E9\",\"templateHash\":\"template\",\"tenantId\":null,\"workflowExecutionId\":\"run\"},\"key\":\"f0add75a0615885f62c38128a6007b5ba69dda953bb9a159af766ce307d1edc1\",\"leaseExpiresAt\":\"2026-07-15T09:30:00\\u002B02:00\",\"maximumModelCalls\":1e0,\"modelRequests\":null,\"protectedRequest\":null,\"protectedResult\":null,\"requestHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"responseObservation\":null,\"status\":\"Accepted\"}",
+    "expected": "5f1a10bde50b3d40b609b1a840d0576436de96951b9204e01260e3bd1c61253c",
+    "validateWith": {
+      "assembly": "Elsa.Agent.Core",
+      "type": "Elsa.Agent.Core.Models.AgentTurnDocumentRules",
+      "method": "Validate"
+    }
+  },
+  {
+    "name": "agent-intent/Cancelled",
+    "assembly": "Elsa.Agent",
+    "type": "Elsa.Agent.Services.AgentSettlementBoundary",
+    "method": "Intent",
+    "arguments": [
+      {
+        "json": {
+          "version": 1,
+          "identity": {
+            "tenantId": null,
+            "persistencePartition": "partition-\u00e9",
+            "workflowExecutionId": "run",
+            "activityExecutionId": "activity",
+            "operationKey": "operation",
+            "artifactId": "artifact",
+            "artifactHash": "hash",
+            "definitionVersionId": "version",
+            "templateHash": "template"
+          },
+          "childInvocationId": null,
+          "cancelledAt": "2026-07-15T09:30:00+02:00"
+        }
+      }
+    ],
+    "canonical": "{\"cancelledAt\":\"2026-07-15T09:30:00\\u002B02:00\",\"childInvocationId\":null,\"identity\":{\"activityExecutionId\":\"activity\",\"artifactHash\":\"hash\",\"artifactId\":\"artifact\",\"definitionVersionId\":\"version\",\"operationKey\":\"operation\",\"persistencePartition\":\"partition-\\u00E9\",\"templateHash\":\"template\",\"tenantId\":null,\"workflowExecutionId\":\"run\"},\"version\":1e0}",
+    "expected": "agent-cancel:4fedbd187b335bd8eb7bf16c003bcb6da510991ec4abce1c64cc3677edc6cfec",
+    "parameterType": "Elsa.Agent.Services.AgentCancelledPayload",
+    "returnProperty": "IntentId",
+    "returnMembers": {
+      "IdempotencyKey": "agent-cancel:4fedbd187b335bd8eb7bf16c003bcb6da510991ec4abce1c64cc3677edc6cfec",
+      "WorkflowExecutionId": "run",
+      "ActivityExecutionId": "activity",
+      "RecordedAt": "2026-07-15T09:30:00+02:00",
+      "Kind": "elsa.agent.cancel/1",
+      "Payload": {
+        "version": 1,
+        "identity": {
+          "tenantId": null,
+          "persistencePartition": "partition-\u00e9",
+          "workflowExecutionId": "run",
+          "activityExecutionId": "activity",
+          "operationKey": "operation",
+          "artifactId": "artifact",
+          "artifactHash": "hash",
+          "definitionVersionId": "version",
+          "templateHash": "template"
+        },
+        "childInvocationId": null,
+        "cancelledAt": "2026-07-15T09:30:00+02:00"
+      }
+    }
+  },
+  {
+    "name": "agent-intent/Applied",
+    "assembly": "Elsa.Agent",
+    "type": "Elsa.Agent.Services.AgentSettlementBoundary",
+    "method": "Intent",
+    "arguments": [
+      {
+        "json": {
+          "version": 1,
+          "identity": {
+            "tenantId": null,
+            "persistencePartition": "partition-\u00e9",
+            "workflowExecutionId": "run",
+            "activityExecutionId": "activity",
+            "operationKey": "operation",
+            "artifactId": "artifact",
+            "artifactHash": "hash",
+            "definitionVersionId": "version",
+            "templateHash": "template"
+          },
+          "childInvocationId": "child",
+          "appliedAt": "2026-07-15T09:30:00+02:00",
+          "handle": "handle-\u00e9"
+        }
+      }
+    ],
+    "canonical": "{\"appliedAt\":\"2026-07-15T09:30:00\\u002B02:00\",\"childInvocationId\":\"child\",\"handle\":\"handle-\\u00E9\",\"identity\":{\"activityExecutionId\":\"activity\",\"artifactHash\":\"hash\",\"artifactId\":\"artifact\",\"definitionVersionId\":\"version\",\"operationKey\":\"operation\",\"persistencePartition\":\"partition-\\u00E9\",\"templateHash\":\"template\",\"tenantId\":null,\"workflowExecutionId\":\"run\"},\"version\":1e0}",
+    "expected": "agent-applied:5137ae211623edf0ff2bcf6196cfbe1917e3cb318a2fb35442358d8bc1bb0746",
+    "parameterType": "Elsa.Agent.Services.AgentAppliedPayload",
+    "returnProperty": "IntentId",
+    "returnMembers": {
+      "IdempotencyKey": "agent-applied:5137ae211623edf0ff2bcf6196cfbe1917e3cb318a2fb35442358d8bc1bb0746",
+      "WorkflowExecutionId": "run",
+      "ActivityExecutionId": "activity",
+      "RecordedAt": "2026-07-15T09:30:00+02:00",
+      "Kind": "elsa.agent.applied/1",
+      "Payload": {
+        "version": 1,
+        "identity": {
+          "tenantId": null,
+          "persistencePartition": "partition-\u00e9",
+          "workflowExecutionId": "run",
+          "activityExecutionId": "activity",
+          "operationKey": "operation",
+          "artifactId": "artifact",
+          "artifactHash": "hash",
+          "definitionVersionId": "version",
+          "templateHash": "template"
+        },
+        "childInvocationId": "child",
+        "appliedAt": "2026-07-15T09:30:00+02:00",
+        "handle": "handle-\u00e9"
+      }
+    }
+  }
+]
