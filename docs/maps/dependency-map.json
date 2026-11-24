@@ -601,8 +601,8 @@
       ]
     },
     {
-      "path": "apps/Elsa.Workbench/Elsa.Workbench.csproj",
-      "name": "Elsa.Workbench",
+      "path": "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj",
+      "name": "Elsa.Workbench.Host",
       "kind": "source",
       "domain": "Elsa.Workbench",
       "sub_domain": "-",
@@ -13172,8 +13172,8 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Workbench",
-          "path": "apps/Elsa.Workbench/Elsa.Workbench.csproj"
+          "id": "Elsa.Workbench.Host",
+          "path": "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj"
         },
         {
           "type": "internal",
@@ -16286,8 +16286,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workbench",
-          "path": "apps/Elsa.Workbench/Elsa.Workbench.csproj"
+          "id": "Elsa.Workbench.Host",
+          "path": "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj"
         },
         {
           "type": "internal",
@@ -18258,8 +18258,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workbench",
-          "path": "apps/Elsa.Workbench/Elsa.Workbench.csproj"
+          "id": "Elsa.Workbench.Host",
+          "path": "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj"
         },
         {
           "type": "internal",
@@ -20732,8 +20732,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workbench",
-          "path": "apps/Elsa.Workbench/Elsa.Workbench.csproj"
+          "id": "Elsa.Workbench.Host",
+          "path": "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj"
         },
         {
           "type": "internal",
@@ -23397,8 +23397,8 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Workbench",
-          "path": "apps/Elsa.Workbench/Elsa.Workbench.csproj"
+          "id": "Elsa.Workbench.Host",
+          "path": "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj"
         },
         {
           "type": "internal",
@@ -31033,8 +31033,8 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Workbench",
-          "path": "apps/Elsa.Workbench/Elsa.Workbench.csproj"
+          "id": "Elsa.Workbench.Host",
+          "path": "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj"
         },
         {
           "type": "internal",
@@ -33022,8 +33022,8 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Workbench",
-          "path": "apps/Elsa.Workbench/Elsa.Workbench.csproj"
+          "id": "Elsa.Workbench.Host",
+          "path": "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj"
         },
         {
           "type": "internal",
