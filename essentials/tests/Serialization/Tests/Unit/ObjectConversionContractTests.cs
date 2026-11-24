@@ -42,6 +42,25 @@ public sealed class ObjectConversionContractTests
         Assert.Equal(5L, converter.ConvertTo<long>(5));
     }
 
+    [Theory]
+    [InlineData(typeof(int))]
+    [InlineData(typeof(int?))]
+    [InlineData(typeof(long))]
+    [InlineData(typeof(ulong))]
+    public void CLR_floating_point_refusals_have_a_stable_domain_diagnostic(Type target)
+    {
+        var converter = SerializationServices.ObjectConverter();
+        foreach (var value in new object[] { 5.0, 5.0f, 5.0m })
+        {
+            var error = Assert.Throws<JsonConversionException>(() => converter.ConvertTo(value, target));
+            Assert.Equal("json-integral-conversion-refused", error.Code);
+            Assert.Equal("$", error.Path);
+            var result = converter.TryConvertTo(value, target);
+            Assert.False(result.IsSuccess);
+            Assert.Equal("json-integral-conversion-refused", Assert.IsType<JsonConversionException>(result.Exception).Code);
+        }
+    }
+
     [Fact]
     public void A_scoped_contract_is_used_for_the_read_and_temporal_values_have_no_local_fallback()
     {

@@ -72,6 +72,34 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task A_raw_argument_beyond_the_payload_reader_depth_is_refused_before_a_draft_is_stored()
+    {
+        var raw = new string('[', 63) + """{ "OrderID":9007199254740993, "nil":null }""" + new string(']', 63);
+        ArgumentValue argument;
+        using (var document = JsonDocument.Parse(raw, new JsonDocumentOptions { MaxDepth = 1000 }))
+            argument = new(document.RootElement, "Literal");
+        var state = new WorkflowDefinitionState([], new ActivityNode("root", "activity", [new("input", argument, null, null, null, null)], []), [], [], null);
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        db.Definitions.Add(new WorkflowDefinition { Id = "depth-definition", TenantId = "tenant-a", Name = "Depth" });
+        await db.SaveChangesAsync();
+        var command = new EfCreateDraftCommand(db, access, new EfDesignAtomicWriter(db, access), new TestIdentity(),
+            SerializationServices.PayloadSerializer(), new TestLockProvider());
+
+        var failure = await Assert.ThrowsAsync<DesignPersistenceException>(() => command.Execute(new("depth-create"), "depth-definition", state));
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, failure.FailureKind);
+        Assert.Equal(DesignPersistenceDomain.Workflow, failure.Domain);
+        Assert.Equal("workflow.draft.create.v1", failure.Operation);
+        Assert.Equal("json-depth-exceeded", Assert.IsType<JsonConversionException>(failure.InnerException).Code);
+        Assert.Empty(await db.Drafts.AsNoTracking().ToListAsync());
+        Assert.Empty(await db.Operations.AsNoTracking().ToListAsync());
+        Assert.Single(await db.Definitions.AsNoTracking().ToListAsync());
+    }
+
+    [Fact]
     public async Task Malformed_materialized_state_is_a_normalized_serialization_failure_before_any_write()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

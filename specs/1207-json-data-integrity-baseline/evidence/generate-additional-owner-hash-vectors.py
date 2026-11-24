@@ -514,6 +514,8 @@ def generate():
         wire_text=json.dumps(projected,ensure_ascii=True,separators=(',',':')).replace(json.dumps(marker),raw)
         expected_wire=helper.load_json(wire_text)
         for member in [*actual['inputs'],*actual['outputs']]:member.pop('isNullable')
+        # The CLR strategy contract exposes S-2's absent override as null; the API wire omits it.
+        actual['strategyOptions']['nullHandling']=None
         reconstructed_text=json.dumps(actual,ensure_ascii=True,separators=(',',':')).replace(json.dumps(marker),raw)
         add('authoring-snapshot-rich/' + label,'Elsa.Workflows.Design.Api','Elsa.Workflows.Design.Api.Services.WorkflowAuthoringRevision','Snapshot',
             [dict(typedJson=input_text)],expected_wire,returnField='Item2',returnFieldsJson=dict(Item1=reconstructed_text),returnRawPaths={

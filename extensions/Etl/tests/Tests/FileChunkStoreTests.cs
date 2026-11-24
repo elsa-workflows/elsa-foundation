@@ -24,7 +24,8 @@ public sealed class FileChunkStoreTests : IDisposable
         Assert.True(published.ContentHash == expected && found?.ContentHash == expected,
             $"FileChunkStore JSON: First-stable hash freeze requires an explicit identity/migration decision. Expected {expected}; published {published.ContentHash}; read {found?.ContentHash}");
         Assert.True(bytes.Length == published.ByteLength, "FileChunkStore JSON physical length: First-stable hash freeze requires an explicit identity/migration decision.");
-        Assert.True(bytes.SequenceEqual(await File.ReadAllBytesAsync(Path.Combine(_root, published.Key))),
+        var retainedBytes = await File.ReadAllBytesAsync(Path.Combine(_root, published.Key));
+        Assert.True(bytes.SequenceEqual(retainedBytes),
             "FileChunkStore JSON retained bytes: First-stable hash freeze requires an explicit identity/migration decision.");
     }
 

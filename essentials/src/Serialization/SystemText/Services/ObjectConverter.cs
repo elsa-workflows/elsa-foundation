@@ -38,7 +38,7 @@ internal sealed class ObjectConverter(IServiceProvider serviceProvider) : IObjec
             return contract.Read(JsonConversionContract.SerializeToElement(value), targetType, report);
         if (targetType.IsInstanceOfType(value)) return value;
         if (IsIntegral(target) && value is double or float or decimal)
-            throw new JsonException("A floating-point CLR value cannot be implicitly converted to an integer.");
+            throw new JsonConversionException("json-integral-conversion-refused", "A floating-point CLR value cannot be implicitly converted to an integer.", "$");
 
         var extension = serviceProvider.GetServices<ITypeConverter>().FirstOrDefault(converter => converter.TargetType == targetType);
         if (extension is not null) return extension.Convert(value);
