@@ -22,7 +22,13 @@ public sealed class Elsa3LiteralConversionTests
     {
         var typed = Elsa3TypedValues.CreateExpression("System.Uri", "Literal", text);
         var definition = ConversionServices.Definition(Activity("root", "Acme.JsonOrder", ("Url", typed)));
-        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.CreateWith(typeof(JsonOrderImportActivity).Assembly), definition);
+        await using var provider = ConversionServices.Create(RealActivityCatalog.CreateWith(typeof(JsonOrderImportActivity).Assembly));
+        var registry = provider.GetRequiredService<IWellKnownTypeRegistry>();
+        if (!registry.TryGetTypeOrDefault("System.Uri", out var uriType))
+            registry.RegisterType(typeof(Uri), "System.Uri");
+        else Assert.Equal(typeof(Uri), uriType);
+        await using var scope = provider.CreateAsyncScope();
+        var result = await scope.ServiceProvider.GetRequiredService<IElsa3DefinitionConverter>().ConvertAsync(new(definition));
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var data = Assert.IsType<JsonElement>(Input(Node(result.Value!.State, "root"), "Url").Value.Value);
         Assert.Equal(JsonValueKind.String, data.ValueKind);

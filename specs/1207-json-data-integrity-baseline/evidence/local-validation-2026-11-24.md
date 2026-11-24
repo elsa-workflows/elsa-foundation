@@ -1,5 +1,23 @@
 # S-9 local validation checkpoint, 24 November 2026
 
+Current source checkpoint: `f5b3362cb2a322ea03b82025dccd8369c94e9fba`. This record remains chronological and incomplete;
+it does not claim final review convergence. S-2 initiative `855dda5dd6` is integrated by `7759707e4f`, with all31 content
+conflicts resolved. The owner removed composed Studio acceptance, visual inspection and visual artifact delivery from
+this stream on24November; [the retained acceptance record](../ux-acceptance.md) preserves the earlier failed and not-run
+states. Those historical Studio gates below are no longer delivery requirements.
+
+The first independent review round's source repairs cover temporal nullable/container host metadata, stable numeric
+refusals, extension catalogs, canonical wait-schema comparison and effective scoped typed-JSON conversion with owning
+protected diagnostics. An additional audit closes raw JSON writes beyond the paired reader's existing depth bound.
+Focused before/after controls retain9fail/5pass→14pass for temporal metadata and11fail/4pass plus4 numeric failures→19pass
+for depth/numeric diagnostics. Typed-profile originals fail all5 new controls; their repaired run is still pending.
+
+At integrated `6e0f57b45b`, whole Runtime5129, ActivitiesRuntime1246, RuntimeAPI742, ExecutionEvidence87,
+DashboardQuery58 and BPMNInterchange293 pass; Serialization131pass/1Linux access-control skip. These supporting results
+precede the latest source repairs and are not one final-head aggregate. Other whole-suite compile/fixture failures,
+the interrupted import run and Docker engine500 interruptions remain retained until repaired whole reruns complete.
+The all679 actual-owner hash vectors, fresh compiled register/GoldenSignature and final fresh review remain pending.
+
 This is an incomplete implementation checkpoint, not final acceptance or review convergence. CI waits are deferred by
 the coordinator. No CI pass is claimed. S-2 owns workflow null/missing/undefined policies and ValueEnvelope admission
 and writes; these repairs preserve JSON tokens at the serializer boundary only.

@@ -21,7 +21,8 @@ namespace Elsa.Weaver.Tests;
 /// </summary>
 public sealed class WeaverSessionAutonomyApiTests
 {
-    // Independent request projection includes all default/null members and the raw active-surface selection.
+    // Supply every pinned member explicitly: the source-generated wire reader can assign null to omitted
+    // init-only members instead of retaining their CLR initializer. The raw selection remains caller data.
     [Theory]
     [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":[1,null]}""", "BA4D2C350D280329FC304200E919AA51A86ACA57F688B28CADA2AEF75A48FFBE")]
     [InlineData(""" { "rows": [1e0,null], "n":9007199254740993.0,"OwnerKey":"Ren\u00e9" } """, "BA4D2C350D280329FC304200E919AA51A86ACA57F688B28CADA2AEF75A48FFBE")]
@@ -33,7 +34,15 @@ public sealed class WeaverSessionAutonomyApiTests
     {
         using var fixture = new Fixture();
         var session = await fixture.CreateAsync();
-        var request = "{\"content\":\"hello\",\"requestId\":\"hash-r1\",\"activeSurface\":{\"selection\":" + raw + "}}";
+        var request = "{\"sessionId\":\"\",\"message\":\"\",\"content\":\"hello\",\"role\":\"user\",\"mode\":\"explain\","
+            + "\"contextAttachmentIds\":[],\"contextAttachments\":[],\"capabilityId\":null,\"requestedCapabilities\":[],"
+            + "\"requestId\":\"hash-r1\",\"source\":null,\"promptMode\":null,"
+            + "\"activeSurface\":{\"route\":\"/\",\"resourceType\":null,\"resourceId\":null,\"selection\":" + raw + "}}";
+        var admitted = JsonSerializer.Deserialize(request, WireContext.WeaverMessageRequest);
+        Assert.NotNull(admitted);
+        using var projection = JsonDocument.Parse(request);
+        Assert.True(Elsa.Serialization.Core.JsonCanonicalForm.Equals(projection.RootElement, Elsa.Serialization.Core.JsonHashInput.SerializeToElement(admitted)),
+            "Weaver golden input must match the actual wire-reader projection before exercising the shipping hash owner.");
         var (status, _) = await fixture.SendRawAsync("PostMessage", request, session.Id);
         Assert.True(status == 200, "Weaver golden prompt admission: First-stable hash freeze requires an explicit identity/migration decision.");
         var messages = (await fixture.Sessions.ListMessagesAsync(session.Id)).Where(item => item.Role == WeaverRole.User).ToArray();
