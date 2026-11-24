@@ -63,6 +63,7 @@ public static class Smoke
     {
         await HttpOverlapChecks.Run(Check);
         await HttpSurfaceChecks.RunAsync(Check);
+        await HttpRouteChecks.RunAsync(Check);
         var registry = Reference.Registry();
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
         {
