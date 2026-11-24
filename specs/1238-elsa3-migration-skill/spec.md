@@ -165,9 +165,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 - Docker is not available, or the migration image tagged with the plan's essentials image tag cannot be pulled: the skill stops
   before running anything and says what to install or which version to use.
 - A JavaScript global is used other than as a direct call (assigned to a variable, passed as a callback): the
-  converter does not rewrite it, so it would fail at run time. The converter is to report such a reference as an
-  ordinary finding (see Assumptions); neither the tool nor the skill scans scripts. The skill points the user to
-  case 14.
+  converter refuses it at conversion with an ordinary finding; neither the tool nor the skill scans scripts. The
+  skill points the user to case 14, which says to make it a direct call in the Elsa 3 definition.
 - A definition's only findings are routine ones the report marks as added to every definition: it goes smoothly,
   and the skill does not ask the user to act on them.
 - A finding has no Elsa 4 remedy (the report says neither patching the definition nor building a component helps):
@@ -276,7 +275,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   | 11 | Variables and workflow state | Variable-reference inputs read and written through the step's variables; undeclared names and workflow state need their access markers; a free-form properties bag has no counterpart | port; redesign for the properties bag |
   | 12 | Background and task activities | The background-execution-safe marker; the workflow author chooses background placement (spec 1230) | port when the activity meets the eligibility criteria |
   | 13 | Cancellation and faults | The cancellation token; fault and cancel transitions; no per-activity cancel callback | port |
-  | 14 | JavaScript functions | A JavaScript host function declaration with a `prefix.name`, effect-free, JSON in and out, that names the Elsa 3 global it replaces; the converter rewrites direct calls only, so other references to the global are turned into direct calls in the Elsa 3 definition first | port; redesign as an activity when the function has effects |
+  | 14 | JavaScript functions | A JavaScript host function declaration `prefix.<Elsa 3 global name>`, effect-free, JSON in and out, registered so the converter maps the Elsa 3 global to it under the converter's matching rule, which the catalog states; the converter rewrites direct calls only and refuses other references, so those become direct calls in the Elsa 3 definition first | port; redesign as an activity when the function has effects |
   | 15 | Liquid filters and other expression additions | Liquid filters: none, filter registration is closed to modules. A new expression syntax: the public expression descriptor and portable expression handler extension points | redesign (Liquid filters: a JavaScript host function or an activity); a new syntax is named with its extension points but carries no example |
   | 16 | Variable type registration | A variable type descriptor provider registering the type under a dotted alias | port |
   | 17 | Storage drivers | None per variable: the converter stores every value in the default durable storage, and Elsa 3's default drivers need nothing. A variable, input or output on the memory driver or on a custom driver converts with a Reconsider finding and starts an interview: what did the user want? A value that is never persisted: the Elsa 4 features that reach that, and how to use them. Any other objective (for example values kept in blob storage): the user plans their own solution, and the plan records it with a link | interview |
@@ -343,13 +342,14 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   report contract, and the categories and buckets. This spec only references that schema.
 - Spec 1236 delivers the essentials engine image the handoff names; spec 1237 delivers the Elsa 3 migration image,
   built from it, that runs the tool.
-- The converter, on the initiative branch, diagnoses unregistered variable types, reports memory and custom storage drivers as behaviour warnings, and maps declared JavaScript
-  functions to prefixed host functions; the skill relies on the guidance those diagnostics carry. A converter
-  change that spec 1237 also depends on adds a finding for a declared JavaScript global used other than as a direct
-  call.
+- The converter, on the initiative branch, diagnoses unregistered variable types, maps declared JavaScript functions
+  to prefixed host functions and refuses a declared global used other than as a direct call; the skill relies on the
+  guidance those diagnostics carry. How a global is matched to its host function may still change; case 14 states
+  the rule that holds when the catalog is written.
 - The user has Docker, and the .NET SDK to build their feature packages. The only network calls are NuGet restore
   and image pulls.
-- Storage drivers reach the inventory through the converter's Reconsider findings that name the memory or custom
-  driver as a storage-driver component; the skill reads the kind and name, not the codes. A storage-driver finding
-  never blocks the run: the value converts to the default storage, and the interview decides what else to do.
+- A pending converter change stops refusing Elsa 3 memory and custom storage drivers: the value converts to the
+  default storage with a Reconsider finding that names the driver as a storage-driver component, and spec 1237
+  lists both as components. Until it lands, the converter refuses those drivers (Must fix), and case 17's interview
+  then runs on the refusal. The skill reads the kind and name, not the codes.
 - The sample is never packed or published.

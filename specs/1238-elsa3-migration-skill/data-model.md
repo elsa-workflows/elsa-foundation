@@ -29,9 +29,11 @@ Filled in from `migration-plan-template.md` ([contract](contracts/plan-template.
 | Elsa 4 target | Full name, host-function name or dotted alias |
 | Cases | Catalog case numbers, in catalog order |
 | Tests to port | Paths |
-| Status | `todo` → `porting` → `ported` → `verified`, or `redesign` / `dropped` |
+| Status | `todo` → `porting` → `ported` → `verified`, or `redesign` / `dropped`; a storage-driver row: `todo` → `interviewed` |
 
-`verified` means no finding of any category in the last assessment names this component (by kind and name). `redesign` and `dropped`
+`verified` means no finding of any category in the last assessment names this component (by kind and name).
+`interviewed` means the user's objective is recorded with the chosen Elsa 4 feature or the link to their own plan;
+the storage-driver finding repeats on every run and does not reopen the row. `redesign` and `dropped`
 need the user's decision recorded in the row.
 
 ## Porting case (repository, `porting-catalog.md`)

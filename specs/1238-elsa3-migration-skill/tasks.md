@@ -10,7 +10,10 @@
 and the check's `--self-test`. The skill text itself is verified by the walkthrough (T029–T031). No test framework
 beyond xunit.
 
-**Dependencies outside this spec**: T021 takes the migration image's name and tags from spec 1237. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
+**Dependencies outside this spec**: T013 and case 14 follow the converter's global-matching rule as merged at the
+time (a change to it is pending). T029–T031 with a storage driver in the sample export need the pending converter
+change that turns storage-driver refusals into Reconsider findings; before it, the walkthrough checks the interview
+on the refusal. T021 takes the migration image's name and tags from spec 1237. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
 need spec 1237's `report.json` schema agreed. Everything else can start once this spec is approved.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -57,12 +60,12 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T
   and keys its effect on `LogicalInvocationId` (stable across operator retries; `InvocationId` is not); test for
   cancellation.
 - [ ] T012 [P] Cancellation and faults (case 13): fault and cancel transitions; tests for each.
-- [ ] T013 JavaScript host function (case 14): `acme.lookupCustomer` declared in `AcmeFeature` with
-  `ReplacesGlobalFunctions = ["lookupCustomer"]`; test calling the
+- [ ] T013 JavaScript host function (case 14): `acme.lookupCustomer` declared in `AcmeFeature` so that the converter's
+  global-matching rule maps the Elsa 3 global `lookupCustomer` to it; test calling the
   implementation with JSON arguments.
 - [ ] T014 Variable type (case 16): a descriptor provider registering `acme.Invoice`; test that the descriptor has
   the dotted alias.
-- [ ] T015 [P] Tests (case 19): the region is one of the tests above, chosen as the example of building an activity
+- [ ] T015 Tests (case 19): the region is one of the tests above, chosen as the example of building an activity
   execution context and calling the activity.
 - [ ] T016 `tools/skills/check_migration_skill.py` per [contracts/catalog-entry.md](contracts/catalog-entry.md), with
   `--self-test` covering every failure rule.
