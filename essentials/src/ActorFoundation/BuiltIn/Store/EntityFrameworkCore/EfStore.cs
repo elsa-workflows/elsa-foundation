@@ -113,92 +113,66 @@ public sealed class JournalEntity
     public string Entries { get; set; } = "";
 }
 
-public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
+public class KernelDb : DbContext
 {
-    // EF keys its model cache by context type. Fresh opt-in databases seed their marker in the
+    // One context type for every profile: a store format and the root capabilities it carries (RootProfiles). EF keys
+    // its model cache by both (KernelModelCacheKeyFactory). Fresh opt-in databases seed their marker in the
     // same creation transaction as the schema. An existing database keeps its original marker.
-    private sealed class RootSelfDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootTimerDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootOperatorDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootTerminationDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootStableBodyDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootTerminalSelectionDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootRetirementDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootTerminateThenDeleteDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootRetentionDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootOperatorRepliesDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootJobDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootTimedJobIssuanceDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootValueDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootReplyDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootTimedJobSettlementDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootTimedJobPreviewDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootParkOpeningDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootParkInspectionDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootParkArrivalsDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    internal StoreFormat RequiredFormat => this switch
+    public KernelDb(DbContextOptions<KernelDb> options) : this(options, StoreFormat.Current, RootCapabilities.None) { }
+
+    private KernelDb(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) : base(options)
     {
-        RootParkOpeningDb => StoreFormat.RootParkOpening,
-        RootParkInspectionDb => StoreFormat.RootParkInspection,
-        RootParkArrivalsDb => StoreFormat.RootParkArrivals,
-        RootTimedJobPreviewDb => StoreFormat.RootTimedJobPreview,
-        RootTimedJobSettlementDb => StoreFormat.RootTimedJobSettlement,
-        RootReplyDb => StoreFormat.RootReplies,
-        RootValueDb => StoreFormat.RootValues,
-        RootTimedJobIssuanceDb => StoreFormat.RootTimedJobIssuance,
-        RootJobDb => StoreFormat.RootJobs,
-        RootOperatorDb => StoreFormat.RootOperators,
-        RootTerminationDb => StoreFormat.RootTerminations,
-        RootStableBodyDb => StoreFormat.RootStableBody,
-        RootTerminalSelectionDb => StoreFormat.RootTerminalSelection,
-        RootRetirementDb => StoreFormat.RootRetirement,
-        RootTerminateThenDeleteDb => StoreFormat.RootTerminateThenDelete,
-        RootRetentionDb => StoreFormat.RootRetention,
-        RootOperatorRepliesDb => StoreFormat.RootOperatorReplies,
-        RootTimerDb => StoreFormat.RootTimers,
-        RootSelfDb => StoreFormat.RootSelf,
-        _ => StoreFormat.Current
-    };
-    internal bool UsesRootSelfProtocol => this is RootSelfDb or RootTimerDb;
-    internal bool UsesRootJobProtocol => this is RootJobDb or RootTimedJobIssuanceDb || UsesRootTimedJobSettlement;
-    internal bool UsesRootJobPreview => this is RootJobDb;
-    internal bool UsesRootTimedJobIssuance => this is RootTimedJobIssuanceDb;
-    internal bool UsesRootTimedJobPreview => this is RootTimedJobPreviewDb;
-    internal bool UsesRootTimedJobSettlement => this is RootTimedJobSettlementDb || UsesRootTimedJobPreview;
+        RequiredFormat = format;
+        Capabilities = capabilities;
+    }
+
+    private static KernelDb Profile(DbContextOptions<KernelDb> options, StoreFormat format) =>
+        new(options, format, RootProfiles.CapabilitiesOf(format));
+
+    internal StoreFormat RequiredFormat { get; }
+    internal RootCapabilities Capabilities { get; }
+    private bool Has(RootCapabilities capability) => (Capabilities & capability) != 0;
+    internal bool UsesRootSelfProtocol => Has(RootCapabilities.SelfProtocol);
+    internal bool UsesRootTimers => Has(RootCapabilities.Timers);
+    internal bool UsesRootJobProtocol => Has(RootCapabilities.JobProtocol);
+    internal bool UsesRootJobPreview => Has(RootCapabilities.JobPreview);
+    internal bool UsesRootTimedJobIssuance => Has(RootCapabilities.TimedJobIssuance);
+    internal bool UsesRootTimedJobPreview => Has(RootCapabilities.TimedJobPreview);
+    internal bool UsesRootTimedJobSettlement => Has(RootCapabilities.TimedJobSettlement);
     internal bool SupportsCorePreview => RequiredFormat == StoreFormat.Current || UsesRootJobPreview || UsesRootTimedJobPreview;
-    internal static KernelDb ForPostgresRootTimedJobPreview(DbContextOptions<KernelDb> options) => new RootTimedJobPreviewDb(options);
-    internal bool UsesRootParkOpening => this is RootParkOpeningDb || UsesRootParkInspection;
-    internal bool UsesRootParkInspection => this is RootParkInspectionDb || UsesRootParkArrivals;
-    internal bool UsesRootParkArrivals => this is RootParkArrivalsDb;
-    internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => new RootParkArrivalsDb(options);
-    internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => new RootParkInspectionDb(options);
+    internal static KernelDb ForPostgresRootTimedJobPreview(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTimedJobPreview);
+    internal bool UsesRootParkOpening => Has(RootCapabilities.ParkOpening);
+    internal bool UsesRootParkInspection => Has(RootCapabilities.ParkInspection);
+    internal bool UsesRootParkArrivals => Has(RootCapabilities.ParkArrivals);
+    internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
+    internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
-    internal static KernelDb ForPostgresRootParkOpening(DbContextOptions<KernelDb> options) => new RootParkOpeningDb(options);
-    internal bool UsesRootReplyProtocol => this is RootReplyDb;
-    internal static KernelDb ForPostgresRootReplies(DbContextOptions<KernelDb> options) => new RootReplyDb(options);
-    internal bool UsesRootValueProtocol => this is RootValueDb;
-    internal static KernelDb ForPostgresRootValues(DbContextOptions<KernelDb> options) => new RootValueDb(options);
-    internal static KernelDb ForPostgresRootJobs(DbContextOptions<KernelDb> options) => new RootJobDb(options);
-    internal static KernelDb ForPostgresRootTimedJobIssuance(DbContextOptions<KernelDb> options) => new RootTimedJobIssuanceDb(options);
-    internal static KernelDb ForPostgresRootTimedJobSettlement(DbContextOptions<KernelDb> options) => new RootTimedJobSettlementDb(options);
-    internal bool UsesRootOperatorProtocol => this is RootOperatorDb || UsesRootTermination;
-    internal bool UsesRootTermination => this is RootTerminationDb || UsesRootStableBody;
-    internal bool UsesRootStableBody => this is RootStableBodyDb || UsesRootTerminalSelection;
-    internal bool UsesRootTerminalSelection => this is RootTerminalSelectionDb || UsesRootRetirement;
-    internal bool UsesRootRetirement => this is RootRetirementDb || UsesRootTerminateThenDelete;
-    internal bool UsesRootTerminateThenDelete => this is RootTerminateThenDeleteDb || UsesRootRetention;
-    internal bool UsesRootRetention => this is RootRetentionDb || UsesRootOperatorReplies;
-    internal bool UsesRootOperatorReplies => this is RootOperatorRepliesDb;
-    internal static KernelDb ForPostgresRootOperatorReplies(DbContextOptions<KernelDb> options) => new RootOperatorRepliesDb(options);
-    internal static KernelDb ForPostgresRootRetention(DbContextOptions<KernelDb> options) => new RootRetentionDb(options);
-    internal static KernelDb ForPostgresRootTerminateThenDelete(DbContextOptions<KernelDb> options) => new RootTerminateThenDeleteDb(options);
-    internal static KernelDb ForPostgresRootRetirement(DbContextOptions<KernelDb> options) => new RootRetirementDb(options);
-    internal static KernelDb ForPostgresRootTerminalSelection(DbContextOptions<KernelDb> options) => new RootTerminalSelectionDb(options);
-    internal static KernelDb ForPostgresRootStableBody(DbContextOptions<KernelDb> options) => new RootStableBodyDb(options);
-    internal static KernelDb ForPostgresRootTerminations(DbContextOptions<KernelDb> options) => new RootTerminationDb(options);
-    internal static KernelDb ForPostgresRootOperators(DbContextOptions<KernelDb> options) => new RootOperatorDb(options);
-    internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => new RootTimerDb(options);
-    internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => new RootSelfDb(options);
+    internal static KernelDb ForPostgresRootParkOpening(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkOpening);
+    internal bool UsesRootReplyProtocol => Has(RootCapabilities.ReplyProtocol);
+    internal static KernelDb ForPostgresRootReplies(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootReplies);
+    internal bool UsesRootValueProtocol => Has(RootCapabilities.ValueProtocol);
+    internal static KernelDb ForPostgresRootValues(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootValues);
+    internal static KernelDb ForPostgresRootJobs(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootJobs);
+    internal static KernelDb ForPostgresRootTimedJobIssuance(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTimedJobIssuance);
+    internal static KernelDb ForPostgresRootTimedJobSettlement(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTimedJobSettlement);
+    internal bool UsesRootOperatorProtocol => Has(RootCapabilities.OperatorProtocol);
+    internal bool UsesRootTermination => Has(RootCapabilities.Termination);
+    internal bool UsesRootStableBody => Has(RootCapabilities.StableBody);
+    internal bool UsesRootTerminalSelection => Has(RootCapabilities.TerminalSelection);
+    internal bool UsesRootRetirement => Has(RootCapabilities.Retirement);
+    internal bool UsesRootTerminateThenDelete => Has(RootCapabilities.TerminateThenDelete);
+    internal bool UsesRootRetention => Has(RootCapabilities.Retention);
+    internal bool UsesRootOperatorReplies => Has(RootCapabilities.OperatorReplies);
+    internal static KernelDb ForPostgresRootOperatorReplies(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootOperatorReplies);
+    internal static KernelDb ForPostgresRootRetention(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootRetention);
+    internal static KernelDb ForPostgresRootTerminateThenDelete(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTerminateThenDelete);
+    internal static KernelDb ForPostgresRootRetirement(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootRetirement);
+    internal static KernelDb ForPostgresRootTerminalSelection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTerminalSelection);
+    internal static KernelDb ForPostgresRootStableBody(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootStableBody);
+    internal static KernelDb ForPostgresRootTerminations(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTerminations);
+    internal static KernelDb ForPostgresRootOperators(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootOperators);
+    internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTimers);
+    internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootSelf);
 
     internal List<RetiredOperatorReply>? RetiredOperatorReplies { get; set; }
     internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
@@ -218,6 +192,7 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         optionsBuilder.ReplaceService<IComparer<IReadOnlyModificationCommand>, SendOrderComparer>();
+        optionsBuilder.ReplaceService<IModelCacheKeyFactory, KernelModelCacheKeyFactory>();
         // D5 (K1), ENGINES.md E7: SQL Server's and MySQL's providers put at most 42 statements in one command unless told,
         // so a flush of 100 instances was several round trips. The store tells them 1,000, as the cost runs do; a context
         // that sets its own MaxBatchSize keeps it.
