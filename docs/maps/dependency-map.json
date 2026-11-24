@@ -12328,6 +12328,30 @@
       ]
     },
     {
+      "path": "essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj",
+      "name": "Elsa.Workflows.Runtime.WorkflowActor",
+      "kind": "source",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.WorkflowActor",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Workflows.Runtime.WorkflowActor",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Contracts",
+          "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Model.Contracts",
+          "path": "essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj"
+        }
+      ]
+    },
+    {
       "path": "essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj",
       "name": "Elsa.Activities.Behavioral.Tests",
       "kind": "test",
@@ -15200,6 +15224,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.WorkflowActor",
+          "path": "essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Kernel.Foundation.InMemory",
           "path": "essentials/tests/ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj"
         },
@@ -15210,13 +15239,13 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Statecharts.OrderFixture",
-          "path": "essentials/tests/Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj"
+          "id": "Elsa.Workflows.Runtime.Native.Migration.SqliteFixture",
+          "path": "essentials/tests/Workflows/Runtime/Native/Migration/SqliteFixture/Elsa.Workflows.Runtime.Native.Migration.SqliteFixture.csproj"
         },
         {
           "type": "internal",
-          "id": "Kernel.WorkflowActor",
-          "path": "prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj"
+          "id": "Elsa.Workflows.Runtime.Statecharts.OrderFixture",
+          "path": "essentials/tests/Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj"
         }
       ]
     },
@@ -15236,6 +15265,11 @@
           "type": "internal",
           "id": "Elsa.ActorFoundation.BuiltIn.Hosting",
           "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.WorkflowActor",
+          "path": "essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj"
         },
         {
           "type": "internal",
@@ -15261,11 +15295,6 @@
           "type": "internal",
           "id": "Kernel.Statecharts",
           "path": "prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Kernel.WorkflowActor",
-          "path": "prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj"
         }
       ]
     },
@@ -16256,6 +16285,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Scheduling",
           "path": "essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.WorkflowActor",
+          "path": "essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj"
         },
         {
           "type": "internal",
@@ -25075,6 +25109,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.WorkflowActor",
+          "path": "essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Kernel.Sim",
           "path": "essentials/tests/ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj"
         },
@@ -25087,11 +25126,50 @@
           "type": "internal",
           "id": "Elsa.ActorFoundation.TestSupport",
           "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/Workflows/Runtime/Native/Migration/SqliteFixture/Elsa.Workflows.Runtime.Native.Migration.SqliteFixture.csproj",
+      "name": "Elsa.Workflows.Runtime.Native.Migration.SqliteFixture",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Native.Migration.SqliteFixture",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Hosting",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj"
         },
         {
           "type": "internal",
-          "id": "Kernel.WorkflowActor",
-          "path": "prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj"
+          "id": "Elsa.ActorFoundation.Hosting",
+          "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.WorkflowActor",
+          "path": "essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Foundation.InMemory",
+          "path": "essentials/tests/ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Data.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "SQLitePCLRaw.bundle_e_sqlite3",
+          "version": "3.0.3"
         }
       ]
     },
