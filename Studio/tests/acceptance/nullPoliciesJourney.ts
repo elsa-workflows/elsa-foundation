@@ -5,7 +5,8 @@ import { expect, type Locator, type Page, type TestInfo } from "@playwright/test
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 type Member = { referenceKey: string; name: string; type: { alias: string }; isRequired: boolean; default: { syntax: string; value: unknown } | null };
-type Draft = { draftId: string; definitionId: string; revision: number; contract: { inputs: Member[] } };
+type OutputMember = { referenceKey: string; name: string; type: { alias: string }; isRequired: boolean };
+type Draft = { draftId: string; definitionId: string; revision: number; contract: { inputs: Member[]; outputs: OutputMember[] } };
 type Node = Record<string, unknown> & { nodeId: string };
 
 /** Real composed authoring, admission and execution. Only the explicitly recorded legacy seed writes an old owned draft. */
@@ -32,9 +33,40 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     expect(detail.activities.length).toBeGreaterThan(0);
     return detail;
   }
+  async function runWorkflowTest(expectedInputs: Record<string, unknown>) {
+    const response = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/test-runs"));
+    await activate(page.getByRole("button", { name: "Start Test Run", exact: true }), "Start workflow test run");
+    const tested = await response; expect(tested.ok(), await tested.text()).toBe(true);
+    expect(tested.request().postDataJSON().inputs ?? {}).toEqual(expectedInputs);
+    let run = await tested.json() as { testRunId: string; workflowExecutionId?: string };
+    await expect.poll(async () => {
+      run = await api<typeof run>(`/publishing/workflow-test-runs/${run.testRunId}`);
+      return Boolean(run.workflowExecutionId);
+    }, { timeout: 30_000 }).toBe(true);
+    return { request: tested.request().postDataJSON(), run, completed: await completed(run.workflowExecutionId!) };
+  }
+  async function runActivityTest(control: Locator, name: string) {
+    const response = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.includes("/publishing/activity-") && new URL(response.url()).pathname.endsWith("/test-runs"));
+    await activate(control, name);
+    const started = await response; expect(started.ok(), await started.text()).toBe(true);
+    const initial = await started.json() as { testRunId: string; workflowExecutionId: string };
+    const execution = await completed(initial.workflowExecutionId);
+    const receipt = await api<{ testRunId: string; workflowExecutionId: string; failure?: unknown }>(`/publishing/activity-test-runs/${initial.testRunId}`);
+    expect(receipt.testRunId).toBe(initial.testRunId); expect(receipt.failure ?? null).toBeNull();
+    const result = page.getByRole("dialog").getByRole("region", { name: "Test run result", exact: true });
+    const details = result.locator("details.ad-test-run-details");
+    if (await details.getAttribute("open") === null) await activate(details.locator("summary"), "Open activity run details");
+    // Visible technical identifiers are abbreviated; their title retains the exact current run identity.
+    await expect(result.locator(".ad-test-run-technical code").first()).toHaveAttribute("title", initial.testRunId);
+    await expect(result).toContainText("Completed", { timeout: 30_000 });
+    return { request: { url: started.url(), body: started.request().postDataJSON() }, receipt, completed: execution };
+  }
+  const definitionIds = new Map<string, string>();
   async function version(key: string) {
-    const result = await api<{ items: { definition: { activityTypeKey: string; headVersionId: string } }[] }>(`/design/activities/definitions?search=${encodeURIComponent(key)}`);
-    return result.items.find(item => item.definition.activityTypeKey === key)!.definition.headVersionId;
+    const result = await api<{ items: { definition: { definitionId: string; activityTypeKey: string; headVersionId: string } }[] }>(`/design/activities/definitions?search=${encodeURIComponent(key)}`);
+    const definition = result.items.find(item => item.definition.activityTypeKey === key)!.definition;
+    definitionIds.set(key, definition.definitionId);
+    return definition.headVersionId;
   }
   const sequence = await version("Elsa.Activities.Sequence.Activities.Sequence");
   const write = await version("Elsa.Activities.Primitives.Activities.WriteLine");
@@ -51,8 +83,14 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     contract: { contractSchemaVersion: "1", inputs: [
       { referenceKey: "note", name: "note", displayName: "Note", type: type("String"), isRequired: true, storageDriverKey: "elsa.json" },
       { referenceKey: "count", name: "count", displayName: "Count", type: type("Int32"), isRequired: false, storageDriverKey: "elsa.json" }
-    ], outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }] },
-    provider: { providerKey: "elsa.activity-graph", schemaVersion: "2", payload: { rootActivity: root([line()]), variables: [], outputMappings: [], outcomeMappings: [{ sourceOutcomeReferenceKey: done.referenceKey, boundaryOutcomeReferenceKey: "done" }] } }, layout: [], activityPresentation: []
+    ], outputs: [
+      { referenceKey: "nullable-result", name: "nullableResult", displayName: "Nullable result", type: type("String"), isRequired: false, storageDriverKey: "elsa.json" },
+      { referenceKey: "number-result", name: "numberResult", displayName: "Number result", type: type("Int32"), isRequired: false, storageDriverKey: "elsa.json" }
+    ], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }] },
+    provider: { providerKey: "elsa.activity-graph", schemaVersion: "2", payload: { rootActivity: root([line()]), variables: [], outputMappings: [
+      { outputReferenceKey: "nullable-result", source: { syntax: "Literal", value: "ok" } },
+      { outputReferenceKey: "number-result", source: { syntax: "Literal", value: 0 } }
+    ], outcomeMappings: [{ sourceOutcomeReferenceKey: done.referenceKey, boundaryOutcomeReferenceKey: "done" }] } }, layout: [], activityPresentation: []
   });
   const activityRoute = `/workflows/activity-definitions?definition=${created.definition.definitionId}&section=editor&draft=${created.draft.draftId}`;
   const saved = () => api<Draft>(`/design/activities/drafts/${created.draft.draftId}`);
@@ -89,6 +127,33 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     keyboardActions.push("Tab to Apply default; Enter");
   }
   try {
+    const emptyActivity = await api<{ definition: { definitionId: string }; draft: { draftId: string } }>("/design/activities/definitions", "POST", {
+      displayName: `Empty null contract ${info.project.name} ${Date.now()}`, category: "Qualification",
+      contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }] },
+      provider: { providerKey: "elsa.activity-graph", schemaVersion: "2", payload: { rootActivity: root([line()]), variables: [], outputMappings: [], outcomeMappings: [{ sourceOutcomeReferenceKey: done.referenceKey, boundaryOutcomeReferenceKey: "done" }] } }, layout: [], activityPresentation: []
+    });
+    await page.goto(`/workflows/activity-definitions?definition=${emptyActivity.definition.definitionId}&section=editor&draft=${emptyActivity.draft.draftId}`);
+    await activate(views().getByRole("tab", { name: /^Inputs/ }), "Empty Inputs tab");
+    await expect(page.locator('[data-contract-row-kind="input"]')).toHaveCount(0);
+    await expect(page.getByText("No inputs defined.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add input", exact: true })).toBeEnabled();
+    await capture(page, info, "contract-empty-inputs");
+    await activate(views().getByRole("tab", { name: /^Outputs/ }), "Empty Outputs tab");
+    await expect(page.locator('[data-contract-row-kind="output"]')).toHaveCount(0);
+    await expect(page.getByText("No outputs defined.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add output", exact: true })).toBeEnabled();
+    await capture(page, info, "contract-empty-outputs");
+
+    const emptyWorkflow = await api<{ definition: { id: string }; draft: { id: string } }>("/design/workflows/definitions", "POST", {
+      name: `Empty null test ${info.project.name} ${Date.now()}`, initialState: { variables: [], inputs: [], outputs: [], rootActivity: root([line()]) }, layout: [], activityPresentation: []
+    });
+    registerWorkflow(emptyWorkflow.definition.id);
+    await page.goto(`/workflows/definitions?definition=${emptyWorkflow.definition.id}&section=editor&draft=${emptyWorkflow.draft.id}`);
+    await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Open empty Test Run");
+    await expect(page.getByRole("button", { name: "Start Test Run", exact: true })).toBeEnabled();
+    await capture(page, info, "workflow-empty-test");
+    proof.emptyWorkflow = await runWorkflowTest({});
+
     await page.goto(activityRoute); await inputs();
     await expect(required()).toBeChecked(); await expect(required()).toBeEnabled();
     await expect(page.getByText("Allow null", { exact: true })).toHaveCount(0);
@@ -128,6 +193,22 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     await expect(page.getByRole("combobox", { name: "Default", exact: true })).toBeFocused();
     await capture(page, info, "contract-required");
 
+    await activate(views().getByRole("tab", { name: /^Outputs/ }), "Activity Outputs tab");
+    const nullableOutput = () => page.locator('[data-contract-row-kind="output"][data-contract-reference-key="nullable-result"]');
+    await expect(nullableOutput().locator('[data-contract-field="type.alias"]')).toHaveValue("String");
+    await expect(page.getByText("Allow null", { exact: true })).toHaveCount(0);
+    await nullableOutput().locator('[data-contract-field="type.alias"]').selectOption("Any");
+    await expect.poll(async () => (await saved()).contract.outputs.find(output => output.referenceKey === "nullable-result")?.type.alias).toBe("Any");
+    await page.reload(); await activate(views().getByRole("tab", { name: /^Outputs/ }), "Reopen Activity Outputs");
+    await expect(nullableOutput().locator('[data-contract-field="type.alias"]')).toHaveValue("Any");
+    await nullableOutput().locator('[data-contract-field="type.alias"]').selectOption("String");
+    await expect.poll(async () => (await saved()).contract.outputs.find(output => output.referenceKey === "nullable-result")?.type.alias).toBe("String");
+    await page.reload(); await activate(views().getByRole("tab", { name: /^Outputs/ }), "Reopen restored Activity Outputs");
+    await expect(nullableOutput().locator('[data-contract-field="type.alias"]')).toHaveValue("String");
+    await expect(page.locator('[data-contract-row-kind="output"][data-contract-reference-key="number-result"]').locator('[data-contract-field="type.alias"]')).toHaveValue("Int32");
+    await capture(page, info, "activity-outputs-reopened");
+    await inputs();
+
     await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Open Test Run");
     const dialog = page.getByRole("dialog");
     const runTest = dialog.getByRole("button", { name: "Run test", exact: true });
@@ -137,8 +218,8 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     await selectWithKeyboard(dialog.getByRole("combobox", { name: "Note", exact: true }), "Null");
     await expect(dialog.getByRole("combobox", { name: "Count", exact: true }).locator('option[value="Null"]')).toBeDisabled();
     await capture(page, info, "activity-test-inputs");
-    await activate(runTest, "Run activity test"); await expect(dialog.getByRole("region", { name: "Test run result", exact: true })).toContainText("Completed", { timeout: 30_000 });
-    proof.activityTestRequest = requests.at(-1);
+    const initialActivityRun = await runActivityTest(runTest, "Run activity test");
+    proof.activityTestRequest = initialActivityRun.request; proof.activityTestCompletion = initialActivityRun;
     await activate(dialog.getByRole("button", { name: "Close", exact: true }).first(), "Close Test Run");
 
     // A type edit must persist and change the reopened test-drive contract.
@@ -150,10 +231,16 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Open Test Run");
     await selectWithKeyboard(dialog.getByRole("combobox", { name: "Note", exact: true }), "Null");
     const changedCount = dialog.getByRole("combobox", { name: "Count", exact: true });
-    await expect(changedCount.locator('option[value="Null"]')).toBeEnabled(); await selectWithKeyboard(changedCount, "Null");
+    await expect(changedCount.locator('option[value="Null"]')).toBeEnabled();
+    await expect(changedCount).toHaveValue("Absent");
+    const nullableOmission = await runActivityTest(runTest, "Run nullable omission");
+    proof.activityNullableOmission = nullableOmission;
+    expect(nullableOmission.request.body).toMatchObject({ inputs: { count: { state: "Absent" }, note: { state: "Present", value: null } } });
+    await selectWithKeyboard(changedCount, "Null");
     await capture(page, info, "contract-type-nullable");
-    await activate(runTest, "Run activity test"); await expect(dialog.getByRole("region", { name: "Test run result", exact: true })).toContainText("Completed", { timeout: 30_000 });
-    proof.changedTypeRequest = requests.at(-1);
+    const changedActivityRun = await runActivityTest(dialog.getByRole("button", { name: "Run again", exact: true }), "Run nullable value again");
+    expect(changedActivityRun.receipt.testRunId).not.toBe(nullableOmission.receipt.testRunId);
+    proof.changedTypeRequest = changedActivityRun.request; proof.changedTypeCompletion = changedActivityRun;
     await activate(dialog.getByRole("button", { name: "Close", exact: true }).first(), "Close Test Run");
     await countRow().locator('[data-contract-field="type.alias"]').selectOption("Int32");
     await expect.poll(async () => (await saved()).contract.inputs.find(member => member.referenceKey === "count")!.type.alias).toBe("Int32");
@@ -163,18 +250,66 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     await capture(page, info, "contract-type-nonnullable");
     await activate(dialog.getByRole("button", { name: "Close", exact: true }).first(), "Close Test Run");
 
+    const invalidActivityKey = crypto.randomUUID();
+    const invalidActivity = await api<{ testRunId: string; status: string; artifactId: string | null; sourceReferenceId: string | null; commandDispatchStatus: string | null; expiration: { evidenceRetained: boolean }; failure: { code: string } }>(
+      `/publishing/activity-drafts/${created.draft.draftId}/test-runs`, "POST", {
+        expectedRevision: (await saved()).revision, idempotencyKey: invalidActivityKey,
+        inputs: { note: { state: "Present", value: null }, count: { state: "Present", value: null } }
+      });
+    expect(invalidActivity).toMatchObject({ status: "ValidationRejected",
+      expiration: { evidenceRetained: false }, failure: { code: "activity.test-run.preparation-failed" } });
+    expect(invalidActivity.artifactId ?? null).toBeNull(); expect(invalidActivity.sourceReferenceId ?? null).toBeNull();
+    expect(invalidActivity.commandDispatchStatus ?? null).toBeNull();
+    const invalidReplay = await api<typeof invalidActivity>(`/publishing/activity-drafts/${created.draft.draftId}/test-runs/idempotency/${invalidActivityKey}`);
+    expect(invalidReplay.testRunId).toBe(invalidActivity.testRunId); expect(invalidReplay.status).toBe("ValidationRejected");
+    await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Reopen after API null refusal");
+    await selectWithKeyboard(dialog.getByRole("combobox", { name: "Note", exact: true }), "Null");
+    const correctedActivity = await runActivityTest(runTest, "Run corrected activity inputs");
+    proof.activityNullRefusal = { receipt: invalidActivity, replay: invalidReplay, correction: correctedActivity };
+    await activate(dialog.getByRole("button", { name: "Close", exact: true }).first(), "Close corrected Test Run");
+
     const workflow = await api<{ definition: { id: string }; draft: { id: string } }>("/design/workflows/definitions", "POST", {
       name: `Null admission ${info.project.name} ${Date.now()}`, initialState: { variables: [], inputs: [
         { referenceKey: "topic", name: "topic", displayName: "Topic", type: type("String"), isRequired: true },
         { referenceKey: "count", name: "count", displayName: "Count", type: type("Int32"), isRequired: false },
-        { referenceKey: "memo", name: "memo", displayName: "Memo", type: type("String"), isRequired: false }
+        { referenceKey: "memo", name: "memo", displayName: "Memo", type: type("String"), isRequired: false },
+        { referenceKey: "payload", name: "payload", displayName: "Payload", type: type("Any"), isRequired: false },
+        { referenceKey: "flag", name: "flag", displayName: "Flag", type: type("Boolean"), isRequired: false }
       ], outputs: [], rootActivity: root([line()]) }, layout: [], activityPresentation: []
     });
     registerWorkflow(workflow.definition.id);
     const admissionDraft = await api<{ state: { rootActivity: Node; inputs: { referenceKey: string }[] } }>(`/design/workflows/drafts/${workflow.draft.id}`);
     expect(admissionDraft.state.rootActivity.nodeId).toBe("root");
-    expect(admissionDraft.state.inputs.map(input => input.referenceKey)).toEqual(["topic", "count", "memo"]);
+    expect(admissionDraft.state.inputs.map(input => input.referenceKey)).toEqual(["topic", "count", "memo", "payload", "flag"]);
     await page.goto(`/workflows/definitions?definition=${workflow.definition.id}&section=editor&draft=${workflow.draft.id}`);
+    const workflowViews = () => page.getByRole("tablist", { name: "Editor view tabs", exact: true });
+    const workflowSaved = () => api<{ state: { inputs: { referenceKey: string; name: string; type: { alias: string } }[]; outputs: { referenceKey: string; name: string; type: { alias: string } }[] } }>(`/design/workflows/drafts/${workflow.draft.id}`);
+    const workflowInputRow = (name: string) => page.locator(".wf-properties-table tbody tr").filter({ has: page.locator(`input[aria-label="Input name"][value="${name}"]`) });
+    async function workflowTab(name: "Inputs" | "Outputs") {
+      await activate(workflowViews().getByRole("tab", { name, exact: true }), `Workflow ${name}`);
+    }
+    async function setWorkflowInputType(name: string, alias: string) {
+      await workflowTab("Inputs");
+      const field = workflowInputRow(name).getByRole("combobox", { name: "Input type", exact: true });
+      await expect(field).toBeVisible(); await field.selectOption(alias);
+      await expect.poll(async () => (await workflowSaved()).state.inputs.find(input => input.referenceKey === name)?.type.alias).toBe(alias);
+    }
+    await workflowTab("Outputs");
+    const outputSave = page.waitForResponse(response => response.request().method() === "PUT" && response.url().includes("/design/workflows/drafts/") && (response.request().postDataJSON().state?.outputs?.length ?? 0) > 0);
+    await activate(page.getByRole("button", { name: "Add output", exact: true }), "Add workflow output");
+    const addedOutput = await outputSave; expect(addedOutput.ok()).toBe(true);
+    expect(addedOutput.request().postDataJSON().state.outputs[0]).not.toHaveProperty("isNullable");
+    await page.getByRole("textbox", { name: "Output name", exact: true }).fill("answer");
+    await expect.poll(async () => (await workflowSaved()).state.outputs[0]?.name).toBe("answer");
+    const outputType = () => page.getByRole("combobox", { name: "Output type", exact: true });
+    await expect(outputType()).toHaveValue("String"); await outputType().selectOption("Int32");
+    await expect.poll(async () => (await workflowSaved()).state.outputs[0]?.type.alias).toBe("Int32");
+    await page.reload(); await workflowTab("Outputs");
+    await expect(outputType()).toHaveValue("Int32"); await expect(page.getByText("Allow null", { exact: true })).toHaveCount(0);
+    await capture(page, info, "workflow-outputs-reopened");
+    await outputType().selectOption("String");
+    await expect.poll(async () => (await workflowSaved()).state.outputs[0]?.type.alias).toBe("String");
+    proof.workflowOutput = { addedRequest: addedOutput.request().postDataJSON(), restored: (await workflowSaved()).state.outputs[0] };
     await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Open Test Run");
     const start = page.getByRole("button", { name: "Start Test Run", exact: true });
     await expect(start).toBeEnabled(); const beforeWorkflow = requests.length;
@@ -185,16 +320,57 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     await expect(page.getByRole("textbox", { name: "Topic", exact: true })).toHaveValue("null");
     await expect(page.getByRole("button", { name: "Send null for Count", exact: true })).toHaveCount(0);
     await capture(page, info, "workflow-test-inputs");
-    const testResponse = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/test-runs"));
-    await activate(start, "Start workflow test run"); const tested = await testResponse;
-    expect(tested.ok(), await tested.text()).toBe(true);
-    expect(tested.request().postDataJSON().inputs).toEqual({ topic: null });
-    let testRun = await tested.json() as { testRunId: string; workflowExecutionId?: string };
-    await expect.poll(async () => {
-      testRun = await api<typeof testRun>(`/publishing/workflow-test-runs/${testRun.testRunId}`);
-      return Boolean(testRun.workflowExecutionId);
-    }, { timeout: 30_000 }).toBe(true);
-    proof.workflowTest = { request: tested.request().postDataJSON(), testRun, completed: await completed(testRun.workflowExecutionId!) };
+    await activate(page.getByRole("button", { name: "Send null for Payload", exact: true }), "Send null for Any");
+    await expect(page.getByRole("textbox", { name: "Payload", exact: true })).toHaveValue("null");
+    await expect(page.getByRole("button", { name: "Send null for Flag", exact: true })).toHaveCount(0);
+    await selectWithKeyboard(page.getByRole("combobox", { name: "Flag", exact: true }), "false");
+    await capture(page, info, "workflow-type-matrix");
+    proof.workflowTest = await runWorkflowTest({ topic: null, payload: null, flag: false });
+
+    await activate(page.getByRole("button", { name: "Return to editing", exact: true }), "Return to workflow editing");
+    await setWorkflowInputType("count", "String");
+    await page.reload(); await workflowTab("Inputs");
+    await expect(workflowInputRow("count").getByRole("combobox", { name: "Input type", exact: true })).toHaveValue("String");
+    await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Reopen changed workflow Test Run");
+    await activate(page.getByRole("button", { name: "Send null for Topic", exact: true }), "Send null for Topic");
+    await activate(page.getByRole("button", { name: "Send null for Count", exact: true }), "Send null for changed Count");
+    await activate(page.getByRole("button", { name: "Send null for Payload", exact: true }), "Send null for Any");
+    await selectWithKeyboard(page.getByRole("combobox", { name: "Flag", exact: true }), "false");
+    await capture(page, info, "workflow-type-nullable");
+    const changedWorkflow = await runWorkflowTest({ topic: null, count: null, payload: null, flag: false });
+    await activate(page.getByRole("button", { name: "Return to editing", exact: true }), "Return to workflow editing");
+    await setWorkflowInputType("count", "Int32");
+    await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Reopen nonnullable Test Run");
+    await activate(page.getByRole("button", { name: "Refresh setup", exact: true }), "Refresh pinned input setup");
+    await expect(page.getByRole("button", { name: "Send null for Count", exact: true })).toHaveCount(0);
+    const beforeTypeRefusal = requests.length;
+    await activate(start, "Reject retained null for Int32");
+    await expect(page.getByRole("alert").filter({ hasText: "Count cannot be null." })).toBeVisible();
+    expect(requests.length).toBe(beforeTypeRefusal); await capture(page, info, "workflow-type-nonnullable-refusal");
+    await activate(page.getByRole("button", { name: "Omit for Count", exact: true }), "Correct Count by omission");
+    const correctedCount = await runWorkflowTest({ topic: null, payload: null, flag: false });
+
+    await activate(page.getByRole("button", { name: "Return to editing", exact: true }), "Return to workflow editing");
+    await setWorkflowInputType("payload", "Boolean");
+    await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Reopen Boolean Test Run");
+    await activate(page.getByRole("button", { name: "Refresh setup", exact: true }), "Refresh Boolean setup");
+    await expect(page.getByRole("button", { name: "Send null for Payload", exact: true })).toHaveCount(0);
+    const beforeBooleanRefusal = requests.length;
+    await activate(start, "Reject retained null for Boolean");
+    await expect(page.getByRole("alert").filter({ hasText: "Payload cannot be null." })).toBeVisible();
+    expect(requests.length).toBe(beforeBooleanRefusal); await capture(page, info, "workflow-boolean-refusal");
+    await activate(page.getByRole("button", { name: "Omit for Payload", exact: true }), "Correct Boolean by omission");
+    const correctedBoolean = await runWorkflowTest({ topic: null, flag: false });
+    await activate(page.getByRole("button", { name: "Return to editing", exact: true }), "Return to workflow editing");
+    await setWorkflowInputType("payload", "Any");
+    await page.reload(); await workflowTab("Inputs");
+    await expect(workflowInputRow("count").getByRole("combobox", { name: "Input type", exact: true })).toHaveValue("Int32");
+    await expect(workflowInputRow("payload").getByRole("combobox", { name: "Input type", exact: true })).toHaveValue("Any");
+    await expect(page.getByText("Allow null", { exact: true })).toHaveCount(0);
+    const persistedWorkflow = await workflowSaved();
+    for (const member of [...persistedWorkflow.state.inputs, ...persistedWorkflow.state.outputs]) expect(member).not.toHaveProperty("isNullable");
+    await capture(page, info, "workflow-inputs-reopened");
+    proof.workflowTypeRecovery = { changedWorkflow, beforeTypeRefusal, correctedCount, beforeBooleanRefusal, correctedBoolean, persistedWorkflow };
 
     const promoted = await api<{ id: string }>(`/design/workflows/drafts/${workflow.draft.id}/promote`, "POST", { operationKey: crypto.randomUUID() });
     const published = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${promoted.id}/publish`, "POST", {});
@@ -281,9 +457,38 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     const activity = await saved();
     const preflight = await api<{ isPublishable: boolean; reviewToken: string; minimumVersion: string; definitionHeadVersionId: string | null; diagnostics: unknown[] }>(`/design/activities/drafts/${activity.draftId}/publication-preflight`, "POST", { expectedDraftRevision: activity.revision, expectedDefinitionHeadVersionId: null });
     expect(preflight.isPublishable, JSON.stringify(preflight.diagnostics)).toBe(true);
-    await api(`/design/activities/drafts/${activity.draftId}/publish`, "POST", { expectedDraftRevision: activity.revision, expectedDefinitionHeadVersionId: preflight.definitionHeadVersionId, version: preflight.minimumVersion, reviewToken: preflight.reviewToken, idempotencyKey: crypto.randomUUID() });
+    const activityPublication = await api<{ outcome: { definitionVersionId: string } }>(`/design/activities/drafts/${activity.draftId}/publish`, "POST", { expectedDraftRevision: activity.revision, expectedDefinitionHeadVersionId: preflight.definitionHeadVersionId, version: preflight.minimumVersion, reviewToken: preflight.reviewToken, idempotencyKey: crypto.randomUUID() });
     await page.goto(activityRoute); await inputs(); await expect(required()).toBeDisabled(); await expect(page.getByRole("combobox", { name: "Default", exact: true })).toBeDisabled();
     await capture(page, info, "contract-readonly");
+    await activate(views().getByRole("tab", { name: /^Outputs/ }), "Read-only Activity Outputs");
+    await expect(nullableOutput().locator('[data-contract-field="type.alias"]')).toBeDisabled();
+    await expect(page.locator('[data-contract-row-kind="output"][data-contract-reference-key="number-result"]').locator('[data-contract-field="type.alias"]')).toBeDisabled();
+    await capture(page, info, "contract-output-readonly");
+
+    await page.goto(`/workflows/activity-definitions?definition=${created.definition.definitionId}&section=versions&version=${activityPublication.outcome.definitionVersionId}`);
+    const historical = () => page.getByRole("region", { name: "Selected exact version", exact: true }).locator(".ad-historical-contract");
+    await expect(historical()).toBeVisible();
+    for (const name of ["Note", "Nullable result"]) await expect(historical().locator("li").filter({ hasText: name })).toContainText("Allows null");
+    for (const name of ["Count", "Number result"]) await expect(historical().locator("li").filter({ hasText: name })).toContainText("Non-null");
+    await expect(historical().locator("input, select, textarea")).toHaveCount(0);
+    await capture(page, info, "contract-historical");
+
+    async function clrContract(key: string, versionId: string, inputKey: string, nullable: boolean, captureName: string) {
+      const exact = await api<{ contract: { inputs: { referenceKey: string; name: string; displayName: string | null; type: { alias: string; supportsNull: boolean } }[] } }>(`/design/activities/versions/${versionId}`);
+      const input = exact.contract.inputs.find(input => input.referenceKey === inputKey)!;
+      expect(input).toBeTruthy(); expect(input.type.alias).toBe("String"); expect(input.type.supportsNull).toBe(nullable);
+      const definitionId = definitionIds.get(key); expect(definitionId).toBeTruthy();
+      await page.goto(`/workflows/activity-definitions?definition=${definitionId}&section=versions&version=${versionId}`);
+      await expect(historical()).toBeVisible();
+      await expect(historical().locator("li").filter({ hasText: input.displayName || input.name })).toContainText(nullable ? "Allows null" : "Non-null");
+      await expect(historical().locator("input, select, textarea")).toHaveCount(0);
+      await capture(page, info, captureName);
+      return { definitionId, versionId, input };
+    }
+    proof.clrContracts = [
+      await clrContract("Elsa.Activities.Primitives.Activities.WriteLine", write, "text", true, "clr-nullable-contract"),
+      await clrContract("Elsa.Activities.Primitives.Activities.PublishEvent", publishEvent, "EventName", false, "clr-nonnullable-contract")
+    ];
     proof.status = "passed";
   } finally {
     proof.observedTestRunRequests = requests;

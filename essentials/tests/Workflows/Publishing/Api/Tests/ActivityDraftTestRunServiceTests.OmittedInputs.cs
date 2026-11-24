@@ -14,6 +14,45 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed partial class ActivityDraftTestRunServiceTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Activity_test_preparation_rejects_nonnullable_null_before_dispatch(bool published)
+    {
+        var inputs = new DesignInput[]
+        {
+            new("note", "Note", new("String"), true, true, null, "elsa.json"),
+            new("count", "Count", new("Int32"), false, false, null, "elsa.json")
+        };
+        var contract = new DesignContract("1", inputs, [], []);
+        var runtimeInputs = inputs.Select(input => new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+            input.ReferenceKey, input.Name, new(input.Type.Alias), input.IsRequired, input.IsNullable,
+            false, null, ActivityValuePolicy.Default)).ToArray();
+        var runtimeContract = new RuntimeContract("graph-type", "1", WellKnownRuntimeActivityConsumers.GraphActivity, Json("{}"), runtimeInputs,
+            new(new ValueTypeDescriptor("Any"), false, ActivityValuePolicy.Default, []), ["Done"], new("test", "graph-type"));
+        var fixture = await CreateFixture(childTemplate: ValidChildTemplate(), includePublishedVersion: true, acceptDispatch: true,
+            publicContract: contract, rootRuntimeContract: runtimeContract);
+        var supplied = new Dictionary<string, ActivityDraftTestRunInput>
+        {
+            ["note"] = new("Present", Json("null")),
+            ["count"] = new("Present", Json("null"))
+        };
+        var request = fixture.Request with { Inputs = supplied };
+        var versionRequest = new StartActivityVersionTestRun(fixture.PublishedVersion!.DefinitionVersionId, "null-refusal", supplied);
+        var response = published ? await fixture.Service.StartVersionAsync(versionRequest) : await fixture.Service.StartAsync(request);
+        Assert.Equal("ValidationRejected", response.Status);
+        Assert.Equal("activity.test-run.preparation-failed", response.Failure?.Code);
+        Assert.Null(response.ArtifactId);
+        Assert.Null(response.SourceReferenceId);
+        Assert.Null(response.CommandDispatchStatus);
+        Assert.False(response.Expiration.EvidenceRetained);
+        Assert.False(fixture.Dispatcher.WasCalled);
+        var replay = published ? await fixture.Service.StartVersionAsync(versionRequest) : await fixture.Service.StartAsync(request);
+        Assert.Equal(response.TestRunId, replay.TestRunId);
+        Assert.Equal(response.Failure, replay.Failure);
+        Assert.False(fixture.Dispatcher.WasCalled);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
