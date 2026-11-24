@@ -363,6 +363,14 @@ public sealed partial class EfStore
     {
         if (owned.Count == 0) return;
         var ids = List(owned.Select(f => f.Partition).Distinct().Order());
+        // SQLite caps the depth of an OR chain at 1,000. A VALUES set retains the fence pairs at the default 1,024 scopes.
+        if (!postgres && Engine is null)
+        {
+            var pairs = string.Join(", ", owned.Select(f => FormattableString.Invariant($"({f.Partition}, {f.Epoch})")));
+            await using var sqlite = create();
+            await sqlite.Database.ExecuteSqlRawAsync($"""UPDATE "Partitions" SET "Owner" = NULL WHERE ("Id", "Epoch") IN (VALUES {pairs})""", cancellationToken);
+            return;
+        }
         var mine = string.Join(" OR ", owned.Select(f => FormattableString.Invariant($"""({Pid} = {f.Partition} AND "Epoch" = {f.Epoch})""")));
         await using var db = create();
         await db.Database.ExecuteSqlRawAsync(postgres && Engine is null

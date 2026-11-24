@@ -34,6 +34,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     private readonly bool[] _releasing = new bool[partitions];
     private IScopeHost? _host;
     private bool _balancing;
+    private Task? _stopSet;
     private Cluster? _cluster;      // K1b: what the node's last renewing heartbeat saw, for the balancing round
 
     public string Node => node;
@@ -62,6 +63,40 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
+        if (cancellationToken.IsCancellationRequested) return;
+        if (_stopSet is { } stopping)
+        {
+            await stopping.WaitAsync(cancellationToken);
+            return;
+        }
+        // The clocked host joins its loops before stopping. Retain the scalar path when a caller stops with work in flight.
+        if (_host is IScopeSetRelease { SupportsSetRelease: true } setHost &&
+            !_passing.Contains(true) && !_activating.Contains(true) && !_releasing.Contains(true))
+        {
+            var held = Enumerable.Range(0, partitions).Select(Activation).OfType<IScopeActivation>().ToArray();
+            if (held.Length > 1)
+            {
+                var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _stopSet = completion.Task;
+                try
+                {
+                    await ReleaseSetAsync(setHost, held, cancellationToken);
+                    completion.SetResult();
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    completion.SetCanceled(cancellationToken);
+                }
+                catch (Exception error)
+                {
+                    completion.SetException(error);
+                    _ = completion.Task.Exception;
+                    throw;
+                }
+                finally { _stopSet = null; }
+                return;
+            }
+        }
         // A cancelled token ends it: what is not given up yet runs out by its lease, as after a crash.
         for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++) await DeactivateAsync(scope, cancellationToken);
     }
@@ -94,9 +129,11 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// <summary>Give the scope up. Whoever takes it next finds no death.</summary>
     public async Task DeactivateAsync(int scope, CancellationToken cancellationToken = default)
     {
-        if (Activation(scope) is not { } activation) return;
+        if (_releasing[scope] || Activation(scope) is not { } activation) return;
+        _releasing[scope] = true;
         _active[scope] = null;
-        await activation.DisposeAsync();
+        try { await activation.DisposeAsync(); }
+        finally { _releasing[scope] = false; }
     }
 
     /// <summary>
@@ -131,23 +168,10 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         var (release, take) = Balancer.Plan(partitions, cluster, scopes.Where(Owns).ToList(), scopes.Where(Activating).ToList(), flaws);
         if (release.Count > 1 && _host is IScopeSetRelease { SupportsSetRelease: true } setHost)
         {
-            if (release.Any(scope => _passing[scope] || _activating[scope])) return;     // hand the set over when every surplus scope is idle
+            if (release.Any(scope => _passing[scope] || _activating[scope] || _releasing[scope])) return;     // hand the set over when every surplus scope is idle
             cancellationToken.ThrowIfCancellationRequested();     // a process that goes away mid-round gives nothing more up
             var activations = release.Select(Activation).OfType<IScopeActivation>().ToArray();
-            if (activations.Length > 0)
-            {
-                foreach (var activation in activations) _releasing[activation.Scope] = true;
-                try
-                {
-                    await setHost.ReleaseAsync(activations, cancellationToken);
-                    foreach (var activation in activations)
-                        if (!activation.Active && ReferenceEquals(_active[activation.Scope], activation)) _active[activation.Scope] = null;
-                }
-                finally
-                {
-                    foreach (var activation in activations) _releasing[activation.Scope] = false;
-                }
-            }
+            if (activations.Length > 0) await ReleaseSetAsync(setHost, activations, cancellationToken);
         }
         else
         {
@@ -156,15 +180,13 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
                 cancellationToken.ThrowIfCancellationRequested();
                 // Earlier give-ups may have awaited the store while a pass started on this worker.
                 if (_passing[surplus] || _activating[surplus] || !Owns(surplus)) continue;
-                _releasing[surplus] = true;
-                try { await DeactivateAsync(surplus, cancellationToken); }
-                finally { _releasing[surplus] = false; }
+                await DeactivateAsync(surplus, cancellationToken);
             }
         }
         if (take.Count > 1 && _host is IScopeSetGain { SupportsSetGain: true } gains)
         {
             // A release may have yielded since the plan was made.
-            var requested = take.Where(scope => !Owns(scope) && !_activating[scope]).ToArray();
+            var requested = take.Where(scope => !Owns(scope) && !_activating[scope] && !_releasing[scope]).ToArray();
             if (requested.Length == 0) return;
             foreach (var scope in requested) _activating[scope] = true;
             IReadOnlyList<IScopeActivation> gained;
@@ -180,6 +202,23 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             foreach (var activation in gained) await activation.WokenAsync(null, cancellationToken);
         }
         else await Task.WhenAll(take.Select(s => ActivateAsync(s, cancellationToken)));
+    }
+
+    private async ValueTask ReleaseSetAsync(IScopeSetRelease host, IScopeActivation[] activations,
+        CancellationToken cancellationToken)
+    {
+        foreach (var activation in activations) _releasing[activation.Scope] = true;
+        try
+        {
+            await host.ReleaseAsync(activations, cancellationToken);
+            foreach (var activation in activations)
+                if (!activation.Active && ReferenceEquals(_active[activation.Scope], activation)) _active[activation.Scope] = null;
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        finally
+        {
+            foreach (var activation in activations) _releasing[activation.Scope] = false;
+        }
     }
 
     /// <summary>K1b: the node's lease, when the host keeps one (<see cref="INodeLeaseHost"/>); null for a host with no node lease.</summary>

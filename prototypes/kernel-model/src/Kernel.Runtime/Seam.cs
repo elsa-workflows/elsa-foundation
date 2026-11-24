@@ -37,7 +37,7 @@ public interface IScopeSetRelease
 {
     bool SupportsSetRelease { get; }
 
-    /// <summary>Cancellation stops the handover before it starts. Once it starts, the host drains the group.</summary>
+    /// <summary>Cancellation stops further handover operations. A store call already entered may have landed.</summary>
     ValueTask ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken = default);
 }
 
