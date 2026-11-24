@@ -57,6 +57,21 @@ The fixture records the operation's outcome and subsequent store state. It does 
 A later owner starts at the unchanged journal position and commits one checkpoint and journal row.
 Repeat with `commit=ef` or `fence=checked` to exercise the other paths.
 
+For PostgreSQL with TLS, create a disposable database and use a connection with `SSL Mode=VerifyFull`.
+The server certificate must match the host name and chain to a trusted root. Run:
+
+```bash
+dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x watchdog postgres "$PG" stage=owned-fence commit=owned fence=batch disposable=1
+```
+
+This stage verifies TLS before resetting the database and again on the waiting worker's session.
+The worker reaches a real PostgreSQL lock wait after writing its batch and before committing.
+The waiting command has no command, statement or lock timeout and must report cancellation on
+the watchdog token. A second transaction verifies the worker holds the partition row, then verifies the lock is
+available after cancellation while the independent blocker is still held. The rollback leaves
+the same journal position for a successor. The stage tests command cancellation and physical
+lock release under verified TLS.
+
 `EngineRun.cs` lists the options. The stress test is the one of FINDINGS section 4: three nodes, two partitions (four
 in the runs marked "no kills"), six workers on 150 ms leases, stalls of 150 to 500 ms, a busy worker session killed
 every 20 to 60 ms (`pg_terminate_backend`, `KILL`, `KILL CONNECTION`; SQLite has no sessions), an outside producer
