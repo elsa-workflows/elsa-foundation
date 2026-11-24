@@ -729,6 +729,15 @@ delivery and checks model protection against the committed checkpoint before
 it retires an eligible root. Build Native.Run in Release with a locked restore
 and run `pg-root-retention owned checked` against an empty PostgreSQL database.
 
+The `pg-root-plan-selection owned checked` fixture uses the separate PostgreSQL
+generated-root timer profile. The real migration operator selects from projected
+workflow headers and commits its signed selection to a plan actor's Full journal
+through the PostgreSQL worker. A second plan records an empty page and an opaque
+continuation. A fresh operator and public PostgreSQL reader recover the cursor and
+report the exact eligible reference as pending. The fixture covers selection for
+FC-C4. Production host composition, PostgreSQL `Migrate` dispatch and target
+application retain their own K9 and K11 acceptance.
+
 The opt-in format-17 fixture holds a selected operator request through
 `IIngress.RequestAsync`. Admission stores the tenant-bound reply address with
 the exact command. A fenced commit binds the response or refusal to that
