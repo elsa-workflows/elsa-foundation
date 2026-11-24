@@ -134,10 +134,16 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
             !stopped.Select(partition => partition.Epoch).SequenceEqual(fences.Select(fence => fence.Epoch)))
             throw new InvalidOperationException("The SQLite shutdown must release every owner at its original epoch.");
         var taken = await store.TakeAsync(scopes, "successor", Defaults.Lease);
+        if (taken.Taken.Count != count) throw new InvalidOperationException("The stale release control must hold the entire SQLite set.");
         var stale = taken.Taken[0];
+        var other = taken.Taken[1];
         var current = await store.RetakeAsync(stale.Partition, "successor", stale.Epoch, Defaults.Lease)
             ?? throw new InvalidOperationException("The new epoch is required for the stale release control.");
-        await store.ReleaseAsync(taken.Taken);
+        var otherCurrent = await store.RetakeAsync(other.Partition, "successor", other.Epoch, Defaults.Lease)
+            ?? throw new InvalidOperationException("A matching epoch in another tuple is required for the stale release control.");
+        if (current.Epoch != otherCurrent.Epoch) throw new InvalidOperationException("The two newer epochs must match.");
+        var releasing = taken.Taken.Select(fence => fence.Partition == other.Partition ? otherCurrent.For(other.Partition) : fence).ToArray();
+        await store.ReleaseAsync(releasing);
         var remaining = await db.Partitions.AsNoTracking().Where(partition => partition.Owner != null).SingleAsync();
         if (remaining.Id != stale.Partition || remaining.Owner != "successor" || remaining.Epoch != current.Epoch)
             throw new InvalidOperationException("A stale set release cleared a later owner epoch.");

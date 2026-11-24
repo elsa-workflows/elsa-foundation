@@ -1269,7 +1269,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var captured = Fences.Where(f => partitions.Contains(f.Partition)).ToList();
         ReceiveJobPublications(cancellationToken);
         await DrainAsync(HandedOver, cancellationToken);
-        if (cancellationToken.IsCancellationRequested) return;
+        cancellationToken.ThrowIfCancellationRequested();
         LeaseUsable();
         List<PartitionFence> leaving, kept = [];
         var quiet = false;
@@ -1288,7 +1288,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             // The fallback resets everything, so what the kept partitions hold in memory only is written first too, as a
             // stand-down writes it.
             await DrainAsync(_ => true, cancellationToken);
-            if (cancellationToken.IsCancellationRequested) return;
+            cancellationToken.ThrowIfCancellationRequested();
             LeaseUsable();
             lock (_turnSync)
             {

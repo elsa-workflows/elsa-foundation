@@ -34,6 +34,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     private readonly bool[] _releasing = new bool[partitions];
     private IScopeHost? _host;
     private bool _balancing;
+    private Task? _stopSet;
     private Cluster? _cluster;      // K1b: what the node's last renewing heartbeat saw, for the balancing round
 
     public string Node => node;
@@ -63,6 +64,11 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
         if (cancellationToken.IsCancellationRequested) return;
+        if (_stopSet is { } stopping)
+        {
+            await stopping.WaitAsync(cancellationToken);
+            return;
+        }
         // The clocked host joins its loops before stopping. Retain the scalar path when a caller stops with work in flight.
         if (_host is IScopeSetRelease { SupportsSetRelease: true } setHost &&
             !_passing.Contains(true) && !_activating.Contains(true) && !_releasing.Contains(true))
@@ -70,8 +76,11 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             var held = Enumerable.Range(0, partitions).Select(Activation).OfType<IScopeActivation>().ToArray();
             if (held.Length > 1)
             {
-                try { await ReleaseSetAsync(setHost, held, cancellationToken); }
+                var release = ReleaseSetAsync(setHost, held, cancellationToken).AsTask();
+                _stopSet = release;
+                try { await release; }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+                finally { _stopSet = null; }
                 return;
             }
         }
@@ -191,6 +200,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             await host.ReleaseAsync(activations, cancellationToken);
             foreach (var activation in activations)
                 if (!activation.Active && ReferenceEquals(_active[activation.Scope], activation)) _active[activation.Scope] = null;
+            cancellationToken.ThrowIfCancellationRequested();
         }
         finally
         {
