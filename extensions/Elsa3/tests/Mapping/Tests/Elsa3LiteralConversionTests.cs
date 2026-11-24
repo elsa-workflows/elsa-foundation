@@ -16,6 +16,20 @@ namespace Elsa3.Mapping.Tests;
 public sealed class Elsa3LiteralConversionTests
 {
     [Theory]
+    [InlineData("https://example.test/items?OwnerKey=%C3%A9")]
+    [InlineData("items/next")]
+    public async Task A_converter_backed_URI_literal_keeps_its_string_token(string text)
+    {
+        var typed = Elsa3TypedValues.CreateExpression("System.Uri", "Literal", text);
+        var definition = ConversionServices.Definition(Activity("root", "Acme.JsonOrder", ("Url", typed)));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.CreateWith(typeof(JsonOrderImportActivity).Assembly), definition);
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var data = Assert.IsType<JsonElement>(Input(Node(result.Value!.State, "root"), "Url").Value.Value);
+        Assert.Equal(JsonValueKind.String, data.ValueKind);
+        Assert.Equal(text, data.GetString());
+    }
+
+    [Theory]
     [InlineData("String", "{\"name\":\"Ada\"}", "\"{\\\"name\\\":\\\"Ada\\\"}\"")]
     [InlineData("String", "[]", "\"[]\"")]
     [InlineData("Int32?", "5", "5")]
@@ -228,6 +242,7 @@ public sealed record JsonImportOrder(string? Id);
 [ReplacesActivityType("Acme.JsonOrder")]
 public sealed class JsonOrderImportActivity : ReplacingTestActivity
 {
+    [ActivityInput] public Uri? Url { get; set; }
     [ActivityInput(Key = "order"), JsonConversion(MemberMappings = ["order_id=Id"])]
     public JsonImportOrder? Payload { get; set; }
     [ActivityInput] public DateTime? At { get; set; }

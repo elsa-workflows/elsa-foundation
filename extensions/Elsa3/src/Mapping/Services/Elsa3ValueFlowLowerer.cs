@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Elsa3.Mapping.Conversion;
 using System.Text.Json.Nodes;
 using Elsa.Expressions.Core.Models;
@@ -380,9 +381,13 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         var options = new Elsa3ConversionOptions { DateInterpretation = expressionRewriter.DateInterpretation, SourceTimeZone = expressionRewriter.SourceTimeZone };
         try
         {
+            var conversion = ConversionForInput(targetType, property.InputContract.StablePropertyKey, activityTypeKey);
+            var shape = conversion.Options.GetTypeInfo(scalarTarget).Kind;
+            // Elsa 3 encodes structured contracts as document text. String-backed converters
+            // such as Uri consume the string token itself, without parsing its contents as JSON.
+            var structured = shape is JsonTypeInfoKind.Object or JsonTypeInfoKind.Dictionary or JsonTypeInfoKind.Enumerable;
             var encodedDocument = literal.ValueKind == JsonValueKind.String && (kind.Equals("Object", StringComparison.OrdinalIgnoreCase) || reference.CollectionKind != CollectionKind.Single ||
-                !scalarTarget.IsPrimitive && scalarTarget != typeof(string) && scalarTarget != typeof(DateTime) && scalarTarget != typeof(DateTimeOffset) &&
-                scalarTarget != typeof(DateOnly) && scalarTarget != typeof(TimeOnly) && scalarTarget != typeof(TimeSpan) && scalarTarget != typeof(Guid) && !scalarTarget.IsEnum && scalarTarget != typeof(decimal) &&
+                structured && scalarTarget != typeof(string) &&
                 scalarTarget != typeof(object) && scalarTarget != typeof(JsonElement) && !typeof(JsonNode).IsAssignableFrom(scalarTarget));
             if (scalarTarget == typeof(bool) && literal.ValueKind == JsonValueKind.String && bool.TryParse(literal.GetString(), out var boolean))
                 literal = JsonSerializer.SerializeToElement(boolean, JsonBaseline.Options);
@@ -392,8 +397,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 literal = document.RootElement.Clone();
             }
             var notes = new List<Elsa3LiteralConversion.Note>();
-            var converted = Elsa3LiteralConversion.Rewrite(literal, targetType, options, notes.Add,
-                ConversionForInput(targetType, property.InputContract.StablePropertyKey, activityTypeKey));
+            var converted = Elsa3LiteralConversion.Rewrite(literal, targetType, options, notes.Add, conversion);
             foreach (var note in notes) Report(note);
             if (notes.Any(note => note.Code == Elsa3ActivityDiagnosticCodes.LiteralDateInterpreted) &&
                 diagnostics.All(note => note.Code != Elsa3ImportDiagnosticCodes.DateInterpretationApplied))

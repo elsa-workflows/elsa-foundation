@@ -139,6 +139,7 @@ public sealed class ValueConversionPreparationTests(ITestOutputHelper output)
         public bool TryGetTypeOrDefault(string alias, out Type type) => TryGetType(alias, out type);
     }
 
+    [JsonConversion(RefuseUnmatchedMembers = true)]
     private sealed class Contract
     {
         [JsonPropertyName("wire_name")]

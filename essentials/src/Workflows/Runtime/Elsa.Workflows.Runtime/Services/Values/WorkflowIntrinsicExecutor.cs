@@ -831,7 +831,9 @@ public sealed class WorkflowIntrinsicExecutor(
         }
         var combined = binding.ConversionPlan is null
             ? conversionSource.Retype(binding.TargetType)
-            : _valueConversionExecutor.Convert(conversionSource, binding.ConversionPlan);
+            : _valueConversionExecutor.Convert(conversionSource, binding.ConversionPlan,
+                // Assignment admission below validates the same target and owns its recorded diagnostics.
+                validateAssignmentPayload ? null : diagnostic => ReportJsonConversion(diagnostic, binding.InputName, conversionSource.Policy, warnings));
         combined = NormalizeTargetNull(binding, combined, executable.ValuePolicies, warnings, targetLabel);
         if (validateAssignmentPayload)
             ValidateAssignmentPayload(binding, combined, intrinsicState.Execution.ExecutableNodeId, warnings);
@@ -881,7 +883,8 @@ public sealed class WorkflowIntrinsicExecutor(
                 var member = ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, selected.Value, combinedPolicy);
                 try
                 {
-                    value = binding.ConversionPlan is null ? member.Retype(binding.TargetType) : _valueConversionExecutor.Convert(member, binding.ConversionPlan);
+                    // The mandatory assignment fit below records the target's diagnostics once.
+                    value = binding.ConversionPlan is null ? member.Retype(binding.TargetType) : _valueConversionExecutor.Convert(member, binding.ConversionPlan, report: null);
                     ValidateAssignmentPayload(binding, value, nodeId, context.Warnings);
                 }
                 catch (Exception exception) when (RuntimeReadSelectionException.IsFitFailure(exception))
@@ -901,6 +904,14 @@ public sealed class WorkflowIntrinsicExecutor(
             combinedPolicy,
             cancellationToken,
             source.ExternalReference?.StorageProfile);
+    }
+
+    private static void ReportJsonConversion(Elsa.Serialization.Core.JsonConversionDiagnostic diagnostic, string input,
+        ValueProtectionPolicy policy, IExecutionWarningSink? warnings)
+    {
+        var warning = ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{input}");
+        var protect = policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) || !string.IsNullOrWhiteSpace(policy.RetentionPolicy);
+        warnings?.Report(protect ? warning.ProtectedForm! : warning);
     }
 
     private void ValidateAssignmentPayload(RuntimeInputBinding binding, ValueEnvelope value, string nodeId, IExecutionWarningSink? warnings)

@@ -1487,6 +1487,7 @@ Elsa.Workflows.Runtime.Services.Values.RuntimeLoopIterationFrameFactory.Create(E
 Elsa.Workflows.Runtime.Services.Values.RuntimeLoopIterationFrameFactory.RuntimeLoopIterationFrameFactory() -> void
 Elsa.Workflows.Runtime.Services.Values.RuntimeValueConversionExecutor
 Elsa.Workflows.Runtime.Services.Values.RuntimeValueConversionExecutor.Convert(Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! source, Elsa.Workflows.Runtime.Core.Models.ValueConversionPlan! plan) -> Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!
+Elsa.Workflows.Runtime.Services.Values.RuntimeValueConversionExecutor.Convert(Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! source, Elsa.Workflows.Runtime.Core.Models.ValueConversionPlan! plan, System.Action<Elsa.Serialization.Core.JsonConversionDiagnostic!>? report) -> Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!
 Elsa.Workflows.Runtime.Services.Values.RuntimeValueConversionExecutor.RuntimeValueConversionExecutor(Elsa.Serialization.Core.IWellKnownTypeRegistry? wellKnownTypeRegistry = null) -> void
 Elsa.Workflows.Runtime.Services.Values.RuntimeVariableDeclarationProjector
 Elsa.Workflows.Runtime.Services.Values.RuntimeVariableDeclarationProjector.ProjectDeclarations(Elsa.Workflows.Runtime.Core.Models.ExecutableNode! node) -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.RuntimeVariableDeclaration!>!

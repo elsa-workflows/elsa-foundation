@@ -810,6 +810,7 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationPolic
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationPolicy.SchemaVersion.get -> string!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeValueConversionExecutor
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeValueConversionExecutor.Convert(Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! source, Elsa.Workflows.Runtime.Core.Models.ValueConversionPlan! plan) -> Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeValueConversionExecutor.Convert(Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! source, Elsa.Workflows.Runtime.Core.Models.ValueConversionPlan! plan, System.Action<Elsa.Serialization.Core.JsonConversionDiagnostic!>? report) -> Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeVolatileWaitPolicy
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeVolatileWaitPolicy.Decide(Elsa.Workflows.Runtime.Core.Models.RuntimeVolatileWaitPolicyRequest! request) -> Elsa.Workflows.Runtime.Core.Models.RuntimeVolatileWaitPolicyDecision!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeWorkflowControlBoundary

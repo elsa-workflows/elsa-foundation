@@ -14,6 +14,20 @@ contracts are Design-free and operate on runtime-owned executable artifacts and 
 > your implementation against the `.Core` contract; the engine package's registrations all use
 > `TryAdd*`.
 
+## Runtime value conversion
+
+`IRuntimeValueConversionExecutor` in Runtime Core is a replacement strategy. Runtime composition uses
+`TryAddSingleton` to select `RuntimeValueConversionExecutor`; a host can register its own implementation first.
+It applies the executable's pinned `ValueConversionPlan` without discovering a new conversion policy at runtime.
+Typed JSON uses the target package's scoped [conversion contract](../../../../../docs/serialization.md)
+and retains the received JSON after validating a typed copy.
+
+The overload accepting `Action<JsonConversionDiagnostic>` reports successful typed-copy diagnostics to the owning
+execution channel. The owner applies the value's protection policy before recording the warning. Implementations
+that only supply the original two-argument method remain callable through the default interface overload; a custom
+executor that performs typed JSON conversion should implement the reporting overload too. Selected-member and
+assignment paths let their subsequent owning fit validation record each diagnostic once.
+
 ## Conditional initial-fault admission
 
 Cross-model contributors use the mechanical `RuntimeChainIdentity` surface in Runtime Core.

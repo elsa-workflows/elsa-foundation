@@ -22,7 +22,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
 
     public static IEnumerable<object[]> TypedValidationWarningCases() =>
         from output in new[] { false, true }
-        from source in new[] { "literal", "expression", "member" }
+        from source in new[] { "literal", "expression", "member", "profile" }
         from protection in new[] { "public", "sensitive", "redacted", "retained" }
         select new object[] { output, source, protection };
 
@@ -76,6 +76,10 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         var type = new ValueTypeDescriptor("Test.ValidationWarningRecord");
         var binding = source switch
         {
+            "profile" => new RuntimeInputBinding("value", type, policy, RuntimeInputBindingSource.Literal,
+                literal: ValueEnvelope.Inline(new("String"), JsonSerializer.SerializeToElement(raw.GetRawText(), JsonBaseline.Options), policy),
+                conversionPlan: new ValueConversionPlan(1, ValueRepresentation.FormattedContent, new("String"), type,
+                    ValueConversionMode.Json, ValueConversionOperation.Profile, new("elsa.json", "1"), null, null)),
             "literal" => new RuntimeInputBinding("value", type, policy, RuntimeInputBindingSource.Literal,
                 literal: ValueEnvelope.Inline(type, raw, policy)),
             "member" => new RuntimeInputBinding("value", type, policy, RuntimeInputBindingSource.WorkflowRequestMember,

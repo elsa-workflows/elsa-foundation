@@ -20,11 +20,13 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// </summary>
 public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellKnownTypeRegistry = null) : IRuntimeValueConversionExecutor
 {
-    // Resolve aliases through the current registry on every call; only CLR member shape is invariant.
+    // XML member mapping resolves aliases through the current registry on every call; only CLR member shape is invariant.
     // Weak actual-Type keys distinguish module load contexts and permit collectible contracts to unload.
     private static readonly ConditionalWeakTable<Type, Dictionary<string, TypeMember>> Members = new();
 
-    public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan)
+    public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan) => Convert(source, plan, report: null);
+
+    public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan, Action<JsonConversionDiagnostic>? report)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(plan);
@@ -60,7 +62,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             ValueConversionOperation.NumericWidening => ConvertNumeric(inline, plan),
             ValueConversionOperation.RecursiveCollection => ConvertCollection(inline, plan, depth: 1),
             ValueConversionOperation.CanonicalAny => CanonicalizeAny(inline, plan),
-            ValueConversionOperation.Profile => ConvertProfile(inline, plan),
+            ValueConversionOperation.Profile => ConvertProfile(inline, plan, report),
             _ => throw Reject(plan, $"the pinned operation '{plan.Operation}' is unsupported")
         };
 
@@ -164,7 +166,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         return document.RootElement.Clone();
     }
 
-    private JsonElement ConvertProfile(JsonElement value, ValueConversionPlan plan)
+    private JsonElement ConvertProfile(JsonElement value, ValueConversionPlan plan, Action<JsonConversionDiagnostic>? report)
     {
         if (IsJsonStringProfile(plan))
             return SerializeJsonAsString(value, plan);
@@ -186,7 +188,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             ValueConversionCompatibility.IsJsonObjectTarget(plan.TargetType))
             return CanonicalizeAny(root, plan);
 
-        return ConvertTypedJson(root, plan);
+        return ConvertTypedJson(root, plan, report);
     }
 
     private static JsonElement SerializeJsonAsString(JsonElement value, ValueConversionPlan plan)
@@ -271,7 +273,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         return ParseJsonContent(json, plan);
     }
 
-    private JsonElement ConvertTypedJson(JsonElement root, ValueConversionPlan plan)
+    private JsonElement ConvertTypedJson(JsonElement root, ValueConversionPlan plan, Action<JsonConversionDiagnostic>? report)
     {
         if (wellKnownTypeRegistry is null)
             throw Reject(plan, "JSON typed conversion requires a well-known type registry at runtime");
@@ -279,9 +281,23 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             throw Reject(plan, $"target contract '{plan.TargetType.Alias}' is not a registered typed alias");
 
         var targetType = TypeReferenceFactory.Close(elementType, plan.TargetType.ToTypeReference());
-        ValidateJsonForType(root, targetType, plan, "$");
-
-        return CanonicalizeAny(root, plan);
+        var diagnostics = new List<JsonConversionDiagnostic>();
+        try
+        {
+            // Validate a typed copy with the same package-owned contract as hydration. Keep the received
+            // JSON for storage: naming, converters and unmatched-member detection never rewrite data.
+            _ = JsonConversionContract.For(targetType).Read(root, targetType, diagnostics.Add);
+        }
+        catch (JsonException exception)
+        {
+            throw Reject(plan, $"typed JSON conversion failed at '{exception.Path ?? "$"}': {exception.Message}");
+        }
+        catch (NotSupportedException exception)
+        {
+            throw Reject(plan, $"typed JSON conversion is unsupported: {exception.Message}");
+        }
+        foreach (var diagnostic in diagnostics) report?.Invoke(diagnostic);
+        return root.Clone();
     }
 
     private static JsonDocument ParseJsonContent(string json, ValueConversionPlan plan)
@@ -322,112 +338,6 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         return 1 +
                element.Attributes().Count(attribute => !attribute.IsNamespaceDeclaration) +
                element.Elements().Sum(child => CountXmlNodes(child, plan, depth + 1));
-    }
-
-    private static void ValidateJsonForType(JsonElement value, Type targetType, ValueConversionPlan plan, string path)
-    {
-        var nullableType = Nullable.GetUnderlyingType(targetType);
-        if (nullableType is not null)
-        {
-            if (value.ValueKind == JsonValueKind.Null)
-                return;
-            ValidateJsonForType(value, nullableType, plan, path);
-            return;
-        }
-
-        if (!targetType.IsValueType && value.ValueKind == JsonValueKind.Null)
-            return;
-
-        if (targetType == typeof(string))
-        {
-            if (value.ValueKind != JsonValueKind.String)
-                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected string at '{path}'");
-            return;
-        }
-
-        if (targetType == typeof(bool))
-        {
-            if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected boolean at '{path}'");
-            return;
-        }
-
-        if (IsNumericType(targetType))
-        {
-            ValidateNumeric(value, targetType, plan, path);
-            return;
-        }
-
-        if (targetType.IsEnum)
-        {
-            if (value.ValueKind is not (JsonValueKind.String or JsonValueKind.Number))
-                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected enum string or number at '{path}'");
-            return;
-        }
-
-        if (targetType.IsArray)
-        {
-            ValidateJsonArray(value, targetType.GetElementType()!, plan, path);
-            return;
-        }
-
-        if (targetType.IsGenericType)
-        {
-            var definition = targetType.GetGenericTypeDefinition();
-            if (definition == typeof(List<>) || definition == typeof(IList<>) || definition == typeof(ICollection<>) ||
-                definition == typeof(IReadOnlyList<>) || definition == typeof(IReadOnlyCollection<>) || definition == typeof(IEnumerable<>))
-            {
-                ValidateJsonArray(value, targetType.GetGenericArguments()[0], plan, path);
-                return;
-            }
-
-            if ((definition == typeof(Dictionary<,>) || definition == typeof(IDictionary<,>) || definition == typeof(IReadOnlyDictionary<,>)) &&
-                targetType.GetGenericArguments()[0] == typeof(string))
-            {
-                ValidateJsonDictionary(value, targetType.GetGenericArguments()[1], plan, path);
-                return;
-            }
-        }
-
-        ValidateJsonObject(value, targetType, plan, path);
-    }
-
-    private static void ValidateJsonArray(JsonElement value, Type elementType, ValueConversionPlan plan, string path)
-    {
-        if (value.ValueKind != JsonValueKind.Array)
-            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected array at '{path}'");
-        var index = 0;
-        foreach (var item in value.EnumerateArray())
-            ValidateJsonForType(item, elementType, plan, $"{path}[{index++}]");
-    }
-
-    private static void ValidateJsonDictionary(JsonElement value, Type elementType, ValueConversionPlan plan, string path)
-    {
-        if (value.ValueKind != JsonValueKind.Object)
-            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected object at '{path}'");
-        foreach (var property in value.EnumerateObject())
-            ValidateJsonForType(property.Value, elementType, plan, $"{path}.{property.Name}");
-    }
-
-    private static void ValidateJsonObject(JsonElement value, Type targetType, ValueConversionPlan plan, string path)
-    {
-        if (value.ValueKind != JsonValueKind.Object)
-            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected object at '{path}'");
-
-        var properties = GetTypeMembers(targetType);
-
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var jsonProperty in value.EnumerateObject())
-        {
-            if (!properties.TryGetValue(jsonProperty.Name, out var targetProperty))
-                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' does not support member '{jsonProperty.Name}' at '{path}'");
-
-            seen.Add(targetProperty.JsonName);
-            ValidateJsonForType(jsonProperty.Value, targetProperty.Type, plan, $"{path}.{jsonProperty.Name}");
-        }
-
-        foreach (var required in properties.Values.Where(property => property.IsRequired && !seen.Contains(property.JsonName)))
-            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' is missing required member '{required.JsonName}' at '{path}'");
     }
 
     private static IReadOnlyDictionary<string, TypeMember> GetTypeMembers(Type targetType) =>
@@ -652,31 +562,6 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         }
 
         throw Reject(plan, $"target contract '{plan.TargetType.Alias}' cannot safely represent XML number at '{path}' as '{targetType.Name}'");
-    }
-
-    private static void ValidateNumeric(JsonElement value, Type targetType, ValueConversionPlan plan, string path)
-    {
-        if (value.ValueKind != JsonValueKind.Number)
-            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected number at '{path}'");
-
-        var ok = Type.GetTypeCode(targetType) switch
-        {
-            TypeCode.Byte => value.TryGetByte(out _),
-            TypeCode.SByte => value.TryGetSByte(out _),
-            TypeCode.Int16 => value.TryGetInt16(out _),
-            TypeCode.UInt16 => value.TryGetUInt16(out _),
-            TypeCode.Int32 => value.TryGetInt32(out _),
-            TypeCode.UInt32 => value.TryGetUInt32(out _),
-            TypeCode.Int64 => value.TryGetInt64(out _),
-            TypeCode.UInt64 => value.TryGetUInt64(out _),
-            TypeCode.Single => value.TryGetSingle(out _),
-            TypeCode.Double => value.TryGetDouble(out _),
-            TypeCode.Decimal => value.TryGetDecimal(out _),
-            _ => false
-        };
-
-        if (!ok)
-            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' cannot safely represent number at '{path}' as '{targetType.Name}'");
     }
 
     private static bool IsNumericType(Type type) => Type.GetTypeCode(type) switch

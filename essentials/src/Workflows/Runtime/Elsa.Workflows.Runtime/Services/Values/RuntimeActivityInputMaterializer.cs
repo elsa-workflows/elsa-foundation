@@ -346,7 +346,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 node.ExecutableNodeId,
                 invocationId,
                 input,
-                ApplyConversionPlan(binding, envelope),
+                ApplyConversionPlan(binding, envelope, resolutionContext),
                 expressionPolicy,
                 expressionPolicy,
                 resolutionContext,
@@ -380,7 +380,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
             return binding.ConversionPlan is null
                 ? source.Retype(binding.TargetType)
-                : ApplyConversionPlan(binding, source);
+                : ApplyConversionPlan(binding, source, resolutionContext);
         }
         var effectivePolicy = ValuePolicyCombiner.Combine(
             binding.EffectivePolicy,
@@ -408,7 +408,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 projected.Presence,
                 projected.InlineValue,
                 projected.ExternalReference,
-                effectivePolicy));
+                effectivePolicy), resolutionContext);
         return await ApplyDestinationStorageAsync(
             node.ExecutableNodeId,
             invocationId,
@@ -461,7 +461,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 var member = ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, selected.Value, effectivePolicy);
                 try
                 {
-                    value = binding.ConversionPlan is null ? member.Retype(binding.TargetType) : ApplyConversionPlan(binding, member);
+                    // FitSelectedMember below applies the owning input-member contract and records its diagnostics.
+                    value = binding.ConversionPlan is null ? member.Retype(binding.TargetType) : ApplyConversionPlan(binding, member, resolutionContext, reportDiagnostics: false);
                 }
                 catch (Exception exception) when (RuntimeReadSelectionException.IsFitFailure(exception))
                 {
@@ -550,7 +551,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         var projected = payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
             ? ValueEnvelope.Null(binding.ConversionPlan?.SourceType ?? binding.TargetType, effectivePolicy)
             : ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, payload.Clone(), effectivePolicy);
-        var converted = ValidatePresence(input, ApplyConversionPlan(binding, projected), node.ExecutableNodeId, resolutionContext);
+        var converted = ValidatePresence(input, ApplyConversionPlan(binding, projected, resolutionContext), node.ExecutableNodeId, resolutionContext);
         return await _externalEnvelopeStorage.RewriteAsync(
             new RuntimeExternalEnvelopeRewriteRequest(
                 resolutionContext.WorkflowExecutionId,
@@ -585,7 +586,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             node.ExecutableNodeId,
             invocationId,
             input,
-            ApplyConversionPlan(binding, conversionSource),
+            ApplyConversionPlan(binding, conversionSource, resolutionContext),
             source.Policy,
             effectivePolicy,
             resolutionContext,
@@ -617,10 +618,11 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         }
     }
 
-    private ValueEnvelope ApplyConversionPlan(RuntimeInputBinding binding, ValueEnvelope source) =>
+    private ValueEnvelope ApplyConversionPlan(RuntimeInputBinding binding, ValueEnvelope source, RuntimeInputBindingResolutionContext context, bool reportDiagnostics = true) =>
         binding.ConversionPlan is null
             ? source
-            : _valueConversionExecutor.Convert(source, binding.ConversionPlan);
+            : _valueConversionExecutor.Convert(source, binding.ConversionPlan,
+                reportDiagnostics ? diagnostic => ReportConversion(diagnostic, binding.InputName, source.Policy, context) : null);
 
     private static bool HasExternalProjection(RuntimeInputBinding binding) =>
         binding.Source == RuntimeInputBindingSource.ActivityResult &&

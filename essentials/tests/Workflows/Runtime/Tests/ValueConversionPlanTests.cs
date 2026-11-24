@@ -440,17 +440,80 @@ public sealed class ValueConversionPlanTests
         var missing = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
             JsonSource("""{"loyaltyPoints":42}"""),
             plan));
-        var unknown = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
-            JsonSource("""{"name":"Ada","loyaltyPoints":42,"legacy":true}"""),
-            plan));
         var numeric = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
             JsonSource("""{"name":"Ada","loyaltyPoints":9223372036854775808}"""),
             plan));
 
         Assert.Contains("Acme.Customer", missing.Message, StringComparison.Ordinal);
-        Assert.Contains("missing required member 'name' at '$'", missing.Message, StringComparison.Ordinal);
-        Assert.Contains("member 'legacy' at '$'", unknown.Message, StringComparison.Ordinal);
+        Assert.Contains("name", missing.Reason, StringComparison.Ordinal);
+        Assert.Contains("'$'", missing.Reason, StringComparison.Ordinal);
         Assert.Contains("$.loyaltyPoints", numeric.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("default", "{ \"customerName\": \"Ren\\u00e9\" }")]
+    [InlineData("snake", "{ \"customer_name\": \"Ren\\u00e9\" }")]
+    [InlineData("mapping", "{ \"customer_id\": \"Ren\\u00e9\" }")]
+    [InlineData("insensitive", "{ \"CUSTOMERNAME\": \"Ren\\u00e9\" }")]
+    [InlineData("nested", "{ \"customer\": { \"customer_name\": \"Ren\\u00e9\" } }")]
+    [InlineData("custom", "{ \"wireName\": \"Ren\\u00e9\" }")]
+    public void Json_profile_validates_the_selected_type_contract_without_rewriting_data(string alias, string json)
+    {
+        var executor = ContractExecutor();
+        var diagnostics = new List<Elsa.Serialization.Core.JsonConversionDiagnostic>();
+
+        var converted = executor.Convert(JsonSource(json), JsonPlan(new ValueTypeDescriptor(alias)), diagnostics.Add);
+
+        Assert.Equal(json, converted.InlineValue!.Value.GetRawText());
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Json_profile_reports_default_exact_match_warnings_once_and_preserves_unknown_members()
+    {
+        const string json = "{ \"CustomerName\":\"Ada\", \"n\":1.0 }";
+        var diagnostics = new List<Elsa.Serialization.Core.JsonConversionDiagnostic>();
+
+        var converted = ContractExecutor().Convert(JsonSource(json), JsonPlan(new ValueTypeDescriptor("default")), diagnostics.Add);
+
+        Assert.Equal(json, converted.InlineValue!.Value.GetRawText());
+        Assert.Equal(new[] { "$[\"CustomerName\"]", "$[\"n\"]" }, diagnostics.Select(diagnostic => diagnostic.Path));
+        Assert.All(diagnostics, diagnostic => Assert.Equal("json-unmatched-member", diagnostic.Code));
+        Assert.All(diagnostics, diagnostic => Assert.Equal(typeof(DefaultJsonContract), diagnostic.TargetType));
+    }
+
+    [Fact]
+    public void Json_profile_respects_strict_unmatched_members_and_only_emits_warnings_after_success()
+    {
+        var executor = ContractExecutor();
+        var diagnostics = new List<Elsa.Serialization.Core.JsonConversionDiagnostic>();
+        var strict = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
+            JsonSource("{\"CustomerName\":\"Ada\"}"), JsonPlan(new ValueTypeDescriptor("strict")), diagnostics.Add));
+        Assert.Contains("json-unmatched-member-refused", strict.Reason, StringComparison.Ordinal);
+        Assert.Empty(diagnostics);
+
+        var invalid = Assert.Throws<RuntimeValueConversionException>(() => TypedExecutor().Convert(
+            JsonSource("{\"unknown\":true,\"name\":\"Ada\",\"loyaltyPoints\":\"5\"}"),
+            JsonPlan(new ValueTypeDescriptor("Acme.Customer")), diagnostics.Add));
+        Assert.Contains("$.loyaltyPoints", invalid.Reason, StringComparison.Ordinal);
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Diagnostic_overload_keeps_existing_conversion_providers_callable()
+    {
+        var provider = new ExistingConversionProvider();
+        Elsa.Workflows.Runtime.Core.Contracts.IRuntimeValueConversionExecutor executor = provider;
+        var type = new ValueTypeDescriptor("String");
+        var plan = ValueConversionPlan.Identity(type, ValueRepresentation.TypedValue);
+        var diagnostics = new List<JsonConversionDiagnostic>();
+        var source = JsonSource("retained text");
+
+        var result = executor.Convert(source, plan, diagnostics.Add);
+
+        Assert.Same(source, result);
+        Assert.Equal(1, provider.Calls);
+        Assert.Empty(diagnostics);
     }
 
     [Fact]
@@ -609,6 +672,41 @@ public sealed class ValueConversionPlanTests
         Assert.Equal(42, snapshot.Values["count"].InlineValue!.Value.GetInt32());
     }
 
+    [Theory]
+    [InlineData("public")]
+    [InlineData("sensitive")]
+    [InlineData("redacted")]
+    [InlineData("retained")]
+    public async Task Materializer_records_one_typed_profile_warning_with_the_source_protection(string protection)
+    {
+        const string json = "{ \"customerName\":\"Ada\", \"SecretBranch\":{\"n\":1.0} }";
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline,
+            isSensitive: protection == "sensitive", redactionMode: protection == "redacted" ? "mask" : null,
+            retentionPolicy: protection == "retained" ? "retain" : null);
+        var type = new ValueTypeDescriptor("default");
+        var binding = new RuntimeInputBinding("customer", type, policy, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(new ValueTypeDescriptor("String"), JsonSerializer.SerializeToElement(json), policy),
+            conversionPlan: JsonPlan(type));
+        var descriptor = JsonSerializer.SerializeToElement(new { type = "test" });
+        var contract = new ActivityContract("test/activity", "1", "test", descriptor,
+            [new ActivityInputContract("customer", "Customer", type, true, false, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            ["Done"], new ActivityActivationRequirement("test", "test/activity"));
+        var node = new ExecutableNode("node", "node", "test/activity", "1", "test", descriptor,
+            new Dictionary<string, RuntimeInputBinding> { ["customer"] = binding }, new Dictionary<string, string>(), activityContract: contract);
+        var warnings = new ExecutionWarningCollector();
+        var context = new RuntimeInputBindingResolutionContext("workflow", "invocation") { Warnings = warnings };
+        var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), [], valueConversionExecutor: ContractExecutor());
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(node, "invocation", context, DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(json, snapshot.Values["customer"].InlineValue!.Value.GetRawText());
+        var warning = Assert.Single(warnings.Warnings);
+        Assert.Equal("json-unmatched-member", warning.Code);
+        Assert.Equal(protection == "public" ? "args.customer[\"SecretBranch\"]" : "args.customer", warning.Details!["path"]);
+        if (protection != "public") Assert.DoesNotContain("SecretBranch", warning.Message, StringComparison.Ordinal);
+    }
+
     private static ValueConversionPlan Plan(
         ValueTypeDescriptor sourceType,
         ValueTypeDescriptor targetType,
@@ -720,6 +818,80 @@ public sealed class ValueConversionPlanTests
         {
             ["Acme.Customer"] = typeof(CustomerContract)
         }));
+
+    private static RuntimeValueConversionExecutor ContractExecutor() => new(new TestTypeRegistry(
+        new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["default"] = typeof(DefaultJsonContract),
+            ["snake"] = typeof(SnakeJsonContract),
+            ["mapping"] = typeof(MappedJsonContract),
+            ["insensitive"] = typeof(InsensitiveJsonContract),
+            ["nested"] = typeof(NestedJsonContract),
+            ["strict"] = typeof(StrictJsonContract),
+            ["custom"] = typeof(AlternateNameJsonContract)
+        }));
+
+    private sealed record DefaultJsonContract
+    {
+        public string? CustomerName { get; init; }
+    }
+
+    [Elsa.Serialization.Core.JsonConversion(NamingPolicy = System.Text.Json.Serialization.JsonKnownNamingPolicy.SnakeCaseLower)]
+    private sealed record SnakeJsonContract
+    {
+        public string? CustomerName { get; init; }
+    }
+
+    [Elsa.Serialization.Core.JsonConversion(MemberMappings = ["customer_id=CustomerName"])]
+    private sealed record MappedJsonContract
+    {
+        public string? CustomerName { get; init; }
+    }
+
+    [Elsa.Serialization.Core.JsonConversion(CaseInsensitive = true)]
+    private sealed record InsensitiveJsonContract
+    {
+        public string? CustomerName { get; init; }
+    }
+
+    private sealed record NestedJsonContract
+    {
+        public SnakeJsonContract? Customer { get; init; }
+    }
+
+    [Elsa.Serialization.Core.JsonConversion(RefuseUnmatchedMembers = true)]
+    private sealed record StrictJsonContract
+    {
+        public string? CustomerName { get; init; }
+    }
+
+    [System.Text.Json.Serialization.JsonConverter(typeof(AlternateNameJsonConverter))]
+    private sealed record AlternateNameJsonContract(string CustomerName);
+
+    private sealed class AlternateNameJsonConverter : System.Text.Json.Serialization.JsonConverter<AlternateNameJsonContract>, IJsonConversionMemberMatcher
+    {
+        public AlternateNameJsonConverter() { }
+        public bool TryGetMemberType(string name, out Type memberType)
+        {
+            memberType = typeof(string);
+            return name == "wireName";
+        }
+        public override AlternateNameJsonContract Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            using var document = JsonDocument.ParseValue(ref reader);
+            return new(document.RootElement.GetProperty("wireName").GetString()!);
+        }
+        public override void Write(Utf8JsonWriter writer, AlternateNameJsonContract value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject(); writer.WriteString("wireName", value.CustomerName); writer.WriteEndObject();
+        }
+    }
+
+    private sealed class ExistingConversionProvider : Elsa.Workflows.Runtime.Core.Contracts.IRuntimeValueConversionExecutor
+    {
+        public int Calls { get; private set; }
+        public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan) { Calls++; return source; }
+    }
 
     private sealed class TestTypeRegistry(IReadOnlyDictionary<string, Type> aliases) : IWellKnownTypeRegistry
     {
