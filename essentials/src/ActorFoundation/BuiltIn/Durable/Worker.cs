@@ -91,6 +91,10 @@ public sealed record WorkerOptions
     /// <summary>Called inside the scheduler just before the job's generation/deadline check; for deterministic witnesses.</summary>
     public Action? BeforeScheduledJobCheck { get; init; }
     internal Action? AfterJobPublication { get; init; }
+    /// <summary>Called at the start of each drain round, outside its retry; for fault witnesses.</summary>
+    internal Action? BeforeDrainRound { get; init; }
+    /// <summary>Called where a drain round judges the heartbeat answer, inside its retry; for transient-error witnesses.</summary>
+    internal Action? BeforeDrainAnswer { get; init; }
 }
 
 /// <summary>
@@ -2282,7 +2286,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         void RequireDrainFence()
         {
             if (_generation != generation || !LeaseUsable())
-                throw new InvalidOperationException("Ownership was lost while draining actor turns during shutdown.");
+                throw new ScopeOwnershipLostException("Ownership was lost while draining actor turns during shutdown.");
         }
     }
 
@@ -2371,13 +2375,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // ---- background jobs -------------------------------------------------------------------------------------------
 
     /// <summary>
-    /// Close job entry, cancel the entered jobs and wait for them to exit. With <paramref name="keepOwnership"/> the wait
-    /// counts as this Worker's pass, as the actor-turn drain does: each heartbeat answer is judged, the fence must stay
-    /// usable, and the pass gate stays open so the node lease keeps renewing until the jobs have exited or
-    /// <paramref name="cancellationToken"/> (the stop deadline) ends the wait. A lost fence ends the renewal, not the wait:
-    /// the loss is thrown once the entered jobs have exited, so the caller can still release what it holds.
+    /// Close job entry and cancel the entered jobs. The task ends when they have exited; it never faults. The host keeps
+    /// this Worker live meanwhile (<see cref="KeepDrainLiveAsync"/>) until every Worker of the node has drained.
     /// </summary>
-    internal async Task DrainJobsAsync(bool keepOwnership = false, CancellationToken cancellationToken = default)
+    internal Task CloseJobEntry()
     {
         CancellationTokenSource[] entered;
         Task exited;
@@ -2393,34 +2394,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             exited = _jobsDrained.Task;
         }
         // Use asynchronous cancellation so cleanup callbacks cannot hold up admission closure or a kill deadline.
-        var ended = Task.WhenAll(entered.Select(CancelAsync).Append(exited));
-        Exception? lost = null;
-        if (keepOwnership && Owns)
-        {
-            var generation = _generation;
-            try
-            {
-                while (!ended.IsCompleted)
-                {
-                    var beat = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                    Volatile.Write(ref _drainBeat, beat);
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (Volatile.Read(ref _answered) is not null) await AnsweredAsync(cancellationToken);
-                    if (_generation != generation || !LeaseUsable())
-                    {
-                        lost = new ScopeOwnershipLostException("Ownership was lost while draining entered jobs during shutdown.");
-                        break;
-                    }
-                    Volatile.Write(ref _lastPass, _options.Monotonic());
-                    using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                    await Task.WhenAny(ended, beat.Task, Task.Delay(_options.Lease / 3, wait.Token));
-                    wait.Cancel();     // a beat or the exit woke the drain: drop this round's timer
-                }
-            }
-            finally { Volatile.Write(ref _drainBeat, null); }
-        }
-        await ended.WaitAsync(cancellationToken);
-        if (lost is not null) throw lost;
+        return Task.WhenAll(entered.Select(CancelAsync).Append(exited));
 
         static async Task CancelAsync(CancellationTokenSource source)
         {
@@ -2429,6 +2403,40 @@ public sealed class Worker : IScopeActivation, ITurnServices
             catch (ObjectDisposedException) { }
             catch (AggregateException) { } // Activity cleanup cannot interrupt ownership or checkpoint bookkeeping.
         }
+    }
+
+    /// <summary>The ownership generation a drain starts from: a reset during the drain moves it.</summary>
+    internal long DrainGeneration => Volatile.Read(ref _generation);
+
+    /// <summary>A heartbeat answer to this Worker wakes the drain that armed this.</summary>
+    internal Task ArmDrainBeat()
+    {
+        var beat = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Volatile.Write(ref _drainBeat, beat);
+        return beat.Task;
+    }
+
+    internal void DisarmDrainBeat() => Volatile.Write(ref _drainBeat, null);
+
+    /// <summary>
+    /// One round of a drain's wait, which counts as this Worker's pass: the last heartbeat answer is judged, the fence must
+    /// still be usable at <paramref name="generation"/>, and the pass gate stays open so the node lease keeps renewing.
+    /// False when the fence was lost. A store error while judging the answer is retried at the next round, as a pass's is,
+    /// and counts no pass.
+    /// </summary>
+    internal async Task<bool> KeepDrainLiveAsync(long generation, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _options.BeforeDrainRound?.Invoke();
+        try
+        {
+            _options.BeforeDrainAnswer?.Invoke();
+            if (Volatile.Read(ref _answered) is not null) await AnsweredAsync(cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested) { return _generation == generation && Owns; }
+        if (_generation != generation || !LeaseUsable()) return false;
+        Volatile.Write(ref _lastPass, _options.Monotonic());
+        return true;
     }
 
     internal void ReopenJobEntry()

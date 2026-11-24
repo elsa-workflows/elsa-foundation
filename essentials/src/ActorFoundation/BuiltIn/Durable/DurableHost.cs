@@ -155,10 +155,11 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
                     throw new InvalidOperationException("Only the attached runtime can prepare this durable host for shutdown.");
                 host._stopping = true;
             }
-            // Every Worker keeps its ownership live while it waits, the node's and each per-partition one alike; the
-            // runtime's host stops renewing only after this. A Worker that lost its fence reports it after its jobs exit.
-            await Task.WhenAll(host.Workers.Select(worker => worker.DrainJobsAsync(keepOwnership: true, cancellationToken)))
-                .WaitAsync(cancellationToken);
+            // Every owning Worker stays live until every Worker's entered jobs have exited; the runtime's host stops
+            // renewing only after this. A lost fence is reported once all jobs have exited.
+            var workers = host.Workers;
+            await host.KeepLiveWhileAsync(workers, [.. workers.Select(worker => worker.CloseJobEntry())], drainsKeepThemselves: false,
+                cancellationToken);
         }
 
         public void Stopped()
@@ -256,8 +257,59 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         finally { _turn.Release(); }
     }
 
-    internal Task DrainEnteredTurnsAsync(CancellationToken cancellationToken) =>
-        Task.WhenAll(Workers.Select(worker => worker.DrainEnteredTurnsAsync(cancellationToken)));     // per-partition Workers too
+    /// <summary>The actor-turn drain of every Worker, the per-partition ones too; each owning Worker stays live until all are done.</summary>
+    internal Task DrainEnteredTurnsAsync(CancellationToken cancellationToken)
+    {
+        var workers = Workers;
+        return KeepLiveWhileAsync(workers, [.. workers.Select(worker => worker.DrainEnteredTurnsAsync(cancellationToken))],
+            drainsKeepThemselves: true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Wait for every Worker's drain and keep each Worker that owned a partition at the start live meanwhile, so the gate
+    /// (every holding Worker passed within a lease) keeps the node lease renewing until the whole node has drained or the
+    /// deadline cancels. With <paramref name="drainsKeepThemselves"/> a Worker's own drain keeps it live until it ends.
+    /// Then every outcome counts: any fault other than a lost fence is thrown as it is, so the runtime abandons the run;
+    /// otherwise a lost fence is thrown as <see cref="ScopeOwnershipLostException"/>.
+    /// </summary>
+    private async Task KeepLiveWhileAsync(IReadOnlyList<Worker> workers, Task[] drains, bool drainsKeepThemselves,
+        CancellationToken cancellationToken)
+    {
+        var generations = workers.Select(worker => worker.DrainGeneration).ToArray();
+        var live = workers.Select(worker => worker.Owns).ToArray();
+        var lost = new bool[workers.Count];
+        var all = Task.WhenAll(drains);
+        var lease = _lease ?? workers.FirstOrDefault()?.Lease ?? TimeSpan.FromSeconds(10);
+        try
+        {
+            while (!all.IsCompleted)
+            {
+                List<Task> wakes = [all];
+                for (var i = 0; i < workers.Count; i++)
+                {
+                    if (!live[i] || drainsKeepThemselves && !drains[i].IsCompleted || drains[i].IsFaulted) continue;
+                    wakes.Add(workers[i].ArmDrainBeat());
+                    if (await workers[i].KeepDrainLiveAsync(generations[i], cancellationToken)) continue;
+                    (live[i], lost[i]) = (false, true);
+                }
+                using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                wakes.Add(Task.Delay(lease / 3, wait.Token));
+                await Task.WhenAny(wakes);
+                wait.Cancel();     // a beat or an exit woke the drain: drop this round's timer
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+        }
+        finally
+        {
+            foreach (var worker in workers) worker.DisarmDrainBeat();
+        }
+        var faults = drains.Where(drain => drain.IsFaulted).SelectMany(drain => drain.Exception!.InnerExceptions).ToList();
+        if (drains.Any(drain => drain.IsCanceled)) cancellationToken.ThrowIfCancellationRequested();
+        if (faults.FirstOrDefault(fault => fault is not ScopeOwnershipLostException) is { } fault)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(fault);
+        if (faults.Count > 0 || lost.Any(value => value))
+            throw faults.FirstOrDefault() ?? new ScopeOwnershipLostException("Ownership was lost while draining during shutdown.");
+    }
 
     private NodeScope Scope(int scope) =>
         _scopes.TryGetValue(scope, out var known) ? known : _scopes[scope] = new NodeScope(this, scope);
