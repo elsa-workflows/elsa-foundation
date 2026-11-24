@@ -93,6 +93,10 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             using var response = client is HttpClient http
                 ? await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token)
                 : await client.SendAsync(request, deadline.Token);
+            // The request the response answers is the one sent, unless the client followed a redirect, which would have
+            // carried this request's headers to another host (NativeHttpOptions says the client must not).
+            if (response.RequestMessage?.RequestUri is { } answered && answered != request.RequestUri)
+                return Fault("http.client.redirects", $"The host's HTTP client followed a redirect to {answered.GetLeftPart(UriPartial.Authority)}; it must not (NativeHttpOptions.CreateClient).");
             var headers = ResponseHeaders(response);
             var status = (int)response.StatusCode;
             var (body, tooLarge) = await ReadAsync(response, context.Http.MaxResponseBytes, deadline.Token);
@@ -118,7 +122,13 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
         foreach (var item in list)
         {
             if (item is not JsonValue scalar) return false;
-            if (scalar.TryGetValue<int>(out var number) || scalar.TryGetValue<string>(out var text) && int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out number))
+            var text = scalar.GetValueKind() switch
+            {
+                JsonValueKind.Number => scalar.ToJsonString(),
+                JsonValueKind.String => scalar.TryGetValue<string>(out var s) ? s : null,
+                _ => null,
+            };
+            if (text is not null && int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var number))
             {
                 if (number is < 100 or > 599) return false;
                 parsed.Add(number);
@@ -154,8 +164,14 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
         if (Body is not null)
         {
             var json = mediaType?.MediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) != false;
-            request.Content = new StringContent(!json && Body is JsonValue text && text.TryGetValue<string>(out var plain) ? plain : Body.ToJsonString(), Encoding.UTF8);
-            request.Content.Headers.ContentType = mediaType ?? new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+            mediaType ??= new MediaTypeHeaderValue("application/json");
+            var encoding = Encoding.UTF8;
+            if (mediaType.CharSet is { Length: > 0 } charset)
+                try { encoding = Encoding.GetEncoding(charset.Trim('"')); }
+                catch (Exception unknown) when (unknown is ArgumentException or NotSupportedException) { refused = $"'{charset}' is not a charset this host encodes."; request.Dispose(); return null; }
+            else mediaType.CharSet = "utf-8";
+            request.Content = new StringContent(!json && Body is JsonValue text && text.TryGetValue<string>(out var plain) ? plain : Body.ToJsonString(), encoding);
+            request.Content.Headers.ContentType = mediaType;
         }
         var keyed = false;
         foreach (var (name, value) in Headers ?? [])
@@ -217,7 +233,7 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
         var encoding = Encoding.UTF8;
         if (response.Content.Headers.ContentType?.CharSet is { Length: > 0 } charset)
             try { encoding = Encoding.GetEncoding(charset.Trim('"')); }
-            catch (ArgumentException) { }
+            catch (Exception unknown) when (unknown is ArgumentException or NotSupportedException) { }     // a charset this host lacks reads as UTF-8
         var text = encoding.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
         if (response.Content.Headers.ContentType?.MediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
             try { return (JsonNode.Parse(text), false); }

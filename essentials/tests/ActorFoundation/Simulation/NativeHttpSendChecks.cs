@@ -60,7 +60,10 @@ internal static partial class NativeHttpEdgeChecks
             .Add(Sends("streamed", Wf.Http("send", "https://partner.example/stream")))
             .Add(Sends("reset", Wf.Http("send", "https://partner.example/reset")))
             .Add(Sends("iso-timeout", Input(Wf.Http("send", "https://partner.example/slow"), "Timeout", "PT0.2S")))
-            .Add(Sends("bad-timeout", Input(Wf.Http("send", "https://partner.example/ok"), "Timeout", "5000")))
+            .Add(Sends("bad-timeout", Input(Wf.Http("send", "https://partner.example/ok"), "Timeout", "soon")))
+            .Add(Sends("string-ms", Input(Wf.Http("send", "https://partner.example/slow"), "Timeout", "200")))
+            .Add(Sends("expr-timeout", Input(Wf.Http("send", "https://partner.example/stuck"), "Timeout", Binding.Expr("100 * 3"))))
+            .Add(Sends("redirected", Wf.Http("send", "https://partner.example/redirect")))
             .Add(Sends("string-codes", Input(Wf.Http("send", "https://partner.example/ok"), "ExpectedStatusCodes", Binding.Literal(new JsonArray("200")))))
             .Add(Sends("content-type-header", Wf.Http("send", "https://partner.example/ok", headers: Binding.Literal(new JsonObject { ["Content-Type"] = "text/plain" }))))
             .Add(Sends("long-job", WithJobTimeout(Wf.Http("send", "https://partner.example/slow", timeout: TimeSpan.FromMilliseconds(200)), TimeSpan.FromSeconds(30))));
@@ -125,8 +128,18 @@ internal static partial class NativeHttpEdgeChecks
                 var iso = await host.RunAsync("iso-timeout", mode);
                 var badTimeout = await host.RunAsync("bad-timeout", mode);
                 var codes = await host.RunAsync("string-codes", mode);
-                Check(iso.Outcome == SendHttpRequest.TimeoutOutcome && badTimeout.Faulted && codes.Outcome == "200",
-                    $"{mode}: a timeout reads as milliseconds or a time span (PT0.2S) and anything else faults; status codes may be numeric strings ({iso.Outcome}, {codes.Outcome})");
+                var stringMs = await host.RunAsync("string-ms", mode);
+                Check(iso.Outcome == SendHttpRequest.TimeoutOutcome && stringMs.Outcome == SendHttpRequest.TimeoutOutcome && badTimeout.Faulted && codes.Outcome == "200",
+                    $"{mode}: a timeout reads as milliseconds (a number or a string of one) or a time span (PT0.2S), and anything else faults; status codes may be numeric strings ({iso.Outcome}, {stringMs.Outcome}, {codes.Outcome})");
+                // The partner ignores the cancel, so only the job's deadline ends the call early: under the 60 s default the
+                // call would end when the partner answers, three seconds on.
+                var before = Environment.TickCount64;
+                var exprTimeout = await host.RunAsync("expr-timeout", mode);
+                var took = Environment.TickCount64 - before;
+                Check(exprTimeout.Outcome == SendHttpRequest.TimeoutOutcome && took < 2_000,
+                    $"{mode}: a timeout an expression computes (a long behind the JSON number) is the job's deadline too ({exprTimeout.Outcome} in {took} ms)");
+                var redirected = await host.RunAsync("redirected", mode);
+                Check(redirected.Faulted, $"{mode}: a host client that followed a redirect faults the activity, whose headers it carried away");
                 var started = Environment.TickCount64;
                 var longJob = await host.RunAsync("long-job", mode);
                 var elapsed = Environment.TickCount64 - started;
@@ -207,6 +220,9 @@ internal static partial class NativeHttpEdgeChecks
                 ok.Headers.Add("X-Trace", "t-1");
                 ok.Headers.Add("Set-Cookie", "session=partner-secret");
                 return ok;
+            case "/redirect":
+                // What a client that follows redirects hands back: the answer of the request it was redirected to.
+                return new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = new HttpRequestMessage(HttpMethod.Get, "https://elsewhere.example/landing") };
             case "/stream":
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new EndlessStream()) };
             case "/reset":

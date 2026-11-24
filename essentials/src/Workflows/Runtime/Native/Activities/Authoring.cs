@@ -29,19 +29,29 @@ public static class ActivityTimeouts
     public static readonly TimeSpan MaxTimeout = TimeSpan.FromDays(1);
 
     /// <summary>
-    /// A timeout as a number of milliseconds or a time span (<c>c</c> format, as <c>00:00:30</c>, or ISO 8601, as
-    /// <c>PT30S</c>), positive and at most <paramref name="max"/>; null for an unbound one. False for anything else.
+    /// A timeout as milliseconds (a number, or a string of one) or a time span (<c>c</c> format with a colon, as
+    /// <c>00:00:30</c>, or ISO 8601, as <c>PT30S</c>), positive and at most <paramref name="max"/>; null for an unbound one.
+    /// False for anything else. A number is read by its JSON kind, whatever CLR value an expression put behind it.
     /// </summary>
     public static bool TryParse(JsonNode? value, TimeSpan max, out TimeSpan? timeout)
     {
         timeout = null;
         if (value is null) return true;
         if (value is not JsonValue scalar) return false;
+        var text = scalar.GetValueKind() switch
+        {
+            System.Text.Json.JsonValueKind.Number => scalar.ToJsonString(),
+            System.Text.Json.JsonValueKind.String => scalar.TryGetValue<string>(out var s) ? s : null,
+            _ => null,
+        };
+        if (text is null) return false;
         TimeSpan span;
-        if (scalar.TryGetValue<double>(out var milliseconds) && double.IsFinite(milliseconds) && milliseconds <= max.TotalMilliseconds) span = TimeSpan.FromMilliseconds(milliseconds);
-        else if (scalar.TryGetValue<string>(out var text) &&
-                 (TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out span) || TryIso(text, out span))) { }
-        else return false;
+        if (double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var milliseconds))
+        {
+            if (!double.IsFinite(milliseconds) || milliseconds > max.TotalMilliseconds) return false;
+            span = TimeSpan.FromMilliseconds(milliseconds);
+        }
+        else if (!(text.Contains(':') && TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out span)) && !TryIso(text, out span)) return false;
         if (span <= TimeSpan.Zero || span > max) return false;
         timeout = span;
         return true;
@@ -161,6 +171,9 @@ public sealed class NativeHttpOptions
     public const int DefaultMaxResponseBytes = 256 * 1_024;
 
     public HttpMessageInvoker? Client { get; init; }
+
+    /// <summary>A client as the activity needs one: it follows no redirect and keeps no cookie.</summary>
+    public static HttpClient CreateClient() => new(new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
 
     /// <summary>A longer response body completes the activity on its ResponseTooLarge outcome, with no body.</summary>
     public int MaxResponseBytes { get; init; } = DefaultMaxResponseBytes;
