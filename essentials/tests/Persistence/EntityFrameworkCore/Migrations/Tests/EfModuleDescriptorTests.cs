@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Xml.Linq;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Cluster.EntityFrameworkCore;
+using Elsa.Decisions.Persistence.EntityFrameworkCore;
 using Elsa.Connections.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
@@ -28,7 +29,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
 /// Guards the single <c>[EfModule]</c> declaration every module assembly now carries.
-/// <see cref="EfModuleCatalog.Discover"/> must find all 19 first-party modules with the
+/// <see cref="EfModuleCatalog.Discover"/> must find all 20 first-party modules with the
 /// names, base contexts and frozen history names the vocabulary table pins, and a descriptor's
 /// <c>HistoryModule</c> must never drift from the module's own frozen
 /// <c>&lt;Module&gt;EfModule.HistoryModuleName</c> constant — the exact mismatch already latent between
@@ -49,6 +50,7 @@ public sealed class EfModuleDescriptorTests
     [
         ("Weaver", typeof(WeaverDbContext), WeaverEfModule.HistoryModuleName),
         ("Agent", typeof(AgentDbContext), AgentEfModule.HistoryModuleName),
+        ("Decisions", typeof(DecisionsEfModule).Assembly.GetType("Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsDbContext", throwOnError: true)!, DecisionsEfModule.HistoryModuleName),
         ("Secrets", typeof(SecretsDbContext), SecretsEfModule.HistoryModuleName),
         ("Connections", typeof(ConnectionsDbContext), ConnectionsEfModule.HistoryModuleName),
         ("Workflows.Runtime", typeof(RuntimeDbContext), RuntimeEfModule.HistoryModuleName),
@@ -71,10 +73,10 @@ public sealed class EfModuleDescriptorTests
     private static IReadOnlyList<EfModuleDescriptor> Discover() => EfModuleCatalog.Discover(ModuleContextCatalog.Modules);
 
     [Fact]
-    public void Discover_returns_all_19_modules_with_correct_names_contexts_and_frozen_history()
+    public void Discover_returns_all_20_modules_with_correct_names_contexts_and_frozen_history()
     {
         var descriptors = Discover();
-        Assert.Equal(19, descriptors.Count);
+        Assert.Equal(20, descriptors.Count);
 
         foreach (var (name, context, historyModule) in Expected)
         {
@@ -336,7 +338,7 @@ public sealed class EfModuleDescriptorTests
 
         var descriptors = EfModuleCatalog.Discover(ModuleContextCatalog.Modules.Append(dashboard).Append(aspNetCoreIdentity).Distinct());
 
-        Assert.Equal(19, descriptors.Count);
+        Assert.Equal(20, descriptors.Count);
         Assert.DoesNotContain(descriptors, descriptor => descriptor.Assembly == dashboard);
         Assert.DoesNotContain(descriptors, descriptor => descriptor.Assembly == aspNetCoreIdentity);
     }
