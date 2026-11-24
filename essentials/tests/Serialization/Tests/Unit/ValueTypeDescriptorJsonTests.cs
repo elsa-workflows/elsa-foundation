@@ -169,7 +169,9 @@ public sealed class ValueTypeDescriptorJsonTests
 
     private static JsonSerializerOptions HostOptions()
     {
-        var options = new JsonSerializerOptions(); JsonBaseline.Configure(options); return options;
+        var options = new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
+        JsonBaseline.Configure(options);
+        return options;
     }
     private static JsonElement Parse(string value) { using var document = JsonDocument.Parse(value); return document.RootElement.Clone(); }
     private sealed record NullablePlaceholder(JsonElement? Value);
