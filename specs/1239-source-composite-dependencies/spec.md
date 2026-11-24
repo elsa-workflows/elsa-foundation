@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/claude/3052-source-composite-deps`
 
-**Status**: Draft
+**Status**: Approved (2026-11-24, D-1 A and D-2 as recommended)
 
 **Issue**: #5681, part of initiative #3052 (Elsa 3 to Elsa 4 conversion)
 
@@ -139,7 +139,7 @@ with a diagnostic that names the missing or unusable dependency, and the rest of
   dependency, and leaves no stored publication, template or edge.
 - **SC-004**: Spec 1237's check "migrated/ loads in a fresh engine" is no longer blocked by this refusal.
 
-## Decisions for approval
+## Decisions (approved 2026-11-24)
 
 **D-1. How one pass gets dependency order.** S must be published before T compiles, and CLR activities before S.
 
