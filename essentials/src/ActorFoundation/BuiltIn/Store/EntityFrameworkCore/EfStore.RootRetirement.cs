@@ -80,6 +80,7 @@ public sealed partial class EfStore
                     SELECT * FROM "Messages" WHERE "InboxScope" = {occurrence} AND "Target" = {Root.Actor}
                         AND "Partition" = {Root.Partition} AND NOT "Done" AND "ReplyTo" IS NOT NULL
                         AND "Id" LIKE 'operator/%' AND "Payload" IS NULL
+                    ORDER BY "Seq" FOR UPDATE
                     """).AsNoTracking().ToListAsync(token);
                 foreach (var row in waiting)
                 {

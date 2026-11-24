@@ -53,6 +53,8 @@ internal sealed partial class PostgresRootAdmission
 
     internal sealed record OperatorReply(string Address, long Deadline);
     internal sealed class OperatorReplyExpired : Exception;
+    internal sealed class OperatorReplyCapacity : Exception;
+    internal const int HeldReplyLimit = 64;
 
     internal async Task<Receipt?> AdmitRootOperatorAsync(string tenant, string reference, string operation, string kind, long? due,
         TimeSpan? keepFor, CancellationToken token, string? selection = null, bool thenDelete = false, bool retentionDelete = false,
@@ -91,7 +93,12 @@ internal sealed partial class PostgresRootAdmission
             }
             else
                 await EfStore.RequireStoreVersionsAsync(db, token);
-            var address = await RootAddressAsync(db, tenant, reference, token);
+            // Serialize only held admissions for the same birth. NO KEY UPDATE remains compatible with receipt FKs.
+            var address = reply is null ? await RootAddressAsync(db, tenant, reference, token) :
+                await db.Database.SqlQuery<CreationAddress>($"""
+                    SELECT "Actor" AS "Id", "Creation" FROM "FoundationRootBirths"
+                    WHERE "Tenant" = {tenant} AND "Reference" = {reference} FOR NO KEY UPDATE
+                    """).SingleOrDefaultAsync(token);
             if (address is null)
             {
                 await tx.RollbackAsync(token);
@@ -129,9 +136,22 @@ internal sealed partial class PostgresRootAdmission
                 await tx.RollbackAsync(token);
                 return null;
             }
-            if (reply is not null && !await db.Database.SqlQuery<bool>($"""
-                SELECT ({reply.Deadline} > floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
-                """).SingleAsync(token)) throw new OperatorReplyExpired();
+            if (reply is not null)
+            {
+                var withinDeadline = await db.Database.SqlQuery<bool>($"""
+                    SELECT ({reply.Deadline} > floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
+                    """).SingleAsync(token);
+                if (!withinDeadline) throw new OperatorReplyExpired();
+
+                var atCapacity = await db.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM "Messages"
+                        WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                            AND "Target" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
+                            AND NOT "Done" AND "ReplyTo" IS NOT NULL AND "Id" LIKE 'operator/%'
+                        OFFSET {HeldReplyLimit - 1} LIMIT 1) AS "Value"
+                    """).SingleAsync(token);
+                if (atCapacity) throw new OperatorReplyCapacity();
+            }
 
             var receipt = await db.Database.SqlQuery<long>($"""
                 INSERT INTO "FoundationOperatorReceipts" AS r ("Tenant","Operation","Reference","Until")
@@ -293,13 +313,12 @@ internal sealed partial class PostgresRootAdmission
         ReplyTo.Parse(address) is { Node.Length: > 0, Request.Length: > 0, Deadline: > 0, BeforeCommit: false } route &&
         (expectedDeadline is null || route.Deadline == expectedDeadline);
 
-    internal async Task<InstanceStatus?> ReadOperatorStatusAtAsync(string tenant, string reference, long deadline, CancellationToken token)
+    internal async Task<InstanceStatus?> ReadOperatorTimeoutStatusAsync(string tenant, string reference, CancellationToken token)
     {
         await using var db = create();
         await using var pinned = await EfStore.BeginRootRetirementOperationAsync(db, token);
         return await db.Database.SqlQuery<InstanceStatus?>($"""
-            SELECT CASE WHEN i."FoundationTerminalAt" IS NULL OR i."FoundationTerminalAt" > {deadline}
-                THEN {(int)InstanceStatus.Running} ELSE i."Status" END AS "Value"
+            SELECT i."Status" AS "Value"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1
                 AND i."FoundationTenant" = b."Tenant" AND i."FoundationReference" = b."Reference"

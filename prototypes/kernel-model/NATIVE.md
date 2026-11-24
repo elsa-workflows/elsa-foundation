@@ -725,16 +725,20 @@ and run `pg-root-retention owned checked` against an empty PostgreSQL database.
 The opt-in format-17 fixture holds a selected operator request through
 `IIngress.RequestAsync`. Admission stores the tenant-bound reply address with
 the exact command. A fenced commit binds the response or refusal to that
-envelope. If retirement settles another queued held operator, the commit
-returns its registration to the Worker for a live `missing` result. The
+envelope. If retirement settles another queued held operator, the transaction
+locks that envelope and returns its registration to the Worker for a live
+`missing` result. The preview admits at most 64 pending held operators per
+root. Duplicates can still replay their receipts, and one-way operator
+admission uses its existing rules. The
 fixture observes plain Terminate, standalone Delete, Terminate then delete,
 protected Delete, competing operators and rollback followed by takeover.
 
 The host starts the request deadline on a monotonic clock anchored to a
 bounded PostgreSQL startup sample. Admission I/O uses the same deadline.
-A reply already accepted by the request registry wins over a late admission
-acknowledgement. After a known admission, a timeout includes the exact
-creation's status at its deadline when a bounded store read can obtain it.
+A stalled admission acknowledgement cannot delay a timely reply or a timeout.
+After a known admission, a bounded read can attach the exact creation's
+committed status observed when resolving the timeout. The fixture does not
+establish historical status at the deadline for a transaction crossing it.
 An expired reply is dropped even when the operator later commits. Replies
 use the live fixture transport and can be lost on process death or an
 unknown commit outcome. Build Native.Run in Release with a locked restore

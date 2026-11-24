@@ -54,6 +54,9 @@ internal static class PostgresHeldOperatorChecks
         var plain = await Start("plain");
         var competing = await Start("competing");
         var delayed = await Start("delayed");
+        var stalled = await Start("stalled");
+        var limited = await Start("limited");
+        var crossing = await Start("crossing");
         var actorType = new PublicActor([new PostgresRootThenDeleteChecks.SeededReceipt(new NativeExecutionModel(registry),
             reference => reference == keep)]);
         long oldEpoch;
@@ -137,7 +140,9 @@ internal static class PostgresHeldOperatorChecks
             Remember(retryInput);
             await ForceRollback(owner, rollback, retryInput, rolledBack);
         }
-        await using (var owner = await Own("after-rollback"))
+        var retirement = new RetirementRead();
+        var retirementOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).AddInterceptors(retirement).Options;
+        await using (var owner = await Own("after-rollback", open: () => KernelDb.ForPostgresRootOperatorReplies(retirementOptions)))
         {
             while (transport.Attempts < 4) await Next(owner);
             Check(transport.Committed == 4 && transport.Deliver(requests, await admission.ReadReplyTimeAsync(stop)) == 1 &&
@@ -177,9 +182,20 @@ internal static class PostgresHeldOperatorChecks
                         row.Target == firstInput.Target.Id && row.Id != firstInput.InboxKey.Id && !row.Done && row.ReplyTo != null, stop);
                 }
                 Remember(PostgresRootAdmission.DecodeOperator(db, following, competing.Id));
+                var key = following.Id;
+                retirement.BeforeScrub = async () =>
+                {
+                    await using var read = Open();
+                    var replaceable = await read.Database.SqlQuery<string>($"""
+                        SELECT "ReplyTo" AS "Value" FROM "Messages" WHERE "Id" = {key} AND "Target" = {firstInput.Target.Id}
+                            AND NOT "Done" FOR UPDATE SKIP LOCKED
+                        """).ToListAsync(stop);
+                    if (replaceable.Count != 0)
+                        throw new InvalidOperationException("Another transaction could replace the captured sibling address.");
+                };
             }
             await Deliver(owner, 8);
-            Check(await first is { Item: "deleted" } && await second is { Error: "missing" },
+            Check(retirement.BeforeScrub is null && await first is { Item: "deleted" } && await second is { Error: "missing" },
                 "retirement returns committed missing to a different held command it settles");
 
             await Drive(owner, delayed, InstanceStatus.Running);
@@ -205,12 +221,54 @@ internal static class PostgresHeldOperatorChecks
             {
                 Remember(await ReadPending(delayed));
                 await Deliver(owner, 9);
-                Check(Clock() < due && !slow.IsCompleted, "the receiver accepted a timely reply while admission acknowledgement was paused");
-                await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(1, due - Clock() + 30)), stop);
+                Check(await slow.WaitAsync(stop) is { Channel: "response", Item: "deleted" } &&
+                    !acknowledgement.Resume.Task.IsCompleted && Clock() < due && requests.All.Count == 0,
+                    "a timely accepted reply releases the caller while admission acknowledgement remains paused");
             }
             finally { acknowledgement.Resume.TrySetResult(); }
-            Check(await slow is { Channel: "response", Item: "deleted" } && requests.All.Count == 0,
-                "a timely accepted reply wins even when admission acknowledgement returns after its deadline");
+            await Drive(owner, stalled, InstanceStatus.Running);
+            var stalledSelection = (await reads.GetAsync(tenant, stalled, stop))!;
+            var later = queue.Commit.Arm();
+            var waiting = Call(stalledSelection, "stalled", Clock() + 900, edge: pausedIngress).AsTask();
+            await later.Seen.Task.WaitAsync(stop);
+            Message stalledInput;
+            try
+            {
+                stalledInput = await ReadPending(stalled);
+                Check(await waiting.WaitAsync(stop) is { Error: "timeout", Status: null } &&
+                    !later.Resume.Task.IsCompleted && requests.All.Count == 0,
+                    "the caller times out even when committed admission acknowledgement remains paused");
+            }
+            finally { later.Resume.TrySetResult(); }
+            while (!await IsCommitted(stalledInput)) await Next(owner);
+            Check(transport.Attempts == 9, "a stalled acknowledgement cannot revive a timed-out registration");
+
+            await Drive(owner, crossing, InstanceStatus.Running);
+            var crossingSelection = (await reads.GetAsync(tenant, crossing, stop))!;
+            var crossingReply = Call(crossingSelection, "crossing", Clock() + 2_000).AsTask();
+            var crossingInput = await ReadPending(crossing);
+            var markerWritten = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            retirement.BeforeScrub = () =>
+            {
+                markerWritten.TrySetResult();
+                return finish.Task;
+            };
+            async Task ApplyCrossing()
+            {
+                while (!await IsCommitted(crossingInput)) await Next(owner);
+            }
+            var applying = ApplyCrossing();
+            try
+            {
+                await markerWritten.Task.WaitAsync(stop);
+                Check(await crossingReply.WaitAsync(stop) is { Error: "timeout", Status: Contract.ActorStatus.Running } &&
+                    !applying.IsCompleted, "the timeout reads the committed Running status while a terminal write is still uncommitted");
+            }
+            finally { finish.TrySetResult(); }
+            await applying.WaitAsync(stop);
+            Check(transport.Attempts == 9 && await reads.GetAsync(tenant, crossing, stop) is null,
+                "a terminal transaction that lands after the timeout cannot deliver a late result");
         }
 
         var mismatchedSelection = (await reads.GetAsync(tenant, keep, stop))!;
@@ -237,6 +295,29 @@ internal static class PostgresHeldOperatorChecks
             await Deliver(owner, 10);
             Check(await mismatched is { Error: "protected" } && requests.All.Count == 0,
                 "a successor settles the refusal after the exact admitted address is restored");
+        }
+        await using (var owner = await Own("reply-capacity"))
+        {
+            await Drive(owner, limited, InstanceStatus.Running);
+            var limitedSelection = (await reads.GetAsync(tenant, limited, stop))!;
+            for (var i = 0; i < PostgresRootAdmission.HeldReplyLimit - 1; i++)
+            {
+                var id = $"reserved-{i}";
+                var reservedUntil = Clock() + 15_000;
+                var receipt = await admission.AdmitRootOperatorAsync(tenant.Tenant, limited.Id, id, Kinds.Terminate, null, null, stop,
+                    limitedSelection.Selection, reply: new(ReplyTo.Of(receiver, id, reservedUntil), reservedUntil));
+                if (receipt is not { Duplicate: false }) throw new InvalidOperationException("The held capacity fixture could not fill its first slots.");
+            }
+            var lastA = Call(limitedSelection, "last-a", Clock() + 2_000).AsTask();
+            var lastB = Call(limitedSelection, "last-b", Clock() + 2_000).AsTask();
+            Check(await (await Task.WhenAny(lastA, lastB)).WaitAsync(stop) is { Error: "operator reply capacity" } &&
+                (await lastA).Error != (await lastB).Error,
+                "two competing callers for the final held slot leave only one additional admitted request");
+            var duplicate = await Call(limitedSelection, "reserved-0", Clock() + 10_000);
+            var oneWay = await ingress.SendAsync(tenant, new Contract.Target.Ref(limited), "one-way", Contract.Kinds.Terminate,
+                JsonSerializer.Serialize(new Contract.OperatorCommand(limitedSelection.Selection)), cancellationToken: stop);
+            Check(duplicate.Error == "repeat" && oneWay.Outcome == Contract.AdmissionOutcome.Accepted,
+                "held capacity preserves the original receipt and leaves one-way operator admission available");
         }
         return 0;
 
@@ -357,6 +438,20 @@ internal static class PostgresHeldOperatorChecks
             {
                 Console.WriteLine("ok the earlier operator format refuses the stored held envelope");
             }
+        }
+    }
+
+    private sealed class RetirementRead : DbCommandInterceptor
+    {
+        internal Func<Task>? BeforeScrub;
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("""DELETE FROM "Journal" WHERE "Instance" """.TrimEnd(), StringComparison.Ordinal) &&
+                Interlocked.Exchange(ref BeforeScrub, null) is { } change)
+                await change();
+            return result;
         }
     }
 
