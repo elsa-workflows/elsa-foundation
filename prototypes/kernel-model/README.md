@@ -531,9 +531,10 @@ ownership before changing any lease or inbox row.
 ### Workbench PostgreSQL provider rehearsal
 
 Run `bash tools/ci/actor-foundation/check-workbench-postgres.sh` from the repository root. The script
-builds a disposable archive of the selected revision. It compiles the preview provider using
-Workbench's locked EF provider versions, adds a qualification command to the archived Workbench,
-and verifies both the provider's compile assets and Workbench's emitted dependency manifest. Each test uses a fresh loopback PostgreSQL database.
+builds a disposable archive of the selected revision and adds a qualification command to that
+Workbench. The relational provider and Workbench import the same central package versions. The script
+verifies their locks, the provider's compile assets and Workbench's emitted dependency manifest.
+Each test uses a fresh loopback PostgreSQL database.
 
 The archived executable runs a dedicated Generic Host before normal Workbench composition. Two
 Workbench processes run the real Native approval with the hosted PostgreSQL launcher.

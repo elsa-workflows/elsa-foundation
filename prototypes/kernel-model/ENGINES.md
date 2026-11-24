@@ -21,6 +21,9 @@ Raw output of every run is under `.out/` (not committed).
 
 ## Setup
 
+The table records the software versions used for the historical runs below. Current builds of the
+relational provider use the [repository's central package versions](../../Directory.Packages.props).
+
 | Engine | Image | Provider | Driver |
 |---|---|---|---|
 | PostgreSQL 17 | `postgres:17` | Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 | Npgsql 10.0.3 |

@@ -26,23 +26,19 @@ import xml.etree.ElementTree as ET
 app = Path('apps/Elsa.Workbench')
 locked = json.loads((app / 'packages.lock.json').read_text())['dependencies']['net10.0']
 provider = Path('prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj')
-provider_locked = json.loads(provider.with_name('packages.lock.json').read_text())['dependencies']['net10.0']
 workbench_versions = {package: info['resolved'] for package, info in locked.items() if 'resolved' in info}
-xml = ET.parse(provider)
-references = {entry.attrib['Include']: entry for entry in xml.findall('.//PackageReference')}
-if references.keys() - workbench_versions.keys():
-    raise SystemExit("Workbench does not lock every direct provider dependency.")
-pins = references.keys() | (provider_locked.keys() & workbench_versions.keys())
-transitive = ET.SubElement(xml.getroot(), 'ItemGroup')
-for package in sorted(pins):
-    reference = references.get(package)
-    if reference is None:
-        reference = ET.SubElement(transitive, 'PackageReference', Include=package)
-    reference.set('Version', workbench_versions[package])
-    print(f'Compile kernel provider with Workbench {package} {workbench_versions[package]}')
-xml.write(provider, encoding='unicode')
+provider_packages = {ref.attrib['Include'] for ref in ET.parse(provider).findall('.//PackageReference')}
+provider_packages.update({'Microsoft.EntityFrameworkCore', 'Microsoft.EntityFrameworkCore.Relational',
+                          'Microsoft.Data.SqlClient', 'Microsoft.Data.Sqlite.Core', 'MySql.Data', 'Npgsql'})
+provider_lock = json.loads(provider.with_name('packages.lock.json').read_text())['dependencies']['net10.0']
+for package in sorted(provider_packages):
+    actual = provider_lock.get(package, {}).get('resolved')
+    expected = workbench_versions.get(package)
+    if expected is None or actual != expected:
+        raise SystemExit(f'Provider version mismatch for {package}: Workbench locked {expected}, '
+                         f'provider locked {actual}')
 Path('expected-workbench-providers.json').write_text(
-    json.dumps({package: workbench_versions[package] for package in pins}))
+    json.dumps({package: workbench_versions[package] for package in provider_packages}))
 project=app/'Elsa.Workbench.csproj'
 text=project.read_text()
 if text.count('</Project>') != 1:
@@ -73,7 +69,11 @@ if (args is ["--qualify-workbench-postgres", .. var previewArguments])
 
 ''' + entry))
 PY
+# The composition is temporary. Restore the provider's committed closure first.
+dotnet restore prototypes/kernel-model/ef/Kernel.EntityFramework --locked-mode
 dotnet restore apps/Elsa.Workbench /p:RestoreLockedMode=false
+git -C "$repo" -c core.fsmonitor=false show "$revision:prototypes/kernel-model/ef/Kernel.EntityFramework/packages.lock.json" |
+  cmp - prototypes/kernel-model/ef/Kernel.EntityFramework/packages.lock.json
 dotnet build -c Release --no-restore apps/Elsa.Workbench
 workbench=apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll
 
