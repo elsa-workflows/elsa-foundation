@@ -68,11 +68,11 @@ internal static class RootStableBodyChecks
         Check((await Read(target)) is { Revision: 2, Suspended: false } && await Position() == fence.Position &&
               await ingress.ReadDueRootOperatorAsync(tenant, target.Reference, default) == suspend,
             "one byte above the declared suspension reserve preserves the row and command");
-        Check((await SetSuspended(target.Creator.Target.Id, suspend, true, reservedGrowth)).Landed, "the exact suspended checkpoint lands");
-        Advance();
+        Check((await SetSuspended(target.Creator.Target.Id, suspend, true, reservedGrowth)).Landed && await Position() == fence.Position,
+            "the exact suspended checkpoint lands without advancing the journal position");
         var resume = await AdmitControl(target.Reference, "resume", Kinds.Resume);
-        Check((await SetSuspended(target.Creator.Target.Id, resume, false, reservedGrowth)).Landed, "the exact resumed checkpoint lands");
-        Advance();
+        Check((await SetSuspended(target.Creator.Target.Id, resume, false, reservedGrowth)).Landed && await Position() == fence.Position,
+            "the exact resumed checkpoint lands without advancing the journal position");
 
         var last = await Add(target, "finish");
         Check((await Write(target, last, final, ended: true)).Landed, "reshaping the saved text spends the reserved growth");
