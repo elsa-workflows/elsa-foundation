@@ -379,10 +379,19 @@ public sealed class Flowchart : CompositeActivity
     public static string? PathOf(string? tag) => Decode(tag).Path;
 
     public static FlowchartGraph GraphOf(Node node) => Graphs.GetValue(node, static n => FlowchartGraph.From(
-        [.. n.Children.Select(child => new FlowchartNode(child.Id))],
+        [.. n.Children.Select(child => new FlowchartNode(child.Id, IsTrigger: IsEntry(n, child)))],
         new FlowchartStructure(
             [.. n.Connections.Select(c => new FlowchartConnection(new FlowchartEndpoint(c.Source, c.Outcome), new FlowchartEndpoint(c.Target)))],
             nodeMetadata: n.Gateways.ToDictionary(g => g.Key, g => new FlowchartNodeMetadata(KindOf(g.Value)), StringComparer.Ordinal))));
+
+    /// <summary>
+    /// A child a run can be started at by its trigger: an HttpEndpoint that no connection leads to (<see cref="HttpRoutes"/>
+    /// registers these as start routes for a root Flowchart; a nested Flowchart marks them too). The graph engine roots its
+    /// loop classification at the start node and then at these, so a loop reached from an entry is classified from where
+    /// the run enters it, whatever the node ids.
+    /// </summary>
+    internal static bool IsEntry(Node flowchart, Node child) =>
+        child.Type == typeof(HttpEndpoint) && !flowchart.Connections.Any(connection => connection.Target == child.Id);
 
     private static string KindOf(Gateway gateway) => gateway switch
     {

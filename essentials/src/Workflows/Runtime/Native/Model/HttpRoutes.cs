@@ -1,12 +1,24 @@
+using Kernel.Graph.Exceptions;
+
 namespace Kernel.Native;
 
-/// <summary>The in-memory route table, built from the published definitions: routing reads nothing.</summary>
+/// <summary>
+/// The in-memory route table, built from the published definitions: routing reads nothing. A route is its method in
+/// upper case and its path trimmed of white space and slashes and in lower case, as the old core canonicalizes a
+/// template, for starts, waits and lookups alike. One route starts one workflow: a second claim on it is refused with
+/// <see cref="HttpRouteConflictException"/> when the table is built, as the old core refuses it at publish. A definition
+/// published again replaces its own routes (the registry keeps one workflow per id), and one path may start different
+/// workflows on different methods. One definition with two entries on one route is refused too, which the old core
+/// lets pass.
+/// </summary>
 public sealed class HttpRoutes
 {
     private readonly Dictionary<string, (string Workflow, string Node)> _starts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _early = new(StringComparer.Ordinal);
 
-    public static string Key(string method, string path) => $"http:{method.ToUpperInvariant()}:{path.Trim('/')}";
+    public static string Key(string method, string path) => $"http:{method.ToUpperInvariant()}:{Normalize(path)}";
+
+    private static string Normalize(string path) => path.Trim().Trim('/').ToLowerInvariant();
 
     public HttpRoutes(WorkflowRegistry registry)
     {
@@ -17,11 +29,31 @@ public sealed class HttpRoutes
             foreach (var node in workflow.Nodes.Values.Where(n => n.Type == typeof(HttpEndpoint)))
                 if (node.Inputs.GetValueOrDefault("Path") is LiteralBinding { Value: { } p } && node.Inputs.GetValueOrDefault("RespondBeforeCommit") is LiteralBinding { Value: { } early } && early.GetValue<bool>())
                     _early.Add(Key(Method(node), p.GetValue<string>()));
-            // A start trigger is an HttpEndpoint at the root or first in a root sequence, with a literal path.
-            var first = workflow.Root.Type == typeof(Sequence) && workflow.Root.Children.Count > 0 ? workflow.Root.Children[0] : workflow.Root;
-            if (first.Type != typeof(HttpEndpoint) || first.Inputs.GetValueOrDefault("Path") is not LiteralBinding { Value: { } path }) continue;
-            _starts[Key(Method(first), path.GetValue<string>())] = (workflow.Id, first.Id);
+            // A start trigger is an HttpEndpoint with a literal path at the root, first in a root Sequence, or a child of a
+            // root Flowchart (the designer's shape) that no connection leads to.
+            foreach (var start in StartsOf(workflow.Root))
+                if (start.Type == typeof(HttpEndpoint) && start.Inputs.GetValueOrDefault("Path") is LiteralBinding { Value: { } path })
+                {
+                    var (method, route) = (Method(start).ToUpperInvariant(), Normalize(path.GetValue<string>()));
+                    if (!_starts.TryAdd(Key(method, route), (workflow.Id, start.Id)))
+                        throw new HttpRouteConflictException(method, route, _starts[Key(method, route)], (workflow.Id, start.Id));
+                }
         }
+    }
+
+    // The nodes a run of the root can begin at. In a Flowchart, a run triggered at a child begins there (the graph
+    // engine's SelectEntryNode), so every child without an inbound connection is an entry, as the old core's start-path
+    // rule has it. A child a connection leads to is not one, even when the engine falls back to it as the start node: a
+    // loop that comes back to it would wait there on the start route's own key, and no request could reach that wait.
+    // A graph the engine refuses has no entry; its run faults on its own.
+    private static IEnumerable<Node> StartsOf(Node root)
+    {
+        if (root.Children.Count == 0) return [root];
+        if (root.Type == typeof(Sequence)) return [root.Children[0]];
+        if (root.Type != typeof(Flowchart)) return [root];
+        try { _ = Flowchart.GraphOf(root); }
+        catch (Exception refused) when (refused is FlowchartExecutionException or ArgumentException) { return []; }
+        return root.Children.Where(child => Flowchart.IsEntry(root, child));
     }
 
     private static string Method(Node node) => node.Inputs.GetValueOrDefault("Method") is LiteralBinding { Value: { } m } ? m.GetValue<string>() : "POST";
@@ -30,4 +62,26 @@ public sealed class HttpRoutes
 
     /// <summary>The route's caller is answered when the turn ends, not after its commit.</summary>
     public bool BeforeCommit(string method, string path) => _early.Contains(Key(method, path));
+}
+
+/// <summary>Two start endpoints claim one method and path: a route starts one workflow, so the route table refuses the second.</summary>
+public sealed class HttpRouteConflictException(string method, string path, (string Workflow, string Node) first, (string Workflow, string Node) second)
+    : InvalidOperationException(Describe(method, path, first, second))
+{
+    /// <summary>The method both claim, in upper case.</summary>
+    public string Method { get; } = method;
+
+    /// <summary>The path both claim, trimmed of white space and slashes and in lower case.</summary>
+    public string Path { get; } = path;
+
+    /// <summary>The claim met first in the registry's order, which is not a publication order.</summary>
+    public (string Workflow, string Node) First { get; } = first;
+
+    /// <summary>The claim met second, at which the table was refused.</summary>
+    public (string Workflow, string Node) Second { get; } = second;
+
+    private static string Describe(string method, string path, (string Workflow, string Node) first, (string Workflow, string Node) second) =>
+        first.Workflow == second.Workflow
+            ? $"Workflow '{first.Workflow}' starts on {method} /{path} at two endpoints, '{first.Node}' and '{second.Node}'; a route starts one workflow at one endpoint. Change the method or path of one of them."
+            : $"Workflows '{first.Workflow}' and '{second.Workflow}' both start on {method} /{path}; a route starts one workflow. Change the method or path of one of them.";
 }
