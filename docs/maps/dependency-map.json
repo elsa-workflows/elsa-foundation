@@ -14800,6 +14800,30 @@
       ]
     },
     {
+      "path": "essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj",
+      "name": "Elsa.ActorFoundation.Store.Conformance",
+      "kind": "test",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "Store.Conformance",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.TestSupport",
+          "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Workflows",
+          "path": "prototypes/kernel-model/src/Kernel.Workflows/Kernel.Workflows.csproj"
+        }
+      ]
+    },
+    {
       "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj",
       "name": "Elsa.ActorFoundation.TestSupport",
       "kind": "test",
