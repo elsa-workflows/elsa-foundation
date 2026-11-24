@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "elsa3-migration-workflows-report-v1",
+  "title": "Elsa 3 workflows migration report, schema version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "tool", "command", "options", "summary", "components", "definitions", "notConverted", "missingTargets", "inputFindings", "run"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": { "name": { "const": "dotnet-elsa" }, "version": { "type": "string" } }
+    },
+    "command": { "enum": ["inventory", "assess"] },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allVersions", "closure"],
+      "properties": {
+        "allVersions": { "type": "boolean" },
+        "closure": { "enum": ["reference", "reference+packages", "host"] }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["definitions", "goesSmoothly", "published", "exported", "blockedByDependency", "notConverted", "byCategory", "byBucket"],
+      "properties": {
+        "definitions": { "type": "integer", "minimum": 0 },
+        "goesSmoothly": { "type": "integer", "minimum": 0 },
+        "published": { "type": "integer", "minimum": 0 },
+        "exported": { "type": "integer", "minimum": 0 },
+        "blockedByDependency": { "type": "integer", "minimum": 0 },
+        "notConverted": { "type": "integer", "minimum": 0 },
+        "byCategory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mustFix", "reconsider", "takeIntoAccount"],
+          "properties": {
+            "mustFix": { "type": "integer", "minimum": 0 },
+            "reconsider": { "type": "integer", "minimum": 0 },
+            "takeIntoAccount": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "byBucket": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["convertAsIs", "convertWithAdjustments", "incompatible"],
+          "properties": {
+            "convertAsIs": { "type": "integer", "minimum": 0 },
+            "convertWithAdjustments": { "type": "integer", "minimum": 0 },
+            "incompatible": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "components": { "type": "array", "items": { "$ref": "#/$defs/component" } },
+    "definitions": { "type": "array", "items": { "$ref": "#/$defs/definition" } },
+    "notConverted": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["definitionId", "version", "sourceVersionId"],
+        "properties": {
+          "definitionId": { "type": "string" },
+          "version": { "type": "integer" },
+          "sourceVersionId": { "type": "string" }
+        }
+      }
+    },
+    "missingTargets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["definitionId", "referencedBy"],
+        "properties": {
+          "definitionId": { "type": "string" },
+          "referencedBy": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "inputFindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "finding"],
+        "properties": {
+          "file": { "type": "string" },
+          "finding": { "$ref": "#/$defs/finding" }
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["closure", "packages", "features", "settingKeys", "persistenceOverridden"],
+      "properties": {
+        "closure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": { "enum": ["reference", "reference+packages", "host"] },
+            "referenceHostVersion": { "type": "string" },
+            "hostAssemblyVersion": { "type": "string" }
+          }
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "version"],
+            "properties": { "id": { "type": "string" }, "version": { "type": "string" } }
+          }
+        },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "settingKeys": { "type": "array", "items": { "type": "string" } },
+        "persistenceOverridden": { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "category", "stage", "path", "message", "guidance"],
+      "properties": {
+        "code": { "type": "string" },
+        "severity": { "enum": ["error", "warning", "info"] },
+        "category": { "enum": ["mustFix", "reconsider", "takeIntoAccount"] },
+        "remedy": { "enum": ["patch-definition", "build-component", "none"] },
+        "componentKind": { "enum": ["activity", "javascript-function", "variable-type", "storage-driver"] },
+        "componentName": { "type": "string" },
+        "stage": { "enum": ["input", "conversion", "import", "publish"] },
+        "path": { "type": ["string", "null"] },
+        "nodeId": { "type": "string" },
+        "message": { "type": "string" },
+        "guidance": { "type": "string" },
+        "publishStoppedHere": { "type": "boolean" }
+      },
+      "allOf": [
+        { "if": { "properties": { "category": { "const": "mustFix" } } }, "then": { "required": ["remedy"] }, "else": { "not": { "required": ["remedy"] } } },
+        { "if": { "required": ["componentKind"] }, "then": { "required": ["componentName"] } }
+      ]
+    },
+    "definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["definitionId", "name", "version", "sourceVersionId", "isReusable", "bucket", "blockedBy", "published", "exportedTo", "needsCompositeSourceSupport", "findings"],
+      "properties": {
+        "definitionId": { "type": "string" },
+        "name": { "type": ["string", "null"] },
+        "version": { "type": "integer" },
+        "sourceVersionId": { "type": "string" },
+        "isReusable": { "type": "boolean" },
+        "bucket": { "enum": ["convert-as-is", "convert-with-adjustments", "incompatible"] },
+        "blockedBy": { "type": "array", "items": { "type": "string" } },
+        "published": { "type": "boolean" },
+        "exportedTo": { "type": ["string", "null"] },
+        "needsCompositeSourceSupport": { "type": "boolean" },
+        "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "definitions", "usages"],
+      "properties": {
+        "kind": { "enum": ["activity", "javascript-function", "variable-type", "storage-driver"] },
+        "name": { "type": "string" },
+        "definitions": { "type": "array", "items": { "type": "string" } },
+        "usages": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}
