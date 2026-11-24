@@ -3,16 +3,20 @@ using System.Text;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Hosting;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Nuplane.Abstractions;
 using Nuplane.Admin;
 using Nuplane.Reconciliation;
 using Nuplane.Reconciliation.Models;
 
-namespace Elsa.Foundation.Host.ModuleManagement;
+namespace Elsa.Foundation.Hosting;
 
 /// <summary>
-/// Optional extra #1 — the module-management endpoints. Two operations, both behind a static API-key filter:
+/// The opt-in module-management endpoints a Foundation host can map. Two operations, both behind a static API-key filter:
 /// <list type="bullet">
 ///   <item><c>POST /_module-management/reconcile</c> — trigger a Nuplane package reconcile (refresh the
 ///   package/assembly catalog from the feed). Same effect as the directory folder listener, on demand.</item>
@@ -24,15 +28,16 @@ namespace Elsa.Foundation.Host.ModuleManagement;
 /// </summary>
 public static class ModuleManagementEndpoints
 {
-    public static IEndpointRouteBuilder MapModuleManagementApi(this IEndpointRouteBuilder endpoints, ModuleManagementOptions options)
+    public static IEndpointRouteBuilder MapModuleManagementApi(this IEndpointRouteBuilder endpoints, ModuleManagementOptions options, string hostOwner)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostOwner);
         var group = endpoints.MapGroup("/_module-management");
-        group.WithHostOwner("Elsa.Foundation.Host")
+        group.WithHostOwner(hostOwner)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(
                 ModuleManagementOptions.ApiKeyHeader,
-                "Elsa.Foundation.Host"))
-            .WithHostCredentialEnforcement(ModuleManagementOptions.ApiKeyHeader, "Elsa.Foundation.Host");
+                hostOwner))
+            .WithHostCredentialEnforcement(ModuleManagementOptions.ApiKeyHeader, hostOwner);
         group.AddEndpointFilter(async (context, next) =>
             Authorized(context.HttpContext, options) ? await next(context) : Results.Unauthorized());
 
@@ -45,7 +50,7 @@ public static class ModuleManagementEndpoints
         // request, so the request's provider is that shell's, and CShells copies every root registration into every shell:
         // Nuplane's singletons there are second instances. A reconcile enqueued on a shell's copy of the trigger queue is read
         // by no dispatcher, so it waits for ever (#2159); only the root's queue has the dispatcher that runs it.
-        var logger = endpoints.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Elsa.Foundation.Host.ModuleManagement");
+        var logger = endpoints.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger($"{hostOwner}.ModuleManagement");
         group.MapPost("/reconcile", async (CancellationToken ct) =>
             ReconcileResult(await endpoints.ServiceProvider.GetRequiredService<INuplaneAdminOperations>().TriggerReconcileAsync(ct), logger));
 

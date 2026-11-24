@@ -1,8 +1,11 @@
 using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Hosting;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
 
-namespace Elsa.Foundation.Host.Health;
+namespace Elsa.Foundation.Hosting;
 
 /// <summary>
 /// Host-level health probes. These report HOST-infrastructure state only:
@@ -21,16 +24,20 @@ namespace Elsa.Foundation.Host.Health;
 /// broker). That lives inside the shell where those dependencies are registered; see the notes in README.
 /// </para>
 /// </summary>
-public static class HealthEndpoints
+public static class FoundationHealthEndpoints
 {
     private const string ConfiguredShellsSection = "CShells:Shells";
 
-    public static IEndpointRouteBuilder MapHostHealth(this IEndpointRouteBuilder endpoints)
+    /// <summary>Maps <c>/health/live</c> and <c>/health/ready</c>, owned by <paramref name="hostOwner"/>.</summary>
+    /// <remarks>Exclude both paths from shell routing (<c>WithWebRouting</c>) so a probe never resolves a shell.</remarks>
+    public static IEndpointRouteBuilder MapFoundationHealth(this IEndpointRouteBuilder endpoints, string hostOwner)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostOwner);
+
         endpoints.MapGet("/health/live", () => Results.Ok(new { status = "live" }))
-            .WithHostOwner("Elsa.Foundation.Host")
+            .WithHostOwner(hostOwner)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .AllowPublic("health", "Reports whether the Foundation Host process is live.");
+            .AllowPublic("health", $"Reports whether the {hostOwner} process is live.");
 
         endpoints.MapGet("/health/ready", (IShellRegistry registry, IConfiguration configuration, ShellActivationTracker tracker) =>
         {
@@ -58,9 +65,9 @@ public static class HealthEndpoints
                 new { status = ready ? "ready" : "not-ready", shells },
                 statusCode: ready ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable);
         })
-            .WithHostOwner("Elsa.Foundation.Host")
+            .WithHostOwner(hostOwner)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .AllowPublic("health", "Reports whether all configured Foundation Host shells are ready.");
+            .AllowPublic("health", $"Reports whether all configured {hostOwner} shells are ready.");
 
         return endpoints;
     }

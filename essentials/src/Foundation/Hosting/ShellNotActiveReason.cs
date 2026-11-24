@@ -1,8 +1,7 @@
 using System.Text.Json.Serialization;
 using CShells.Lifecycle;
-using Elsa.Foundation.Hosting;
 
-namespace Elsa.Foundation.Host.Health;
+namespace Elsa.Foundation.Hosting;
 
 /// <summary>The stable codes of <see cref="ShellNotActiveReason.Code"/>, which tooling and operators match on.</summary>
 public static class ShellNotActiveReasonCodes
