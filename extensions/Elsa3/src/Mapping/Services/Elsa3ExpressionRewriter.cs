@@ -59,9 +59,13 @@ public sealed class Elsa3ExpressionRewriter(
     /// Elsa 4 matches the host function whose name after the prefix is the Elsa 3 name.
     /// </summary>
     internal static string UndeclaredFunctionGuidance(string name) =>
-        $"If the host rebuilt '{name}' for Elsa 4, register a host function named '<prefix>.{name}' (for example 'acme.{name}') " +
-        "under one namespace only; the converter then rewrites the call. " +
+        $"{RebuiltFunctionGuidance(name)} " +
         "Otherwise compute the value with JavaScript or an Elsa 4 built-in function, or in an activity, in the Elsa 3 workflow before import.";
+
+    /// <summary>How a host that rebuilt an Elsa 3 function for Elsa 4 gets its calls converted (#5664).</summary>
+    private static string RebuiltFunctionGuidance(string name) =>
+        $"If the host rebuilt '{name}' for Elsa 4, register a host function named '<prefix>.{name}' (for example 'acme.{name}') " +
+        "under one namespace only; the converter then rewrites the call.";
 
     /// <summary>
     /// What to do about a refused call to a name no host function can take over (a standard JavaScript global, a CLR
@@ -722,10 +726,10 @@ public sealed class Elsa3ExpressionRewriter(
         public bool AllowsOutcomeSetters { get; init; }
 
         /// <summary>
-        /// Each member name of a prefixed host function, with the functions that carry it: the Elsa 3 globals they replace. An Elsa 3
-        /// built-in the converter converts itself (<c>getVariable</c>, the setters, <c>getCorrelationId</c>, …) keeps that
-        /// conversion (see <c>ConvertedGlobals</c>). Of the Elsa 3 functions the converter refuses, the byte and stream
-        /// helpers, <c>getConfig</c>, the definition readers and <c>getLastResult</c> can be replaced.
+        /// Each member name of a prefixed host function, with the functions that carry it: the Elsa 3 globals they replace.
+        /// A name in <c>ConvertedGlobals</c> (<c>getVariable</c>, the setters, <c>getCorrelationId</c>, …) keeps its
+        /// conversion. Of the Elsa 3 functions the converter refuses, the byte and stream helpers, <c>getConfig</c>, the
+        /// definition readers and <c>getLastResult</c> can be replaced.
         /// </summary>
         public IReadOnlyDictionary<string, string[]> ReplacedGlobals { get; init; } = new Dictionary<string, string[]>(StringComparer.Ordinal);
 
@@ -1018,14 +1022,17 @@ public sealed class Elsa3ExpressionRewriter(
             "Int32Array", "Uint32Array", "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array", "Float16Array",
             "SharedArrayBuffer", "Atomics", "Iterator", "FinalizationRegistry", "DisposableStack", "AsyncDisposableStack",
             "SuppressedError", "Temporal", "arguments",
+            // The global object inherits Object.prototype, so Elsa 3 ran these bare calls natively too.
+            "toString", "toLocaleString", "valueOf", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "constructor",
         };
 
         /// <summary>
-        /// Names never matched to a host function (#5664): the Elsa 3 and Elsa 4 built-ins the converter converts itself, the
-        /// outcome setters and instance-state helpers, the CLR, lodash and moment globals, the read roots
-        /// (<c>variables</c>, <c>args</c>, …) and the standard JavaScript globals. The other Elsa 3 functions it refuses (byte and stream helpers, <c>getConfig</c>, the definition readers,
-        /// <c>getLastResult</c>) are matched. A host function with one of them as its member name does not take it over, and a
-        /// reference to one is not refused as a replaced function.
+        /// Names never matched to a host function (#5664): the Elsa 3 and Elsa 4 built-ins the converter converts itself,
+        /// the setters, the outcome setters and instance-state helpers, the CLR, lodash and moment globals, the read roots
+        /// (<c>variables</c>, <c>args</c>, …) and the standard JavaScript globals. The other Elsa 3 functions it refuses
+        /// (byte and stream helpers, <c>getConfig</c>, the definition readers, <c>getLastResult</c>) are matched. A host
+        /// function with one of them as its member name does not take it over, and a reference to one is not refused as a
+        /// replaced function.
         /// </summary>
         private static readonly HashSet<string> ConvertedGlobals = new(
             PureGlobalCalls
@@ -1639,7 +1646,11 @@ public sealed class Elsa3ExpressionRewriter(
 
                 if (RefusedHostFunctions.TryGetValue(callee.Name, out var refused))
                 {
-                    Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, refused.Message, refused.Guidance));
+                    // A refused Elsa 3 built-in a host function may take over says so (#5664); one it may not does not.
+                    var guidance = ConvertedGlobals.Contains(callee.Name)
+                        ? refused.Guidance
+                        : $"{refused.Guidance} {RebuiltFunctionGuidance(callee.Name)}";
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, refused.Message, guidance));
                     return;
                 }
 
@@ -2283,6 +2294,12 @@ public sealed class Elsa3ExpressionRewriter(
         /// Whether <paramref name="name"/> has the shape of an Elsa 3 generated accessor (<c>get{Name}</c> or
         /// <c>set{Name}</c>) rather than a built-in, and the <c>{Name}</c> part as written.
         /// </summary>
+        private static bool HasAccessorShape(string name, string prefix, out string accessor)
+        {
+            accessor = name.Length > prefix.Length ? name[prefix.Length..] : string.Empty;
+            return accessor.Length > 0 && name.StartsWith(prefix, StringComparison.Ordinal);
+        }
+
         private static bool TryGetAccessorName(string name, string prefix, out string accessor)
         {
             accessor = name.Length > prefix.Length ? name[prefix.Length..] : string.Empty;
@@ -2307,7 +2324,9 @@ public sealed class Elsa3ExpressionRewriter(
 
             // Elsa 3 registered custom functions and generated accessors in an order its source does not fix (R-3): any
             // accessor Elsa 3 generated under the name, resolvable or not (two variables, an activity output), clashes.
-            if ((TryGetAccessorName(callee.Name, "get", out var accessor) || TryGetAccessorName(callee.Name, "set", out accessor)) &&
+            // A matched Elsa 3 built-in (getConfig, getLastResult, …) clashes with an accessor too: Elsa 3 generated one for a
+            // variable named Config whatever the built-in was called.
+            if ((HasAccessorShape(callee.Name, "get", out var accessor) || HasAccessorShape(callee.Name, "set", out accessor)) &&
                 !resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor)).NoSource)
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(

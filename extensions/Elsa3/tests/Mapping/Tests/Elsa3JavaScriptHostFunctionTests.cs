@@ -419,14 +419,12 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         [
             new("acme.toJson", _ => default),
             new("acme.newGuid", _ => default),
-            new("acme.getVariable", _ => default),
         ];
 
-        var result = await ConvertTextAsync("toJson({ a: 1 }) + newGuid() + getVariable('Key')", claims,
-            new Elsa3Variable { Id = "v", Name = "Key", TypeName = "String" });
+        var result = await ConvertTextAsync("toJson({ a: 1 }) + newGuid()", claims);
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("JSON.stringify({ a: 1 }) + newGuid() + variables.Key", ReadExpression(result).Source);
+        Assert.Equal("JSON.stringify({ a: 1 }) + newGuid()", ReadExpression(result).Source);
     }
 
     /// <summary>
@@ -439,6 +437,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [InlineData("acme.isNullOrEmpty", "['a', ''].filter(isNullOrEmpty)")]
     [InlineData("acme.getWorkflowInstanceId", "[getWorkflowInstanceId][0]")]
     [InlineData("acme.variables", "Object.keys(variables).length")]
+    [InlineData("acme.hasOwnProperty", "hasOwnProperty('x')")]
     public async Task A_host_function_named_like_a_native_or_converted_global_is_not_matched(string hostFunction, string expression)
     {
         var withHostFunction = await ConvertTextAsync(expression, [new JavaScriptHostFunctionDeclaration(hostFunction, _ => default)]);
@@ -450,6 +449,23 @@ public sealed class Elsa3JavaScriptHostFunctionTests
             withHostFunction.Diagnostics.Select(diagnostic => diagnostic.Code).Order(StringComparer.Ordinal));
         if (withHostFunction.Succeeded)
             Assert.Equal(ReadExpression(without).Source, ReadExpression(withHostFunction).Source);
+    }
+
+    /// <summary>
+    /// A refused Elsa 3 built-in a host function may take over names the registration route; one it may not, such as
+    /// the instance-name reader, does not.
+    /// </summary>
+    [Theory]
+    [InlineData("getLastResult()", "getLastResult", true)]
+    [InlineData("bytesToString(x)", "bytesToString", true)]
+    [InlineData("getWorkflowInstanceName()", "getWorkflowInstanceName", false)]
+    public async Task A_refused_elsa3_built_in_names_the_registration_route_only_when_it_can_be_matched(string expression, string name, bool matchable)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Message.Contains($"'{name}'", StringComparison.Ordinal));
+        Assert.Equal(matchable, diagnostic.Guidance?.Contains($"'<prefix>.{name}'", StringComparison.Ordinal) == true);
     }
 
     /// <summary>A refused call to a name no host function can take over gets no advice to register one.</summary>
@@ -477,6 +493,19 @@ public sealed class Elsa3JavaScriptHostFunctionTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         Assert.Equal("acme.getConfig('Key')", ReadExpression(result).Source);
+    }
+
+    /// <summary>A matched Elsa 3 built-in that is also a variable's generated accessor is ambiguous, as a custom function is.</summary>
+    [Theory]
+    [InlineData("acme.getConfig", "getConfig()", "Config")]
+    [InlineData("acme.getLastResult", "getLastResult()", "LastResult")]
+    public async Task A_matched_elsa3_built_in_that_is_also_a_generated_accessor_is_ambiguous(string hostFunction, string expression, string variable)
+    {
+        var result = await ConvertTextAsync(expression, [new JavaScriptHostFunctionDeclaration(hostFunction, _ => default)],
+            new Elsa3Variable { Id = "v", Name = variable, TypeName = "String" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
     }
 
     /// <summary>Only the whole name after the prefix matches; a host function with another member name leaves the refusal.</summary>
