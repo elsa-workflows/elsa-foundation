@@ -9,3 +9,4 @@
 /specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/current-fault/** -text
 /specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/current-native/** -text
 /specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/current-prior-cancellation/** -text
+/specs/1207-json-data-integrity-baseline/evidence/fixtures/etl/** -text

@@ -23,12 +23,12 @@ namespace Elsa.Etl.Tests;
 
 public sealed class EtlV1CompatibilityFixtureTests
 {
-    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions WebJson = Elsa.Serialization.Core.JsonBaseline.Options;
 
     [Fact]
-    public void Retained_v1_published_artifact_and_native_workflow_keep_their_original_identity()
+    public void Current_v1_published_artifact_and_native_workflow_keep_their_captured_identity()
     {
-        var fixture = EtlV1CompatibilityFixture.Open();
+        var fixture = EtlV1CompatibilityFixture.OpenCurrent();
         fixture.VerifyFiles();
 
         var artifact = fixture.ReadArtifact();
@@ -71,7 +71,7 @@ public sealed class EtlV1CompatibilityFixtureTests
     [Fact]
     public async Task Runtime_artifact_store_reads_the_retained_native_publication_without_design_services()
     {
-        var fixture = EtlV1CompatibilityFixture.Open();
+        var fixture = EtlV1CompatibilityFixture.OpenCurrent();
         fixture.VerifyFiles();
         var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.V1PublicationReplay", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -108,9 +108,9 @@ public sealed class EtlV1CompatibilityFixtureTests
     }
 
     [Fact]
-    public async Task Runtime_store_migrates_and_accepts_the_retained_owed_effect_without_retargeting_binding_handles()
+    public async Task Current_v1_store_accepts_the_retained_owed_effect_without_retargeting_binding_handles()
     {
-        var fixture = EtlV1CompatibilityFixture.Open();
+        var fixture = EtlV1CompatibilityFixture.OpenCurrent();
         fixture.VerifyFiles();
         var destination = Path.Combine(Path.GetTempPath(), "Elsa.Etl.V1FixtureReplay", Guid.NewGuid().ToString("N"));
         fixture.CopyRuntimeTo(destination);

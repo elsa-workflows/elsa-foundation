@@ -10,14 +10,14 @@ using Microsoft.EntityFrameworkCore;
 namespace Elsa.Etl.Tests;
 
 /// <summary>The design-store contract on SQLite, with the cases only SQLite can stage.</summary>
-public sealed class EtlDefinitionStoreV2Tests : EtlDefinitionStoreV2Contract
+public sealed partial class EtlDefinitionStoreV2Tests : EtlDefinitionStoreV2Contract
 {
     protected override async Task<IEtlDesignTestDatabase> CreateDatabaseAsync() => await EtlDesignTestDatabase.CreateAsync();
 
     [Fact]
-    public async Task Actual_pre_v2_design_database_migrates_without_rewriting_original_artifact_bytes()
+    public async Task Current_v1_design_rows_keep_captured_artifact_bytes_through_schema_checks()
     {
-        var fixture = EtlV1CompatibilityFixture.Open();
+        var fixture = EtlV1CompatibilityFixture.OpenCurrent();
         fixture.VerifyFiles();
         await using var database = await EtlDesignTestDatabase.CreateAsync(fixture.FilePath("published/etl-design.db"));
         await using var context = database.CreateContext();
@@ -31,7 +31,7 @@ public sealed class EtlDefinitionStoreV2Tests : EtlDefinitionStoreV2Contract
         Assert.Equal(original.Pipeline.GetRawText(), actual.Pipeline.GetRawText());
         Assert.All(await context.PublishedArtifacts.ToListAsync(), row => Assert.Equal(1, row.FormatVersion));
         var row = await context.PublishedArtifacts.SingleAsync(row => row.DefinitionVersion == fixture.Manifest.DefinitionVersion);
-        Assert.Equal(JsonSerializer.Serialize(original, new JsonSerializerOptions(JsonSerializerDefaults.Web)), row.ArtifactJson);
+        Assert.Equal(JsonSerializer.Serialize(original, Elsa.Serialization.Core.JsonBaseline.Options), row.ArtifactJson);
         Assert.Equal(1, (await context.Drafts.SingleAsync()).FormatVersion);
         var catalog = new EfEtlDefinitionCatalog(context);
         Assert.Equal(1, Assert.Single(await catalog.ListDefinitionsAsync(scope, null, 10)).FormatVersion);
