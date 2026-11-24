@@ -59,6 +59,31 @@ internal static class ProfileCapabilityChecks
             ("root-park-arrivals", () => KernelDb.ForPostgresRootParkArrivals(options), StoreFormat.RootParkArrivals,
                 RootCapabilities.ParkOpening | RootCapabilities.ParkInspection | RootCapabilities.ParkArrivals)
         ];
+        // The true accessors of each profile, taken from the pre-refactor subclass chains (UsesRootTimers is new),
+        // so that a property bound to the wrong capability fails even when the capability set is right.
+        var accessors = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["ordinary"] = ["SupportsCorePreview"],
+            ["root-self"] = ["UsesRootSelfProtocol"],
+            ["root-timers"] = ["UsesRootSelfProtocol", "UsesRootTimers"],
+            ["root-operators"] = ["UsesRootOperatorProtocol"],
+            ["root-jobs"] = ["SupportsCorePreview", "UsesRootJobPreview", "UsesRootJobProtocol"],
+            ["root-timed-job-issuance"] = ["UsesRootJobProtocol", "UsesRootTimedJobIssuance"],
+            ["root-values"] = ["UsesRootValueProtocol"],
+            ["root-timed-job-settlement"] = ["UsesRootJobProtocol", "UsesRootTimedJobSettlement"],
+            ["root-replies"] = ["UsesRootReplyProtocol"],
+            ["root-terminations"] = ["UsesRootOperatorProtocol", "UsesRootTermination"],
+            ["root-stable-body"] = ["UsesRootOperatorProtocol", "UsesRootStableBody", "UsesRootTermination"],
+            ["root-terminal-selection"] = ["UsesRootOperatorProtocol", "UsesRootStableBody", "UsesRootTerminalSelection", "UsesRootTermination"],
+            ["root-retirement"] = ["RequiresPinnedRootNamespace", "UsesRootOperatorProtocol", "UsesRootRetirement", "UsesRootStableBody", "UsesRootTerminalSelection", "UsesRootTermination"],
+            ["root-terminate-then-delete"] = ["RequiresPinnedRootNamespace", "UsesRootOperatorProtocol", "UsesRootRetirement", "UsesRootStableBody", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination"],
+            ["root-retention"] = ["RequiresPinnedRootNamespace", "UsesRootOperatorProtocol", "UsesRootRetention", "UsesRootRetirement", "UsesRootStableBody", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination"],
+            ["root-operator-replies"] = ["RequiresPinnedRootNamespace", "UsesRootOperatorProtocol", "UsesRootOperatorReplies", "UsesRootRetention", "UsesRootRetirement", "UsesRootStableBody", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination"],
+            ["root-timed-job-preview"] = ["SupportsCorePreview", "UsesRootJobProtocol", "UsesRootTimedJobPreview", "UsesRootTimedJobSettlement"],
+            ["root-park-opening"] = ["RequiresPinnedRootNamespace", "UsesRootParkOpening"],
+            ["root-park-inspection"] = ["RequiresPinnedRootNamespace", "UsesRootParkInspection", "UsesRootParkOpening"],
+            ["root-park-arrivals"] = ["RequiresPinnedRootNamespace", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening"],
+        };
         var flags = typeof(KernelDb).GetProperties(BindingFlags.Instance | BindingFlags.NonPublic)
             .Where(p => p.PropertyType == typeof(bool) && (p.Name.StartsWith("Uses", StringComparison.Ordinal) ||
                 p.Name.StartsWith("Supports", StringComparison.Ordinal) || p.Name.StartsWith("Requires", StringComparison.Ordinal)))
@@ -84,6 +109,7 @@ internal static class ProfileCapabilityChecks
             Check(RootProfiles.Formats[format] == expected, $"{name} mapping for protocol {format.MessageProtocol} is {expected}");
             Check(Equals(marker, format.MessageProtocol), $"{name} model seeds marker protocol {format.MessageProtocol}");
             Check(db.UsesRootTimers == (format == StoreFormat.RootTimers), $"{name} timer selection matches its format");
+            Check(set.SequenceEqual(accessors[name]), $"{name} turns on exactly [{string.Join(",", accessors[name])}]");
             var factory = db.GetService<IModelCacheKeyFactory>();
             Check(factory is KernelModelCacheKeyFactory, $"{name} resolves the kernel model cache key factory");
             var key = factory.Create(db, designTime: false);
@@ -92,6 +118,10 @@ internal static class ProfileCapabilityChecks
             keys.Add((name, key));
         }
         Check(RootProfiles.Formats.Count == profiles.Length, $"the mapping has {profiles.Length} formats, one per factory");
+        Check(accessors.Count == profiles.Length, $"every profile has its expected accessors");
+        var mapped = RootProfiles.Formats.Values.Aggregate(RootCapabilities.None, (all, next) => all | next);
+        foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
+            Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
         for (var i = 0; i < keys.Count; i++)
             for (var j = i + 1; j < keys.Count; j++)
                 if (Equals(keys[i].Key, keys[j].Key)) Check(false, $"{keys[i].Name} and {keys[j].Name} share a model cache key");

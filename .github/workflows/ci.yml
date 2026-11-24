@@ -2019,6 +2019,7 @@ jobs:
         run: |
           NAT="dotnet ../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
           $NAT smoke
+          $NAT profile-capabilities
           $NAT cost sqlite
 
       - name: Graph engine corpus
