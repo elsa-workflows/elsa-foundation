@@ -251,6 +251,7 @@
   </Folder>
   <Folder Name="/essentials/tests/ActorFoundation/">
     <Project Path="essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
+    <Project Path="essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Activities/">
     <Project Path="essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />

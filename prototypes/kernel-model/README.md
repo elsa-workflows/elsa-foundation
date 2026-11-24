@@ -28,7 +28,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs`; the commit as the store's own SQL in `EfStore.Owned.cs` and the `*CommitDialect.cs` files ([COMMIT-SQL.md](COMMIT-SQL.md)) |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`) |
 | `ef/Kernel.Ef.Conformance` | The conformance suite against the EF store, every engine |
-| `conformance/Kernel.Store.Conformance` | The store conformance suite: semantic cases, the stress test, the cost runs, for any provider |
+| `../../essentials/tests/ActorFoundation/Store/Conformance` | The store conformance suite: semantic cases, the stress test, the cost runs, for any provider |
 | `conformance/Kernel.Store.Conformance.Run` | The suite against the in-memory store |
 | `conformance/Kernel.Runtime.Conformance` | The runtime conformance suite: semantic cases, the fence broken on purpose, the stress test, for any actor runtime |
 | `conformance/Kernel.Runtime.Conformance.Run` | The runtime suite against the built-in runtime |

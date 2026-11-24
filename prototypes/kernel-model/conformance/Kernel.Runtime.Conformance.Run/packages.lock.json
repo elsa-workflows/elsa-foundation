@@ -40,7 +40,7 @@
           "Kernel.Store.Conformance": "[1.0.0, )"
         }
       },
-      "kernel.store.conformance": {
+      "Kernel.Store.Conformance": {
         "type": "Project",
         "dependencies": {
           "Elsa.ActorFoundation.TestSupport": "[1.0.0, )",

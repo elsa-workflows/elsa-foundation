@@ -220,7 +220,7 @@ This increment covers ordinary direct inputs and checkpoint-only actor turns.
 
 ### The store conformance suite. Run
 
-`conformance/Kernel.Store.Conformance` (merged from `6097f0174b`), 46 semantic cases, against the merged store with
+`../../essentials/tests/ActorFoundation/Store/Conformance` (merged from `6097f0174b`), 46 semantic cases, against the merged store with
 the fixes. The runner `ef/Kernel.Ef.Conformance` now takes SQL Server and MySQL.
 
 | Store | Required | Reference |

@@ -490,7 +490,7 @@
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }
       },
-      "kernel.store.conformance": {
+      "Kernel.Store.Conformance": {
         "type": "Project",
         "dependencies": {
           "Elsa.ActorFoundation.TestSupport": "[1.0.0, )",
