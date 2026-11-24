@@ -31,7 +31,7 @@ public sealed class MemberReadMaterializationTests
     private static readonly JsonElement CustomerJson = JsonSerializer.SerializeToElement(new
     {
         customerId = "c-1", count = 3, address = new { street = "Main", zip = (string?)null }, tags = new[] { "x" }
-    });
+    }, options: Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly DurableValueExternalReference CustomerReference = new("external", "customers/c-1", new Dictionary<string, string>());
 
     public static TheoryData<string, bool> Roles => new() { { "request", false }, { "request", true }, { "variable", false }, { "variable", true } };
@@ -117,8 +117,8 @@ public sealed class MemberReadMaterializationTests
 
     /// <summary>The same rule for a request member supplied as a CLR value when the run starts.</summary>
     [Theory]
-    [InlineData("CustomerId", null)]
-    [InlineData("customerId", RuntimeReadSelectionException.AbsentMember)]
+    [InlineData("customerId", null)]
+    [InlineData("CustomerId", RuntimeReadSelectionException.AbsentMember)]
     public async Task A_member_of_a_clr_seeded_request_member_is_read_by_its_stored_name(string segment, string? code)
     {
         var seeded = WorkflowExecutionStartCommandPayload.ToJsonValues(new Dictionary<string, object?> { ["customer"] = new SeededCustomer("c-1") })["customer"];

@@ -387,7 +387,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var supplied = WorkflowExecutionStartCommandPayload.ToJsonValues(request.Inputs);
         var matches = origin.FormatVersion == 1 ? supplied.Count == 0 :
             origin.Inputs is { } captured && supplied.Count == captured.Count &&
-            captured.All(item => supplied.TryGetValue(item.Key, out var value) && JsonElement.DeepEquals(item.Value, value));
+            captured.All(item => supplied.TryGetValue(item.Key, out var value) && Elsa.Serialization.Core.JsonCanonicalForm.Equals(item.Value, value));
         if (!matches)
             throw AuthorityRejected("model-work-input-mismatch", "Native model work must preserve its exact committed declared inputs.");
     }
@@ -557,7 +557,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         if (savedOrigin is not null)
         {
             var protectedMetadata = metadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-            protectedMetadata[SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin);
+            protectedMetadata[SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin, options: Elsa.Serialization.Core.JsonBaseline.Options);
             metadata = protectedMetadata;
         }
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(

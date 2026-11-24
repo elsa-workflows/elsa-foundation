@@ -83,18 +83,17 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
         ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
         var material = await runtime.PreparePublicationAsync(projected.Definition, inputContract,
             projected.Services.Where(item => item.InputMapping is not null).Select(item => item.InputMapping!).ToArray(), caller, cancellationToken);
-        var publicationId = "bpmn-publication:" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
-            new[] { caller.TenantId ?? "", caller.ActorId, requestId }))).ToLowerInvariant();
+        var publicationId = "bpmn-publication:" + Elsa.Serialization.Core.JsonHashInput.Hash(new[] { caller.TenantId ?? "", caller.ActorId, requestId });
         var sourceId = WorkflowActivationReferenceIdentity.Create(publicationId);
         var now = clock.GetUtcNow();
         var prior = await publications.FindAsync(publicationId, cancellationToken);
         // Bind supplied intent, including omission, rather than today's resolved policy/slot authority.
-        var requestFingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+        var requestFingerprint = Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             formatVersion = 1, definitionId = definition.Id, versionId = version.Id, caller.ActorId, caller.TenantId, requestId,
             intentProvided = intent is not null, action = intent is null ? (int?)null : (int)intent.Action,
             slotName = intent?.SlotName, expectedSlotRevision, expectedPublicationId
-        }))).ToLowerInvariant();
+        });
         if (prior is not null && prior.RequestFingerprint != requestFingerprint)
             throw new RuntimeCheckpointReplayConflictException("publish:" + requestId);
         var hostPolicy = await policies.FindAsync(null, cancellationToken)

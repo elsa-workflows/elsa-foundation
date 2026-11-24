@@ -77,6 +77,16 @@ public sealed class ActivityTemplatePlacer(
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
+    private static readonly JsonSerializerOptions InvocationOriginJson = CreateInvocationOriginJson();
+    private static JsonSerializerOptions CreateInvocationOriginJson()
+    {
+        // The existing retained placement field uses CLR names and numeric enum values.
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.PropertyNamingPolicy = null;
+        options.MakeReadOnly();
+        return options;
+    }
+
     /// <summary>
     /// Keeps the constructor shape from before the placer gained its type registry
     /// (adding an optional parameter is binary-breaking, review checklist §E5). Without the registry, background
@@ -444,7 +454,7 @@ public sealed class ActivityTemplatePlacer(
                 ? StampBoundaryDescriptor(current.Node.Descriptor, frame, frame.Children, nodeIds)
                 : current.Node.Descriptor;
             var metadata = current.Node.Metadata.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
-            metadata["activity.invocationOrigin"] = JsonSerializer.Serialize(frame.Origin.Segments);
+            metadata["activity.invocationOrigin"] = JsonSerializer.Serialize(frame.Origin.Segments, options: InvocationOriginJson);
             metadata["activity.placementNamespace"] = placementHasher.ComputeHash(frame.Origin.ToCanonicalBytes());
             metadata["activity.templateNodeId"] = current.Node.ExecutableNodeId;
             if (isBoundary)
@@ -908,7 +918,7 @@ public sealed class ActivityTemplatePlacer(
             var routed = JsonNode.Parse(payload.GetRawText())!.AsObject();
             compiledVariables = routed["variables"]?.DeepClone();
             routed.Remove("variables");
-            payload = JsonSerializer.SerializeToElement(routed, DescriptorPayloadSerializer.Options);
+            payload = JsonSerializer.SerializeToElement(routed, options: DescriptorPayloadSerializer.Options);
         }
 
         var rewritten = activityStructureService.RemapExecutableStructure(
@@ -919,7 +929,7 @@ public sealed class ActivityTemplatePlacer(
         var restored = JsonNode.Parse(rewritten.Payload.GetRawText()) as JsonObject
             ?? throw new InvalidOperationException($"Structure '{rewritten.Kind}@{rewritten.SchemaVersion}' remapped to a non-object payload.");
         restored["variables"] = compiledVariables;
-        return new(rewritten.Kind, rewritten.SchemaVersion, JsonSerializer.SerializeToElement(restored, DescriptorPayloadSerializer.Options));
+        return new(rewritten.Kind, rewritten.SchemaVersion, JsonSerializer.SerializeToElement(restored, options: DescriptorPayloadSerializer.Options));
     }
 
     private RuntimeActivityDescriptor StampBoundaryDescriptor(

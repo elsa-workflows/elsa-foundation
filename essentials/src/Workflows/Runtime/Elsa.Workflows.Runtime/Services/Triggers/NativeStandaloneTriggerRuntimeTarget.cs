@@ -48,16 +48,16 @@ internal sealed class NativeStandaloneTriggerRuntimeTarget(IWorkflowExecutableSt
             ["runtime.artifactHash"] = recipient.Material.ArtifactHash,
             [RuntimeMetadataKeys.WorkflowExecutionOrigin] = WorkflowExecutableReferenceScope.Published.ToString(),
             [RuntimeMetadataKeys.SourceReferenceId] = recipient.SourceProvenance.SourceReferenceId!,
-            [OriginMetadata] = JsonSerializer.Serialize(origin)
+            [OriginMetadata] = JsonSerializer.Serialize(origin, options: Elsa.Serialization.Core.JsonBaseline.Options)
         };
         if (persistenceModes is not null) metadata[RuntimeMetadataKeys.PersistenceMode] = persistenceModes.Resolve(executable).ToString();
         var command = new WorkflowExecutionCommand(recipient.StartIdentity.CommandId, recipient.StartIdentity.WorkflowExecutionId,
-            WorkflowExecutionCommandKind.Start, source.RecordedAt, JsonSerializer.SerializeToElement(payload), metadata);
+            WorkflowExecutionCommandKind.Start, source.RecordedAt, JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options), metadata);
         var envelope = new WorkflowExecutionCommandEnvelope(recipient.StartIdentity.EnvelopeId, recipient.StartIdentity.WorkflowExecutionId,
             command, recipient.StartIdentity.IdempotencyKey, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, source.RecordedAt,
             metadata: metadata, partition: recipient.Partition);
         return new(1, source.OutboxItemId, source.SourceFingerprint, source.SubscriptionDelivery.SelectionFingerprint, recipient.RecipientId,
-            recipient.StartIdentity, source.RecordedAt, Protocol, 1, JsonSerializer.SerializeToElement(envelope));
+            recipient.StartIdentity, source.RecordedAt, Protocol, 1, JsonSerializer.SerializeToElement(envelope, options: Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     public async ValueTask<RuntimeTargetAcceptanceReceipt?> ReconcileAsync(RuntimePostCommitOutboxItem source,

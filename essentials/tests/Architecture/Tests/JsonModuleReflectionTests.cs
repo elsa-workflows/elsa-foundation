@@ -92,13 +92,15 @@ public sealed class JsonModuleReflectionTests
         var types = RuntimeLibraries.Assemblies.SelectMany(assembly => assembly.GetTypes())
             .Where(type => !type.IsAbstract && typeof(JsonSerializerContext).IsAssignableFrom(type)).ToArray();
         var result = new List<JsonSerializerContext>();
+        var missing = new List<string>();
         foreach (var type in types)
         {
             var wire = type.GetProperty("WireContext", StaticMembers);
             if (type.Namespace?.Split('.').Contains("Api", StringComparer.Ordinal) == true)
-                Assert.NotNull(wire);
+                if (wire is null) missing.Add(type.FullName!);
             if (wire is not null) result.Add(Assert.IsAssignableFrom<JsonSerializerContext>(wire.GetValue(null)));
         }
+        Assert.True(missing.Count == 0, "API contexts missing an owned WireContext: " + string.Join(", ", missing));
         return result;
     }
 

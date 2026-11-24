@@ -15,9 +15,9 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [InlineData(true, true)]
     public async Task Original_staged_whole_results_publish_and_place_with_independent_exact_producers(bool portable, bool nested)
     {
-        var value = portable ? new ArgumentValue(new ExpressionDefinition("JavaScript", "args.result", new("Elsa.Any"),
+        var value = portable ? global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new ExpressionDefinition("JavaScript", "args.result", new("Elsa.Any"),
             new Dictionary<string, ExpressionParameterBinding> { ["result"] = new ActivityResultExpressionParameterBinding("producer", "$result") },
-            JsonSerializer.SerializeToElement(new { }), "binding-readonly-v1"), "JavaScript") :
+            JsonSerializer.SerializeToElement(new { }), "binding-readonly-v1"), "JavaScript")  :
             new ArgumentValue(JsonSerializer.SerializeToElement(new { producerNodeId = "producer", projectionKey = "$result" }), "ActivityResult");
         var read = new ArgumentState("Text", value, null, null, null, null);
         var executable = await PublishPlacedBodyAsync(read, assignOutput: true, copies: 2, nested: nested, outputAlias: "Elsa.Any",

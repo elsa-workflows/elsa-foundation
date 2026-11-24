@@ -21,7 +21,7 @@ internal static class StandaloneTriggersApi
 
     internal static void Map(IEndpointRouteBuilder endpoints)
     {
-        var api = endpoints.MapEndpointGroup(Owner, StandaloneTriggersJsonContext.Default, jsonContentType: "application/json");
+        var api = endpoints.MapEndpointGroup(Owner, StandaloneTriggersJsonContext.WireContext, jsonContentType: "application/json");
         void Get(string path, string name, Type response, Func<HttpContext, Task<object>> action, params string[] permissions) =>
             api.MapUnboundOperation("GET", path, name, response, 200, null, context => ExecuteAsync(context, action), containFailures: false)
                 .RequireAnyPermission(permissions);
@@ -125,7 +125,9 @@ internal static class StandaloneTriggersApi
             if (type.Type == typeof(WorkflowDeclaredInput))
                 type.Properties.Single(property => property.Name == "defaultValue").ShouldSerialize = static (_, value) => value is not null;
         });
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = resolver };
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.TypeInfoResolver = resolver;
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
         options.Converters.Add(new JsonStringEnumConverter());
         options.MakeReadOnly();
         return options;
@@ -146,4 +148,7 @@ internal static class StandaloneTriggersApi
 [JsonSerializable(typeof(TriggerPreview))]
 [JsonSerializable(typeof(TriggerChangeResult))]
 [JsonSerializable(typeof(TriggerProblem))]
-internal sealed partial class StandaloneTriggersJsonContext : JsonSerializerContext;
+internal sealed partial class StandaloneTriggersJsonContext : JsonSerializerContext
+{
+    internal static StandaloneTriggersJsonContext WireContext { get; } = new(new JsonSerializerOptions(StandaloneTriggersApi.Json));
+}

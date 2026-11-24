@@ -12,7 +12,7 @@ internal sealed partial class TriggerManagement
         var redactions = new List<TriggerConfigurationRedaction>();
         foreach (var path in ProtectedPaths(trigger))
             if (Parent(value, path) is { } parent && parent.Remove(path[^1])) redactions.Add(new(path));
-        return (JsonSerializer.SerializeToElement(value), redactions.AsReadOnly());
+        return (JsonSerializer.SerializeToElement(value, options: Elsa.Serialization.Core.JsonBaseline.Options), redactions.AsReadOnly());
     }
 
     private JsonElement PreserveProtectedConfiguration(StandaloneTrigger trigger, JsonElement proposed)
@@ -26,7 +26,7 @@ internal sealed partial class TriggerManagement
             var parent = Parent(value, path, create: true);
             if (parent is not null && !parent.ContainsKey(path[^1])) parent[path[^1]] = retained?.DeepClone();
         }
-        return JsonSerializer.SerializeToElement(value);
+        return JsonSerializer.SerializeToElement(value, options: Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
     private IEnumerable<string[]> ProtectedPaths(StandaloneTrigger trigger) =>

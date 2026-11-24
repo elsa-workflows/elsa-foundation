@@ -42,9 +42,9 @@ public sealed class RuntimeStartCommandSchedulingTests
         {
             HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled
         };
-        await NewHandler(material, queue).HandleAsync(NewStartWorkItem(executable.Identity, payload: JsonSerializer.SerializeToElement(payload)));
+        await NewHandler(material, queue).HandleAsync(NewStartWorkItem(executable.Identity, payload: JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options)));
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        var queued = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var queued = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(enabled, queued.HistoryCaptureEnabledAtAdmission);
         Assert.Equal(policy is null, queued.HistoryCapturePolicy is null);
         if (policy is not null) Assert.True(policy.IsEquivalentTo(queued.HistoryCapturePolicy));
@@ -82,7 +82,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled
         };
         var command = new WorkflowExecutionCommand("command", "wfexec-1", WorkflowExecutionCommandKind.Start, _now,
-            JsonSerializer.SerializeToElement(payload), new Dictionary<string, string>());
+            JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options), new Dictionary<string, string>());
         var envelope = new WorkflowExecutionCommandEnvelope("envelope", "wfexec-1", command, "start",
             WorkflowExecutionCommandDeliveryMode.AtLeastOnce, _now);
         var unreadable = false;
@@ -118,7 +118,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             HistoryCapturePolicy = new("replacement", 3, true, ["WorkflowStarted", "WorkflowCompleted"]),
             HistoryCaptureEnabledAtAdmission = true
         };
-        var work = NewStartWorkItem(executable.Identity, WorkflowExecutionCommandKind.Checkpoint, JsonSerializer.SerializeToElement(replacement));
+        var work = NewStartWorkItem(executable.Identity, WorkflowExecutionCommandKind.Checkpoint, JsonSerializer.SerializeToElement(replacement, options: Elsa.Serialization.Core.JsonBaseline.Options));
         var context = new WorkflowRuntimePipelineContext(work);
         var handler = new WorkflowCheckpointSchedulerWorkHandler(new InMemoryActivityExecutionStateStore(),
             new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), new InMemoryRuntimeCheckpointCommitStore(),
@@ -134,14 +134,14 @@ public sealed class RuntimeStartCommandSchedulingTests
     [Fact]
     public void Legacy_start_and_checkpoint_wire_omit_unknown_capture_choice()
     {
-        var start = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(NewIdentity(), "artifact-1"));
-        var checkpoint = JsonSerializer.SerializeToElement(new RuntimeCheckpointCommandPayload(NewIdentity(), "test", [], "test"));
+        var start = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(NewIdentity(), "artifact-1"), options: Elsa.Serialization.Core.JsonBaseline.Options);
+        var checkpoint = JsonSerializer.SerializeToElement(new RuntimeCheckpointCommandPayload(NewIdentity(), "test", [], "test"), options: Elsa.Serialization.Core.JsonBaseline.Options);
         Assert.False(start.TryGetProperty(nameof(WorkflowExecutionStartCommandPayload.HistoryCapturePolicy), out _));
         Assert.False(start.TryGetProperty(nameof(WorkflowExecutionStartCommandPayload.HistoryCaptureEnabledAtAdmission), out _));
         Assert.False(checkpoint.TryGetProperty(nameof(RuntimeCheckpointCommandPayload.HistoryCapturePolicy), out _));
         Assert.False(checkpoint.TryGetProperty(nameof(RuntimeCheckpointCommandPayload.HistoryCaptureEnabledAtAdmission), out _));
         var state = JsonSerializer.SerializeToElement(new WorkflowExecutionState("wfexec-1", NewIdentity(),
-            WorkflowExecutionStatus.Running, null, _now, _now, _now, null, null, null, null, new Dictionary<string, string>()));
+            WorkflowExecutionStatus.Running, null, _now, _now, _now, null, null, null, null, new Dictionary<string, string>()), options: Elsa.Serialization.Core.JsonBaseline.Options);
         Assert.False(state.TryGetProperty(nameof(WorkflowExecutionState.HistoryCapturePolicy), out _));
         Assert.False(state.TryGetProperty(nameof(WorkflowExecutionState.HistoryCaptureEnabledAtAdmission), out _));
     }

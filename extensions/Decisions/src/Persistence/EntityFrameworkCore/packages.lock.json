@@ -133,7 +133,10 @@
         "contentHash": "jSOCVxEwCd4Aq925kJVz1kSO1EpX2OHYKL04qVREXkDU7Ce3pVDdHPYm+fEy8y/th2kJf/DAstRHpJAqoNWP8w=="
       },
       "elsa.decisions.core": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
       },
       "elsa.decisions.persistence.core": {
         "type": "Project",

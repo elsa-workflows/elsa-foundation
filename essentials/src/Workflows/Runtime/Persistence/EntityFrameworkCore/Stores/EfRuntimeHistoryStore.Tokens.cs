@@ -16,13 +16,13 @@ internal sealed partial class EfRuntimeHistoryStore
         field => field is IFormattable value ? value.ToString(null, CultureInfo.InvariantCulture) : field?.ToString()).ToArray());
     private static string? Policy(RuntimeHistoryHead? head) => head is null ? null : Binding(
         new object?[] { head.Policy.PolicyId, head.Policy.Version, head.Policy.Required }.Concat(head.Policy.SupportedKinds).ToArray());
-    private string Encode(string purpose, Cursor value) => codec.Encode(purpose, JsonSerializer.SerializeToUtf8Bytes(value));
+    private string Encode(string purpose, Cursor value) => codec.EncodeJson(purpose, JsonSerializer.SerializeToUtf8Bytes(value, options: Elsa.Serialization.Core.JsonBaseline.Options));
     private Cursor? Decode(string purpose, string? value, string binding)
     {
         if (value is null) return null;
         try
         {
-            var cursor = JsonSerializer.Deserialize<Cursor>(codec.Decode(purpose, value));
+            var cursor = JsonSerializer.Deserialize<Cursor>(codec.DecodeJson(purpose, value), options: Elsa.Serialization.Core.JsonBaseline.Options);
             if (cursor is null || cursor.Binding != binding || cursor.After < 0 || cursor.Upper < cursor.After || cursor.CatchUp && cursor.After != cursor.Upper)
                 throw new FormatException();
             return cursor;

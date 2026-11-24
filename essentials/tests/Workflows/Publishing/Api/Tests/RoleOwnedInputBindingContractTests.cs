@@ -257,8 +257,8 @@ public sealed class RoleOwnedInputBindingContractTests
         var input = new InputDefinition("message", "Text", type, null, "Text", null, false);
         var portable = new ExpressionDefinition(language, "42", type, new Dictionary<string, ExpressionParameterBinding>(),
             JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
-        var raw = compiler.Compile("node", input, new ArgumentValue("42", language));
-        var promoted = compiler.Compile("node", input, new ArgumentValue(JsonSerializer.SerializeToElement(portable), language));
+        var raw = compiler.Compile("node", input, global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr("42", language));
+        var promoted = compiler.Compile("node", input, new ArgumentValue(JsonSerializer.SerializeToElement(portable, Elsa.Serialization.Core.JsonBaseline.Options), language));
         Assert.Equal(raw.Source, promoted.Source); Assert.Equal(raw.TargetType, promoted.TargetType);
         Assert.Equal(raw.Expression!.Language, promoted.Expression!.Language);
         Assert.Equal(raw.Expression.Expression, promoted.Expression.Expression);

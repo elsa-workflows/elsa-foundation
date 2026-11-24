@@ -115,7 +115,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         if (value.ValueKind != JsonValueKind.Number || !value.TryGetDouble(out var number) || !double.IsFinite(number))
             throw Reject(plan, "numeric text formatting requires a finite Double");
 
-        return JsonSerializer.SerializeToElement(number.ToString("R", CultureInfo.InvariantCulture));
+        return JsonSerializer.SerializeToElement(number.ToString("R", CultureInfo.InvariantCulture), Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
     private static JsonElement ConvertNumeric(JsonElement value, ValueConversionPlan plan)
@@ -195,7 +195,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         if (nodeCount > plan.Limits.MaxCollectionItems)
             throw Reject(plan, $"maximum JSON node count '{plan.Limits.MaxCollectionItems}' was exceeded");
 
-        return JsonSerializer.SerializeToElement(value.GetRawText());
+        return JsonSerializer.SerializeToElement(value.GetRawText(), Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
     private JsonElement ConvertXmlProfile(JsonElement value, ValueConversionPlan plan)

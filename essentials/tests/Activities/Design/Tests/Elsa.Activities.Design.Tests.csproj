@@ -55,4 +55,7 @@
     <ProjectReference Include="..\..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="../../../../../specs/1207-json-data-integrity-baseline/evidence/catalog-hash-vectors.json" LogicalName="catalog-hash-vectors.json" />
+  </ItemGroup>
 </Project>

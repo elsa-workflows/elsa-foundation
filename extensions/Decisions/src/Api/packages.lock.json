@@ -76,7 +76,10 @@
         "type": "Project"
       },
       "elsa.decisions.core": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
       },
       "elsa.decisions.design": {
         "type": "Project",

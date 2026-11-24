@@ -5,6 +5,40 @@ namespace Elsa.Architecture.Tests;
 public sealed class JsonBaselineArchitectureTests
 {
     [Theory]
+    [InlineData("value?.Deserialize<Payload>()")]
+    [InlineData("value?.Deserialize<Payload>(null)")]
+    [InlineData("value?.Deserialize(typeof(Payload))")]
+    public void Conditional_JSON_reads_also_require_explicit_options(string invocation)
+    {
+        var source = "class C { void M(JsonElement? value) { var result = " + invocation + "; } }";
+        Assert.Equal("optionless", Assert.Single(JsonBaselineSourceScan.Scan(source)).Setting);
+        Assert.Empty(JsonBaselineSourceScan.Scan("class C { void M(JsonElement? value) { var result = value?.Deserialize<Payload>(options: JsonBaseline.Options); } }"));
+    }
+
+    [Theory]
+    [InlineData("value.Deserialize(typeof(Payload), null)")]
+    [InlineData("value?.Deserialize(typeof(Payload), null)")]
+    [InlineData("value.Deserialize(typeof(Payload), default(JsonSerializerOptions))")]
+    [InlineData("value?.Deserialize(typeof(Payload), default(JsonSerializerOptions))")]
+    public void A_required_runtime_Type_does_not_hide_a_null_JSON_profile(string invocation)
+    {
+        var source = "class C { void M(JsonElement? value) { var result = " + invocation + "; } }";
+        Assert.Equal("optionless", Assert.Single(JsonBaselineSourceScan.Scan(source)).Setting);
+    }
+
+    [Theory]
+    [InlineData("class FutureDataOwner { void M<T>(JsonElement? value) { value?.Deserialize<T>(); } }")]
+    [InlineData("class FutureDataOwner<T> { void M(JsonElement value) { value.Deserialize<T>(); } }")]
+    [InlineData("class FutureDataOwner<T> { void M(JsonElement? value) { value?.Deserialize<T>(); } }")]
+    [InlineData("class FutureDataOwner { void M(JsonElement? value) { value?.Deserialize(typeof(Payload)); } }")]
+    public void Conditional_and_enclosing_generic_data_reads_cannot_join_the_legacy_list(string source)
+    {
+        var finding = Assert.Single(JsonBaselineSourceScan.Scan(source));
+        Assert.True(finding.CarriesData);
+        var legacy = new HashSet<string> { JsonBaselineSourceScan.Identity("FutureDataOwner.cs", finding) };
+        Assert.False(JsonBaselineSourceScan.IsAccounted("FutureDataOwner.cs", finding, legacy, []));
+    }
+    [Theory]
     [InlineData("class C { object x = new JsonSerializerOptions(); }", "construction")]
     [InlineData("class C { JsonSerializerOptions x = new(); }", "construction")]
     [InlineData("class C { JsonSerializerOptions Create() => new(); }", "construction")]

@@ -50,8 +50,8 @@ internal sealed partial class BpmnDirectExecutionDriver
 
     private static JsonElement WriteDocument(Document document) => document.Entry is { } entry
         ? JsonSerializer.SerializeToElement(new InputFrame(16, entry.Profile, document with { Entry = null }, entry.Kind,
-            entry.Payload, entry.Inputs), Web)
-        : JsonSerializer.SerializeToElement(document, Web);
+            entry.Payload, entry.Inputs), options: Web)
+        : JsonSerializer.SerializeToElement(document, options: Web);
 
     private static Document ReadDocument(RuntimeModelExecutionState state)
     {
@@ -115,7 +115,7 @@ internal sealed partial class BpmnDirectExecutionDriver
             .Concat((document.Cancellations ?? []).Select(item => item.Origin));
 
     internal static bool SameInputs(IReadOnlyDictionary<string, JsonElement> left, IReadOnlyDictionary<string, JsonElement> right) =>
-        left.Count == right.Count && left.All(item => right.TryGetValue(item.Key, out var value) && JsonElement.DeepEquals(item.Value, value));
+        left.Count == right.Count && left.All(item => right.TryGetValue(item.Key, out var value) && Elsa.Serialization.Core.JsonCanonicalForm.Equals(item.Value, value));
 
     internal sealed record InputEntry(string Profile, string Kind, JsonElement Payload, IReadOnlyDictionary<string, JsonElement> Inputs);
     private sealed record InputFrame(int FormatVersion, string Profile, Document Document, string Kind, JsonElement Payload,

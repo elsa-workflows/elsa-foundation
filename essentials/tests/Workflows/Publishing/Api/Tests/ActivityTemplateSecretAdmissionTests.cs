@@ -65,7 +65,7 @@ public sealed class ActivityTemplateSecretAdmissionTests
     public async Task Literal_on_exact_write_line_dependency_remains_publishable()
     {
         var result = await CompileAsync(typeof(WriteLineActivity),
-            new WorkflowArgumentState("text", new ArgumentValue("Hello", "Literal"), null, null, null, null));
+            new WorkflowArgumentState("text", global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr("Hello", "Literal"), null, null, null, null));
 
         Assert.True(result.IsSuccessful, string.Join(Environment.NewLine, result.Diagnostics.Select(item => item.Message)));
         Assert.NotNull(result.Template);
@@ -86,7 +86,7 @@ public sealed class ActivityTemplateSecretAdmissionTests
         var structures = new LeafStructureService();
         var provider = new GraphActivityProvider(structures, new ActivityContractAuthoringValidator(new EmptyCapabilities()));
         var descriptorPayload = JsonSerializer.SerializeToElement(
-            new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)));
+            new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)), Elsa.Serialization.Core.JsonBaseline.Options);
         var runtimeInputs = activityVersion.Inputs.Select(definition => new RuntimeActivityInputContract(
             definition.ReferenceKey,
             definition.Name,

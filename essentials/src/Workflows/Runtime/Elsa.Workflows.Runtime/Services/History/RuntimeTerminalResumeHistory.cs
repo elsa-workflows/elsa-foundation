@@ -20,7 +20,7 @@ internal static class RuntimeTerminalResumeHistory
             !policy.SupportedKinds.Contains("DeliveryUnmatched", StringComparer.Ordinal)) return;
         try
         {
-            var payload = work.Payload?.Deserialize<RuntimeResumeBookmarkCommandPayload>()
+            var payload = work.Payload?.Deserialize<RuntimeResumeBookmarkCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)
                 ?? throw new InvalidDataException("The terminal resume has no payload.");
             if (payload.ExpectedBookmarkResume is not { } expected) return; // Other legacy receiver paths remain separate.
             var context = access?.Current ?? throw Unavailable();

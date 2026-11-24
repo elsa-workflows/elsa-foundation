@@ -316,7 +316,14 @@ public static class ModuleManagementApiEndpoints
     {
         var config = await ReadManagementConfigurationAsync(environment, options.Value, cancellationToken);
         var nuplane = GetOrCreateObject(config.Document, "Nuplane");
-        nuplane["CleanupPolicy"] = JsonSerializer.SerializeToNode(policy, JsonOptions);
+        // Configuration keys belong to Nuplane's established configuration contract.
+        nuplane["CleanupPolicy"] = new JsonObject
+        {
+            ["RetainLastNVersions"] = policy.RetainLastNVersions,
+            ["RetainYoungerThanDays"] = policy.RetainYoungerThanDays,
+            ["Mode"] = policy.Mode,
+            ["ProtectLastKnownGood"] = policy.ProtectLastKnownGood
+        };
         await WriteManagementConfigurationAsync(environment, options.Value, config, cancellationToken);
         return Results.Json(new ModuleManagementConfigurationWriteResponse(false, "Retention policy updated. It will be used by the next prune operation and after host restart by Nuplane cleanup."), options: WireJson);
     }

@@ -131,5 +131,12 @@
     "payload": "{\"x\":1.0}",
     "frameHex": "010000003465006c00730061002e0070006f00730074002d0063006f006d006d00690074002e0069006e00740065006e0074002e00760031000100000008730065006e00640001000000127000750062006c0069007300680065007200010000000e7000750062006c00690073006800010000002436003300390032003800350036003900360030003000300030003000300030003000300001000000106100630074006900760069007400790001000000066b00650079000100000008770061006900740001000000023300010000002436003300390032003800350036003900360036003000300030003000300030003000300001000000097b2278223a3165307d0100000002320001000000026100010000000a6600690072007300740001000000027a0001000000086c00610073007400",
     "sha256": "3208e04f70178fff196009744a1dc5a44d568cca99b0ada170a5d910d0db07eb"
+  },
+  {
+    "family": "empty-commit",
+    "name": "pre-history",
+    "payload": null,
+    "canonical": "{\"checkpoint\":{\"activityExecutionIds\":[],\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"metadata\":{},\"name\":\"bgBhAG0AZQA=\",\"occurredAt\":\"2026-10-26T00:00:00\\u002B00:00\",\"workflowExecutionId\":\"dwBhAGkAdABlAHIA\"},\"commitId\":\"YwBvAG0AbQBpAHQA\",\"metadata\":{},\"postCommitIntents\":[],\"stateChanges\":{\"activityExecutionInspections\":[],\"activityExecutions\":[],\"activityScopeCleanups\":[],\"alterationJobTerminalChange\":null,\"backgroundActivityWork\":{\"acceptances\":[],\"admissions\":[],\"cancellations\":[]},\"bookmarks\":[],\"consumedSchedulerWorkItems\":[],\"durableValues\":[],\"incidents\":[],\"operational\":[],\"postCommitOutbox\":[],\"scheduler\":null,\"workflowDispatchCancellations\":[],\"workflowDispatches\":[],\"workflowExecution\":null}}",
+    "sha256": "12400ef7670071f85be78ccfded150ba04c7b05c54d4d8f2683ec4058b4d8d8a"
   }
 ]

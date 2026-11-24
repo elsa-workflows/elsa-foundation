@@ -67,7 +67,7 @@ public sealed class BpmnTaskBindingInterchangeTests
         var catalog = new Catalog(Declared("brief"), withProcessPins: true);
         var nested = Process(Literal("brief", Brief)) with {
             NodeId = "subprocess-child", ActivityVersionId = "catalog-process-old",
-            Inputs = [new ArgumentState("CanStartWorkflow", new ArgumentValue(false, "Literal"), null, null, null, null)]
+            Inputs = [new ArgumentState("CanStartWorkflow", ArgumentValue.FromClr(false, "Literal"), null, null, null, null)]
         };
         var structure = new BpmnAuthoredStructure([nested],
             [new("outer-start", BpmnElementTypes.StartEvent), new("sub", BpmnElementTypes.SubProcess, childNodeId: nested.NodeId), new("outer-end", BpmnElementTypes.EndEvent)],

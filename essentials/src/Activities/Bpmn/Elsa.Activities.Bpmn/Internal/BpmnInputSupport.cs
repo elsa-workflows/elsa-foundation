@@ -8,7 +8,7 @@ namespace Elsa.Activities.Bpmn.Internal;
 
 internal static class BpmnInputSupport
 {
-    private static readonly JsonSerializerOptions Strict = new(JsonSerializerDefaults.Web) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
+    private static readonly JsonSerializerOptions Strict = new(Elsa.Serialization.Core.JsonBaseline.Options) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
 
     internal static BpmnInputModelDefinition? Envelope(RuntimeModelMaterial material) => material.Profile == BpmnModelProtocol.InputsProfile
         ? material.Definition.Deserialize<BpmnInputModelDefinition>(Strict) ?? throw Invalid("The BPMN input model is missing.") : null;
@@ -70,7 +70,7 @@ internal static class BpmnInputSupport
     // Reuse the existing exact-string canonical model hash without changing the artifact format or global serializer.
     internal static string Fingerprint(WorkflowExecutableInputContract contract) => new RuntimeModelMaterial(1,
         new("contract", "contract", "contract", "1", "contract"), new("elsa.bpmn.worker-input-contract", 1), "v1",
-        JsonSerializer.SerializeToElement(new { }), contract, [], [], []).ComputeContentHash();
+        JsonSerializer.SerializeToElement(new { }, options: Elsa.Serialization.Core.JsonBaseline.Options), contract, [], [], []).ComputeContentHash();
 
     internal static void Check(WorkflowExecutableInputValidation result)
     {

@@ -311,7 +311,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
             // whose inputs are its boundary's, keeps offering the Input or InputMember read.
             var value = binding.Role is "Input" or ActivityDataReadRoles.InputMember && !context.WorkflowBoundary
                 ? memberOfInput
-                    ? new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = input.ReferenceKey, memberPath = binding.MemberPath }), ActivityDataReadRoles.InputMember)
+                    ? new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = input.ReferenceKey, memberPath = binding.MemberPath }, options: Elsa.Serialization.Core.JsonBaseline.Options), ActivityDataReadRoles.InputMember)
                     : ArgumentValue.FromClr(new VariableReference(input.ReferenceKey), "Input")
                 : RequestRead(context.WorkflowBoundary ? input.Name : input.ReferenceKey, binding, memberOfInput);
             return new($"input:{input.ReferenceKey}", input.DisplayName, null, value,
@@ -482,8 +482,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
 
     // The request read of one member, or of the whole member when the read selects none.
     private static ArgumentValue RequestRead(string memberKey, ActivityDataReadBinding binding, bool member) => member
-        ? new(JsonSerializer.SerializeToElement(new { memberKey, memberPath = binding.MemberPath }), ActivityDataReadRoles.WorkflowRequestMember)
-        : new(JsonSerializer.SerializeToElement(new { memberKey, path = binding.Path }), "WorkflowRequest");
+        ? new(JsonSerializer.SerializeToElement(new { memberKey, memberPath = binding.MemberPath }, options: Elsa.Serialization.Core.JsonBaseline.Options), ActivityDataReadRoles.WorkflowRequestMember)
+        : new(JsonSerializer.SerializeToElement(new { memberKey, path = binding.Path }, options: Elsa.Serialization.Core.JsonBaseline.Options), "WorkflowRequest");
 
     // A member read is admitted wherever the whole read of its source is.
     private async ValueTask<ActivityBindingConversionPreview?> PreviewConversion(Request context, ArgumentState input,

@@ -21,7 +21,7 @@ internal static class DashboardQueriesApi
 
     internal static void Map(IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapEndpointGroup("Elsa.Studio.Dashboard.Api", DashboardQueriesJsonContext.Default,
+        var group = endpoints.MapEndpointGroup("Elsa.Studio.Dashboard.Api", DashboardQueriesJsonContext.WireContext,
             jsonContentType: "application/json");
         group.MapUnboundOperation("GET", Root + "dashboard-datasets", "DiscoverDashboardDatasets",
             typeof(DashboardDatasetCatalog), 200, null, Discover).RequirePermission("studio/questions:read");
@@ -46,25 +46,25 @@ internal static class DashboardQueriesApi
     private static Task Discover(HttpContext http) => Boundary(http, async actor =>
     {
         var items = await Queries(http).DiscoverAsync(Scope(http, actor), http.RequestAborted);
-        await Results.Json(new DashboardDatasetCatalog(items), DashboardQueriesJsonContext.Default.DashboardDatasetCatalog).ExecuteAsync(http);
+        await Results.Json(new DashboardDatasetCatalog(items), DashboardQueriesJsonContext.WireContext.DashboardDatasetCatalog).ExecuteAsync(http);
     });
 
     private static Task Validate(HttpContext http) => Boundary(http, async actor =>
     {
-        var request = await Read(http, DashboardQueriesJsonContext.Default.DashboardQueryRequest);
+        var request = await Read(http, DashboardQueriesJsonContext.WireContext.DashboardQueryRequest);
         var result = await Queries(http).ValidateAsync(Scope(http, actor), request, http.RequestAborted);
-        await Results.Json(result, DashboardQueriesJsonContext.Default.DashboardQueryValidation).ExecuteAsync(http);
+        await Results.Json(result, DashboardQueriesJsonContext.WireContext.DashboardQueryValidation).ExecuteAsync(http);
     });
 
     private static Task Preview(HttpContext http) => Boundary(http, async actor =>
     {
-        var request = await Read(http, DashboardQueriesJsonContext.Default.DashboardQueryRequest);
+        var request = await Read(http, DashboardQueriesJsonContext.WireContext.DashboardQueryRequest);
         await Write(http, await Queries(http).ExecuteAsync(Scope(http, actor), request, http.RequestAborted));
     });
 
     private static Task Drill(HttpContext http) => Boundary(http, async actor =>
     {
-        var request = await Read(http, DashboardQueriesJsonContext.Default.DashboardDrillRequest);
+        var request = await Read(http, DashboardQueriesJsonContext.WireContext.DashboardDrillRequest);
         // Native draft exploration is separate from a saved-resource drill; callers binding a saved
         // question must use the saved endpoint so a revoked definition is checked again.
         await Write(http, await Queries(http).DrillAsync(Scope(http, actor), request, http.RequestAborted));
@@ -92,7 +92,7 @@ internal static class DashboardQueriesApi
         RequireRevision(http, question.Revision);
         if (question.Definition is null && !question.Capabilities.CanEdit)
             throw new DashboardResourceException("denied", "Editing access is required to preview a replacement for an unavailable question.");
-        var draft = await Read(http, DashboardQueriesJsonContext.Default.DashboardQueryRequest);
+        var draft = await Read(http, DashboardQueriesJsonContext.WireContext.DashboardQueryRequest);
         // The ordinary native query service independently re-evaluates the replacement's source
         // authority and grammar; a preview does not apply or save the replacement.
         http.Response.Headers.ETag = Quote(question.Revision);
@@ -135,7 +135,7 @@ internal static class DashboardQueriesApi
     {
         var question = await Resources(http).GetAuthorizedQuestionAsync(actor, RequiredRoute(http, "id"), http.RequestAborted);
         RequireRevision(http, question.Revision);
-        var input = await Read(http, DashboardQueriesJsonContext.Default.DashboardSavedQueryDrillInput);
+        var input = await Read(http, DashboardQueriesJsonContext.WireContext.DashboardSavedQueryDrillInput);
         var definition = question.Content.Definition
             ?? throw new DashboardResourceException("unavailable", "The saved question is unavailable.");
         var request = new DashboardDrillRequest(Merge(definition, null, input.ParameterValues),
@@ -154,7 +154,7 @@ internal static class DashboardQueriesApi
         if (tile?.QuestionId is null || tile.ReferenceState != "available")
             throw new DashboardResourceException("notFound", "The dashboard question is unavailable.");
         var question = await Resources(http).GetAuthorizedQuestionAsync(actor, tile.QuestionId, http.RequestAborted);
-        var input = await Read(http, DashboardQueriesJsonContext.Default.DashboardSavedQueryDrillInput);
+        var input = await Read(http, DashboardQueriesJsonContext.WireContext.DashboardSavedQueryDrillInput);
         if (input.QuestionRevision is { } observed && !StringComparer.Ordinal.Equals(observed, question.Revision))
             throw new DashboardResourceException("conflict", "The question changed. Reload before drilling into its results.");
         var definition = question.Content.Definition
@@ -199,6 +199,10 @@ internal static class DashboardQueriesApi
             };
             await Problem(http, status, error.Code, error.Message);
         }
+        catch (Elsa.Serialization.Core.JsonConversionException error)
+        {
+            await Problem(http, 400, error.Code, "Supply Z or an explicit offset for the indicated date-time.", error.Path);
+        }
         catch (JsonException)
         {
             await Problem(http, 400, "invalidBody", "Supply a supported Dashboard query definition.");
@@ -232,7 +236,7 @@ internal static class DashboardQueriesApi
     private static async ValueTask<DashboardSavedQueryExecutionInput> ReadOptional(HttpContext http)
     {
         var bytes = await ReadBytes(http);
-        return bytes.Length == 0 ? new() : JsonSerializer.Deserialize(bytes, DashboardQueriesJsonContext.Default.DashboardSavedQueryExecutionInput)
+        return bytes.Length == 0 ? new() : JsonSerializer.Deserialize(bytes, DashboardQueriesJsonContext.WireContext.DashboardSavedQueryExecutionInput)
             ?? throw new DashboardResourceException("invalidBody", "Supply valid typed parameter overrides.");
     }
 
@@ -254,14 +258,15 @@ internal static class DashboardQueriesApi
     }
 
     private static Task Write(HttpContext http, DashboardQueryResult result) =>
-        Results.Json(result, DashboardQueriesJsonContext.Default.DashboardQueryResult).ExecuteAsync(http);
-    private static Task Problem(HttpContext http, int status, string code, string message) =>
-        Results.Json(new DashboardQueryApiProblem(code, message), DashboardQueriesJsonContext.Default.DashboardQueryApiProblem,
+        Results.Json(result, DashboardQueriesJsonContext.WireContext.DashboardQueryResult).ExecuteAsync(http);
+    private static Task Problem(HttpContext http, int status, string code, string message, string? path = null) =>
+        Results.Json(new DashboardQueryApiProblem(code, message, path), DashboardQueriesJsonContext.WireContext.DashboardQueryApiProblem,
             statusCode: status).ExecuteAsync(http);
 }
 
 internal sealed record DashboardDatasetCatalog(IReadOnlyList<DashboardDatasetDeclaration> Items);
-internal sealed record DashboardQueryApiProblem(string Code, string Message);
+internal sealed record DashboardQueryApiProblem(string Code, string Message,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Path = null);
 internal sealed record DashboardSavedQueryExecutionInput
 {
     public string? QuestionRevision { get; init; }
@@ -277,7 +282,7 @@ internal sealed record DashboardSavedQueryDrillInput
 }
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    GenerationMode = JsonSourceGenerationMode.Metadata, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
+    GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(DashboardDatasetCatalog))]
 [JsonSerializable(typeof(DashboardQueryRequest))]
 [JsonSerializable(typeof(DashboardQueryValidation))]
@@ -286,4 +291,15 @@ internal sealed record DashboardSavedQueryDrillInput
 [JsonSerializable(typeof(DashboardSavedQueryExecutionInput))]
 [JsonSerializable(typeof(DashboardSavedQueryDrillInput))]
 [JsonSerializable(typeof(DashboardQueryApiProblem))]
-internal partial class DashboardQueriesJsonContext : JsonSerializerContext;
+internal partial class DashboardQueriesJsonContext : JsonSerializerContext
+{
+    internal static DashboardQueriesJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+}

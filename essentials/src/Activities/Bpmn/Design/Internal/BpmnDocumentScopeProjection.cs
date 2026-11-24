@@ -285,6 +285,6 @@ internal static class BpmnDocumentScopeProjection
         };
     }
 
-    private static bool Equal<T>(T left, T right) => JsonElement.DeepEquals(JsonSerializer.SerializeToElement(left, Json), JsonSerializer.SerializeToElement(right, Json));
+    private static bool Equal<T>(T left, T right) => Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(left, Json), JsonSerializer.SerializeToElement(right, Json));
     private static InvalidOperationException Invalid(string message) => new($"Invalid BPMN document scope projection: {message}.");
 }

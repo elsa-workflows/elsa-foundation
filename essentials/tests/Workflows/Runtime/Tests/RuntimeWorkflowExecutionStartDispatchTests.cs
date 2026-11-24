@@ -145,7 +145,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
 
         await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
 
-        var payload = Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(1, resolutions);
         Assert.Equal(enabled, payload.HistoryCaptureEnabledAtAdmission);
         if (enabled) Assert.True(policy.IsEquivalentTo(payload.HistoryCapturePolicy));
@@ -973,7 +973,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { type = "test" })),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { type = "test" }, options: Elsa.Serialization.Core.JsonBaseline.Options)),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
 

@@ -189,7 +189,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
         };
         if (payload.StimulusDeliveryOrigin is { } savedOrigin)
-            commitMetadata[SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin);
+            commitMetadata[SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin, options: Elsa.Serialization.Core.JsonBaseline.Options);
         return new RuntimeCheckpointCommit(
             CommitId: commitId,
             Checkpoint: new RuntimeCheckpoint(

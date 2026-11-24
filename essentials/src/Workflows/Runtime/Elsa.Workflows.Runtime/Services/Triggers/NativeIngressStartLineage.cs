@@ -29,10 +29,10 @@ internal static class NativeIngressStartLineage
         var root = new RuntimeSchedulerWorkItem(RuntimeChainId.Derive(start.WorkItemId, $"schedule:{rootNodeId}"),
             start.WorkflowExecutionId, RuntimeChainId.Derive(start.CommandId, $"schedule:{rootNodeId}"),
             WorkflowExecutionCommandKind.ScheduleActivity, start.EnvelopeId, RuntimeChainId.Derive(start.IdempotencyKey, $"schedule:{rootNodeId}"),
-            now, start.RecordedAt, start.Sequence is { } sequence ? sequence + 2 : null, JsonSerializer.SerializeToElement(schedule),
+            now, start.RecordedAt, start.Sequence is { } sequence ? sequence + 2 : null, JsonSerializer.SerializeToElement(schedule, options: Elsa.Serialization.Core.JsonBaseline.Options),
             metadata, envelopeMetadata, attempt: attempt);
         var intent = new RuntimePostCommitIntent($"{start.WorkItemId}:postcommit:schedule:root:{rootNodeId}", start.WorkflowExecutionId,
-            RuntimePostCommitIntentKinds.EnqueueSchedulerWork, now, null, root.IdempotencyKey, JsonSerializer.SerializeToElement(root),
+            RuntimePostCommitIntentKinds.EnqueueSchedulerWork, now, null, root.IdempotencyKey, JsonSerializer.SerializeToElement(root, options: Elsa.Serialization.Core.JsonBaseline.Options),
             new Dictionary<string, string> { ["runtime.sourceSchedulerWorkItemId"] = start.WorkItemId,
                 ["runtime.schedulerWorkItemId"] = root.WorkItemId, ["runtime.rootExecutableNodeId"] = rootNodeId });
         var checkpoint = new RuntimeCheckpointCommandPayload(payload.PinnedExecutable, RuntimeCheckpointNames.WorkflowStarted,
@@ -49,13 +49,13 @@ internal static class NativeIngressStartLineage
         { [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory };
         if (payload.StimulusDeliveryOrigin is { } saved)
         {
-            checkpointMetadata[SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(saved);
-            envelopeMetadata = new(envelopeMetadata, StringComparer.Ordinal) { [SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(saved) };
+            checkpointMetadata[SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(saved, options: Elsa.Serialization.Core.JsonBaseline.Options);
+            envelopeMetadata = new(envelopeMetadata, StringComparer.Ordinal) { [SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(saved, options: Elsa.Serialization.Core.JsonBaseline.Options) };
         }
         return new(RuntimeChainId.Derive(start.WorkItemId, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}"), start.WorkflowExecutionId,
             RuntimeChainId.Derive(start.CommandId, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}"), WorkflowExecutionCommandKind.Checkpoint,
             start.EnvelopeId, RuntimeChainId.Derive(start.IdempotencyKey, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}"),
             now, start.RecordedAt, start.Sequence is { } checkpointSequence ? checkpointSequence + 1 : null,
-            JsonSerializer.SerializeToElement(checkpoint), checkpointMetadata, envelopeMetadata);
+            JsonSerializer.SerializeToElement(checkpoint, options: Elsa.Serialization.Core.JsonBaseline.Options), checkpointMetadata, envelopeMetadata);
     }
 }

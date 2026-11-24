@@ -16,7 +16,7 @@ internal static class SavedStimulusStartSeal
         var command = work.CommandMetadata.GetValueOrDefault(OriginMetadata);
         var envelope = work.EnvelopeMetadata.GetValueOrDefault(OriginMetadata);
         if (origin is null && command is null && envelope is null) return;
-        if (origin is null || command != JsonSerializer.Serialize(origin) || envelope != command)
+        if (origin is null || command != JsonSerializer.Serialize(origin, options: Elsa.Serialization.Core.JsonBaseline.Options) || envelope != command)
             throw new InvalidDataException("The accepted saved-start marker and queued origin must be preserved together.");
     }
 
@@ -36,7 +36,7 @@ internal static class SavedStimulusStartSeal
         if (!(commit.Checkpoint.Name == Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStarted && commit.ExpectedInitialStartFault is null ||
               commit.Checkpoint.Name == Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowFaulted && commit.ExpectedInitialStartFault is not null) ||
             commit.StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert, State.StimulusDeliveryOrigin: { } origin } ||
-            marker != JsonSerializer.Serialize(origin))
+            marker != JsonSerializer.Serialize(origin, options: Elsa.Serialization.Core.JsonBaseline.Options))
             throw new InvalidDataException("Saved initial command authority requires its canonical physical workflow admission.");
     }
 
@@ -49,7 +49,7 @@ internal static class SavedStimulusStartSeal
         var recipient = cohort.Starts.SingleOrDefault(item => item.Binding.TriggerBindingId == authority.TriggerBindingId)
             ?? throw new InvalidDataException("No captured binding authorizes this command.");
         var identity = KeyedWorkflowStartIdentity.For(source.Intent.IdempotencyKey!, recipient.Executable.ArtifactId);
-        var start = envelope.Command.Payload?.Deserialize<WorkflowExecutionStartCommandPayload>()
+        var start = envelope.Command.Payload?.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)
             ?? throw new InvalidDataException("The saved start command has no payload.");
         IReadOnlyDictionary<string, JsonElement> defaults = new Dictionary<string, JsonElement>();
         if (material.InputContract is { } contract)
@@ -85,6 +85,6 @@ internal static class SavedStimulusStartSeal
 
     internal static WorkflowExecutionCommandEnvelope Read(RuntimePostCommitOutboxItem source, string executionId) =>
         (source.SavedStimulusStarts is { } seals && seals.TryGetValue(executionId, out var command)
-            ? command.Deserialize<WorkflowExecutionCommandEnvelope>() ?? throw new InvalidDataException("The accepted command is invalid.") : null)
+            ? command.Deserialize<WorkflowExecutionCommandEnvelope>(options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new InvalidDataException("The accepted command is invalid.") : null)
         ?? throw new InvalidDataException("The actual source has no accepted command for this deterministic target.");
 }

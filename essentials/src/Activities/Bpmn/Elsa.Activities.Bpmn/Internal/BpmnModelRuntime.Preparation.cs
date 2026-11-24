@@ -39,7 +39,7 @@ internal sealed partial class BpmnModelRuntime
         var seed = new WorkflowExecutableIdentity("pending", "pending", "pending", "1.0.0", "pending");
         var model = new RuntimeModelMaterial(1, seed, new(BpmnModelProtocol.Key, BpmnModelProtocol.Version),
             envelope is null ? BpmnInputSupport.BaseProfile(definition) : BpmnModelProtocol.InputsProfile,
-            envelope is null ? JsonSerializer.SerializeToElement(definition, Web) : JsonSerializer.SerializeToElement(envelope, Web),
+            envelope is null ? JsonSerializer.SerializeToElement(definition, options: Web) : JsonSerializer.SerializeToElement(envelope, options: Web),
             inputContract, [], dependencies, []);
         await driver.ValidateMaterialAsync(model, cancellationToken);
         BpmnDirectExecutionDriver.ValidateTimerDeadlines(model, clock.GetUtcNow());

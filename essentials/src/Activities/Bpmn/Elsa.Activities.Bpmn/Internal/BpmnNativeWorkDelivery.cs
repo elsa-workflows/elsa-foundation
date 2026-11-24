@@ -96,7 +96,7 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
                 // Its source stays owed until cancellation and positive retirement/result consumption settle it.
                 var cleanup = new RuntimeModelExecutionCommand(retainedModel.Executable, retainedModel.MaterialIncarnationId,
                     "settle-faulted-work:" + BpmnModelIdentity.Create(retainedModel.ExecutionId), "cancel",
-                    JsonSerializer.SerializeToElement(new { reason = "Settle native work retained by the final model fault." }, BpmnNativeWorkBoundary.Web),
+                    JsonSerializer.SerializeToElement(new { reason = "Settle native work retained by the final model fault." }, options: BpmnNativeWorkBoundary.Web),
                     retainedModel.Authority, retainedModel.TenantId) { IngressOrigin = retainedModel.IngressOrigin };
                 await QueueModelAsync(cleanup, retainedModel.ExecutionId, source, cancellationToken);
                 throw Pending("bpmn.native-start.fault-settlement-pending", "The faulted model's original native work remains owed until its cancellation decision.");
@@ -126,7 +126,7 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
         if (!result.Origin.MatchesModel(current)) throw new BpmnModelValidationException("The native result model pin changed.");
         var inputId = BpmnNativeWorkBoundary.ResultInputId(result.Origin);
         var command = new RuntimeModelExecutionCommand(current.Executable, current.MaterialIncarnationId, inputId, "native-result",
-            JsonSerializer.SerializeToElement(result, BpmnNativeWorkBoundary.Web), current.Authority, current.TenantId) { IngressOrigin = current.IngressOrigin };
+            JsonSerializer.SerializeToElement(result, options: BpmnNativeWorkBoundary.Web), current.Authority, current.TenantId) { IngressOrigin = current.IngressOrigin };
         var fingerprint = RuntimeCheckpointCommitFingerprint.ComputeModelInput(command);
         if (await reader.FindInputAsync(current.ExecutionId, inputId, cancellationToken) is { } accepted)
         {

@@ -205,7 +205,7 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
                 [new("SaveSubscription", false, "TargetDetailsRestricted"), new("RemoveSubscription", manageHidden && stoppable && !subscription.Origin.ConfigurationReadOnly),
                  new("EnableSubscription", false, "TargetDetailsRestricted"), new("PauseSubscription", operateHidden && stoppable),
                  new("GrantInvocation", false, "TargetDetailsRestricted"), new("RevokeInvocation", authorizeHidden && stoppable && !subscription.Origin.ConfigurationReadOnly)],
-                new { trigger.Name, effectiveState = trigger.DesiredState.ToString(), http = HttpSummary(trigger) });
+                JsonSerializer.SerializeToElement(new { trigger.Name, effectiveState = trigger.DesiredState.ToString(), http = HttpSummary(trigger) }, options: StandaloneTriggersApi.Json));
         }
         var target = await TargetAsync(subscription.DefinitionId, subscription.SlotName, ct);
         var validation = target.InputContract is null ? null : mapper.ValidateMappings(target.InputContract, subscription.Mappings);
@@ -224,7 +224,7 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
                  await access.HasAsync(TriggerPermissions.Authorize, trigger, ct) &&
                  await access.HasAsync("workflows/runtime:execute", new TriggerTargetResource(subscription.DefinitionId, subscription.SlotName), ct)),
              new("RevokeInvocation", stoppable && !subscription.Origin.ConfigurationReadOnly && await access.HasAsync(TriggerPermissions.Authorize, trigger, ct))],
-            new { trigger.Name, effectiveState = trigger.DesiredState.ToString(), http = HttpSummary(trigger) });
+            JsonSerializer.SerializeToElement(new { trigger.Name, effectiveState = trigger.DesiredState.ToString(), http = HttpSummary(trigger) }, options: StandaloneTriggersApi.Json));
     }
 
     private async ValueTask ValidateConfigurationAsync(string typeKey, int schema, JsonElement configuration, CancellationToken ct)
@@ -282,25 +282,13 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
     }
     private static JsonElement Combine(JsonElement value, string name, JsonElement property) => JsonSerializer.SerializeToElement(
         value.EnumerateObject().ToDictionary(item => item.Name, item => item.Value.Clone(), StringComparer.Ordinal)
-            .Append(new KeyValuePair<string, JsonElement>(name, property.Clone())).ToDictionary(item => item.Key, item => item.Value), StandaloneTriggersApi.Json);
+            .Append(new KeyValuePair<string, JsonElement>(name, property.Clone())).ToDictionary(item => item.Key, item => item.Value), options: StandaloneTriggersApi.Json);
     private static JsonElement Without(JsonElement value, string name) => JsonSerializer.SerializeToElement(
-        value.EnumerateObject().Where(item => item.Name != name).ToDictionary(item => item.Name, item => item.Value.Clone(), StringComparer.Ordinal), StandaloneTriggersApi.Json);
+        value.EnumerateObject().Where(item => item.Name != name).ToDictionary(item => item.Name, item => item.Value.Clone(), StringComparer.Ordinal), options: StandaloneTriggersApi.Json);
     private static string? EncodeCursor(string? value) => value is null ? null : Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
     private static string? DecodeCursor(string? value)
     { try { return value is null ? null : Encoding.UTF8.GetString(Convert.FromBase64String(value)); } catch (FormatException) { throw Validation("The continuation cursor is invalid."); } }
     private static void EnsureReplay(TriggerMutationReceipt receipt, string fingerprint)
     { if (receipt.RequestFingerprint != fingerprint) throw new TriggerOperationException("conflict", "This request identity names different content."); }
-    internal static string Fingerprint<T>(T value)
-    {
-        using var stream = new MemoryStream(); using (var writer = new Utf8JsonWriter(stream)) Canonical(JsonSerializer.SerializeToElement(value, StandaloneTriggersApi.Json), writer);
-        return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
-    }
-    private static void Canonical(JsonElement value, Utf8JsonWriter writer)
-    {
-        if (value.ValueKind == JsonValueKind.Object)
-        { writer.WriteStartObject(); foreach (var property in value.EnumerateObject().OrderBy(item => item.Name, StringComparer.Ordinal)) { writer.WritePropertyName(property.Name); Canonical(property.Value, writer); } writer.WriteEndObject(); }
-        else if (value.ValueKind == JsonValueKind.Array)
-        { writer.WriteStartArray(); foreach (var item in value.EnumerateArray()) Canonical(item, writer); writer.WriteEndArray(); }
-        else value.WriteTo(writer);
-    }
+    internal static string Fingerprint<T>(T value) => Elsa.Serialization.Core.JsonHashInput.Hash(value);
 }

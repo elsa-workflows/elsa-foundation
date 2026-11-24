@@ -31,7 +31,7 @@ internal sealed class PublishStimulusIntentAdapter : IStimulusDeliveryIntentAdap
         var payload = intent.Payload!.Value.Deserialize<PublishStimulusIntentPayload>(Options)!;
         if (payload.IsLocalEvent) return null;
         return new(SourceDescriptor.TypeKey, SourceDescriptor.SchemaVersion, "eventName", payload.EventName, SourceDescriptor.SourceFamily, SourceDescriptor.PayloadSchema,
-            payload.Payload ?? JsonSerializer.SerializeToElement<object?>(null),
+            payload.Payload ?? JsonSerializer.SerializeToElement<object?>(null, options: Elsa.Serialization.Core.JsonBaseline.Options),
             JsonSerializer.SerializeToElement(new { eventName = payload.EventName, correlationId = payload.CorrelationId }, Options));
     }
 

@@ -108,7 +108,8 @@ internal static class JsonBaselineSourceScan
         foreach (var call in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             var member = call.Expression as MemberAccessExpressionSyntax;
-            var name = member?.Name.Identifier.ValueText ?? (call.Expression as SimpleNameSyntax)?.Identifier.ValueText;
+            var binding = call.Expression as MemberBindingExpressionSyntax;
+            var name = member?.Name.Identifier.ValueText ?? binding?.Name.Identifier.ValueText ?? (call.Expression as SimpleNameSyntax)?.Identifier.ValueText;
             if (name is null) continue;
             var receiver = member?.Expression.ToString();
             var serializer = receiver is not null && (receiver == "JsonSerializer" || receiver.EndsWith(".JsonSerializer", StringComparison.Ordinal) || serializerAliases.Contains(receiver)) || member is null && staticSerializer;
@@ -148,10 +149,17 @@ internal static class JsonBaselineSourceScan
                 if (namedProfile is not null ? IsNullProfile(namedProfile.Expression, call) :
                     !effective.Skip(1).Any(argument => argument.NameColon is null && IsProfileExpression(argument.Expression, call))) Add("optionless", call);
             }
-            else if (!serializer && member is not null && name is "Deserialize" or "DeserializeAsync" &&
-                (effective.Length == 0 || effective.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" && IsNullProfile(argument.Expression, call)) ||
-                 effective.Length == 1 && IsNullProfile(effective[0].Expression, call) ||
-                 member.Name is not GenericNameSyntax && effective.Length == 1 && IsTypeExpression(effective[0].Expression, call))) Add("optionless", call);
+            else if (!serializer && (member is not null || binding is not null) && name is "Deserialize" or "DeserializeAsync")
+            {
+                var profile = effective.FirstOrDefault(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo");
+                if (profile is null)
+                {
+                    var positional = effective.Where(argument => argument.NameColon is null).ToArray();
+                    var typeArgument = (member?.Name ?? binding!.Name) is not GenericNameSyntax && positional.Length > 0 && IsTypeExpression(positional[0].Expression, call);
+                    profile = positional.ElementAtOrDefault(typeArgument ? 1 : 0);
+                }
+                if (profile is null || IsNullProfile(profile.Expression, call)) Add("optionless", call);
+            }
             if (member is null) continue;
             var collectionType = name is "Add" or "Insert" or "Remove" or "RemoveAt" or "Clear" ? DeclaredType(member.Expression, call) : null;
             if (IsConverterCollection(collectionType))
@@ -282,12 +290,13 @@ internal static class JsonBaselineSourceScan
     private static bool CarriesData(InvocationExpressionSyntax invocation)
     {
         var member = invocation.Expression as MemberAccessExpressionSyntax;
-        if (member?.Name is GenericNameSyntax generic && generic.TypeArgumentList.Arguments.Any(argument =>
-            invocation.Ancestors().OfType<MethodDeclarationSyntax>().Any(method => method.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == argument.ToString()) == true))) return true;
+        var methodName = member?.Name ?? (invocation.Expression as MemberBindingExpressionSyntax)?.Name;
+        if (methodName is GenericNameSyntax generic && generic.TypeArgumentList.Arguments.Any(argument =>
+            DataType(argument, new HashSet<string>(StringComparer.Ordinal)))) return true;
         var arguments = invocation.ArgumentList.Arguments;
         foreach (var expression in arguments.SelectMany(argument => argument.Expression.DescendantNodesAndSelf()).OfType<ExpressionSyntax>())
             if (DeclaredType(expression, invocation, inferDynamic: false) is { } type && DataType(SyntaxFactory.ParseTypeName(type), new HashSet<string>(StringComparer.Ordinal))) return true;
-        if (member?.Name.Identifier.ValueText.StartsWith("Deserialize", StringComparison.Ordinal) == true &&
+        if (methodName?.Identifier.ValueText.StartsWith("Deserialize", StringComparison.Ordinal) == true &&
             arguments.Any(argument => IsTypeExpression(argument.Expression, invocation))) return true;
         return arguments.Any(argument => argument.Expression is InvocationExpressionSyntax call &&
             call.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText is "GetProperty" or "Clone" or "EnumerateArray");

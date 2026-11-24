@@ -645,6 +645,7 @@
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
         }

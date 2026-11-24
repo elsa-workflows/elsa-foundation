@@ -50,8 +50,8 @@ internal static class InputReadLowering
             : new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey }, Elsa.Serialization.Core.JsonBaseline.Options), ActivityDataReadRoles.WorkflowRequestMember);
     }
 
-    // A stored read is { referenceKey } JSON; an in-process caller may hand an Input read over as the reference itself.
-    // Nothing else is read as a reference, so no other object's serialized shape decides what is lowered.
+    // The authored boundary has already converted CLR values through their scoped contract.
+    // Lowering recognizes only the resulting { referenceKey } JSON contract.
     private static string? ReferenceKey(JsonElement? payload) => payload switch
     {
         JsonElement { ValueKind: JsonValueKind.Object } json when json.TryGetProperty("referenceKey", out var key) && key.ValueKind == JsonValueKind.String =>

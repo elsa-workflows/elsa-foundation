@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal sealed class EfStandaloneTriggerStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access,
     TimeProvider time) : IStandaloneTriggerStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     internal RuntimeDbContext Context => context;
 
     public ValueTask<TriggerAggregate?> FindAsync(TriggerScope scope, string triggerId, CancellationToken cancellationToken = default) =>

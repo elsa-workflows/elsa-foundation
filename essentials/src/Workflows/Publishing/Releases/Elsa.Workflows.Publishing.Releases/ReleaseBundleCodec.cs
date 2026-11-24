@@ -178,9 +178,9 @@ internal sealed class ReleaseBundleCodec : IReleaseBundleCodec
             if (input.Length > bounds.MaxBlobBytes || input.Length > bounds.MaxExpandedBytes - expanded) throw Refuse("byte_limit_exceeded");
             var bytes = input.ToArray();
             expanded += bytes.LongLength;
-            if (Hash(bytes) != digest) throw Refuse("blob_digest_mismatch");
             if (bytes.Length == 0 || bytes[^1] is 10 or 13) throw Refuse("invalid_blob_encoding");
             CheckJson(bytes, bounds.MaxJsonDepth);
+            if (Hash(bytes) != digest) throw Refuse("blob_digest_mismatch");
             if (!blobs.TryAdd(digest, bytes)) throw Refuse("duplicate_blob");
         }
         foreach (var member in members)

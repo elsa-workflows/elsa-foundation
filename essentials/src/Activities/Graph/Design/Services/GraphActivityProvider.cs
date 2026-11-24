@@ -1091,7 +1091,7 @@ public sealed class GraphActivityProvider(
         {
             kind = "SetOutput", output.ReferenceKey, output.Type, output.StorageDriverKey,
             isNullable = output.IsNullable, node.ParentOccurrenceId, node.ChildSlotName, node.ChildIndex
-        }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        }, new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options));
         return new ExecutableNode($"set-output:{node.NodeId}", node.NodeId, "elsa.intrinsic.setoutput", "1.0.0",
             WellKnownRuntimeActivityConsumers.Intrinsic, payload, bindings, new Dictionary<string, string>(),
             intrinsicKind: WorkflowIntrinsicKind.SetOutput, descriptorSchemaVersion: WorkflowIntrinsicDescriptorSchemas.ActivityOutput);

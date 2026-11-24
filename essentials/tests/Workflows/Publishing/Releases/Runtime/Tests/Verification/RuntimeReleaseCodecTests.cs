@@ -13,6 +13,29 @@ public sealed class RuntimeReleaseCodecTests
 {
     private readonly ReleaseRuntimeArtifactCodec _codec = new();
 
+    [Fact]
+    public void Logical_json_leaves_normalize_while_original_publication_provenance_strings_remain_literal()
+    {
+        var version = RuntimeReleaseFixture.ActivityVersion(RuntimeReleaseFixture.Template());
+        ReleaseActivityVersion Value(string raw, string contract) => new(version.Scope, version.DefinitionId, version.VersionId,
+            version.Version, version.ActivityTypeKey, version.ResolutionKind, version.Contract, version.ProviderKey,
+            version.ProviderSchemaVersion, RuntimeReleaseFixture.Json(raw), version.CompilerFingerprint, version.TemplateId,
+            version.TemplateHash, version.SourceReferenceId, version.SourceKind, version.SourceId,
+            new(true, "owner-tenant", contract, "{\"providerKey\":\"fixture-provider\"}", RuntimeReleaseFixture.Json("{}")));
+        const string first = "{\"z\":1.0,\"a\":\"\\u0061\"}";
+        const string equivalent = "{ \"a\":\"a\", \"z\":1e0 }";
+        const string originalContract = "{\"inputs\":[],\"outputs\":[]}";
+        const string spelledContract = "{ \"outputs\": [], \"inputs\": [] }";
+        var a = _codec.EncodeActivityVersion(Value(first, originalContract));
+        var b = _codec.EncodeActivityVersion(Value(equivalent, originalContract));
+        Assert.Equal(a.Descriptor.PayloadDigest, b.Descriptor.PayloadDigest);
+        Assert.Equal(first, _codec.DecodeActivityVersion(a.GetPayloadBytes()).ProviderPayload.GetRawText());
+        Assert.Equal(equivalent, _codec.DecodeActivityVersion(b.GetPayloadBytes()).ProviderPayload.GetRawText());
+        var provenance = _codec.EncodeActivityVersion(Value(equivalent, spelledContract));
+        Assert.NotEqual(a.Descriptor.PayloadDigest, provenance.Descriptor.PayloadDigest);
+        Assert.Equal(spelledContract, _codec.DecodeActivityVersion(provenance.GetPayloadBytes()).Publication!.ContractJson);
+    }
+
     [Theory]
     [InlineData(70, 80)]
     [InlineData(110, 128)]

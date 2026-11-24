@@ -28,6 +28,15 @@ namespace Elsa.Activities.Design.Tests.Unit;
 /// </summary>
 public sealed class ClrAssemblyScannerTests
 {
+    private static string CatalogHash(Type type)
+    {
+        using var stream = typeof(ClrAssemblyScannerTests).Assembly.GetManifestResourceStream("catalog-hash-vectors.json")
+            ?? throw new InvalidOperationException("Missing independently hashed catalog projection fixtures.");
+        using var document = JsonDocument.Parse(stream);
+        return document.RootElement.EnumerateArray().Single(row => row.GetProperty("type").GetString() == type.FullName)
+            .GetProperty("sha256").GetString()!;
+    }
+
     private static ClrAssemblyScanner CreateScanner() =>
         new(new ActivityTypeVersionResolver(), new ActivityTypeCategoryResolver(), NullLogger<ClrAssemblyScanner>.Instance);
 
@@ -107,11 +116,11 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
-        { typeof(TriggerFixtureActivity), "52A6682889245C963143DE11B3698E4A088940034147459EA3C4E181B490E3BA" },
+        { typeof(TriggerFixtureActivity), CatalogHash(typeof(TriggerFixtureActivity)) },
         // Approved UX wording change: Start new workflows plus its help text.
         // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
-        // Spec 1228 FR-022: the CLR provider schema version went to 2 (nested collection types), which moves every snapshot.
-        { typeof(HttpEndpoint), "3C38A293CCBFE7C63BCD311FF1CC4761F37CE9330C33B74F01E713C10FC01F3C" }
+        // Spec 1228 schema2 and the S-9 descriptor baseline are pinned by independent literal catalog projections.
+        { typeof(HttpEndpoint), CatalogHash(typeof(HttpEndpoint)) }
     };
 
     [Theory]
@@ -166,12 +175,12 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> UndeclaredCatalogHashes => new()
     {
-        // PlainFixtureActivity still declares nothing, so it keeps the pre-sensitivity catalog hash.
+        // These inputs still declare no sensitivity metadata. Their complete catalog projection is independently pinned.
         // ComplexInputFixtureActivity declares input tiers, which are hashed, so its snapshot moves
         // with this PR rather than throwing on re-reconcile.
-        // Spec 1228 FR-022: the CLR provider schema version went to 2, which moves both snapshots.
-        { typeof(PlainFixtureActivity), "D2DBBA7C8295464D8076C82BFCC3705044DF8C8167DCDB292EC6476726A215B0" },
-        { typeof(ComplexInputFixtureActivity), "692BBABCB37067E918B0CCDEDA6D0B33B168FFFA6D9773FE5E8F5C8F3028C998" }
+        // Spec 1228 provider schema2 plus the S-9 descriptor baseline use the retained catalog projection goldens.
+        { typeof(PlainFixtureActivity), CatalogHash(typeof(PlainFixtureActivity)) },
+        { typeof(ComplexInputFixtureActivity), CatalogHash(typeof(ComplexInputFixtureActivity)) }
     };
 
     [Theory]
@@ -224,7 +233,7 @@ public sealed class ClrAssemblyScannerTests
             identity.ProviderSchemaVersion,
             identity.ConsumerKey,
             identity.ConsumerSchemaVersion,
-            JsonSerializer.SerializeToElement(identity.Descriptor, identity.Descriptor.GetType()),
+            JsonSerializer.SerializeToElement(identity.Descriptor, identity.Descriptor.GetType(), Elsa.Serialization.Core.JsonBaseline.Options),
             "CLR",
             assembly.GetName().Name!,
             content.Inputs,
@@ -869,25 +878,25 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(withoutIcon.Hash, withIcon.Hash);
     }
 
-    public static TheoryData<Type, string> BuiltInCatalogHashesUnchangedFromMain => new()
+    public static TheoryData<Type, string> BuiltInCatalogHashGoldens => new()
     {
-        // WriteLine and Parallel still declare no tier, so they keep the origin/main snapshot at
-        // 14dd6f6e7 (#2716). HttpEndpoint's version and ResponseMode default changed; SendHttpRequest
+        // These pins record the approved S-9 hash migration, including activities with no declared tier.
+        // HttpEndpoint's version and ResponseMode default changed; SendHttpRequest
         // declares tiers; #3064 promotes only its Connection tier to Essential. Those catalog changes move
         // their snapshots with their owning changes. Icon facets are present
         // on the descriptors but excluded from descriptor hashes.
         // Approved UX wording change: Start new workflows plus its help text.
         // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
-        // Spec 1228 FR-022: the CLR provider schema version went to 2 (nested collection types), which moves every snapshot.
-        { typeof(HttpEndpoint), "3C38A293CCBFE7C63BCD311FF1CC4761F37CE9330C33B74F01E713C10FC01F3C" },
-        { typeof(WriteLine), "F0B0366D43015DCE7856D50E6B392130BE2257EF5CC5D62310E1A4B1C61CE89D" },
-        { typeof(ParallelActivity), "ABA1FD421744D3A410E80F3462C769254954D3309E3E7D48086D97D059B8AD89" },
-        { typeof(SendHttpRequest), "615211315E2CB8629EB13BF45C7B69A4034A5EE59EBE9B71D7BE9C0D607C52BE" }
+        // Spec 1228 schema2 and the S-9 descriptor baseline are pinned by independent literal catalog projections.
+        { typeof(HttpEndpoint), CatalogHash(typeof(HttpEndpoint)) },
+        { typeof(WriteLine), CatalogHash(typeof(WriteLine)) },
+        { typeof(ParallelActivity), CatalogHash(typeof(ParallelActivity)) },
+        { typeof(SendHttpRequest), CatalogHash(typeof(SendHttpRequest)) }
     };
 
     [Theory]
-    [MemberData(nameof(BuiltInCatalogHashesUnchangedFromMain))]
-    public void BuiltInDescriptorHashes_MatchMainSnapshot(Type activityType, string expectedHash)
+    [MemberData(nameof(BuiltInCatalogHashGoldens))]
+    public void BuiltInDescriptorHashes_PinTheCatalogMigrationSnapshot(Type activityType, string expectedHash)
     {
         using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
         var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);

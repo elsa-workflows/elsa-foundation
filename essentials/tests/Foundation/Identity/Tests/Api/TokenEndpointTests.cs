@@ -261,6 +261,40 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Refresh_metadata_keeps_its_existing_member_names_and_redeems_an_old_writer_payload()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+        var issued = await IssueForAsync(_fixture, accessToken);
+        await using (var scope = _fixture.Services.CreateAsyncScope())
+        {
+            var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>();
+            var entry = await manager.FindByReferenceIdAsync(issued.RefreshToken!);
+            Assert.NotNull(entry);
+            var current = await manager.GetPayloadAsync(entry!);
+            // This is the actual previous PascalCase writer/reader contract, independent of
+            // the service's private options. The shared data baseline does not rename it.
+            var previous = JsonSerializer.Deserialize<PreviousRefreshMetadata>(current!, JsonSerializerOptions.Default)!;
+            Assert.False(string.IsNullOrWhiteSpace(previous.TenantId));
+            Assert.NotNull(previous.Scopes);
+            using var document = JsonDocument.Parse(current!);
+            Assert.True(document.RootElement.TryGetProperty("TenantId", out _));
+            Assert.False(document.RootElement.TryGetProperty("tenantId", out _));
+            var oldWriterPayload = JsonSerializer.Serialize(previous, JsonSerializerOptions.Default);
+            var descriptor = new OpenIddictTokenDescriptor();
+            await manager.PopulateAsync(descriptor, entry!);
+            descriptor.Payload = oldWriterPayload;
+            await manager.UpdateAsync(entry!, descriptor);
+        }
+        using var response = await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = issued.RefreshToken });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    private sealed record PreviousRefreshMetadata(string TenantId, string[] Scopes, string? CanonicalUserId = null,
+        string? SubjectId = null, string? Provider = null, string? SubjectIssuer = null, string? SessionId = null);
+
+    [Fact]
     public async Task Logout_On_The_In_Memory_Vendor_Store_Revokes_Every_Live_Entry_Of_The_Subject()
     {
         // The fixture's OpenIddict vendor store is EF Core in-memory, as in Workbench development/demo mode (#4913).

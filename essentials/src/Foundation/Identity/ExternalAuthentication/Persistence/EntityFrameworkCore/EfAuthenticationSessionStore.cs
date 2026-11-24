@@ -15,6 +15,17 @@ namespace Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFram
 internal sealed class EfAuthenticationSessionStore(ExternalAuthenticationDbContext context,
     IPersistenceAccessContextAccessor access, IDataProtectionProvider protection) : IAuthenticationSessionStore
 {
+    // This protected owner metadata retains its established CLR member names. Carried JSON
+    // still uses the shared baseline; no tolerant reader or workflow conversion policy is added.
+    private static readonly JsonSerializerOptions RetainedJson = CreateRetainedJson();
+    private static JsonSerializerOptions CreateRetainedJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.PropertyNamingPolicy = null;
+        options.MakeReadOnly();
+        return options;
+    }
+
     public bool IsDurable => true;
 
     public async ValueTask<bool> TryCreateAsync(AuthenticationSessionRecord session, CancellationToken cancellationToken = default)
@@ -33,7 +44,7 @@ internal sealed class EfAuthenticationSessionStore(ExternalAuthenticationDbConte
             throw new ArgumentException("Invalid authentication session.", nameof(session));
         try
         {
-            var json = JsonSerializer.Serialize(session);
+            var json = JsonSerializer.Serialize(session, options: RetainedJson);
             if (Encoding.UTF8.GetByteCount(json) > 16384) throw new ArgumentException("Oversized authentication session.", nameof(session));
             var entity = new AuthenticationSessionEntity
             {
@@ -118,7 +129,7 @@ internal sealed class EfAuthenticationSessionStore(ExternalAuthenticationDbConte
     {
         EfSchemaVersion.EnsureReadable(ExternalAuthenticationEfModule.Chain, entity.SchemaVersion);
         AuthenticationSessionRecord? record;
-        try { record = JsonSerializer.Deserialize<AuthenticationSessionRecord>(Protector(entity).Unprotect(entity.ProtectedPayload)); }
+        try { record = JsonSerializer.Deserialize<AuthenticationSessionRecord>(Protector(entity).Unprotect(entity.ProtectedPayload), options: RetainedJson); }
         catch (Exception exception) when (exception is CryptographicException or JsonException)
         { throw new AuthenticationStoreException("read-session", tenantId, entity.Id, exception); }
         if (record is null || record.TenantId != tenantId || record.Id != entity.Id || Hash(record.UserId) != entity.UserKey ||

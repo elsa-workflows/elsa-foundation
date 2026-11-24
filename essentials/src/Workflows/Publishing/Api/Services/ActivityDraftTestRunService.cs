@@ -1067,14 +1067,15 @@ public sealed class ActivityDraftTestRunService(
             {
                 name = x.Key,
                 state = x.Value.State,
-                value = x.Value.Value?.GetRawText()
+                hasValue = x.Value.Value.HasValue,
+                value = x.Value.Value
             });
-        return StableHash(JsonSerializer.Serialize(new
+        return Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             request.VersionId,
             request.CorrelationId,
             inputs
-        }));
+        });
     }
 
     private static string ActivityVersionReceiptId(string versionId) =>

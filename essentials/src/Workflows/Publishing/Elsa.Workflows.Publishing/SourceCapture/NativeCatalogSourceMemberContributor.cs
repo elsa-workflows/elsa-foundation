@@ -104,7 +104,7 @@ internal sealed class NativeCatalogSourceMemberContributor(IReleaseRuntimeArtifa
                     publishedAt = details.PublishedAt, directDependencyCount = details.DirectDependencyCount, closedTemplateCount = details.ClosedTemplateCount,
                     resumeTargetCount = details.ResumeTargetCount, runtimeRequirementsJson = Encoding.UTF8.GetString(requirementsBytes),
                     resourceMeasurementsJson = Encoding.UTF8.GetString(measurementsBytes)
-                });
+                }, options: Elsa.Serialization.Core.JsonBaseline.Options);
                 var resolution = publication.ResolutionKind == ActivityDefinitionVersionResolutionKind.Unspecified
                     ? string.IsNullOrWhiteSpace(publication.SourceDraftId) ? "AuthorableActivity" : "ReusableTemplateBoundary" : publication.ResolutionKind.ToString();
                 additions.Add(codec.EncodeActivityVersion(new(scope, publication.DefinitionId, publication.VersionId, publication.Version, publication.ActivityTypeKey,
@@ -127,8 +127,13 @@ internal sealed class NativeCatalogSourceMemberContributor(IReleaseRuntimeArtifa
             var payload = captured.GetPayload(member.Key);
             if (payload.Length > limits.MaxBlobBytes || payload.Length != member.Descriptor.ByteLength) throw Refuse("native_catalog_captured_member_conflict");
             var copy = payload.ToArray();
-            if ("sha256:" + Convert.ToHexStringLower(SHA256.HashData(copy)) != member.Descriptor.PayloadDigest)
-                throw Refuse("native_catalog_captured_member_conflict");
+            try
+            {
+                if ("sha256:" + Elsa.Serialization.Core.JsonHashInput.HashUtf8(copy) != member.Descriptor.PayloadDigest)
+                    throw Refuse("native_catalog_captured_member_conflict");
+            }
+            catch (Exception error) when (error is JsonException or InvalidOperationException)
+            { throw Refuse("native_catalog_captured_member_conflict"); }
             return copy;
         }
         void Add(string id)

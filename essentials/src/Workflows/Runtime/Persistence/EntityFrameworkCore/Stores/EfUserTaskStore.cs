@@ -268,14 +268,14 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
     {
         Id = CompositeId(scope, version.TenantId, version.Form.Id, version.Form.Version), ScopeKey = Encode(scope), ScopeHash = Hash(scope),
         TenantKey = Encode(version.TenantId), TenantHash = Hash(version.TenantId), FormKey = Encode(version.Form.Id),
-        VersionKey = Encode(version.Form.Version), ContentJson = JsonSerializer.Serialize(version)
+        VersionKey = Encode(version.Form.Version), ContentJson = JsonSerializer.Serialize(version, options: Elsa.Serialization.Core.JsonBaseline.Options)
     };
 
     private static UserTaskFormEntity ToDraftRow(UserTaskFormDraft draft, string scope) => new()
     {
         Id = CompositeId(scope, draft.TenantId, draft.Id, UserTaskProtocol.FormDraftVersion), ScopeKey = Encode(scope), ScopeHash = Hash(scope),
         TenantKey = Encode(draft.TenantId), TenantHash = Hash(draft.TenantId), FormKey = Encode(draft.Id),
-        VersionKey = Encode(UserTaskProtocol.FormDraftVersion), ContentJson = JsonSerializer.Serialize(draft)
+        VersionKey = Encode(UserTaskProtocol.FormDraftVersion), ContentJson = JsonSerializer.Serialize(draft, options: Elsa.Serialization.Core.JsonBaseline.Options)
     };
 
     private static UserTaskFormDefinition Definition(string tenantId, string id, IReadOnlyCollection<UserTaskFormEntity> rows, string scope)
@@ -324,7 +324,7 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
     private static UserTaskFormDraft ReadDraft(UserTaskFormEntity row, string scope)
     {
         var content = UserTasksEfModule.Chain.Upcast<UserTaskFormEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
-        var value = JsonSerializer.Deserialize<UserTaskFormDraft>(content) ?? throw new InvalidDataException("The form draft is invalid.");
+        var value = JsonSerializer.Deserialize<UserTaskFormDraft>(content, options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new InvalidDataException("The form draft is invalid.");
         if (row.ScopeKey != Encode(scope) || row.ScopeHash != Hash(scope) || row.TenantKey != Encode(value.TenantId) || row.TenantHash != Hash(value.TenantId) ||
             row.FormKey != Encode(value.Id) || row.VersionKey != Encode(UserTaskProtocol.FormDraftVersion) || row.Id != CompositeId(scope, value.TenantId, value.Id, UserTaskProtocol.FormDraftVersion) ||
             value.Revision < 1 || value.Form is { } form && form.Id != value.Id)

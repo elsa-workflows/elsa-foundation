@@ -235,8 +235,8 @@ public sealed class BpmnRoundTripTests
             "type" => variable with { Type = new TypeReference("Acme.Account") },
             "collection" => variable with { Type = new TypeReference("Int32", CollectionKind.Array) },
             "storage" => variable with { StorageDriverType = "external-store" },
-            "literal-default" => variable with { Default = new ArgumentValue(42, "Literal") },
-            _ => variable with { Default = new ArgumentValue("variables.outer", "JavaScript") }
+            "literal-default" => variable with { Default = ArgumentValue.FromClr(42, "Literal") },
+            _ => variable with { Default = ArgumentValue.FromClr("variables.outer", "JavaScript") }
         };
         var source = ProcessNode(new BpmnAuthoredStructure(variables: [variable]));
         var before = source.Structure!.Payload.GetRawText();

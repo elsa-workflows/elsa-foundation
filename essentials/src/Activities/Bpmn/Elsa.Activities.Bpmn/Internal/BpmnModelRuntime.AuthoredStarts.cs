@@ -34,7 +34,7 @@ internal sealed partial class BpmnModelRuntime
             sourceReferenceId = source.SourceReferenceId,
             authored = new AuthoredModelEntry(1, slot, source),
             submittedInputs = supplied
-        }, Web);
+        }, options: Web);
         var command = new RuntimeModelExecutionCommand(material.Identity, material.IncarnationId, requestId,
             BpmnDirectExecutionDriver.AuthoredKind, payload, authority, caller.TenantId);
         try

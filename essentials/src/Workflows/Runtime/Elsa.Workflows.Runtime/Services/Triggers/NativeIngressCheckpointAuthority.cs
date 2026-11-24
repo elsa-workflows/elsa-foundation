@@ -69,16 +69,16 @@ internal static class NativeIngressCheckpointAuthority
             InitialStartFaultAuthority.RequireSameStart(commit, envelope, executable);
             return; // The physical writer has already joined the actual poison decision to this conditional write.
         }
-        var start = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var start = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         var intentId = $"{envelope.EnvelopeId}:postcommit:schedule:root:{executable.RootActivity.ExecutableNodeId}";
         var intent = commit.PostCommitIntents.SingleOrDefault(item => item.IntentId == intentId)
             ?? throw new InvalidDataException("An initial ingress checkpoint must commit its exact root continuation.");
-        var root = intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>() ?? throw new InvalidDataException("The ingress root continuation is invalid.");
+        var root = intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>(options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new InvalidDataException("The ingress root continuation is invalid.");
         var original = new RuntimeSchedulerWorkItem(envelope.EnvelopeId, envelope.WorkflowExecutionId, envelope.Command.CommandId,
             envelope.Command.Kind, envelope.EnvelopeId, envelope.IdempotencyKey, envelope.EnqueuedAt, root.RecordedAt,
             envelope.Sequence, envelope.Command.Payload, envelope.Command.Metadata, envelope.Metadata);
         var expected = NativeIngressStartLineage.Build(original, start, executable.RootActivity.ExecutableNodeId);
-        var payload = expected.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var payload = expected.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         var seeds = RuntimeWorkflowStateSeed.BuildSeedChanges(state.WorkflowExecutionId,
             start.Inputs.ToDictionary(pair => pair.Key, pair => (object?)pair.Value, StringComparer.Ordinal), commit.Checkpoint.OccurredAt,
             start.StimulusInput, start.TriggerNodeId, start.TriggerMetadata, start.CorrelationId);

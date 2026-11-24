@@ -19,7 +19,7 @@ public sealed class NativeIngressWaitTargetTests
 
     [Theory]
     [InlineData("{}")]
-    [InlineData("{\"IngressWaitOrigin\":null}")]
+    [InlineData("{\"ingressWaitOrigin\":null}")]
     public void Legacy_resume_without_origin_does_not_require_the_new_payload_shape(string json)
     {
         Assert.Null(NativeIngressWaitTargetEvidence.Origin(Probe(json)));
@@ -28,7 +28,7 @@ public sealed class NativeIngressWaitTargetTests
     [Fact]
     public void A_claimed_origin_requires_a_valid_typed_payload()
     {
-        Assert.ThrowsAny<Exception>(() => NativeIngressWaitTargetEvidence.Origin(Probe("{\"IngressWaitOrigin\":{}}")));
+        Assert.ThrowsAny<Exception>(() => NativeIngressWaitTargetEvidence.Origin(Probe("{\"ingressWaitOrigin\":{}}")));
     }
 
     [Theory]
@@ -69,7 +69,7 @@ public sealed class NativeIngressWaitTargetTests
         Assert.NotEqual(fixture.Root.StartIdentity.WorkflowExecutionId, envelope.WorkflowExecutionId);
         Assert.Equal(fixture.Wait.Identity.CommandId, envelope.Command.CommandId);
         Assert.Equal(Now, envelope.EnqueuedAt);
-        var payload = envelope.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(fixture.Wait.Identity.Generation, payload.ExpectedBookmarkResume!.RegistrationCapture!.Generation);
         Assert.Equal("18446744073709551615", payload.Input!.Value.GetProperty("number").GetRawText());
         Assert.NotNull(payload.IngressWaitOrigin);

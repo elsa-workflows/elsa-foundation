@@ -72,6 +72,8 @@ public sealed class JsonDataBoundaryArchitectureTests
     [InlineData("Elsa.Workflows.Runtime.Core.Models.ValueEnvelope", "InlineValue")]
     [InlineData("Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommand", "Payload")]
     [InlineData("Elsa.Workflows.Runtime.Api.Models.WorkflowOutputView", "Value")]
+    [InlineData("Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerSubscriptionView", "TriggerSummary")]
+    [InlineData("Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerChangeResult", "Effects")]
     [InlineData("Elsa.Weaver.Core.Models.WeaverContextAttachment", "Content")]
     public void Reviewed_data_members_remain_JSON_values(string owner, string member)
     {

@@ -51,6 +51,16 @@ def generate():
         preimage = helper.canonical(dict(format=opaque('elsa.model.input.v1'), command=command))
         vectors.append(dict(family='model-input', name=name, payload=raw, canonical=preimage,
                             sha256=hashlib.sha256(preimage.encode()).hexdigest()))
+    changes = dict(workflowExecution=None, scheduler=None, activityExecutions=[], activityExecutionInspections=[], bookmarks=[],
+                   durableValues=[], incidents=[], operational=[], workflowDispatches=[], workflowDispatchCancellations=[],
+                   activityScopeCleanups=[], consumedSchedulerWorkItems=[], alterationJobTerminalChange=None,
+                   backgroundActivityWork=dict(admissions=[], acceptances=[], cancellations=[]), postCommitOutbox=[])
+    empty_commit = dict(commitId=opaque('commit'), checkpoint=dict(checkpointId=opaque('checkpoint'), name=opaque('name'),
+                        workflowExecutionId=opaque('waiter'), occurredAt='2026-10-26T00:00:00+00:00', activityExecutionIds=[], metadata={}),
+                        stateChanges=changes, postCommitIntents=[], metadata={})
+    canonical = helper.canonical(empty_commit)
+    vectors.append(dict(family='empty-commit', name='pre-history', payload=None, canonical=canonical,
+                        sha256=hashlib.sha256(canonical.encode()).hexdigest()))
     Path(__file__).with_name('checkpoint-hash-vectors.json').write_text(json.dumps(vectors, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(f'Wrote {len(vectors)} independent checkpoint vectors')
 

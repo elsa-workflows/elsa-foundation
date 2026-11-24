@@ -26,7 +26,7 @@ internal static class RuntimeArtifactJson
         // normalized collections cannot silently replace a persisted source body with a different export.
         using var output = new BoundedSnapshotStream(Encoding.UTF8.GetByteCount(value));
         using (var writer = new Utf8JsonWriter(output, new JsonWriterOptions { MaxDepth = maximumDepth }))
-        { JsonSerializer.Serialize(writer, result, options); writer.Flush(); }
+        { JsonSerializer.Serialize(writer, result, options: options); writer.Flush(); }
         using var original = JsonDocument.Parse(value, new JsonDocumentOptions { MaxDepth = maximumDepth });
         using var reconstructed = JsonDocument.Parse(output.GetBuffer().AsMemory(0, checked((int)output.Length)), new JsonDocumentOptions { MaxDepth = maximumDepth });
         if (ActivityTemplateHasher.ComputeCanonicalValueHash(original.RootElement) != ActivityTemplateHasher.ComputeCanonicalValueHash(reconstructed.RootElement))

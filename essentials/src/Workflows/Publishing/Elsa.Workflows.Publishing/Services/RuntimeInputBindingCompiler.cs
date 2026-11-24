@@ -42,7 +42,7 @@ public sealed class RuntimeInputBindingCompiler(
     private const string DefaultExpressionType = "Default";
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
-    private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
@@ -142,7 +142,7 @@ public sealed class RuntimeInputBindingCompiler(
         // The same wire form ExecutableNodeCompiler.CompileStructure writes and placement reads back.
         return JsonSerializer.SerializeToElement(
             declarations.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray(),
-            DescriptorPayloadSerializer.Options);
+            options: DescriptorPayloadSerializer.Options);
     }
 
     internal RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)
