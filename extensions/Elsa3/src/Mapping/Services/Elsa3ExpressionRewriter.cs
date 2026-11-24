@@ -73,7 +73,7 @@ public sealed class Elsa3ExpressionRewriter(
         {
             var script = new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source);
             // Count a loop value too: replacing a later read with its loop slot must not discard a legacy write.
-            var analyzer = new JavaScriptAnalyzer(resolve) { Mode = Elsa3JavaScriptMode.Expression, Source = source };
+            var analyzer = new JavaScriptAnalyzer(resolve) { Mode = Elsa3JavaScriptMode.Expression, Source = source, ReplacedGlobals = _replacedGlobals };
             analyzer.CollectReassignedNames(script);
             return analyzer.ReusableScriptMayWrite(script);
         }
