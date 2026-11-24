@@ -7,6 +7,7 @@ public sealed partial class EfStore
 {
     private const int WorkflowHistoryVersion = 1;
     private static readonly string[] RootListSourceTriggers = ["kernel_require_root_checkpoint_writer", "kernel_project_root_actor_list"];
+    private static readonly string[] RootListWithParkTriggers = [..RootListSourceTriggers, "kernel_project_root_park_metadata"];
     private static readonly string[] RootListWithMarkTriggers = ["kernel_require_root_checkpoint_writer", "kernel_require_root_actor_list_v13", "kernel_project_root_actor_list_v13"];
     private static readonly string[] WorkflowHistorySourceTriggers = [..RootListSourceTriggers, "kernel_project_root_workflow_history_v1"];
 

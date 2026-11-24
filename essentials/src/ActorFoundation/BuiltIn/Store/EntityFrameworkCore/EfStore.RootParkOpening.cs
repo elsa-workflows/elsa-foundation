@@ -104,7 +104,7 @@ public sealed partial class EfStore
             if (!retained.Select(envelope).OrderBy(row => row.Id, StringComparer.Ordinal)
                 .SequenceEqual(pending.Select(envelope).OrderBy(row => row.Id, StringComparer.Ordinal))) return false;
 
-            return await db.Database.SqlQuery<bool>($"""
+            var stored = await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (
                     SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
                         AND "FoundationTenant" = {Root.Tenant} AND "FoundationReference" = {Root.Reference}
@@ -119,6 +119,12 @@ public sealed partial class EfStore
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
                 AS "Value"
                 """).SingleAsync(cancellationToken);
+            return stored && (!db.UsesRootParkInspection || await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "FoundationActorList"
+                    WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference}
+                        AND "Status" = {(int)InstanceStatus.Faulted} AND "ParkAt" = {prior.At} AND "ParkFault" = {EncodedFault})
+                AS "Value"
+                """).SingleAsync(cancellationToken));
         }
     }
 }
