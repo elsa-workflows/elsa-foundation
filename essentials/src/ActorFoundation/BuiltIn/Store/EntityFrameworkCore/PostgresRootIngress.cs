@@ -6,7 +6,8 @@ using Contract = Kernel.Foundation.Contracts;
 namespace Kernel.EntityFramework;
 
 internal sealed class PostgresRootIngress(PostgresRootAdmission admission, string actorType,
-    Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeTerminate = null) : Contract.IIngress
+    Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeTerminate = null,
+    Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeDelete = null) : Contract.IIngress
 {
     private static readonly JsonSerializerOptions OperatorJson = new()
     {
@@ -24,9 +25,15 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         if (Contract.Kinds.IsCommand(kind))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return kind == Contract.Kinds.Terminate && target is Contract.Target.Ref exact &&
-                PostgresRootAdmission.IsIssuedReferenceShape(exact.Actor.Id) && authorizeTerminate?.Invoke(scope, exact.Actor) == true
-                ? await TerminateAsync(scope, exact.Actor, id, payload, options, cancellationToken)
+            var authorize = kind switch
+            {
+                Contract.Kinds.Terminate => authorizeTerminate,
+                Contract.Kinds.Delete => authorizeDelete,
+                _ => null
+            };
+            return target is Contract.Target.Ref exact && PostgresRootAdmission.IsIssuedReferenceShape(exact.Actor.Id) &&
+                authorize?.Invoke(scope, exact.Actor) == true
+                ? await OperateAsync(scope, exact.Actor, id, kind, payload, options, cancellationToken)
                 : new(Contract.AdmissionOutcome.Refused);
         }
         if (target is Contract.Target.Start start)
@@ -63,8 +70,8 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         };
     }
 
-    private async ValueTask<Contract.Admission> TerminateAsync(Contract.BoundScope scope, Contract.ActorRef actor, string id,
-        string? payload, Contract.AddOptions? options, CancellationToken token)
+    private async ValueTask<Contract.Admission> OperateAsync(Contract.BoundScope scope, Contract.ActorRef actor, string id,
+        string kind, string? payload, Contract.AddOptions? options, CancellationToken token)
     {
         if (!FoundationMetadataLimits.IsOutsideMessageId(id) || payload is null || payload.Length > 2_048)
             return new(Contract.AdmissionOutcome.Refused);
@@ -79,7 +86,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
             return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
         if (command.Selection is not { Length: > 0 } selection)
             return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
-        var receipt = await admission.AdmitRootOperatorAsync(scope.Tenant, actor.Id, id, Contract.Kinds.Terminate,
+        var receipt = await admission.AdmitRootOperatorAsync(scope.Tenant, actor.Id, id, kind,
             options?.DueAt, options?.KeepFor, token, selection);
         return receipt switch
         {
@@ -117,7 +124,8 @@ public sealed partial class EfStore
 
     // The host authenticates the caller and authorizes termination of the supplied exact reference.
     internal async ValueTask<Contract.IIngress> OpenSelectedRootIngressAsync(string actorType, TimeSpan deduplicationWindow,
-        Func<Contract.BoundScope, Contract.ActorRef, bool> authorizeTerminate, CancellationToken cancellationToken)
+        Func<Contract.BoundScope, Contract.ActorRef, bool> authorizeTerminate, CancellationToken cancellationToken,
+        Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeDelete = null)
     {
         ArgumentNullException.ThrowIfNull(authorizeTerminate);
         PostgresRootAdmission.RequireActorType(actorType);
@@ -127,7 +135,9 @@ public sealed partial class EfStore
         if (!db.Database.IsNpgsql() || !db.UsesRootTerminalSelection)
             throw new NotSupportedException("Selected root ingress requires the PostgreSQL selection profile.");
         await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
-        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true), actorType, authorizeTerminate);
+        if (authorizeDelete is not null && !db.UsesRootRetirement)
+            throw new NotSupportedException("Selected deletion requires the PostgreSQL retirement profile.");
+        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true), actorType, authorizeTerminate, authorizeDelete);
     }
 
     /// <summary>

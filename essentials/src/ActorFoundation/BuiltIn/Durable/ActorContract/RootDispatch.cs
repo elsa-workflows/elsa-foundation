@@ -25,16 +25,37 @@ internal sealed partial class ActorAdapter
     {
         var metadata = row.FoundationDispatchHeader ?? roots!.Checkpoint(row);
         return new(new(metadata.Reference), row.Model, metadata.Tenant, (Contract.ActorStatus)row.Status, row.Fault,
-            null, null, metadata.Header.TypeData, metadata.Header.Labels);
+            null, metadata.Terminal?.At, metadata.Header.TypeData, metadata.Header.Labels);
     }
 
     private static bool IsRootControl(Durable.Message message) => message is
     {
-        Kind: Durable.Kinds.Suspend or Durable.Kinds.Resume or Durable.Kinds.Terminate,
+        Kind: Durable.Kinds.Suspend or Durable.Kinds.Resume or Durable.Kinds.Terminate or Durable.Kinds.Delete,
         InboxScope: Durable.InboxKey.FoundationOccurrenceScope, StorageId: not null, TargetCreation: 1, KeepUntil: not null,
         Operator: { Selection: null, DeleteTarget: null, RetentionDelete: false, RecoverMode: null, RecoverHandles: null },
         Start: null, Payload: null, ReplyTo: null, EventMatch: null, Sender: null, SenderCreation: 0, ActorAuthored: false, JobGeneration: 0
-    };
+    } && (message.Kind == Durable.Kinds.Delete ? message.Operator.QualifiedTerminal is not null : message.Operator.QualifiedTerminal is null);
+
+    private Durable.TurnOutcome? SettleRootDeletion(Durable.TurnInput input)
+    {
+        if (input.Taken is not [{ Durable: true, Message: { Kind: Durable.Kinds.Delete,
+            Operator.QualifiedTerminal: { } selection } message }]) return null;
+        var row = input.Row;
+        if (row is not { Creation: 1, Retired: false, Status: not Durable.InstanceStatus.Running, Parent: null,
+                Children: null, Jobs: null, FoundationDispatchHeader.Terminal: { } terminal } ||
+            row.Model != actor.Type || row.Id != message.Target.Id || message.TargetCreation != row.Creation || terminal != selection)
+            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
+
+        var protection = DeletionRefusal(RootHeader(row), row.State, input.Services.Now);
+        if (protection is not null)
+            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, protection);
+        var marker = Durable.CreationProtocol.Retire(row);
+        return new(input.Actor)
+        {
+            Row = marker, Expected = row.Revision, Revision = marker.Revision, Status = marker.Status,
+            Consumed = [.. input.Taken], Journal = """["delete"]""", Delete = true, Unsubscribe = true
+        };
+    }
 
     private string? RootRefusal(Durable.TurnInput input)
     {

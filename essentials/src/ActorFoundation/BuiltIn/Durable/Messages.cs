@@ -57,9 +57,12 @@ internal sealed record FoundationOperatorCommand(string? Selection)
 {
     internal string? DeleteTarget { get; init; }
     internal bool RetentionDelete { get; init; }
+    internal FoundationTerminalStamp? QualifiedTerminal { get; init; }
     internal ParkRecoveryMode? RecoverMode { get; init; }
     internal IReadOnlyList<string>? RecoverHandles { get; init; }
 }
+
+internal sealed record FoundationTerminalStamp(long Revision, long At);
 
 /// <summary>A message. Times are database time in milliseconds.</summary>
 public sealed record Message(

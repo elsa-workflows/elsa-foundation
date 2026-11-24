@@ -105,6 +105,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
         SettlesEndedChildNotice(row, delivery.Message) ||
+        roots is not null && delivery.Message.Operator?.QualifiedTerminal is not null ||
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||
             delivery.IsWorkerJobCompletion && (rootJobHandle is not null || delivery.JobDeadline is not null || IsParked(row)));
 
@@ -118,7 +119,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition, spec.Input))
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
         if (roots is not null)
-            return SettleRootTimedJob(input) ?? (RootRefusal(input) is { } reason
+            return SettleRootDeletion(input) ?? SettleRootTimedJob(input) ?? (RootRefusal(input) is { } reason
                 ? Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, reason) : null);
         if (message.Kind == Durable.Kinds.ParkExpiry)
             return ExpirePark(input);

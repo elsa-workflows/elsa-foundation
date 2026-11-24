@@ -3231,8 +3231,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             unit.Held.Where(i => i.Durable && conversions?.ContainsKey(i) != true).Select(i => i.Message.InboxKey).ToList(), unit.Delete)
         {
             FoundationHeader = unit.FoundationHeader,
-            FoundationRootOperator = unit.Row?.FoundationDispatchHeader is not null && unit.Consumed is [var qualified] &&
-                qualified.Message.Operator is not null ? qualified.Message : null,
+            FoundationRootOperator = unit.Consumed is [var qualified] && qualified.Message.Operator is { } command &&
+                (unit.Row?.FoundationDispatchHeader is not null || unit.Delete && command.QualifiedTerminal is not null)
+                    ? qualified.Message : null,
             FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
                 unit.Consumed is [{ IsWorkerJobCompletion: true, Original: { } original } completed] &&
                 (completed.JobDeadline is null || _type.RootTimedJobPublicationClock is not null)

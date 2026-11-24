@@ -62,6 +62,8 @@ public sealed partial class EfStore
     private abstract record QualifiedRootCheckpoint(long JournalRevision)
     {
         internal virtual long RevisionFor(string actor) => JournalRevision;
+        internal virtual bool WritesJournal(string actor) => false;
+        internal virtual bool RequiresRetirementSchema => false;
         internal virtual ValueTask CheckBeforeWriteAsync(KernelDb db, CancellationToken cancellationToken) => ValueTask.CompletedTask;
         internal abstract Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken);
     }
@@ -133,9 +135,14 @@ public sealed partial class EfStore
             CREATE OR REPLACE FUNCTION kernel_require_root_checkpoint_writer() RETURNS trigger LANGUAGE plpgsql AS $fn$
             BEGIN
                 IF TG_OP = 'UPDATE' AND NEW."FoundationWriteRevision" = OLD."Revision" + 1
-                    AND NEW."Revision" = NEW."FoundationWriteRevision" AND OLD."Status" = 0
+                    AND NEW."Revision" = NEW."FoundationWriteRevision"
                     AND NEW."FoundationReference" = OLD."FoundationReference" AND NEW."FoundationTenant" = OLD."FoundationTenant"
-                    AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT NEW."Retired"
+                    AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired"
+                    AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR
+                        (/*root-retirement*/ AND NEW."Retired" AND OLD."Status" <> 0 AND NEW."Status" = OLD."Status"
+                            AND NEW."State" = 'null' AND NEW."FoundationHeader" IS NULL
+                            AND NEW."FoundationTerminalRevision" = OLD."FoundationTerminalRevision"
+                            AND NEW."FoundationTerminalAt" = OLD."FoundationTerminalAt"))
                 THEN RETURN NEW; END IF;
                 RAISE EXCEPTION 'Qualified actor checkpoint requires a qualified update' USING ERRCODE = '23514';
             END
@@ -145,14 +152,17 @@ public sealed partial class EfStore
             CREATE OR REPLACE FUNCTION kernel_require_root_journal_revision() RETURNS trigger LANGUAGE plpgsql AS $fn$
             BEGIN
                 IF EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance" AND i."FoundationReference" IS NOT NULL
-                    AND (i."Partition" <> NEW."Partition" OR NEW."Revision" <> i."Revision" + 1 OR i."Status" <> 0))
+                    AND (i."Partition" <> NEW."Partition" OR NEW."Revision" <> i."Revision" + 1 OR i."Status" <> 0 OR i."Retired")
+                    AND NOT (/*root-retirement*/ AND i."Retired" AND i."Partition" = NEW."Partition" AND NEW."Revision" = -1
+                        AND NEW."Entries" = '["delete"]' AND NOT EXISTS (
+                            SELECT 1 FROM "Journal" j WHERE j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j."Revision" = -1)))
                 THEN RAISE EXCEPTION 'Qualified actor journal requires the next running checkpoint revision' USING ERRCODE = '23514'; END IF;
                 RETURN NEW;
             END
             $fn$;
             CREATE OR REPLACE TRIGGER kernel_require_root_journal_revision BEFORE INSERT ON "Journal"
             FOR EACH ROW EXECUTE FUNCTION kernel_require_root_journal_revision();
-            """, cancellationToken);
+            """.Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal), cancellationToken);
 
     /// <summary>The manual first Running checkpoint of a generated root, with its creator as the sole input.
     /// The Worker qualifies immediate completion through its regular turn path.</summary>
