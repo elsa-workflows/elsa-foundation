@@ -1,6 +1,7 @@
 """Package complete current-writer concurrent-fault stores; historical bug cuts remain historical."""
 import argparse
 import base64
+from datetime import datetime, timezone
 import gzip
 import hashlib
 import json
@@ -39,6 +40,16 @@ def verify(data, report):
         if name.startswith('Elsa.') and not versions[name].endswith('+' + receipt['sourceSha']):
             raise ValueError('Executing first-party writer does not identify the clean source: ' + name)
     return receipt
+
+
+def instant(value):
+    """Exact .NET ticks; Python datetime alone discards the seventh fractional digit."""
+    match = re.fullmatch(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,7}))?(Z|[+-]\d{2}:\d{2})', value)
+    if match is None:
+        raise ValueError('Settlement timestamps require explicit-offset instants')
+    date = datetime.fromisoformat(match[1] + match[3].replace('Z', '+00:00')).astimezone(timezone.utc)
+    return ((date.toordinal() * 86400 + date.hour * 3600 + date.minute * 60 + date.second) * 10_000_000
+            + int((match[2] or '').ljust(7, '0')))
 
 
 def verify_history(scenario, reports, stores):
@@ -87,6 +98,14 @@ def verify_history(scenario, reports, stores):
         command = 'native-start-retired:' + sha(frame)
     if stores[2]['inputs'].get(command, {}).get('result', {}).get('status') != 'Accepted':
         raise ValueError('Physical cancellation lacks its original result or not-admitted retirement receipt')
+    accepted = instant(stores[2]['inputs'][command]['acceptedAt'])
+    cancel_ack = instant(stores[2]['outbox'][source]['deliveredAt'])
+    if cancel_ack < accepted:
+        raise ValueError('Cancellation ACK precedes its physical accepted receipt')
+    if not admitted:
+        retired_start_ack = instant(stores[2]['outbox'][cancellation['origin']['sourceOutboxItemId']]['deliveredAt'])
+        if retired_start_ack < accepted or cancel_ack < retired_start_ack:
+            raise ValueError('Not-admitted start/cancel ACK order precedes physical retirement')
 
 
 def record(repo, capture, output):

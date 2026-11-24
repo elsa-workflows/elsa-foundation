@@ -10,6 +10,12 @@ spec.loader.exec_module(packager)
 
 
 class FaultCaptureBindingTests(unittest.TestCase):
+    def test_ack_order_keeps_seventh_fractional_digits_and_compares_actual_offset_instants(self):
+        self.assertEqual(packager.instant('2026-01-15T01:00:00.0000001+01:00'), packager.instant('2026-01-15T00:00:00.0000001Z'))
+        self.assertEqual(1, packager.instant('2026-01-15T00:00:00.0000002Z') - packager.instant('2026-01-15T00:00:00.0000001Z'))
+        with self.assertRaises(ValueError):
+            packager.instant('2026-01-15T00:00:00')
+
     def history(self):
         origins = [dict(invocationId='call-' + name, attemptId='attempt-' + name, workerExecutionId='worker-' + name,
                         sourceOutboxItemId='start-' + name, resultInputId='result-' + name) for name in ['a', 'b']]
@@ -22,7 +28,8 @@ class FaultCaptureBindingTests(unittest.TestCase):
                    dict(state=dict(state, lifecycle=3, revision=3, terminalResult=dict(status='Faulted'), payload=dict(state={'semantic': 1}, work=[], nativeResults=[fault, dict(origin=origins[1], status=4)], cancellations=[dict(debt, settled=True)])), native=workers)]
         stores = [dict(outbox={name: dict(status='Pending') for name in ['start-a', 'start-b']}, inputs={}),
                   dict(outbox={'cancel-b': dict(status='Pending')}, inputs={}),
-                  dict(outbox={name: dict(status='Delivered', deliveredAt='now') for name in ['start-a', 'start-b', 'cancel-b']}, inputs={'result-b': dict(result=dict(status='Accepted'))})]
+                  dict(outbox={name: dict(status='Delivered', deliveredAt='2026-01-15T00:00:00.0000002+00:00') for name in ['start-a', 'start-b', 'cancel-b']},
+                       inputs={'result-b': dict(result=dict(status='Accepted'), acceptedAt='2026-01-15T00:00:00.0000001+00:00')})]
         return copy.deepcopy(reports), copy.deepcopy(stores)
 
     def test_rehashed_reports_cannot_replace_physical_fault_debt_or_settlement_histories(self):
@@ -37,6 +44,7 @@ class FaultCaptureBindingTests(unittest.TestCase):
             lambda r, s: s[1]['outbox']['cancel-b'].update(status='Delivered', deliveredAt='early'),
             lambda r, s: s[2]['outbox']['start-b'].update(status='Pending', deliveredAt=None),
             lambda r, s: s[2].update(inputs={}),
+            lambda r, s: s[2]['outbox']['cancel-b'].update(deliveredAt='2026-01-15T00:00:00.0000000+00:00'),
         ]
         for index, change in enumerate(changes):
             reports, stores = self.history()
