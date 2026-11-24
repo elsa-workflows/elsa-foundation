@@ -26,23 +26,21 @@ import xml.etree.ElementTree as ET
 app = Path('apps/Elsa.Workbench')
 locked = json.loads((app / 'packages.lock.json').read_text())['dependencies']['net10.0']
 provider = Path('prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj')
-provider_locked = json.loads(provider.with_name('packages.lock.json').read_text())['dependencies']['net10.0']
 workbench_versions = {package: info['resolved'] for package, info in locked.items() if 'resolved' in info}
-xml = ET.parse(provider)
-references = {entry.attrib['Include']: entry for entry in xml.findall('.//PackageReference')}
-if references.keys() - workbench_versions.keys():
-    raise SystemExit("Workbench does not lock every direct provider dependency.")
-pins = references.keys() | (provider_locked.keys() & workbench_versions.keys())
-transitive = ET.SubElement(xml.getroot(), 'ItemGroup')
-for package in sorted(pins):
-    reference = references.get(package)
-    if reference is None:
-        reference = ET.SubElement(transitive, 'PackageReference', Include=package)
-    reference.set('Version', workbench_versions[package])
-    print(f'Compile kernel provider with Workbench {package} {workbench_versions[package]}')
-xml.write(provider, encoding='unicode')
-Path('expected-workbench-providers.json').write_text(
-    json.dumps({package: workbench_versions[package] for package in pins}))
+provider_packages = {ref.attrib['Include'] for ref in ET.parse(provider).findall('.//PackageReference')}
+provider_packages.update({'Microsoft.EntityFrameworkCore', 'Microsoft.EntityFrameworkCore.Relational',
+                          'Microsoft.Data.SqlClient', 'Microsoft.Data.Sqlite.Core', 'MySql.Data', 'Npgsql'})
+provider_lock = json.loads(provider.with_name('packages.lock.json').read_text())['dependencies']['net10.0']
+provider_versions = {package: info['resolved'] for package, info in provider_lock.items() if 'resolved' in info}
+for package in sorted(provider_packages):
+    actual = provider_versions.get(package)
+    expected = workbench_versions.get(package)
+    if expected is None or actual != expected:
+        raise SystemExit(f'Provider version mismatch for {package}: Workbench locked {expected}, '
+                         f'provider locked {actual}')
+Path('expected-workbench-providers.json').write_text(json.dumps({
+    'aligned': sorted(provider_packages), 'provider': provider_versions, 'workbench': workbench_versions
+}))
 project=app/'Elsa.Workbench.csproj'
 text=project.read_text()
 if text.count('</Project>') != 1:
@@ -73,7 +71,11 @@ if (args is ["--qualify-workbench-postgres", .. var previewArguments])
 
 ''' + entry))
 PY
+# The composition is temporary. Restore the provider's committed closure first.
+dotnet restore prototypes/kernel-model/ef/Kernel.EntityFramework --locked-mode
 dotnet restore apps/Elsa.Workbench /p:RestoreLockedMode=false
+git -C "$repo" -c core.fsmonitor=false show "$revision:prototypes/kernel-model/ef/Kernel.EntityFramework/packages.lock.json" |
+  cmp - prototypes/kernel-model/ef/Kernel.EntityFramework/packages.lock.json
 dotnet build -c Release --no-restore apps/Elsa.Workbench
 workbench=apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll
 
@@ -89,20 +91,30 @@ if 'Kernel.Foundation.InMemory' in actual:
     raise SystemExit('The PostgreSQL preview must not load the in-memory ingress assembly.')
 print('ok PostgreSQL preview uses the durable actor adapter without the in-memory ingress assembly')
 compile_entries = json.loads(compile_assets.read_text())['targets']['net10.0']
-compiled = dict(key.rsplit('/', 1) for key in compile_entries)
+compiled = dict(key.rsplit('/', 1) for key, entry in compile_entries.items() if entry['type'] == 'package')
+locked_provider = expected['provider']
+for package in sorted(locked_provider.keys() | compiled.keys()):
+    if compiled.get(package) != locked_provider.get(package):
+        raise SystemExit(f'Provider compile graph changed for {package}: locked {locked_provider.get(package)}, '
+                         f'compiled {compiled.get(package)}')
+print(f'ok all {len(compiled)} provider compile packages match the committed provider lock')
+
+locked_workbench = expected['workbench']
+shared_packages = locked_provider.keys() & locked_workbench.keys() & actual.keys()
+for package in sorted(shared_packages):
+    if actual[package] != locked_workbench[package]:
+        raise SystemExit(f'Workbench runtime graph changed for {package}: locked {locked_workbench[package]}, '
+                         f'emitted {actual[package]}')
+print(f'ok all {len(shared_packages)} emitted shared packages match the original Workbench lock')
+
 runtime_required = {'Microsoft.EntityFrameworkCore', 'Microsoft.EntityFrameworkCore.Relational',
                     'Npgsql.EntityFrameworkCore.PostgreSQL', 'Npgsql'}
-if runtime_required - expected.keys():
+if runtime_required - set(expected['aligned']):
     raise SystemExit('Workbench and the provider must lock the PostgreSQL runtime dependencies.')
-for package in sorted(expected):
-    version = expected[package]
-    compile_version = compiled.get(package)
-    # Shared-framework assemblies and metapackages can be absent from the app manifest.
-    requires_runtime = package in runtime_required or package in actual
-    if compile_version != version or (requires_runtime and actual.get(package) != version):
-        raise SystemExit(f'Provider version mismatch for {package}: Workbench locked {version}, '
-                         f'compile {compile_version}, host runtime {actual.get(package)}')
-    print(f'ok matching provider dependency {package} {version} (runtime {actual.get(package, "none")})')
+if runtime_required - actual.keys():
+    raise SystemExit('Workbench must emit the PostgreSQL runtime dependencies.')
+for package in expected['aligned']:
+    print(f'ok matching provider dependency {package} {compiled[package]} (runtime {actual.get(package, "none")})')
 PYDEPS
 
 for major in "${versions[@]}"; do

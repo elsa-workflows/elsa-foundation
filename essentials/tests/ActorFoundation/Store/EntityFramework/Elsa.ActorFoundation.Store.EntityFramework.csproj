@@ -4,8 +4,6 @@
     <RootNamespace>Kernel.Ef.Conformance</RootNamespace>
     <AssemblyName>Kernel.Ef.Conformance</AssemblyName>
     <IsPackable>false</IsPackable>
-    <!-- Keep the prototype provider's dependency versions until the provider moves to the shared package policy. -->
-    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
     <NoWarn>$(NoWarn);EF1002</NoWarn>
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <!-- ENGINES.md E2: Microsoft.Data.SqlClient refuses to open a connection in invariant-globalization mode. -->

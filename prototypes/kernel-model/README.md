@@ -2,7 +2,8 @@
 
 A standalone model of the execution kernel ([DESIGN.md](DESIGN.md): the design as built, against draft 5 of the
 sketch, in three layers), the stores it runs on, the native Elsa workflow model on it, and a simulation that tries to
-break it all. The prototype keeps its own build and provider versions. Its projects reference the backend
+break it all. The prototype keeps its own build settings. The relational provider imports the repository's
+central package versions. Its projects reference the backend
 [Actor Foundation packages](../../essentials/src/ActorFoundation/README.md), so the public contracts and Embedded
 tenant binding use the same assemblies as a package consumer.
 
@@ -531,9 +532,12 @@ ownership before changing any lease or inbox row.
 ### Workbench PostgreSQL provider rehearsal
 
 Run `bash tools/ci/actor-foundation/check-workbench-postgres.sh` from the repository root. The script
-builds a disposable archive of the selected revision. It compiles the preview provider using
-Workbench's locked EF provider versions, adds a qualification command to the archived Workbench,
-and verifies both the provider's compile assets and Workbench's emitted dependency manifest. Each test uses a fresh loopback PostgreSQL database.
+builds a disposable archive of the selected revision and adds a qualification command to that
+Workbench. The relational provider and Workbench import the same central package versions. The script
+matches the provider's compile graph to its own lock and the emitted shared dependencies to the original
+Workbench lock. It also requires the two locks to agree on the EF providers, drivers and explicit version
+floors. Workbench can select its own versions of other transitive packages. Each test uses a fresh loopback
+PostgreSQL database.
 
 The archived executable runs a dedicated Generic Host before normal Workbench composition. Two
 Workbench processes run the real Native approval with the hosted PostgreSQL launcher.
