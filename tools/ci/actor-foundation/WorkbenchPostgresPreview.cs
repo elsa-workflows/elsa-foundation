@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
+using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Native;
