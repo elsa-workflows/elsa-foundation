@@ -11756,6 +11756,59 @@
       ]
     },
     {
+      "path": "essentials/src/Workflows/Runtime/Native/Activities/Elsa.Workflows.Runtime.Native.Activities.csproj",
+      "name": "Elsa.Workflows.Runtime.Native.Activities",
+      "kind": "source",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Native.Activities",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Workflows.Runtime.Native.Activities",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Contracts",
+          "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj",
+      "name": "Elsa.Workflows.Runtime.Native.Model",
+      "kind": "source",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Native.Model",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Workflows.Runtime.Native.Model",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Contracts",
+          "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Model.Contracts",
+          "path": "essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Graph",
+          "path": "essentials/src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Native.Activities",
+          "path": "essentials/src/Workflows/Runtime/Native/Activities/Elsa.Workflows.Runtime.Native.Activities.csproj"
+        }
+      ]
+    },
+    {
       "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj",
       "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
       "kind": "source",
@@ -16168,6 +16221,16 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.JavaScript",
           "path": "essentials/src/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Native.Activities",
+          "path": "essentials/src/Workflows/Runtime/Native/Activities/Elsa.Workflows.Runtime.Native.Activities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Native.Model",
+          "path": "essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj"
         },
         {
           "type": "internal",
@@ -24983,13 +25046,52 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Kernel.Workflows",
-          "path": "essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj"
+          "id": "Elsa.Workflows.Runtime.Native.Model",
+          "path": "essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj"
         },
         {
           "type": "internal",
-          "id": "Kernel.Native",
-          "path": "prototypes/kernel-model/models/Native/Kernel.Native.csproj"
+          "id": "Kernel.Workflows",
+          "path": "essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/Workflows/Runtime/Native/Migration/Run/Elsa.Workflows.Runtime.Native.Migration.Run.csproj",
+      "name": "Elsa.Workflows.Runtime.Native.Migration.Run",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Native.Migration.Run",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Native.Model",
+          "path": "essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Sim",
+          "path": "essentials/tests/ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Foundation.InMemory",
+          "path": "essentials/tests/ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.TestSupport",
+          "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.WorkflowActor",
+          "path": "prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj"
         }
       ]
     },
@@ -25873,6 +25975,30 @@
       ]
     },
     {
+      "path": "essentials/tests/Workflows/Runtime/Statecharts/Native/Elsa.Workflows.Runtime.Statecharts.Native.csproj",
+      "name": "Elsa.Workflows.Runtime.Statecharts.Native",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Statecharts.Native",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Native.Model",
+          "path": "essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Statecharts",
+          "path": "prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj"
+        }
+      ]
+    },
+    {
       "path": "essentials/tests/Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj",
       "name": "Elsa.Workflows.Runtime.Statecharts.OrderFixture",
       "kind": "test",
@@ -25887,7 +26013,7 @@
         {
           "type": "internal",
           "id": "Kernel.Statecharts.Native",
-          "path": "prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj"
+          "path": "essentials/tests/Workflows/Runtime/Statecharts/Native/Elsa.Workflows.Runtime.Statecharts.Native.csproj"
         }
       ]
     },
@@ -25925,13 +26051,13 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime.Statecharts.OrderFixture",
-          "path": "essentials/tests/Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj"
+          "id": "Kernel.Statecharts.Native",
+          "path": "essentials/tests/Workflows/Runtime/Statecharts/Native/Elsa.Workflows.Runtime.Statecharts.Native.csproj"
         },
         {
           "type": "internal",
-          "id": "Kernel.Statecharts.Native",
-          "path": "prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj"
+          "id": "Elsa.Workflows.Runtime.Statecharts.OrderFixture",
+          "path": "essentials/tests/Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj"
         }
       ]
     },
