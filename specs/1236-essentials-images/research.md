@@ -78,8 +78,11 @@ acceptance set and templates from the merged S-15 or the then-current head).
   is not blanked by that file, which only turns `IsDevelopmentOrDemo` off; the essentials list bakes
   `IsDevelopmentOrDemo: false` for both identity features and no signing key, so a production key must come from the
   user. `Elsa:ModuleManagement:ApiKey` is not required: it serves only Studio's feature management, which the
-  essentials Studio does not compose. Features already refuse activation without them; the task
-  checks each refusal names the setting and adds a startup check only where one does not.
+  essentials Studio does not compose. Features already refuse activation without most of them; the task
+  checks each refusal names the setting and adds a startup check only where one does not. The workflow alteration
+  payload key is one that does not: with `WorkflowAlterationPayloadProtectionActiveKeyId` empty the runtime falls back
+  to an ephemeral development key, and with the key empty it fails only on first use, so the host check is needed
+  there.
 - **Rationale**: build nothing for a refusal that already exists; the spec only requires that it names the setting.
 - **Example settings**: `docker/compose/essentials/appsettings.example.json` lists every required key with a
   "change me" value and a one-line comment per key.
@@ -89,8 +92,8 @@ acceptance set and templates from the merged S-15 or the then-current head).
 - **Decision**: a PR-tier test project `essentials/tests/Essentials/Tests` with:
   - every listed feature resolves in `EssentialsFeatureAssemblies` (fails naming it);
   - the composed shell's feature set equals the list (fails naming the difference);
-  - no assembly in the engine host's dependency closure is an Elsa 3 assembly (in addition to
-    `Elsa3MigrationBoundaryTests`);
+  - no assembly in the composition library's dependency closure, which carries every listed feature, is an Elsa 3
+    assembly (in addition to `Elsa3MigrationBoundaryTests`; T016 checks the built image);
   - the merge order: a user key overrides a baked key, an environment variable overrides the user key, an added
     feature appears in `CShells:Shells:default:Features`;
   - every entry has a non-empty reason.

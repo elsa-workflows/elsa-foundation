@@ -48,6 +48,7 @@ index 0.
 | `/app/composition/<name>.features.json` | derived image | Its added list, read by the composition library after the essentials list, in ordinal file-name order. |
 | `/app/Elsa.Essentials.Composition.dll` and the listed features' assemblies | engine image | What a derived tool composes from. |
 | Entry point `dotnet Elsa.Essentials.Server.dll` | engine image | A derived image replaces it. |
+| `Nuplane:Loading:SharedAssemblies`, `Nuplane:HostProvidedPackages` in the baked `appsettings.json` | engine image | The assemblies a package loaded in this image shares with the host; a derived image builds its load options from them. |
 
 A derived image uses the same version tag as its base. The engine host reads every list in `/app/composition/` but
 loads no packages a derived image adds; a derived image that runs the engine with an added list puts that list's

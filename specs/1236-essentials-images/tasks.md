@@ -21,8 +21,9 @@ worktree path on Windows (MSB3030).
   `ExpectedSolutionFolder` the way `Elsa.Foundation.Host` is listed, add `Elsa.Essentials` to the host and test groupings
   in constitution §E2.1, and run `ArchitectureGuardTests.Project_paths_match_domain_tree_convention` (R-2).
 - [ ] T002 [P] Create `apps/Elsa.Essentials.Server/Elsa.Essentials.Server.csproj` referencing
-  `Elsa.Essentials.Composition`, `Elsa.Foundation.Hosting` and the Nuplane/CShells hosting packages the Workbench uses;
-  add it to `Elsa.Server.slnx` and to the guard's `ExpectedProjectPath` and `ExpectedSolutionFolder`.
+  `Elsa.Essentials.Composition`, `Elsa.Foundation.Hosting` and the Nuplane/CShells hosting packages the Workbench uses,
+  importing `apps/ComputedProductionSettings.targets` as the Workbench does; add it to
+  `HostProvidedPackagesGuardTests.SharingHosts`, to `Elsa.Server.slnx` and to the guard's `ExpectedProjectPath` and `ExpectedSolutionFolder`.
 - [ ] T003 [P] Create `Studio/src/apps/Elsa.Studio.Essentials/Elsa.Studio.Essentials.csproj` modelled on
   `Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj`, referencing only the Studio modules R-8 lists; add it to
   the Studio solution.
@@ -65,13 +66,19 @@ publishes `/app/migrated/workflows`.
   feature discovery over `/app/packages`, as `apps/Elsa.Workbench/Program.cs` does for its feature catalog; and this host
   wiring, which is not a feature: the readiness endpoint `/health/ready` with eager activation of the default shell at
   startup (the Workbench's `Readiness/` `DefaultShellWarmup` and `MapShellReadiness`, not its lazy default), the CORS
-  policy reading `Cors:AllowedOrigins`, and the root health endpoint. Copy nothing else Workbench-specific (boot
-  timeline, composition observation endpoints, Weaver, OpenTelemetry bridge).
+  policy reading `Cors:AllowedOrigins`, the root health endpoint, and the host registrations the listed features rely
+  on: `AddEfPersistenceResources`, `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection`,
+  `AddShellStartupValidation`, `AddAuthentication`/`AddAuthorization`, and the OpenIddict vendor store (EF DbContext,
+  SQLite migrations, store initializer, store provider, migration policy, pruning) as spec Q10 decides. Copy nothing
+  else Workbench-specific (boot timeline, composition observation endpoints, Weaver, OpenTelemetry bridge).
 - [ ] T010 [US1] Write `apps/Elsa.Essentials.Server/appsettings.json`: persistence resource `Elsa` on
   `Data Source=/app/data/elsa.db`, every EF feature on that resource, OpenIddict's SQLite token store at `/app/data/elsa-identity.db`,
-  `Migrate:Policy` `AutoMigrate`, Data Protection keys under `/app/data` (R-9).
-- [ ] T011 [US1] Add a guard test in `essentials/tests/Essentials/Tests/` that boots the engine's shell
-  composition with the list in memory (no web listener) and asserts the composed feature set equals the list, naming
+  `Migrate:Policy` `AutoMigrate`, Data Protection keys under `/app/data` (R-9), and the Nuplane loading settings the
+  Workbench bakes (`Nuplane:Loading:SharedAssemblies`, `Nuplane:HostProvidedPackages`), narrowed to the essentials
+  closure, so user packages load against the image's shared assemblies (FR-007).
+- [ ] T011 [US1] Add a guard test in `essentials/tests/Essentials/Tests/` that composes the shell from
+  `Elsa.Essentials.Composition` alone (the list, `EssentialsFeatureAssemblies` and CShells, no web listener and no
+  reference to `Elsa.Essentials.Server`) and asserts the composed feature set equals the list, naming
   any difference (FR-018).
 - [ ] T012 [US1] Check each required setting of [contracts/engine-image.md](contracts/engine-image.md): start the host
   with it empty and confirm it refuses to start as spec.md defines it (`/health/ready` never 200, the log

@@ -237,7 +237,8 @@ activities file).
   Workbench and Studio images get.
 - **FR-016**: A compose file MUST start both images with mounts for `appsettings.json`, the packages folder, the
   `migrated/` folder and the data volume, and MUST need no other configuration than the example `appsettings.json`.
-- **FR-017**: The Workbench, its image and the S-15 acceptance on the Workbench MUST NOT change.
+- **FR-017**: The Workbench's behaviour, its image and the S-15 acceptance on the Workbench MUST NOT change. Moving
+  Workbench host code into a shared library without changing what it does is allowed only if Q10 is answered that way.
 
 **One list**
 
@@ -289,6 +290,7 @@ activities file).
 | Q5 | Can configuration switch a baked feature off? | Deliberately left alone, as agreed in the migration design. |
 | Q7 | How does the Elsa 3 migration image get the essentials composition? | It is built `FROM` the engine at the same version and adds its own baked list and packages (Joey on PR #5669). The engine therefore carries no Elsa 3 code and offers a documented extension point (FR-024). |
 | Q9 | How do converted reusables reach the engine? | As composite activities in the activities file, loaded by JSON activity reconciliation (Joey on PR #5678, spec 1237). The engine fix for source-owned composites with dependencies is a separate issue. |
+| Q10 | **Open for Joey.** The OpenIddict token store (EF DbContext, SQLite migrations, initializer, store provider, migration policy, pruning, about 2,400 lines) is host code in `apps/Elsa.Workbench/OpenIddict*` and `WorkbenchOpenIddict*`, not part of the identity feature. The essentials engine needs it. Copy it into the essentials host, or extract it into one library both hosts reference? | Recommendation: extract it into one library both hosts reference, moving the code without changing what it does. Two copies of migrations and a store would drift; the Workbench keeps its behaviour (FR-017). |
 | Q6 | Which data store? | SQLite in a data folder by default, as the S-15 run uses; the providers the persistence layer already supports stay selectable through settings. No new provider work. |
 
 ## Success Criteria *(mandatory)*
