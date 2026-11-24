@@ -3,17 +3,22 @@ using Kernel.Graph.Exceptions;
 namespace Kernel.Native;
 
 /// <summary>
-/// The in-memory route table, built from the published definitions: routing reads nothing. One method and path starts
-/// one workflow: a second claim on it is refused with <see cref="HttpRouteConflictException"/> when the table is built,
-/// as the old core refuses it at publish. A definition published again replaces its own routes (the registry keeps one
-/// workflow per id), and one path may start different workflows on different methods.
+/// The in-memory route table, built from the published definitions: routing reads nothing. A route is its method in
+/// upper case and its path trimmed of white space and slashes and in lower case, as the old core canonicalizes a
+/// template, for starts, waits and lookups alike. One route starts one workflow: a second claim on it is refused with
+/// <see cref="HttpRouteConflictException"/> when the table is built, as the old core refuses it at publish. A definition
+/// published again replaces its own routes (the registry keeps one workflow per id), and one path may start different
+/// workflows on different methods. One definition with two entries on one route is refused too, which the old core
+/// lets pass.
 /// </summary>
 public sealed class HttpRoutes
 {
     private readonly Dictionary<string, (string Workflow, string Node)> _starts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _early = new(StringComparer.Ordinal);
 
-    public static string Key(string method, string path) => $"http:{method.ToUpperInvariant()}:{path.Trim('/')}";
+    public static string Key(string method, string path) => $"http:{method.ToUpperInvariant()}:{Normalize(path)}";
+
+    private static string Normalize(string path) => path.Trim().Trim('/').ToLowerInvariant();
 
     public HttpRoutes(WorkflowRegistry registry)
     {
@@ -29,7 +34,7 @@ public sealed class HttpRoutes
             foreach (var start in StartsOf(workflow.Root))
                 if (start.Type == typeof(HttpEndpoint) && start.Inputs.GetValueOrDefault("Path") is LiteralBinding { Value: { } path })
                 {
-                    var (method, route) = (Method(start).ToUpperInvariant(), path.GetValue<string>().Trim('/'));
+                    var (method, route) = (Method(start).ToUpperInvariant(), Normalize(path.GetValue<string>()));
                     if (!_starts.TryAdd(Key(method, route), (workflow.Id, start.Id)))
                         throw new HttpRouteConflictException(method, route, _starts[Key(method, route)], (workflow.Id, start.Id));
                 }
@@ -66,17 +71,17 @@ public sealed class HttpRouteConflictException(string method, string path, (stri
     /// <summary>The method both claim, in upper case.</summary>
     public string Method { get; } = method;
 
-    /// <summary>The path both claim, without its leading and trailing slashes.</summary>
+    /// <summary>The path both claim, trimmed of white space and slashes and in lower case.</summary>
     public string Path { get; } = path;
 
-    /// <summary>The workflow and endpoint that claimed the route first.</summary>
+    /// <summary>The claim met first in the registry's order, which is not a publication order.</summary>
     public (string Workflow, string Node) First { get; } = first;
 
-    /// <summary>The workflow and endpoint whose claim was refused.</summary>
+    /// <summary>The claim met second, at which the table was refused.</summary>
     public (string Workflow, string Node) Second { get; } = second;
 
     private static string Describe(string method, string path, (string Workflow, string Node) first, (string Workflow, string Node) second) =>
         first.Workflow == second.Workflow
-            ? $"Workflow '{first.Workflow}' starts on {method} /{path} at two endpoints, '{first.Node}' and '{second.Node}'; a route starts one workflow at one endpoint."
+            ? $"Workflow '{first.Workflow}' starts on {method} /{path} at two endpoints, '{first.Node}' and '{second.Node}'; a route starts one workflow at one endpoint. Change the method or path of one of them."
             : $"Workflows '{first.Workflow}' and '{second.Workflow}' both start on {method} /{path}; a route starts one workflow. Change the method or path of one of them.";
 }

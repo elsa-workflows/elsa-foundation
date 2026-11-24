@@ -62,10 +62,16 @@ internal static class HttpRouteChecks
               twice.Message.Contains("POST /orders", StringComparison.Ordinal),
             $"two definitions that start on one method and path are refused, naming both ({twice?.Message})");
 
-        var spelled = Refused(new WorkflowRegistry().Add(Starts("a", "in", "/Orders/", "post")).Add(Wf.Workflow("b", Wf.Flowchart("flow",
-            [Wf.Respond("out", "b"), Wf.HttpEndpoint("entry", "Orders", "POST")], [new Connection("entry", "out")]))));
-        check(spelled is { Method: "POST", Path: "Orders", First: ("a", "in"), Second: ("b", "entry") },
-            "the method's case and the path's slashes do not make two routes, and a Flowchart entry claims a route as a Sequence start does");
+        var spelled = Refused(new WorkflowRegistry().Add(Wf.Workflow("a", Wf.Flowchart("flow",
+            [Wf.Respond("out", "a"), Wf.HttpEndpoint("entry", "orders", "POST")], [new Connection("entry", "out")])))
+            .Add(Starts("b", "in", " /Orders/ ", "post")));
+        check(spelled is { Method: "POST", Path: "orders", First: ("a", "entry"), Second: ("b", "in") },
+            "the method's case and the path's case, white space and slashes do not make two routes, and a Flowchart entry claims a route as a Sequence start does");
+        var rooted = Refused(new WorkflowRegistry().Add(Wf.Workflow("empty", Wf.HttpEndpoint("in", ""))).Add(Wf.Workflow("slash", Wf.HttpEndpoint("in", "/"))));
+        var cased = new HttpRoutes(new WorkflowRegistry().Add(Starts("cased", "in", "Orders/Export")));
+        check(rooted is { Path: "", First: ("empty", "in"), Second: ("slash", "in") } && rooted.Message.Contains("POST /;", StringComparison.Ordinal) &&
+              cased.TryStart("post", "/orders/export/", out var found) && found == ("cased", "in"),
+            "an empty path and '/' are one route at the root, and a request finds a route whatever its case and slashes");
 
         var republished = new WorkflowRegistry().Add(Starts("orders", "in-v1", "orders")).Add(Starts("orders", "in-v2", "orders"));
         check(Refused(republished) is null && new HttpRoutes(republished).TryStart("POST", "orders", out var latest) && latest == ("orders", "in-v2"),
