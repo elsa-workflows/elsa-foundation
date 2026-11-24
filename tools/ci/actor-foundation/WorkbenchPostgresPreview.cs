@@ -74,6 +74,7 @@ internal static class WorkbenchPostgresPreview
             var setup = new EfStore(OpenObservation, postgres: true);
             await setup.CreateAsync();
             await setup.InstallPreviewRootSchemaAsync(token);
+            if (nativeJobs) await InstallJobWitnessAsync(db, token);
         }
 
         Receipt? previous = null;
@@ -190,13 +191,21 @@ internal static class WorkbenchPostgresPreview
                         suffix.Items.Where(entry => Entry(entry) == "end").Select(entry => entry.Revision).SequenceEqual([4L]),
                         "one background result and the end appear in the fourth revision");
                     await using var observation = OpenObservation();
-                    var empty = await observation.Database.SqlQuery<bool>($"""
-                        SELECT NOT EXISTS (
-                            SELECT 1 FROM "Instances" i JOIN "Messages" m ON m."Partition" = i."Partition" AND m."Target" = i."Id"
-                            WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id} AND NOT m."Done"
-                        ) AS "Value"
+                    var settled = await observation.Database.SqlQuery<bool>($"""
+                        SELECT i."Jobs" IS NULL AND i."NextJobGeneration" = 1 AND NOT EXISTS (
+                            SELECT 1 FROM "Messages" m WHERE m."Partition" = i."Partition" AND m."Target" = i."Id"
+                                AND (m."InboxScope" = {EfStore.RootJobScope} OR NOT m."Done")
+                        ) AS "Value" FROM "Instances" i
+                        WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
                         """).SingleAsync(token);
-                    Require(empty, "the completed workflow leaves no pending job ticket or input");
+                    Require(settled, "settlement clears the job registry and physically removes the job ticket");
+                    var issuance = await observation.Database.SqlQuery<bool>($"""
+                        SELECT count(*) = 1 AND bool_and(w."Generation" = 0 AND j."Revision" = 3) AS "Value"
+                        FROM "WorkbenchJobWitness" w JOIN "Instances" i ON i."Partition" = w."Partition" AND i."Id" = w."Target"
+                        JOIN "Journal" j ON j."Partition" = w."Partition" AND j."Instance" = w."Target" AND j.xmin = w."Transaction"
+                        WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
+                        """).SingleAsync(token);
+                    Require(issuance, "one physical generation-zero ticket was inserted in journal revision three's transaction");
                 }
                 last = completion;
             }
@@ -343,6 +352,21 @@ internal static class WorkbenchPostgresPreview
             workspace.Delete(recursive: true);
         }
     }
+
+    // Preserve the physical insertion witness after the owner deletes the ticket during normal result settlement.
+    private static Task<int> InstallJobWitnessAsync(KernelDb db, CancellationToken token) =>
+        db.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE "WorkbenchJobWitness" ("Partition" int, "Target" text, "Generation" bigint, "Transaction" xid);
+            CREATE FUNCTION capture_workbench_job() RETURNS trigger LANGUAGE plpgsql AS $fn$
+            BEGIN
+                IF NEW."InboxScope" = -6 THEN
+                    INSERT INTO "WorkbenchJobWitness" VALUES (NEW."Partition", NEW."Target", NEW."JobGeneration", NEW.xmin);
+                END IF;
+                RETURN NEW;
+            END;
+            $fn$;
+            CREATE TRIGGER capture_workbench_job AFTER INSERT ON "Messages" FOR EACH ROW EXECUTE FUNCTION capture_workbench_job();
+            """, token);
 
     private static KernelDb OpenProfile(DbContextOptions<KernelDb> options, bool nativeJobs) =>
         nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(options) : new(options);

@@ -55,19 +55,25 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         }
     }
 
+    private const string RootIssuerSource = """
+        FROM "FoundationRootIssuer" issuer
+        JOIN pg_catalog.pg_class i ON i.oid = issuer.tableoid AND i.relkind = 'r'
+        JOIN pg_catalog.pg_class source ON source.oid = pg_catalog.to_regclass('"Instances"')
+            AND source.relnamespace = i.relnamespace AND source.relkind = 'r'
+        JOIN pg_catalog.pg_class marker ON marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
+            AND marker.relnamespace = i.relnamespace AND marker.relkind = 'r'
+        """;
+
     private static async Task<FoundationReadCursor> ReadJournalCursorAsync(KernelDb db, CancellationToken cancellationToken)
     {
-        var issuerKey = await db.Database.SqlQueryRaw<byte[]>("""
-            SELECT issuer."Key" AS "Value" FROM "FoundationRootIssuer" issuer
-            JOIN pg_catalog.pg_class i ON i.oid = issuer.tableoid AND i.relkind = 'r'
-            JOIN pg_catalog.pg_class source ON source.oid = pg_catalog.to_regclass('"Instances"')
-                AND source.relnamespace = i.relnamespace AND source.relkind = 'r'
-            JOIN pg_catalog.pg_class marker ON marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
-                AND marker.relnamespace = i.relnamespace AND marker.relkind = 'r'
-            """).SingleOrDefaultAsync(cancellationToken)
-            ?? throw new StoreFormatException("The root read issuer is missing from the checkpoint's store schema.");
+        var issuerKey = await ReadRootIssuerKeyAsync(db, cancellationToken);
         return new(HMACSHA256.HashData(issuerKey, "elsa-preview/journal-cursor/1"u8));
     }
+
+    internal static async Task<byte[]> ReadRootIssuerKeyAsync(KernelDb db, CancellationToken cancellationToken) =>
+        await db.Database.SqlQueryRaw<byte[]>("""SELECT issuer."Key" AS "Value" """ + RootIssuerSource)
+            .SingleOrDefaultAsync(cancellationToken)
+        ?? throw new StoreFormatException("The root issuer is missing from the checkpoint's store schema.");
 
     internal async Task InstallAsync(CancellationToken cancellationToken = default)
     {
@@ -127,12 +133,16 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
 
     internal static async Task<int> ReadInstalledPartitionCountAsync(KernelDb db, CancellationToken cancellationToken)
     {
-        var count = await db.Database.SqlQueryRaw<int>("""
-            SELECT i."Partitions" AS "Value" FROM "FoundationRootIssuer" i CROSS JOIN "Partitions" p
-            GROUP BY i."Partitions"
-            HAVING i."Partitions" = count(p."Id") AND min(p."Id") = 0 AND max(p."Id") = i."Partitions" - 1
-            """).SingleOrDefaultAsync(cancellationToken);
-        if (count == 0) throw new InvalidOperationException("The installed root placement no longer matches the virtual partitions.");
+        var sql = $"""
+            SELECT issuer."Partitions" AS "Value" {RootIssuerSource}
+            JOIN pg_catalog.pg_class placement ON placement.oid = pg_catalog.to_regclass('"Partitions"')
+                AND placement.relnamespace = i.relnamespace AND placement.relkind = 'r'
+            CROSS JOIN "Partitions" p
+            GROUP BY issuer."Partitions"
+            HAVING issuer."Partitions" = count(p."Id") AND min(p."Id") = 0 AND max(p."Id") = issuer."Partitions" - 1
+            """;
+        var count = await db.Database.SqlQueryRaw<int>(sql).SingleOrDefaultAsync(cancellationToken);
+        if (count == 0) throw new StoreFormatException("The root issuer and installed virtual partitions must match the checkpoint schema.");
         return count;
     }
 
@@ -221,9 +231,9 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         if (!lockOrdinaryWrites)
             return await db.Database.SqlQueryRaw<Issuer>("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """).SingleAsync(token);
 
-        var issuer = await ReadGuardedAdmissionAsync(db, new("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """),
+        var issuer = await ReadGuardedAdmissionAsync(db, new("""SELECT issuer."Key", issuer."Partitions" """ + RootIssuerSource),
             static reader => new Issuer(reader.GetFieldValue<byte[]>(0), reader.GetInt32(1)), token);
-        return issuer ?? throw new InvalidOperationException("The generated-root issuer is missing.");
+        return issuer ?? throw new StoreFormatException("The root issuer is missing from the checkpoint's store schema.");
     }
 
     private static async Task<TRow?> ReadGuardedAdmissionAsync<TRow>(KernelDb db, NpgsqlBatchCommand lookup,

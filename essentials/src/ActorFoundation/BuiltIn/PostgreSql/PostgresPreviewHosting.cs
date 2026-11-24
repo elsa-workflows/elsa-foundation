@@ -10,7 +10,7 @@ namespace Kernel.Foundation.Postgres;
 /// <summary>Starts the Built-in Actor Foundation on an installed PostgreSQL Core Preview store.</summary>
 public static class PostgresPreviewHosting
 {
-    /// <summary>Selects the preview format for a dedicated PostgreSQL database with Native background jobs.</summary>
+    /// <summary>Selects the preview format for a dedicated PostgreSQL database with one outstanding untimed Native job per generated root.</summary>
     public static KernelDb CreateNativeJobContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootJobs(options);
 
     /// <summary>

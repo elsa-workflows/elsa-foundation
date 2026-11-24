@@ -320,7 +320,8 @@ host using the other preview format refuses startup. A first process saves an ap
 A second process takes the same actor at a later epoch. Replaying the first approval leaves state and
 journal unchanged. Sending a new approval finishes the ordinary workflow. In the Native job profile,
 the new approval issues an untimed background job and the next revision records its result and
-workflow completion. The receipt checks the result and journal and that no job ticket remains.
+workflow completion. Each generated root supports one outstanding untimed job. The receipt checks
+the ticket insertion, result, journal and physical ticket removal.
 The client prints PostgreSQL wire trips for each enabled phase, including host lifetime and public
 client operations. Schema setup and direct observations bypass the meter. Set `PG_VERSION=16` to
 repeat with PostgreSQL 16, or pass `Debug` to qualify a Debug build.
@@ -384,8 +385,9 @@ must refuse the changed schema without a lock cycle. The probe restores the mark
 A host can use `EfStore.OpenPreviewRootReadsAsync` to open `IActorReads` for an already-installed ordinary
 PostgreSQL generated-root store. Compose the store with the public `new KernelDb(options)` PostgreSQL context.
 The trusted hosting layer supplies the caller's `BoundScope`. The provider supplies point, list and journal reads
-with bookmarks that cross process restarts. Other preview profiles require their matching internal context.
-Inbox inspection and operator selections remain full-provider work.
+with bookmarks that cross process restarts. The Native job profile uses
+`PostgresPreviewHosting.CreateNativeJobContext(options)` for the same read API. The remaining
+qualification profiles use their corresponding internal contexts.
 
 The preview's public `IActorReads.GetAsync` and `ListAsync` use a persisted, tenant-indexed projection of generated roots. PostgreSQL
 updates the list within the fenced metadata commit, including suspension changes that leave no public journal entry.

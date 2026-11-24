@@ -22,7 +22,7 @@ public sealed partial class EfStore
         if (!db.UsesRootJobProtocol || !db.Database.IsNpgsql())
             throw new StoreFormatException("Generated-root jobs require the PostgreSQL job protocol.");
         await RequireStoreVersionsAsync(db, token);
-        var key = await db.Database.SqlQueryRaw<byte[]>("""SELECT "Key" AS "Value" FROM "FoundationRootIssuer" """).SingleAsync(token);
+        var key = await PostgresRootAdmission.ReadRootIssuerKeyAsync(db, token);
         lock (_workerBinding)
         {
             if (_ordinaryRoots is not null)
