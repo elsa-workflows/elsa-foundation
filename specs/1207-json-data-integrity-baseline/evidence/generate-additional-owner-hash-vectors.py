@@ -738,6 +738,174 @@ def generate():
         for mode,delivery in [('legacy',False),('delivery',True)]:
             add('agent-request/' + mode + '-' + label,'Elsa.Agent','Elsa.Agent.Journal.AgentTurnJournal','RequestHash',
                 [typed_raw(value,variants[0][1]),dict(text='elsa.agent.turn/request/' + ('2' if delivery else '1'))],agent_projection(value,variants[0][1],delivery))
+    # Actual binding constructors/resolvers: file identities are opaque; HTTP and SQL are ordinary owner JSON.
+    binding_scope=dict(tenantId='tenant-é',persistencePartition='partition-é')
+    scope_identity=hashlib.sha256(etl_frame(['etl-scope-v1','tenant-é','partition-é'])).hexdigest()
+    etl_runtime='Elsa.Etl.Runtime'
+    for platform,path in [('windows','C:\\etl-fixture\\source.csv'),('unix','/etl-fixture/source.csv')]:
+        for label,role,expected_hash in [('source',0,'A'*64),('source-lowercase',0,'a'*64),('output',2,None)]:
+            binding=dict(scope=binding_scope,alias='source',role=role,revision='v1',path=path,isCurrent=True,expectedSha256=expected_hash,
+                immutableInput=role==0,atomicPublication=role==2)
+            projection=opaque(dict(formatVersion=1,scopeIdentity=scope_identity,alias='source',role='Source' if role==0 else 'MainOutput',revision='v1',
+                path=path,expectedSha256=expected_hash.lower() if expected_hash else None,immutableInput=role==0,atomicPublication=role==2))
+            projection['role']='Source' if role==0 else 'MainOutput'
+            add('host-file-binding/' + platform + '-' + label,etl_runtime,'Elsa.Etl.Runtime.Bindings.HostFileBindings','Resolve',
+                [dict(json=binding_scope),dict(text='source'),dict(json=role)],projection,platform=platform,returnProperty='Handle',
+                instance=dict(constructorArguments=dict(bindings=dict(arrayArguments=[dict(json=binding)]))))
+    metadata=dict(tenantId='tenant-é',name='api',typeName='http',authScheme='api-key',owner='Tenant',status='Ready',
+        settings=[dict(key='baseurl',value='https://api.fixture.invalid/')],allowedHostsKind='fixed',allowedHosts=['api.fixture.invalid'])
+    for label in ['anonymous','connection','endpoint','paths','shard','connection-alias']:
+        endpoint='https://api.fixture.invalid/data' if label!='endpoint' else 'https://api.fixture.invalid/other'
+        paths=['/data','/other'] if label=='paths' else [endpoint.split('.invalid')[1]]
+        shards=[dict(id='north',seedUri=endpoint+'?cursor=first')]
+        if label=='shard':shards[0]['id']='south'
+        connection=None if label=='anonymous' else metadata
+        connection_name=None if connection is None else ('other' if label=='connection-alias' else 'API')
+        projection=dict(formatVersion=1,scopeIdentity=scope_identity,alias='source',role='Source',revision='v1',endpoint=endpoint,allowHttp=False,
+            allowedPaths=sorted(paths),idempotencyHeader='Idempotency-Key',connectionAlias=connection_name.lower() if connection_name else None,
+            shards=shards,connection=connection)
+        binding=dict(constructorArguments=dict(Scope=dict(json=binding_scope),Alias=dict(text='source'),Role=dict(text='Source'),Revision=dict(text='v1'),
+            EndpointPolicy=dict(constructorArguments=dict(endpoint=dict(text=endpoint),allowedPaths=dict(json=paths),allowHttp=dict(json=False))),
+            AllowHttp=dict(json=False),IsCurrent=dict(json=True),ConnectionName=dict(json=connection_name),IdempotencyHeader=dict(text='Idempotency-Key'),Shards=dict(json=shards)))
+        add('host-http-binding/' + label,etl_runtime,'Elsa.Etl.Runtime.Bindings.HostHttpBindings','ComputeHandle',[binding,dict(json=connection)],projection)
+    for label in ['base','password','tables-order','database','port','ledger']:
+        database='orders' if label!='database' else 'other'
+        port=5432 if label!='port' else 5433
+        password='fixture-password' if label!='password' else 'different-fixture-password'
+        tables=['public.orders','public.other'] if label!='tables-order' else ['public.other','public.orders']
+        ledger='elsa_etl_effect_ledger' if label!='ledger' else 'custom_ledger'
+        options=dict(tenantId='tenant-é',persistencePartition='partition-é',alias='warehouse',role='MainOutput',revision='v1',isCurrent=True,provider='postgresql',
+            connectionString=f'Host=db.fixture.invalid;Port={port};Database={database};Username=owner;Password={password}',allowedTables=tables,ledgerTable=ledger,createLedger=True)
+        instance=dict(constructorArguments=dict(options=dict(arrayArguments=[dict(json=options)]),engines=dict(arrayArguments=[dict(clrType='Elsa.Etl.Sql.PostgreSql.PostgreSqlEtlSqlEngine',
+            clrAssembly='Elsa.Etl.Sql.PostgreSql',constructorArguments={})])))
+        projection=dict(formatVersion=1,scopeIdentity=scope_identity,alias='warehouse',role='MainOutput',revision='v1',provider='postgresql',host='db.fixture.invalid',
+            port=str(port),database=database,user='owner',allowedTables=sorted(tables),ledgerTable=ledger,createLedger=True)
+        add('host-sql-binding/' + label,etl_runtime,'Elsa.Etl.Runtime.Bindings.HostSqlBindings','ResolveCurrent',
+            [dict(json=binding_scope),dict(text='warehouse'),dict(text='MainOutput'),dict(text='public.orders')],projection,instance=instance,returnProperty='Handle')
+    # Evidence's observable comparand binds canonical inline data even when the value is redacted or truncated.
+    evidence='Elsa.Workflows.ExecutionEvidence'
+    for label,raw in variants:
+        for mode in ['Captured','Sensitive','Truncated']:
+            policy=dict(lifecycle='Instance',storage='Inline',isSensitive=mode=='Sensitive',requiresEncryption=False,redactionMode=None,retentionPolicy=None,metadata={})
+            envelope=dict(constructorArguments=dict(type=dict(json=dict(alias='Any',collectionKind='Single',schema=None,schemaVersion=None)),presence=dict(json=2),
+                inlineValue=dict(rawJson=raw),externalReference=dict(json=None),policy=dict(json=policy),withheldValue=dict(json=None)))
+            instance=dict(constructorArguments=dict(store=dict(clrType='Elsa.Workflows.ExecutionEvidence.Services.InMemoryExecutionEvidenceStore',clrAssembly=evidence,
+                constructorArguments=dict(options=dict(json=None))),options=dict(json=dict(maxInlineValueLength=1 if mode=='Truncated' else 8192,redactSensitiveValues=True)),logger=dict(json=None)))
+            extra=dict(returnProperty='Comparand',instance=instance)
+            if mode=='Captured':extra['returnRawPaths']={'Value':raw.strip(' \t\r\n')}
+            add('evidence-capture/' + mode.lower() + '-' + label,evidence,'Elsa.Workflows.ExecutionEvidence.Services.ExecutionEvidenceCheckpointEnricher','Capture',
+                [envelope],helper.load_json(raw),mode+':',**extra)
+    # Publication review binds the explicitly selected draft/review facts, with opaque CLR strings.
+    draft=dict(id='draft-é',tenantId=None,definitionId='definition-é',revision=9007199254740993)
+    readiness=dict(kind='provider',key='fixture',schemaVersion='1',status='Ready',supportedSchemaVersions=['1','2'])
+    dependencies=[dict(definitionId='dependency-é',versionId='version-é',version='1.0.0',templateHash='hash-é',occurrenceId='occurrence-é')]
+    for label in ['base','revision','head','versions-order','dependency','provider','storage','runtime']:
+        value=copy.deepcopy(draft);head=None;versions=['1.0.0','2.0.0'];deps=copy.deepcopy(dependencies);provider=copy.deepcopy(readiness);storage=[];runtime_readiness=[]
+        if label=='revision':value['revision']+=1
+        if label=='head':head='head-é'
+        if label=='versions-order':versions.reverse()
+        if label=='dependency':deps[0]['templateHash']='other-hash'
+        if label=='provider':provider['status']='Unavailable'
+        if label=='storage':storage=[dict(kind='storage',key='inline',schemaVersion=None,status='Ready',supportedSchemaVersions=[])]
+        if label=='runtime':runtime_readiness=[dict(kind='runtime',key='execute',schemaVersion='1',status='Ready',supportedSchemaVersions=['1'])]
+        projection=opaque(dict(id=value['id'],tenantId=value['tenantId'],definitionId=value['definitionId'],revision=value['revision'],headVersionId=head,
+            reviewedVersion='1.0.0',templateHash=None,providerFingerprint=None,diff=None,requiredBump='Patch',validVersions=versions,
+            dependencies=deps,provider=provider,storage=storage,runtime=runtime_readiness,diagnostics=[]))
+        add('publication-review/' + label,'Elsa.Workflows.Publishing.Api','Elsa.Workflows.Publishing.Api.Services.ActivityPublicationReviewPolicy','ReviewToken',
+            [dict(json=value),dict(json=head),dict(text='1.0.0'),dict(json=None),dict(json=None),dict(json=1),dict(json=versions),dict(json=deps),dict(json=provider),
+             dict(json=storage),dict(json=runtime_readiness),dict(json=[])],projection,'sha256:')
+    # These production helpers receive the real caller's existing process key or per-attempt nonce.
+    for label,raw in variants:
+        for key_label,key in [('ascending',bytes(range(32))),('descending',bytes(reversed(range(32))))]:
+            digest=hmac.new(key,helper.canonical(helper.load_json(raw)).encode(),hashlib.sha256).hexdigest()
+            rows.append(dict(name='shell-revision/' + key_label + '-' + label,assembly='Elsa.Studio.Hosting.Nuplane',
+                type='Elsa.Studio.Hosting.Nuplane.ShellFeatureStore',method='HashRevision',arguments=[dict(rawJson=raw),dict(keyHex=key.hex())],
+                canonical=helper.canonical(helper.load_json(raw)),expected=digest))
+    connector_revision=dict(kind=4,revision=dict(alias='source',revision='v1',handle='source-handle',expectedSha256=None))
+    connector_bindings=dict(source=connector_revision,lookup=None,main=connector_revision,errors=connector_revision,httpShardIds=[])
+    for label,raw in variants:
+        invocation_row=next(row for row in rows if row['name']=='etl-invocation-fingerprint/'+label)
+        admission=dict(constructorArguments=dict(Invocation=invocation_row['arguments'][0],Bindings=dict(json=connector_bindings)))
+        for nonce in ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb']:
+            projection=dict(formatVersion=2,kind='connector-input-snapshot',invocation=invocation_row['expected'],role='Source',pinHandle='source-handle',attempt=nonce)
+            add('rabbitmq-snapshot-identity/' + label + '-' + nonce[0],etl_runtime,'Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer','RabbitMqSnapshotIdentity',
+                [admission,dict(json='-'.join([nonce[:8],nonce[8:12],nonce[12:16],nonce[16:20],nonce[20:]]))],projection)
+    # ETL terminal identity hashes the owner's u16-prefixed wire strings and camel-case enum, not CLR serialization.
+    etl_ef='Elsa.Etl.Persistence.EntityFrameworkCore'
+    terminal_instance=dict(constructorArguments=dict(db=dict(clrType='Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeSqliteDbContext',clrAssembly=etl_ef,
+        constructorArguments=dict(options=dict(constructorArguments={}))),clock=dict(systemTimeProvider=True),options=dict(json={}),logger=dict(json=None)))
+    terminal_invocation=next(row for row in rows if row['name']=='etl-invocation-fingerprint/base')['arguments'][0]
+    for label in ['success','fault','diagnostic','accepted','rejected','filtered','settlement-time']:
+        outcome=2 if label=='fault' else 0
+        diagnostic=dict(code='failure-é',recordOrdinal=9007199254740993,field='OwnerKey') if label=='diagnostic' else None
+        run=dict(invocationFingerprint='invocation-hash',acceptedRecords=9007199254740993 if label=='accepted' else 1,
+            rejectedRecords=2 if label=='rejected' else 0,filteredRecords=3 if label=='filtered' else 0)
+        projection=dict(version='u16:'+opaque('etl-terminal-v1'),invocationFingerprint='u16:'+opaque(run['invocationFingerprint']),outcome='faulted' if outcome==2 else 'succeeded',
+            diagnostic=None if diagnostic is None else dict(code='u16:'+opaque(diagnostic['code']),recordOrdinal=diagnostic['recordOrdinal'],field='u16:'+opaque(diagnostic['field'])),
+            acceptedRecords=run['acceptedRecords'],rejectedRecords=run['rejectedRecords'],filteredRecords=run['filteredRecords'])
+        add('etl-terminal/' + label,etl_ef,'Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EfEtlRuntimeStore','BuildTerminal',
+            [terminal_invocation,dict(json=outcome),dict(json=diagnostic),dict(json=run),dict(json=1 if label=='settlement-time' else 0)],projection,
+            instance=terminal_instance,returnProperty='ResultId')
+    # Invalid Rules dispatch still binds the complete frozen request and native result address.
+    rule_artifact=dict(formatVersion=1,languageId='elsa.rules.finite-positive',languageVersion=1,vocabulary=['fact'],rules=[])
+    artifact_bytes=canonical(rule_artifact).encode();artifact_digest=hashlib.sha256(artifact_bytes).hexdigest()
+    rule_pin=dict(formatVersion=1,sourceSha256='a'*64,artifact=dict(formatVersion=1,artifactId='rules:'+artifact_digest,sha256=artifact_digest,
+        canonicalBytes=base64.b64encode(artifact_bytes).decode()),implementation=dict(pinSchemaVersion=1,packages=[],languageId='elsa.rules.finite-positive',
+            languageVersion=1,receiptSchemaVersion=1,stateSchemaVersion=1),vocabularyCount=1)
+    rule_request=dict(scope=dict(tenantId=None,persistencePartition='partition-é'),runId='run-é',program=rule_pin,initialFacts=[dict(atom='fact')],maxRounds=0,
+        workflowExecutionId='workflow-é',activityExecutionId='activity-é',executableId='executable-é',executableHash='executable-hash',nodeId='node-é',resumeTargetId='resume-é')
+    rule_address=dict(formatVersion=1,workflowExecutionId='workflow-é',activityExecutionId='activity-é',executableId='executable-é',executableHash='executable-hash',
+        nodeId='node-é',bookmarkId='bookmark-é',resumeTargetId='resume-é',registrationId='registration-é',stimulusType='rules-completed',stimulusHash='b'*64,
+        resultContractId='RuleResult',resultSchemaVersion=1,deduplicationPolicy='once',providerId='rules-provider')
+    for label in ['base','rounds','fact','run','address']:
+        value=copy.deepcopy(rule_request);destination=copy.deepcopy(rule_address)
+        if label=='rounds':value['maxRounds']=-1
+        if label=='fact':value['initialFacts']=[dict(atom='other')]
+        if label=='run':value['runId']='other-run'
+        if label=='address':destination['bookmarkId']='other-bookmark'
+        add('rules-invalid-delivery/' + label,'Elsa.Rules.Workflows.Runtime','Elsa.Rules.Workflows.Runtime.Services.RulesNativeBoundary','InvalidDeliveryId',
+            [dict(json=value),dict(json=destination)],dict(request=value,destination=destination,code='rules.invalid-round-limit'),'rules-invalid-')
+    # Publication identities are private production helpers used by the actual snapshot/index publishers.
+    source_chunk=dict(key='source.csv',contentHash='a'*64,byteLength=12)
+    for label,raw in variants:
+        invocation_row=next(row for row in rows if row['name']=='etl-invocation-fingerprint/'+label)
+        admission=dict(constructorArguments=dict(Invocation=invocation_row['arguments'][0],Bindings=dict(json=connector_bindings)))
+        add('connector-input-identity/' + label,etl_runtime,'Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer','InputSnapshotIdentity',
+            [admission,dict(json=0),dict(text='source-handle')],dict(formatVersion=2,kind='connector-input-snapshot',invocation=invocation_row['expected'],role='Source',pinHandle='source-handle'))
+        for family,method,kind in [('connector-csv-index','CsvSourceIndexIdentity','connector-csv-source-index'),('connector-jsonl-index','JsonlSourceIndexIdentity','connector-jsonl-source-index')]:
+            add(family+'/' + label,etl_runtime,'Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer',method,[admission,dict(text='source-handle'),dict(json=source_chunk)],
+                dict(formatVersion=2,kind=kind,invocation=invocation_row['expected'],sourcePinHandle='source-handle',sourceKey=source_chunk['key'],sourceHash=source_chunk['contentHash']))
+    base_invocation=next(row for row in rows if row['name']=='etl-invocation-fingerprint/base')
+    admission=dict(constructorArguments=dict(Invocation=base_invocation['arguments'][0],Bindings=dict(json=connector_bindings)))
+    for label,role,handle in [('lookup',1,'source-handle'),('handle',0,'changed-handle')]:
+        add('connector-input-identity/'+label,etl_runtime,'Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer','InputSnapshotIdentity',
+            [admission,dict(json=role),dict(text=handle)],dict(formatVersion=2,kind='connector-input-snapshot',invocation=base_invocation['expected'],role='Lookup' if role==1 else 'Source',pinHandle=handle))
+    for label in ['key','hash','length']:
+        chunk=copy.deepcopy(source_chunk)
+        if label=='key':chunk['key']='other.csv'
+        if label=='hash':chunk['contentHash']='b'*64
+        if label=='length':chunk['byteLength']=13
+        for family,method,kind in [('connector-csv-index','CsvSourceIndexIdentity','connector-csv-source-index'),('connector-jsonl-index','JsonlSourceIndexIdentity','connector-jsonl-source-index')]:
+            add(family+'/'+label,etl_runtime,'Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer',method,[admission,dict(text='source-handle'),dict(json=chunk)],
+                dict(formatVersion=2,kind=kind,invocation=base_invocation['expected'],sourcePinHandle='source-handle',sourceKey=chunk['key'],sourceHash=chunk['contentHash']))
+    for label in ['base','lookup','run','handle','ignored-scope-alias-revision']:
+        role=1 if label=='lookup' else 0;run='other-run' if label=='run' else 'run-é';handle='other-handle' if label=='handle' else 'source-handle'
+        pin=dict(scope=binding_scope,alias='source',role=role,revision='v1',handle=handle,expectedSha256='a'*64)
+        if label=='ignored-scope-alias-revision':pin.update(scope=dict(tenantId=None,persistencePartition='other'),alias='other',revision='v2')
+        add('v1-input-identity/'+label,etl_runtime,'Elsa.Etl.Runtime.Preparation.EtlFilePreparer','InputSnapshotIdentity',
+            [dict(json=pin),dict(text=run)],dict(formatVersion=1,snapshotFormatVersion=1,runId=run,role='Lookup' if role==1 else 'Source',pinHandle=handle))
+    # The real native-catalog receipt verifier checks canonical content but returns exact retained payload bytes.
+    for label,raw in variants:
+        digest='sha256:'+hashlib.sha256(helper.canonical(helper.load_json(raw)).encode()).hexdigest()
+        descriptor=dict(kind='workflow-executable',identity='fixture',codec='test-json',codecVersion=1,payloadDigest=digest,byteLength=len(raw.encode()))
+        rows.append(dict(name='native-catalog-payload/'+label,assembly='Elsa.Workflows.Publishing',type='Elsa.Workflows.Publishing.SourceCapture.NativeCatalogSourceMemberContributor',
+            method='ValidateCapturedPayload',arguments=[dict(utf8=raw),dict(json=descriptor),dict(json=4096)],expected=digest,expectedBytesHex=raw.encode().hex()))
+    for label,raw in [('malformed','{'),('wrong-hash',variants[0][1]),('wrong-length',variants[0][1]),('byte-limit',variants[0][1])]:
+        digest='sha256:' + ('0'*64 if label=='wrong-hash' else hashlib.sha256(helper.canonical(helper.load_json(variants[0][1])).encode()).hexdigest())
+        descriptor=dict(kind='workflow-executable',identity='fixture',codec='test-json',codecVersion=1,payloadDigest=digest,byteLength=len(raw.encode())+(1 if label=='wrong-length' else 0))
+        rows.append(dict(name='native-catalog-payload/'+label,assembly='Elsa.Workflows.Publishing',type='Elsa.Workflows.Publishing.SourceCapture.NativeCatalogSourceMemberContributor',
+            method='ValidateCapturedPayload',arguments=[dict(utf8=raw),dict(json=descriptor),dict(json=len(raw.encode())-1 if label=='byte-limit' else 4096)],
+            expected=None,expectedException='Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseCaptureException',exceptionCode='native_catalog_captured_member_conflict'))
     return rows
 
 

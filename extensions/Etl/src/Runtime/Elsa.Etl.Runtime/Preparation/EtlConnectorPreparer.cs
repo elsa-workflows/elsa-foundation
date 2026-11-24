@@ -208,15 +208,7 @@ internal sealed class EtlConnectorPreparer
         EtlRabbitMqSource queue, long lookupBytes, Action<IEtlRabbitMqReceipt> received, CancellationToken cancellationToken)
     {
         var revision = admission.Bindings.Source.Revision;
-        var identity = Elsa.Serialization.Core.JsonHashInput.Hash(new
-        {
-            FormatVersion = 2,
-            Kind = "connector-input-snapshot",
-            Invocation = EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation),
-            Role = EtlFileRole.Source.ToString(),
-            PinHandle = revision.Handle,
-            Attempt = Guid.NewGuid().ToString("N")
-        });
+        var identity = RabbitMqSnapshotIdentity(admission, Guid.NewGuid());
         var maxBytes = pipeline.Limits.MaxSnapshotBytes;
         // The store refuses a prepared run whose retained input (the snapshot, its index of one entry per record and a sentinel,
         // and the lookup) passes the retained-input limit, so the drain stops short of that too and the rest stay queued.
@@ -279,17 +271,53 @@ internal sealed class EtlConnectorPreparer
         }, cancellationToken);
     }
 
-    private async ValueTask<EtlChunk> PublishInputSnapshotAsync(EtlConnectorRunAdmission admission,
-        PinnedFileBinding pin, long maxBytes, IFileChunkPublisher publisher, CancellationToken cancellationToken)
-    {
-        var identity = Elsa.Serialization.Core.JsonHashInput.Hash(new
+    private static string RabbitMqSnapshotIdentity(EtlConnectorRunAdmission admission, Guid attempt) =>
+        Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             FormatVersion = 2,
             Kind = "connector-input-snapshot",
             Invocation = EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation),
-            Role = pin.Role.ToString(),
-            PinHandle = pin.Handle
+            Role = EtlFileRole.Source.ToString(),
+            PinHandle = admission.Bindings.Source.Revision.Handle,
+            Attempt = attempt.ToString("N")
         });
+
+    private static string InputSnapshotIdentity(EtlConnectorRunAdmission admission, EtlFileRole role, string pinHandle) =>
+        Elsa.Serialization.Core.JsonHashInput.Hash(new
+        {
+            FormatVersion = 2,
+            Kind = "connector-input-snapshot",
+            Invocation = EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation),
+            Role = role.ToString(),
+            PinHandle = pinHandle
+        });
+
+    private static string CsvSourceIndexIdentity(EtlConnectorRunAdmission admission, string sourcePinHandle, EtlChunk source) =>
+        Elsa.Serialization.Core.JsonHashInput.Hash(new
+        {
+            FormatVersion = 2,
+            Kind = "connector-csv-source-index",
+            Invocation = EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation),
+            SourcePinHandle = sourcePinHandle,
+            SourceKey = source.Key,
+            SourceHash = source.ContentHash
+        });
+
+    private static string JsonlSourceIndexIdentity(EtlConnectorRunAdmission admission, string sourcePinHandle, EtlChunk source) =>
+        Elsa.Serialization.Core.JsonHashInput.Hash(new
+        {
+            FormatVersion = 2,
+            Kind = "connector-jsonl-source-index",
+            Invocation = EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation),
+            SourcePinHandle = sourcePinHandle,
+            SourceKey = source.Key,
+            SourceHash = source.ContentHash
+        });
+
+    private async ValueTask<EtlChunk> PublishInputSnapshotAsync(EtlConnectorRunAdmission admission,
+        PinnedFileBinding pin, long maxBytes, IFileChunkPublisher publisher, CancellationToken cancellationToken)
+    {
+        var identity = InputSnapshotIdentity(admission, pin.Role, pin.Handle);
 
         return await publisher.PublishAsync(_snapshotRoot, identity, maxBytes,
             async (destination, ct) =>
@@ -324,14 +352,7 @@ internal sealed class EtlConnectorPreparer
         EtlSqlSource sql, long? watermarkFloor, CancellationToken cancellationToken)
     {
         var revision = admission.Bindings.Source.Revision;
-        var identity = Elsa.Serialization.Core.JsonHashInput.Hash(new
-        {
-            FormatVersion = 2,
-            Kind = "connector-input-snapshot",
-            Invocation = EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation),
-            Role = EtlFileRole.Source.ToString(),
-            PinHandle = revision.Handle
-        });
+        var identity = InputSnapshotIdentity(admission, EtlFileRole.Source, revision.Handle);
         var maxBytes = pipeline.Limits.MaxSnapshotBytes;
         if (await _jsonlPublisher.FindAsync(_snapshotRoot, identity, maxBytes, cancellationToken) is { } published)
             return published;
@@ -356,15 +377,7 @@ internal sealed class EtlConnectorPreparer
         if (source.ByteLength == 0)
             throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.source-header-missing"));
 
-        var identity = Elsa.Serialization.Core.JsonHashInput.Hash(new
-        {
-            FormatVersion = 2,
-            Kind = "connector-csv-source-index",
-            Invocation = EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation),
-            SourcePinHandle = sourcePin.Handle,
-            SourceKey = source.Key,
-            SourceHash = source.ContentHash
-        });
+        var identity = CsvSourceIndexIdentity(admission, sourcePin.Handle, source);
         var maxIndexBytes = checked((source.ByteLength + 1) * EtlConnectorCsvSupport.IndexEntrySize);
         return await _indexPublisher.PublishAsync(_snapshotRoot, identity, maxIndexBytes,
             async (destination, ct) =>
@@ -406,15 +419,7 @@ internal sealed class EtlConnectorPreparer
         string sourcePinHandle, string expectedSourceHash, EtlChunk source, CancellationToken cancellationToken)
     {
         // Unlike CSV there is no header, so an empty snapshot is a valid zero-record input.
-        var identity = Elsa.Serialization.Core.JsonHashInput.Hash(new
-        {
-            FormatVersion = 2,
-            Kind = "connector-jsonl-source-index",
-            Invocation = EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation),
-            SourcePinHandle = sourcePinHandle,
-            SourceKey = source.Key,
-            SourceHash = source.ContentHash
-        });
+        var identity = JsonlSourceIndexIdentity(admission, sourcePinHandle, source);
         var maxIndexBytes = checked((source.ByteLength + 1) * EtlConnectorCsvSupport.IndexEntrySize);
         return await _indexPublisher.PublishAsync(_snapshotRoot, identity, maxIndexBytes,
             async (destination, ct) =>

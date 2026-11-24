@@ -21,6 +21,8 @@ public sealed class JsonHashOwnerGoldenTests : IDisposable
         Assert.True(inventory.Errors.Count == 0, string.Join('\n', inventory.Errors));
         foreach (var vector in Vectors())
         {
+            if (vector.TryGetProperty("platform", out var platform) &&
+                (platform.GetString() == "windows") != OperatingSystem.IsWindows()) continue;
             var type = inventory.Assemblies.Single(a => a.GetName().Name == vector.GetProperty("assembly").GetString())
                 .GetType(vector.GetProperty("type").GetString()!, throwOnError: true)!;
             if (type.IsGenericTypeDefinition)
@@ -48,13 +50,21 @@ public sealed class JsonHashOwnerGoldenTests : IDisposable
             try { returned = method.Invoke(instance, values); }
             catch (TargetInvocationException error) when (vector.TryGetProperty("expectedException", out _))
             {
-                Assert.Equal(vector.GetProperty("expectedException").GetString(), error.InnerException!.GetType().FullName);
+                Assert.True(vector.GetProperty("expectedException").GetString() == error.InnerException!.GetType().FullName,
+                    vector.GetProperty("name").GetString() + ": First-stable hash freeze: owner refusal type changed; changes require an explicit identity/migration decision. Actual " + error.InnerException.GetType().FullName);
                 if (vector.TryGetProperty("exceptionCode", out var exceptionCode))
-                    Assert.Equal(exceptionCode.GetString(), error.InnerException.GetType().GetProperty("Code")!.GetValue(error.InnerException));
+                    Assert.True(Equals(exceptionCode.GetString(), error.InnerException.GetType().GetProperty("Code")!.GetValue(error.InnerException)),
+                        vector.GetProperty("name").GetString() + ": First-stable hash freeze: owner refusal code changed; changes require an explicit identity/migration decision.");
                 continue;
             }
             finally { (instance as IDisposable)?.Dispose(); }
-            Assert.False(vector.TryGetProperty("expectedException", out _), vector.GetProperty("name").GetString() + ": the actual owner must refuse malformed JSON.");
+            Assert.True(!vector.TryGetProperty("expectedException", out _), vector.GetProperty("name").GetString() + ": First-stable hash freeze: the actual owner must preserve the expected refusal; changes require an explicit identity/migration decision.");
+            if (vector.TryGetProperty("expectedBytesHex", out var expectedBytes))
+            {
+                Assert.True(returned is byte[] bytes && Convert.ToHexStringLower(bytes) == expectedBytes.GetString(),
+                    vector.GetProperty("name").GetString() + ": First-stable hash freeze: verified payload bytes remain exact; changes require an explicit identity/migration decision.");
+                continue;
+            }
             if (vector.TryGetProperty("expectedOrdinalDigest", out var ordinalDigest))
             {
                 Assert.True(Assert.IsType<int>(returned) == StringComparer.Ordinal.GetHashCode(ordinalDigest.GetString()!),
@@ -138,6 +148,7 @@ public sealed class JsonHashOwnerGoldenTests : IDisposable
 
     private object? Argument(JsonElement argument, Type type, IReadOnlyList<Assembly> assemblies)
     {
+        if (argument.TryGetProperty("systemTimeProvider", out _)) return TimeProvider.System;
         if (argument.TryGetProperty("emptyScopeFactory", out _)) return services.GetRequiredService<IServiceScopeFactory>();
         if (argument.TryGetProperty("baselineOptions", out _)) return JsonBaseline.Options;
         if (argument.TryGetProperty("clrNull", out _)) return null;

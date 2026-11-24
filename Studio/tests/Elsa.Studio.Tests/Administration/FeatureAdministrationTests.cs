@@ -21,6 +21,30 @@ namespace Elsa.Studio.Tests.Administration;
 public sealed class FeatureAdministrationTests
 {
     [Fact]
+    public async Task Actual_revision_callers_bind_retained_features_with_the_existing_process_key()
+    {
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true);
+        var store = host.App.Services.GetRequiredService<IShellFeatureConfigurationStore>();
+        var key = ((byte[])typeof(ShellFeatureStore).GetField("RevisionKey", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!).ToArray();
+        var hash = typeof(ShellFeatureStore).GetMethod("HashRevision", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        async Task<string> RetainedRevision()
+        {
+            using var retained = JsonDocument.Parse(await File.ReadAllTextAsync(host.ShellsFile));
+            var features = retained.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("Authoring").GetProperty("Features");
+            return (string)hash.Invoke(null, [features, key])!;
+        }
+        var before = await store.LoadAsync();
+        Assert.True(before.Revision == await RetainedRevision(), "Shell snapshot caller: First-stable hash freeze requires an explicit identity/migration decision.");
+        using var raw = JsonDocument.Parse("""{ "Credential":"fixture-private", "Size":10, "OwnerData":{"n":9007199254740993,"nil":null} }""");
+        var changes = before.Features.Select(pair => new FeatureConfigurationChange(pair.Key, true, pair.Key == "Configured" ? raw.RootElement.Clone() : pair.Value)).ToArray();
+        var saved = await store.SaveAsync(before.Revision, changes);
+        Assert.True(saved.Revision == await RetainedRevision(), "Shell save/snapshot callers: First-stable hash freeze requires an explicit identity/migration decision.");
+        Assert.True(saved.Revision == (await store.LoadAsync()).Revision, "Shell revision key retains its existing process lifetime. First-stable hash freeze requires an explicit identity/migration decision.");
+        Assert.True(key.SequenceEqual((byte[])typeof(ShellFeatureStore).GetField("RevisionKey", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!),
+            "Shell revision key lifetime: First-stable hash freeze requires an explicit identity/migration decision.");
+    }
+
+    [Fact]
     public async Task Declared_configuration_data_survives_catalog_apply_and_reload_with_conflicting_host_options()
     {
         const string raw = """{ "OrderTotal":1.00, "text":"Ren\u00e9 <>&", "explicit":null, "large":9007199254740993 }""";

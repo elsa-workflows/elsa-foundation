@@ -21,6 +21,32 @@ namespace Elsa.Weaver.Tests;
 /// </summary>
 public sealed class WeaverSessionAutonomyApiTests
 {
+    // Independent request projection includes all default/null members and the raw active-surface selection.
+    [Theory]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":[1,null]}""", "BA4D2C350D280329FC304200E919AA51A86ACA57F688B28CADA2AEF75A48FFBE")]
+    [InlineData(""" { "rows": [1e0,null], "n":9007199254740993.0,"OwnerKey":"Ren\u00e9" } """, "BA4D2C350D280329FC304200E919AA51A86ACA57F688B28CADA2AEF75A48FFBE")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993}""", "C99170E843DDEFB4C0DD52EA1C6C49C9B81D9154A146034C1C67D0B923AA4FD3")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":null}""", "B0086CA76C41C509DD09F478D9E959F99D2226F95C77695D2A44C5B16D658CF7")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":[null,1]}""", "7439C596B0B1817AF6F76417A4A9F816E78C8657CB753DBF15D27BFF1F9F9C9F")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740992,"rows":[1,null]}""", "6DF849F0E5086C3E7DFEC3819746052406DE4570621AB2DBB885D87331133637")]
+    public async Task Actual_post_owner_pins_delivery_fingerprint_for_carried_selection(string raw, string expected)
+    {
+        using var fixture = new Fixture();
+        var session = await fixture.CreateAsync();
+        var request = "{\"content\":\"hello\",\"requestId\":\"hash-r1\",\"activeSurface\":{\"selection\":" + raw + "}}";
+        var (status, _) = await fixture.SendRawAsync("PostMessage", request, session.Id);
+        Assert.True(status == 200, "Weaver golden prompt admission: First-stable hash freeze requires an explicit identity/migration decision.");
+        var messages = (await fixture.Sessions.ListMessagesAsync(session.Id)).Where(item => item.Role == WeaverRole.User).ToArray();
+        Assert.True(messages.Length == 1, "Weaver golden prompt count: First-stable hash freeze requires an explicit identity/migration decision.");
+        var message = messages[0];
+        Assert.True(message.DeliveryFingerprint == expected,
+            $"Weaver post selection: First-stable hash freeze requires an explicit identity/migration decision. Expected {expected}; actual {message.DeliveryFingerprint}");
+        var (duplicate, _) = await fixture.SendRawAsync("PostMessage", request, session.Id);
+        Assert.True(duplicate == 200, "Weaver golden prompt replay: First-stable hash freeze requires an explicit identity/migration decision.");
+        Assert.True((await fixture.Sessions.ListMessagesAsync(session.Id)).Count(item => item.Role == WeaverRole.User) == 1,
+            "Weaver golden prompt replay count: First-stable hash freeze requires an explicit identity/migration decision.");
+    }
+
     private static WeaverJsonContext WireContext => (WeaverJsonContext)typeof(WeaverJsonContext)
         .GetProperty("WireContext", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
     private const string Actor = "actor-1";

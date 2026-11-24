@@ -53,7 +53,7 @@ internal sealed class ShellFeatureStore(
         foreach (var feature in features.OrderBy(feature => feature.Id, StringComparer.OrdinalIgnoreCase))
             accepted[feature.Id] = feature.Enabled ? feature.Configuration.Clone() : JsonSerializer.SerializeToElement(false, Elsa.Serialization.Core.JsonBaseline.Options);
         var replacement = JsonSerializer.SerializeToElement(accepted, Elsa.Serialization.Core.JsonBaseline.Options);
-        _ = Elsa.Serialization.Core.JsonHashInput.HashKeyed(replacement, RevisionKey); // Refuse an unhashable candidate before changing the file.
+        _ = HashRevision(replacement, RevisionKey); // Refuse an unhashable candidate before changing the file.
         try
         {
             await AtomicConfigWriter.WriteAtomicAsync(file, ReplaceFeatures(document, replacement) + Environment.NewLine, cancellationToken);
@@ -89,9 +89,12 @@ internal sealed class ShellFeatureStore(
                 : JsonSerializer.SerializeToElement(ComposedConfiguration(settings, id), Elsa.Serialization.Core.JsonBaseline.Options);
         }
         var revisionValue = node ?? JsonSerializer.SerializeToElement(values, Elsa.Serialization.Core.JsonBaseline.Options);
-        var revision = Convert.ToHexStringLower(Elsa.Serialization.Core.JsonHashInput.HashKeyed(revisionValue, RevisionKey));
+        var revision = HashRevision(revisionValue, RevisionKey);
         return new(ShellName, revision, values, shellConfiguration);
     }
+
+    private static string HashRevision(JsonElement value, byte[] key) =>
+        Convert.ToHexStringLower(Elsa.Serialization.Core.JsonHashInput.HashKeyed(value, key));
 
     private static JsonObject ComposedConfiguration(ShellSettings settings, string id)
     {

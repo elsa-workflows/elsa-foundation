@@ -211,14 +211,7 @@ internal sealed class EtlFilePreparer
         long maxBytes,
         CancellationToken cancellationToken)
     {
-        var identity = Elsa.Serialization.Core.JsonHashInput.Hash(new
-        {
-            FormatVersion = 1,
-            SnapshotFormatVersion,
-            RunId = runId,
-            Role = pin.Role.ToString(),
-            PinHandle = pin.Handle
-        });
+        var identity = InputSnapshotIdentity(pin, runId);
 
         return await _snapshotPublisher.PublishAsync(_snapshotRoot, identity, maxBytes,
             async (destination, ct) =>
@@ -358,6 +351,16 @@ internal sealed class EtlFilePreparer
     private static EtlTypedRow FreezeRow(EtlTypedRow row) =>
         new(row.RecordOrdinal, new ReadOnlyDictionary<string, EtlTypedValue>(
             row.Values.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)));
+
+    private static string InputSnapshotIdentity(PinnedFileBinding pin, string runId) =>
+        Elsa.Serialization.Core.JsonHashInput.Hash(new
+        {
+            FormatVersion = 1,
+            SnapshotFormatVersion,
+            RunId = runId,
+            Role = pin.Role.ToString(),
+            PinHandle = pin.Handle
+        });
 
     private static void WriteIndexEntry(byte[] entry, int ordinal, long start, long end)
     {

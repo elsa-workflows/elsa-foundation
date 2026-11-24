@@ -9,6 +9,27 @@ namespace Elsa.Etl.Tests;
 
 public sealed class EtlHttpPageCacheTests : IDisposable
 {
+    // Independent canonical preimages wrap the literal data in an otherwise fixed valid HTTP page.
+    [Theory]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":[1,null]}""", "f53bd7a3fbae2b302966cce263f2db16b27898ab10da36d22ae2f1ff88a016fb")]
+    [InlineData(""" { "rows": [1e0,null], "n":9007199254740993.0,"OwnerKey":"Ren\u00e9" } """, "f53bd7a3fbae2b302966cce263f2db16b27898ab10da36d22ae2f1ff88a016fb")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993}""", "a14c1f5a47d073d9b8c6bd2d44bd097f19805fae37c11ecc9a403b8fc822c1ec")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":null}""", "9e372061fc650933dfc59d06ab5d45a428cb1caa68ce177af290058939577f93")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":[null,1]}""", "7d2f442c0941ced362ab06fc4feaf03e3760220f275b7b6efd6d31fe13d8c3ae")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740992,"rows":[1,null]}""", "6e7b96e79e8d463b9233d154a6c57c5b873408634dfe53444bb2a45dc5636254")]
+    public async Task Actual_page_publication_pins_whole_body_identity_and_preserves_unselected_data(string raw, string expected)
+    {
+        var body = Encoding.UTF8.GetBytes("{\"records\":[{\"id\":1,\"name\":\"Ada\"}],\"next\":\"cursor-1\",\"ownerData\":" + raw + "}");
+        var cache = Cache(Admission("page-hash-golden", new EtlScope("tenant-a", "golden")));
+        var published = await cache.PublishAsync(PageSequence, Request(), FirstAttempt, 1, ReceivedAt, body);
+        var read = await cache.ReadAsync(PageSequence, Request());
+        Assert.True(published.Descriptor.Body.ContentHash == expected && read?.Descriptor.Body.ContentHash == expected,
+            $"ETL HTTP page publication: First-stable hash freeze requires an explicit identity/migration decision. Expected {expected}; actual {published.Descriptor.Body.ContentHash}");
+        Assert.True(body.Length == published.Descriptor.Body.ByteLength, "ETL HTTP page physical length: First-stable hash freeze requires an explicit identity/migration decision.");
+        Assert.True(body.SequenceEqual(published.RawBody.ToArray()), "ETL HTTP page publication bytes: First-stable hash freeze requires an explicit identity/migration decision.");
+        Assert.True(body.SequenceEqual(read!.RawBody.ToArray()), "ETL HTTP page retained bytes: First-stable hash freeze requires an explicit identity/migration decision.");
+    }
+
     private const long PageSequence = 0;
     private static readonly Guid FirstAttempt = Guid.Parse("65a0e0be-f89b-4c10-8cf8-4878bffbc10c");
     private static readonly Guid SecondAttempt = Guid.Parse("82b82449-0870-4d8b-b67a-1a96eaf88ef0");

@@ -7,6 +7,36 @@ namespace Elsa.Etl.Tests;
 
 public sealed class FileChunkStoreTests : IDisposable
 {
+    // Fixed digests independently generated from these literal canonical JSON values.
+    [Theory]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":[1,null]}""", "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f")]
+    [InlineData(""" { "rows": [1e0,null], "n":9007199254740993.0,"OwnerKey":"Ren\u00e9" } """, "4ad5669c9e2c2d62b13796dbc77609fbe0cbf90d7350123ad5d6409b94e1b91f")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993}""", "aaa637899be4a75616df0a78eb3c8c9798349e57095043d932e117ee654e8c4c")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":null}""", "d27f0ae7fbcebdf5018ac5f421bcf1a7d9f1b006a4fd41df36d51e818fb828cc")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":[null,1]}""", "7c885ecab394c5329fe59ec3d1f437035c7ab30dcb26ed2cb9a69fd1d4149ac7")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740992,"rows":[1,null]}""", "999da9c38e8633d9bdc022381ed82ff9640e0b8d71de94c3f859ec6fb0b7fb9d")]
+    public async Task Actual_json_descriptor_writer_and_reader_pin_canonical_hash_and_retained_bytes(string raw, string expected)
+    {
+        var store = new FileChunkStore(".json");
+        var bytes = Encoding.UTF8.GetBytes(raw);
+        var published = await store.PublishAsync(_root, "golden-json", 4096, (stream, ct) => stream.WriteAsync(bytes, ct));
+        var found = await store.FindAsync(_root, "golden-json", 4096);
+        Assert.True(published.ContentHash == expected && found?.ContentHash == expected,
+            $"FileChunkStore JSON: First-stable hash freeze requires an explicit identity/migration decision. Expected {expected}; published {published.ContentHash}; read {found?.ContentHash}");
+        Assert.True(bytes.Length == published.ByteLength, "FileChunkStore JSON physical length: First-stable hash freeze requires an explicit identity/migration decision.");
+        Assert.True(bytes.SequenceEqual(await File.ReadAllBytesAsync(Path.Combine(_root, published.Key))),
+            "FileChunkStore JSON retained bytes: First-stable hash freeze requires an explicit identity/migration decision.");
+    }
+
+    [Fact]
+    public async Task Actual_json_descriptor_refuses_malformed_retained_data()
+    {
+        var store = new FileChunkStore(".json");
+        var error = await Assert.ThrowsAsync<EtlEffectException>(() => store.PublishAsync(_root, "bad-json", 4096,
+            (stream, ct) => stream.WriteAsync("{"u8.ToArray(), ct)).AsTask());
+        Assert.True(error.Code == "etl.effect-conflict", "FileChunkStore JSON refusal: First-stable hash freeze requires an explicit identity/migration decision.");
+    }
+
     private readonly string _root = Path.Combine(Path.GetTempPath(), "elsa-etl-chunks-" + Guid.NewGuid().ToString("N"));
     private readonly FileChunkStore _store = new();
 
