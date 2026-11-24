@@ -117,46 +117,53 @@ static class ProviderWatchdog
         var first = await store.TakeAsync(0, "watchdog-old", LeaseTime, token)
             ?? throw new InvalidOperationException("The old owner did not take the partition.");
         string interrupted;
-        await using (var blocker = target.Admins()())
-        await using (var hold = await blocker.Database.BeginTransactionAsync(token))
+        Task<Committed>? blocked = null;
+        try
         {
+            await using var blocker = target.Admins()();
+            await using var hold = await blocker.Database.BeginTransactionAsync(token);
             var blockerPid = await blocker.Database.SqlQueryRaw<int>("""SELECT pg_backend_pid() AS "Value" """).SingleAsync(token);
             await blocker.Database.ExecuteSqlRawAsync(AwaitAdvisoryLock, token);
-            var owner = target.Store(target.Workers(new PauseBeforeCommit()));
+            var pause = new PauseBeforeCommit();
+            var owner = target.Store(target.Workers(pause));
             long monotonic = 0;
             List<string> escalated = [];
             var watchdog = new Watchdog(LeaseTime, escalated.Add, () => monotonic);
-            using var attempt = CancellationTokenSource.CreateLinkedTokenSource(token);
-            var blocked = watchdog.Watch(owner).CommitAsync(Flush(first), attempt.Token).AsTask();
-            try
+            blocked = watchdog.Watch(owner).CommitAsync(Flush(first), token).AsTask();
+            await using var observer = target.Admins()();
+            while (!await observer.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_stat_activity activity JOIN pg_stat_ssl ssl ON ssl.pid = activity.pid
+                    WHERE activity.datname = current_database() AND activity.application_name = 'kernel-worker'
+                        AND ssl.ssl AND {blockerPid} = ANY(pg_blocking_pids(activity.pid))
+                ) AS "Value"
+                """).SingleAsync(token))
             {
-                await using var observer = target.Admins()();
-                while (!await observer.Database.SqlQuery<bool>($"""
-                    SELECT EXISTS (
-                        SELECT 1 FROM pg_stat_activity activity JOIN pg_stat_ssl ssl ON ssl.pid = activity.pid
-                        WHERE activity.datname = current_database() AND activity.application_name = 'kernel-worker'
-                            AND ssl.ssl AND {blockerPid} = ANY(pg_blocking_pids(activity.pid))
-                    ) AS "Value"
-                    """).SingleAsync(token))
-                {
-                    if (blocked.IsCompleted)
-                        throw new InvalidOperationException("The owner stopped before its TLS session reached the advisory lock.");
-                    await Task.Delay(25, token);
-                }
-                Require(!await FenceCanBeLockedAsync(target, token), "the waiting TLS worker owns the physical partition row lock");
-                Require(!blocked.IsCompleted && watchdog.Check() == 0, "the transaction is still open before the watchdog threshold");
-
-                monotonic = (long)(LeaseTime.TotalMilliseconds * 2);
-                Require(watchdog.Check() == 1, "the watchdog requests cancellation of the open transaction");
-                interrupted = await AwaitInterruptedAsync(blocked, LeaseTime / 3, token);
-                monotonic += (long)(LeaseTime.TotalMilliseconds / 3);
-                Require(watchdog.Check() == 0 && escalated.Count == 0, "the provider returned before process escalation");
-                Require(await FenceCanBeLockedAsync(target, token), "the fence lock cleared while the advisory blocker was still held");
+                if (blocked.IsCompleted)
+                    throw new InvalidOperationException("The owner stopped before its TLS session reached the advisory lock.");
+                await Task.Delay(25, token);
             }
-            finally
+            Require(!await FenceCanBeLockedAsync(target, token), "the waiting TLS worker owns the physical partition row lock");
+            Require(!blocked.IsCompleted && watchdog.Check() == 0, "the transaction is still open before the watchdog threshold");
+
+            monotonic = (long)(LeaseTime.TotalMilliseconds * 2);
+            Require(watchdog.Check() == 1, "the watchdog requests cancellation of the open transaction");
+            interrupted = await AwaitInterruptedAsync(blocked, LeaseTime / 3, token);
+            Require(!token.IsCancellationRequested && pause.ObservedCancellation,
+                "the waiting PostgreSQL command reported cancellation on the watchdog token");
+            monotonic += (long)(LeaseTime.TotalMilliseconds / 3);
+            Require(watchdog.Check() == 0 && escalated.Count == 0, "the provider returned before process escalation");
+            Require(await FenceCanBeLockedAsync(target, token), "the fence lock cleared while the advisory blocker was still held");
+        }
+        finally
+        {
+            // Dispose the advisory-lock transaction first. A worker that ignores cancellation can now return.
+            if (blocked is not null)
             {
-                await attempt.CancelAsync();
-                await ((Task)blocked).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                if (await Task.WhenAny(blocked, Task.Delay(TimeSpan.FromSeconds(3))) == blocked)
+                    await ((Task)blocked).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                else
+                    Console.Error.WriteLine("The worker did not return after releasing the fixture lock.");
             }
         }
 
@@ -169,14 +176,28 @@ static class ProviderWatchdog
 
     private sealed class PauseBeforeCommit : DbTransactionInterceptor
     {
+        public bool ObservedCancellation { get; private set; }
+
         public override async ValueTask<InterceptionResult> TransactionCommittingAsync(DbTransaction transaction,
             TransactionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
         {
             await using var command = transaction.Connection!.CreateCommand();
             command.Transaction = transaction;
-            command.CommandText = AwaitAdvisoryLock;
+            command.CommandTimeout = 0;
+            command.CommandText = "SET LOCAL statement_timeout = 0; SET LOCAL lock_timeout = 0";
             await command.ExecuteNonQueryAsync(cancellationToken);
-            return result;
+            command.CommandText = AwaitAdvisoryLock;
+            try
+            {
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+            catch (Exception error) when (cancellationToken.IsCancellationRequested &&
+                error is OperationCanceledException or PostgresException { SqlState: PostgresErrorCodes.QueryCanceled })
+            {
+                ObservedCancellation = true;
+                throw;
+            }
+            throw new InvalidOperationException("The advisory lock was released before the worker command was cancelled.");
         }
     }
 

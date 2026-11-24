@@ -66,7 +66,8 @@ dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x watchdog postgre
 
 This stage verifies TLS before resetting the database and again on the waiting worker's session.
 The worker reaches a real PostgreSQL lock wait after writing its batch and before committing.
-A second transaction verifies the worker holds the partition row, then verifies the lock is
+The waiting command has no command, statement or lock timeout and must report cancellation on
+the watchdog token. A second transaction verifies the worker holds the partition row, then verifies the lock is
 available after cancellation while the independent blocker is still held. The rollback leaves
 the same journal position for a successor. The stage tests command cancellation and physical
 lock release under verified TLS.
