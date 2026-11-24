@@ -165,6 +165,20 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
 
     internal async Task<int> CheckTimedJobWorkerAsync()
     {
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "--owned-commit", "--ef-commit", "--checked-fence", "--fence-in-batch", "--without-trial-withdrawal"
+        };
+        if (engine == "sqlserver") allowed.Add("--rcsi-off");
+        if (engine == "mysql") allowed.Add("--rc");
+        if (flags.Any(option => !allowed.Contains(option)) ||
+            flags.Contains("--owned-commit") && flags.Contains("--ef-commit") ||
+            flags.Contains("--checked-fence") && flags.Contains("--fence-in-batch"))
+        {
+            Console.Error.WriteLine($"Invalid timed-job-worker options for {engine}. Choose one writer, one fence and optional flags from: {string.Join(", ", allowed)}.");
+            return 2;
+        }
+
         await using var fixture = (Provided)await CreateAsync(1, new());
         return await RelationalTimedJobChecks.RunAsync((EfStore)fixture.Store, fixture.CreateContext, Name,
             trialWithdrawal: !flags.Contains("--without-trial-withdrawal"));
