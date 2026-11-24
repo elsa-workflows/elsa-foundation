@@ -12,7 +12,7 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootTerminateChecks
 {
-    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool fallback = false)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool fallback = false, bool stableBody = false)
     {
         const string operation = "terminate-copy";
         const string definition = "before-upgraded-turn";
@@ -21,7 +21,8 @@ internal static class PostgresRootTerminateChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => KernelDb.ForPostgresRootTerminations(options);
+        KernelDb Open() => stableBody ? KernelDb.ForPostgresRootStableBody(options) : KernelDb.ForPostgresRootTerminations(options);
+        KernelDb OpenPrior() => stableBody ? KernelDb.ForPostgresRootTerminations(options) : KernelDb.ForPostgresRootOperators(options);
         EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch)
             { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
@@ -94,7 +95,7 @@ internal static class PostgresRootTerminateChecks
             : null;
         var adjacentWire = adjacentInput is null ? null : Json.Write(await HeldRow(adjacentInput.InboxKey));
 
-        await using (var older = KernelDb.ForPostgresRootOperators(options))
+        await using (var older = OpenPrior())
         {
             try
             {
@@ -165,11 +166,11 @@ internal static class PostgresRootTerminateChecks
                     recoveryTargets.SetEquals([prior.Actor.Id]),
                     "the selected fallback owner leaves the adjacent actor and its input untouched");
             }
-            var legacyReader = new EfStore(() => KernelDb.ForPostgresRootOperators(options), postgres: true);
+            var legacyReader = new EfStore(OpenPrior, postgres: true);
             try
             {
                 await legacyReader.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop);
-                throw new InvalidOperationException("The prior operator reader decoded a format-11 checkpoint.");
+                throw new InvalidOperationException("The prior reader decoded the new checkpoint format.");
             }
             catch (StoreException error) when (error.Failure == Failure.Definite && error.Message == "Unsupported qualified actor checkpoint.")
             {
@@ -284,6 +285,12 @@ internal static class PostgresRootTerminateChecks
         async Task<EncodedContent> ReadEncodedContent(string id)
         {
             await using var db = Open();
+            if (stableBody)
+                return await db.Database.SqlQuery<EncodedContent>($"""
+                    SELECT md5("State") || ':' || md5("FoundationStateWire") AS "StateHash", md5("FoundationHeader") AS "HeaderHash",
+                        octet_length("State") + octet_length("FoundationHeader") + octet_length("FoundationStateWire") AS "Bytes"
+                    FROM "Instances" WHERE "Id" = {id}
+                    """).SingleAsync(stop);
             return await db.Database.SqlQuery<EncodedContent>($"""
                 SELECT md5("State") AS "StateHash", md5("FoundationHeader") AS "HeaderHash",
                     octet_length("State") + octet_length("FoundationHeader") AS "Bytes"

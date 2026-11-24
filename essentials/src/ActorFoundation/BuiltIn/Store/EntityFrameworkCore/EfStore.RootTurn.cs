@@ -7,7 +7,7 @@ public sealed partial class EfStore
     private sealed record LockedRoot(string Header, long ContentBytes, int HeaderBytes);
 
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
-        string State, string Header, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
+        string State, string Header, byte[]? Wire, long Growth, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
         bool? OperatorSuspension, bool OperatorTermination, RootJobState? JobState, RootJobCompletion? JobCompletion, bool TimedJob,
         IReadOnlyList<FoundationValue>? Values) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
@@ -18,8 +18,9 @@ public sealed partial class EfStore
             var terminalHeader = db.UsesRootTermination && Status == InstanceStatus.Running
                 ? RootTerminalHeaderBytes(Current.Model, Current.Definition) : 0;
             var reserve = Math.Max(0, terminalHeader - System.Text.Encoding.UTF8.GetByteCount(Header));
-            var projectedBytes = await MeasureRootContentAsync(db, family.Length + reserve, State, Header, jobs, cancellationToken,
-                comparePriorSize: true);
+            var projectedBytes = db.UsesRootStableBody ? StableContentBytes(State, Header, Wire, reserve, Status == InstanceStatus.Running ? Growth : 0)
+                : await MeasureRootContentAsync(db, family.Length + reserve, State, Header, jobs, cancellationToken,
+                    comparePriorSize: true);
             var overBudget = projectedBytes > RootContentBytes;
 
             var home = new InstanceRef(Current.Actor.Id).Partition;
@@ -46,7 +47,7 @@ public sealed partial class EfStore
             // physical write and its projection may each stay put or shrink.
             var contentBytes = projectedBytes - reserve;
             var priorProjection = prior.ContentBytes + Math.Max(0, terminalHeader - prior.HeaderBytes);
-            if (overBudget && (contentBytes > Math.Max(RootContentBytes, prior.ContentBytes) ||
+            if (overBudget && (db.UsesRootStableBody || contentBytes > Math.Max(RootContentBytes, prior.ContentBytes) ||
                 projectedBytes > Math.Max(RootContentBytes, priorProjection)))
                 throw new StoreException(Failure.Definite, RootContentFailure);
 
@@ -77,8 +78,8 @@ public sealed partial class EfStore
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
             // UnsubscribeAll here only when the exact root has no physical subscriptions.
             var encoded = family + State;
-            var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Instances" SET "State" = {encoded}, "FoundationHeader" = {Header}, "StateVersion" = {StateVersion},
+            var updated = await db.Database.ExecuteSqlInterpolatedAsync(AddRootWire(db, $"""
+                UPDATE "Instances" SET "State" = {encoded}, "FoundationHeader" = {Header}, "StateVersion" = {StateVersion}, /*root-wire*/
                     "Status" = {(int)Status}, "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "Suspended" = {OperatorSuspension ?? Current.Suspended},
                     "Jobs" = {jobs}, "NextJobGeneration" = {nextJobGeneration},
@@ -88,7 +89,7 @@ public sealed partial class EfStore
                     AND "FoundationReference" = {Reference} AND "Revision" = {Current.Revision}
                     AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions"
                         WHERE "Instance" = {Current.Actor.Id}))
-                """, cancellationToken);
+                """, Wire), cancellationToken);
             return updated == 1 && (Values is not { Count: > 0 } values ||
                 await WriteRootValuesAsync(db, Current.Actor, values, cancellationToken));
         }
@@ -140,14 +141,15 @@ public sealed partial class EfStore
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, TimeSpan lease, InstanceStatus status, string? state, int stateVersion,
-        string typeData, IReadOnlyDictionary<string, string> labels, string? journal, CancellationToken cancellationToken = default) =>
-        CommitPreparedRootAsync(fence, lease, PrepareRootTurn(tenant, reference, current, inputs, fence, status, state, stateVersion, typeData, labels, journal), cancellationToken);
+        string typeData, IReadOnlyDictionary<string, string> labels, string? journal, CancellationToken cancellationToken = default, long terminalGrowth = 0) =>
+        CommitPreparedRootAsync(fence, lease, PrepareRootTurn(tenant, reference, current, inputs, fence, status, state, stateVersion, typeData, labels,
+            journal, terminalGrowth: terminalGrowth), cancellationToken);
 
     private PreparedRoot PrepareRootTurn(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,
         string typeData, IReadOnlyDictionary<string, string> labels, string? journal, string[]? recalls = null, bool? operatorSuspension = null,
         RootJobState? jobState = null, RootJobCompletion? jobCompletion = null, bool timedJob = false,
-        IReadOnlyList<FoundationValue>? values = null, bool operatorTermination = false)
+        IReadOnlyList<FoundationValue>? values = null, bool operatorTermination = false, long terminalGrowth = 0)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
@@ -163,11 +165,13 @@ public sealed partial class EfStore
             operatorSuspension is null && !operatorTermination && accepted.Any(message => message.Operator is not null) ||
             operatorTermination && accepted is not [{ Kind: Kinds.Terminate, Operator: not null }])
             throw new ArgumentException("The turn requires distinct qualified inputs for its exact actor creation.", nameof(inputs));
-        var (stored, header) = EncodeRootContent(current.Model, current.Definition, state, stateVersion, typeData, labels, journal);
+        var stable = RootStableBody;
+        var (stored, header) = EncodeRootContent(current.Model, current.Definition, stable && state is not null ? StableBodyMarker : state, stateVersion, typeData, labels, journal);
+        var wire = stable && state is not null ? RootSelfContent.Encode(state) : null;
         var image = new InstanceRow(current.Actor.Id, "", "", status, "null", checked(current.Revision + 1), null)
             .WithFoundationState(stored);
         var root = new RootTurnCheckpoint(tenant, reference, current, status, StoredState.Encode(image),
-            header, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, operatorTermination, jobState, jobCompletion, timedJob, values);
+            header, wire, terminalGrowth, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, operatorTermination, jobState, jobCompletion, timedJob, values);
         var turn = new TurnCommit(image.Id, null, null, [], [], [], [], [], journal);
         return new(turn, root);
 
