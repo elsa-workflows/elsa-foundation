@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 
 namespace Kernel.Runtime.Hosting;
 
@@ -47,11 +48,13 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private readonly IScopeActivation?[] _seen;     // the activation each scope had at the last look: a new one gets a pass at once
     private readonly SemaphoreSlim _signal = new(0, 1);
     private readonly CancellationTokenSource _exit = new(), _kill = new();     // leave the loop between passes; stop a pass where it is
+    private readonly CancellationTokenSource _heartbeatsExit;
     private readonly TaskScheduler _scheduler = new ConcurrentExclusiveSchedulerPair().ExclusiveScheduler;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
-    private Task? _loop, _halted;
+    private Task? _loop, _heartbeats, _halted;
     private TimeSpan? _heartbeatEvery;
     private readonly Func<CancellationToken, Task>? _beside;
+    private readonly Func<CancellationToken, Task>? _beforeRelease;
     private readonly CancellationTokenSource _besideEnd = new();     // A1: cancelled at the end of the stop, or on a kill
     private Task? _besideRun;
     private readonly object _halting = new();
@@ -60,9 +63,14 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// <param name="beside">K1b slice 5b: a loop of the host's own that runs beside the node's loops, off the node's
     /// scheduler, and ends when a stop has ended or on a kill: layer 2's watchdog (<c>Watchdog.RunAsync</c>), which closes a stuck
     /// owner-path call's connection at twice the lease and ends the process, by the host's policy, only when it cannot.</param>
-    public RuntimeNode(string node, IMembership membership, int partitions, LoopOptions? options = null, IWakeSignal? wake = null, Func<CancellationToken, Task>? beside = null)
+    /// <param name="beforeRelease">Optional graceful drain after the last scheduler pass and before returning
+    /// ownership. It may await work entered by a pass that has already returned.</param>
+    public RuntimeNode(string node, IMembership membership, int partitions, LoopOptions? options = null, IWakeSignal? wake = null,
+        Func<CancellationToken, Task>? beside = null, Func<CancellationToken, Task>? beforeRelease = null)
     {
         _beside = beside;
+        _beforeRelease = beforeRelease;
+        _heartbeatsExit = CancellationTokenSource.CreateLinkedTokenSource(_kill.Token);
         _options = options ?? new LoopOptions();
         _runtime = new PartitionRuntime(node, membership, partitions, _options.Window, wake);
         _due = new long[partitions];
@@ -89,7 +97,8 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         lock (_halting)
             if (_halted is null)     // a stop or kill that came first leaves the node unstarted
             {
-                _loop = Task.WhenAll(OnNode(LoopAsync), OnNode(BalanceLoopAsync), _heartbeatEvery is { } every ? Task.Run(() => HeartbeatLoopAsync(every)) : Task.CompletedTask);
+                _loop = Task.WhenAll(OnNode(LoopAsync), OnNode(BalanceLoopAsync));
+                if (_heartbeatEvery is { } every) _heartbeats = Task.Run(() => HeartbeatLoopAsync(every));
                 if (_beside is { } beside) _besideRun = Task.Run(() => Beside(beside));     // not in _loop: the stop must not wait on it
             }
     }
@@ -110,7 +119,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
 
     private async Task HeartbeatLoopAsync(TimeSpan every)
     {
-        var exit = _exit.Token;
+        var exit = _heartbeatsExit.Token;
         while (!exit.IsCancellationRequested)
         {
             var started = Now;
@@ -204,12 +213,33 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     {
         _gone = true;
         _exit.Cancel();
-        if (_loop is not null) await _loop;
-        if (_kill.IsCancellationRequested) return;
-        // A kill, or a stop that may not wait any longer, stops waiting for a release under way as well: what is not
-        // given up runs out by its lease, as after a crash.
-        try { await OnNode(() => _runtime.StopAsync(_kill.Token).AsTask()).WaitAsync(_kill.Token); }
-        catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
+        if (_beforeRelease is null) _heartbeatsExit.Cancel();
+
+        Exception? drainError = null;
+        try
+        {
+            if (_loop is not null) await _loop;
+            if (_beforeRelease is { } drain && !_kill.IsCancellationRequested)
+            {
+                try { await OnNode(() => drain(_kill.Token)).WaitAsync(_kill.Token); }
+                catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
+                catch (Exception error) { drainError = error; }
+            }
+        }
+        finally
+        {
+            _heartbeatsExit.Cancel();
+            if (_heartbeats is not null) await _heartbeats;
+        }
+
+        // A kill during shutdown leaves remaining ownership to expire instead of returning it as clean.
+        if (!_kill.IsCancellationRequested)
+        {
+            try { await OnNode(() => _runtime.StopAsync(_kill.Token).AsTask()).WaitAsync(_kill.Token); }
+            catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
+            catch (Exception releaseError) when (drainError is not null) { throw new AggregateException(drainError, releaseError); }
+        }
+        if (drainError is not null) ExceptionDispatchInfo.Throw(drainError);
     }
 
     /// <summary>Run on the node's scheduler, one task at a time with the loop and what it started.</summary>

@@ -437,12 +437,19 @@ PostgreSQL database and run the following after building `models/Native.Run` in 
 dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-roots 1024
 ```
 
-Each Native node starts through `PostgresPreviewHosting.StartAsync` in `Kernel.Foundation.Postgres`.
-The host passes the installed PostgreSQL context factory, a distinct node name and its public actor type.
+Each Native application explicitly registers `PostgresPreviewHostedService` in its .NET Generic Host.
+The service starts the node through `PostgresPreviewHosting.StartAsync` and stops it during application shutdown.
+The application passes the installed PostgreSQL context factory, a distinct node name and its public actor type.
 All nodes on the database use the same actor type and definitions. The launcher checks the installed
 partition layout and runs the owner-call watchdog. Supply a process-termination policy for a call
-that remains stuck after cancellation. The caller disposes the returned runtime to release ownership. The driver's start, direct input and journal reads use the EF
+that remains stuck after cancellation or when the application's shutdown deadline expires. The application
+stops and disposes its Generic Host. A direct caller of the launcher owns the returned runtime. The driver's start, direct input and journal reads use the EF
 provider's public surfaces. The Flowchart and StateMachine qualification fixtures keep their own setup.
+
+Run `pg-preview-host-lifetime` on a fresh disposable PostgreSQL database to watch application shutdown
+keep renewing through fenced drain passes while an entered turn waits beyond one lease. The completed
+sibling commits first and the slow turn commits before release. A replacement application resumes the root,
+then verifies the saved journal bookmark and replay.
 
 To check launcher validation, a plain public actor and watchdog escalation, run
 `pg-preview-host-watchdog` on a fresh disposable PostgreSQL database. The fixture stalls an entered

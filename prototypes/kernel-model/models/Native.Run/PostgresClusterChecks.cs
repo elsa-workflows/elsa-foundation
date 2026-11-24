@@ -7,6 +7,9 @@ using Kernel.Native.Preview;
 using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Contract = Kernel.Foundation.Contracts;
 using Models = Kernel.Model.Contracts;
 
@@ -386,18 +389,34 @@ internal static class PostgresClusterChecks
         {
             while (!await condition()) { Healthy(node); await Task.Delay(40, stop); }
         }
-        async Task<RuntimeNode> StartNodeAsync()
+        async Task<RunningNode> StartNodeAsync()
         {
             if (!specialized)
-                return await PostgresPreviewHosting.StartAsync(Open, name,
-                    new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]), Environment.FailFast, loopOptions, stop);
+            {
+                var builder = Host.CreateEmptyApplicationBuilder(new());
+                builder.Logging.ClearProviders();
+                var service = new PostgresPreviewHostedService(Open, name,
+                    new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]), Environment.FailFast, loopOptions);
+                builder.Services.AddHostedService(_ => service);
+                var application = builder.Build();
+                try
+                {
+                    await application.StartAsync(stop);
+                    return new(service.Runtime, application);
+                }
+                catch
+                {
+                    await DisposeHostAsync(application);
+                    throw;
+                }
+            }
 
             var host = PostgresNativeRootOwner.PrepareNode(store, name, partitions, registry, worker);
             var runtime = new RuntimeNode(name, store, partitions, loopOptions);
             try
             {
                 await runtime.StartAsync(host, stop);
-                return runtime;
+                return new(runtime);
             }
             catch
             {
@@ -406,9 +425,9 @@ internal static class PostgresClusterChecks
             }
         }
 
-        void Healthy(RuntimeNode runtime)
+        void Healthy(RunningNode running)
         {
-            if (runtime.LastError is { } ex) throw new InvalidOperationException(name + " runtime error", ex);
+            if (running.Runtime.LastError is { } ex) throw new InvalidOperationException(name + " runtime error", ex);
         }
     }
 
@@ -421,4 +440,19 @@ internal static class PostgresClusterChecks
     {
         if (!pass) throw new InvalidOperationException(detail);
     }
+    private sealed record RunningNode(RuntimeNode Runtime, IHost? Application = null) : IAsyncDisposable
+    {
+        internal Task StopAsync(CancellationToken cancellationToken) =>
+            Application?.StopAsync(cancellationToken) ?? Runtime.StopAsync(cancellationToken).AsTask();
+
+        public ValueTask DisposeAsync() => Application is { } app ? DisposeHostAsync(app) : Runtime.DisposeAsync();
+    }
+
+    private static ValueTask DisposeHostAsync(IHost app)
+    {
+        if (app is IAsyncDisposable asyncHost) return asyncHost.DisposeAsync();
+        app.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
 }

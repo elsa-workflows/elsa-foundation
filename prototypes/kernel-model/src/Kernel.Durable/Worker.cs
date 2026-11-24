@@ -1117,7 +1117,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             // A suspended turn may be mutating its live object. Fence its eventual result and write only the
             // previous sealed row; its taken volatile inputs are still in _items and Promote writes them too.
-            if (slot.Busy) { slot.TurnFence++; slot.UndoTurn?.Invoke(); slot.Driving = false; }
+            if (slot.Busy) { slot.TurnFence++; slot.UndoTurn?.Invoke(); slot.Driving = false; slot.EnteredTurn = null; }
             slot.Busy = true;
             var unit = Bound(_type.Write(slot.Row!, null, slot.Pending), slot);
             Promote(unit);
@@ -2213,7 +2213,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         else
         {
             slot.Driving = true;
-            _ = Drive(input, cancellationToken);
+            var entered = Drive(input, cancellationToken);
+            slot.EnteredTurn = slot.Driving ? entered : null;
         }
     }
 
@@ -2224,6 +2225,43 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 : request.TargetCreation is { } target && target != request.Start.Creation.Generation ? "WrongCreation"
                 : CreationProtocol.StartError(slot.Row, request.Start, request.Kind, request.Payload, request.InboxKey)
             : CreationProtocol.TargetError(slot.Row, request);
+
+    // The host has stopped scheduling new turns. A drain pass reconciles heartbeat answers and flushes
+    // completed outcomes. Keeping those passes live lets legitimate waiting work renew through the normal gate.
+    internal async Task DrainEnteredTurnsAsync(CancellationToken cancellationToken)
+    {
+        if (!Owns) return;
+        var generation = _generation;
+        Task entered;
+        lock (_turnSync)
+            entered = Task.WhenAll(_slots.Values.Where(slot => slot is { Driving: true, EnteredTurn: not null })
+                .Select(slot => slot.EnteredTurn!));
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Volatile.Read(ref _answered) is not null) await AnsweredAsync(cancellationToken);
+            RequireDrainFence();
+            if (_queue.Count > 0) await FlushAsync(cancellationToken);
+            RequireDrainFence();
+            cancellationToken.ThrowIfCancellationRequested();
+            Volatile.Write(ref _lastPass, _options.Monotonic());
+
+            if (entered.IsCompleted)
+            {
+                await entered;
+                if (_queue.Count == 0) return;
+            }
+            if (_queue.Count > 0) continue;
+            await Task.WhenAny(entered, Task.Delay(_options.Lease / 3, cancellationToken));
+        }
+
+        void RequireDrainFence()
+        {
+            if (_generation != generation || !LeaseUsable())
+                throw new InvalidOperationException("Ownership was lost while draining actor turns during shutdown.");
+        }
+    }
 
     private async Task Drive(TurnInput input, CancellationToken cancellationToken)
     {
@@ -2240,6 +2278,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 ResumeAfterDetachedTurn(input.Slot);
                 if (fence != input.Slot.TurnFence || inline && !LeaseUsable()) return;
                 input.Slot.Driving = false;
+                input.Slot.EnteredTurn = null;
                 input.Slot.RollbackTurn?.Invoke();
                 unit = _type.Park(input.Row, input.Actor, input.Taken, input.Spec, e.Message, input.Unwritten ? input.Pending : null);
                 MarkPark(unit, input.Row);
@@ -2254,6 +2293,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             ResumeAfterDetachedTurn(input.Slot);
             if (fence != input.Slot.TurnFence || inline && !LeaseUsable()) return;
             input.Slot.Driving = false;
+            input.Slot.EnteredTurn = null;
             Enqueue(Bound(unit, input.Slot), cancellationToken);
         }
     }
@@ -2840,6 +2880,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     slot.TurnFence++;
                     slot.UndoTurn?.Invoke();
                     slot.Driving = false;
+                    slot.EnteredTurn = null;
                     // The checkpoint can promote while the rejected continuation exits. No second public turn enters meanwhile.
                     slot.DetachedAuthoredTurn = slot.Row?.FoundationInlineBirth is not null;
                 }
@@ -3727,6 +3768,7 @@ internal sealed class Slot
     public long AbsentAt; // date of an alias-aware absence, whether observed or locally minted
     public long Comparison; // latest accepted provider lookup that included this canonical slot
     public bool Driving;            // a model turn, as distinct from a queued commit, is in flight
+    public Task? EnteredTurn;        // completion queues the outcome for a graceful shutdown drain
     public long TurnFence;          // invalidates an uncommitted turn during graceful stand-down
     public Action? RollbackTurn;    // abandon a failed unit without restarting unrelated physical work
     public Action? UndoTurn;        // unwind only the invalidated turn's provisional cancellations

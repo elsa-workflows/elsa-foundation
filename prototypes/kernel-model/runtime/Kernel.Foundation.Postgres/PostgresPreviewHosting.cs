@@ -49,7 +49,8 @@ public static class PostgresPreviewHosting
         var watchdog = new Watchdog(Defaults.Lease, endProcess);
         var watched = watchdog.Watch(store);
         var host = DurableHost.ForNode(node, watched, new ActorAdapter(new RootHeaders(scope), actor), partitions);
-        var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync);
+        var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
+            beforeRelease: host.DrainEnteredTurnsAsync);
         try
         {
             await runtime.StartAsync(host, cancellationToken);
