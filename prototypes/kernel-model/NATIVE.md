@@ -802,9 +802,10 @@ input pending.
 Run `pg-root-park-opening owned checked` from a locked Release build of
 Native.Run against an empty PostgreSQL database. Repeat with each writer
 and fence mode in its own database. The fixture uses a generated root and
-direct input. The next provider increments cover fresh arrivals while
-parked, public inspection and recovery controls, and composition with the
-Workbench preview.
+direct input. Public inspection and fresh arrivals while parked are covered
+by the [Park inspection](#postgresql-park-inspection) and
+[Park arrivals](#postgresql-park-arrivals) sections below. Recovery controls
+and composition with the Workbench preview are later increments.
 
 ### PostgreSQL Park inspection
 
@@ -821,6 +822,29 @@ PostgreSQL database. The fixture drives a real opening first, refuses an
 opening with its projection trigger disabled, and reads the result after
 a new owner takes over. Recovery controls and authentication of Park
 selections have their own increments.
+
+### PostgreSQL Park arrivals
+
+Protocol 21 lets a parked generated root accept ordinary direct input
+through the public ingress. The owner keeps each new occurrence in a fenced
+continuation without calling the actor. The kept reason is Arrived, and the
+Park time, opening revision, fault and checkpoint stay as the opening wrote
+them. The continuation adds no journal entry. An input already buffered
+when the Park opened is kept as Arrived by the same owner. An expired
+operation id is accepted on a parked root here as a new occurrence with its
+own handle, while protocols 19 and 20 refuse it. An occurrence that reaches its
+attempt limit re-parks the same Park: its taken inputs are kept as Consumed
+and one Park journal entry is added. When a taken batch mixes an exhausted
+occurrence with a fresh arrival, the whole batch re-parks and both are kept
+as Consumed, matching the in-memory poison path.
+
+Run `pg-root-park-arrivals owned checked` from the locked Release build of
+Native.Run against an empty dedicated PostgreSQL database. Repeat with each
+writer and fence mode in its own database. The fixture refuses stale,
+changed and rewritten keep and re-park batches, shows that an admission
+waits while the root row is locked for update, and checks that protocol 20
+and protocol 21 refuse each other's stores. Recovery, discard, operator
+selection, and timers, jobs and children while parked remain open.
 
 ## 10. Private durable lexical-resource probe
 
