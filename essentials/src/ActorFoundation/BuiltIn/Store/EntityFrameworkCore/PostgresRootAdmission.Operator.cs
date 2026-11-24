@@ -23,7 +23,16 @@ internal sealed partial class PostgresRootAdmission
         // A recover carries the ordinary admission window, which it gives each row it restores or clears.
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public long? Window { get; init; }
+        // A drain control of an open recover carries the release generation it pages.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public long? Drain { get; init; }
     }
+
+    // The next drain control of an open recover: the recover's operation and Park mark under a fresh occurrence.
+    internal static (string Id, string Header) DrainControl(string reference, string operation, FoundationParkMark park, long window, long generation) =>
+        ($"{OperatorOccurrencePrefix}{reference}/{FoundationRootCreator.OperationDigest(operation)}/{Guid.NewGuid():N}",
+            OperatorPrefix + DurableKeyJson.Write(new StoredOperator(reference, operation, 1, Kinds.Recover, false)
+                { Park = park, Window = window, Drain = generation }));
     internal const string OperatorOccurrencePrefix = "operator/";
     internal static bool IsStoredOperator(string? header) => header is not null &&
         (header.StartsWith(OperatorPrefix, StringComparison.Ordinal) || header.StartsWith(TerminateThenDeletePrefix, StringComparison.Ordinal) ||
@@ -352,7 +361,8 @@ internal sealed partial class PostgresRootAdmission
             {
                 QualifiedTerminal = header.Terminal, DeleteTarget = thenDelete ? reference : null,
                 RootThenDelete = thenDelete, RetentionDelete = retentionDelete, RootHeldReply = held,
-                RecoverMode = header.Park is null ? null : ParkRecoveryMode.Resume, RootParkMark = header.Park, RootParkWindow = header.Window
+                RecoverMode = header.Park is null ? null : ParkRecoveryMode.Resume, RootParkMark = header.Park, RootParkWindow = header.Window,
+                RootParkDrain = header.Drain
             });
     }
 
@@ -387,7 +397,7 @@ internal sealed partial class PostgresRootAdmission
         if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != kind ||
             (kind == Kinds.Delete ? header.Terminal is not { Revision: > 0 } : header.Terminal is not null) ||
             (kind == Kinds.Recover ? header.Park is not { Revision: > 0, At: > 0 } || header.Window is not >= 0 || due != 0 || header.ExplicitZeroDue ||
-                held || thenDelete || retentionDelete : header.Park is not null || header.Window is not null) ||
+                held || thenDelete || retentionDelete || header.Drain is <= 0 : header.Park is not null || header.Window is not null || header.Drain is not null) ||
             thenDelete && (!terminateThenDelete || kind != Kinds.Terminate) ||
             retentionDelete && (!retentionDeletes || kind != Kinds.Delete || held) ||
             header.ExplicitZeroDue && due != 0 || !MatchesDirectOccurrence(reference, header.Operation, occurrence[OperatorOccurrencePrefix.Length..], retentionDelete))

@@ -67,13 +67,31 @@ internal sealed record FoundationOperatorCommand(string? Selection)
     internal FoundationParkMark? RootParkMark { get; init; }
     internal long? RootParkWindow { get; init; }
     internal FoundationRootParkFacts? RootParkFacts { get; init; }
+    // A drain control of an open recover (protocol 23): the release generation of the resolution it pages.
+    internal long? RootParkDrain { get; init; }
 }
 
 internal sealed record FoundationTerminalStamp(long Revision, long At);
 
 internal sealed record FoundationParkMark(long Revision, long At);
 
-internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arrived, int Consumed, bool FitsPage, string KeptDigest);
+// Arrived counts the rows this commit restores: the whole set, or under protocol 23 the next page.
+internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arrived, int Consumed, bool FitsPage, string KeptDigest)
+{
+    internal FoundationParkDrainState? Drain { get; init; }
+
+    // A recover that fits one page journals its outcome; a larger set journals that its drain opened.
+    internal string OpenJournal(string operation) => FitsPage
+        ? Json.Write(new { Outcome = "recovered", Operation = operation, Restored = Arrived, Cleared = Consumed, AlreadyRearmed = 0 })
+        : Json.Write(new { Outcome = "recovering", Operation = operation, Restored = Arrived, Cleared = Consumed });
+
+    // The drain's Complete journals the totals, as the in-memory Complete does.
+    internal string CompleteJournal(string operation) =>
+        Json.Write(new { Outcome = "recovered", Operation = operation, Restored = Drain!.Restored, Cleared = Drain.Cleared, AlreadyRearmed = 0 });
+}
+
+// An open drain: its release generation, the cursor after the last restored row and the running totals.
+internal sealed record FoundationParkDrainState(long Generation, long Seq, string Id, long Restored, long Cleared);
 
 /// <summary>A message. Times are database time in milliseconds.</summary>
 public sealed record Message(

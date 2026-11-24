@@ -13,6 +13,7 @@ internal interface IRootDispatchHeaders
     bool KeepsParkInputs { get; }
     bool KeepsParkArrivals { get; }
     bool RecoversPark { get; }
+    bool DrainsPark { get; }
 }
 
 internal sealed partial class ActorAdapter
@@ -54,26 +55,31 @@ internal sealed partial class ActorAdapter
         ActorAuthored: false, JobGeneration: 0,
         Operator: { Selection: null, RecoverMode: Durable.ParkRecoveryMode.Resume, RecoverHandles: null, QualifiedTerminal: null,
             DeleteTarget: null, RootThenDelete: false, RetentionDelete: false, RootHeldReply: false, RootParkMark: not null, RootParkWindow: >= 0, RootParkFacts: not null }
-    };
+    } && (message.Operator.RootParkDrain is null || roots!.DrainsPark);
 
     // One page of a qualified root's kept set resolves in one fenced commit: the store restores the arrivals and clears the
-    // fault input. Any other case keeps the Park, consumes the command and journals a refusal at the next revision.
+    // fault input. Under protocol 23 a larger set opens a drain ("recovering") that restores its first page, and each drain
+    // control restores the next page, or completes once no kept row is left. Any other case consumes the command and
+    // journals a refusal at the next revision, keeping the Park or the open drain.
     private Durable.TurnOutcome RecoverRootPark(Durable.TurnInput input, Durable.InstanceRow row, Durable.Delivery recover)
     {
         var message = recover.Message;
         var facts = message.Operator!.RootParkFacts!;
-        var reason = message.Target.Id != row.Id || row.Creation != 1 ? "target"
+        var control = message.Operator.RootParkDrain;
+        var reason = control is { } generation
+            ? row is { Status: Durable.InstanceStatus.Running, Retired: false, Suspended: false } && message.Target.Id == row.Id &&
+                row.Creation == 1 && facts.Drain?.Generation == generation ? null : "selection"
+            : message.Target.Id != row.Id || row.Creation != 1 ? "target"
             : row is not { Status: Durable.InstanceStatus.Faulted, Retired: false, Suspended: false } ||
                 facts.Mark != message.Operator.RootParkMark ? "selection"
-            : !RestoresNothing(row) ? "plan" : !facts.FitsPage ? "page" : null;
+            : !RestoresNothing(row) ? "plan" : !facts.FitsPage && !roots!.DrainsPark ? "page" : null;
         var revision = checked(row.Revision + 1);
-        var next = reason is null ? row with { Status = Durable.InstanceStatus.Running, Fault = null, Revision = revision } : row with { Revision = revision };
+        var next = reason is null && control is null ? row with { Status = Durable.InstanceStatus.Running, Fault = null, Revision = revision } : row with { Revision = revision };
         return new(input.Actor)
         {
             Expected = row.Revision, Row = next, Revision = revision, Status = next.Status, Consumed = [recover],
-            Journal = reason is null
-                ? Durable.Json.Write(new { Outcome = "recovered", Operation = message.Id, Restored = facts.Arrived, Cleared = facts.Consumed, AlreadyRearmed = 0 })
-                : Durable.Json.Write(new { Outcome = "refused", Operation = message.Id, Reason = reason })
+            Journal = reason is not null ? Durable.Json.Write(new { Outcome = "refused", Operation = message.Id, Reason = reason })
+                : control is null ? facts.OpenJournal(message.Id) : facts.Arrived > 0 ? null : facts.CompleteJournal(message.Id)
         };
     }
 

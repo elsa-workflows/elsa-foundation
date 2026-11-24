@@ -53,6 +53,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootParkInspection => Current with { MessageProtocol = 20 };
     internal static StoreFormat RootParkArrivals => Current with { MessageProtocol = 21 };
     internal static StoreFormat RootParkRecovery => Current with { MessageProtocol = 22 };
+    internal static StoreFormat RootParkDrain => Current with { MessageProtocol = 23 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -84,7 +85,8 @@ internal enum RootCapabilities
     ParkOpening = 1 << 17,
     ParkInspection = 1 << 18,
     ParkArrivals = 1 << 19,
-    ParkRecovery = 1 << 20
+    ParkRecovery = 1 << 20,
+    ParkDrain = 1 << 21
 }
 
 internal static class RootProfiles
@@ -123,7 +125,10 @@ internal static class RootProfiles
         [StoreFormat.RootParkInspection] = ParkInspection,
         [StoreFormat.RootParkArrivals] = ParkInspection | RootCapabilities.ParkArrivals,
         // Recover composes with the Park capabilities and admits only its own operator occurrence.
-        [StoreFormat.RootParkRecovery] = ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery | RootCapabilities.OperatorProtocol
+        [StoreFormat.RootParkRecovery] = ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery | RootCapabilities.OperatorProtocol,
+        // The drain adds paging to recover: a kept set over one page opens a drain instead of refusing "page".
+        [StoreFormat.RootParkDrain] = ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery | RootCapabilities.OperatorProtocol |
+            RootCapabilities.ParkDrain
     };
 
     internal static RootCapabilities CapabilitiesOf(StoreFormat format) =>

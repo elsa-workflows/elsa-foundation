@@ -125,7 +125,7 @@ public sealed partial class EfStore
     }
 
     internal static Task InstallFirstRootCheckpointsAsync(KernelDb db, CancellationToken cancellationToken) =>
-        db.Database.ExecuteSqlRawAsync("""
+        db.Database.ExecuteSqlRawAsync(WithDrainFragments(db, """
             ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationReference" text COLLATE "C" REFERENCES "FoundationRootBirths" ("Reference"),
                                   ADD COLUMN IF NOT EXISTS "FoundationTenant" text COLLATE "C",
                                   ADD COLUMN IF NOT EXISTS "FoundationHeader" text,
@@ -137,7 +137,7 @@ public sealed partial class EfStore
                 IF TG_OP = 'UPDATE' AND NEW."FoundationWriteRevision" = OLD."Revision" + 1
                     AND NEW."Revision" = NEW."FoundationWriteRevision"
                     AND NEW."FoundationReference" = OLD."FoundationReference" AND NEW."FoundationTenant" = OLD."FoundationTenant"
-                    AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired" /*root-park-generation*/
+                    AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired" /*root-park-generation*/ /*drain-checkpoint*/
                     AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR /*root-park-continues*/ OR /*root-park-recover*/ OR
                         (/*root-retirement*/ AND NEW."Retired" AND NEW."State" = 'null' AND NEW."FoundationHeader" IS NULL /*root-retirement-wire*/
                             AND ((OLD."Status" <> 0 AND NEW."Status" = OLD."Status"
@@ -187,17 +187,17 @@ public sealed partial class EfStore
                     AND NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" + 1))
                 AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
                     AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/
-                    AND CASE WHEN j."Entries" LIKE '{{"Outcome":"recovered",%' THEN NOT (OLD."Status" = 2 AND NEW."Status" = 0)
-                        ELSE j."Entries" LIKE '{{"Outcome":"refused",%' AND ROW(NEW."Status", NEW."Retired", NEW."Suspended", NEW."State",
+                    AND CASE WHEN j."Entries" LIKE '{{"Outcome":"recovered",%' THEN NOT (OLD."Status" = 2 AND NEW."Status" = 0 /*drain-recovered*/)
+                        /*drain-recovering*/ ELSE j."Entries" LIKE '{{"Outcome":"refused",%' AND ROW(NEW."Status", NEW."Retired", NEW."Suspended", NEW."State",
                             NEW."StateVersion", NEW."FoundationHeader", NEW."Fault", NEW."History", NEW."Jobs", NEW."Children", NEW."Parent",
                             NEW."FoundationParkAt", NEW."FoundationParkRevision", NEW."FoundationParkGeneration",
                             NEW."FoundationTerminalRevision", NEW."FoundationTerminalAt", NEW."Model", NEW."Definition",
-                            NEW."NextJobGeneration", NEW."CustomHandles" /*new-wire*/)
+                            NEW."NextJobGeneration", NEW."CustomHandles" /*new-wire*/ /*new-drain*/)
                         IS DISTINCT FROM ROW(OLD."Status", OLD."Retired", OLD."Suspended", OLD."State",
                             OLD."StateVersion", OLD."FoundationHeader", OLD."Fault", OLD."History", OLD."Jobs", OLD."Children", OLD."Parent",
                             OLD."FoundationParkAt", OLD."FoundationParkRevision", OLD."FoundationParkGeneration",
                             OLD."FoundationTerminalRevision", OLD."FoundationTerminalAt", OLD."Model", OLD."Definition",
-                            OLD."NextJobGeneration", OLD."CustomHandles" /*old-wire*/) END)
+                            OLD."NextJobGeneration", OLD."CustomHandles" /*old-wire*/ /*old-drain*/) END)
                 """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
                 // The state wire column exists only on stable-body profiles.
                 .Replace("/*new-wire*/", db.UsesRootStableBody ? """, NEW."FoundationStateWire" """ : "", StringComparison.Ordinal)
@@ -210,23 +210,25 @@ public sealed partial class EfStore
                     AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
                     AND NEW."History" IS NOT DISTINCT FROM OLD."History"
                     AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
-                        AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/ AND j."Entries" LIKE '{{"Outcome":"recovered",%'))
+                        AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/ AND (j."Entries" LIKE '{{"Outcome":"recovered",%' /*drain-open-entry*/)))
                 """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal) : "false", StringComparison.Ordinal)
             // A recovered entry is journaled only on the parked root it resolves.
             .Replace("/*root-park-recovered-journal*/", db.UsesRootParkRecovery ? """
                 IF NEW."Entries" LIKE '{{"Outcome":"recovered",%' AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance"
                     AND i."FoundationReference" IS NOT NULL AND NOT (i."Status" = 2 AND NOT i."Retired" AND NOT i."Suspended"
                         AND i."Partition" = NEW."Partition" AND NEW."Revision" = i."Revision" + 1
-                        AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0))
+                        AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0 /*drain-complete-journal*/))
                 THEN RAISE EXCEPTION 'A recovered journal entry requires the parked checkpoint it resolves' USING ERRCODE = '23514'; END IF;
                 """ : "", StringComparison.Ordinal)
             .Replace("/*root-park-recover-journal*/", db.UsesRootParkRecovery
                 // The raw command is formatted, so the literal brace is doubled.
-                ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'""" : "", StringComparison.Ordinal)
+                ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%' /*drain-open-journal*/""" : "", StringComparison.Ordinal)
             .Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
-            .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal), cancellationToken);
+            .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal),
+            "/*drain-checkpoint*/", "/*drain-recovered*/", "/*drain-recovering*/", "/*new-drain*/", "/*old-drain*/", "/*drain-open-entry*/",
+            "/*drain-complete-journal*/", "/*drain-open-journal*/"), cancellationToken);
 
     /// <summary>The manual first Running checkpoint of a generated root, with its creator as the sole input.
     /// The Worker qualifies immediate completion through its regular turn path.</summary>
