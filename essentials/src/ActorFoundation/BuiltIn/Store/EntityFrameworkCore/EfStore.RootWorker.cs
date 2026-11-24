@@ -436,7 +436,7 @@ public sealed partial class EfStore
         var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
         var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
             (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == RootSelfScope || RootJobsEnabled && m.InboxScope == RootJobScope) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
-        var inputs = records.Select(record => DecodeRootInput(record, root.Reference, RootSelfIssuer, RootJobsEnabled, replies: db.UsesRootReplyProtocol, terminations: db.UsesRootTermination, retirements: db.UsesRootRetirement)).ToArray();
+        var inputs = records.Select(record => DecodeRootInput(record, root.Reference, RootSelfIssuer, RootJobsEnabled, replies: db.UsesRootReplyProtocol, terminations: db.UsesRootTermination, retirements: db.UsesRootRetirement, terminateThenDelete: db.UsesRootTerminateThenDelete)).ToArray();
         if (!SameInputs(inputs, turn.Done.Concat(turn.Consumed))) return null;
         if (turn.FoundationRootOperator is { } command)
         {

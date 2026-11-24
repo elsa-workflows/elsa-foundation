@@ -702,8 +702,19 @@ same-owner deletion, original receipt replay and complete rollback when a store
 write is suppressed. The runnable fixture is
 `pg-root-retirement owned checked` against an empty PostgreSQL database.
 
-This profile qualifies generated roots with no attached work. Protected ThenDelete,
-descendant and job cascades, retention and held operator replies have separate
+The opt-in format-15 fixture adds a selected Terminate, then delete command.
+The host authorizes termination and deletion for the same generated reference.
+The worker applies the command in one fenced commit. An eligible running
+root retires with one new terminal revision and one deletion marker. Native
+receipt protection can keep the cancelled checkpoint and its terminal journal.
+A command admitted while the root was running can also retire it after an
+earlier Terminate, preserving that terminal mark. Build Native.Run in
+Release with a locked restore and run `pg-root-then-delete owned checked`
+against an empty PostgreSQL database. The test seeds a receipt in Native
+state and uses the real Native cancellation and protection logic.
+
+Both profiles qualify generated roots with no attached work. Descendant and
+job cascades, automated retention and held operator replies have separate
 acceptance cases.
 
 ## 10. Private durable lexical-resource probe

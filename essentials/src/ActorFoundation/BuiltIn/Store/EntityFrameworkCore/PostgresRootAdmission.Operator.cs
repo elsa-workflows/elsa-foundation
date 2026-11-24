@@ -13,6 +13,9 @@ internal sealed partial class PostgresRootAdmission
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public FoundationTerminalStamp? Terminal { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool ThenDelete { get; init; }
     }
     internal const string OperatorOccurrencePrefix = "operator/";
     internal static bool IsStoredOperator(string? header) => header?.StartsWith(OperatorPrefix, StringComparison.Ordinal) == true;
@@ -32,7 +35,7 @@ internal sealed partial class PostgresRootAdmission
             """, token);
 
     internal async Task<Receipt?> AdmitRootOperatorAsync(string tenant, string reference, string operation, string kind, long? due,
-        TimeSpan? keepFor, CancellationToken token, string? selection = null)
+        TimeSpan? keepFor, CancellationToken token, string? selection = null, bool thenDelete = false)
     {
         if (kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete) || !FoundationMetadataLimits.IsOutsideMessageId(operation))
             throw new ArgumentException("Expected a one-way exact-root operator command.");
@@ -43,7 +46,7 @@ internal sealed partial class PostgresRootAdmission
         await using var db = create();
         if (!db.UsesRootOperatorProtocol || kind == Kinds.Terminate && !db.UsesRootTermination) return null;
         var deletion = kind == Kinds.Delete;
-        if (deletion && !db.UsesRootRetirement) return null;
+        if (deletion && !db.UsesRootRetirement || thenDelete && (kind != Kinds.Terminate || !db.UsesRootTerminateThenDelete)) return null;
         var selected = deletion || db.UsesRootTerminalSelection && kind == Kinds.Terminate;
         if (selected != (selection is not null)) return null;
 
@@ -111,7 +114,7 @@ internal sealed partial class PostgresRootAdmission
             }
             var actor = new InstanceRef(address.Id);
             var id = $"{OperatorOccurrencePrefix}{reference}/{digest}/{Guid.NewGuid():N}";
-            var header = OperatorPrefix + DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0) { Terminal = terminal });
+            var header = OperatorPrefix + DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0) { Terminal = terminal, ThenDelete = thenDelete });
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial")
                 VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0)
@@ -203,10 +206,10 @@ internal sealed partial class PostgresRootAdmission
                 AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" LIKE 'operator/%' AND NOT m."Done"
                 AND m."Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint ORDER BY m."Seq" LIMIT 1
             """).AsNoTracking().SingleOrDefaultAsync(token);
-        return row is null ? null : DecodeOperator(row, reference, db.UsesRootTermination, db.UsesRootRetirement);
+        return row is null ? null : DecodeOperator(row, reference, db.UsesRootTermination, db.UsesRootRetirement, db.UsesRootTerminateThenDelete);
     }
 
-    internal static Message DecodeOperator(MessageEntity row, string reference, bool terminations, bool retirements)
+    internal static Message DecodeOperator(MessageEntity row, string reference, bool terminations, bool retirements, bool terminateThenDelete)
     {
         if (!IsOperatorOccurrence(new(row.Id, row.InboxScope)) || !IsStoredOperator(row.Start) || row.Kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete) ||
             row.Kind == Kinds.Terminate && !terminations || row.Kind == Kinds.Delete && !retirements || row.EventMatch is not null || row.Payload is not null || row.ReplyTo is not null || row.Sender is not null ||
@@ -218,11 +221,12 @@ internal sealed partial class PostgresRootAdmission
         if (header is null) throw new StoreException(Failure.Definite, "Invalid stored operator framing.");
         if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != row.Kind ||
             (row.Kind == Kinds.Delete ? header.Terminal is not { Revision: > 0 } : header.Terminal is not null) ||
+            header.ThenDelete && (!terminateThenDelete || row.Kind != Kinds.Terminate) ||
             header.ExplicitZeroDue && row.Due != 0 || !MatchesDirectOccurrence(reference, header.Operation, row.Id[OperatorOccurrencePrefix.Length..]))
             throw new StoreException(Failure.Definite, "The operator occurrence differs from its bound reference and operation.");
         var suffix = row.Id.LastIndexOf('/');
         return FoundationIngressAddress.Occurrence(header.Operation, row.Id[..suffix], row.Id[(suffix + 1)..],
-            new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, null, new(null) { QualifiedTerminal = header.Terminal });
+            new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, null, new(null) { QualifiedTerminal = header.Terminal, DeleteTarget = header.ThenDelete ? reference : null, RootThenDelete = header.ThenDelete });
     }
 
     internal async Task<int> SweepOperatorReceiptsAsync(CancellationToken token)

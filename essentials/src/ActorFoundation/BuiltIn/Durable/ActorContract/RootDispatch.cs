@@ -33,18 +33,24 @@ internal sealed partial class ActorAdapter
     {
         Kind: Durable.Kinds.Suspend or Durable.Kinds.Resume or Durable.Kinds.Terminate or Durable.Kinds.Delete,
         InboxScope: Durable.InboxKey.FoundationOccurrenceScope, StorageId: not null, TargetCreation: 1, KeepUntil: not null,
-        Operator: { Selection: null, DeleteTarget: null, RetentionDelete: false, RecoverMode: null, RecoverHandles: null },
+        Operator: { Selection: null, RetentionDelete: false, RecoverMode: null, RecoverHandles: null },
         Start: null, Payload: null, ReplyTo: null, EventMatch: null, Sender: null, SenderCreation: 0, ActorAuthored: false, JobGeneration: 0
-    } && (message.Kind == Durable.Kinds.Delete ? message.Operator.QualifiedTerminal is not null : message.Operator.QualifiedTerminal is null);
+    } && (message.Kind == Durable.Kinds.Delete ? message.Operator.QualifiedTerminal is not null : message.Operator.QualifiedTerminal is null)
+        && (message.Operator.RootThenDelete ? message.Kind == Durable.Kinds.Terminate && message.Operator.DeleteTarget is not null
+            : message.Operator.DeleteTarget is null);
 
     private Durable.TurnOutcome? SettleRootDeletion(Durable.TurnInput input)
     {
-        if (input.Taken is not [{ Durable: true, Message: { Kind: Durable.Kinds.Delete,
-            Operator.QualifiedTerminal: { } selection } message }]) return null;
+        if (input.Taken is not [{ Durable: true, Message: { Operator: { } command } message }] ||
+            message.Kind != Durable.Kinds.Delete && !command.RootThenDelete) return null;
         var row = input.Row;
-        if (row is not { Creation: 1, Retired: false, Status: not Durable.InstanceStatus.Running, Parent: null,
-                Children: null, Jobs: null, FoundationDispatchHeader.Terminal: { } terminal } ||
-            row.Model != actor.Type || row.Id != message.Target.Id || message.TargetCreation != row.Creation || terminal != selection)
+        if (row is not { Creation: 1, Retired: false, Parent: null, Children: null, Jobs: null, FoundationDispatchHeader: { } header } ||
+            row.Model != actor.Type || row.Id != message.Target.Id || message.TargetCreation != row.Creation ||
+            (command.RootThenDelete ? command.DeleteTarget != header.Reference : header.Terminal is null || header.Terminal != command.QualifiedTerminal))
+            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
+        if (row.Status == Durable.InstanceStatus.Running)
+            return command.RootThenDelete ? null : Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
+        if (header.Terminal is null)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
 
         var protection = DeletionRefusal(RootHeader(row), row.State, input.Services.Now);

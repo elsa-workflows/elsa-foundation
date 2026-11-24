@@ -80,14 +80,17 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         try { command = JsonSerializer.Deserialize<Contract.OperatorCommand>(payload, OperatorJson); }
         catch (JsonException) { return new(Contract.AdmissionOutcome.Refused); }
 
-        if (command is not { ThenDelete: false, Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null })
+        if (command is not { Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null })
             return new(Contract.AdmissionOutcome.Refused);
         if (command.ExpectedTarget is { } selected && selected != actor)
             return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
+        if (command.ThenDelete && (kind != Contract.Kinds.Terminate || command.ExpectedTarget != actor ||
+            authorizeDelete?.Invoke(scope, actor) != true))
+            return new(Contract.AdmissionOutcome.Refused);
         if (command.Selection is not { Length: > 0 } selection)
             return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
         var receipt = await admission.AdmitRootOperatorAsync(scope.Tenant, actor.Id, id, kind,
-            options?.DueAt, options?.KeepFor, token, selection);
+            options?.DueAt, options?.KeepFor, token, selection, command.ThenDelete);
         return receipt switch
         {
             { Duplicate: true } => new(Contract.AdmissionOutcome.Duplicate, new Contract.ActorRef(receipt.Reference)),
