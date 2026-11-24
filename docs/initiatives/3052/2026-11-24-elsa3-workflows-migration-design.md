@@ -49,7 +49,8 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
 - **Variable types:** register the type in an Elsa 4 feature under a dotted alias and it converts typed. This is not
   related to proxies (#4103); a script calling .NET members on a value stays refused (`VF-IMP-012`). The converter
   gains the missing diagnostics: **#5666**.
-- **Storage drivers** are migrated in stage 1 as custom features, with the refusal from #5666.
+- **Storage drivers** are not migrated: every member converts to `elsa.json` with an `ELS3-BEHAVIOUR-*` warning
+  (Reconsider) that starts the conversation in [Elsa 3 storage drivers](../../migration/elsa3-storage-drivers.md).
 
 ### The CLI: `dotnet elsa elsa3-migration workflows inventory|assess`
 
