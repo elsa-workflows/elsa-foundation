@@ -203,7 +203,11 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
       if (memo === null) await page.getByRole("button", { name: "Send null for Memo", exact: true }).click();
       else {
         const field = page.getByRole("textbox", { name: "Memo", exact: true });
-        await field.focus(); await field.fill(memo);
+        await field.focus();
+        // Omit already displays an empty field. Make a real edit before clearing it so React receives the change
+        // that distinguishes an explicitly supplied empty string from an untouched omitted value.
+        if (memo === "") await field.fill("clear this value");
+        await field.fill(memo);
       }
       if (memo === null) await capture(page, info, "published-run-inputs");
       const response = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith(`/runtime/workflows/executables/${published.artifactId}/execute`));
