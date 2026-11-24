@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using static Kernel.Native.Binding;
 using static Kernel.Native.Wf;
+using static Kernel.Native.TestWf;
 
 namespace Kernel.Native.Run;
 
@@ -18,7 +19,7 @@ public static class JoinReplayVariantChecks
             await Shape(mode, "V8 join inside a loop", Workflow("v", Sequence("root",
                     Parallel("par", null,
                         Sequence("b1", Event("e1", "v-1"), Flowchart("flow",
-                            [Set("head", "round", Expr("round + 1")), Set("pa", "a", 1), Set("pb", "b", 1), WriteLine("j", "joined"), Http("h", "https://partner.example/j", Expr("'r=' + round")), If("decide", Expr("round < 3")), Set("end", "done", "yes")],
+                            [Set("head", "round", Expr("round + 1")), Set("pa", "a", 1), Set("pb", "b", 1), WriteLine("j", "joined"), Post("h", "https://partner.example/j", Expr("'r=' + round")), If("decide", Expr("round < 3")), Set("end", "done", "yes")],
                             [new("head", "pa"), new("head", "pb"), new("pa", "j"), new("pb", "j"), new("j", "h"), new("h", "decide"), new("decide", "head", "True"), new("decide", "end", "False")],
                             ("j", Gateway.ParallelJoin))),
                         Sequence("b2", Event("e2", "v-2"), Set("t1", "tag", 1), Set("t2", "tag", 2), Set("t3", "tag", 3))),
@@ -28,7 +29,7 @@ public static class JoinReplayVariantChecks
             // V9 two joins in series after a merge: m -> u, v -> j1 -> w; m -> z; j2 joins w and z; h behind j2.
             await Shape(mode, "V9 two joins in series after a merge", Workflow("v", Sequence("root",
                     Flowchart("flow",
-                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), WriteLine("m", "merged"), WriteLine("u", "u"), WriteLine("v", "v"), WriteLine("j1", "j1"), WriteLine("w", "w"), WriteLine("z", "z"), WriteLine("j2", "j2"), Http("h", "https://partner.example/j2", "joined")],
+                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), WriteLine("m", "merged"), WriteLine("u", "u"), WriteLine("v", "v"), WriteLine("j1", "j1"), WriteLine("w", "w"), WriteLine("z", "z"), WriteLine("j2", "j2"), Post("h", "https://partner.example/j2", "joined")],
                         [new("s0", "ea"), new("s0", "eb"), new("ea", "m"), new("eb", "m"), new("m", "u"), new("m", "v"), new("u", "j1"), new("v", "j1"), new("j1", "w"), new("m", "z"), new("w", "j2"), new("z", "j2"), new("j2", "h")],
                         ("m", Gateway.Merge), ("j1", Gateway.ParallelJoin), ("j2", Gateway.ParallelJoin)),
                     Set("out", "output", "done")),
@@ -37,7 +38,7 @@ public static class JoinReplayVariantChecks
             // V10 a join with one inbound from a merge and one from outside that arrives LAST (a third event): does the firing count differ?
             await Shape(mode, "V10 join after merge, outside inbound arrives last", Workflow("v", Sequence("root",
                     Flowchart("flow",
-                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), Event("ey", "v-3"), WriteLine("m", "merged"), WriteLine("px", "px"), WriteLine("j", "joined"), Http("h", "https://partner.example/j", "joined")],
+                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), Event("ey", "v-3"), WriteLine("m", "merged"), WriteLine("px", "px"), WriteLine("j", "joined"), Post("h", "https://partner.example/j", "joined")],
                         [new("s0", "ea"), new("s0", "eb"), new("s0", "ey"), new("ea", "m"), new("eb", "m"), new("m", "px"), new("px", "j"), new("ey", "j"), new("j", "h")],
                         ("m", Gateway.Merge), ("j", Gateway.ParallelJoin)),
                     Set("out", "output", "done")),
