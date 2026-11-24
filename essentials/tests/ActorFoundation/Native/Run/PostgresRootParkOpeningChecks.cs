@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.EntityFramework;
@@ -827,12 +828,28 @@ internal static class PostgresRootParkOpeningChecks
                     "the checkpoint trigger refuses a refused entry beside a recovered entry with the recover write");
                 Check(await TriggerProbe(turn.Instance, checkpoint.Revision, refused, Continue(turn.Instance), token),
                     "a refused entry with only the revision moved passes the triggers (rolled back)");
-                Check(!await TriggerProbe(running.Actor.Id, running.Revision, recovered, null, token),
+                // No commit-time check here: only the journal's insert trigger can refuse this probe.
+                Check(!await TriggerProbe(running.Actor.Id, running.Revision, recovered, null, token, immediate: false),
                     "the journal trigger refuses a recovered entry on a Running root");
                 Check(await TriggerProbe(running.Actor.Id, running.Revision, refused, Continue(running.Actor.Id), token) &&
                     !await TriggerProbe(running.Actor.Id, running.Revision, refused,
                         Continue(running.Actor.Id, stateStep: 1), token),
                     "a refused entry on a Running root passes with the row unchanged and is refused with a changed row");
+                // Each column the refused-row rule compares beyond the older set: the change alone passes, beside a refused entry it is refused.
+                foreach (var (column, change) in new (string, string)[]
+                {
+                    ("Model", "\"Model\" = \"Model\" || 'x'"), ("Definition", "\"Definition\" = \"Definition\" || 'x'"),
+                    ("NextJobGeneration", "\"NextJobGeneration\" = coalesce(\"NextJobGeneration\", 0) + 1"),
+                    ("CustomHandles", "\"CustomHandles\" = coalesce(\"CustomHandles\", '') || 'x'")
+                })
+                {
+                    var write = FormattableStringFactory.Create(
+                        "UPDATE \"Instances\" SET \"Revision\" = \"Revision\" + 1, \"FoundationWriteRevision\" = \"Revision\" + 1, " + change +
+                        " WHERE \"Id\" = {0}", running.Actor.Id);
+                    Check(await TriggerProbe(running.Actor.Id, running.Revision, null, write, token) &&
+                        !await TriggerProbe(running.Actor.Id, running.Revision, refused, write, token),
+                        $"a refused entry on a Running root is refused when {column} changes");
+                }
                 // A lone outcome entry passes the insert trigger but is refused at commit, so the next write at that revision still lands.
                 Check(!await LoneEntryCommits(turn.Instance, checkpoint.Revision, recovered, token) &&
                     !await LoneEntryCommits(turn.Instance, checkpoint.Revision, refused, token) &&
@@ -968,7 +985,7 @@ internal static class PostgresRootParkOpeningChecks
         // One or two raw journal entries at the next revision, then one write, in a transaction that is always rolled back
         // after its deferred checks run. True when all pass the triggers; false when a trigger refuses any.
         async Task<bool> TriggerProbe(string instance, long revision, string? entries, FormattableString? write, CancellationToken token,
-            string? then = null)
+            string? then = null, bool immediate = true)
         {
             await using var db = Open();
             await using var transaction = await db.Database.BeginTransactionAsync(token);
@@ -978,7 +995,7 @@ internal static class PostgresRootParkOpeningChecks
                     await InsertEntry(db, instance, revision, entry, token);
                 if (write is not null && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1)
                     throw new InvalidOperationException("The trigger probe did not write exactly the root row.");
-                await db.Database.ExecuteSqlRawAsync("SET CONSTRAINTS ALL IMMEDIATE", token);
+                if (immediate) await db.Database.ExecuteSqlRawAsync("SET CONSTRAINTS ALL IMMEDIATE", token);
                 return true;
             }
             catch (Exception error) when ((error as PostgresException ?? error.InnerException as PostgresException)?.SqlState == "23514")
