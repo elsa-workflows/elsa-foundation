@@ -14,8 +14,15 @@ internal static class Elsa3LiteralConversion
     internal static JsonElement Rewrite(JsonElement value, Type type, Elsa3ConversionOptions options, Action<Note> report,
         JsonConversionContract? contract = null, string path = "$")
     {
-        type = Nullable.GetUnderlyingType(type) ?? type;
         contract ??= JsonConversionContract.For(type);
+        if (ReferenceEquals(contract, JsonConversionContract.Default)) contract = contract.ForNested(type);
+        return RewriteCore(value, type, options, report, contract, path, new LiteralConversionContext());
+    }
+
+    private static JsonElement RewriteCore(JsonElement value, Type type, Elsa3ConversionOptions options, Action<Note> report,
+        JsonConversionContract contract, string path, LiteralConversionContext context)
+    {
+        type = Nullable.GetUnderlyingType(type) ?? type;
         if (value.ValueKind == JsonValueKind.Null || type == typeof(object) || type == typeof(JsonElement) ||
             typeof(System.Text.Json.Nodes.JsonNode).IsAssignableFrom(type)) return value.Clone();
         if (type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(DateOnly))
@@ -23,7 +30,7 @@ internal static class Elsa3LiteralConversion
         if (type.IsEnum && value.ValueKind == JsonValueKind.String && Enum.TryParse(type, value.GetString(), true, out var enumeration))
             return JsonSerializer.SerializeToElement(enumeration, type, JsonBaseline.Options);
 
-        var info = contract.Options.GetTypeInfo(type);
+        var info = context.Options(contract).GetTypeInfo(type);
         if (value.ValueKind == JsonValueKind.Object && info.PolymorphismOptions is { } polymorphism &&
             value.TryGetProperty(polymorphism.TypeDiscriminatorPropertyName, out var discriminator))
         {
@@ -32,8 +39,10 @@ internal static class Elsa3LiteralConversion
                 candidate.TypeDiscriminator is int number && discriminator.ValueKind == JsonValueKind.Number && discriminator.TryGetInt32(out var actual) && actual == number);
             if (derived.DerivedType is { } selectedType)
             {
-                contract = ChildContract(selectedType, contract);
-                info = contract.Options.GetTypeInfo(selectedType);
+                // A discriminator chooses a shape inside this declared Base/member occurrence.
+                // A direct conversion to Derived selects its annotation at its own boundary instead.
+                type = selectedType;
+                info = context.Options(contract).GetTypeInfo(selectedType);
             }
         }
         if (info.Kind == JsonTypeInfoKind.Dictionary && value.ValueKind == JsonValueKind.Object)
@@ -41,7 +50,7 @@ internal static class Elsa3LiteralConversion
             var elementType = type.GetInterfaces().Append(type).FirstOrDefault(item => item.IsGenericType &&
                 item.GetGenericTypeDefinition() is var definition && (definition == typeof(IDictionary<,>) || definition == typeof(IReadOnlyDictionary<,>)))?.GetGenericArguments()[1];
             return elementType is null ? value.Clone() : RewriteObject(value, property =>
-                (property.Name, Rewrite(property.Value, elementType, options, report, ChildContract(elementType, contract), MemberPath(path, property.Name))));
+                (property.Name, RewriteCore(property.Value, elementType, options, report, context.ChildContract(elementType, contract), MemberPath(path, property.Name), context)));
         }
         if (info.Kind == JsonTypeInfoKind.Enumerable && value.ValueKind == JsonValueKind.Array)
         {
@@ -54,7 +63,7 @@ internal static class Elsa3LiteralConversion
                 writer.WriteStartArray();
                 var index = 0;
                 foreach (var item in value.EnumerateArray())
-                    writer.WriteRawValue(Rewrite(item, elementType, options, report, ChildContract(elementType, contract), $"{path}[{index++}]").GetRawText());
+                    writer.WriteRawValue(RewriteCore(item, elementType, options, report, context.ChildContract(elementType, contract), $"{path}[{index++}]", context).GetRawText());
                 writer.WriteEndArray();
             }
             using var document = JsonDocument.Parse(stream.ToArray());
@@ -90,10 +99,8 @@ internal static class Elsa3LiteralConversion
                 report(CoverageUnavailable(MemberPath(path, member.Name), member.PropertyType, customConverter.GetType()));
                 return (member.Name, property.Value.Clone());
             }
-            var underlying = Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType;
-            var selected = memberSelection || underlying.GetCustomAttribute<JsonConversionAttribute>(true) is not null
-                ? JsonConversionContract.For(member.PropertyType, clrMember) : contract;
-            return (member.Name, Rewrite(property.Value, member.PropertyType, options, report, selected, MemberPath(path, member.Name)));
+            var selected = context.ChildContract(member.PropertyType, contract, clrMember);
+            return (member.Name, RewriteCore(property.Value, member.PropertyType, options, report, selected, MemberPath(path, member.Name), context));
         });
     }
 
@@ -160,10 +167,23 @@ internal static class Elsa3LiteralConversion
     private static LiteralRefusal RefuseDate(string path, string message) => new(Elsa3ActivityDiagnosticCodes.LiteralDateOffsetMissing, path, message,
         "Set the Elsa 3 converter's date interpretation to SourceTimeZone with the server's IANA zone, or add Z or an explicit offset to the value; choose AssumeUtc only to accept UTC behaviour.");
     private static string MemberPath(string path, string name) => $"{path}[{JsonSerializer.Serialize(name, JsonBaseline.Options)}]";
-    private static JsonConversionContract ChildContract(Type type, JsonConversionContract parent)
+    private sealed class LiteralConversionContext
     {
-        type = Nullable.GetUnderlyingType(type) ?? type;
-        return type.GetCustomAttribute<JsonConversionAttribute>(true) is not null ? JsonConversionContract.For(type) : parent;
+        private readonly Dictionary<JsonConversionContract, JsonSerializerOptions> options = new();
+        private readonly Dictionary<(Type Type, MemberInfo? Member, JsonConversionContract Parent), JsonConversionContract> children = new();
+
+        internal JsonSerializerOptions Options(JsonConversionContract contract)
+        {
+            if (!options.TryGetValue(contract, out var selected)) options.Add(contract, selected = contract.Options);
+            return selected;
+        }
+
+        internal JsonConversionContract ChildContract(Type type, JsonConversionContract parent, MemberInfo? member = null)
+        {
+            var key = (type, member, parent);
+            if (!children.TryGetValue(key, out var selected)) children.Add(key, selected = parent.ForNested(type, member));
+            return selected;
+        }
     }
     private static Note CoverageUnavailable(string path, Type type, Type converter) => new("json-unmatched-coverage-unavailable", path,
         $"Literal keys for {type.Name} are owned by converter {converter.FullName}; their shape was preserved without inferred rewrites.",

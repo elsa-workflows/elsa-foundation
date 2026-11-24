@@ -16,6 +16,71 @@ namespace Elsa3.Mapping.Tests;
 public sealed class Elsa3LiteralConversionTests
 {
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void Discriminator_rewrites_keep_the_declared_scope_including_Default_and_refuse_ambiguity(bool useDefault, bool ambiguous)
+    {
+        const string carried = "{ \"Name\":\"Ren\\u00e9\", \"n\":1.0, \"x\":null }";
+        var input = Parse("{\"kind\":\"scoped\",\"CUSTOMER_NAME\":\"Ada\",\"START_AT\":\"2026-07-15T09:15:00\",\"carried\":" + carried +
+            (ambiguous ? ",\"customer_name\":\"Second\"}" : "}"));
+        var raw = input.GetRawText();
+        var contract = useDefault ? JsonConversionContract.Default : JsonConversionContract.For(typeof(ScopedImportBase));
+        var notes = new List<Elsa3LiteralConversion.Note>();
+        JsonElement Convert() => Elsa3LiteralConversion.Rewrite(input, typeof(ScopedImportBase), Options(Elsa3DateInterpretation.SourceTimeZone), notes.Add, contract);
+        if (ambiguous) Assert.Equal(Elsa3ActivityDiagnosticCodes.LiteralKeyAmbiguous, Assert.Throws<Elsa3LiteralConversion.LiteralRefusal>(() => Convert()).Code);
+        else
+        {
+            var converted = Convert();
+            Assert.Equal("scoped", converted.GetProperty("kind").GetString());
+            Assert.Equal("Ada", converted.GetProperty("customer_name").GetString());
+            Assert.Equal("2026-07-15T09:15:00+02:00", converted.GetProperty("start_at").GetString());
+            Assert.Equal(carried, converted.GetProperty("carried").GetRawText());
+            Assert.Empty(UnmatchedMemberScanner.Scan(converted, typeof(ScopedImportBase), contract));
+            Assert.Equal("Ada", Assert.IsType<ScopedImportDerived>(contract.Read(converted, typeof(ScopedImportBase))).CustomerName);
+            Assert.DoesNotContain(notes, note => note.Code == "json-unmatched-coverage-unavailable");
+
+            var direct = Elsa3LiteralConversion.Rewrite(Parse("""{"CUSTOMERNAME":"Direct","STARTAT":"2026-07-15T09:15:00"}"""),
+                typeof(ScopedImportDerived), Options(Elsa3DateInterpretation.SourceTimeZone), _ => { });
+            Assert.Equal("Direct", direct.GetProperty("CustomerName").GetString());
+            Assert.Equal("2026-07-15T09:15:00+02:00", direct.GetProperty("StartAt").GetString());
+        }
+        Assert.Equal(raw, input.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("order_value", false)]
+    [InlineData("order_values", false)]
+    [InlineData("orders_by_key", false)]
+    [InlineData("order_value", true)]
+    [InlineData("order_values", true)]
+    [InlineData("orders_by_key", true)]
+    public void Unannotated_polymorphic_children_rewrite_keys_and_dates_under_the_enclosing_scope(string shape, bool useDefault)
+    {
+        const string carried = "{ \"Name\":\"Ren\\u00e9\", \"n\":1.0 }";
+        var child = "{\"CUSTOMER_NAME\":\"Ada\",\"START_AT\":\"2026-07-15T09:15:00\",\"carried\":" + carried + "}";
+        var contents = shape switch { "order_value" => child, "order_values" => "[" + child + "]", _ => "{\"KeepKey\":" + child + "}" };
+        var input = Parse("{\"" + shape + "\":" + contents + "}");
+        var raw = input.GetRawText();
+        var contract = useDefault ? JsonConversionContract.Default : JsonConversionContract.For(typeof(ImportPolymorphicChildren));
+        var notes = new List<Elsa3LiteralConversion.Note>();
+        var converted = Elsa3LiteralConversion.Rewrite(input, typeof(ImportPolymorphicChildren), Options(Elsa3DateInterpretation.SourceTimeZone), notes.Add, contract);
+        var nested = shape switch { "order_value" => converted.GetProperty(shape), "order_values" => converted.GetProperty(shape)[0], _ => converted.GetProperty(shape).GetProperty("KeepKey") };
+        Assert.Equal("Ada", nested.GetProperty("customer_name").GetString());
+        Assert.Equal("2026-07-15T09:15:00+02:00", nested.GetProperty("start_at").GetString());
+        Assert.Equal(carried, nested.GetProperty("carried").GetRawText());
+        Assert.DoesNotContain(notes, note => note.Code == "json-unmatched-coverage-unavailable");
+        Assert.Empty(UnmatchedMemberScanner.Scan(converted, typeof(ImportPolymorphicChildren), contract));
+        var typed = (ImportPolymorphicChildren)contract.Read(converted, typeof(ImportPolymorphicChildren))!;
+        var value = shape switch { "order_value" => typed.OrderValue!, "order_values" => typed.OrderValues![0], _ => typed.OrdersByKey!["KeepKey"] };
+        Assert.Equal("Ada", value.CustomerName);
+        var refused = Assert.Throws<Elsa3LiteralConversion.LiteralRefusal>(() => Elsa3LiteralConversion.Rewrite(input, typeof(ImportPolymorphicChildren), new(), _ => { }, contract));
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.LiteralDateOffsetMissing, refused.Code);
+        Assert.Equal(raw, input.GetRawText());
+    }
+
+    [Theory]
     [InlineData("Child", false)]
     [InlineData("Children", false)]
     [InlineData("ListChildren", false)]
@@ -266,6 +331,31 @@ public sealed class Elsa3LiteralConversionTests
     { DateInterpretation = interpretation, SourceTimeZone = interpretation == Elsa3DateInterpretation.SourceTimeZone ? "Europe/Amsterdam" : null };
     private static JsonElement Parse(string json) { using var document = JsonDocument.Parse(json); return document.RootElement.Clone(); }
     private sealed record Item(string Code);
+    [JsonConversion(NamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower, RefuseUnmatchedMembers = true)]
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind"), JsonDerivedType(typeof(ScopedImportDerived), "scoped")]
+    private abstract class ScopedImportBase;
+    [JsonConversion(NamingPolicy = JsonKnownNamingPolicy.Unspecified, RefuseUnmatchedMembers = true)]
+    private sealed class ScopedImportDerived : ScopedImportBase
+    {
+        public string? CustomerName { get; set; }
+        public DateTimeOffset StartAt { get; set; }
+        public JsonElement? Carried { get; set; }
+    }
+    [JsonConversion(NamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+    private sealed class ImportPolymorphicChildren
+    {
+        public ConcreteImportBase? OrderValue { get; set; }
+        public List<ConcreteImportBase>? OrderValues { get; set; }
+        public Dictionary<string, ConcreteImportBase>? OrdersByKey { get; set; }
+    }
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind"), JsonDerivedType(typeof(ConcreteImportDerived), "derived")]
+    private class ConcreteImportBase
+    {
+        public string? CustomerName { get; set; }
+        public DateTimeOffset StartAt { get; set; }
+        public JsonElement? Carried { get; set; }
+    }
+    private sealed class ConcreteImportDerived : ConcreteImportBase;
     private sealed class RecursiveInputs
     {
         [JsonConversion(NamingPolicy = JsonKnownNamingPolicy.Unspecified)] public RecursiveOrder? Value { get; set; }

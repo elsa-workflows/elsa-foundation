@@ -606,6 +606,54 @@ public sealed class ValueConversionPlanTests
         Assert.Empty(diagnostics);
     }
 
+    [Theory]
+    [InlineData("object", false)]
+    [InlineData("list", false)]
+    [InlineData("dictionary", false)]
+    [InlineData("object", true)]
+    [InlineData("list", true)]
+    [InlineData("dictionary", true)]
+    public void Xml_unannotated_polymorphic_children_keep_the_enclosing_scope_for_objects_and_containers(string shape, bool useDefault)
+    {
+        const string child = "<customerName>Ada</customerName><startAt>2026-10-28T09:15:00+05:00</startAt><capturedAt>2026-10-28T09:15:00+05:00</capturedAt>";
+        var sourceName = shape switch { "object" => "orderValue", "list" => "orderValues", _ => "ordersByKey" };
+        var contents = shape switch { "object" => child, "list" => "<item>" + child + "</item>", _ => "<KeepKey>" + child + "</KeepKey>" };
+        var xml = "<root><" + sourceName + ">" + contents + "</" + sourceName + "></root>";
+        var type = new ValueTypeDescriptor("polymorphic-children");
+        var executor = new RuntimeValueConversionExecutor(new TestTypeRegistry(new Dictionary<string, Type> { [type.Alias] = typeof(XmlPolymorphicChildren) }));
+        var diagnostics = new List<JsonConversionDiagnostic>();
+        var result = executor.Convert(XmlSource(xml), XmlPlan(type), useDefault ? JsonConversionContract.Default : null, diagnostics.Add).InlineValue!.Value;
+        var nested = shape switch { "object" => result.GetProperty("order_value"), "list" => result.GetProperty("order_values")[0], _ => result.GetProperty("orders_by_key").GetProperty("KeepKey") };
+        Assert.Equal("Ada", nested.GetProperty("customer_name").GetString());
+        Assert.Equal("2026-10-28T09:15:00+05:00", nested.GetProperty("start_at").GetString());
+        Assert.Equal("2026-10-28T04:15:00Z", nested.GetProperty("captured_at").GetString());
+        Assert.False(nested.TryGetProperty("optional", out _));
+        Assert.Empty(diagnostics);
+        var contract = JsonConversionContract.For(typeof(XmlPolymorphicChildren));
+        Assert.Empty(UnmatchedMemberScanner.Scan(result, typeof(XmlPolymorphicChildren), contract));
+        var typed = (XmlPolymorphicChildren)contract.Read(result, typeof(XmlPolymorphicChildren))!;
+        var value = shape switch { "object" => typed.OrderValue!, "list" => typed.OrderValues![0], _ => typed.OrdersByKey!["KeepKey"] };
+        Assert.IsType<ConcreteXmlCustomer>(value);
+        Assert.Equal("Ada", value.CustomerName);
+        Assert.Equal(DateTimeKind.Utc, value.CapturedAt.Kind);
+    }
+
+    [Fact]
+    public void Xml_Default_roots_an_unannotated_polymorphic_target_and_keeps_strict_date_validation()
+    {
+        var type = new ValueTypeDescriptor("concrete-polymorphic");
+        var executor = new RuntimeValueConversionExecutor(new TestTypeRegistry(new Dictionary<string, Type> { [type.Alias] = typeof(ConcreteXmlCustomer) }));
+        var diagnostics = new List<JsonConversionDiagnostic>();
+        var result = executor.Convert(XmlSource("<root><customerName>Ada</customerName><capturedAt>2026-10-28T09:15:00+05:00</capturedAt></root>"),
+            XmlPlan(type), JsonConversionContract.Default, diagnostics.Add).InlineValue!.Value;
+        Assert.Equal("Ada", result.GetProperty("customerName").GetString());
+        Assert.Equal("2026-10-28T04:15:00Z", result.GetProperty("capturedAt").GetString());
+        Assert.Empty(diagnostics);
+        var refused = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(
+            XmlSource("<root><customerName>Ada</customerName><capturedAt>2026-10-28T09:15:00</capturedAt></root>"), XmlPlan(type), JsonConversionContract.Default, null));
+        Assert.Contains("json-datetime-offset-missing", refused.Reason, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Xml_JsonPropertyName_source_and_explicit_JSON_mapping_have_distinct_roles()
     {
@@ -1116,6 +1164,24 @@ public sealed class ValueConversionPlanTests
         public XmlFormattingNestedContract? Nested { get; init; }
         public string? Optional { get; init; }
     }
+
+    [JsonConversion(NamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+    private sealed class XmlPolymorphicChildren
+    {
+        public ConcreteXmlCustomer? OrderValue { get; set; }
+        public List<ConcreteXmlCustomer>? OrderValues { get; set; }
+        public Dictionary<string, ConcreteXmlCustomer>? OrdersByKey { get; set; }
+    }
+
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind"), JsonDerivedType(typeof(SpecialXmlCustomer), "special")]
+    private class ConcreteXmlCustomer
+    {
+        public string? CustomerName { get; set; }
+        public DateTimeOffset StartAt { get; set; }
+        public DateTime CapturedAt { get; set; }
+        public string? Optional { get; set; }
+    }
+    private sealed class SpecialXmlCustomer : ConcreteXmlCustomer;
 
     [JsonConversion(MemberMappings = ["customer_id=CustomerName"])]
     private sealed record NamedXmlContract

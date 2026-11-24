@@ -104,25 +104,39 @@ public sealed class JsonConversionContract
         return Types.GetValue(type, key => new(key.GetCustomAttribute<JsonConversionAttribute>(inherit: true), key));
     }
 
+    /// <summary>Resolves a nested declared type or member while retaining the enclosing scope for unannotated types.</summary>
+    /// <remarks>Unannotated polymorphic children need their own metadata root. Cache such selections only within the conversion operation.</remarks>
+    public JsonConversionContract ForNested(Type type, MemberInfo? member = null)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        if (HasSelection(type, member)) return For(type, member);
+        if (!HasPolymorphicShape(type) || rootType == type) return this;
+        return new(this, type);
+    }
+
+    internal JsonConversionContract ForRoot(Type type) => rootType is null ? ForNested(type) : this;
+
     internal static bool HasSelection(Type type, MemberInfo? member = null) => member?.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null ||
         (Nullable.GetUnderlyingType(type) ?? type).GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null;
 
     /// <summary>Reads a typed copy without modifying stored JSON. Reports every unmatched key through the supplied recording sink.</summary>
     public object? Read(JsonElement value, Type type, Action<JsonConversionDiagnostic>? report = null)
     {
+        var contract = ForRoot(type);
         // These fixed BCL contracts have no member naming, custom converter or temporal policy.
         // Reusing their baseline metadata avoids rebuilding a reflection resolver on every scalar input.
         // User, enum, collection and object contracts remain operation-local, including nested collectible types.
         if (IsBaselineScalar(Nullable.GetUnderlyingType(type) ?? type))
         {
-            _ = Naming(namingPolicy); // Invalid selections must still refuse even though scalar naming has no effect.
+            _ = Naming(contract.namingPolicy); // Invalid selections must still refuse even though scalar naming has no effect.
             if (value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
-                foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, this)) report?.Invoke(diagnostic);
+                foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, contract)) report?.Invoke(diagnostic);
             return value.Deserialize(type, JsonBaseline.Options);
         }
         var operation = new Operation();
-        foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, this, operation)) report?.Invoke(diagnostic);
-        return value.Deserialize(type, operation.GetOptions(this));
+        foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, contract, operation)) report?.Invoke(diagnostic);
+        return value.Deserialize(type, operation.GetOptions(contract));
     }
 
     private static bool IsBaselineScalar(Type type) => type == typeof(string) || type == typeof(bool) || type == typeof(char) ||
@@ -131,7 +145,7 @@ public sealed class JsonConversionContract
         type == typeof(float) || type == typeof(double) || type == typeof(decimal);
 
     /// <summary>Writes with the same effective contract used for reads.</summary>
-    public JsonElement Write(object? value, Type type) => JsonSerializer.SerializeToElement(value, type, Options);
+    public JsonElement Write(object? value, Type type) => JsonSerializer.SerializeToElement(value, type, ForRoot(type).Options);
 
     /// <summary>Converts a CLR value using its type's declared contract.</summary>
     public static JsonElement SerializeToElement(object? value, Type? type = null)
@@ -168,8 +182,12 @@ public sealed class JsonConversionContract
     {
         // STJ requires object metadata for discriminator-selected types. A converter around a derived
         // type disables that metadata, even when its annotation is merely inherited from this root.
-        public override bool CanConvert(Type typeToConvert) => typeToConvert != rootType && !polymorphicTypes.Contains(typeToConvert) &&
-            (HasSelection(typeToConvert) || HasPolymorphicShape(typeToConvert));
+        public override bool CanConvert(Type typeToConvert)
+        {
+            var declaredType = Nullable.GetUnderlyingType(typeToConvert) ?? typeToConvert;
+            return declaredType != rootType && !polymorphicTypes.Contains(declaredType) &&
+                (HasSelection(declaredType) || HasPolymorphicShape(declaredType));
+        }
         public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) => CreateBoundaryConverter(typeToConvert, operation.ChildContract(typeToConvert, parent), operation);
     }
 
@@ -239,16 +257,16 @@ public sealed class JsonConversionContract
     {
         private readonly object gate = new();
         private readonly Dictionary<JsonConversionContract, JsonSerializerOptions> options = new();
-        private readonly Dictionary<(Type Type, JsonConversionContract Parent), JsonConversionContract> children = new();
+        private readonly Dictionary<(Type Type, MemberInfo? Member, JsonConversionContract Parent), JsonConversionContract> children = new();
         private Dictionary<(JsonConversionContract Contract, Type Type), JsonSerializerOptions>? collectionOptions;
 
-        internal JsonConversionContract ChildContract(Type type, JsonConversionContract parent)
+        internal JsonConversionContract ChildContract(Type type, JsonConversionContract parent, MemberInfo? member = null)
         {
             lock (gate)
             {
-                var key = (type, parent);
+                var key = (type, member, parent);
                 if (children.TryGetValue(key, out var existing)) return existing;
-                var selected = HasSelection(type) ? For(type) : HasPolymorphicShape(type) ? new JsonConversionContract(parent, type) : parent;
+                var selected = parent.ForNested(type, member);
                 children.Add(key, selected);
                 return selected;
             }

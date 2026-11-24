@@ -112,6 +112,7 @@ override Elsa.Serialization.Core.JsonConversionDiagnostic.GetHashCode() -> int
 override Elsa.Serialization.Core.JsonConversionDiagnostic.ToString() -> string!
 static Elsa.Serialization.Core.JsonConversionContract.Default.get -> Elsa.Serialization.Core.JsonConversionContract!
 static Elsa.Serialization.Core.JsonConversionContract.For(System.Type! type, System.Reflection.MemberInfo? member = null) -> Elsa.Serialization.Core.JsonConversionContract!
+Elsa.Serialization.Core.JsonConversionContract.ForNested(System.Type! type, System.Reflection.MemberInfo? member = null) -> Elsa.Serialization.Core.JsonConversionContract!
 static Elsa.Serialization.Core.JsonConversionContract.IsContractAdapter(System.Text.Json.Serialization.JsonConverter? converter) -> bool
 static Elsa.Serialization.Core.JsonConversionDiagnostic.operator !=(Elsa.Serialization.Core.JsonConversionDiagnostic? left, Elsa.Serialization.Core.JsonConversionDiagnostic? right) -> bool
 static Elsa.Serialization.Core.JsonConversionDiagnostic.operator ==(Elsa.Serialization.Core.JsonConversionDiagnostic? left, Elsa.Serialization.Core.JsonConversionDiagnostic? right) -> bool

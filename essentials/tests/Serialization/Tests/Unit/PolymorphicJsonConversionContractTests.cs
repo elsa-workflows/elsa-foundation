@@ -8,6 +8,51 @@ namespace Elsa.Serialization.Tests.Unit;
 public sealed class PolymorphicJsonConversionContractTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Default_roots_native_polymorphism_and_reports_real_unmatched_members(bool unmatched)
+    {
+        var raw = "{ \"kind\":\"ordinary\", \"customerName\":\"Ada\"" + (unmatched ? ", \"extra\":null }" : " }");
+        var input = Element(raw);
+        var scanned = UnmatchedMemberScanner.Scan(input, typeof(OrdinaryBase), JsonConversionContract.Default);
+        var diagnostics = new List<JsonConversionDiagnostic>();
+        var value = Assert.IsType<OrdinaryDerived>(JsonConversionContract.Default.Read(input, typeof(OrdinaryBase), diagnostics.Add));
+        Assert.Equal("Ada", value.CustomerName);
+        Assert.Equal(scanned.ToArray(), diagnostics.ToArray());
+        if (unmatched)
+        {
+            var warning = Assert.Single(diagnostics);
+            Assert.Equal("json-unmatched-member", warning.Code);
+            Assert.Equal("$[\"extra\"]", warning.Path);
+            Assert.Equal(typeof(OrdinaryDerived), warning.TargetType);
+        }
+        else Assert.Empty(diagnostics);
+        var written = JsonConversionContract.Default.Write(value, typeof(OrdinaryBase));
+        Assert.Equal("ordinary", written.GetProperty("kind").GetString());
+        Assert.Equal("Ada", written.GetProperty("customerName").GetString());
+        Assert.Empty(UnmatchedMemberScanner.Scan(written, typeof(OrdinaryBase), JsonConversionContract.Default));
+        Assert.Equal(raw, input.GetRawText());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Nullable_scoped_roots_use_the_underlying_contract_without_wrapping_themselves(bool useDefault)
+    {
+        var declared = typeof(NullableScopedValue?);
+        // Fail before conversion on a regressed factory; invoking that adapter would otherwise recurse.
+        Assert.False(JsonConversionContract.IsContractAdapter(JsonConversionContract.For(declared).Options.GetTypeInfo(declared).Converter));
+        var contract = useDefault ? JsonConversionContract.Default : JsonConversionContract.For(declared);
+        var input = Element("""{"wire_name":"Ada"}""");
+        Assert.Empty(UnmatchedMemberScanner.Scan(input, declared, contract));
+        var value = Assert.IsType<NullableScopedValue>(contract.Read(input, declared));
+        Assert.Equal("Ada", value.Name);
+        Assert.Equal("Ada", contract.Write(value, declared).GetProperty("wire_name").GetString());
+        Assert.Null(contract.Read(Element("null"), declared));
+        Assert.Equal(JsonValueKind.Null, contract.Write(null, declared).ValueKind);
+    }
+
+    [Theory]
     [InlineData("scan")]
     [InlineData("read")]
     [InlineData("write")]
@@ -176,6 +221,9 @@ public sealed class PolymorphicJsonConversionContractTests
     }
 
     private static JsonElement Element(string json) { using var document = JsonDocument.Parse(json); return document.RootElement.Clone(); }
+
+    [JsonConversion(MemberMappings = ["wire_name=Name"])]
+    private readonly record struct NullableScopedValue(string Name);
 
     [JsonConversion(CaseInsensitive = true)]
     [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind"), JsonDerivedType(typeof(InheritedDerived), "derived")]

@@ -25,7 +25,7 @@ public static class UnmatchedMemberScanner
     internal static IReadOnlyList<JsonConversionDiagnostic> Scan(JsonElement value, Type type, JsonConversionContract contract, JsonConversionContract.Operation operation)
     {
         var result = new List<JsonConversionDiagnostic>();
-        Visit(value, type, contract, "$", result, operation);
+        Visit(value, type, contract.ForRoot(type), "$", result, operation);
         return result;
     }
 
@@ -127,7 +127,7 @@ public static class UnmatchedMemberScanner
                 var selection = member.AttributeProvider as System.Reflection.MemberInfo;
                 var scoped = JsonConversionContract.HasSelection(member.PropertyType, selection);
                 // A member converter may consume a shape unrelated to its CLR properties.
-                Visit(property.Value, member.PropertyType, scoped ? JsonConversionContract.For(member.PropertyType, selection) : operation.ChildContract(member.PropertyType, contract), MemberPath(path, property.Name), result, operation, scoped ? null : member.CustomConverter);
+                Visit(property.Value, member.PropertyType, operation.ChildContract(member.PropertyType, contract, selection), MemberPath(path, property.Name), result, operation, scoped ? null : member.CustomConverter);
                 continue;
             }
             if (info.Properties.Any(x => x.IsExtensionData)) continue;

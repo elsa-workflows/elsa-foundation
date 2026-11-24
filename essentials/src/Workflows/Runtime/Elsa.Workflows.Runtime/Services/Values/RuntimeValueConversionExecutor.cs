@@ -216,6 +216,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         var document = ReadXmlDocument(value, plan);
         var targetType = TypeReferenceFactory.Close(elementType, plan.TargetType.ToTypeReference());
         var contract = conversionContract ?? JsonConversionContract.For(targetType);
+        if (ReferenceEquals(contract, JsonConversionContract.Default)) contract = contract.ForNested(targetType);
         var context = new XmlConversionContext();
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new() { Encoder = JsonBaseline.Options.Encoder }))
@@ -363,11 +364,6 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
                element.Elements().Sum(child => CountXmlNodes(child, plan, depth + 1));
     }
 
-    private static JsonConversionContract ChildContract(Type type, JsonConversionContract parent, MemberInfo? member = null) =>
-        member?.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null ||
-        (Nullable.GetUnderlyingType(type) ?? type).GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null
-            ? JsonConversionContract.For(type, member) : parent;
-
     private static Type? CollectionElement(Type type, bool dictionary = false) => type.IsArray ? type.GetElementType() :
         type.GetInterfaces().Append(type).FirstOrDefault(item => item.IsGenericType &&
             (dictionary ? item.GetGenericTypeDefinition() == typeof(IDictionary<,>) || item.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)
@@ -437,12 +433,12 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             var shape = targetType.GetInterfaces().Append(targetType).First(item => item.IsGenericType &&
                 (item.GetGenericTypeDefinition() == typeof(IDictionary<,>) || item.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)));
             if (shape.GetGenericArguments()[0] != typeof(string)) throw Reject(plan, $"XML dictionaries require string keys at '{path}'");
-            WriteXmlDictionary(writer, element, valueType, plan, path, depth, ChildContract(valueType, contract), context);
+            WriteXmlDictionary(writer, element, valueType, plan, path, depth, context.ChildContract(valueType, contract), context);
             return;
         }
         if (info.Kind == JsonTypeInfoKind.Enumerable && CollectionElement(targetType) is { } elementType)
         {
-            WriteXmlArray(writer, element, elementType, plan, path, depth, ChildContract(elementType, contract), context);
+            WriteXmlArray(writer, element, elementType, plan, path, depth, context.ChildContract(elementType, contract), context);
             return;
         }
         WriteXmlObject(writer, element, info, plan, path, depth, contract, context);
@@ -545,7 +541,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             if (!names.Add(name)) throw Reject(plan, $"ambiguous XML mappings for member '{name}' at '{path}'");
             if (!matcher.TryGetMemberType(name, out var type)) throw Reject(plan, $"custom JSON converter does not support XML attribute '{name}' at '{path}'");
             writer.WritePropertyName(name);
-            WriteXmlAttributeAsJson(writer, attribute, type, plan, $"{path}.@{name}", depth, ChildContract(type, contract), context, null);
+            WriteXmlAttributeAsJson(writer, attribute, type, plan, $"{path}.@{name}", depth, context.ChildContract(type, contract), context, null);
         }
         foreach (var child in element.Elements())
         {
@@ -553,7 +549,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             if (!names.Add(name)) throw Reject(plan, $"ambiguous XML mappings for member '{name}' at '{path}'");
             if (!matcher.TryGetMemberType(name, out var type)) throw Reject(plan, $"custom JSON converter does not support XML element '{name}' at '{path}'");
             writer.WritePropertyName(name);
-            WriteXmlAsJson(writer, child, type, plan, $"{path}.{name}", depth + 1, ChildContract(type, contract), context);
+            WriteXmlAsJson(writer, child, type, plan, $"{path}.{name}", depth + 1, context.ChildContract(type, contract), context);
         }
         writer.WriteEndObject();
     }
@@ -587,7 +583,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         if (info.Kind == JsonTypeInfoKind.Enumerable && projected.ValueKind == JsonValueKind.Array && typed is System.Collections.IEnumerable items)
         {
             var itemType = CollectionElement(type)!;
-            var selected = ChildContract(itemType, contract);
+            var selected = context.ChildContract(itemType, contract);
             writer.WriteStartArray();
             var index = 0;
             foreach (var item in items)
@@ -602,7 +598,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         if (info.Kind == JsonTypeInfoKind.Dictionary && typed is System.Collections.IDictionary dictionary)
         {
             var valueType = CollectionElement(type, dictionary: true)!;
-            var selected = ChildContract(valueType, contract);
+            var selected = context.ChildContract(valueType, contract);
             writer.WriteStartObject();
             foreach (System.Collections.DictionaryEntry item in dictionary)
             {
@@ -628,7 +624,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
                 (member.ObjectCreationHandling ?? info.PreferredPropertyObjectCreationHandling ?? options.PreferredObjectCreationHandling) == JsonObjectCreationHandling.Populate;
             if (member.Get is null || !readsMember) JsonSerializer.Serialize(writer, property.Value, JsonBaseline.Options);
             else WriteNormalizedXml(writer, property.Value, member.Get(typed), member.PropertyType,
-                ChildContract(member.PropertyType, contract, member.AttributeProvider as MemberInfo), context, member.CustomConverter, options);
+                context.ChildContract(member.PropertyType, contract, member.AttributeProvider as MemberInfo), context, member.CustomConverter, options);
         }
         writer.WriteEndObject();
     }
@@ -744,6 +740,14 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         private readonly Dictionary<JsonConversionContract, JsonSerializerOptions> options = new();
         private readonly Dictionary<JsonTypeInfo, IReadOnlyDictionary<string, XmlMember>> members = new();
         private readonly Dictionary<(Type Type, JsonSerializerOptions Options, JsonConverter Converter), JsonTypeInfo> converterInfos = new();
+        private readonly Dictionary<(Type Type, MemberInfo? Member, JsonConversionContract Parent), JsonConversionContract> children = new();
+
+        internal JsonConversionContract ChildContract(Type type, JsonConversionContract parent, MemberInfo? member = null)
+        {
+            var key = (type, member, parent);
+            if (!children.TryGetValue(key, out var selected)) children.Add(key, selected = parent.ForNested(type, member));
+            return selected;
+        }
         internal JsonSerializerOptions Options(JsonConversionContract contract)
         {
             if (!options.TryGetValue(contract, out var selected)) options.Add(contract, selected = contract.Options);
