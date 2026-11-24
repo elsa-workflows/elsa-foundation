@@ -99,6 +99,18 @@ definition in the designer, change it and publish it.
 3. **Given** the essentials Studio, **When** the author looks at the navigation, **Then** it offers only workflow
    design and what the designer needs, and no entries for modules the engine does not compose.
 
+**Studio UX acceptance record** ([Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md)):
+
+- **User goal**: starting from the essentials compose file, an author signs in, finds a converted definition, changes
+  an expression and publishes it, and the engine runs the new version.
+- **Reference**: the existing Workflow Definitions list and designer in the full Studio; the essentials Studio reuses
+  them unchanged.
+- **Observable states**: sign-in (wrong password, success); definitions list empty and populated; designer open;
+  expression edit with a validation error and its recovery; publish success; navigation without non-designer
+  modules. Desktop (1440) and narrow (390) widths, light and dark.
+- **Exclusions**: instance views, user management and settings screens are the workflows module's own and are not
+  qualified again here; this record covers what the essentials composition changes (what is present and absent).
+
 ### User Story 4 - One feature list for the image and the migration CLI (Priority: P2)
 
 As a maintainer, I change the essentials composition in one place, and both the engine image and the migration CLI's
