@@ -1,3 +1,5 @@
+using Kernel.Graph.Exceptions;
+
 namespace Kernel.Native;
 
 /// <summary>The in-memory route table, built from the published definitions: routing reads nothing.</summary>
@@ -17,11 +19,26 @@ public sealed class HttpRoutes
             foreach (var node in workflow.Nodes.Values.Where(n => n.Type == typeof(HttpEndpoint)))
                 if (node.Inputs.GetValueOrDefault("Path") is LiteralBinding { Value: { } p } && node.Inputs.GetValueOrDefault("RespondBeforeCommit") is LiteralBinding { Value: { } early } && early.GetValue<bool>())
                     _early.Add(Key(Method(node), p.GetValue<string>()));
-            // A start trigger is an HttpEndpoint at the root or first in a root sequence, with a literal path.
-            var first = workflow.Root.Type == typeof(Sequence) && workflow.Root.Children.Count > 0 ? workflow.Root.Children[0] : workflow.Root;
+            // A start trigger is an HttpEndpoint with a literal path at the root, first in a root Sequence, or the start
+            // node of a root Flowchart (the designer's shape).
+            var first = StartOf(workflow.Root);
             if (first.Type != typeof(HttpEndpoint) || first.Inputs.GetValueOrDefault("Path") is not LiteralBinding { Value: { } path }) continue;
             _starts[Key(Method(first), path.GetValue<string>())] = (workflow.Id, first.Id);
         }
+    }
+
+    // The node a run of the root begins at. A Flowchart's is the graph engine's start node (the first child without an
+    // inbound connection, else the first child); a graph the engine refuses has none, and its run faults on its own.
+    private static Node StartOf(Node root)
+    {
+        if (root.Children.Count == 0) return root;
+        if (root.Type == typeof(Sequence)) return root.Children[0];
+        if (root.Type != typeof(Flowchart)) return root;
+        try
+        {
+            return Flowchart.GraphOf(root).SelectStartNode() is { } start ? root.Children.First(child => child.Id == start.NodeId) : root;
+        }
+        catch (FlowchartExecutionException) { return root; }
     }
 
     private static string Method(Node node) => node.Inputs.GetValueOrDefault("Method") is LiteralBinding { Value: { } m } ? m.GetValue<string>() : "POST";

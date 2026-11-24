@@ -73,6 +73,9 @@ internal static partial class NativeHttpEdgeChecks
                 Wf.HttpEndpoint("resume", "greet-later/resume", "GET"),
                 Wf.Respond("greeting", Binding.Expr("$resume.Query.name + '@' + $resume.Headers['x-tenant']"),
                     headers: Binding.Literal(new JsonObject { ["X-Resumed"] = "yes" })))))
+            .Add(Wf.Workflow("designed", Wf.Flowchart("flow",
+                [Wf.Respond("accepted", Binding.Expr("'accepted ' + $start.Query.id"), status: 201), Wf.HttpEndpoint("start", "designed")],
+                [new Connection("start", "accepted")])))
             .Add(Wf.Workflow("bad-headers", Wf.Sequence("main",
                 Wf.HttpEndpoint("start", "bad-headers"),
                 Wf.Respond("refused", "never sent", headers: Binding.Literal(new JsonObject { ["Content-Type"] = "text/html" })))));
@@ -238,6 +241,9 @@ internal static partial class NativeHttpEdgeChecks
             var control = await RawPostAsync("echo-headers", "X-Bad: a\u0001b");
             Require(control.Status == 400,
                 $"A request header the model's rules refuse, here a control character Kestrel lets through, is answered 400. Observed {control.Status}.");
+            using (var designed = await PostAsync("designed?id=7"))
+                Require(designed.StatusCode == HttpStatusCode.Created && await designed.Content.ReadAsStringAsync(token) == "accepted 7",
+                    $"A request starts a designer-shaped root Flowchart at its HttpEndpoint start node through the public ingress. Observed {(int)designed.StatusCode}.");
             using (var refused = await PostAsync("bad-headers"))
                 Require(refused.StatusCode == HttpStatusCode.InternalServerError &&
                         await refused.Content.ReadAsStringAsync(token) == "the workflow faulted",
