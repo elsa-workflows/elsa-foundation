@@ -3102,4 +3102,28 @@ public static class Elsa3ImportDiagnosticCodes
     /// function directly.
     /// </summary>
     public const string ReplacedFunctionReference = "ELS3-REPLACED-FUNCTION-REFERENCE";
+
+    /// <summary>
+    /// A reusable workflow's input uses an Elsa 3 storage driver that this Elsa 4 host cannot use for the input's type
+    /// (#5683): refused, with guidance to port the driver under its Elsa 3 type's full name as key, or to use the default.
+    /// </summary>
+    public const string InputStorageDriverUnregistered = "ELS3-INPUT-STORAGE-DRIVER-UNREGISTERED";
+
+    /// <summary>
+    /// A reusable workflow's output uses an Elsa 3 storage driver that this Elsa 4 host cannot use for the output's type
+    /// (#5683): refused, with guidance to port the driver under its Elsa 3 type's full name as key, or to use the default.
+    /// </summary>
+    public const string OutputStorageDriverUnregistered = "ELS3-OUTPUT-STORAGE-DRIVER-UNREGISTERED";
+
+    /// <summary>
+    /// The input of a workflow that is not reusable uses an Elsa 3 storage driver other than the default one (#5683):
+    /// refused, because Elsa 4 keeps a workflow's own inputs in the instance (#5698), with guidance to use the default.
+    /// </summary>
+    public const string InputStorageDriverUnsupported = "ELS3-INPUT-STORAGE-DRIVER-UNSUPPORTED";
+
+    /// <summary>
+    /// The output of a workflow that is not reusable uses an Elsa 3 storage driver other than the default one (#5683):
+    /// refused, because Elsa 4 keeps a workflow's own outputs in the instance (#5698), with guidance to use the default.
+    /// </summary>
+    public const string OutputStorageDriverUnsupported = "ELS3-OUTPUT-STORAGE-DRIVER-UNSUPPORTED";
 }

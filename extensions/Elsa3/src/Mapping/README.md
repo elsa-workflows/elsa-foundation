@@ -45,6 +45,8 @@ Nothing throws for input or catalog content. Every cause is a diagnostic:
 - `VF-IMP-*` are value-flow errors;
 - `ELS3-VARIABLE-TYPE-UNREGISTERED` (an info) and `ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED` (an error) name a variable's
   custom type that Elsa 4 does not register, or its storage driver other than the default (#5666);
+- `ELS3-INPUT-STORAGE-DRIVER-UNMAPPED` and `ELS3-OUTPUT-STORAGE-DRIVER-UNMAPPED` (errors) name a workflow input or output
+  on a storage driver other than the default (#5683);
 - `ELS3-UNTYPED-RESULT` (an error) is an untyped activity result bound to a typed input whose kind is not known to match
   (spec 1228 US6, #4898); `ELS3-SCRIPT-OUTCOME-*` are about a script's computed outcomes.
 
@@ -109,6 +111,13 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   `ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED`: Elsa 4 cannot store a variable outside the workflow instance yet (publication
   refuses it with VF-ACT-005), so the guidance is to set the variable back to the default storage (#5666). The default
   driver becomes no storage driver.
+
+  A workflow input or output on an Elsa 3 storage driver other than the default is refused the same way, with
+  `ELS3-INPUT-STORAGE-DRIVER-UNMAPPED` or `ELS3-OUTPUT-STORAGE-DRIVER-UNMAPPED` (#5683). No Elsa 4 storage driver
+  stands for an Elsa 3 one: the type registry's alias for the driver is not a durable-value storage driver key, so a
+  reusable workflow's publication refused it (`activity.runtime.storage-driver-missing`) and a plain workflow dropped it
+  silently. Registering the driver's type does not change that. The default driver becomes no storage driver, which a
+  reusable workflow's contract publishes as `elsa.json`.
 
   A resource type (`FormFile`, `IFormFile`, `Stream`, `byte[]` or `Byte` with the array flag, alone, as a collection
   element or as a CLR generic type argument) is refused with or without a starting value: it stands for a file, a stream or raw bytes, which Elsa 4 cannot hold yet (#3194).

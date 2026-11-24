@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -31,7 +32,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
     IWellKnownTypeRegistry wellKnownTypeRegistry,
     IObjectConverter objectConverter,
     IOptions<Elsa3MappingOptions>? options = null,
-    IVariableTypeDescriptorCatalog? typeDescriptors = null)
+    IVariableTypeDescriptorCatalog? typeDescriptors = null,
+    IActivityContractCapabilityCatalog? contractCapabilities = null)
 {
     /// <summary>
     /// The deepest JSON level an activity node may sit at. The state is limited to 64 JSON levels (System.Text.Json's
@@ -69,6 +71,10 @@ internal sealed partial class Elsa3ActivityNormalizer(
 
         CheckWorkflowVariables(plan);
         CheckWorkflowInputs(plan);
+        CheckArgumentStorageDrivers(plan, plan.Definition.Inputs, "Input", "inputs",
+            Elsa3ImportDiagnosticCodes.InputStorageDriverUnregistered, Elsa3ImportDiagnosticCodes.InputStorageDriverUnsupported);
+        CheckArgumentStorageDrivers(plan, plan.Definition.Outputs, "Output", "outputs",
+            Elsa3ImportDiagnosticCodes.OutputStorageDriverUnregistered, Elsa3ImportDiagnosticCodes.OutputStorageDriverUnsupported);
 
         var pending = new Dictionary<Elsa3Activity, string>(ReferenceEqualityComparer.Instance);
         await VisitAsync(plan, clone.Root, "$.root", null, RootJsonLevel, pending, cancellationToken);
@@ -113,6 +119,63 @@ internal sealed partial class Elsa3ActivityNormalizer(
         else
             context.Activity.AdditionalProperties[Elsa3IntrinsicContracts.ValueKey] = Elsa3TypedValues.CreateNull(type.Alias);
     }
+
+    /// <summary>
+    /// A workflow input or output on an Elsa 3 storage driver other than the default kept its value outside the instance
+    /// (#5683). Its Elsa 4 key is the driver type's full name (<see cref="Elsa3VariableMapper.StorageDriverKey"/>), so a
+    /// driver ported to Elsa 4 under that key matches without a mapping. Elsa 4 honours a storage driver only on a reusable
+    /// workflow's inputs and outputs, and only one that this host can use for the member's type, which publication checks
+    /// the same way. Anything else is refused here, where the migrator sees it: a workflow that is not reusable, because
+    /// Elsa 4 keeps its own inputs and outputs in the instance (#5698), and a driver this host cannot use for the type.
+    /// </summary>
+    private void CheckArgumentStorageDrivers(
+        Elsa3ConversionPlan plan,
+        IList<Elsa3WorkflowArgumentDefinition>? arguments,
+        string kind,
+        string member,
+        string unregisteredCode,
+        string unsupportedCode)
+    {
+        for (var index = 0; index < (arguments?.Count ?? 0); index++)
+        {
+            var argument = arguments![index];
+            if (Elsa3VariableMapper.StorageDriverKey(argument.StorageDriverType) is not { } key)
+                continue;
+            var noun = kind.ToLowerInvariant();
+            var driver = $"{kind} '{argument.Name}' uses the Elsa 3 storage driver '{argument.StorageDriverType!.Trim()}'.";
+            var useDefault = $"set the {noun}'s storage back to the default (the workflow instance) in the Elsa 3 workflow, then convert again.";
+            string code, message, guidance;
+            if (!plan.Request.IsReusable)
+            {
+                code = unsupportedCode;
+                message = $"{driver} Elsa 4 keeps a workflow's own inputs and outputs in the workflow instance and has no storage driver for them yet (#5698), so the {noun} cannot be converted.";
+                guidance = $"To convert it now, {useDefault} Once Elsa 4 supports storage drivers there (#5698), an Elsa 4 port of the driver registered under the key '{key}' will convert.";
+            }
+            else if (!CanStore(ResolveType(argument.Type), key))
+            {
+                code = unregisteredCode;
+                message = $"{driver} This Elsa 4 host has no storage driver with the key '{key}' that it can use for the {noun}'s type, so the {noun} cannot be converted.";
+                guidance = $"Port the driver to Elsa 4 as a durable-value storage driver whose key is '{key}' (the Elsa 3 driver type's full name), register it, and have the {noun}'s type list it among its compatible storage drivers (#5698); then convert again. Otherwise, {useDefault}";
+            }
+            else
+                continue;
+
+            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
+                plan,
+                Elsa3MigrationDiagnosticSeverity.Error,
+                code,
+                message,
+                guidance,
+                $"$.{member}[{index}]",
+                new Dictionary<string, string> { [$"{kind}Name"] = argument.Name, ["StorageDriverKey"] = key }));
+        }
+    }
+
+    /// <summary>Whether this host's contract capabilities let a member of <paramref name="type"/> use the driver <paramref name="key"/>, as publication requires.</summary>
+    private bool CanStore(TypeReference type, string key) =>
+        contractCapabilities?.Types.FirstOrDefault(capability => StringComparer.Ordinal.Equals(capability.Alias, type.Alias)) is { } capability &&
+        capability.SupportsDurability &&
+        capability.CompatibleStorageDriverKeys.Contains(key);
 
     private void CheckWorkflowVariables(Elsa3ConversionPlan plan)
     {

@@ -86,6 +86,16 @@ internal static class Elsa3VariableMapper
     }
 
     /// <summary>
+    /// The Elsa 4 storage driver key for an Elsa 3 storage driver (#5683): <c>null</c> for none or Elsa 3's default,
+    /// otherwise the Elsa 3 driver type's full name without its assembly, as in <c>Acme.BlobStorageDriver</c>. A driver
+    /// ported to Elsa 4 takes that name as its <c>DriverKey</c>, so the key matches without a mapping.
+    /// </summary>
+    internal static string? StorageDriverKey(string? storageDriverTypeName) =>
+        string.IsNullOrWhiteSpace(storageDriverTypeName) || IsDefaultStorageDriver(storageDriverTypeName)
+            ? null
+            : storageDriverTypeName.Split(',')[0].Trim();
+
+    /// <summary>
     /// The info a variable whose Elsa 3 type Elsa 4 does not register gets (#5666): it converts as Any, and keeps its type
     /// once an Elsa 4 feature registers the type. <c>null</c> for a type Elsa 4 knows, and for a shape that is Any
     /// whatever is registered (a nested collection, a collection of dictionaries).
