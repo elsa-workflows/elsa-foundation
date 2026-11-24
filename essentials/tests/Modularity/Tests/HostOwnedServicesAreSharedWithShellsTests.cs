@@ -14,8 +14,8 @@ using Elsa.Foundation.Hosting;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workbench;
-using Elsa.Workbench.OpenIddict;
-using Elsa.Workbench.OpenIddictEngines;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.Extensions.Configuration;
@@ -123,12 +123,12 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             "unreachable from shell code: a hosted service the host starts once, and a shell container never starts its copy (a disposable one could not be shared in any case)",
             "Elsa.Persistence.EntityFramework.EfModuleMigrator<Elsa.Cluster.EntityFrameworkCore.ClusterMembershipDbContext>",
             "Elsa.Persistence.EntityFramework.EfModuleMigrator<Elsa.Foundation.DataProtection.EntityFrameworkCore.DataProtectionKeysDbContext>",
-            "Elsa.Workbench.OpenIddict.OpenIddictIdentityStoreInitializer",
+            "Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictIdentityStoreInitializer",
             "Elsa.Workbench.Readiness.DefaultShellWarmup",
-            "Elsa.Workbench.WorkbenchOpenIddictMigrator"),
+            "Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictStoreMigrator"),
         Entries(
             IntentionallyPerShell + "records what its own container's options pipeline resolved the store's AutoMigrate to, for the host's migrator, which a shell never starts",
-            "Elsa.Workbench.WorkbenchOpenIddictMigrationSwitch"),
+            "Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictMigrationSwitch"),
         Entries(
             UnreachableFromShells + "; these registrations support the host's reconciliation/loading route, which shells reach only through the shared adapter",
             "Nuplane.Abstractions.PackageStoreProtection.IPackageStoreAdmission",
@@ -330,10 +330,10 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
 
         var hosted = built.Host.Services.GetServices<IHostedService>().Select(service => service.GetType()).ToList();
 
-        Assert.Contains(typeof(WorkbenchOpenIddictMigrator), hosted);
+        Assert.Contains(typeof(OpenIddictStoreMigrator), hosted);
         Assert.Contains(typeof(OpenIddictIdentityStoreInitializer), hosted);
         Assert.True(
-            hosted.IndexOf(typeof(OpenIddictIdentityStoreInitializer)) < hosted.IndexOf(typeof(WorkbenchOpenIddictMigrator)),
+            hosted.IndexOf(typeof(OpenIddictIdentityStoreInitializer)) < hosted.IndexOf(typeof(OpenIddictStoreMigrator)),
             "The migration policy starts before the vendor initializer, which would then migrate the store itself.");
     }
 
@@ -413,9 +413,9 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         var store = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>();
 
         Assert.IsType<OpenIddictIdentityPostgreSqlDbContext>(store);
-        Assert.Contains(typeof(WorkbenchOpenIddictPruningService), hosted);
+        Assert.Contains(typeof(OpenIddictPruningService), hosted);
         Assert.True(
-            hosted.IndexOf(typeof(WorkbenchOpenIddictMigrator)) < hosted.IndexOf(typeof(WorkbenchOpenIddictPruningService)),
+            hosted.IndexOf(typeof(OpenIddictStoreMigrator)) < hosted.IndexOf(typeof(OpenIddictPruningService)),
             "The prune starts before the migration policy has migrated the store.");
     }
 
@@ -458,10 +458,9 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         ? $"{type.Namespace}.{type.Name[..type.Name.IndexOf('`')]}<{string.Join(", ", type.GetGenericArguments().Select(Describe))}>"
         : $"{type.Namespace}.{type.Name}";
 
-    private static Assembly EntryAssembly(string host) => host == "Elsa.Workbench"
-        ? typeof(WorkbenchOpenIddictMigrator).Assembly
-        // Foundation.Host compiles no type of its own beside its entry point; the test references the project, so it loads by name.
-        : Assembly.Load("Elsa.Foundation.Host");
+    // A host compiles no type of its own the test could name beside its entry point; the test references each host project, so
+    // each loads by its assembly name, which is its directory name under apps/.
+    private static Assembly EntryAssembly(string host) => Assembly.Load(host);
 
     /// <summary>A content root of the host's own settings and a shell file of its own, so the shell that is activated enables no feature.</summary>
     private sealed class ContentRoot : IDisposable

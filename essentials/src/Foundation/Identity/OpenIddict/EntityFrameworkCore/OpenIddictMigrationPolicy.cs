@@ -1,45 +1,44 @@
 using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Persistence.EntityFramework;
-using Elsa.Workbench.OpenIddict;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Workbench;
+namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 
 /// <summary>
-/// Elsa's migration policy for Workbench's OpenIddict vendor store, kept out of the vendor sources so they stay the third-party
+/// Elsa's migration policy for the OpenIddict vendor store, kept out of the vendor sources so they stay the third-party
 /// store's alone (<c>OpenIddictPersistenceArchitectureTests</c>): the vendor initializer migrates only when the store's
 /// <c>AutoMigrate</c> is on, so this takes that over by turning it off for the vendor and migrating itself, through
 /// <see cref="EfSqliteMigrationLock"/>. A SQLite store whose EF migration lock a killed process left behind then fails the host's
 /// start with the way to clear it, or, with nothing pending, goes on past it, instead of hanging it (#2196). The vendor
 /// initializer is left to create the demo in-memory store and nothing else.
 /// </summary>
-public static class WorkbenchOpenIddictMigrationPolicy
+public static class OpenIddictMigrationPolicy
 {
     /// <summary>
-    /// Registered right after <c>AddWorkbenchOpenIddictVendor</c>, so the store is migrated at the same point in the host's start
+    /// Registered right after <c>AddOpenIddictVendorStore</c>, so the store is migrated at the same point in the host's start
     /// as the vendor initializer used to migrate it (a test over the real host holds the order). The root hosted-service shape is
     /// the vendor initializer's: CShells copies root descriptors into shell providers, so a shell initializer would migrate again
     /// on activation.
     /// </summary>
-    public static IServiceCollection AddWorkbenchOpenIddictMigrationPolicy(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddOpenIddictMigrationPolicy(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddSingleton<WorkbenchOpenIddictMigrationSwitch>();
+        services.AddSingleton<OpenIddictMigrationSwitch>();
         services.AddSingleton<IPostConfigureOptions<OpenIddictIdentityOptions>, TakeOverAutoMigrate>();
-        services.AddSingleton(provider => new WorkbenchOpenIddictMigrator(
+        services.AddSingleton(provider => new OpenIddictStoreMigrator(
             provider.GetRequiredService<IOptions<OpenIddictIdentityOptions>>(),
-            provider.GetRequiredService<WorkbenchOpenIddictMigrationSwitch>(),
+            provider.GetRequiredService<OpenIddictMigrationSwitch>(),
             provider,
             EfMigrateOptions.FromConfiguration(configuration)));
-        services.AddHostedService(provider => provider.GetRequiredService<WorkbenchOpenIddictMigrator>());
+        services.AddHostedService(provider => provider.GetRequiredService<OpenIddictStoreMigrator>());
         return services;
     }
 }
 
 /// <summary>Whether the store's <c>AutoMigrate</c> asked for migration, as the options pipeline resolved it before the vendor was told otherwise.</summary>
-public sealed class WorkbenchOpenIddictMigrationSwitch
+public sealed class OpenIddictMigrationSwitch
 {
     public bool AutoMigrate { get; set; } = true;
 }
@@ -49,7 +48,7 @@ public sealed class WorkbenchOpenIddictMigrationSwitch
 /// resolved, in the one place that overrides it, and turns it off for the vendor. A post-configuration sees the value after all of
 /// them, so a setting made in code is honoured as one made in configuration is.
 /// </summary>
-internal sealed class TakeOverAutoMigrate(WorkbenchOpenIddictMigrationSwitch migration) : IPostConfigureOptions<OpenIddictIdentityOptions>
+internal sealed class TakeOverAutoMigrate(OpenIddictMigrationSwitch migration) : IPostConfigureOptions<OpenIddictIdentityOptions>
 {
     public void PostConfigure(string? name, OpenIddictIdentityOptions options)
     {
@@ -59,9 +58,9 @@ internal sealed class TakeOverAutoMigrate(WorkbenchOpenIddictMigrationSwitch mig
 }
 
 /// <summary>Migrates the durable OpenIddict store at the host's start, as the store's own <c>AutoMigrate</c> asked.</summary>
-public sealed class WorkbenchOpenIddictMigrator : IHostedService
+public sealed class OpenIddictStoreMigrator : IHostedService
 {
-    private readonly WorkbenchOpenIddictMigrationSwitch _migration;
+    private readonly OpenIddictMigrationSwitch _migration;
     private readonly IServiceProvider _services;
     private readonly EfMigrateOptions _options;
 
@@ -69,9 +68,9 @@ public sealed class WorkbenchOpenIddictMigrator : IHostedService
     /// The options the switch is recorded from: resolved here, so that its post-configuration has run, and the switch holds what the
     /// options said, by the time <see cref="StartAsync"/> reads it.
     /// </param>
-    public WorkbenchOpenIddictMigrator(
+    public OpenIddictStoreMigrator(
         IOptions<OpenIddictIdentityOptions> identity,
-        WorkbenchOpenIddictMigrationSwitch migration,
+        OpenIddictMigrationSwitch migration,
         IServiceProvider services,
         EfMigrateOptions options)
     {

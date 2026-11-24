@@ -1,6 +1,6 @@
-namespace Elsa.Workbench.OpenIddict;
+namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 
-/// <summary>Workbench defaults for the host-selected OpenIddict vendor persistence implementation.</summary>
+/// <summary>Defaults of the host-composed OpenIddict token store.</summary>
 public static class OpenIddictEntityFrameworkCoreDefaults
 {
     public const string DefaultConnectionString = "Data Source=identity.db";

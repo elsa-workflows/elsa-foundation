@@ -1,5 +1,6 @@
 using System.Reflection;
 using Elsa.Workbench;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -17,7 +18,7 @@ namespace Elsa.Modularity.Tests;
 /// </summary>
 public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
 {
-    private static readonly TimeSpan Interval = new WorkbenchOpenIddictPruningOptions().Interval;
+    private static readonly TimeSpan Interval = new OpenIddictPruningOptions().Interval;
 
     private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-prune-");
     private readonly FakeTimeProvider _time = new(DateTimeOffset.UtcNow);
@@ -184,13 +185,13 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
     {
         using var provider = CreateProvider(Durable((key, value)));
 
-        Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<WorkbenchOpenIddictPruningOptions>>().Value);
+        Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<OpenIddictPruningOptions>>().Value);
     }
 
     [Fact]
     public void The_defaults_prune_every_hour_what_is_two_weeks_old()
     {
-        var defaults = new WorkbenchOpenIddictPruningOptions();
+        var defaults = new OpenIddictPruningOptions();
 
         Assert.True(defaults.Enabled);
         Assert.Equal(TimeSpan.FromHours(1), defaults.Interval);
@@ -202,7 +203,7 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
     private IConfiguration Durable(params (string Key, string Value)[] prune) =>
         new ConfigurationBuilder()
             .AddConfiguration(WorkbenchOpenIddictTestHost.DurableConfiguration(Path.Join(_directory.FullName, "tokens.db"), autoMigrate: true))
-            .AddInMemoryCollection(prune.Select(setting => KeyValuePair.Create<string, string?>($"{WorkbenchOpenIddictPruningOptions.SectionPath}:{setting.Key}", setting.Value)))
+            .AddInMemoryCollection(prune.Select(setting => KeyValuePair.Create<string, string?>($"{OpenIddictPruningOptions.SectionPath}:{setting.Key}", setting.Value)))
             .Build();
 
     /// <summary>A node: the store the host runs, and the prune registered beside it the way <c>Program.cs</c> registers it, on the test's clock and log.</summary>
@@ -211,12 +212,12 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
         {
             services.AddSingleton<TimeProvider>(_time);
             services.AddSingleton<ILoggerFactory>(_log);
-            services.AddWorkbenchOpenIddictPruning(configuration);
+            services.AddOpenIddictPruning(configuration);
             replace?.Invoke(services);
         });
 
-    private WorkbenchOpenIddictPruningService Service(IServiceProvider? provider = null) =>
-        (provider ?? _provider).GetServices<IHostedService>().OfType<WorkbenchOpenIddictPruningService>().Single();
+    private OpenIddictPruningService Service(IServiceProvider? provider = null) =>
+        (provider ?? _provider).GetServices<IHostedService>().OfType<OpenIddictPruningService>().Single();
 
     private static async Task WaitUntilAsync(Func<Task<bool>> condition)
     {

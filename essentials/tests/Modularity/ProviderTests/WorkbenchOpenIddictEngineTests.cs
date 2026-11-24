@@ -1,6 +1,6 @@
 using Elsa.Modularity.Tests;
 using Elsa.Workbench;
-using Elsa.Workbench.OpenIddict;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -76,7 +76,7 @@ public abstract class WorkbenchOpenIddictEngineTests(OpenIddictEngineDatabase en
         var scenario = new OpenIddictPruneScenario(node, _time);
         var entries = await scenario.SeedAsync(extraExpired: 20);
 
-        await node.GetServices<IHostedService>().OfType<WorkbenchOpenIddictPruningService>().Single().PruneAsync(CancellationToken.None);
+        await node.GetServices<IHostedService>().OfType<OpenIddictPruningService>().Single().PruneAsync(CancellationToken.None);
 
         Assert.Equal(entries.Kept, await scenario.RemainingAsync(entries.All));
     }
@@ -102,7 +102,7 @@ public abstract class WorkbenchOpenIddictEngineTests(OpenIddictEngineDatabase en
         var node = WorkbenchOpenIddictTestHost.CreateProvider(configuration, withMigrationPolicy: true, services =>
         {
             services.AddSingleton<TimeProvider>(_time);
-            services.AddWorkbenchOpenIddictPruning(configuration);
+            services.AddOpenIddictPruning(configuration);
         });
         _nodes.Add(node);
         return node;

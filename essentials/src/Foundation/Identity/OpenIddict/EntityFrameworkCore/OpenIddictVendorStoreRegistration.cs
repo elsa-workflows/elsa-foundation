@@ -1,27 +1,26 @@
 using Elsa.Foundation.Identity.OpenIddict;
-using Elsa.Workbench.OpenIddict;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OpenIddict.EntityFrameworkCore;
 
-namespace Elsa.Workbench;
+namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 
 /// <summary>
-/// Workbench-owned wiring for OpenIddict's vendor Entity Framework Core store.
+/// Host-composed wiring for OpenIddict's vendor Entity Framework Core store.
 /// The OpenIddict feature itself remains provider-neutral and shell-composable; this host chooses the vendor
 /// persistence implementation and owns its startup lifecycle explicitly.
 /// </summary>
-public static class WorkbenchOpenIddictVendorRegistration
+public static class OpenIddictVendorStoreRegistration
 {
-    public static IServiceCollection AddWorkbenchOpenIddictVendor(
+    public static IServiceCollection AddOpenIddictVendorStore(
         this IServiceCollection services,
         IConfiguration configuration)
     {
         services.Configure<OpenIddictIdentityOptions>(
             configuration.GetSection("CShells:Shells:default:Features:FoundationIdentityOpenIddict"));
-        services.AddOptions<WorkbenchOpenIddictEntityFrameworkCoreOptions>()
+        services.AddOptions<OpenIddictEntityFrameworkCoreOptions>()
             .Configure<IOptions<OpenIddictIdentityOptions>>((options, identityOptions) =>
             {
                 options.ConnectionString = identityOptions.Value.ConnectionString;
@@ -37,7 +36,7 @@ public static class WorkbenchOpenIddictVendorRegistration
                 return;
             }
 
-            var options = serviceProvider.GetRequiredService<IOptions<WorkbenchOpenIddictEntityFrameworkCoreOptions>>().Value;
+            var options = serviceProvider.GetRequiredService<IOptions<OpenIddictEntityFrameworkCoreOptions>>().Value;
             builder.UseSqlite(
                 options.ConnectionString ?? OpenIddictEntityFrameworkCoreDefaults.DefaultConnectionString,
                 sqlite => sqlite
@@ -50,7 +49,7 @@ public static class WorkbenchOpenIddictVendorRegistration
         services.AddOpenIddict()
             .AddCore(core => core.UseEntityFrameworkCore().UseDbContext<OpenIddictIdentityDbContext>());
 
-        // Root hosted services run once for the Workbench process. CShells copies these root descriptors into shell
+        // Root hosted services run once for the host process. CShells copies these root descriptors into shell
         // providers, so registering this initializer again as an IShellInitializer would race durable migrations
         // during shell activation. The context, migrations, and lifecycle remain host-owned vendor infrastructure.
         services.AddSingleton<OpenIddictIdentityStoreInitializer>();

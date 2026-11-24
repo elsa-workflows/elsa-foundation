@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Workbench.OpenIddict;
+namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 
 /// <summary>
 /// Bootstraps the OpenIddict token store schema at startup so tokens can be issued immediately: it migrates
@@ -14,13 +14,13 @@ namespace Elsa.Workbench.OpenIddict;
 /// <c>OpenIddictTokens</c> table.
 /// </summary>
 /// <remarks>
-/// Workbench keeps both lifecycle interfaces because the same host-owned vendor registration can participate in
-/// either lifecycle. Workbench wires the initializer as a root <see cref="IHostedService"/> because CShells copies root descriptors into shell providers; registering the
+/// The initializer keeps both lifecycle interfaces because the same host-owned vendor registration can participate in
+/// either lifecycle. The store registration wires the initializer as a root <see cref="IHostedService"/> because CShells copies root descriptors into shell providers; registering the
 /// same initializer again as an <see cref="IShellInitializer"/> would run durable migrations twice on activation.
 /// </remarks>
 public sealed class OpenIddictIdentityStoreInitializer(
     IServiceProvider services,
-    IOptions<WorkbenchOpenIddictEntityFrameworkCoreOptions> options) : IHostedService, IShellInitializer
+    IOptions<OpenIddictEntityFrameworkCoreOptions> options) : IHostedService, IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken) => EnsureSchemaAsync(cancellationToken);
 

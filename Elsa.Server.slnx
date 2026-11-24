@@ -427,6 +427,7 @@
   <Folder Name="/essentials/src/Foundation/Identity/OpenIddict/">
     <Project Path="essentials/src/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj" />
     <Project Path="essentials/src/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
+    <Project Path="essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Foundation/Identity/Persistence/">
     <Project Path="essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />

@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace Elsa.Workbench.OpenIddict;
+namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 
 /// <summary>
 /// Companion EF Core context holding OpenIddict's entity sets (applications, authorizations, scopes,
-/// tokens). By default it targets the Workbench persistence database, with its own model and migrations history.
+/// tokens). By default it targets the host's token database file, with its own model and migrations history.
 /// </summary>
 /// <remarks>
 /// A companion context was chosen over adding OpenIddict's entity sets to an Identity model deliberately:

@@ -1,5 +1,5 @@
 using Elsa.Workbench;
-using Elsa.Workbench.OpenIddict;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,10 +36,10 @@ internal static class WorkbenchOpenIddictTestHost
         var services = new ServiceCollection();
         services.AddSingleton(configuration);
         services.AddLogging();
-        services.AddWorkbenchOpenIddictVendor(configuration);
-        services.AddWorkbenchOpenIddictStoreProvider(configuration);
+        services.AddOpenIddictVendorStore(configuration);
+        services.AddOpenIddictStoreProvider(configuration);
         if (withMigrationPolicy)
-            services.AddWorkbenchOpenIddictMigrationPolicy(configuration);
+            services.AddOpenIddictMigrationPolicy(configuration);
         configure?.Invoke(services);
         return services.BuildServiceProvider();
     }
@@ -48,7 +48,7 @@ internal static class WorkbenchOpenIddictTestHost
     internal static async Task StartAsync(IServiceProvider provider)
     {
         await provider.GetRequiredService<OpenIddictIdentityStoreInitializer>().StartAsync(CancellationToken.None);
-        if (provider.GetService<WorkbenchOpenIddictMigrator>() is { } migrator)
+        if (provider.GetService<OpenIddictStoreMigrator>() is { } migrator)
             await migrator.StartAsync(CancellationToken.None);
     }
 

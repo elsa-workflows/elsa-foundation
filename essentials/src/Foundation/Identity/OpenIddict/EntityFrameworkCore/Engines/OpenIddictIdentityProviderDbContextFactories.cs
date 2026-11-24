@@ -1,9 +1,9 @@
 using Elsa.Persistence.EntityFramework;
-using Elsa.Workbench.OpenIddict;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
-namespace Elsa.Workbench.OpenIddictEngines;
+namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines;
 
 // Design-time factories for the engines other than SQLite, so `dotnet ef migrations add --context <engine context>` can scaffold
 // that engine's migrations without the full application host. Each takes an optional `--connectionString <value>`, and binds the
@@ -39,7 +39,7 @@ file static class DesignTime
             builder,
             provider,
             ConnectionString(args) ?? fallbackConnectionString,
-            EfMigrationsHistory.TableName(WorkbenchOpenIddictStoreProvider.Module),
+            EfMigrationsHistory.TableName(OpenIddictStoreProvider.Module),
             typeof(TContext).Assembly,
             OpenIddictIdentityDbContext.Schema);
         return create(builder.Options);
