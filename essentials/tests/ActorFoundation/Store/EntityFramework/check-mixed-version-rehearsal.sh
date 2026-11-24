@@ -34,16 +34,18 @@ build_driver() {
     mkdir -p "$destination"
     git -C "$repo" -c core.fsmonitor=false archive "$revision" | tar -xf - -C "$destination"
     local project=$runner
+    local build_root=$destination
     if [[ "$name" != new ]]; then
         # The disposable driver and its database guard are the only additions to the archived test project.
         project=$legacy_runner
+        build_root="$destination/prototypes/kernel-model"
         cp "$source/$runner/FormatRehearsalProcess.cs" "$source/prototypes/kernel-model/models/Native.Run/PostgresFixtureDatabase.cs" "$destination/$project/"
         cat > "$destination/$project/Program.cs" <<'CS'
 using Kernel.Ef.Conformance;
 return await FormatRehearsalProcess.RunAsync(args);
 CS
     fi
-    (cd "$destination" && dotnet build "$project" -c Release -p:RestoreLockedMode=true) > "$logs/$name-build.log" 2>&1
+    (cd "$build_root" && dotnet build "$destination/$project" -c Release -p:RestoreLockedMode=true) > "$logs/$name-build.log" 2>&1
     printf '%s %s %s\n' "$name" "$revision" "$(git -c core.fsmonitor=false hash-object "$destination/$project/bin/Release/net10.0/Kernel.EntityFramework.dll")"
 }
 

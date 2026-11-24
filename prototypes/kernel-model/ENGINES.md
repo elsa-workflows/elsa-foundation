@@ -304,7 +304,8 @@ once 8 and 7, 1,000 at once 51 and 50 (E7); MySQL 100 at once 11 and 10 (E7).
 
 ### E2. SqlClient does not open a connection in invariant-globalization mode. Reasoned, not re-run
 
-`InvariantGlobalization` is false in `Kernel.Ef.Run.csproj` and now `Kernel.Ef.Conformance.csproj`.
+`InvariantGlobalization` is false in `Kernel.Ef.Run.csproj` and the
+[Actor Foundation conformance project](../../essentials/tests/ActorFoundation/Store/EntityFramework/Elsa.ActorFoundation.Store.EntityFramework.csproj).
 
 ### E3. Connector/NET sends `SET TRANSACTION ISOLATION LEVEL` before every BEGIN. Run
 
