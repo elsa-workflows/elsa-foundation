@@ -32,6 +32,7 @@
     <ProjectReference Include="../../extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="../../extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../extensions/Elsa3/src/Activities/Design/Import/Publishing/Elsa3.Activities.Design.Import.Publishing.csproj" />
+    <ProjectReference Include="../../extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Elsa3.Activities.Design.Import.Reconciliation.csproj" />
   </ItemGroup>
 
 	<ItemGroup>

@@ -458,7 +458,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(Elsa3.Mapping.Elsa3MappingFeature).Assembly,
             typeof(Elsa3.Activities.Design.Import.Elsa3ImportActivitiesFeature).Assembly,
             typeof(Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Elsa3ImportActivitiesEntityFrameworkCoreFeature).Assembly,
-            typeof(Elsa3.Activities.Design.Import.Publishing.Elsa3ImportActivitiesPublishingFeature).Assembly
+            typeof(Elsa3.Activities.Design.Import.Publishing.Elsa3ImportActivitiesPublishingFeature).Assembly,
+            typeof(Elsa3.Activities.Design.Import.Reconciliation.Elsa3JsonReconciliationFeature).Assembly
         )
 
         .WithConfigurationProvider(configuration)
