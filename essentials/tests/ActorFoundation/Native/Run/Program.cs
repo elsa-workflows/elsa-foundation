@@ -91,6 +91,9 @@ if (args is ["pg-root-value-volume", var volumeStorage and ("inline" or "referen
     return await PostgresValueVolume.RunAsync(volumeStorage == "reference", volumePattern == "changing", padBytes, measuredTurns);
 if (args is ["pg-timed-job-worker", var jobFence and ("checked" or "in-batch")])
     return await PostgresTimedJobChecks.RunAsync(jobFence == "in-batch");
+if (args is ["pg-timed-job-worker", var jobWriter and ("owned" or "ef"), var physicalJobFence and ("checked" or "in-batch"), .. var physicalJobOptions] &&
+    (physicalJobOptions is [] or ["without-trial-withdrawal"]))
+    return await PostgresTimedJobChecks.RunAsync(physicalJobFence == "in-batch", jobWriter == "owned", physicalJobOptions.Length == 0);
 if (args is ["pg-root-timed-job-issuance", var timedFence and ("checked" or "in-batch"), .. var timedPhase])
     return await PostgresRootTimedJobIssuance.RunAsync(timedFence, timedPhase);
 if (args is ["pg-root-timed-job-settlement", var settleFence and ("checked" or "in-batch"), var winner and ("complete" or "timeout" or "late-clock" or "unhandled-timeout")])
