@@ -164,6 +164,28 @@ internal static class ProfileCapabilityChecks
             Check(needs != RootCapabilities.None && (needs & capability) == 0 &&
                 RootProfiles.Formats.Values.Where(set => set.HasFlag(capability)).All(set => set.HasFlag(needs)),
                 $"{capability} needs {needs}, which every shipped set with {capability} carries");
+        // The edge set itself is pinned, so dropping or widening one prerequisite fails here even when every shipped set stays closed.
+        var expectedEdges = new Dictionary<RootCapabilities, RootCapabilities>
+        {
+            [RootCapabilities.Timers] = RootCapabilities.SelfProtocol,
+            [RootCapabilities.Termination] = RootCapabilities.OperatorProtocol,
+            [RootCapabilities.StableBody] = RootCapabilities.Termination,
+            [RootCapabilities.TerminalSelection] = RootCapabilities.StableBody,
+            [RootCapabilities.Retirement] = RootCapabilities.TerminalSelection,
+            [RootCapabilities.TerminateThenDelete] = RootCapabilities.Retirement,
+            [RootCapabilities.Retention] = RootCapabilities.TerminateThenDelete,
+            [RootCapabilities.OperatorReplies] = RootCapabilities.TerminalSelection,
+            [RootCapabilities.JobPreview] = RootCapabilities.JobProtocol,
+            [RootCapabilities.TimedJobIssuance] = RootCapabilities.JobProtocol,
+            [RootCapabilities.TimedJobSettlement] = RootCapabilities.JobProtocol,
+            [RootCapabilities.TimedJobPreview] = RootCapabilities.TimedJobSettlement,
+            [RootCapabilities.ParkInspection] = RootCapabilities.ParkOpening,
+            [RootCapabilities.ParkArrivals] = RootCapabilities.ParkInspection,
+            [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol
+        };
+        Check(RootProfiles.Prerequisites.Count == expectedEdges.Count &&
+            expectedEdges.All(edge => RootProfiles.Prerequisites.TryGetValue(edge.Key, out var needs) && needs == edge.Value),
+            $"the prerequisite map is exactly the {expectedEdges.Count} pinned edges");
         // An unshipped composition must be closed: stable body without termination would write a shipped prefix over the wire layout.
         var unshipped = StoreFormat.Current with { MessageProtocol = 96 };
         foreach (var (composition, missing) in new (RootCapabilities Set, RootCapabilities Missing)[]
