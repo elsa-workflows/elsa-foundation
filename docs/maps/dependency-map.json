@@ -15259,6 +15259,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Native.Migration.SelectionFixture",
+          "path": "essentials/tests/Workflows/Runtime/Native/Migration/SelectionFixture/Elsa.Workflows.Runtime.Native.Migration.SelectionFixture.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Native.Migration.SqliteFixture",
           "path": "essentials/tests/Workflows/Runtime/Native/Migration/SqliteFixture/Elsa.Workflows.Runtime.Native.Migration.SqliteFixture.csproj"
         },
@@ -25151,6 +25156,25 @@
           "type": "internal",
           "id": "Elsa.ActorFoundation.TestSupport",
           "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/Workflows/Runtime/Native/Migration/SelectionFixture/Elsa.Workflows.Runtime.Native.Migration.SelectionFixture.csproj",
+      "name": "Elsa.Workflows.Runtime.Native.Migration.SelectionFixture",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Native.Migration.SelectionFixture",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.WorkflowActor",
+          "path": "essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj"
         }
       ]
     },
