@@ -3,6 +3,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Values;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
@@ -57,6 +58,24 @@ public sealed class RuntimeSchemaPresenceSerializationTests
             "withheld" => ValueEnvelope.Withheld(type, WithheldValue.PolicyRequiresEncryption(), policy),
             _ => ValueEnvelope.Inline(type, Parse("null")!.Value, policy)
         };
+        if (kind == "inline-null")
+        {
+            // S-2 FR-010 uses ExplicitNull for declared nulls, never Present with a null payload.
+            // Keep the existing refusal control before passing the same JSON through the runtime boundary.
+            var noncanonical = artifact ? RuntimeArtifactJson.Serialize(source) : JsonSerializer.Serialize(source, JsonBaseline.Options);
+            Assert.Throws<ArgumentException>(() =>
+            {
+                if (artifact) RuntimeArtifactJson.Deserialize<ValueEnvelope>(noncanonical);
+                else JsonSerializer.Deserialize<ValueEnvelope>(noncanonical, JsonBaseline.Options);
+            });
+
+            var seeded = Assert.Single(RuntimeWorkflowStateSeed.BuildSeedChanges("workflow",
+                new Dictionary<string, object?> { ["value"] = source.InlineValue!.Value }, DateTimeOffset.UnixEpoch)).State!;
+            Assert.Equal(JsonValueKind.Null, seeded.InlineValue!.Value.ValueKind);
+            source = RuntimeInputBindingStateProjection.ProjectWorkflowInputEnvelopes([seeded])["value"];
+            Assert.Equal(ValuePresence.ExplicitNull, source.Presence);
+            Assert.False(source.InlineValue.HasValue);
+        }
         var written = artifact ? RuntimeArtifactJson.Serialize(source) : JsonSerializer.Serialize(source, JsonBaseline.Options);
         var restored = artifact ? RuntimeArtifactJson.Deserialize<ValueEnvelope>(written)
             : JsonSerializer.Deserialize<ValueEnvelope>(written, JsonBaseline.Options)!;
