@@ -458,8 +458,8 @@ then verifies the saved journal bookmark and replay.
 
 To check launcher validation, a plain public actor and watchdog escalation, run
 `pg-preview-host-watchdog` on a fresh disposable PostgreSQL database. After the actor completes, the fixture
-observes a heartbeat failure through `LastError`. It then stalls an entered heartbeat and observes the escalation
-callback before releasing the stall.
+stalls an entered heartbeat and observes the escalation callback before releasing the stall. The fixture makes
+that callback throw and checks that the hosted service reports the exception through `LastError`.
 
 The first node checkpoints roots on distinct partitions in one PostgreSQL transaction. A second OS process joins
 with its own RuntimeNode. A single store snapshot shows the two nodes each own half the partitions. The second

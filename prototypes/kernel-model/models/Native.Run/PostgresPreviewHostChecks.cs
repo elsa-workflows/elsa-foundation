@@ -59,8 +59,13 @@ internal static class PostgresPreviewHostChecks
         var hang = new StalledHeartbeat();
         var watched = new DbContextOptionsBuilder<KernelDb>(data).AddInterceptors(hang).Options;
         var escalated = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failure = new InvalidOperationException("Fixture escalation failed.");
         await using var service = new PostgresPreviewHostedService(() => new(watched), "preview-host",
-            actor, message => escalated.TrySetResult(message), new() { PollInterval = TimeSpan.FromMilliseconds(25) });
+            actor, message =>
+            {
+                escalated.TrySetResult(message);
+                throw failure;
+            }, new() { PollInterval = TimeSpan.FromMilliseconds(25) });
         if (service.LastError is not null)
             throw new InvalidOperationException("A node that has not started has no runtime error.");
         await service.StartAsync(stop);
@@ -77,19 +82,16 @@ internal static class PostgresPreviewHostChecks
                 throw new InvalidOperationException("The launcher must serve the public actor and journal its one terminal turn.");
             Console.WriteLine("ok the terminal header preserves the escaped actor type and the journal is nonempty");
 
-            var failure = new InvalidOperationException("Fixture heartbeat failure.");
-            hang.FailNext(failure);
-            while (service.LastError is null) await Task.Delay(25, stop);
-            if (service.LastError != failure)
-                throw new InvalidOperationException("The hosted service must report the runtime loop error.", service.LastError);
-            Console.WriteLine("ok the hosted service reports the runtime loop error");
-
             hang.Arm();
             await hang.Entered.Task.WaitAsync(stop);
             var message = await escalated.Task.WaitAsync(stop);
             if (!message.Contains("heartbeat", StringComparison.Ordinal) || hang.Released.Task.IsCompleted)
                 throw new InvalidOperationException("The watchdog did not escalate the stalled owner heartbeat.");
             Console.WriteLine("ok the host watchdog invokes the supplied escalation policy for an entered heartbeat");
+            while (service.LastError is null) await Task.Delay(25, stop);
+            if (service.LastError != failure)
+                throw new InvalidOperationException("The hosted service must report the watchdog loop error.", service.LastError);
+            Console.WriteLine("ok the hosted service reports the watchdog loop error");
         }
         finally
         {
@@ -103,23 +105,18 @@ internal static class PostgresPreviewHostChecks
     private sealed class StalledHeartbeat : DbCommandInterceptor
     {
         private int _armed;
-        private Exception? _failure;
         internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal void Arm() => Volatile.Write(ref _armed, 1);
-        internal void FailNext(Exception error) => Volatile.Write(ref _failure, error);
 
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
             CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            if (command.CommandText.Contains("""INSERT INTO "Nodes" """, StringComparison.Ordinal))
+            if (command.CommandText.Contains("""INSERT INTO "Nodes" """, StringComparison.Ordinal) &&
+                Interlocked.Exchange(ref _armed, 0) == 1)
             {
-                if (Interlocked.Exchange(ref _failure, null) is { } failure) throw failure;
-                if (Interlocked.Exchange(ref _armed, 0) == 1)
-                {
-                    Entered.TrySetResult();
-                    await Released.Task;
-                }
+                Entered.TrySetResult();
+                await Released.Task;
             }
             return result;
         }
