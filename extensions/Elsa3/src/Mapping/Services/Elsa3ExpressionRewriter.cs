@@ -1029,7 +1029,7 @@ public sealed class Elsa3ExpressionRewriter(
 
         /// <summary>
         /// Names never matched to a host function (#5664): the Elsa 3 and Elsa 4 built-ins the converter converts itself,
-        /// the setters, the outcome setters and instance-state helpers, the CLR, lodash and moment globals, the read roots
+        /// the setters, <c>getOutputFrom</c>, the outcome setters and instance-state helpers, the CLR, lodash and moment globals, the read roots
         /// (<c>variables</c>, <c>args</c>, …) and the standard JavaScript globals. The other Elsa 3 functions it refuses
         /// (byte and stream helpers, <c>getConfig</c>, the definition readers, <c>getLastResult</c>) are matched. A host
         /// function with one of them as its member name does not take it over, and a reference to one is not refused as a
