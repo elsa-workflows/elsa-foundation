@@ -211,6 +211,7 @@ public sealed partial class EfStore
                 WHERE b."Tenant" = {Root.Tenant} AND b."Reference" = {Root.Reference} AND b."Actor" = {Root.Actor}
                     AND b."Creation" = 1 AND i."Partition" = {Root.Partition} AND NOT i."Retired"
                     AND (i."Status" = {(int)InstanceStatus.Finished} OR
+                        ({db.UsesRootTermination} AND i."Status" = {(int)InstanceStatus.Cancelled}) OR
                         ({db.UsesRootTimedJobSettlement} AND i."Status" = {(int)InstanceStatus.Faulted}
                             AND starts_with(i."State", {TimedRootStateFamily})))
                     AND i."FoundationTerminalAt" IS NOT NULL AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
@@ -342,11 +343,12 @@ public sealed partial class EfStore
             recalls.Any(key => key.Scope != -1 || !root.Owns(key)) ||
             turn.Consumed.Any(recalls.Contains) || turn.Sent.Any(m => recalls.Contains(m.InboxKey)))) throw RootShape();
         var timedFault = RootTimedJobSettlementEnabled && turn.Expected is not null && row.Status == InstanceStatus.Faulted;
+        var terminated = turn.FoundationRootOperator is { Kind: Kinds.Terminate } && row.Status == InstanceStatus.Cancelled;
         if (row.Id != root.Actor ||
             row.Creation != 1 || !RootJobsEnabled && row.NextJobGeneration is not (null or 0) || row.StartIntent != root.Fingerprint || row.Revision != checked((turn.Expected ?? 0) + 1) ||
-            row.Status is not (InstanceStatus.Running or InstanceStatus.Finished) && !timedFault ||
+            row.Status is not (InstanceStatus.Running or InstanceStatus.Finished) && !timedFault && !terminated ||
             row.FoundationDispatchHeader is not { } header || header.Tenant != root.Tenant || header.Reference != root.Reference ||
-            turn.Unsubscribe != (row.Status == InstanceStatus.Finished || timedFault) ||
+            turn.Unsubscribe != (row.Status == InstanceStatus.Finished || timedFault || terminated) ||
             turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 }) throw RootShape();
 
         // Record equality checks the full shape, including extension fields. Adding a new durable effect
@@ -403,11 +405,19 @@ public sealed partial class EfStore
         var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
         var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
             (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == RootSelfScope || RootJobsEnabled && m.InboxScope == RootJobScope) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
-        var inputs = records.Select(record => DecodeRootInput(record, root.Reference, RootSelfIssuer, RootJobsEnabled, replies: db.UsesRootReplyProtocol)).ToArray();
+        var inputs = records.Select(record => DecodeRootInput(record, root.Reference, RootSelfIssuer, RootJobsEnabled, replies: db.UsesRootReplyProtocol, terminations: db.UsesRootTermination)).ToArray();
         if (!SameInputs(inputs, turn.Done.Concat(turn.Consumed))) return null;
         if (turn.FoundationRootOperator is { } command)
         {
             if (inputs is not [var persisted] || persisted != command) return null;
+            if (command.Kind == Kinds.Terminate)
+            {
+                if (!db.UsesRootTermination || !terminated || row.Suspended != current.Suspended ||
+                    turn.Sent.Count != 0 || recalls is not null || current.Jobs is not null || row.Jobs is not null ||
+                    row.StateVersion != current.StateVersion || turn.Journal is null) throw RootShape();
+                return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
+                    row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, operatorTermination: true);
+            }
             if (!db.UsesRootOperatorProtocol || row.Status != InstanceStatus.Running ||
                 row.Suspended != (command.Kind == Kinds.Suspend) || row.StateVersion != current.StateVersion || state != current.State ||
                 turn.Sent.Count != 0 || recalls is not null || turn.Journal is not null) throw RootShape();

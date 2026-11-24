@@ -29,14 +29,14 @@ internal sealed partial class PostgresRootAdmission
     internal async Task<Receipt?> AdmitRootOperatorAsync(string tenant, string reference, string operation, string kind, long? due,
         TimeSpan? keepFor, CancellationToken token)
     {
-        if (kind is not (Kinds.Suspend or Kinds.Resume) || !FoundationMetadataLimits.IsOutsideMessageId(operation))
-            throw new ArgumentException("Expected a one-way exact-root suspension command.");
+        if (kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate) || !FoundationMetadataLimits.IsOutsideMessageId(operation))
+            throw new ArgumentException("Expected a one-way exact-root operator command.");
         var window = keepFor is { } keep && keep < deduplicationWindow ? keep : deduplicationWindow;
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         var windowMs = (long)window.TotalMilliseconds;
         var digest = FoundationRootCreator.OperationDigest(operation);
         await using var db = create();
-        if (!db.UsesRootOperatorProtocol) return null;
+        if (!db.UsesRootOperatorProtocol || kind == Kinds.Terminate && !db.UsesRootTermination) return null;
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
         await EfStore.RequireStoreVersionsAsync(db, token);
         var address = await RootAddressAsync(db, tenant, reference, token);
@@ -98,13 +98,13 @@ internal sealed partial class PostgresRootAdmission
                 AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" LIKE 'operator/%' AND NOT m."Done"
                 AND m."Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint ORDER BY m."Seq" LIMIT 1
             """).AsNoTracking().SingleOrDefaultAsync(token);
-        return row is null ? null : DecodeOperator(row, reference);
+        return row is null ? null : DecodeOperator(row, reference, db.UsesRootTermination);
     }
 
-    internal static Message DecodeOperator(MessageEntity row, string reference)
+    internal static Message DecodeOperator(MessageEntity row, string reference, bool terminations)
     {
-        if (!IsOperatorOccurrence(new(row.Id, row.InboxScope)) || !IsStoredOperator(row.Start) || row.Kind is not (Kinds.Suspend or Kinds.Resume) ||
-            row.EventMatch is not null || row.Payload is not null || row.ReplyTo is not null || row.Sender is not null ||
+        if (!IsOperatorOccurrence(new(row.Id, row.InboxScope)) || !IsStoredOperator(row.Start) || row.Kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate) ||
+            row.Kind == Kinds.Terminate && !terminations || row.EventMatch is not null || row.Payload is not null || row.ReplyTo is not null || row.Sender is not null ||
             row.JobGeneration != 0 || row.KeepUntil is not { } until)
             throw new StoreException(Failure.Definite, "Unexpected stored one-way operator envelope.");
         StoredOperator? header;
