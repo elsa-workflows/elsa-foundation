@@ -91,8 +91,8 @@ internal sealed class Elsa3RewriteContext(
     }
 
     /// <inheritdoc cref="Error"/>
-    public void Warning(string code, string message, string guidance, string? property = null, string? withinProperty = null) =>
-        Plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Warning(Plan, Node, code, message, guidance, property, withinProperty));
+    public void Warning(string code, string message, string guidance, string? property = null, string? withinProperty = null, IReadOnlyDictionary<string, string>? metadata = null) =>
+        Plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Warning(Plan, Node, code, message, guidance, property, withinProperty, metadata));
 
     /// <inheritdoc cref="Error"/>
     public void Info(string code, string message, string guidance, string? property = null, string? withinProperty = null) =>

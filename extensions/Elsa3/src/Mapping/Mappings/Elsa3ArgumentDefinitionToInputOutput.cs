@@ -7,9 +7,9 @@ using Elsa3.Models;
 namespace Elsa3.Mapping.Mappings;
 
 /// <summary>
-/// Converts an Elsa-3 workflow argument definition to an Elsa-4 input/output definition. Elsa 3's default storage driver
-/// kept the value with the workflow instance, as Elsa 4 does without a storage driver. Any other driver keeps its Elsa 3
-/// type's full name as its Elsa 4 key (#5683); conversion has already refused one Elsa 4 cannot use there.
+/// Converts an Elsa-3 workflow argument definition to an Elsa-4 input/output definition. Every Elsa 3 storage driver
+/// becomes Elsa 4's default storage (no storage driver, so elsa.json); conversion reports a Memory or custom driver as a
+/// behaviour warning (<see cref="Elsa3StorageDriverCorrections"/>).
 /// </summary>
 public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry wellKnownTypeRegistry)
 {
@@ -20,7 +20,7 @@ public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry 
             input.Name,
             input.Name,
             MapTypeReference(type),
-            Elsa3VariableMapper.StorageDriverKey(input.StorageDriverType),
+            StorageDriverType: null,
             $"{input.DisplayName}",
             input.Category,
             IsNullable: SupportsNull(type),
@@ -36,7 +36,7 @@ public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry 
             input.Name,
             input.Name,
             MapTypeReference(type),
-            Elsa3VariableMapper.StorageDriverKey(input.StorageDriverType),
+            StorageDriverType: null,
             $"{input.DisplayName}",
             input.Category,
             IsNullable: SupportsNull(type),
