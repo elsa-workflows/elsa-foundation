@@ -72,7 +72,7 @@ public sealed class SourceOwnedGraphDependencyTests
     }
 
     [Fact]
-    public async Task Publishing_the_same_source_owned_composite_again_converges_without_new_edges()
+    public async Task Publishing_an_already_published_source_owned_composite_again_writes_no_new_edges()
     {
         await using var f = await PublishedNativeFixture.Create();
         var writeLine = await f.PublishClrCatalog();

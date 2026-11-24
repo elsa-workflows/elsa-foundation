@@ -82,10 +82,11 @@ public sealed class SourceVersionRefusalTests
         // 2.0.0 is contributed twice with the same content; duplicate handling Throw ends the pass at the second one.
         var source = new InMemoryReconcilerHarness.InMemorySource("acme", "Configuration", Model("1.0.0"), Model("2.0.0"), Model("2.0.0"));
 
-        await Assert.ThrowsAnyAsync<Exception>(() => InMemoryReconcilerHarness
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => InMemoryReconcilerHarness
             .BuildReconciler(new(), source, DuplicateHandling.Throw, sourceVersionPublisher: publisher, diagnosticStore: diagnostics, logger: logger)
             .Reconcile(CancellationToken.None));
 
+        Assert.Contains("matching content hash", thrown.Message, StringComparison.Ordinal);
         Assert.Equal("acme.refused", Assert.Single(diagnostics.Find(ActivityCatalogStableIds.VersionId(TypeKey, "1.0.0")!)).Code);
         Assert.Contains(logger.Entries, entry => entry.Message.Contains("acme.refused", StringComparison.Ordinal));
     }

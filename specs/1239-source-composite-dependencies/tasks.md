@@ -25,4 +25,4 @@ Implementation starts after the coordinator approves the spec (D-1, D-2).
 ## Phase 4: Docs and finish
 
 - [x] T010 Update `essentials/src/Activities/Design/Reconciliation/Json/README.md` (FR-009).
-- [ ] T011 Run the scoped tests (plan, Test scope) and the gate checker; set spec status to Implemented.
+- [x] T011 Run the scoped tests (plan, Test scope) and the gate checker; set spec status to Implemented.

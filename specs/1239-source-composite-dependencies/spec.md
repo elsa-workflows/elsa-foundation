@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/claude/3052-source-composite-deps`
 
-**Status**: Approved (2026-11-24, D-1 A and D-2 as recommended)
+**Status**: Implemented — approved 2026-11-24 with D-1 option A and D-2
 
 **Issue**: #5681, part of initiative #3052 (Elsa 3 to Elsa 4 conversion)
 
