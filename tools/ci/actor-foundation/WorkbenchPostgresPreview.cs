@@ -217,8 +217,13 @@ internal static class WorkbenchPostgresPreview
                         using var ticket = JsonDocument.Parse(cut.TicketPayload);
                         var argumentsJson = ticket.RootElement.GetProperty("Arguments").GetString()
                             ?? throw new InvalidOperationException("The active job has no invocation arguments.");
-                        var job = JsonSerializer.Deserialize<BackgroundArgs>(argumentsJson);
-                        Require(job is not null && job.EffectKey == originalEntry.EffectKey &&
+                        using var invocation = JsonDocument.Parse(argumentsJson);
+                        var nativeJson = invocation.RootElement.GetProperty("Arguments").GetString()
+                            ?? throw new InvalidOperationException("The workflow job has no Native arguments.");
+                        var job = JsonSerializer.Deserialize<BackgroundArgs>(nativeJson);
+                        Require(invocation.RootElement.GetProperty("Model").GetString() == NativeExecutionModel.ModelKey &&
+                            job is not null && job.Workflow == definition.Id && job.Node == DirectApprovalWorkflow.JobNode &&
+                            job.EffectKey == originalEntry.EffectKey &&
                             job.Inputs[nameof(DirectApprovalWorkflow.WaitForTakeover.ReleaseFile)]?.GetValue<string>() == releaseFile,
                             "the entered callback and release signal match the durable job recipe");
                         await former.CrashAsync(token);
