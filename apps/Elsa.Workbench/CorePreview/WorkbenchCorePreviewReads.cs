@@ -15,6 +15,8 @@ internal sealed class WorkbenchCorePreviewReads(Func<KernelDb> open, BoundScope 
 {
     internal const string ListPath = "/runtime/core-preview/workflows/instances";
     private const int PageSize = 25;
+    private static readonly Dictionary<string, ActorStatus> StatusNames =
+        Enum.GetValues<ActorStatus>().ToDictionary(value => value.ToString(), StringComparer.OrdinalIgnoreCase);
 
     internal static void Map(IEndpointRouteBuilder endpoints)
     {
@@ -23,6 +25,7 @@ internal sealed class WorkbenchCorePreviewReads(Func<KernelDb> open, BoundScope 
         endpoints.MapGet(ListPath, reads.ListAsync)
             .WithHostOwner("Elsa.Workbench")
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+            .DisableCookieRedirect()
             .RequireAllPermissions(WorkflowRuntimePermissions.WorkflowRuntimeRead,
                 HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission);
     }
@@ -34,7 +37,7 @@ internal sealed class WorkbenchCorePreviewReads(Func<KernelDb> open, BoundScope 
         ActorStatus? filter = null;
         if (status is not null)
         {
-            if (!Enum.TryParse<ActorStatus>(status, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+            if (!StatusNames.TryGetValue(status, out var parsed))
                 return Results.BadRequest("Use a valid workflow status.");
             filter = parsed;
         }
@@ -67,7 +70,10 @@ internal sealed class WorkbenchCorePreviewReads(Func<KernelDb> open, BoundScope 
             return false;
 
         var claims = principal.FindAll(IdentityClaimTypes.TenantId).Take(2).ToArray();
-        return claims is [var claim] && string.Equals(claim.Value, tenant.Tenant, StringComparison.Ordinal);
+        if (claims is not [var claim] || !string.Equals(claim.Value, tenant.Tenant, StringComparison.Ordinal)) return false;
+
+        // A per-resource policy may hide rows or affect continuation. This preview has no visibility projection for those policies.
+        return !services.GetServices<IPermissionResourceHandler>().Any();
     }
 
     private sealed record Row(string Ref, string Status, string? Definition, string? Version, long? EndedAt);
