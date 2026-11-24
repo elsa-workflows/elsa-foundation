@@ -17,7 +17,7 @@
     <ProjectReference Include="../models/Native.Legacy/Kernel.Native.Legacy.csproj" />
     <ProjectReference Include="../models/Statecharts/Kernel.Statecharts.csproj" />
     <ProjectReference Include="../src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
-    <ProjectReference Include="../runtime/Kernel.Runtime.Hosting/Kernel.Runtime.Hosting.csproj" />
+    <ProjectReference Include="../../../essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

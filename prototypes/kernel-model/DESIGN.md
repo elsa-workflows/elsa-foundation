@@ -24,7 +24,7 @@ Words: a **turn** is one call of an instance's code with the messages that are d
 **background job** (job) is work a turn starts outside itself, whose result comes back as a message; a **pass** is the
 runtime's call into a partition, which runs the turns that are due and commits them in batches.
 
-The kernel is 2,290 lines in three projects: `src/Kernel.Runtime` 295, `src/Kernel.Durable` 1,714 (of which 254 are
+The kernel is 2,290 lines in three projects: `../../essentials/src/ActorFoundation/BuiltIn/Runtime` 295, `src/Kernel.Durable` 1,714 (of which 254 are
 the in-memory store) and `src/Kernel.Workflows` 281 (2,240 at stage A; the runtimes of section 27 added the rest). Before the split, `src/Kernel` was 1,758; the difference is the
 seam's interfaces, `PartitionRuntime`, the durable half of a turn (`DurableTurn`) and their comments. Around it: the EF
 store and its four dialects, the MongoDB store, the store conformance suite, the deterministic simulation, and the
@@ -46,7 +46,7 @@ native model.
 
 | Layer | Owns | Project and types |
 |---|---|---|
-| 1. Actor runtime | Placement of scopes on nodes, activation and deactivation, one pass at a time per scope, wake-ups between nodes. No guarantee about messages or state | `src/Kernel.Runtime`: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal (`IWakeSignal`, `InProcessWakeSignal`), membership (`IMembership`, `Cluster`), and `PartitionRuntime`, the built-in runtime (fair share from `node` heartbeats, activations, passes). Also `InstanceRef`, `Flaw` and `Defaults` |
+| 1. Actor runtime | Placement of scopes on nodes, activation and deactivation, one pass at a time per scope, wake-ups between nodes. No guarantee about messages or state | `../../essentials/src/ActorFoundation/BuiltIn/Runtime`: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal (`IWakeSignal`, `InProcessWakeSignal`), membership (`IMembership`, `Cluster`), and `PartitionRuntime`, the built-in runtime (fair share from `node` heartbeats, activations, passes). Also `InstanceRef`, `Flaw` and `Defaults` |
 | 2. Durable actors | The durable inbox, a turn's state and messages committed atomically, the fence, timers, background jobs, events, poison, the journal, live output | `src/Kernel.Durable`: `Worker` (one partition's `IScopeActivation`), `DurableHost` (the `IScopeHost`), the seam to layer 3 (`IActorType`, `TurnInput`, `TurnOutcome`, `Delivery`, `DurableTurn`, `ITurnServices`), `IKernelStore` and `InMemoryStore`, `Projector`, `Requests` and `IReplyTransport`, messages and kinds |
 | 3. Actor types | What an actor does with its messages | `src/Kernel.Workflows`: `WorkflowInstance`, the one actor type (definition and version, status, parent and children, cancel of a tree, suspend, resume, terminate, rebind, delete, the history envelope), and the execution-model contract it runs (`IExecutionModel`, `ITurn`). Models: the simulation's toy models, `NativeModel` (its Flowchart runs on the graph engine of `models/Graph`, main's Flowchart engine) |
 
@@ -118,7 +118,7 @@ public interface IWakeSignal                       // layer 1, pluggable; not du
   partitions without balancing: they activate through `DurableHost` and run passes with `RunAsync` in their own loop
   (on purpose: FINDINGS section 27, L13). Two runtimes run on a clock of their own, and the runtime conformance suite
   runs them both:
-  - `RuntimeNode` (`runtime/Kernel.Runtime.Hosting`) is the built-in runtime of one node: one loop around a
+  - `RuntimeNode` (`../../essentials/src/ActorFoundation/BuiltIn/Hosting`) is the built-in runtime of one node: one loop around a
     `PartitionRuntime` that balances, runs a held scope's pass when the last one asked, at once on a hint, and wakes
     every held scope at the poll interval. The loop runs on a scheduler of the node's own that runs one task at a
     time, so a job's continuation never runs beside a pass (workers set `WorkerOptions.JobScheduler` so that a job's

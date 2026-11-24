@@ -483,6 +483,15 @@
         "resolved": "0.8.8",
         "contentHash": "UIDFkA5DC3en3tOJ3Mof11yBx9kUQLsaeo/oFdvN6Bbkr9E9+VCqfIadHci8cu+I51K2Sl7XYWVl2R/mA75NBQ=="
       },
+      "elsa.actorfoundation.builtin.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.actorfoundation.builtin.runtime": {
+        "type": "Project"
+      },
       "elsa.actorfoundation.contracts": {
         "type": "Project"
       },
@@ -501,7 +510,7 @@
       "kernel.durable": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Runtime": "[1.0.0, )"
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )"
         }
       },
       "kernel.entityframework": {
@@ -525,9 +534,9 @@
       "kernel.foundation.postgres": {
         "type": "Project",
         "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",
           "Kernel.EntityFramework": "[1.0.0, )",
           "Kernel.Foundation.InMemory": "[1.0.0, )",
-          "Kernel.Runtime.Hosting": "[1.0.0, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )"
         }
       },
@@ -559,24 +568,14 @@
       "kernel.native.run": {
         "type": "Project",
         "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
           "Kernel.EntityFramework": "[1.0.0, )",
           "Kernel.Foundation.InMemory": "[1.0.0, )",
           "Kernel.Foundation.Postgres": "[1.0.0, )",
           "Kernel.Native.Legacy": "[1.0.0, )",
-          "Kernel.Runtime.Hosting": "[1.0.0, )",
           "Kernel.Statecharts.Native": "[1.0.0, )",
           "Kernel.WorkflowActor": "[1.0.0, )"
-        }
-      },
-      "kernel.runtime": {
-        "type": "Project"
-      },
-      "kernel.runtime.hosting": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
-          "Kernel.Runtime": "[1.0.0, )"
         }
       },
       "kernel.statecharts": {

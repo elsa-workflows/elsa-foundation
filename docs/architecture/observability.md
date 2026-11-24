@@ -2488,7 +2488,7 @@ call takes a `BoundScope`:
 
 - **Ids are opaque to layer 3.** Layer 3 stores and compares an `ActorRef` as a string and never parses it (FC-13).
   Today's `InstanceRef` embeds its partition (`3/order-17` in
-  [Addresses.cs](../../prototypes/kernel-model/src/Kernel.Runtime/Addresses.cs)); that stays inside the built-in
+  [Addresses.cs](../../essentials/src/ActorFoundation/BuiltIn/Runtime/Addresses.cs)); that stays inside the built-in
   foundation, and K2 removes it from layer 3's reach.
 - **Where an operator finds a handle.** `InboxAsync` lists an actor's rows, in pages, each with its handle and state; a
   retry names at most 500 handles from there. It is eventually consistent: a row a drain has just restored or cleared

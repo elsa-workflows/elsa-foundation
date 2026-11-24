@@ -17,7 +17,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 
 | Path | What |
 |---|---|
-| `src/Kernel.Runtime` | Layer 1, the actor runtime: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal, and `PartitionRuntime`, the built-in runtime (balancer, activations, one pass at a time per partition); addresses, flaws, the owner's defaults |
+| `../../essentials/src/ActorFoundation/BuiltIn/Runtime` | Layer 1, the actor runtime: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal, and `PartitionRuntime`, the built-in runtime (balancer, activations, one pass at a time per partition); addresses, flaws, the owner's defaults |
 | `src/Kernel.Durable` | Layer 2, durable actors: `Worker` (a partition's activation: inbox, fenced commit, timers, background jobs, events, poison, journal), `DurableHost`, the seam to layer 3 (`IActorType`, `DurableTurn`), the store contract, the in-memory store, the projector, reply addresses for live output |
 | `src/Kernel.Workflows` | Layer 3, actor types: `WorkflowInstance` (status, definition, parent and children, suspend, resume, terminate, rebind, delete, the history envelope) and the execution-model contract (`IExecutionModel`, `ITurn`) |
 | `sim` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
@@ -32,7 +32,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `conformance/Kernel.Store.Conformance.Run` | The suite against the in-memory store |
 | `conformance/Kernel.Runtime.Conformance` | The runtime conformance suite: semantic cases, the fence broken on purpose, the stress test, for any actor runtime |
 | `conformance/Kernel.Runtime.Conformance.Run` | The runtime suite against the built-in runtime |
-| `runtime/Kernel.Runtime.Hosting` | `RuntimeNode`: the built-in runtime of one node on a clock |
+| `../../essentials/src/ActorFoundation/BuiltIn/Hosting` | `RuntimeNode`: the built-in runtime of one node on a clock |
 | `mongo/Kernel.Mongo` | The storage interface on MongoDB |
 | `mongo/Kernel.Mongo.Run` | The suite against MongoDB, its connection killer, probes |
 | `experiments/VirtualPartitions` | Round 5 A: the two fence granularities of virtual partitions (per virtual partition, per owned range) as EF stores, the measurement harness and the ownership simulation; results in [PARTITIONS.md](PARTITIONS.md) |
@@ -836,7 +836,7 @@ $SIM --job-trial-check                               # counted withdrawal, cance
 $SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
 $SIM --public-owner-check                            # FC-1 per-owner serialization and fenced takeover
 $SIM --public-owner-check --flaw IgnoreLeaseDeadline,CommitDespiteFence
-$SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (src/Kernel.Runtime/VirtualPartitions.cs)
+$SIM --placement-check                               # round 5 A: virtual-partition addressing and range placement (../../essentials/src/ActorFoundation/BuiltIn/Runtime/VirtualPartitions.cs)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
 $SIM --native-mutations --seeds 20000                # break the native model on purpose
 $SIM --native --native-flaw ResumeAnyChild --seed 1  # replay one native flaw
