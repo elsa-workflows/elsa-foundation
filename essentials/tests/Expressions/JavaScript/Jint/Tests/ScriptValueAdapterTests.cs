@@ -197,9 +197,9 @@ public sealed partial class ScriptValueAdapterTests
         Assert.Equal(expected, (await ExpressionAsync(expression, args: true)).GetString());
     }
 
-    private static async Task<JsonElement> ExpressionAsync(string source, List<string>? logs = null, bool args = false, RecordingWarningSink? sink = null, bool undefinedAsNull = false)
+    private static async Task<JsonElement> ExpressionAsync(string source, List<string>? logs = null, bool args = false, RecordingWarningSink? sink = null, bool undefinedAsNull = false, Action<IServiceCollection>? configure = null)
     {
-        await using var provider = Build(logs);
+        await using var provider = Build(logs, configure);
         await using var scope = provider.CreateAsyncScope();
         var evaluator = scope.ServiceProvider.GetRequiredService<IPortableJavaScriptEvaluator>();
         var order = JsonSerializer.Deserialize<JsonElement>(Order);

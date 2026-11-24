@@ -1,10 +1,32 @@
 using System.Text.Json;
 using Xunit;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 public sealed partial class ScriptValueAdapterTests
 {
+    [Theory]
+    [InlineData(2)]
+    [InlineData(64)]
+    public async Task Intermediate_depth_overflow_keeps_the_result_limit_diagnostic(int depth)
+    {
+        var source = "1";
+        for (var level = 0; level < depth + 2; level++) source = "{a:" + source + "}";
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => ExpressionAsync("(" + source + ")",
+            configure: services => services.Configure<Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions>(options => options.MaxResultDepth = depth)));
+        Assert.Contains($"JSON depth limit of {depth}", failure.Message);
+        Assert.IsAssignableFrom<JsonException>(failure.InnerException);
+    }
+
+    [Fact]
+    public async Task A_large_positive_depth_option_does_not_overflow_the_intermediate_limit()
+    {
+        var value = await ExpressionAsync("({answer:42})", configure: services =>
+            services.Configure<Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions>(options => options.MaxResultDepth = int.MaxValue));
+        Assert.Equal(42, value.GetProperty("answer").GetInt32());
+    }
+
     [Theory]
     [InlineData("Object.defineProperty(Array.prototype, '0', {get(){throw new Error('inherited hole');}, configurable:true});")]
     [InlineData("Array.prototype[0] = {toJSON(){throw new Error('inherited toJSON');}};")]

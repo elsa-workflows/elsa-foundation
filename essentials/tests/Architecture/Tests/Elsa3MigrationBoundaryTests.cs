@@ -38,7 +38,7 @@ public sealed class Elsa3MigrationBoundaryTests
     }
 
     [Fact]
-    public void Elsa3MappingProject_DependsOnAuthoringAndDesignPersistenceButNotRuntimeOrProviderPersistence()
+    public void Elsa3MappingProject_SharesRuntimeCoreDefaultsButNotRuntimeImplementations()
     {
         var projectPath = Path.Combine(RepoRoot, "extensions", "Elsa3", "src", "Mapping", "Elsa3.Mapping.csproj");
         var references = XDocument.Load(projectPath)
@@ -49,13 +49,15 @@ public sealed class Elsa3MigrationBoundaryTests
             .Order(StringComparer.Ordinal)
             .ToArray();
         var forbidden = references
-            .Where(reference => reference.Contains(".Runtime", StringComparison.Ordinal))
+            .Where(reference => reference.Contains(".Runtime", StringComparison.Ordinal) && reference != "Elsa.Workflows.Runtime.Core")
             .ToArray();
 
         Assert.Contains("Elsa.Activities.Design.Persistence.Core", references);
         Assert.Contains("Elsa.Workflows.Design.Core", references);
         Assert.Contains("Elsa.Workflows.Design.Persistence.Core", references);
         Assert.Contains("Elsa3.Models", references);
+        // Spec 1232 T005 shares the domain default lookup, without a runtime implementation dependency.
+        Assert.Contains("Elsa.Workflows.Runtime.Core", references);
         Assert.Empty(forbidden);
     }
 

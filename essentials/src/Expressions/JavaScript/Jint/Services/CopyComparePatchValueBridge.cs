@@ -263,8 +263,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     ?? throw new InvalidOperationException("A JavaScript result must be representable as persistable JSON.");
                 using (EvaluationLimits.ExcludeHostWork(_engine))
                 {
-                    using var document = JsonDocument.Parse(text, new JsonDocumentOptions { MaxDepth = _options.MaxResultDepth + 1 });
-                    return (document.RootElement.Clone(), markers);
+                    return (JintResultMaterializer.ParseResult(text, _options, intermediate: true), markers);
                 }
             }
             catch

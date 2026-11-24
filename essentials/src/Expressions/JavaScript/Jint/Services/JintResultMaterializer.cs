@@ -44,7 +44,7 @@ internal static class JintResultMaterializer
     }
 
     /// <summary>Parses result JSON and checks it against the configured result limits.</summary>
-    public static JsonElement ParseResult(string json, FeatureOptions options)
+    public static JsonElement ParseResult(string json, FeatureOptions options, bool intermediate = false)
     {
         ArgumentNullException.ThrowIfNull(json);
         ArgumentNullException.ThrowIfNull(options);
@@ -52,8 +52,7 @@ internal static class JintResultMaterializer
         ValidatePositive(options.MaxResultDepth, nameof(options.MaxResultDepth));
         ValidatePositive(options.MaxResultNodes, nameof(options.MaxResultNodes));
 
-        var byteCount = Encoding.UTF8.GetByteCount(json);
-        if (byteCount > options.MaxResultBytes)
+        if (!intermediate && Encoding.UTF8.GetByteCount(json) > options.MaxResultBytes)
         {
             throw new InvalidOperationException(
                 $"A JavaScript result exceeds the configured limit of {options.MaxResultBytes} bytes.");
@@ -62,7 +61,9 @@ internal static class JintResultMaterializer
         JsonDocument document;
         try
         {
-            document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = options.MaxResultDepth });
+            // Interim bridge markers need one level of headroom; byte/node limits apply to the normalized result.
+            var depth = intermediate && options.MaxResultDepth < int.MaxValue ? options.MaxResultDepth + 1 : options.MaxResultDepth;
+            document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = depth });
         }
         catch (JsonException exception)
         {
@@ -73,7 +74,8 @@ internal static class JintResultMaterializer
 
         using (document)
         {
-            ValidateTree(document.RootElement, options, depth: 1, nodeCount: 0);
+            if (!intermediate)
+                ValidateTree(document.RootElement, options, depth: 1, nodeCount: 0);
 
             return document.RootElement.Clone();
         }
