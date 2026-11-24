@@ -49,8 +49,10 @@ internal static class PostgresRootRetentionChecks
         var actorType = new PublicActor([new PostgresRootThenDeleteChecks.SeededReceipt(new NativeExecutionModel(registry),
             reference => reference == protectedActor)]);
         var extended = false;
+        const int expiryMilliseconds = 25;
         TimeSpan? Window(Contract.ActorHeader header) => header.Ref == indefinite || header.Tenant != blue.Tenant ? null
-            : extended && header.Ref == later ? TimeSpan.FromHours(2) : TimeSpan.Zero;
+            : extended && header.Ref == later ? TimeSpan.FromHours(2)
+            : header.Ref == expired ? TimeSpan.FromMilliseconds(expiryMilliseconds) : TimeSpan.Zero;
         var retention = new RetentionFixture(reads, Window, admission.AdmitRetentionDeleteAsync);
         EfStore.RootImage expiredBefore;
         EfStore.RootImage laterBefore;
@@ -82,6 +84,19 @@ internal static class PostgresRootRetentionChecks
         Check((await admission.AdmitRetentionDeleteAsync(blue, later, chosen.Selection!, stop)).Outcome == Contract.AdmissionOutcome.Refused &&
               (await admission.AdmitRetentionDeleteAsync(red, expired, chosen.Selection!, stop)).Outcome == Contract.AdmissionOutcome.Refused,
             "retention admission binds the selection to the exact actor and tenant");
+        var due = checked(expiredBefore.TerminalAt!.Value + expiryMilliseconds);
+        await using (var db = Open())
+        {
+            long now;
+            do
+            {
+                now = await db.Database.SqlQueryRaw<long>("""
+                    SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value"
+                    """).SingleAsync(stop);
+                if (now < due) await Task.Delay(1, stop);
+            } while (now < due);
+            Check(now >= due && due > expiredBefore.TerminalAt, "PostgreSQL time reaches the committed root's positive retention deadline");
+        }
         await InterruptAfterAdmission();
         var first = await Sweep(blue);
         Check(first is (5, 2, 1, 3), "the real retention pass replays an interrupted admission across bounded PostgreSQL read pages");
