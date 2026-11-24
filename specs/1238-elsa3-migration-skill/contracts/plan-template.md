@@ -5,7 +5,7 @@
 ```markdown
 # Elsa 3 to Elsa 4 migration plan
 
-Elsa 4 version: <version> (the migration and engine image tag)
+Essentials image tag: <tag> (the engine you go live on; the migration image uses the same tag)
 Stage: inventory | prepare | test-migration | handoff
 Export: <path>
 Last report: <path> (<command>, <date>)

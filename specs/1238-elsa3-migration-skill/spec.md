@@ -161,7 +161,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   skill asks for more source or records the user's decision to redesign or drop the definitions that use it.
 - A component exists in the source but no definition uses it: it is not migrated (inventory comes only from the
   report).
-- Docker is not available, or the migration image tagged with the plan's Elsa 4 version cannot be pulled: the skill stops
+- Docker is not available, or the migration image tagged with the plan's essentials image tag cannot be pulled: the skill stops
   before running anything and says what to install or which version to use.
 - A JavaScript global is used other than as a direct call (assigned to a variable, passed as a callback): the
   converter does not rewrite it, so it would fail at run time. The converter is to report such a reference as an
@@ -199,7 +199,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   one plugin whose source is `plugins/elsa3-migration/`, and that plugin's `.claude-plugin/plugin.json`. Users of
   agents that read `.agents/skills/` copy the skill folder. No adapter repeats the skill's content.
 - **FR-004**: The skill MUST state the report schema versions it reads and stop on any other. It is not tied to a tool
-  release: the plan records the Elsa 4 version the user targets, and that version is the tag of the migration image
+  release: the plan records the tag of the essentials engine image the user targets (a build tag, not a package version), and
+  the migration image with that same tag is the one
   the skill runs (FR-022) and of the essentials engine image the user later goes live on.
 
 **Privacy**
@@ -243,7 +244,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   (`elsaworkflows/elsa-elsa3-migration`, tagged like the essentials engine image it is built from), whose entry point is the tool's migration command group. The skill starts it with `docker run` as spec 1237's
   command-line contract shows, without network access: the export and the output folder for every run, plus the
   packages folder and the `appsettings.json` for `assess`. It records the command in the plan. Before the first run of a session, the skill MUST check that Docker is
-  available and that the migration image tagged with the plan's Elsa 4 version (FR-004) can be
+  available and that the migration image tagged with the plan's essentials image tag (FR-004) can be
   pulled. When either fails, it stops, says what is missing, and runs nothing. When the tool refuses to run, the skill
   shows the tool's reason and stops.
 

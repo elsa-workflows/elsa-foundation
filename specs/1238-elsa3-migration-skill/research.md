@@ -64,12 +64,12 @@ copied by every AI that follows the catalog. Only a build catches that without r
 ## R-4 Versions
 
 **Decision**: The skill gates only on the report's integer schema version, which it lists; on any other it stops and
-tells the user to update the skill. The Elsa 4 version the user targets is recorded in the plan and selects the
+tells the user to update the skill. The essentials image tag the user targets (a build tag, not a package version) is recorded in the plan and selects the
 migration image tag. `plugin.json` carries no version, so a marketplace install follows the repository's commits.
 
 **Rationale**: Package versions are computed per commit (`PackageVersioning.props`), so no file can name "the" tool
 version, and a marketplace install follows the default branch rather than a release. Spec 1237 ships the tool and
-the skill separately and versions the report by schema. The user's target version is a real choice they make once,
+the skill separately and versions the report by schema. The user's target engine tag is a real choice they make once,
 and it must match the engine image they go live on.
 
 **Alternatives considered**: Stamping the tool version into `plugin.json` and the skill front matter at release:

@@ -69,7 +69,7 @@ publishes or deploys.
 | P-3 | Catalog verdicts | The spec's FR-014 table, decided against the code (R-2). |
 | P-4 | Sample | `extensions/Elsa3/tests/Migration/Sample/Elsa3.Migration.Sample.csproj` and `extensions/Elsa3/tests/Migration/Sample.Tests/Elsa3.Migration.Sample.Tests.csproj`; marked regions `// catalog:case-NN begin` / `// catalog:case-NN end` (R-3, [contracts/catalog-entry.md](contracts/catalog-entry.md)). |
 | P-5 | Check | `tools/skills/check_migration_skill.py`, run with `--self-test` and then for real next to the catalog link check in `ci.yml`; `plugins/**` is documentation-only in `tools/ci/change_scope.py` (R-5). |
-| P-6 | Versions | `SKILL.md` lists the report schema versions it reads; the plan records the target Elsa 4 version, which is the migration image tag; no tool version is stamped anywhere (R-4). |
+| P-6 | Versions | `SKILL.md` lists the report schema versions it reads; the plan records the essentials image tag the user targets, which is also the migration image tag; no tool version is stamped anywhere (R-4). |
 | P-7 | Report | The skill reads only the fields in [contracts/report-consumption.md](contracts/report-consumption.md); any gap is raised on spec 1237's PR, not solved here. |
 
 ## Project Structure

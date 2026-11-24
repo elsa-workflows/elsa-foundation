@@ -8,7 +8,7 @@ Filled in from `migration-plan-template.md` ([contract](contracts/plan-template.
 
 | Field | Content | Rule |
 |---|---|---|
-| Elsa 4 version | The essentials version the user targets; the migration image tag | Set at inventory; changing it means rerunning the assessment. |
+| Essentials image tag | The tag of the essentials engine image the user will go live on (a build tag, not a package version); the migration image with the same tag runs the tool | Set at inventory; changing it means rerunning the assessment; the report's image version confirms it. |
 | Stage | `inventory` → `prepare` → `test-migration` → `handoff` | Moves forward only; a new finding in `test-migration` sends one component back to `porting`, not the stage. |
 | Export | Path of the Elsa 3 export | Required from `inventory`. |
 | Source locations | Folders or repositories of Elsa 3 source | Added when asked (FR-009). |
