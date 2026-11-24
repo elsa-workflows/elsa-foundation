@@ -10,7 +10,7 @@ internal static class FoundationEventSendChecks
         const long initial = 1_700_800_000_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now) { IngressDeduplicationWindow = TimeSpan.FromMilliseconds(40) };
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         var ingress = new EventIngress(store, new Requests("event-one-way"), "event-owner");
         var worker = new Worker("event-owner", 0, store, new ActorAdapter(store, new Probe()), new WorkerOptions { Monotonic = () => now - initial });
         await using var activation = (await new DurableHost([worker]).ActivateAsync(0))!;
@@ -71,7 +71,7 @@ internal static class FoundationEventSendChecks
     {
         const long now = 1_701_500_000_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         Contract.IIngress edge = new InMemoryIngress(store, new Requests("subscription-check"), "subscription-check");
         var actor = new Probe();
         var worker = new Worker("subscription-check", 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
@@ -156,7 +156,7 @@ internal static class FoundationEventSendChecks
             {
                 IngressDeduplicationWindow = TimeSpan.FromMilliseconds(10)
             };
-            var scope = new Contract.BoundScope("start-catch-up");
+            var scope = ContractScopes.Bind("start-catch-up");
             var actor = new Probe();
             var wire = new CountingStore(store, () => { }, (batch, landed) =>
             {
@@ -234,7 +234,7 @@ internal static class FoundationEventSendChecks
         const int count = 12;
         const int megabyte = 1_024 * 1_024;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("registrar-duplicates");
+        var scope = ContractScopes.Bind("registrar-duplicates");
         var edge = new EventIngress(store, new Requests("registrar"), "caller");
         var actor = new Probe();
         var payload = new string('x', megabyte);
@@ -272,7 +272,7 @@ internal static class FoundationEventSendChecks
     {
         const long now = 1_701_511_010_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("registrar-page");
+        var scope = ContractScopes.Bind("registrar-page");
         var edge = new EventIngress(store, new Requests("registrar-page"), "caller");
         var actor = new Probe();
         const int count = InMemoryStore.ParkPageLimit + 1;
@@ -317,7 +317,7 @@ internal static class FoundationEventSendChecks
         {
             IngressDeduplicationWindow = TimeSpan.FromMilliseconds(10)
         };
-        var scope = new Contract.BoundScope("keeping-scope");
+        var scope = ContractScopes.Bind("keeping-scope");
         var actor = new Probe();
         var edge = new InMemoryIngress(store, new Requests("keeping-wait"), "keeping-wait");
         Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
@@ -408,7 +408,7 @@ internal static class FoundationEventSendChecks
     {
         const long now = 1_701_510_100_000;
         var store = new InMemoryStore(1, () => now, Flaw.None, StringComparer.OrdinalIgnoreCase);
-        var scope = new Contract.BoundScope("keeping-batch");
+        var scope = ContractScopes.Bind("keeping-batch");
         var probe = new Probe();
         var edge = new InMemoryIngress(store, new Requests("keeping-batch"), "keeping-batch");
         var worker = new Worker("keeping-batch", 0, store, new ActorAdapter(store, probe), new WorkerOptions { Monotonic = () => 0 });
@@ -507,7 +507,7 @@ internal static class FoundationEventSendChecks
         var now = 1_702_200_020_000L;
         var incarnation = 0;
         var store = new InMemoryStore(2, () => now) { NewPublicationIncarnation = () => Incarnation(++incarnation) };
-        var scope = new Contract.BoundScope("publication-order");
+        var scope = ContractScopes.Bind("publication-order");
         var ingress = new InMemoryIngress(store, new Requests("order"), "order");
         var events = new EventIngress(store, new Requests("publish-order"), "order");
         var left = StartWait(0, "left");
@@ -564,7 +564,7 @@ internal static class FoundationEventSendChecks
     {
         const long now = 1_702_200_010_000;
         var store = new InMemoryStore(1, () => now, Flaw.None, StringComparer.OrdinalIgnoreCase);
-        var scope = new Contract.BoundScope("publication-race");
+        var scope = ContractScopes.Bind("publication-race");
         var edge = new EventIngress(store, new Requests("race"), "race");
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Task<Contract.Admission> Publish(string key, string id) => Task.Run(async () =>
@@ -589,7 +589,7 @@ internal static class FoundationEventSendChecks
         const long start = 1_702_200_000_000;
         var now = start;
         var store = new InMemoryStore(1, () => now, Flaw.None, StringComparer.OrdinalIgnoreCase);
-        var scope = new Contract.BoundScope("broadcast");
+        var scope = ContractScopes.Bind("broadcast");
         var edge = new EventIngress(store, new Requests("publisher"), "publisher");
         var count = byteCut ? 2 : InMemoryStore.ParkPageLimit + 1;
         var firstSize = byteCut ? 1 : InMemoryStore.ParkPageLimit;
@@ -696,7 +696,7 @@ internal static class FoundationEventSendChecks
         const long start = 1_702_200_020_000;
         var now = start;
         var store = new InMemoryStore(1, () => now) { IngressDeduplicationWindow = TimeSpan.FromMilliseconds(20) };
-        var scope = new Contract.BoundScope("broadcast-dead-letter");
+        var scope = ContractScopes.Bind("broadcast-dead-letter");
         var edge = new EventIngress(store, new Requests("publisher"), "publisher");
         await edge.SetStartAsync(scope, "live", "wait", new("event-send", "receiver"));
         await DrainEmptyRegistrations(store, 1);
@@ -737,7 +737,7 @@ internal static class FoundationEventSendChecks
         const long now = 1_702_200_030_000;
         const int count = 12;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("prior-deliveries");
+        var scope = ContractScopes.Bind("prior-deliveries");
         var edge = new EventIngress(store, new Requests("publisher"), "publisher");
         await edge.SendAsync(scope, new("live"), "kept", new string('x', 1_024 * 1_024), new(KeepFor: TimeSpan.FromMinutes(1)));
         for (var i = 0; i < count; i++)

@@ -10,7 +10,7 @@ internal static partial class ParkHandoffCreditChecks
         const long start = 1_702_610_023_000;
         var now = start;
         var name = sameOwner ? "same-owner discard" : discard ? "discard" : "resume";
-        var scope = new Contract.BoundScope("cross-park");
+        var scope = ContractScopes.Bind("cross-park");
         var probe = new Probe { HoldInputs = true, FaultOnSuspend = true };
         var store = new InMemoryStore(1, () => now);
         var ingress = new InMemoryIngress(store, new Requests("cross-park"), "cross-park",

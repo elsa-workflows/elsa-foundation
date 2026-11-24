@@ -97,7 +97,7 @@ internal static class EventRequestChecks
             "repeating the event id cannot deliver the old publication to a new non-keeping wait");
 
         var bound = new EventIngress(store, requests, "caller");
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         var eventTarget = new Contract.Target.Event("typed");
         var keep = new Contract.AddOptions(KeepFor: TimeSpan.FromMinutes(1));
         var options = new Contract.RequestOptions(null, now + 60_000);

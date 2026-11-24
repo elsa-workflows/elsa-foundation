@@ -38,7 +38,7 @@ internal static partial class NativeHttpEdgeChecks
         long Now() => Interlocked.Read(ref timestamp);
         var store = new InMemoryStore(1, Now, flaws);
         var reads = new ActorList(store, 16);
-        var scope = new Contract.BoundScope("http-remote");
+        var scope = ContractScopes.Bind("http-remote");
         var requests = new Requests(receiver, flaws);
         var transport = new LocalTransport(receiver, requests);
         var originalLink = new DisconnectableReplyTransport(transport);

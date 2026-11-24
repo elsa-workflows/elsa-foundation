@@ -12,8 +12,8 @@ internal static class TenantPassChecks
             const long now = 1_701_700_000_000;
             var store = new InMemoryStore(1, () => now);
             var ingress = new InMemoryIngress(store, new Requests("tenant-passes"), "tenant-passes");
-            var hot = new Contract.BoundScope("hot");
-            var quiet = new Contract.BoundScope("quiet");
+            var hot = ContractScopes.Bind("hot");
+            var quiet = ContractScopes.Bind("quiet");
             var probe = new Probe();
             var type = new ActorAdapter(store, probe);
             var weights = weight == 1 ? null : new Dictionary<string, int> { [hot.Tenant] = weight };

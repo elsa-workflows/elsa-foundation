@@ -12,7 +12,7 @@ internal static class PublicOwnerChecks
         const int lease = 100;
         var now = start;
         var store = new InMemoryStore(1, () => now, flaws);
-        var scope = new Contract.BoundScope("turn-owner");
+        var scope = ContractScopes.Bind("turn-owner");
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("takeover"), "edge");
         Contract.IActorReads reads = new ActorList(store, 10);
         var previous = new Probe("previous", pause: true);

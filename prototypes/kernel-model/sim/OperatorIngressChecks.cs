@@ -10,8 +10,8 @@ internal static class OperatorIngressChecks
         const long now = 1_701_000_000_000;
         var store = new InMemoryStore(1, () => now);
         var requests = new Requests("operators");
-        var scope = new Contract.BoundScope("acme");
-        var foreign = new Contract.BoundScope("other");
+        var scope = ContractScopes.Bind("acme");
+        var foreign = ContractScopes.Bind("other");
         Contract.IIngress ordinary = new InMemoryIngress(store, requests, "operator-owner");
         Contract.IIngress operators = new InMemoryIngress(store, requests, "operator-owner", (selected, _) => selected == scope || selected == foreign);
         Contract.IActorReads reads = new ActorList(store, 10);
@@ -95,7 +95,7 @@ internal static class OperatorIngressChecks
         const long initial = 1_701_000_010_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("terminal-mark");
+        var scope = ContractScopes.Bind("terminal-mark");
         var edge = new InMemoryIngress(store, new Requests("terminal-mark"), "terminal-mark");
         var worker = new Worker("terminal-mark", 0, store, new ActorAdapter(store, new Probe()), new WorkerOptions { Monotonic = () => now - initial });
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
@@ -151,7 +151,7 @@ internal static class OperatorIngressChecks
         const long now = 1_701_100_000_000;
         var store = new InMemoryStore(1, () => now);
         var requests = new Requests("operator-fallback");
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         Contract.IIngress edge = new InMemoryIngress(store, requests, "fallback", (selected, _) => selected == scope);
         Contract.IActorReads reads = new ActorList(store, 10);
         var legacy = new WorkflowInstance([new LegacyProbe()]);

@@ -2,9 +2,9 @@
 
 A standalone model of the execution kernel ([DESIGN.md](DESIGN.md): the design as built, against draft 5 of the
 sketch, in three layers), the stores it runs on, the native Elsa workflow model on it, and a simulation that tries to
-break it all. It tests the design before product code exists. It shares nothing with the Elsa runtime and builds as its own
-repository: the folder has its own `Directory.Build.*`, `Directory.Packages.props`, `NuGet.config`, `global.json` and
-`.editorconfig`.
+break it all. The prototype keeps its own build and provider versions. Its projects reference the backend
+[Actor Foundation packages](../../essentials/src/ActorFoundation/README.md), so the public contracts and Embedded
+tenant binding use the same assemblies as a package consumer.
 
 What was found is in [FINDINGS.md](FINDINGS.md) (section 27: the runtime conformance suite and the Orleans adapter;
 section 26: the graph engine; section 25: round 4's decided items; section 24: the three layers and the round 4 names;

@@ -15,8 +15,8 @@ internal static class FoundationKeyIngressChecks
         const long initial = 1_700_700_000_000;
         var now = initial;
         var store = new InMemoryStore(2, () => now);
-        var scope = new Contract.BoundScope("acme");
-        var other = new Contract.BoundScope("other");
+        var scope = ContractScopes.Bind("acme");
+        var other = ContractScopes.Bind("other");
         var edge = new OrdinaryIngress(store);
         var options = new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(40));
         var spec = new Contract.StartSpec("key-ingress", "one", "input");
@@ -85,7 +85,7 @@ internal static class FoundationKeyIngressChecks
     {
         const int partitions = 1024;
         const long now = 1_700_700_000_000;
-        var scope = new Contract.BoundScope("a");
+        var scope = ContractScopes.Bind("a");
         var store = new InMemoryStore(partitions, () => now, Flaw.None, StringComparer.Ordinal, equality);
         var attempts = new[] { (Key: "Invoice", Operation: "first-op", Input: "input"),
             (Key: "invoice", Operation: secondOperation, Input: secondInput) };

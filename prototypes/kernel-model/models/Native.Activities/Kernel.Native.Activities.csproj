@@ -4,7 +4,7 @@
     <KernelContractOnly>true</KernelContractOnly>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Kernel.Foundation.Contracts/Kernel.Foundation.Contracts.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
     <InternalsVisibleTo Include="Kernel.Native" />
     <InternalsVisibleTo Include="Kernel.Native.Legacy" />
     <InternalsVisibleTo Include="Kernel.Native.Recovery.Run" />

@@ -9,8 +9,8 @@ internal static class ActorJournalChecks
     {
         var now = 1_700_300_000_000L;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
-        var foreign = new Contract.BoundScope("other");
+        var scope = ContractScopes.Bind("acme");
+        var foreign = ContractScopes.Bind("other");
         var reader = new ActorList(store, 1);
         var target = InstanceRef.In(0, "journal-root");
         var neighbor = InstanceRef.In(0, "journal-neighbor");

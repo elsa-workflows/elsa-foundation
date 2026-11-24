@@ -12,8 +12,8 @@ internal static class IngressContractChecks
         var store = new InMemoryStore(1, () => now);
         var requests = new Requests("contract-ingress");
         Contract.IIngress ingress = new InMemoryIngress(store, requests, "request-node");
-        var scope = new Contract.BoundScope("acme");
-        var foreign = new Contract.BoundScope("other");
+        var scope = ContractScopes.Bind("acme");
+        var foreign = ContractScopes.Bind("other");
         var transport = new Transport(store, requests);
         var adapter = new ActorAdapter(store, new Probe(), (requests, "request-node"));
         var worker = new Worker("request-node", 0, store, adapter,

@@ -12,8 +12,8 @@ internal static class ActorInboxChecks
         var now = start;
         var store = new InMemoryStore(1, () => now);
         Contract.IActorReads reader = new ActorList(store, 1);
-        var scope = new Contract.BoundScope("acme");
-        var other = new Contract.BoundScope("other");
+        var scope = ContractScopes.Bind("acme");
+        var other = ContractScopes.Bind("other");
         var address = InstanceRef.In(0, "actor-inbox");
         var initial = Admit(1);
         var owner = await Owner("inbox-first");
@@ -77,7 +77,7 @@ internal static class ActorInboxChecks
     {
         const long now = 1_701_600_000_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("hold-order"), "hold-order");
         Contract.IActorReads reads = new ActorList(store, 16);
         var probe = new HeldProbe();

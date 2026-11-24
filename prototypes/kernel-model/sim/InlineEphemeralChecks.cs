@@ -17,7 +17,7 @@ internal static class InlineEphemeralChecks
     private sealed class Schedule(string shape, Action<bool, string> check, Flaw flaws)
     {
         private const long Start = 1_703_500_000_000;
-        private readonly Contract.BoundScope _scope = new("inline");
+        private readonly Contract.BoundScope _scope = ContractScopes.Bind("inline");
         private long _now = Start;
 
         internal async Task Run()
@@ -122,7 +122,7 @@ internal static class InlineEphemeralChecks
                 check(await reads.GetAsync(_scope, reference) is { Header.Status: Contract.ActorStatus.Running, Header.Ref: var bound } &&
                     bound == reference && store.Subscriptions.Count == 1,
                     $"the first durable outcome binds the life and its subscription together ({shape})");
-                await ingress.SendAsync(new Contract.BoundScope("other"), new Contract.Target.Event("signal"), "foreign", "ignored", "foreign");
+                await ingress.SendAsync(ContractScopes.Bind("other"), new Contract.Target.Event("signal"), "foreign", "ignored", "foreign");
                 await Pass(owner);
                 check(!reply.IsCompleted, $"a foreign publication cannot resolve the provisional life ({shape})");
                 await ingress.SendAsync(_scope, new Contract.Target.Event("signal"), "same-scope", "ignored", "same-scope");

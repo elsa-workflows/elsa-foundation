@@ -47,7 +47,7 @@ internal static class JobResultSizeChecks
         var requests = new Requests("job-result-size");
         var worker = new Worker("job-result-size", 0, store, new ActorAdapter(store, actor),
             new WorkerOptions { Monotonic = () => 0, Flaws = flaws });
-        var scope = new Contract.BoundScope("sizes");
+        var scope = ContractScopes.Bind("sizes");
         Contract.IIngress edge = new InMemoryIngress(store, requests, "job-result-size", (selected, _) => selected == scope);
         var started = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "running", null)), "start", Contract.Kinds.Start);
         var target = new Contract.Target.Ref(started.Actor!.Value);

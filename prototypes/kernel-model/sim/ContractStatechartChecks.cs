@@ -15,7 +15,7 @@ internal static class ContractStatechartChecks
         const long startAt = 1_700_600_000_000;
         var now = startAt;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         var ingress = new OrdinaryIngress(store);
         Contract.IActorReads reader = new ActorList(store, 32);
         var edge = new InMemoryIngress(store, new Requests("chart-runtime"), "chart-runtime",
@@ -100,7 +100,7 @@ internal static class ContractStatechartChecks
         check(inbox.Items is [{ Kind: "operator-timer", Handle.Length: > 0, Due: var timerDue }] && timerDue > now,
             "the runtime sees the opaque handle for a pending timer through the public inbox read");
 
-        var cross = await runtime.TerminateAsync(new Contract.BoundScope("other"), "foreign-terminate", selected);
+        var cross = await runtime.TerminateAsync(ContractScopes.Bind("other"), "foreign-terminate", selected);
         var own = await runtime.TerminateAsync(scope, "terminate", selected);
         await Pump(next);
         check(cross.Outcome == Contract.AdmissionOutcome.Refused && own.Outcome == Contract.AdmissionOutcome.Accepted &&

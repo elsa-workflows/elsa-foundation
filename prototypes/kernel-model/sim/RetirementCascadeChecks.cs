@@ -21,7 +21,7 @@ internal static class RetirementCascadeChecks
     {
         const long now = 1_702_310_000_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("retirement-cascade");
+        var scope = ContractScopes.Bind("retirement-cascade");
         var probe = new Probe();
         var ingress = new InMemoryIngress(store, new Requests("retirement-cascade"), "retirement-cascade",
             (_, kind) => kind is Contract.Kinds.Delete or Contract.Kinds.Terminate);

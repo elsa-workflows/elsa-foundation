@@ -5,6 +5,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Kernel.Durable/Kernel.Durable.csproj" />
-    <ProjectReference Include="../Kernel.Model.Contracts/Kernel.Model.Contracts.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Model/Elsa.ActorFoundation.Model.Contracts.csproj" />
   </ItemGroup>
 </Project>

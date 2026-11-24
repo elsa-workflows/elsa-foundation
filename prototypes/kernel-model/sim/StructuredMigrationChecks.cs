@@ -341,7 +341,7 @@ internal static class StructuredMigrationChecks
         {
             const long now = 1_701_800_000_000;
             var store = new InMemoryStore(1, () => now);
-            var scope = new Contract.BoundScope("acme");
+            var scope = ContractScopes.Bind("acme");
             Contract.IIngress ingress = new InMemoryIngress(store, new Requests("migration-validation"), "migration-validation");
             var runtime = new PublicRuntime(ingress, new ActorList(store, 16));
             var registry = new WorkflowRegistry().Add(source);

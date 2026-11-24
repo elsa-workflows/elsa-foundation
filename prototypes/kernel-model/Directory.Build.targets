@@ -4,7 +4,7 @@
     <ItemGroup>
       <!-- ResolveReferences includes Native's SDK-supplied transitive dependencies on Graph and Native.Activities.
            Statecharts.Native may use those transitively, but may declare only Native and Statecharts beyond contracts. -->
-      <_UnexpectedKernelProject Include="@(ProjectReference)" Condition="'%(ProjectReference.Filename)' != 'Kernel.Foundation.Contracts' And '%(ProjectReference.Filename)' != 'Kernel.Model.Contracts' And
+      <_UnexpectedKernelProject Include="@(ProjectReference)" Condition="'%(ProjectReference.Filename)' != 'Elsa.ActorFoundation.Contracts' And '%(ProjectReference.Filename)' != 'Elsa.ActorFoundation.Model.Contracts' And
         ('$(MSBuildProjectName)' != 'Kernel.Statecharts.Native' Or ('%(ProjectReference.Filename)' != 'Kernel.Native' And '%(ProjectReference.Filename)' != 'Kernel.Statecharts')) And
         (('$(MSBuildProjectName)' != 'Kernel.Native' And ('$(MSBuildProjectName)' != 'Kernel.Statecharts.Native' Or '%(ProjectReference.DefiningProjectName)' != 'Microsoft.PackageDependencyResolution')) Or ('%(ProjectReference.Filename)' != 'Kernel.Graph' And '%(ProjectReference.Filename)' != 'Kernel.Native.Activities'))" />
     </ItemGroup>

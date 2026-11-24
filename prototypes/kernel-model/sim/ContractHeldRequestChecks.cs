@@ -16,7 +16,7 @@ internal static class ContractHeldRequestChecks
         const long initial = 1_702_100_000_000;
         const int lease = 100;
         var now = initial;
-        var scope = new Contract.BoundScope("north");
+        var scope = ContractScopes.Bind("north");
         var store = new InMemoryStore(1, () => now);
         var requests = new Requests("request-node");
         var transport = new Replies(requests);

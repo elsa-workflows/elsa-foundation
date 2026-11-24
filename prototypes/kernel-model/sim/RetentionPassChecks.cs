@@ -12,8 +12,8 @@ internal static class RetentionPassChecks
         const int pageSize = 2;
         var now = endedAt;
         var extended = TimeSpan.FromMilliseconds(10);
-        var blue = new Contract.BoundScope("retention-blue");
-        var red = new Contract.BoundScope("retention-red");
+        var blue = ContractScopes.Bind("retention-blue");
+        var red = ContractScopes.Bind("retention-red");
         var store = new InMemoryStore(1, () => now) { IngressDeduplicationWindow = TimeSpan.FromMilliseconds(100) };
         var actorType = new Probe();
         var ingress = new InMemoryIngress(store, new Requests("retention-pass"), "retention-pass");

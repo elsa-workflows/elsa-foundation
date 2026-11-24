@@ -6,7 +6,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Sim" />
     <InternalsVisibleTo Include="Kernel.Native.Run" />
-    <ProjectReference Include="../Kernel.Foundation.Contracts/Kernel.Foundation.Contracts.csproj" />
-    <ProjectReference Include="../Kernel.Model.Contracts/Kernel.Model.Contracts.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Model/Elsa.ActorFoundation.Model.Contracts.csproj" />
   </ItemGroup>
 </Project>

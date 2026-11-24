@@ -28,7 +28,7 @@ internal static class ParkPageBoundsChecks
         const long start = 1_701_679_300_000;
         var now = start;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(1) };
-        var scope = new Contract.BoundScope(new string('t', 64));
+        var scope = ContractScopes.Bind(new string('t', 64));
         var kind = new string('界', 85) + "k";
         const int pageByteLimit = 4 * 1024 * 1024;
         var largeBodies = payloadBounds

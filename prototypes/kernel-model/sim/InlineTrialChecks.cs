@@ -13,7 +13,7 @@ internal static class InlineTrialChecks
         var now = start;
         var store = new InMemoryStore(1, () => now);
         var requests = new Requests("inline-trial");
-        var scope = new Contract.BoundScope("inline-trial");
+        var scope = ContractScopes.Bind("inline-trial");
         var actor = new Model();
         var opts = new WorkerOptions
         {

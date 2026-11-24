@@ -11,8 +11,8 @@ internal static class OrdinaryIngressChecks
         var now = startAt;
         var store = new InMemoryStore(1, () => now);
         var edge = new OrdinaryIngress(store);
-        var scope = new Contract.BoundScope("acme");
-        var other = new Contract.BoundScope("other");
+        var scope = ContractScopes.Bind("acme");
+        var other = ContractScopes.Bind("other");
         var read = new ActorList(store, 10);
         var spec = new Contract.Target.Start(new("ordinary-ingress", "startup", "configured"));
         var deduplicate = new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(20));

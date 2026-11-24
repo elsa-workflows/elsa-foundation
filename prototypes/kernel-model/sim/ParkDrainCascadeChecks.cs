@@ -30,7 +30,7 @@ internal static class ParkDrainCascadeChecks
         const long initial = 1_702_310_020_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = expiry ? TimeSpan.FromMilliseconds(1) : null };
-        var scope = new Contract.BoundScope("park-cascade");
+        var scope = ContractScopes.Bind("park-cascade");
         var probe = new Probe();
         var edge = new InMemoryIngress(store, new Requests("park-cascade"), "park-cascade",
             (_, kind) => kind is Contract.Kinds.Discard or Contract.Kinds.Terminate);
@@ -126,7 +126,7 @@ internal static class ParkDrainCascadeChecks
         const long initial = 1_702_310_030_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMinutes(10) };
-        var scope = new Contract.BoundScope("park-terminate");
+        var scope = ContractScopes.Bind("park-terminate");
         var probe = new Probe();
         var edge = new InMemoryIngress(store, new Requests("park-terminate"), "park-terminate", (_, kind) => kind is Contract.Kinds.Terminate or Contract.Kinds.Delete);
         var writes = new List<TurnCommit>();
@@ -280,7 +280,7 @@ internal static class ParkDrainCascadeChecks
     {
         const long now = 1_702_310_040_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("park-terminate-cascade");
+        var scope = ContractScopes.Bind("park-terminate-cascade");
         var probe = new Probe(retainOnTerminate: true);
         const string node = "terminate-existing-cascade";
         var edge = new InMemoryIngress(store, new Requests(node), node, (_, kind) => kind == Contract.Kinds.Terminate);
@@ -354,7 +354,7 @@ internal static class ParkDrainCascadeChecks
         const long initial = 1_702_310_050_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("terminate-open-recovery");
+        var scope = ContractScopes.Bind("terminate-open-recovery");
         var probe = new Probe();
         const string node = "terminate-open-recovery";
         var edge = new InMemoryIngress(store, new Requests(node), node,
@@ -447,7 +447,7 @@ internal static class ParkDrainCascadeChecks
         const long initial = 1_702_310_060_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("terminate-running-recover");
+        var scope = ContractScopes.Bind("terminate-running-recover");
         var probe = new Probe(restoreTrial: true);
         var scheduler = new HeldScheduler();
         var queuedAtOpen = 0;
@@ -615,7 +615,7 @@ internal static class ParkDrainCascadeChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe(restoreTrial: true, restoreSubscription: true);
-        var scope = new Contract.BoundScope("terminate-after-recover");
+        var scope = ContractScopes.Bind("terminate-after-recover");
         var scheduler = new HeldScheduler();
         var requests = new Requests("terminate-after-recover");
         var edge = new InMemoryIngress(store, requests, "terminate-after-recover",
@@ -703,7 +703,7 @@ internal static class ParkDrainCascadeChecks
         var now = initial;
         var count = CascadeProtocol.PageLimit + 1;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("cold-job-suffix");
+        var scope = ContractScopes.Bind("cold-job-suffix");
         var probe = new Probe(restoreMany: true);
         var scheduler = new HeldScheduler();
         var edge = new InMemoryIngress(store, new Requests("cold-job-suffix"), "cold-job-suffix",
@@ -778,7 +778,7 @@ internal static class ParkDrainCascadeChecks
         const long initial = 1_702_310_075_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("recovered-job-open");
+        var scope = ContractScopes.Bind("recovered-job-open");
         var probe = new Probe(restoreTrial: true);
         var scheduler = new HeldScheduler();
         var requests = new Requests("recovered-job-open");

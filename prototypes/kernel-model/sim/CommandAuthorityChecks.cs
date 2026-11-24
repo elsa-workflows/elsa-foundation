@@ -54,7 +54,7 @@ internal static class CommandAuthorityChecks
     {
         const long now = 1_701_400_000_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         var actor = new Probe();
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("command-authority"), "command-authority");
         var worker = new Worker("command-authority", 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
@@ -101,7 +101,7 @@ internal static class CommandAuthorityChecks
     {
         const long now = 1_701_400_010_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("cascade-origin");
+        var scope = ContractScopes.Bind("cascade-origin");
         var actor = new Probe();
         var emitted = new List<Message>();
         var wire = new CountingStore(store, () => { }, (batch, landed) =>

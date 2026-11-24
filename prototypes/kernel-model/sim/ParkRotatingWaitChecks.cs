@@ -14,7 +14,7 @@ internal static class ParkRotatingWaitChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var model = new RotatingWaits();
-        var scope = new Contract.BoundScope("rotating-waits");
+        var scope = ContractScopes.Bind("rotating-waits");
         var edge = new InMemoryIngress(store, new Requests("rotation"), "rotation", (_, kind) => kind == Contract.Kinds.Recover);
         var random = new Random(4229);
         var atOpen = 0;

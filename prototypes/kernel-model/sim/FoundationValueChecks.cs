@@ -10,7 +10,7 @@ internal static class FoundationValueChecks
         const long initial = 1_702_725_000_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now) { IngressDeduplicationWindow = TimeSpan.FromMilliseconds(100) };
-        var scope = new Contract.BoundScope("values");
+        var scope = ContractScopes.Bind("values");
         var probe = new Probe();
         var edge = new InMemoryIngress(store, new Requests("values"), "values", (_, kind) => kind == Contract.Kinds.Delete);
         var first = Owner("values-first");

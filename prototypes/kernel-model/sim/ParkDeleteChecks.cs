@@ -26,7 +26,7 @@ internal static class ParkDeleteChecks
         const long initial = 1_702_310_070_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMinutes(10) };
-        var scope = new Contract.BoundScope("park-delete");
+        var scope = ContractScopes.Bind("park-delete");
         var probe = new Probe();
         var requests = new Requests("park-delete");
         var edge = new InMemoryIngress(store, requests, "park-delete", (_, kind) => kind == Contract.Kinds.Delete);
@@ -160,7 +160,7 @@ internal static class ParkDeleteChecks
     {
         const long initial = 1_702_310_083_000;
         var now = initial;
-        var scope = new Contract.BoundScope("delete-takeover");
+        var scope = ContractScopes.Bind("delete-takeover");
         var store = new InMemoryStore(1, () => now)
         {
             ParkedRetentionWindow = kind == ParkClearKind.Expiry ? TimeSpan.FromMilliseconds(1) : null

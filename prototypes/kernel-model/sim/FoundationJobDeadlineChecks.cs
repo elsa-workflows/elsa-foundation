@@ -10,7 +10,7 @@ internal static class FoundationJobDeadlineChecks
         const long initial = 1_701_200_000_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         var requests = new Requests("timed-jobs");
         Contract.IIngress edge = new InMemoryIngress(store, requests, "jobs", (selected, _) => selected == scope);
         var model = new Probe();

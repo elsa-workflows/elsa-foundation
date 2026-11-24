@@ -18,7 +18,7 @@ internal static class ParkCoverageBudgetChecks
     {
         const long now = 1_702_701_000_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("coverage-budget");
+        var scope = ContractScopes.Bind("coverage-budget");
         var probe = new Probe();
         var edge = new InMemoryIngress(store, new Requests("coverage-budget"), "coverage-budget",
             (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate);

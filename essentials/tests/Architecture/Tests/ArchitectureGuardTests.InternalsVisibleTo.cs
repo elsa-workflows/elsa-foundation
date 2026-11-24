@@ -77,6 +77,8 @@ public sealed partial class ArchitectureGuardTests
         Assert.Contains(("Elsa.ExtensionBuilder.Api", "Elsa.ExtensionBuilder.Api.Tests"), grants);
         Assert.Contains(("Elsa.Modularity.Api", "Elsa.Modularity.Tests"), grants);
         Assert.Contains(("Elsa.Workbench", "Elsa.Modularity.Tests"), grants);
+        Assert.Contains(("Elsa.ActorFoundation.Contracts", "Elsa.ActorFoundation.Hosting"), grants);
+        Assert.Contains(("Elsa.ActorFoundation.Contracts", "Elsa.ActorFoundation.TestSupport"), grants);
     }
 
     /// <summary>

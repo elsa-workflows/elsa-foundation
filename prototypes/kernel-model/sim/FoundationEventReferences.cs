@@ -12,7 +12,7 @@ internal static class FoundationEventReferences
         const long now = 1_700_200_000_000;
         var store = new InMemoryStore(1, () => now);
         var spec = new Contract.StartSpec("event-refs", "start");
-        var scope = new Contract.BoundScope(tenant);
+        var scope = ContractScopes.Bind(tenant);
         var ingress = new EventIngress(store, new Requests("event-reference-requests"), "caller");
         Worker Owner(string node) => new(node, 0, store, new WorkflowInstance([new Probe()]),
             new WorkerOptions { Monotonic = () => 0 });

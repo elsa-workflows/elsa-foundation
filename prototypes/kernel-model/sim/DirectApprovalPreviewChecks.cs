@@ -17,7 +17,7 @@ internal static class DirectApprovalPreviewChecks
         {
             if (landed) writes.AddRange(batch.Turns.Where(turn => turn.Row is not null));
         });
-        var scope = new Contract.BoundScope("preview");
+        var scope = ContractScopes.Bind("preview");
         var ingress = new InMemoryIngress(store, new Requests("direct-preview"), "direct-preview");
         var reads = new ActorList(store, 32);
         var runtime = new Kernel.WorkflowActor.WorkflowRuntime(ingress, reads);

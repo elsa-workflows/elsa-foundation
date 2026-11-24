@@ -76,7 +76,7 @@ internal static class ContractWorkload
             foreach (var tenant in new[] { "north", "south" })
             foreach (var key in new[] { "Work", "Counters" })
             {
-                var scope = new Contract.BoundScope(tenant);
+                var scope = ContractScopes.Bind(tenant);
                 var spec = new Contract.StartSpec(Model, key);
                 trace.Add($"open {tenant}/{key} and retry its start with alternate casing");
                 var opened = await driver.Ingress.SendAsync(scope, new Contract.Target.Key(key, spec), "start", Contract.Kinds.Start);

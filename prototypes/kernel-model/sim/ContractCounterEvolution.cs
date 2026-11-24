@@ -34,7 +34,7 @@ internal static partial class ContractActorWorkload
         var older = new PublicWorkflow([new CounterModel(1)]);
         var newer = new PublicWorkflow([new CounterModel(2, flaws.HasFlag(Flaw.SkipUpgrade), speculative.Add)]);
         await using var driver = new ContractWorkload.InMemoryDriver(partitions, flaws, older);
-        var scope = new Contract.BoundScope("evolution");
+        var scope = ContractScopes.Bind("evolution");
         var runtime = new PublicRuntime(driver.Ingress, driver.Reads);
         var counter = await Start("evolving-counter");
         var bystander = await Start("spare-counter");

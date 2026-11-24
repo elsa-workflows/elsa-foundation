@@ -12,7 +12,7 @@ internal static class SequentialCascadeChecks
     {
         const long now = 1_704_070_000_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("sequential-cascade");
+        var scope = ContractScopes.Bind("sequential-cascade");
         var edge = new InMemoryIngress(store, new Requests("cascade-tree"), "cascade-tree", (_, kind) => kind == Contract.Kinds.Terminate);
         var model = new Tree();
         var rootRef = await edge.SendAsync(scope, new Contract.Target.Start(new(model.Type, "parent", History: Contract.History.Minimal)),

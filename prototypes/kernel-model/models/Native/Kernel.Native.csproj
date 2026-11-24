@@ -4,8 +4,8 @@
     <KernelContractOnly>true</KernelContractOnly>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Kernel.Foundation.Contracts/Kernel.Foundation.Contracts.csproj" />
-    <ProjectReference Include="../../src/Kernel.Model.Contracts/Kernel.Model.Contracts.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Model/Elsa.ActorFoundation.Model.Contracts.csproj" />
     <ProjectReference Include="../Graph/Kernel.Graph.csproj" />
     <ProjectReference Include="../Native.Activities/Kernel.Native.Activities.csproj" />
   </ItemGroup>

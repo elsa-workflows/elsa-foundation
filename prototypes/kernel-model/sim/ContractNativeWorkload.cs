@@ -54,7 +54,7 @@ internal static class ContractNativeWorkload
         var sends = new List<NativeOutbound>();
         var model = new NativeExecutionModel(NativeWorkflows.Registry, new() { Flaws = nativeFlaws }, sends.Add);
         await using ContractWorkload.IDriver driver = new ContractWorkload.InMemoryDriver(partitions, flaws, new PublicWorkflow([model]));
-        var scope = new Contract.BoundScope("native");
+        var scope = ContractScopes.Bind("native");
         var runtime = new PublicRuntime(driver.Ingress, driver.Reads);
         var started = new List<Started>(NativeWorkflows.Mix.Length);
 

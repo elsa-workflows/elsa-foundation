@@ -28,7 +28,7 @@ internal static class ParkLargeDrainChecks
         var heartbeatDue = start;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe(lateDirect ? latePayload : null);
-        var scope = new Contract.BoundScope("large-park-drain");
+        var scope = ContractScopes.Bind("large-park-drain");
         var ingress = new InMemoryIngress(store, new Requests("large-park-drain"), "large-park-drain",
             (_, kind) => kind == Contract.Kinds.Recover);
         var pages = 0;

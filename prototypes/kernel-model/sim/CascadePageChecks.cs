@@ -38,7 +38,7 @@ internal static class CascadePageChecks
     private static async Task RunAuthoredTerminate(Action<bool, string> check)
     {
         var store = new InMemoryStore(1, () => 1_702_300_030_000);
-        var scope = new Contract.BoundScope("authored-then-end");
+        var scope = ContractScopes.Bind("authored-then-end");
         var probe = new Probe();
         var ingress = new InMemoryIngress(store, new Requests("authored-then-end"), "authored-then-end");
         var root = (await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "root")), "start", Contract.Kinds.Start)).Actor!.Value;
@@ -102,7 +102,7 @@ internal static class CascadePageChecks
     {
         const long now = 1_702_300_050_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("native-cascade");
+        var scope = ContractScopes.Bind("native-cascade");
         var allowDelete = false;
         var ingress = new InMemoryIngress(store, new Requests("native-cascade"), "native-cascade",
             (_, kind) => kind == Contract.Kinds.Terminate || allowDelete && kind == Contract.Kinds.Delete);
@@ -176,7 +176,7 @@ internal static class CascadePageChecks
         const long initial = 1_702_300_000_000;
         var now = initial;
         var store = new InMemoryStore(2, () => now) { IngressDeduplicationWindow = TimeSpan.FromMilliseconds(100) };
-        var scope = new Contract.BoundScope("cascade-pages");
+        var scope = ContractScopes.Bind("cascade-pages");
         var edge = new InMemoryIngress(store, new Requests("cascade-paging"), "cascade-paging",
             (_, kind) => kind is Contract.Kinds.Delete or Contract.Kinds.Terminate);
         var probe = new Probe();
@@ -412,7 +412,7 @@ internal static class CascadePageChecks
     {
         const long now = 1_702_300_060_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("then-delete");
+        var scope = ContractScopes.Bind("then-delete");
         var probe = new Probe { Protect = protect };
         var edge = new InMemoryIngress(store, new Requests("then-delete"), "then-delete",
             (_, kind) => kind is Contract.Kinds.Terminate or Contract.Kinds.Delete);
@@ -453,7 +453,7 @@ internal static class CascadePageChecks
     {
         const long now = 1_702_300_065_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("mixed-then-delete");
+        var scope = ContractScopes.Bind("mixed-then-delete");
         var probe = new Probe { Protect = protect, HonourTerminate = true };
         var scheduler = new HeldScheduler();
         var edge = new InMemoryIngress(store, new Requests("mixed-then-delete"), "mixed-then-delete",
@@ -549,7 +549,7 @@ internal static class CascadePageChecks
     {
         const long now = 1_702_300_070_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("cascade-send-cap");
+        var scope = ContractScopes.Bind("cascade-send-cap");
         var probe = new Probe();
         var edge = new InMemoryIngress(store, new Requests("model-cap"), "model-cap");
         var actor = (await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "root")), "start", Contract.Kinds.Start)).Actor!.Value;

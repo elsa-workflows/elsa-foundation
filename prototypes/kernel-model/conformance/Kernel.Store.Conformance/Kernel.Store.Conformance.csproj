@@ -3,6 +3,10 @@
     <RootNamespace>Kernel.Store.Conformance</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../../../essentials/tests/ActorFoundation/Fixtures/Elsa.ActorFoundation.TestSupport.csproj" />
+    <Using Include="Elsa.ActorFoundation.TestSupport" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- The toy execution models of the simulation drive the stress test and the cost runs. -->
     <Compile Include="../../models/Recreate.Run/MetadataModels.cs" Link="MetadataModels.cs" />
     <Compile Include="../../sim/Models.cs" Link="Models.cs" />

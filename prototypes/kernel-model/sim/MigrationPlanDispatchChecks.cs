@@ -14,7 +14,7 @@ internal static class MigrationPlanDispatchChecks
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
         var stop = timeout.Token;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("migration");
+        var scope = ContractScopes.Bind("migration");
         var permitted = true;
         var fixture = new WitnessActor();
         var edge = new InMemoryIngress(store, new Requests("migration-dispatch"), "migration-dispatch",

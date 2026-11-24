@@ -24,8 +24,8 @@ internal static class NativeTenantEffectChecks
         var store = new InMemoryStore(1, () => now);
         var reads = new ActorList(store, 32);
         var runtime = OpenIngress("first");
-        var blue = new Contract.BoundScope("blue");
-        var green = new Contract.BoundScope("green");
+        var blue = ContractScopes.Bind("blue");
+        var green = ContractScopes.Bind("green");
         var workflow = new WorkflowRegistry().Add(Wf.Workflow(Definition, Wf.Sequence("root",
             Wf.Delay("wait", Expr("input.delay")),
             Wf.Http("http", HttpUrl, Expr("input.payload")),

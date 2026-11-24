@@ -484,6 +484,15 @@
         "resolved": "0.8.8",
         "contentHash": "UIDFkA5DC3en3tOJ3Mof11yBx9kUQLsaeo/oFdvN6Bbkr9E9+VCqfIadHci8cu+I51K2Sl7XYWVl2R/mA75NBQ=="
       },
+      "elsa.actorfoundation.contracts": {
+        "type": "Project"
+      },
+      "elsa.actorfoundation.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "kernel.durable": {
         "type": "Project",
         "dependencies": {
@@ -493,22 +502,19 @@
       "kernel.entityframework": {
         "type": "Project",
         "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
           "Kernel.Durable": "[1.0.0, )",
-          "Kernel.Foundation.Contracts": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.15, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.15, )",
           "MySql.EntityFrameworkCore": "[10.0.12, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }
       },
-      "kernel.foundation.contracts": {
-        "type": "Project"
-      },
       "kernel.foundation.inmemory": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Durable": "[1.0.0, )",
-          "Kernel.Foundation.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Kernel.Durable": "[1.0.0, )"
         }
       },
       "kernel.runtime": {
@@ -517,7 +523,7 @@
       "kernel.runtime.hosting": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )",
+          "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
           "Kernel.Runtime": "[1.0.0, )"
         }
       }

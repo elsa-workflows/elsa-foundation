@@ -39,7 +39,7 @@ internal static partial class ContractActorWorkload
         const string treeEvent = "tree-jobs";
         var work = new WorkBodies();
         var random = new Random(seed);
-        var scope = new Contract.BoundScope("job-tree");
+        var scope = ContractScopes.Bind("job-tree");
         var refused = 0;
         var clears = 0;
         var type = new PublicWorkflow([new PublicRunner(work), new PublicFragile(work), new PublicTree(work, treeEvent)]);

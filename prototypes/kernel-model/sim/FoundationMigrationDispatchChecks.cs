@@ -11,7 +11,7 @@ internal static class FoundationMigrationDispatchChecks
         const string key = "invoice-9";
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("migration");
+        var scope = ContractScopes.Bind("migration");
         var probe = new Probe();
         var edge = new InMemoryIngress(store, new Requests("migration-dispatch"), "migration-dispatch",
             (_, kind) => kind is Contract.Kinds.Migrate or Contract.Kinds.Delete);

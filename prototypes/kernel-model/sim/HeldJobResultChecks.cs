@@ -27,7 +27,7 @@ internal static class HeldJobResultChecks
         const long now = 1_701_300_100_000;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe("settled");
-        var scope = new Contract.BoundScope("settled-job");
+        var scope = ContractScopes.Bind("settled-job");
         Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => 0 });
         var first = Owner("settled-first");
@@ -69,7 +69,7 @@ internal static class HeldJobResultChecks
         const long now = 1_701_300_200_000;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe("pending-cancel");
-        var scope = new Contract.BoundScope("pending-job");
+        var scope = ContractScopes.Bind("pending-job");
         var worker = new Worker("pending-owner", 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => 0 });
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
@@ -99,7 +99,7 @@ internal static class HeldJobResultChecks
         const long now = 1_701_300_250_000;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe("replace-pending");
-        var scope = new Contract.BoundScope("replace-pending");
+        var scope = ContractScopes.Bind("replace-pending");
         Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => 0 });
         var worker = Owner("replacement-owner");
@@ -198,7 +198,7 @@ internal static class HeldJobResultChecks
         const long now = 1_701_300_275_000;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe("legacy-result");
-        var scope = new Contract.BoundScope("legacy-result");
+        var scope = ContractScopes.Bind("legacy-result");
         Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => 0 });
         var first = Owner("legacy-result-first");
@@ -245,7 +245,7 @@ internal static class HeldJobResultChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var actor = new Probe(shape);
-        var scope = new Contract.BoundScope("held-result");
+        var scope = ContractScopes.Bind("held-result");
         var requests = new Requests("first-owner");
         Worker WorkerFor(string node) => new(node, 0, store, new ActorAdapter(store, actor),
             new WorkerOptions { Monotonic = () => now - initial, PollLimit = shape == "poll-one" ? 1 : 500, Flaws = flaws });

@@ -26,7 +26,7 @@ internal static class NativeMigrationApplyChecks
     private static async Task VerifyQueuedJobTimeoutAsync(Action<bool, string> check)
     {
         var store = new InMemoryStore(1, () => 1_701_800_000_000);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         Contract.IIngress edge = new InMemoryIngress(store, new Requests("queued-job-migration"), "queued-job-migration",
             (_, kind) => kind == Contract.Kinds.Migrate);
         Contract.IActorReads reads = new ActorList(store, 32);
@@ -79,7 +79,7 @@ internal static class NativeMigrationApplyChecks
         const long initial = 1_701_800_000_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         Contract.IIngress edge = new InMemoryIngress(store, new Requests("version-hold"), "version-hold",
             (_, kind) => kind == Contract.Kinds.Migrate);
         Contract.IActorReads reads = new ActorList(store, 32);
@@ -154,8 +154,8 @@ internal static class NativeMigrationApplyChecks
         const long initial = 1_701_800_000_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
-        var otherScope = new Contract.BoundScope("other");
+        var scope = ContractScopes.Bind("acme");
+        var otherScope = ContractScopes.Bind("other");
         Contract.IIngress edge = new InMemoryIngress(store, new Requests("migration-apply"), "migration-apply",
             (_, kind) => kind is Contract.Kinds.Migrate or Contract.Kinds.Suspend or Contract.Kinds.Resume);
         Contract.IActorReads reads = new ActorList(store, 64);
@@ -302,7 +302,7 @@ internal static class NativeMigrationApplyChecks
     {
         const int headerLimit = 16 * 1_024;
         var store = new InMemoryStore(1, () => 1_701_800_000_000);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         Contract.IIngress edge = new InMemoryIngress(store, new Requests("header-limit"), "header-limit",
             (_, kind) => kind == Contract.Kinds.Migrate);
         Contract.IActorReads reads = new ActorList(store, 32);
