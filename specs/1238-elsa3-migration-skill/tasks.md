@@ -36,7 +36,8 @@ need spec 1237's `report.json` schema agreed. Everything else can start once thi
 ## Phase 2: Foundational — sample and check (blocks US3)
 
 Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T008, T013 and T014 also register in
-`AcmeFeature`, so they run one after another after T004, and the case 18 region is final only after T014. All live in `Migration/Sample/` and
+`AcmeFeature`, so they run one after another after T004, and the case 18 region is final only after T014 (after T033, when it runs; T033 then
+re-copies the case 18 block in the catalog). All live in `Migration/Sample/` and
 `Migration/Sample.Tests/`; tasks touching different files are [P].
 
 - [ ] T004 Feature registration (case 18): `AcmeFeature` as a `[ShellFeature]` `IShellFeature`; a test that the

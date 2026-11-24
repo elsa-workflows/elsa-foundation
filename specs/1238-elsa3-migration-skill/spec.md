@@ -219,7 +219,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   the user's responsibility, and the skill says so.
 - **FR-008**: **Inventory.** The skill MUST run `workflows inventory` in the Elsa 3 migration image
   (FR-022) on the export and take the custom components only from the report's inventory: activity types, JavaScript functions, variable types
-  and storage drivers, with usage counts. A component no definition uses is not migrated.
+  and storage drivers, with the number of definitions that use each and the number of references. A component no
+  definition uses is not migrated.
 - **FR-009**: The skill MUST ask for the folders or repositories of the user's Elsa 3 source and match each
   component to its implementation by a focused search (research R-6): an activity by its Elsa 3 type name (namespace
   and class, or what its activity attribute sets), a JavaScript function by its global name, a variable type by its
@@ -346,5 +347,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   and image pulls.
 - Spec 1240 decides whether workflow variables, inputs and outputs can use a registered storage driver and how
   the converter carries Elsa 3 drivers over. Case 17 follows it: if spec 1240 is not approved, case 17 stays
-  *redesign* and its sample task is dropped.
+  *redesign* and its sample task is dropped. Spec 1240 removes the converter's unmapped-storage-driver codes, so a
+  missing driver is then reported at publication instead; the case 17 port path needs spec 1237's report to treat
+  that publication code as a storage-driver component (driver key as its name) whose remedy is building a
+  component, so storage drivers keep reaching the inventory and the plan.
 - The sample is never packed or published.

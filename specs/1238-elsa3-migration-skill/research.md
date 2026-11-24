@@ -93,8 +93,8 @@ API change is a code change, so the full build runs and breaks the sample.
 
 **Decision**: The skill's focused searches follow Elsa 3's naming. An activity type `Ns.Type` is found by: a class
 named `Type` in namespace `Ns`; `[Activity("Ns"` on a class named `Type` (the second string argument of the common
-three-argument form is the category, not the type); `Type = "Type"` in an activity attribute; or the five-argument
-form `[Activity("Ns", "Type", <version>, ...)]`. A
+three-argument form is the category, not the type); `Type = "Type"` in an activity attribute; or any form whose third
+positional argument is an integer version, such as `[Activity("Ns", "Type", 2)]`. A
 JavaScript function by `SetValue("name"`; a variable type by the alias in `AddVariableTypeAndAlias<`/`AddTypeAlias<` (with no alias argument, the alias
 is the class name); a variable type registered without an alias (`AddVariableType<`, `AddVariableTypes(`) appears in
 the export under its assembly-qualified name, so it is found, like a storage driver, by the namespace and class

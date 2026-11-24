@@ -24,7 +24,7 @@ Filled in from `migration-plan-template.md` ([contract](contracts/plan-template.
 |---|---|
 | Kind | activity type, JavaScript function, variable type, storage driver |
 | Elsa 3 name | As the report names it |
-| Uses | Usage count from the report |
+| Uses | Definitions that use the component (the count of the report's definition list for it), then the number of references |
 | Source | Path, or `not found` |
 | Elsa 4 target | Full name, host-function name or dotted alias |
 | Cases | Catalog case numbers, in catalog order |
