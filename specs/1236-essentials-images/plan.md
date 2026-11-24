@@ -46,7 +46,7 @@ Workbench unchanged (FR-017); no JTest CI tier (FR-023).
 | §E2.2 Runtime takes no Design reference | PASS | No runtime project changes; the host composes existing features. |
 | §E5 packaging, reserved `Elsa.Server` name | PASS | New names do not take the reserved name (R-1). The library and hosts have no hand-written version. |
 | §E7 CI test tiers | PASS | The new test project goes into `tools/ci/test-tiers.json` as PR tier; no child host of 2 minutes or more. |
-| §2.2 project paths follow the domain tree | PASS (to verify) | Library under `essentials/src/Foundation/`; hosts under `apps/` and `Studio/src/apps/` like their siblings. The guard decides the exact library path (R-2). |
+| §2.2 project paths follow the domain tree | PASS (to verify) | Library next to the hosts in `apps/` (a host grouping, not a domain, R-2); hosts under `apps/` and `Studio/src/apps/` like their siblings; tests under `essentials/tests/Essentials/` like the Workbench's. T001 runs the guard. |
 | §2.5, §2.23.1 every feature composes | PASS | No feature added; the library carries none. |
 | §2.20 EF Core admission | PASS | The library references EF feature projects only through project references; it resolves no EF package itself. If the guard counts transitive resolution, the library is admitted like the Workbench. |
 | §2.23 risk-based tests | PASS | Tests cover drift, Elsa 3 leakage, merge order and secret refusal (R-6). |
@@ -61,7 +61,7 @@ Workbench unchanged (FR-017); no JTest CI tier (FR-023).
 | # | Decision | Detail |
 |---|---|---|
 | P-1 | Hosts | R-1: `apps/Elsa.Essentials.Server`, `Studio/src/apps/Elsa.Studio.Essentials`. |
-| P-2 | List | R-2: `essentials.features.json` in `Elsa.Foundation.Essentials`, every composed feature with a reason, placed in the image's composition folder (R-12). |
+| P-2 | List | R-2: `essentials.features.json` in `Elsa.Essentials.Composition`, every composed feature with a reason, placed in the image's composition folder (R-12). |
 | P-3 | Merge | R-3: list → baked `appsettings.json` → `/app/config/appsettings.json` → environment → command line, one extension method. |
 | P-4 | Workflows | R-4: `/app/workflows`, flat, published on reconcile. |
 | P-5 | Secrets | R-5: no baked values; existing refusals checked to name the setting. |
@@ -93,15 +93,15 @@ specs/1236-essentials-images/
 ### Source Code (repository root)
 
 ```text
-essentials/src/Foundation/Essentials/
-├── Elsa.Foundation.Essentials.csproj      # project references of every listed feature
+apps/Elsa.Essentials.Composition/
+├── Elsa.Essentials.Composition.csproj      # project references of every listed feature
 ├── essentials.features.json               # the list (copied to output and to /app/composition)
 ├── EssentialsFeatureList.cs               # reads the list
 ├── EssentialsFeatureAssemblies.cs         # assemblies for feature discovery
 └── EssentialsConfigurationExtensions.cs   # the merge (P-3)
 
-essentials/tests/Foundation/Essentials/Tests/
-└── Elsa.Foundation.Essentials.Tests.csproj   # guard and merge tests (R-6)
+essentials/tests/Essentials/Tests/
+└── Elsa.Essentials.Tests.csproj   # guard and merge tests (R-6)
 
 apps/Elsa.Essentials.Server/
 ├── Elsa.Essentials.Server.csproj

@@ -1,7 +1,8 @@
 # Research: Elsa essentials images
 
 Facts are from `origin/initiative/3052-elsa3-to-elsa4-conversion` at `2db2d8a899` and the S-15 implementation branch
-`agent/claude/3052-s15-jtest-impl` at `14d70f4d99` (PR #5662, not yet merged).
+`agent/claude/3052-s15-jtest-impl` at `14d70f4d99` (PR #5662, not yet merged; it has moved since, so T004 re-reads the
+acceptance set and templates from the merged S-15 or the then-current head).
 
 ## R-1 Host shape
 
@@ -20,7 +21,7 @@ Facts are from `origin/initiative/3052-elsa3-to-elsa4-conversion` at `2db2d8a899
 ## R-2 One feature list
 
 - **Decision**: one JSON file, `essentials.features.json`, kept in a small library
-  `essentials/src/Foundation/Essentials/Elsa.Foundation.Essentials`. Each entry holds the feature name, its baked
+  `apps/Elsa.Essentials.Composition`. Each entry holds the feature name, its baked
   settings and its reason. The library also holds the project references of every listed feature, an
   `EssentialsFeatureAssemblies` list for feature discovery, and the settings merge (R-3). The engine host and the
   migration CLI's Elsa 3 entry point both reference this library.
@@ -32,19 +33,22 @@ Facts are from `origin/initiative/3052-elsa3-to-elsa4-conversion` at `2db2d8a899
 - **Alternatives**: a CShells-shaped `shells.json` (no place for a reason per feature, and users would recognise and
   edit it); the list in the host project (the CLI would reference a web host); an MSBuild items file (the CLI could not
   read settings from it).
-- **Placement**: the folder follows the domain-tree guard (`ArchitectureGuardTests.Project_paths_match_domain_tree_convention`);
-  if the guard refuses the path, the nearest admitted path under `essentials/src/Foundation/` is used and recorded.
+- **Placement**: next to the hosts, `apps/Elsa.Essentials.Composition`, because the library groups features from every
+  domain the way a host does; placed under a domain such as `Elsa.Foundation` it would make that domain depend on all
+  the others (constitution §E2.1 treats hosts as groupings, not domains). Its tests sit in `essentials/tests/Essentials/`
+  like the Workbench's in `essentials/tests/Workbench/`. If `ArchitectureGuardTests.Project_paths_match_domain_tree_convention`
+  or the migration CLI's reference rules refuse this, the implementation raises it on the PR before moving it.
 
 ## R-3 Settings merge
 
 - **Decision**: configuration layers, lowest first: the essentials feature list (as `CShells:Shells:default:Features`
   keys), the image's baked `appsettings.json` (host defaults: logging, paths, persistence resource, Nuplane feed), the
   user's `/app/config/appsettings.json`, environment variables, command line. One extension method in
-  `Elsa.Foundation.Essentials` adds the first three layers to an `IConfigurationBuilder`; the host and the CLI both call
+  `Elsa.Essentials.Composition` adds the first three layers to an `IConfigurationBuilder`; the host and the CLI both call
   it.
 - **Rationale**: the user file overrides any baked key and adds features under the same `CShells` path the composition
   uses, which is how the Workbench layers `shells.json`, `shells.{Environment}.json` and environment variables today
-  (`apps/Elsa.Workbench/Program.cs` lines 106–114). Mounting the user file in its own folder keeps it from shadowing the
+  (`apps/Elsa.Workbench/Program.cs` lines 106–118). Mounting the user file in its own folder keeps it from shadowing the
   baked `appsettings.json`.
 - **No `shells.Production.json`**: the essentials image has one environment shape; the secrets FR-008 names are
   blank in the list and validated at start (R-5).
@@ -65,7 +69,11 @@ Facts are from `origin/initiative/3052-elsa3-to-elsa4-conversion` at `2db2d8a899
 - **Decision**: the secrets blanked by the Workbench's `shells.Production.json` (`Secrets:EncryptionKey`,
   `SeedAdminPassword`, `FoundationIdentityOpenIddict` signing key, `WorkflowsRuntimeEntityFrameworkCore`
   `RecoveryContinuationSigningKey` and `HierarchyCursorSigningKey`, the workflow alteration payload protection key)
-  and `Elsa:ModuleManagement:ApiKey` have no baked value. Features already refuse activation without them; the task
+  have no baked value, `Secrets:EncryptionKey` only if the list ends up composing Secrets. The OpenIddict signing key
+  is not blanked by that file, which only turns `IsDevelopmentOrDemo` off; the essentials list bakes
+  `IsDevelopmentOrDemo: false` for both identity features and no signing key, so a production key must come from the
+  user. `Elsa:ModuleManagement:ApiKey` is not required: it serves only Studio's feature management, which the
+  essentials Studio does not compose. Features already refuse activation without them; the task
   checks each refusal names the setting and adds a startup check only where one does not.
 - **Rationale**: build nothing for a refusal that already exists; the spec only requires that it names the setting.
 - **Example settings**: `docker/compose/essentials/appsettings.example.json` lists every required key with a
@@ -73,7 +81,7 @@ Facts are from `origin/initiative/3052-elsa3-to-elsa4-conversion` at `2db2d8a899
 
 ## R-6 Guard
 
-- **Decision**: a PR-tier test project `essentials/tests/Foundation/Essentials/Tests` with:
+- **Decision**: a PR-tier test project `essentials/tests/Essentials/Tests` with:
   - every listed feature resolves in `EssentialsFeatureAssemblies` (fails naming it);
   - the composed shell's feature set equals the list (fails naming the difference);
   - no assembly in the engine host's dependency closure is an Elsa 3 assembly (in addition to
@@ -92,7 +100,8 @@ RunJavaScript, HttpEndpoint, WriteHttpResponse, DispatchWorkflow, BulkDispatchWo
 Event, Complete, one reusable workflow used as an activity; expressions Literal, JavaScript and Object, no Liquid),
 the S-15 Elsa 4 templates (identity login and token, `runtime/workflows/executables`, instances page and detail,
 activity executions, `runtime/workflows/diagnostics/settings`), the S-15 run configuration (checkpoint persistence in
-`Durable` mode) and the essentials Studio's backend needs. Names are the Workbench's `shells.json` feature names.
+`Durable` mode) and the essentials Studio's backend needs. Names are CShells feature names (most as in the Workbench's `shells.json`; `JsonWorkflowReconciliation` is in its catalog but
+not enabled there).
 
 | Group | Candidates | Reason |
 |---|---|---|
@@ -103,7 +112,7 @@ activity executions, `runtime/workflows/diagnostics/settings`), the S-15 run con
 | Activities | ActivitiesRuntime, ActivitiesPrimitives, ActivitiesControlFlow, ActivitiesSequence, ActivitiesFlowchart, ActivitiesGraphDesign, ActivitiesGraphRuntime, ActivitiesScripting, ActivitiesDispatchWorkflowRuntime, ActivitiesDispatchWorkflowDesign, ActivitiesDesignApi, ActivitiesDesignReconciliation, ClrActivityReconciliation, ActivitiesDesignEntityFrameworkCore | the activity types above; the activity catalog the designer and publishing read |
 | Workflows design | WorkflowsDesignApi, WorkflowDesignValidations, WorkflowsDesignEntityFrameworkCore, JsonWorkflowReconciliation | the workflows folder; the designer |
 | Publishing | WorkflowsPublishing, WorkflowsPublishingApi, WorkflowsPublishingEntityFrameworkCore | publish on reconcile; publish from Studio |
-| Runtime | WorkflowsRuntimeEntityFrameworkCore, WorkflowsRuntimeApi, WorkflowAlterationPayloadProtectionKeys, WorkflowsRuntimeTriggers, WorkflowsRuntimeResumption, WorkflowsRuntimeScheduling, WorkflowsRuntimeCheckpointPersistence, WorkflowsRuntimeHistory, WorkflowsExecutionEvidence | executables, instances and activity-execution reads; correlation and event resumption; dispatch; diagnostics settings |
+| Runtime | WorkflowsRuntimeEntityFrameworkCore, WorkflowsRuntimeApi (with its workflow alteration payload protection key settings), WorkflowsRuntimeTriggers, WorkflowsRuntimeResumption, WorkflowsRuntimeScheduling, WorkflowsRuntimeCheckpointPersistence, WorkflowsRuntimeHistory, WorkflowsExecutionEvidence | executables, instances and activity-execution reads; correlation and event resumption; dispatch; diagnostics settings |
 | Events | the feature that provides `PublishEvent` and the `Event` trigger | the events suite |
 
 **To confirm in implementation** (T-tasks): whether dispatch needs `WorkflowsRuntimeDistributed` and its two EF
@@ -173,7 +182,7 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
   and must add the converter and import features without copying the essentials list. Packages are the extension
   path the engine already has for user features, so a derived image needs no rebuilt host. Keeping baked packages out
   of `/app/packages` means a user's mount there cannot hide them.
-- **Proof**: a test Dockerfile, `essentials/tests/Foundation/Essentials/DerivedImage/Dockerfile`, builds `FROM` the
+- **Proof**: a test Dockerfile, `essentials/tests/Essentials/DerivedImage/Dockerfile`, builds `FROM` the
   local engine image, adds a list naming the Liquid feature and the locally packed Liquid package, and starts; a
   Liquid expression in a definition in the workflows folder then evaluates (SC-007). It is a manual check recorded in
   the PR evidence, not a CI job.

@@ -8,8 +8,8 @@
 
 **Input**: Two published images, an Elsa 4 engine and a designer-only Studio, that carry exactly the features the
 final JTest acceptance set needs. The composition is baked in. Users deliver one `appsettings.json`, their feature
-packages and a folder of converted Elsa 4 workflows. One feature list feeds both the engine image and the reference
-closure of the Elsa 3 migration CLI. The JTest acceptance set passes against the engine image.
+packages and a folder of converted Elsa 4 workflows. One feature list feeds the engine image and, through it, the Elsa 3
+migration image the migration CLI runs in, which is built `FROM` the engine. The JTest acceptance set passes against the engine image.
 
 ## Problem
 
@@ -67,7 +67,7 @@ only the Workbench.
 
 **Independent Test**: Build the engine image at the head, convert the acceptance definitions with the migration CLI's
 `inventory` command, mount the `converted/` folder, run `jtest run` with the S-15 Elsa 4 templates and an environment
-that differs only in base URL, and compare the result per suite with the S-15 Workbench run on the same head.
+that differs only in base URL and credentials, and compare the result per suite with the S-15 Workbench run on the same head.
 
 **Acceptance Scenarios**:
 
@@ -141,8 +141,14 @@ and see it composed next to the essentials list.
   feature stays composed once.
 - A user's `appsettings.json` sets a baked feature to anything that would switch it off: this specification does not
   define, document or test that case (see Q5).
-- A converted definition fails to import or publish at startup: the engine logs the definition and the reason, keeps
-  running and serves the other definitions, as JSON workflow reconciliation does today.
+- A converted definition fails to publish at startup: the engine logs the definition and the reason, keeps running and
+  serves the other definitions, as JSON workflow reconciliation does today.
+- A file in the workflows folder cannot be imported (malformed JSON, a store error): the reconcile pass fails as a
+  whole, nothing from the folder is published, and the log names the file and the reason, as JSON workflow
+  reconciliation does today. The migration CLI writes only definitions that converted (refused ones stay in its
+  report), so this case means a hand-edited or foreign file; this specification builds no per-file isolation for it.
+- A converted definition uses a reusable workflow defined in another file of the folder: it is published only if the
+  engine accepts that order (see FR-010).
 - The workflows folder holds subfolders: only the top level is read, as JSON workflow reconciliation does today; the
   migration CLI writes a flat folder (FR-010).
 - A user package needs a newer Elsa share than the image carries: Nuplane refuses it, as it does for the Workbench
@@ -176,8 +182,9 @@ and see it composed next to the essentials list.
 - **FR-007**: A feature the user adds MUST come from a package in the mounted packages folder, loaded by Nuplane as the
   Workbench image loads packages today. When an added feature cannot be found, the engine MUST refuse to start and name
   it.
-- **FR-008**: Secrets (token signing key, recovery and hierarchy cursor signing keys, secrets encryption key, the
-  seeded administrator password, the module management key) MUST have no baked value. When one is missing, the engine
+- **FR-008**: Secrets the composed features require (today: the seeded administrator password, the token signing key,
+  the recovery and hierarchy cursor signing keys, the workflow alteration payload protection key) MUST have no baked
+  value, and the identity features MUST NOT run in development or demo mode. When one is missing, the engine
   MUST refuse to start and name the setting. A documented example `appsettings.json` MUST list every required setting.
 
 **Workflows**
@@ -186,7 +193,9 @@ and see it composed next to the essentials list.
   the image and is empty by default, and MUST publish what it imports by default. A user MAY turn publishing off in
   `appsettings.json`.
 - **FR-010**: The workflows folder MUST be read as a flat folder of files in the JSON workflow reconciliation format.
-  This is the format and layout the migration CLI writes to `converted/`.
+  This is the format and layout the migration CLI writes to `converted/`. Files are read in ordinal file-name order;
+  if a definition that uses a reusable workflow cannot be published before that reusable is, the CLI names its files so
+  that reusables sort first, and this order rule is part of the `converted/` interface.
 - **FR-011**: The engine MUST store its data in SQLite under a data folder meant for a volume by default. The other
   storage providers the persistence layer already supports MUST remain selectable through settings.
 
@@ -213,8 +222,8 @@ and see it composed next to the essentials list.
 
 **One list**
 
-- **FR-018**: The feature list MUST be machine-readable and readable by another tool without referencing the engine
-  host. A guard test MUST fail, naming the feature, when the engine host cannot resolve a listed feature or composes
+- **FR-018**: The feature list MUST be machine-readable and readable, together with the settings merge, by the
+  migration CLI inside the migration image without referencing the engine host. A guard test MUST fail, naming the feature, when the engine host cannot resolve a listed feature or composes
   one that is not listed.
 - **FR-024**: The engine image MUST be usable as a base image. An image built `FROM` it MUST be able to add features
   to the baked composition by adding its own feature list and those features' packages at documented paths, without
@@ -251,7 +260,8 @@ and see it composed next to the essentials list.
 |---|---|---|
 | Q1 | New hosts or Workbench profiles? | New hosts (Joey, 2026-11-24). A Workbench profile would still ship every Workbench feature in the binary, and the CLI could not reuse it as its closure. |
 | Q2 | How do the Elsa 3 definitions reach an engine that carries no Elsa 3 code? | Through the migration CLI's `converted/` folder, mounted as the workflows folder: the user's own go-live path. Joey gave no preference; this was the recommendation. The final acceptance run therefore waits for the CLI's `inventory` command (FR-019); FR-022 checks the image before that. |
-| Q3 | Image names? | `elsaworkflows/elsa-server-essentials` and `elsaworkflows/elsa-studio-essentials`, chosen with Q1. |
+| Q3 | Image names? | `elsaworkflows/elsa-server-essentials` and `elsaworkflows/elsa-studio-essentials`, chosen with Q1. The engine is not the clean product host constitution §E5 reserves `Elsa.Server` for: that host carries no domains and takes every feature from the feed, while the essentials engine compiles in one fixed composition for migration and evaluation. |
+| Q8 | The intake says the engine has exactly the JTest features; may it add what the designer-only Studio needs? | Yes: the intake also asks for a designer-only Studio running against this engine, which needs the designer's backend (activity catalog, expression and design APIs). Each such feature is listed with the reason "essentials Studio" (FR-001). |
 | Q4 | Does the engine publish what it imports? | Yes by default: going live means the mounted workflows run. Users can turn it off. |
 | Q5 | Can configuration switch a baked feature off? | Deliberately left alone, as agreed in the migration design. |
 | Q7 | How does the Elsa 3 migration image get the essentials composition? | It is built `FROM` the engine at the same version and adds its own baked list and packages (Joey on PR #5669). The engine therefore carries no Elsa 3 code and offers a documented extension point (FR-024). |

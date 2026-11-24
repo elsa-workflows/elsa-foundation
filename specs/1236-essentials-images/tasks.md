@@ -14,13 +14,13 @@ worktree path on Windows (MSB3030).
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `essentials/src/Foundation/Essentials/Elsa.Foundation.Essentials.csproj` (no feature class, internal
-  by default) and `essentials/tests/Foundation/Essentials/Tests/Elsa.Foundation.Essentials.Tests.csproj` (xunit); add
+- [ ] T001 Create `apps/Elsa.Essentials.Composition/Elsa.Essentials.Composition.csproj` (no feature class, internal
+  by default) and `essentials/tests/Essentials/Tests/Elsa.Essentials.Tests.csproj` (xunit); add
   both to `Elsa.Server.slnx`, register the test project as PR tier in `tools/ci/test-tiers.json`, run
   `ArchitectureGuardTests.Project_paths_match_domain_tree_convention` and move the library if the guard refuses the
   path (R-2; record the final path in plan.md).
 - [ ] T002 [P] Create `apps/Elsa.Essentials.Server/Elsa.Essentials.Server.csproj` referencing
-  `Elsa.Foundation.Essentials`, `Elsa.Foundation.Hosting` and the Nuplane/CShells hosting packages the Workbench uses;
+  `Elsa.Essentials.Composition`, `Elsa.Foundation.Hosting` and the Nuplane/CShells hosting packages the Workbench uses;
   add it to `Elsa.Server.slnx`.
 - [ ] T003 [P] Create `Studio/src/apps/Elsa.Studio.Essentials/Elsa.Studio.Essentials.csproj` modelled on
   `Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj`, referencing only the Studio modules R-8 lists; add it to
@@ -31,15 +31,15 @@ worktree path on Windows (MSB3030).
 - [ ] T004 Derive the engine feature list (R-7): for each candidate, record the suite, template, Studio need or
   `required by <feature>` that justifies it, reading the S-15 acceptance definitions and Elsa 4 templates in
   `extensions/Elsa3/tests/JTest/` and the `DependsOn` of each feature; settle the R-7 "to confirm" items; drop every
-  candidate without a reason. Write `essentials/src/Foundation/Essentials/essentials.features.json` in the format of
-  [contracts/feature-list.md](contracts/feature-list.md), with `JsonWorkflowReconciliation` set as R-4 describes and no
-  secret values (R-5).
-- [ ] T005 Add the project references of every listed feature to `Elsa.Foundation.Essentials.csproj` and list their
-  assemblies in `essentials/src/Foundation/Essentials/EssentialsFeatureAssemblies.cs`.
+  candidate without a reason. Write `apps/Elsa.Essentials.Composition/essentials.features.json` in the format of
+  [contracts/feature-list.md](contracts/feature-list.md), with `JsonWorkflowReconciliation` set as R-4 describes, no
+  secret values and `IsDevelopmentOrDemo: false` on both identity features (R-5).
+- [ ] T005 Add the project references of every listed feature to `Elsa.Essentials.Composition.csproj` and list their
+  assemblies in `apps/Elsa.Essentials.Composition/EssentialsFeatureAssemblies.cs`.
 - [ ] T006 Implement `EssentialsFeatureList` (reads `essentials.features.json` first, then every other `*.features.json` in the composition folder in ordinal file-name order, R-12) and
   `EssentialsConfigurationExtensions.AddEssentialsConfiguration` (list → baked settings → optional user file, R-3) in
-  `essentials/src/Foundation/Essentials/`.
-- [ ] T007 Write the guard and merge tests in `essentials/tests/Foundation/Essentials/Tests/` (R-6): every entry has a
+  `apps/Elsa.Essentials.Composition/`.
+- [ ] T007 Write the guard and merge tests in `essentials/tests/Essentials/Tests/` (R-6): every entry has a
   reason and resolves in `EssentialsFeatureAssemblies`; a user key overrides a baked key; an environment variable
   overrides the user key; an added feature appears under `CShells:Shells:default:Features`; no assembly in the
   library's closure is an Elsa 3 assembly.
@@ -64,12 +64,12 @@ publishes `/app/workflows`.
 - [ ] T010 [US1] Write `apps/Elsa.Essentials.Server/appsettings.json`: persistence resource `Elsa` on
   `Data Source=/app/data/elsa.db`, every EF feature on that resource, OpenIddict store under `/app/data`,
   `Migrate:Policy` `AutoMigrate`, Data Protection keys under `/app/data` (R-9).
-- [ ] T011 [US1] Add a guard test in `essentials/tests/Foundation/Essentials/Tests/` that boots the engine's shell
+- [ ] T011 [US1] Add a guard test in `essentials/tests/Essentials/Tests/` that boots the engine's shell
   composition with the list in memory (no web listener) and asserts the composed feature set equals the list, naming
   any difference (FR-018).
 - [ ] T012 [US1] Check each required setting of [contracts/engine-image.md](contracts/engine-image.md): start the host
   with it empty and confirm the refusal names the setting; where one does not, add a startup check in the host that
-  names it. Cover each refusal in a test in `essentials/tests/Foundation/Essentials/Tests/`. Update the contract's
+  names it. Cover each refusal in a test in `essentials/tests/Essentials/Tests/`. Update the contract's
   table to the confirmed list.
 - [ ] T013 [US1] Confirm that an added feature without a package refuses start and names the feature (scenario 4);
   add a host check and a test only if the existing refusal does not name it.
@@ -79,12 +79,15 @@ publishes `/app/workflows`.
 - [ ] T015 [US1] Write `apps/Elsa.Essentials.Server/Dockerfile` from the Workbench Dockerfile (locked restore,
   ReadyToRun, computed versions, non-root user, health check), creating `/app/config`, `/app/workflows`,
   `/app/packages` and `/app/data` owned by the runtime user; build it locally.
-- [ ] T016 [US1] Check SC-004: list every assembly in the built image's `/app` and confirm none is an Elsa 3 assembly;
+- [ ] T016 [US1] Check FR-003 and SC-004: list every assembly in the built image's `/app` and confirm none is an Elsa 3 assembly and every Elsa assembly belongs to a listed feature or to hosting and
+  package loading;
   record the command and result in the PR evidence.
 - [ ] T017 [US1] Run User Story 1 scenarios 1–6 against the local image (example settings, `hello.json`, the
   locally packed Liquid feature package for scenario 2 with a definition that uses a Liquid expression, a changed baked
-  setting for scenario 3, a missing package, a missing secret, no workflows mount), plus the edge case of one
-  definition that fails to import next to `hello.json` (logged with its reason, `hello.json` still served); record each
+  setting for scenario 3 (`PublishOnReconcile: false`, checking `hello.json` is imported but not published, FR-009), a missing package, a missing secret, no workflows mount), plus the import-failure
+  edge case (a malformed file next to `hello.json`: the pass fails and the log names the file), and the order case: a
+  definition using a reusable workflow in a file that sorts after it (S-15's `composition-workflow-as-activity-root`
+  and `-sub`). If the root is not published, record the order rule in FR-010 and the hand-over note for the CLI spec; record each
   result in the PR evidence.
 
 **Checkpoint**: the engine image runs a user's workflow with only a settings file (SC-002 for the engine).
@@ -119,13 +122,11 @@ publishes `/app/workflows`.
 - [ ] T022 [US3] Before coding, check the Studio UX acceptance record in spec.md (User Story 3) against the
   confirmed R-8 module list and correct it in the same PR if the list changed a state.
 - [ ] T023 [US3] Write `Studio/src/apps/Elsa.Studio.Essentials/Program.cs` and its feature assemblies (R-8 list, the
-  sign-in module confirmed), `shells.json` baked (not mounted), `appsettings.json` reading `Studio:BackendBaseUrl` and
-  the management key, and the user file at `/app/config/appsettings.json`.
+  sign-in module confirmed), `shells.json` baked (not mounted), `appsettings.json` reading `Studio:BackendBaseUrl`, and the user file at `/app/config/appsettings.json`.
 - [ ] T024 [US3] Write `Studio/src/apps/Elsa.Studio.Essentials/Dockerfile` from the Studio Web Dockerfile; build it
   locally.
 - [ ] T025 [US3] Write `docker/compose/docker-compose.essentials.yml`: both images, the four engine mounts, the Studio
-  origin in the engine's CORS and identity return-URL settings through the example settings file, the shared
-  management key (FR-016). Then walk [quickstart.md](quickstart.md) from a clean folder, changing only the
+  origin in the engine's CORS and identity return-URL settings through the example settings file (FR-016). Then walk [quickstart.md](quickstart.md) from a clean folder, changing only the
   `change-me` values, and confirm `hello.json` runs and Studio signs in (SC-002).
 - [ ] T026 [US3] Composed proof: add an essentials host selection to `tools/ux-acceptance/run.py` and a journey for
   T022's states, or, if that grows beyond a host selection, run the journey by hand with screenshots and accessibility
@@ -140,8 +141,8 @@ publishes `/app/workflows`.
 
 **Independent Test**: User Story 4 scenarios.
 
-- [ ] T028 [US4] Add a test in `essentials/tests/Foundation/Essentials/Tests/` that reads the list and composes the
-  configuration through `Elsa.Foundation.Essentials` alone, with no reference to `Elsa.Essentials.Server` (scenario 3);
+- [ ] T028 [US4] Add a test in `essentials/tests/Essentials/Tests/` that reads the list and composes the
+  configuration through `Elsa.Essentials.Composition` alone, with no reference to `Elsa.Essentials.Server` (scenario 3);
   confirm the T011 guard fails naming a feature when one is removed from `EssentialsFeatureAssemblies` (scenario 2).
 - [ ] T029 [US4] Leave a hand-over note for the migration CLI specification in the PR: the library name and path, the
   two entry points and the `converted/` layout rule (R-4).
@@ -149,9 +150,9 @@ publishes `/app/workflows`.
 - [ ] T030 [US4] Make the engine read its baked composition from `/app/composition/` (`essentials.features.json` first,
   then the other `*.features.json` in ordinal order) and register `/app/composition/packages` as a second Nuplane directory feed (R-12): in
   `apps/Elsa.Essentials.Server/Program.cs`, and in the Dockerfile (copy `essentials.features.json` there, create
-  `packages/`). Add a test in `essentials/tests/Foundation/Essentials/Tests/` that a second list file in the folder adds
+  `packages/`). Add a test in `essentials/tests/Essentials/Tests/` that a second list file in the folder adds
   a feature and merges key by key over an essentials entry.
-- [ ] T031 [US4] Write `essentials/tests/Foundation/Essentials/DerivedImage/Dockerfile` (`FROM` the local engine image,
+- [ ] T031 [US4] Write `essentials/tests/Essentials/DerivedImage/Dockerfile` (`FROM` the local engine image,
   adds `liquid.features.json` and the locally packed Liquid package) and its README; build and start it with a
   definition that uses a Liquid expression and record the result in the PR evidence (SC-007, scenario 4). Document the
   extension paths in `docs/docker.md` (T033).

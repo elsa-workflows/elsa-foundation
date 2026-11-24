@@ -23,8 +23,7 @@ The engine refuses to start, naming the setting, when one of these is empty:
 | `CShells:Shells:default:Features:FoundationIdentityOpenIddict:SigningKey` | Base64 PKCS#8 RSA key that signs access tokens. |
 | `CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey` | HMAC key, at least 32 bytes. |
 | `CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey` | HMAC key, at least 32 bytes. |
-| `CShells:Shells:default:Features:WorkflowsRuntimeApi:WorkflowAlterationPayloadProtectionKeys` and `...ActiveKeyId` | Protects workflow alteration payloads. |
-| `Elsa:ModuleManagement:ApiKey` | Shared with the Studio image's management bridge. |
+| `CShells:Shells:default:Features:WorkflowsRuntimeApi:WorkflowAlterationPayloadProtectionKeys` and `WorkflowAlterationPayloadProtectionActiveKeyId` | Protects workflow alteration payloads. |
 
 The final list is whatever the composed features require; the implementation checks it against the refusals and
 updates this table and `appsettings.example.json` together.
@@ -50,7 +49,6 @@ A derived image uses the same version tag as its base. Users configure it exactl
 | Setting | Purpose |
 |---|---|
 | `Studio:BackendBaseUrl` | The engine's URL as the browser reaches it. |
-| `Studio:BackendModuleManagementApiKey` | Same value as the engine's `Elsa:ModuleManagement:ApiKey`. |
 
 Configured through `/app/config/appsettings.json` or environment variables. Its composition is baked; there is no
 mounted `shells.json`.
