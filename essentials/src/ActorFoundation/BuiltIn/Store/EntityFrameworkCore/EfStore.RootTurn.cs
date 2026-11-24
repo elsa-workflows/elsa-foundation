@@ -11,6 +11,10 @@ public sealed partial class EfStore
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
+            var family = RootStateFamily(db);
+            var jobs = JobState is null ? Current.Jobs : JobState.Jobs;
+            RequireRootContent(family.Length, State, Header, jobs);
+
             var home = new InstanceRef(Current.Actor.Id).Partition;
             var headers = await db.Database.SqlQuery<string>($"""
                 SELECT i."FoundationHeader" AS "Value" FROM "Instances" i JOIN "FoundationRootBirths" b
@@ -49,11 +53,10 @@ public sealed partial class EfStore
                     """, cancellationToken);
             }
             var ended = Status is InstanceStatus.Finished or InstanceStatus.Faulted;
-            var jobs = JobState is null ? Current.Jobs : JobState.Jobs;
             var nextJobGeneration = JobState is null ? Current.NextJobGeneration : JobState.NextGeneration;
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
             // UnsubscribeAll here only when the exact root has no physical subscriptions.
-            var encoded = RootStateFamily(db) + State;
+            var encoded = family + State;
             var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "State" = {encoded}, "FoundationHeader" = {Header}, "StateVersion" = {StateVersion},
                     "Status" = {(int)Status}, "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
