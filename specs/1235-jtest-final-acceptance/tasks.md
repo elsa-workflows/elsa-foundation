@@ -118,6 +118,10 @@ recorded approval before the tasks after them start.
 
 **Independent test**: fresh Workbench with reconciliation, `jtest run` with the Elsa 4 configuration, ledger read.
 
+**Rule for T024 to T027**: each template reads the full value its outputs carry, never a preview, summary or
+case-insensitive lookup, and normalizes nothing the contract's translation table does not list; an output Elsa 4
+cannot produce with the same meaning fails the template with the output named (FR-011, FR-013).
+
 - [ ] T023 [P] [US3] Create `JTest/environments/elsa4.json` (same keys as `dev.json`, executor base
   `{base}/workflows/http`) and `JTest/global-configuration.elsa4.json` (template search path `templates-elsa4/*`)
   per contracts/run-hosts.md.
@@ -154,7 +158,8 @@ recorded approval before the tasks after them start.
 - [ ] T037 [US3] Bucket every definition in `JTest/ledger/dispositions.md` (SC-003).
 - [ ] T038 [US3] Once spec 1207 is merged into the initiative branch, merge the initiative branch into this branch and
   make the qualifying run: all suites on a fresh Workbench from that head; record it as the non-JOIN milestone run
-  (FR-020, SC-004).
+  (FR-020, SC-004). Before recording it, confirm with `git diff` that `JTest/tests/**` differs from the T022 state
+  only by approved T029 rows, and rerun those changed suites on 3.6.3 (SC-002).
 
 **Checkpoint**: non-JOIN milestone. The specification stays Draft/in progress while J-tasks are open.
 
