@@ -724,13 +724,21 @@ and run `pg-root-retention owned checked` against an empty PostgreSQL database.
 
 The opt-in format-17 fixture holds a selected operator request through
 `IIngress.RequestAsync`. Admission stores the tenant-bound reply address with
-the exact command. The Worker releases its answer after the fenced commit,
-including after takeover. The fixture observes committed `deleted`,
-`terminated and kept` and protected Delete outcomes. Rollback leaves the
-caller waiting and the durable registration intact. A later owner can commit
-after the caller's deadline. Build Native.Run in Release with a locked restore
+the exact command. A fenced commit binds the response or refusal to that
+envelope. If retirement settles another queued held operator, the commit
+returns its registration to the Worker for a live `missing` result. The
+fixture observes plain Terminate, standalone Delete, Terminate then delete,
+protected Delete, competing operators and rollback followed by takeover.
+
+The host starts the request deadline on a monotonic clock anchored to a
+bounded PostgreSQL startup sample. Admission I/O uses the same deadline.
+A reply already accepted by the request registry wins over a late admission
+acknowledgement. After a known admission, a timeout includes the exact
+creation's status at its deadline when a bounded store read can obtain it.
+An expired reply is dropped even when the operator later commits. Replies
+use the live fixture transport and can be lost on process death or an
+unknown commit outcome. Build Native.Run in Release with a locked restore
 and run `pg-held-operator owned checked` against an empty PostgreSQL database.
-This exercises the live reply contract through a fixture transport.
 
 These profiles qualify generated roots with no attached work. Descendant and
 job cascades, parked work, retention scheduling and production reply transport

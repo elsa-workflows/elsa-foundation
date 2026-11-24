@@ -293,6 +293,19 @@ internal sealed partial class PostgresRootAdmission
         ReplyTo.Parse(address) is { Node.Length: > 0, Request.Length: > 0, Deadline: > 0, BeforeCommit: false } route &&
         (expectedDeadline is null || route.Deadline == expectedDeadline);
 
+    internal async Task<InstanceStatus?> ReadOperatorStatusAtAsync(string tenant, string reference, long deadline, CancellationToken token)
+    {
+        await using var db = create();
+        await using var pinned = await EfStore.BeginRootRetirementOperationAsync(db, token);
+        return await db.Database.SqlQuery<InstanceStatus?>($"""
+            SELECT CASE WHEN i."FoundationTerminalAt" IS NULL OR i."FoundationTerminalAt" > {deadline}
+                THEN {(int)InstanceStatus.Running} ELSE i."Status" END AS "Value"
+            FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
+            WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1
+                AND i."FoundationTenant" = b."Tenant" AND i."FoundationReference" = b."Reference"
+            """).SingleOrDefaultAsync(token);
+    }
+
     internal async Task<int> SweepOperatorReceiptsAsync(CancellationToken token)
     {
         await using var db = create();

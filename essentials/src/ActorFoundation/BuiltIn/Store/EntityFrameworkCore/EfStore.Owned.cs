@@ -186,7 +186,7 @@ public sealed partial class EfStore
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
-        return new Committed(true, now, seqs);
+        return new Committed(true, now, seqs) { RetiredOperatorReplies = db.RetiredOperatorReplies ?? [] };
     }
 
     /// <summary>

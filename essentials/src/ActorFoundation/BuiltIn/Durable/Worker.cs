@@ -3176,6 +3176,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 Apply(unit, seqs, handOver, cancellationToken, ReplyRelease.AfterCommit, fenced);
                 if (!LeaseUsable()) return Outcome.Lost;
             }
+            foreach (var retired in result.RetiredOperatorReplies)
+                Send(retired.Route, retired.Occurrence + "#retired", null, null, error: "missing");
             if (result.ParkExpiries.Count > 0)
             {
                 lock (_turnSync)
@@ -3238,7 +3240,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             FoundationHeader = unit.FoundationHeader,
             FoundationRootOperator = unit.Consumed is [var qualified] && qualified.Message.Operator is { } command &&
-                (unit.Row?.FoundationDispatchHeader is not null || unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true })
+                (command.RootHeldReply || unit.Row?.FoundationDispatchHeader is not null ||
+                    unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true })
                     ? qualified.Message : null,
             FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
                 unit.Consumed is [{ IsWorkerJobCompletion: true, Original: { } original } completed] &&

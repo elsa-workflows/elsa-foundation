@@ -1,7 +1,7 @@
-using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
@@ -9,7 +9,7 @@ namespace Kernel.EntityFramework;
 internal sealed class PostgresRootIngress(PostgresRootAdmission admission, string actorType,
     Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeTerminate = null,
     Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeDelete = null,
-    (Requests Requests, string Node)? heldOperators = null) : Contract.IIngress
+    (Requests Requests, string Node, Func<long> Clock)? heldOperators = null) : Contract.IIngress
 {
     private static readonly JsonSerializerOptions OperatorJson = new()
     {
@@ -115,19 +115,21 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         if (target is not Contract.Target.Ref exact || !Authorizes(scope, exact.Actor, kind))
             return new(null, null, Error: "missing");
 
-        var started = Stopwatch.GetTimestamp();
-        var now = await admission.ReadReplyTimeAsync(cancellationToken);
-        double Remaining() => (double)((decimal)request.Deadline - now) - Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        double Remaining() => (double)((decimal)request.Deadline - host.Clock());
         var remaining = Remaining();
         if (remaining <= 0) return new(null, null, Error: "timeout");
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (remaining <= int.MaxValue) lifetime.CancelAfter(TimeSpan.FromMilliseconds(remaining));
         var open = host.Requests.OpenBound(id, request.Deadline, scope.Tenant, null);
+        var completion = host.Requests.CompletionOf(open);
+        var admitted = false;
         try
         {
             var route = new PostgresRootAdmission.OperatorReply(open.ReplyAddress(host.Node), open.Deadline);
             var accepted = await OperateAsync(scope, exact.Actor, id, kind, payload, add, lifetime.Token, route);
-            if (Remaining() <= 0) return new(null, null, Error: "timeout");
+            admitted = accepted.Outcome == Contract.AdmissionOutcome.Accepted;
+            if (completion.IsCompleted) return await PresentAsync(await completion);
+            if (Remaining() <= 0) return await TimeoutAsync();
             if (accepted.Outcome == Contract.AdmissionOutcome.Duplicate) return new(null, null, Error: "repeat");
             if (accepted.Outcome == Contract.AdmissionOutcome.Refused)
                 return new(null, null, Error: accepted.Reason switch
@@ -137,14 +139,44 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
                     _ => "missing"
                 });
 
-            var completion = host.Requests.CompletionOf(open);
             while (!completion.IsCompleted && (remaining = Remaining()) > 0)
             {
                 try { await completion.WaitAsync(TimeSpan.FromMilliseconds(Math.Min(remaining, int.MaxValue)), lifetime.Token); }
                 catch (TimeoutException) { }
             }
-            if (!completion.IsCompleted) host.Requests.Timeout(open);
-            var answer = await completion.WaitAsync(cancellationToken);
+            return completion.IsCompleted ? await PresentAsync(await completion) : await TimeoutAsync();
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            return await TimeoutAsync();
+        }
+        catch (PostgresRootAdmission.OperatorReplyExpired)
+        {
+            return await TimeoutAsync();
+        }
+        finally { host.Requests.Disconnect(open); }
+
+        async ValueTask<Contract.Reply> TimeoutAsync()
+        {
+            host.Requests.Timeout(open);
+            return await PresentAsync(await completion);
+        }
+
+        async ValueTask<Contract.Reply> PresentAsync(Reply answer)
+        {
+            if (answer.Error == "timeout" && admitted)
+            {
+                // Status is supplementary to the deadline result. A busy store must not hold the caller indefinitely.
+                using var observation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                observation.CancelAfter(TimeSpan.FromMilliseconds(100));
+                try
+                {
+                    var status = await admission.ReadOperatorStatusAtAsync(scope.Tenant, exact.Actor.Id, request.Deadline, observation.Token);
+                    return new(null, null, (Contract.ActorStatus?)status, answer.Error);
+                }
+                catch (OperationCanceledException) when (observation.IsCancellationRequested && !cancellationToken.IsCancellationRequested) { }
+                catch (NpgsqlException error) when (error.IsTransient && !cancellationToken.IsCancellationRequested) { }
+            }
             if (answer.Item is CreationResult refusal)
                 return new(null, refusal.OwningOperation, Error: refusal.Result switch
                 {
@@ -156,15 +188,6 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
                 });
             return new(answer.Channel, answer.Item, (Contract.ActorStatus?)answer.Status, answer.Error);
         }
-        catch (OperationCanceledException) when (lifetime.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-        {
-            return new(null, null, Error: "timeout");
-        }
-        catch (PostgresRootAdmission.OperatorReplyExpired)
-        {
-            return new(null, null, Error: "timeout");
-        }
-        finally { host.Requests.Disconnect(open); }
     }
 
     public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
@@ -192,7 +215,7 @@ public sealed partial class EfStore
     // The host authenticates the caller and authorizes termination of the supplied exact reference.
     internal async ValueTask<Contract.IIngress> OpenSelectedRootIngressAsync(string actorType, TimeSpan deduplicationWindow,
         Func<Contract.BoundScope, Contract.ActorRef, bool> authorizeTerminate, CancellationToken cancellationToken,
-        Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeDelete = null, (Requests Requests, string Node)? heldOperators = null)
+        Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeDelete = null, (Requests Requests, string Node, Func<long> Clock)? heldOperators = null)
     {
         ArgumentNullException.ThrowIfNull(authorizeTerminate);
         PostgresRootAdmission.RequireActorType(actorType);
@@ -208,6 +231,7 @@ public sealed partial class EfStore
         {
             if (!db.UsesRootOperatorReplies) throw new NotSupportedException("Held operators require the PostgreSQL reply profile.");
             ArgumentNullException.ThrowIfNull(host.Requests);
+            ArgumentNullException.ThrowIfNull(host.Clock);
             if (string.IsNullOrWhiteSpace(host.Node) || host.Node.Length > 256 || host.Node.Contains('|') ||
                 host.Node.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(host.Node))
                 throw new ArgumentException("Expected an issued reply node.", nameof(heldOperators));
