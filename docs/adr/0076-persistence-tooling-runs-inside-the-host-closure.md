@@ -796,10 +796,9 @@ can ship on its own schedule.
 ### D14 — The worker may reach further frozen entry points, one per command group, each named and frozen
 
 The worker of D1 is not tied to persistence. A command group that must run product code inside a host's closure may
-reach its own frozen entry point there, by type name and through the same worker. The entry point's assembly comes from
-the host's deps closure, or from a package the group loads under D10's second exception, and the worker looks for it
-in both, instead of adding a second worker or
-loading product code into the tool. Each such entry point:
+reach its own frozen entry point there, by type name and through the same worker, instead of adding a second worker or
+loading product code into the tool. The entry point's assembly comes from the host's deps closure, or from a package
+the group loads under D10's second exception, and the worker looks for it in both. Each such entry point:
 
 - is a `public static Task<int> RunAsync(Stream request, Stream response)` on a named type in a named assembly, taking
   versioned JSON on stdin and answering on stdout, exactly as `EfToolingHost` does;
