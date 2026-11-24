@@ -79,6 +79,34 @@ public sealed class SwitchStructureHandlerTests : IDisposable
         Assert.Equal(node.Structure!.Payload.GetProperty("cases")[0].GetProperty("condition").GetRawText(), payload.GetProperty("cases")[0].GetProperty("condition").GetRawText());
     }
 
+    [Fact]
+    public void Replacing_children_keeps_carried_condition_child_and_extension_tokens_exact()
+    {
+        const string raw = "{ \"OwnerKey\":\"Ren\\u00e9<+>\", \"N\":1.0, \"wide\":12345678901234567890123456789012345, \"x\":null }";
+        using var authored = JsonDocument.Parse("""
+            {"cases":[{"caseId":"a","match":"Approved","activity":null,
+              "condition":{"referenceKey":"predicate","value":{"expressionType":"JavaScript","value":__RAW__}},
+              "future":__RAW__}],"default":null,"future":__RAW__}
+            """.Replace("__RAW__", raw, StringComparison.Ordinal));
+        var node = NewNode() with { Structure = new(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion, authored.RootElement.Clone()) };
+        var original = node.Structure.Payload.GetRawText();
+        using var data = JsonDocument.Parse(raw);
+        var child = NewBranchNode("child") with
+        {
+            Inputs = [new ArgumentState("data", new(data.RootElement.Clone(), "Literal"), null, null, null, null)]
+        };
+        var replaced = _handler.ReplaceChildren(node,
+            [new(SwitchActivity.CaseSlotName("Approved"), [child]), new(SwitchActivity.DefaultSlotName, [child])]);
+        var payload = replaced.Structure!.Payload;
+        var item = payload.GetProperty("cases")[0];
+        Assert.Equal(raw, item.GetProperty("condition").GetProperty("value").GetProperty("value").GetRawText());
+        Assert.Equal(raw, item.GetProperty("future").GetRawText());
+        Assert.Equal(raw, payload.GetProperty("future").GetRawText());
+        Assert.Equal(raw, item.GetProperty("activity").GetProperty("inputs")[0].GetProperty("value").GetProperty("value").GetRawText());
+        Assert.Equal(raw, payload.GetProperty("default").GetProperty("inputs")[0].GetProperty("value").GetProperty("value").GetRawText());
+        Assert.Equal(original, node.Structure.Payload.GetRawText());
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData(" ")]
