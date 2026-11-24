@@ -54,6 +54,8 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
                 PostgresRootSelection.SealRunning(cursor, scope.Tenant, row.Reference),
             { TerminalRevision: > 0 and var revision, EndedAt: { } at } =>
                 PostgresRootSelection.SealTerminal(cursor, scope.Tenant, row.Reference, revision, at),
+            { ParkAt: { } parkedAt, ParkRevision: { } parkRevision } =>
+                PostgresRootSelection.SealPark(cursor, scope.Tenant, row.Reference, parkRevision, parkedAt),
             _ => null
         };
         return new(header, selection, row.ParkAt is { } parkAt ? new(parkAt, null) : null, asOf);
@@ -103,7 +105,13 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
         var snapshot = await store.ReadRootInboxAsync(scope.Tenant, reference, afterSeq, afterOccurrence, _pageSize + 1, cancellationToken);
         var page = snapshot.Rows.Take(_pageSize).Select(row => new DeliveryView(
             cursor.InboxHandle(DurableKeyJson.Write(new { scope.Tenant, Reference = reference, row.Occurrence, row.Seq })),
-            row.Id, row.Kind, null, row.Due, row.Kept ? DeliveryState.Consumed : DeliveryState.Pending, row.Attempts, row.Size)).ToArray();
+            row.Id, row.Kind, null, row.Due, row.KeptBy switch
+            {
+                ParkKeepReason.Consumed => DeliveryState.Consumed,
+                ParkKeepReason.Arrived => DeliveryState.Arrived,
+                null => DeliveryState.Pending,
+                _ => throw new StoreFormatException("The root inbox has an unsupported kept reason.")
+            }, row.Attempts, row.Size)).ToArray();
         PageToken? next = null;
         if (snapshot.Rows.Count > _pageSize)
         {

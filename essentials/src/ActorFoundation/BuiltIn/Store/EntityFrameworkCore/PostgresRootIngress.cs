@@ -9,7 +9,8 @@ namespace Kernel.EntityFramework;
 internal sealed class PostgresRootIngress(PostgresRootAdmission admission, string actorType,
     Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeTerminate = null,
     Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeDelete = null,
-    (Requests Requests, string Node, Func<long> Clock)? heldOperators = null) : Contract.IIngress
+    (Requests Requests, string Node, Func<long> Clock)? heldOperators = null,
+    Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeRecover = null) : Contract.IIngress
 {
     private static readonly JsonSerializerOptions OperatorJson = new()
     {
@@ -70,6 +71,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         {
             Contract.Kinds.Terminate => authorizeTerminate,
             Contract.Kinds.Delete => authorizeDelete,
+            Contract.Kinds.Recover => authorizeRecover,
             _ => null
         })?.Invoke(scope, actor) == true;
 
@@ -83,7 +85,8 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         try { command = JsonSerializer.Deserialize<Contract.OperatorCommand>(payload, OperatorJson); }
         catch (JsonException) { return new(Contract.AdmissionOutcome.Refused); }
 
-        if (command is not { Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null })
+        if (command is not { Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null } ||
+            kind == Contract.Kinds.Recover && options?.DueAt is not null)
             return new(Contract.AdmissionOutcome.Refused);
         if (command.ExpectedTarget is { } selected && selected != actor)
             return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
@@ -324,7 +327,7 @@ public sealed partial class EfStore
         await using var db = create();
         if (!db.Database.IsNpgsql() || !db.SupportsCorePreview)
             throw new NotSupportedException("Ingress requires the ordinary or Native job PostgreSQL Core Preview format.");
-        await PostgresRootAdmission.OpenJournalCursorAsync(db, cancellationToken);
+        await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
         return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true), actorType);
     }
 }

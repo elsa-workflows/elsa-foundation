@@ -33,6 +33,7 @@
       "essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj",
       "essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj",
       "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj",
+      "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj",
       "essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj",
       "essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
       "essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj",

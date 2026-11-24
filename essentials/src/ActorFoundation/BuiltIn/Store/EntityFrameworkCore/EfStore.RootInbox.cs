@@ -9,11 +9,11 @@ public sealed partial class EfStore
     // This reserve covers the escaped, name-limited direct and operator headers.
     private const int MaxRootInboxHeaderBytes = 24 * 1024;
 
-    internal sealed record RootInboxEntry(long Seq, string Occurrence, string Id, string Kind, long? Due, int Attempts, long Size, bool Kept);
+    internal sealed record RootInboxEntry(long Seq, string Occurrence, string Id, string Kind, long? Due, int Attempts, long Size, ParkKeepReason? KeptBy);
     internal sealed record RootInboxPage(IReadOnlyList<RootInboxEntry> Rows, long AsOf);
     private sealed record InboxProjection(long AsOf, int? StoreSchema, int? MessageProtocol, int? JournalCodec, bool SourceReady,
         long? Seq, string? Occurrence, string? Kind, string? Header, long? Due, int? Attempts, long? Size, bool? HasReply,
-        bool? SupportedShape, bool? Kept);
+        bool? SupportedShape, short? KeptBy);
 
     internal async Task<RootInboxPage> ReadRootInboxAsync(string tenant, string reference, long afterSeq, string afterOccurrence,
         int limit, CancellationToken cancellationToken)
@@ -41,7 +41,7 @@ public sealed partial class EfStore
                 ), page AS (
                     SELECT m."Seq", m."Id" AS "Occurrence", m."Kind",
                         CASE WHEN octet_length(m."Start") <= {MaxRootInboxHeaderBytes} THEN m."Start" END AS "Header",
-                        m."Due", m."Attempts", /*kept*/ AS "Kept",
+                        m."Due", m."Attempts", /*kept-by*/ AS "KeptBy",
                         (octet_length(m."Id")::bigint + octet_length(m."Kind") + coalesce(octet_length(m."Start"), 0)
                             + coalesce(octet_length(m."Payload"), 0)) AS "Size",
                         m."ReplyTo" IS NOT NULL AS "HasReply",
@@ -79,10 +79,12 @@ public sealed partial class EfStore
                 FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN marker ON true
                 ORDER BY page."Seq", page."Occurrence" COLLATE "C"
                 """;
-            var kept = db.UsesRootParkInspection
-                ? """m."FoundationKeptBy" = 0""" : "false";
+            var kept = db.UsesRootParkArrivals ? """m."FoundationKeptBy" IN (0, 1)"""
+                : db.UsesRootParkInspection ? """m."FoundationKeptBy" = 0""" : "false";
+            var keptBy = db.UsesRootParkInspection ? """m."FoundationKeptBy" """ : "NULL::smallint";
             var rootParked = db.UsesRootParkInspection ? """i."FoundationParkAt" IS NOT NULL""" : "false";
             var sql = query.Format.Replace("/*kept*/", kept, StringComparison.Ordinal)
+                .Replace("/*kept-by*/", keptBy, StringComparison.Ordinal)
                 .Replace("/*root-parked*/", rootParked, StringComparison.Ordinal);
             sampled = await db.Database.SqlQuery<InboxProjection>(FormattableStringFactory.Create(sql, query.GetArguments()))
                 .ToListAsync(cancellationToken);
@@ -112,7 +114,7 @@ public sealed partial class EfStore
             var (id, publicKind, publicDue) = occurrence.StartsWith(PostgresRootAdmission.OperatorOccurrencePrefix, StringComparison.Ordinal)
                 ? PostgresRootAdmission.InspectOperatorHeader(db, header, reference, occurrence, kind, due, hasReply)
                 : PostgresRootAdmission.InspectDirectHeader(db, header, reference, occurrence, kind, due, hasReply);
-            return new(row.Seq.Value, occurrence, id, publicKind, publicDue, attempts, size, row.Kept == true);
+            return new(row.Seq.Value, occurrence, id, publicKind, publicDue, attempts, size, row.KeptBy is { } reason ? (ParkKeepReason)reason : null);
         }
     }
 }

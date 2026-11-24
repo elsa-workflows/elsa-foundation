@@ -30,7 +30,7 @@ public sealed partial class EfStore
             FROM "FoundationRootIssuer"
             """).SingleAsync(token);
         if (!install.Installed) await new PostgresRootAdmission(create, TimeSpan.Zero).InstallAsync(token);
-        RootSelfIssuer = new(seed => FoundationSelfSend.Handle(install.Key, seed), db.RequiredFormat == StoreFormat.RootTimers);
+        RootSelfIssuer = new(seed => FoundationSelfSend.Handle(install.Key, seed), db.UsesRootTimers);
     }
 
     // The ordinary writer transports an exceptional payload as base64. Only the compact bytea is stored.
