@@ -113,6 +113,20 @@ internal static class PostgresRootCompositionChecks
         await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" ENABLE TRIGGER kernel_project_root_actor_list_v13""", ct);
         Check((await List(store, parked: null, ct)).Count == 2 && (await History(store, ct)).Items.Count == 2,
             "both reads recover once the projectors are enabled again");
+
+        // A second install over the seeded rows resyncs the projector and the Park backfill without losing either mark.
+        await admission.InstallAsync(ct);
+        await store.InstallRootWorkflowHistoryAsync(ct);
+        Check(await List(store, parked: null, ct) is [{ Reference: Ended, TerminalRevision: 2, ParkAt: null },
+                { Reference: Parked, TerminalRevision: null, ParkAt: > 0, ParkFault: "parked on purpose" }] &&
+            (await History(store, ct)).Items.Count == 2,
+            "reinstalling over existing rows keeps the terminal mark, the Park mark and history");
+
+        // The shipped qualified formats keep refusing history before any read: 13 has no pinned namespace and 14 retires roots.
+        await Refused(() => History(new EfStore(() => KernelDb.ForPostgresRootTerminalSelection(options), postgres: true), ct),
+            "the shipped terminal-selection profile still refuses workflow history");
+        await Refused(() => History(new EfStore(() => KernelDb.ForPostgresRootRetirement(options), postgres: true), ct),
+            "the shipped retirement profile still refuses workflow history");
         return 0;
     }
 

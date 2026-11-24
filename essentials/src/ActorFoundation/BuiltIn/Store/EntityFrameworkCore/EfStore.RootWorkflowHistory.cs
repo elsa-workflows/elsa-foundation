@@ -31,6 +31,8 @@ public sealed partial class EfStore
         if (installed) RequireHistoryVersion(versions[0]);
         // History reads the actor's own list row, so it requires the projector of this profile and not the Park metadata.
         var projection = ActorListProjection.Of(db);
+        if (!db.SupportsRootWorkflowHistory)
+            throw new StoreFormatException("This store profile does not carry workflow history.");
         var required = installed ? projection.WorkflowHistoryTriggers : projection.SourceTriggers;
         if (!await db.Database.SqlQuery<bool>($"""
             SELECT to_regclass('"FoundationActorList"') IS NOT NULL
@@ -98,6 +100,8 @@ public sealed partial class EfStore
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified workflow history requires PostgreSQL.");
         await using var db = create();
+        if (!db.SupportsRootWorkflowHistory)
+            throw new StoreFormatException("This store profile does not carry workflow history.");
         var expected = db.RequiredFormat;
         var triggers = ActorListProjection.Of(db).WorkflowHistoryTriggers;
         var encodedType = DurableKeyJson.Write(type);

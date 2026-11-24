@@ -156,6 +156,11 @@ public class KernelDb : DbContext
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
+    // Workflow history removes no row of a retired root, and outside a pinned namespace it does not bind its reads to a
+    // qualified list. Until the composed install provides both, a qualified list carries history only in a pinned namespace
+    // without retirement, so the shipped formats 13 to 17 refuse it as before.
+    internal bool SupportsRootWorkflowHistory => !(UsesRootTerminalSelection || UsesRootRetirement) ||
+        RequiresPinnedRootNamespace && !UsesRootRetirement;
     internal static KernelDb ForPostgresRootParkOpening(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkOpening);
     internal bool UsesRootReplyProtocol => Has(RootCapabilities.ReplyProtocol);
     internal static KernelDb ForPostgresRootReplies(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootReplies);
