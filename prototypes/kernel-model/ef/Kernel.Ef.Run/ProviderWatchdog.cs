@@ -9,6 +9,7 @@ using Npgsql;
 static class ProviderWatchdog
 {
     private const string Actor = "0/watchdog";
+    private const string OldOwner = "watchdog-old";
     private const string ChildConnection = "KERNEL_WATCHDOG_TEST_CONNECTION";
     private const int Escalated = 71;
     private static readonly TimeSpan LeaseTime = TimeSpan.FromSeconds(2);
@@ -57,7 +58,7 @@ static class ProviderWatchdog
         var store = target.Store(target.Workers());
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var token = limit.Token;
-        var first = await store.TakeAsync(0, "watchdog-old", LeaseTime, token)
+        var first = await store.TakeAsync(0, OldOwner, LeaseTime, token)
             ?? throw new InvalidOperationException("The old owner did not take the partition.");
 
         string result;
@@ -124,7 +125,7 @@ static class ProviderWatchdog
 
         await target.ResetAsync(1);
         var store = target.Store(target.Workers());
-        var first = await store.TakeAsync(0, "watchdog-old", LeaseTime, token)
+        var first = await store.TakeAsync(0, OldOwner, LeaseTime, token)
             ?? throw new InvalidOperationException("The old owner did not take the partition.");
         if (ownerExit)
         {
@@ -207,6 +208,14 @@ static class ProviderWatchdog
             {
                 // Give the disconnected session the entire positive budget. The lease expires sooner.
                 await Task.Delay(ProcessExitBudget, token);
+                await using var observer = target.Admins()();
+                Require(await observer.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (
+                        SELECT 1 FROM "Partitions" p JOIN "Nodes" n ON n."Id" = p."Owner"
+                        WHERE p."Id" = 0 AND p."Epoch" = {first.Epoch} AND p."Owner" = {OldOwner}
+                            AND n."LeaseUntil" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                    ) AS "Value"
+                    """).SingleAsync(token), "the database clock is past the original owner's persisted lease");
                 Require(!await FenceCanBeLockedAsync(target, token),
                     "without disconnect detection the exited owner's transaction still holds the fence past lease expiry");
             }
