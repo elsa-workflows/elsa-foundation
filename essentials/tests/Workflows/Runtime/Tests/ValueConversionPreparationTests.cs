@@ -86,9 +86,13 @@ public sealed class ValueConversionPreparationTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Member_preparation_does_not_root_collectible_contracts()
+    public async Task Member_preparation_does_not_root_collectible_contracts()
     {
         var reference = ConvertCollectible();
+        // The framework's reflection accessor cache expires after a second and evicts on access.
+        // Match the existing serialization lifetime controls before testing our own permanent roots.
+        await Task.Delay(TimeSpan.FromMilliseconds(1500));
+        _ = JsonConversionContract.SerializeToElement(new CacheEvictionCanary());
         for (var i = 0; i < 10 && reference.IsAlive; i++)
         {
             GC.Collect();
@@ -106,16 +110,28 @@ public sealed class ValueConversionPreparationTests(ITestOutputHelper output)
         return new WeakReference(type.Assembly);
     }
 
+    private sealed class CacheEvictionCanary { public string Name => "canary"; }
+
     private static Type DynamicContract(Type memberType)
     {
         var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName($"conversion-{Guid.NewGuid():N}"), AssemblyBuilderAccess.RunAndCollect);
         var builder = assembly.DefineDynamicModule("main").DefineType("Plugin.Contract", TypeAttributes.Public);
+        var field = builder.DefineField("value", memberType, FieldAttributes.Private);
         var property = builder.DefineProperty("Value", PropertyAttributes.None, memberType, null);
         var getter = builder.DefineMethod("get_Value", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, memberType, Type.EmptyTypes);
         var il = getter.GetILGenerator();
-        if (memberType.IsValueType) il.Emit(OpCodes.Ldc_I4_0); else il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, field);
         il.Emit(OpCodes.Ret);
         property.SetGetMethod(getter);
+        var setter = builder.DefineMethod("set_Value", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+            typeof(void), [memberType]);
+        var setterIl = setter.GetILGenerator();
+        setterIl.Emit(OpCodes.Ldarg_0);
+        setterIl.Emit(OpCodes.Ldarg_1);
+        setterIl.Emit(OpCodes.Stfld, field);
+        setterIl.Emit(OpCodes.Ret);
+        property.SetSetMethod(setter);
         return builder.CreateType()!;
     }
 

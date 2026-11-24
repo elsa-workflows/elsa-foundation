@@ -8,7 +8,7 @@ import { WorkflowDashboardMetric } from "./WorkflowDashboardMetric";
 import { WorkflowDashboardUnavailable } from "./WorkflowDashboardUnavailable";
 
 export function WorkflowRunHealthWidget({ snapshot }: StudioDashboardWidgetBodyProps<WorkflowRunHealthSnapshot, RunHealthSettings>) {
-  useStudioTimeZone();
+  const displayTimeZone = resolveStudioTimeZone(useStudioTimeZone());
   if (!snapshot) return null;
 
   if (snapshot.status === "unavailable") {
@@ -38,10 +38,10 @@ export function WorkflowRunHealthWidget({ snapshot }: StudioDashboardWidgetBodyP
       </div>
 
       <p className="workflow-run-health__scope">
-        Start window: <time dateTime={snapshot.from}>{formatFullTime(snapshot.from, snapshot.timeZone)}</time>
+        Start window: <time dateTime={snapshot.from}>{formatFullTime(snapshot.from, displayTimeZone)}</time>
         {" – "}
-        <time dateTime={snapshot.to}>{formatFullTime(snapshot.to, snapshot.timeZone)}</time>
-        {` · ${snapshot.bucket} buckets · ${snapshot.timeZone} · `}
+        <time dateTime={snapshot.to}>{formatFullTime(snapshot.to, displayTimeZone)}</time>
+        {` · ${snapshot.bucket} buckets aggregated in ${snapshot.timeZone} · `}
         {snapshot.includeTestRuns ? "Test runs included" : "Test runs excluded"}
       </p>
 
@@ -61,7 +61,7 @@ export function WorkflowRunHealthWidget({ snapshot }: StudioDashboardWidgetBodyP
           {hasStarts && snapshot.buckets.length > 0 ? (
             <RunBucketChart
               buckets={snapshot.buckets}
-              timeZone={snapshot.timeZone}
+              timeZone={displayTimeZone}
               granularity={snapshot.bucket}
               totalStarted={snapshot.startedCount}
             />
@@ -70,7 +70,7 @@ export function WorkflowRunHealthWidget({ snapshot }: StudioDashboardWidgetBodyP
               description={hasStarts ? "Activity totals are available, but time-bucket details are unavailable." : "Running now counts active workflows across all start times."} />
           )}
 
-          <BucketDetails buckets={snapshot.buckets} timeZone={snapshot.timeZone} />
+          <BucketDetails buckets={snapshot.buckets} timeZone={displayTimeZone} />
         </section>
 
         <section className="workflow-run-health__panel" aria-labelledby="workflow-run-health-failures-title">
@@ -93,7 +93,6 @@ export function WorkflowRunHealthWidget({ snapshot }: StudioDashboardWidgetBodyP
 }
 
 function RunBucketChart({ buckets, timeZone, granularity, totalStarted }: { buckets: RunBucket[]; timeZone: string; granularity: "hour" | "day"; totalStarted: number }) {
-  useStudioTimeZone();
   const maxStarted = Math.max(1, ...buckets.map(bucket => bucket.startedCount));
   const tickIndices = sparseTickIndices(buckets.length);
 
@@ -139,7 +138,6 @@ function RunBucketChart({ buckets, timeZone, granularity, totalStarted }: { buck
 }
 
 function BucketDetails({ buckets, timeZone }: { buckets: RunBucket[]; timeZone: string }) {
-  useStudioTimeZone();
   if (buckets.length === 0) return null;
 
   return (
@@ -214,16 +212,16 @@ function formatPercentage(value: number) {
   return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value)}%`;
 }
 
-function formatFullTime(value: string, _timeZone: string) {
-  return formatStudioDate(value);
+function formatFullTime(value: string, timeZone: string) {
+  return formatStudioDate(value, timeZone);
 }
 
-function formatAxisTime(value: string, _timeZone: string, granularity: "hour" | "day") {
+function formatAxisTime(value: string, timeZone: string, granularity: "hour" | "day") {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   // Compact chart labels retain their offset; full instant text is in the tooltip and accessible table.
   return new Intl.DateTimeFormat(undefined, {
-    timeZone: resolveStudioTimeZone(), month: "short", day: "numeric",
+    timeZone, month: "short", day: "numeric",
     ...(granularity === "hour" ? { hour: "2-digit" as const } : {}), timeZoneName: "longOffset"
   }).format(date);
 }

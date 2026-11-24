@@ -1,4 +1,6 @@
 import React from "react";
+import { flushSync } from "react-dom";
+import { getStudioTimeZonePreference, setStudioTimeZonePreference } from "@elsa-workflows/studio-sdk";
 import { describe, expect, it } from "vitest";
 import { WorkflowRunHealthWidget } from "../WorkflowRunHealthWidget";
 import { loadRunHealth, normalizeRunHealthSettings, type RunHealthRange } from "../workflowDashboardApi";
@@ -65,16 +67,42 @@ describe("Workflow Run Health widget", () => {
   });
 
   it("accepts Foundation wire buckets without names and retains exact DST interval evidence", () => {
+    const originalTimeZone = getStudioTimeZonePreference();
+    setStudioTimeZonePreference("Europe/Amsterdam");
     const snapshot = runSnapshot();
     const view = render(<WorkflowRunHealthWidget settings={{ range: "7d", includeTestRuns: false }} size="wide" snapshot={snapshot} />);
-    expect(view.textContent).toContain("orders");
-    expect(view.textContent).toContain("Europe/Amsterdam");
-    expect(view.querySelector(".workflow-run-health__scope")?.textContent).toContain("GMT+2");
-    expect(view.querySelector(".workflow-run-health__scope")?.textContent).toContain("GMT+1");
-    // The returned interval/test scope is authoritative even when settings changed during a refresh.
-    expect(view.textContent).toMatch(/test runs/i);
-    expect(view.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain("12");
-    expect(view.querySelector("table")?.textContent).toContain("12");
+    try {
+      expect(view.textContent).toContain("orders");
+      expect(view.textContent).toContain("Europe/Amsterdam");
+      expect(view.querySelector(".workflow-run-health__scope")?.textContent).toContain("UTC+02:00");
+      expect(view.querySelector(".workflow-run-health__scope")?.textContent).toContain("UTC+01:00");
+      // The returned interval/test scope is authoritative even when settings changed during a refresh.
+      expect(view.textContent).toMatch(/test runs/i);
+      expect(view.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain("12");
+      expect(view.querySelector("table")?.textContent).toContain("12");
+    } finally { flushSync(() => setStudioTimeZonePreference(originalTimeZone)); }
+  });
+
+  it("updates mounted bucket dates and their accessible display zone while retaining the aggregation zone", () => {
+    const originalTimeZone = getStudioTimeZonePreference();
+    setStudioTimeZonePreference("Europe/Amsterdam");
+    const snapshot = runSnapshot();
+    const view = render(<WorkflowRunHealthWidget settings={{ range: "7d", includeTestRuns: false }} size="wide" snapshot={snapshot} />);
+    const firstTime = view.querySelector("time");
+    try {
+      expect(view.querySelector("caption")?.textContent).toContain("displayed in Europe/Amsterdam");
+      expect(firstTime?.textContent).toContain("UTC+02:00");
+
+      flushSync(() => setStudioTimeZonePreference("UTC"));
+
+      expect(view.querySelector("time")).toBe(firstTime);
+      expect(view.querySelector("caption")?.textContent).toContain("displayed in UTC");
+      expect(view.querySelector("caption")?.textContent).not.toContain("Europe/Amsterdam");
+      for (const time of view.querySelectorAll("time")) expect(time.textContent).toContain("UTC+00:00");
+      for (const label of view.querySelectorAll(".workflow-run-health__time-labels span")) expect(label.textContent).toMatch(/(?:GMT|UTC)(?![+-])/);
+      expect(view.querySelector(".workflow-run-health__scope")?.textContent).toContain("day buckets aggregated in Europe/Amsterdam");
+      expect(snapshot.timeZone).toBe("Europe/Amsterdam");
+    } finally { flushSync(() => setStudioTimeZonePreference(originalTimeZone)); }
   });
 
   it("keeps empty buckets at zero and distinguishes failed-run links from time-window totals", () => {

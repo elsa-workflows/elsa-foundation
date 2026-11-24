@@ -514,6 +514,9 @@ public sealed class ValueConversionPlanTests
         Assert.Same(source, result);
         Assert.Equal(1, provider.Calls);
         Assert.Empty(diagnostics);
+        Assert.Same(source, executor.Convert(source, plan, JsonConversionContract.For(typeof(string)), diagnostics.Add));
+        Assert.Equal(2, provider.Calls);
+        Assert.Empty(diagnostics);
     }
 
     [Fact]

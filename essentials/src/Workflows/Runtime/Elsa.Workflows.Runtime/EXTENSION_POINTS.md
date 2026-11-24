@@ -26,7 +26,11 @@ The overload accepting `Action<JsonConversionDiagnostic>` reports successful typ
 execution channel. The owner applies the value's protection policy before recording the warning. Implementations
 that only supply the original two-argument method remain callable through the default interface overload; a custom
 executor that performs typed JSON conversion should implement the reporting overload too. Selected-member and
-assignment paths let their subsequent owning fit validation record each diagnostic once.
+assignment paths let their subsequent owning fit validation record each diagnostic once. The four-argument overload
+also accepts the owning input member's code-declared `JsonConversionContract`; it changes neither the pinned plan
+nor the executable. CLR input materialization and deferred secret activation supply that same member contract used
+by hydration. Existing implementations remain callable through its default interface body; typed JSON replacement
+executors should implement this overload to honor boundary overrides as well as the reporting sink.
 
 ## Conditional initial-fault admission
 

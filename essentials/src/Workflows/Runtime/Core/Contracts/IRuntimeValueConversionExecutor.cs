@@ -14,4 +14,8 @@ public interface IRuntimeValueConversionExecutor
 
     /// <summary>Applies the pinned plan and records typed JSON diagnostics through the owning execution's sink.</summary>
     ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan, Action<JsonConversionDiagnostic>? report) => Convert(source, plan);
+
+    /// <summary>Applies the owning input member's code-declared JSON contract without changing the pinned plan.</summary>
+    ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan, JsonConversionContract? conversionContract,
+        Action<JsonConversionDiagnostic>? report) => Convert(source, plan, report);
 }

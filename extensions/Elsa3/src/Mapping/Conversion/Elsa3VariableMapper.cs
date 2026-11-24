@@ -1,6 +1,7 @@
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -170,7 +171,8 @@ internal static class Elsa3VariableMapper
                         using var document = JsonDocument.Parse(value);
                         scalar = document.RootElement.Clone();
                     }
-                    else if (value.TrimStart().StartsWith('{') || value.TrimStart().StartsWith('['))
+                    else if (JsonConversionContract.For(scalarType).Options.GetTypeInfo(scalarKind).Kind is
+                        JsonTypeInfoKind.Object or JsonTypeInfoKind.Dictionary or JsonTypeInfoKind.Enumerable)
                     {
                         using var document = JsonDocument.Parse(value);
                         scalar = document.RootElement.Clone();

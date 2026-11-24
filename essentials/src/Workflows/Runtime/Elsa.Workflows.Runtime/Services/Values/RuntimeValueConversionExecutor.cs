@@ -27,6 +27,10 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
     public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan) => Convert(source, plan, report: null);
 
     public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan, Action<JsonConversionDiagnostic>? report)
+        => Convert(source, plan, conversionContract: null, report);
+
+    public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan, JsonConversionContract? conversionContract,
+        Action<JsonConversionDiagnostic>? report)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(plan);
@@ -62,7 +66,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             ValueConversionOperation.NumericWidening => ConvertNumeric(inline, plan),
             ValueConversionOperation.RecursiveCollection => ConvertCollection(inline, plan, depth: 1),
             ValueConversionOperation.CanonicalAny => CanonicalizeAny(inline, plan),
-            ValueConversionOperation.Profile => ConvertProfile(inline, plan, report),
+            ValueConversionOperation.Profile => ConvertProfile(inline, plan, conversionContract, report),
             _ => throw Reject(plan, $"the pinned operation '{plan.Operation}' is unsupported")
         };
 
@@ -166,7 +170,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         return document.RootElement.Clone();
     }
 
-    private JsonElement ConvertProfile(JsonElement value, ValueConversionPlan plan, Action<JsonConversionDiagnostic>? report)
+    private JsonElement ConvertProfile(JsonElement value, ValueConversionPlan plan, JsonConversionContract? conversionContract, Action<JsonConversionDiagnostic>? report)
     {
         if (IsJsonStringProfile(plan))
             return SerializeJsonAsString(value, plan);
@@ -188,7 +192,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             ValueConversionCompatibility.IsJsonObjectTarget(plan.TargetType))
             return CanonicalizeAny(root, plan);
 
-        return ConvertTypedJson(root, plan, report);
+        return ConvertTypedJson(root, plan, conversionContract, report);
     }
 
     private static JsonElement SerializeJsonAsString(JsonElement value, ValueConversionPlan plan)
@@ -273,7 +277,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         return ParseJsonContent(json, plan);
     }
 
-    private JsonElement ConvertTypedJson(JsonElement root, ValueConversionPlan plan, Action<JsonConversionDiagnostic>? report)
+    private JsonElement ConvertTypedJson(JsonElement root, ValueConversionPlan plan, JsonConversionContract? conversionContract, Action<JsonConversionDiagnostic>? report)
     {
         if (wellKnownTypeRegistry is null)
             throw Reject(plan, "JSON typed conversion requires a well-known type registry at runtime");
@@ -286,7 +290,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         {
             // Validate a typed copy with the same package-owned contract as hydration. Keep the received
             // JSON for storage: naming, converters and unmatched-member detection never rewrite data.
-            _ = JsonConversionContract.For(targetType).Read(root, targetType, diagnostics.Add);
+            _ = (conversionContract ?? JsonConversionContract.For(targetType)).Read(root, targetType, diagnostics.Add);
         }
         catch (JsonException exception)
         {

@@ -267,6 +267,61 @@ public sealed class EventTriggerStimulusProviderTests
         Assert.Equal(new[] { "Done" }, completion.Selection.ResolveNames());
     }
 
+    [Theory]
+    [InlineData("""{ "OrderTotal":1.00, "text":"Ren\u00e9 <>&", "large":9007199254740993, "explicit":null }""")]
+    [InlineData("""[ 1.00, "Ren\u00e9 <>&", 9007199254740993, null ]""")]
+    [InlineData("\"Ren\\u00e9\"")]
+    public async Task Event_snapshots_and_real_resume_preserve_the_exact_carried_payload(string raw)
+    {
+        var activity = await NewEventActivityAsync(canStartWorkflow: false);
+        JsonElement snapshot;
+        ActivityResumeContext<EventWaitState, EventReceived> context;
+        using (var document = JsonDocument.Parse(raw))
+        {
+            var trigger = new EventReceived(document.RootElement);
+            snapshot = SnapshotEventPayload(trigger);
+            context = new(DirectContext(), new EventWaitState("raw-event"), trigger, "registration-raw", "delivery-raw");
+        }
+
+        Assert.Equal(raw, snapshot.GetRawText());
+        Assert.Equal(raw, context.Trigger.Payload!.Value.GetRawText());
+        var transition = await ((IStatefulActivity<EventResult, EventWaitState, EventReceived>)activity).ResumeAsync(context);
+        var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);
+        Assert.Equal("raw-event", completion.Result.EventName);
+        Assert.Equal(raw, completion.Result.Payload!.Value.GetRawText());
+        if (snapshot.ValueKind == JsonValueKind.Object)
+        {
+            Assert.Equal("1.00", snapshot.GetProperty("OrderTotal").GetRawText());
+            Assert.Equal(9007199254740993L, snapshot.GetProperty("large").GetInt64());
+            Assert.Equal(JsonValueKind.Null, snapshot.GetProperty("explicit").ValueKind);
+            Assert.False(snapshot.TryGetProperty("missing", out _));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Event_snapshots_keep_the_existing_no_payload_and_JSON_null_contract(bool suppliesJsonNull)
+    {
+        var activity = await NewEventActivityAsync(canStartWorkflow: false);
+        using var jsonNull = JsonDocument.Parse("null");
+        var trigger = suppliesJsonNull ? new EventReceived(jsonNull.RootElement) : new EventReceived();
+        Assert.Equal(JsonValueKind.Null, SnapshotEventPayload(trigger).ValueKind);
+        var context = new ActivityResumeContext<EventWaitState, EventReceived>(DirectContext(), new EventWaitState("null-event"),
+            trigger, "registration-null", "delivery-null");
+        Assert.Null(context.Trigger.Payload);
+        var transition = await ((IStatefulActivity<EventResult, EventWaitState, EventReceived>)activity).ResumeAsync(context);
+        Assert.Null(Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition).Result.Payload);
+    }
+
+    private static JsonElement SnapshotEventPayload(EventReceived trigger)
+    {
+        // The public suspension path calls PersistableActivityValue.Snapshot and reads its frozen payload.
+        var suspension = ActivityTransition<int, EventReceived>.Suspend<string>(trigger,
+            [new ActivityTriggerRegistration<string>("continue", "test", "raw-event")]);
+        return Assert.IsAssignableFrom<IStatefulActivitySuspensionTransition<EventReceived>>(suspension).StatePayload;
+    }
+
     /// <summary>
     /// #3107: the engine resumes through the untyped request with the stimulus input as the trigger payload. A Publish
     /// Event without a payload delivers JSON null, and any payload delivers its own shape; both used to fault here.

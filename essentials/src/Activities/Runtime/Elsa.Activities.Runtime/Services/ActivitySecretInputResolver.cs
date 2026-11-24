@@ -1,5 +1,7 @@
 using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Text.Json;
+using System.Reflection;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -65,6 +67,7 @@ public sealed class ActivitySecretInputResolver(
         string workflowExecutionId,
         string activityExecutionId,
         ActivityInputSnapshot snapshot,
+        Type activityType,
         CancellationToken cancellationToken,
         Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings = null)
     {
@@ -75,7 +78,7 @@ public sealed class ActivitySecretInputResolver(
         {
             var value = await ResolveReferenceAsync(pending.Resolver, tenantId, secret.Reference, cancellationToken);
             secretMask.Register(activityExecutionId, secret.Reference.Name, value);
-            values[secret.Key] = ConvertResolvedSecret(secret, value, cancellationToken, warnings);
+            values[secret.Key] = ConvertResolvedSecret(secret, value, activityType, cancellationToken, warnings);
         }
 
         return ActivityActivator.WithValues(snapshot, values);
@@ -145,16 +148,18 @@ public sealed class ActivitySecretInputResolver(
     /// is dropped rather than wrapped, because its message may describe the value it rejected. Publish pins only plans
     /// from text that cannot fail on a string, so only an artifact that skipped publish reaches the failure.
     /// </summary>
-    private ValueEnvelope ConvertResolvedSecret(SecretInput secret, string value, CancellationToken cancellationToken,
+    private ValueEnvelope ConvertResolvedSecret(SecretInput secret, string value, Type activityType, CancellationToken cancellationToken,
         Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings)
     {
         var plan = secret.ConversionPlan
             ?? throw new RuntimeSecretResolutionException(secret.Reference.Name, RuntimeSecretResolutionException.ConversionFailed, isRetryable: false);
         try
         {
+            var member = activityType.GetProperties(BindingFlags.Public | BindingFlags.Instance).FirstOrDefault(property =>
+                ActivityInputPropertyResolver.FindAttribute(property) is { } input && (input.Key ?? property.Name) == secret.Key);
             return valueConversionExecutor.Convert(
                 ValueEnvelope.Inline(plan.SourceType, JsonValueConversion.SerializeToElement(value), secret.Envelope.Policy),
-                plan, diagnostic =>
+                plan, member is null ? null : JsonConversionContract.For(member.PropertyType, member), diagnostic =>
                 {
                     var warning = Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path,
                         diagnostic.TargetType, diagnostic.Converter, $"args.{secret.Key}");

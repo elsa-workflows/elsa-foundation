@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -73,6 +74,50 @@ public sealed class Elsa3VariableStartingValueTests
         { "ObjectDictionary[]", false, """[{"a":1}]""", "Any", CollectionKind.Single, """[{"a":1}]""" },
         { "Acme.Orders.Order, Acme", false, """{"id":1}""", "Any", CollectionKind.Single, """{"id":1}""" }
     };
+
+    [Theory]
+    [InlineData("{id}")]
+    [InlineData("[next]")]
+    [InlineData("[1]")]
+    public void String_backed_variable_defaults_are_not_parsed_as_documents(string text)
+    {
+        var registry = Registry();
+        registry.RegisterType(typeof(Uri), "System.Uri");
+        registry.RegisterType(typeof(StringBackedDefault), typeof(StringBackedDefault).FullName!);
+        foreach (var type in new[] { typeof(Uri), typeof(StringBackedDefault) })
+        {
+            var source = new Elsa3Variable { Id = "v", Name = "v", TypeName = type.FullName!, Value = text };
+            Assert.True(Elsa3VariableMapper.TryMap(registry, ObjectConverter, source, out var variable, out var refusal), refusal?.Message);
+            Assert.Equal(text, variable.Default!.Value!.Value.GetString());
+        }
+    }
+
+    [Fact]
+    public void Structured_variable_defaults_still_parse_document_text_and_refuse_invalid_numbers()
+    {
+        var registry = Registry();
+        registry.RegisterType(typeof(StructuredDefault), typeof(StructuredDefault).FullName!);
+        var source = new Elsa3Variable { Id = "v", Name = "v", TypeName = typeof(StructuredDefault).FullName!, Value = "{\"Count\":5}" };
+        Assert.True(Elsa3VariableMapper.TryMap(registry, ObjectConverter, source, out var variable, out var refusal), refusal?.Message);
+        Assert.Equal(5, variable.Default!.Value!.Value.GetProperty("count").GetInt32());
+        source.Value = "{\"count\":\"5\"}";
+        Assert.False(Elsa3VariableMapper.TryMap(registry, ObjectConverter, source, out _, out _));
+        source.TypeName = "Int32";
+        foreach (var invalid in new[] { "5.0", "\"5\"", "[1]" })
+        {
+            source.Value = invalid;
+            Assert.False(Elsa3VariableMapper.TryMap(registry, ObjectConverter, source, out _, out _));
+        }
+    }
+
+    private sealed class StructuredDefault { public int Count { get; set; } }
+    [JsonConverter(typeof(StringBackedDefaultConverter))]
+    private sealed record StringBackedDefault(string Text);
+    private sealed class StringBackedDefaultConverter : JsonConverter<StringBackedDefault>
+    {
+        public override StringBackedDefault Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => new(reader.GetString()!);
+        public override void Write(Utf8JsonWriter writer, StringBackedDefault value, JsonSerializerOptions options) => writer.WriteStringValue(value.Text);
+    }
 
     [Theory]
     [MemberData(nameof(Values))]
