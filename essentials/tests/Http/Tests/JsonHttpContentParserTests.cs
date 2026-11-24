@@ -12,6 +12,28 @@ namespace Elsa.Http.Tests;
 
 public sealed class JsonHttpContentParserTests
 {
+    [Theory]
+    [InlineData("{ \"UpperKey\":\"Ren\\u00e9<+>\", \"n\":1.0, \"wide\":12345678901234567890123456789012345, \"x\":null }")]
+    [InlineData("[ 1e0, null, { \"CaseKey\":\"\\u0061\" } ]")]
+    [InlineData("null")]
+    [InlineData("\"Ren\\u00e9\"")]
+    public async Task Any_JSON_response_keeps_its_tokens_through_the_registered_outgoing_body_writer(string raw)
+    {
+        var services = new ServiceCollection();
+        new HttpFeature(new ShellFeatureContext(new ShellSettings { Id = new ShellId("json-forwarding-tests") }, [])).ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        var parser = provider.GetServices<IHttpContentParser>().Single(value => value.Priority == 0 && value.GetSupportsContentType(Context(raw, typeof(object))));
+        var factory = provider.GetServices<IHttpContentFactory>().Single(value => value.SupportedContentTypes.Contains("application/json"));
+
+        var value = await parser.ReadAsync(Context(raw, typeof(object)));
+
+        Assert.Equal(raw, Assert.IsType<JsonElement>(value).GetRawText());
+        Assert.Equal(raw, JsonConversionContract.SerializeToElement(value).GetRawText());
+        using var forwarded = factory.CreateHttpContent(value, "application/json");
+        Assert.Equal(raw, await forwarded.ReadAsStringAsync());
+        Assert.Equal("application/json", forwarded.Headers.ContentType!.MediaType);
+    }
+
     [Fact]
     public async Task Transport_JSON_is_parsed_before_strict_scalar_conversion()
     {

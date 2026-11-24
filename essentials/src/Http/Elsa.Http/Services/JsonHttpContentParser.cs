@@ -28,9 +28,10 @@ internal sealed class JsonHttpContentParser : IHttpContentParser
         if (returnType is null || returnType == typeof(string))
             return json;
 
-        // Dynamic (Any) payload: the canonical runtime representation is a mutable JsonNode.
-        if (returnType == typeof(object) || typeof(JsonNode).IsAssignableFrom(returnType)) return JsonNode.Parse(json)!;
+        // Any carries received JSON unchanged. A mutable DOM is an explicit requested conversion.
+        if (typeof(JsonNode).IsAssignableFrom(returnType)) return JsonNode.Parse(json)!;
         using var document = JsonDocument.Parse(json);
+        if (returnType == typeof(object)) return document.RootElement.Clone();
         return JsonConversionContract.For(returnType).Read(document.RootElement, returnType, context.ReportJsonDiagnostic)!;
     }
 }
