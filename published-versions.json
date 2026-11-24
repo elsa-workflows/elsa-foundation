@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "1ad38cb01e7c05f1046e0bdab35abc9a63f70cba",
+  "last_publish_commit": "e601bb4bec80037025c6770e1373f6c697b4d52f",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -164,8 +164,8 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
-      "version": "4.0.18-preview",
-      "commit": "534ae0284a617bd2214e6d8625ab1f7ae987f105"
+      "version": "4.0.19-preview",
+      "commit": "e601bb4bec80037025c6770e1373f6c697b4d52f"
     },
     {
       "package_id": "Elsa.ActorFoundation.Contracts",
@@ -1194,13 +1194,13 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Activities",
-      "version": "4.0.0-preview",
-      "commit": "7ba8f6ebc8e60ce97ce45f5e35229341c9eb8db8"
+      "version": "4.0.1-preview",
+      "commit": "e601bb4bec80037025c6770e1373f6c697b4d52f"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Model",
-      "version": "4.0.1-preview",
-      "commit": "1ad38cb01e7c05f1046e0bdab35abc9a63f70cba"
+      "version": "4.0.2-preview",
+      "commit": "e601bb4bec80037025c6770e1373f6c697b4d52f"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
