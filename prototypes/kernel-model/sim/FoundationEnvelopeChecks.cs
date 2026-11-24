@@ -11,7 +11,7 @@ internal static class FoundationEnvelopeChecks
     {
         const long now = 1_701_300_000_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("turn-cap"), "turn-cap");
         Contract.IActorReads reads = new ActorList(store, 2);
         var model = new Probe();
@@ -113,7 +113,7 @@ internal static class FoundationEnvelopeChecks
         var hugeType = new string('t', 16_800_000);
         var hugeNamedActor = new TerminalProbe(maxState, growth, fullHeader, hugeType);
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("terminal-reserve"), "terminal-reserve",
             (bound, kind) => bound == scope && kind == Contract.Kinds.Terminate);
         Contract.IActorReads reads = new ActorList(store, 16);

@@ -15,7 +15,7 @@ internal static class ContractStatechartChecks
         const long startAt = 1_700_600_000_000;
         var now = startAt;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         var ingress = new OrdinaryIngress(store);
         Contract.IActorReads reader = new ActorList(store, 32);
         var edge = new InMemoryIngress(store, new Requests("chart-runtime"), "chart-runtime",
@@ -35,6 +35,8 @@ internal static class ContractStatechartChecks
             return (await new DurableHost([worker]).ActivateAsync(0))!;
         }
 
+        var foundationAssembly = typeof(Contract.ActorRef).Assembly.GetName().Name;
+        var modelAssembly = typeof(Models.ITurn).Assembly.GetName().Name;
         var activityAssembly = typeof(Kernel.Native.Delay).Assembly;
         var activityReferences = activityAssembly.GetReferencedAssemblies().Select(assembly => assembly.Name).ToArray();
         check(typeof(Kernel.Native.WriteLine).Assembly == activityAssembly &&
@@ -42,13 +44,13 @@ internal static class ContractStatechartChecks
             typeof(Kernel.Native.SendHttpRequest).Assembly == activityAssembly &&
             typeof(Kernel.Native.SendEmail).Assembly == activityAssembly &&
             typeof(Kernel.Native.ActivityContext).GetProperty(nameof(Kernel.Native.ActivityContext.Instance))?.PropertyType == typeof(Contract.ActorRef) &&
-            activityReferences.Contains("Kernel.Foundation.Contracts") &&
-            activityReferences.All(name => name == "Kernel.Foundation.Contracts" || name?.StartsWith("System.", StringComparison.Ordinal) == true),
+            activityReferences.Contains(foundationAssembly) &&
+            activityReferences.All(name => name == foundationAssembly || name?.StartsWith("System.", StringComparison.Ordinal) == true),
             "the compiled Native activities depend only on the foundation contract and framework and receive an opaque ref");
 
         var modelReferences = typeof(StatechartModel).Assembly.GetReferencedAssemblies().Select(assembly => assembly.Name).ToArray();
-        check(modelReferences.Contains("Kernel.Model.Contracts") &&
-            modelReferences.All(name => name is "Kernel.Foundation.Contracts" or "Kernel.Model.Contracts" or "netstandard" ||
+        check(modelReferences.Contains(modelAssembly) &&
+            modelReferences.All(name => name == foundationAssembly || name == modelAssembly || name == "netstandard" ||
                 name?.StartsWith("System.", StringComparison.Ordinal) == true),
             "the compiled statechart model depends only on the public contracts and framework");
 
@@ -100,7 +102,7 @@ internal static class ContractStatechartChecks
         check(inbox.Items is [{ Kind: "operator-timer", Handle.Length: > 0, Due: var timerDue }] && timerDue > now,
             "the runtime sees the opaque handle for a pending timer through the public inbox read");
 
-        var cross = await runtime.TerminateAsync(new Contract.BoundScope("other"), "foreign-terminate", selected);
+        var cross = await runtime.TerminateAsync(ContractScopes.Bind("other"), "foreign-terminate", selected);
         var own = await runtime.TerminateAsync(scope, "terminate", selected);
         await Pump(next);
         check(cross.Outcome == Contract.AdmissionOutcome.Refused && own.Outcome == Contract.AdmissionOutcome.Accepted &&

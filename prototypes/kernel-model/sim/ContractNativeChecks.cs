@@ -13,8 +13,10 @@ internal static class ContractNativeChecks
     {
         var direct = typeof(NativeExecutionModel).Assembly.GetReferencedAssemblies().Select(assembly => assembly.Name).ToArray();
         var graph = typeof(Kernel.Graph.Models.FlowchartConnection).Assembly.GetReferencedAssemblies().Select(assembly => assembly.Name);
-        check(direct.Contains("Kernel.Foundation.Contracts") && direct.Contains("Kernel.Model.Contracts") &&
-            direct.All(name => name is "Kernel.Foundation.Contracts" or "Kernel.Model.Contracts" or "Kernel.Graph" or "Kernel.Native.Activities" ||
+        var foundationAssembly = typeof(Contract.ActorRef).Assembly.GetName().Name;
+        var modelAssembly = typeof(Models.ITurn).Assembly.GetName().Name;
+        check(direct.Contains(foundationAssembly) && direct.Contains(modelAssembly) &&
+            direct.All(name => name == foundationAssembly || name == modelAssembly || name is "Kernel.Graph" or "Kernel.Native.Activities" ||
                 name?.StartsWith("System.", StringComparison.Ordinal) == true) &&
             graph.All(name => name?.StartsWith("System.", StringComparison.Ordinal) == true),
             "the compiled Native execution model uses the public contracts and its layer-three libraries");
@@ -34,7 +36,7 @@ internal static class ContractNativeChecks
         const long due = initial + 100;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("native-contract"), "native-contract");
         Contract.IActorReads reads = new ActorList(store, 32);
         var runtime = new PublicRuntime(ingress, reads);
@@ -110,7 +112,7 @@ internal static class ContractNativeChecks
         const string node = "native-receipts";
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         var requests = new Requests(node);
         Contract.IIngress ingress = new InMemoryIngress(store, requests, node,
             (bound, kind) => bound == scope && kind == Contract.Kinds.Terminate);
@@ -180,7 +182,7 @@ internal static class ContractNativeChecks
         {
             ParkedRetentionWindow = TimeSpan.FromMinutes(1), IngressDeduplicationWindow = TimeSpan.FromMilliseconds(100)
         };
-        var scope = new Contract.BoundScope("native-retry-all");
+        var scope = ContractScopes.Bind("native-retry-all");
         Node Branch(string name) => Wf.Sequence("sequence-" + name, Wf.Delay("delay-" + name, 100), Wf.Set("set-" + name, name, true));
         var model = new NativeExecutionModel(new WorkflowRegistry().Add(Wf.Workflow("timers", Wf.Parallel("pair", null, Branch("one"), Branch("two")))));
         var faultAt = new HashSet<string>(["timers", "suppress-trip", "retry-all-trip"], StringComparer.Ordinal);
@@ -304,7 +306,7 @@ internal static class ContractNativeChecks
         const long initial = 1_701_800_015_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMinutes(1) };
-        var scope = new Contract.BoundScope("native-recovery");
+        var scope = ContractScopes.Bind("native-recovery");
         var registry = new WorkflowRegistry().Add(Wf.Workflow("timer", Wf.Sequence("sequence",
             Wf.Delay("delay", 100), Wf.Set("finished-delay", "result", "continued"))));
         var model = new NativeExecutionModel(registry);
@@ -375,7 +377,7 @@ internal static class ContractNativeChecks
         {
             ParkedRetentionWindow = TimeSpan.FromMinutes(1), IngressDeduplicationWindow = TimeSpan.FromMilliseconds(100)
         };
-        var scope = new Contract.BoundScope("native-rearm");
+        var scope = ContractScopes.Bind("native-rearm");
         var registry = new WorkflowRegistry().Add(Wf.Workflow("timer", Wf.Sequence("sequence",
             Wf.Delay("delay", 100), Wf.Set("finished-delay", "result", "continued"))));
         var model = new NativeExecutionModel(registry);
@@ -726,7 +728,7 @@ internal static class ContractNativeChecks
         const long initial = 1_701_800_035_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("native-wait-recovery");
+        var scope = ContractScopes.Bind("native-wait-recovery");
         var registry = new WorkflowRegistry().Add(Wf.Workflow("waiting", Wf.Sequence("sequence",
             Wf.Event("wait", "approval"), Wf.Set("continue", "outcome", "matched"))));
         var model = new NativeExecutionModel(registry);
@@ -820,7 +822,7 @@ internal static class ContractNativeChecks
     {
         const long now = 1_701_800_000_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("native-job-restore"), "native-job-restore");
         Contract.IActorReads reads = new ActorList(store, 16);
         var runtime = new PublicRuntime(ingress, reads);

@@ -30,7 +30,7 @@ internal static class PostgresRootOperatorChecks
             await admission.InstallAsync(ct);
         }
         var journal = new PostgresRootReads(store, await admission.OpenJournalCursorAsync(ct), 8);
-        var blue = FixedTenantScope.Bind("blue");
+        var blue = EmbeddedTenant.Bind("blue");
         var basic = new PostgresPreviewFoundation(admission, journal, WorkflowActor.WorkflowActor.ActorType);
         var operatorApi = new PostgresPreviewFoundation(admission, journal, WorkflowActor.WorkflowActor.ActorType,
             (scope, kind) => ReferenceEquals(scope, blue) && kind is Contract.Kinds.Suspend or Contract.Kinds.Resume);

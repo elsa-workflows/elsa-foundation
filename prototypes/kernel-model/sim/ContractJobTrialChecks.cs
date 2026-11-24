@@ -336,7 +336,7 @@ internal static partial class ContractActorWorkload
         private readonly WithdrawalActor _type;
         private readonly int _jobs;
         internal ContractWorkload.InMemoryDriver Driver { get; }
-        internal Contract.BoundScope Scope { get; } = new("job-trial");
+        internal Contract.BoundScope Scope { get; } = ContractScopes.Bind("job-trial");
         internal Contract.ActorRef Job { get; private set; }
         internal Contract.ActorRef ControlTarget { get; private set; }
         internal List<WorkAttempt> Attempts => _type.Attempts;

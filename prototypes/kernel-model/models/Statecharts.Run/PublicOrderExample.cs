@@ -24,7 +24,7 @@ internal static class PublicOrderExample
         const long start = 1_705_000_000_000;
         var now = start;
         var store = new InMemoryStore(1, () => now);
-        var scope = FixedTenantScope.Bind("orders");
+        var scope = EmbeddedTenant.Bind("orders");
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var token = budget.Token;
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("orders-ingress"), "orders-ingress");

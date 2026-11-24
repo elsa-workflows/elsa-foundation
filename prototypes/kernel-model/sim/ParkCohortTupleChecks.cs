@@ -23,7 +23,7 @@ internal static class ParkCohortTupleChecks
         var now = start;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe { HoldHere = false };
-        var scope = new Contract.BoundScope("interrupted-suffix");
+        var scope = ContractScopes.Bind("interrupted-suffix");
         var ingress = new InMemoryIngress(store, new Requests("interrupted-suffix"), "interrupted-suffix",
             (_, kind) => kind == Contract.Kinds.Recover);
         var reads = new ActorList(store, 5);
@@ -151,7 +151,7 @@ internal static class ParkCohortTupleChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe();
-        var scope = new Contract.BoundScope("tied-cohort");
+        var scope = ContractScopes.Bind("tied-cohort");
         var ingress = new InMemoryIngress(store, new Requests("tied-cohort"), "tied-cohort", (_, kind) => kind == Contract.Kinds.Recover);
         var reads = new ActorList(store, 5);
         var flights = new List<InboxKey[]>();
@@ -236,7 +236,7 @@ internal static class ParkCohortTupleChecks
         const int maxAttempts = 3;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe { HoldHere = false };
-        var scope = new Contract.BoundScope("ordinary-tied-poison");
+        var scope = ContractScopes.Bind("ordinary-tied-poison");
         var ingress = new InMemoryIngress(store, new Requests("ordinary-tied-poison"), "ordinary-tied-poison");
         var scheduler = new HeldScheduler();
         var trials = new List<InboxKey[]>();

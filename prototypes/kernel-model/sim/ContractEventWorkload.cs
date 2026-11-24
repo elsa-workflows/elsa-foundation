@@ -51,7 +51,7 @@ internal static class ContractEventWorkload
     private sealed class Schedule(int seed, int partitions, Flaw flaws, List<string> trace)
     {
         private readonly Random _random = new(seed);
-        private readonly Contract.BoundScope _scope = new("events");
+        private readonly Contract.BoundScope _scope = ContractScopes.Bind("events");
         private readonly ContractWorkload.InMemoryDriver _driver = new(partitions, flaws, new PublicWorkflow([
             new Model<SequenceState>("sequence", SequenceStart, SequenceTurn),
             new Model<WaitCheckpoint>("waiter", start => new() { Input = Json.Read<WaitInput>(start.Input!) }, WaiterTurn, WaiterRestore),

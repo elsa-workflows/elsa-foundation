@@ -8,37 +8,37 @@
         "resolved": "3.9.0",
         "contentHash": "J6vB61zKwMSfxbkN+/amGvj1qVMDKrKjV3kmoOWttMcv8JJScLDCFh89FyL3f2lDUyJrnfgZCR6/KX+07e99eg=="
       },
+      "elsa.actorfoundation.contracts": {
+        "type": "Project"
+      },
+      "elsa.actorfoundation.model.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "kernel.durable": {
         "type": "Project",
         "dependencies": {
           "Kernel.Runtime": "[1.0.0, )"
         }
       },
-      "kernel.foundation.contracts": {
-        "type": "Project"
-      },
       "kernel.graph": {
         "type": "Project"
-      },
-      "kernel.model.contracts": {
-        "type": "Project",
-        "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )"
-        }
       },
       "kernel.native": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
           "Kernel.Graph": "[1.0.0, )",
-          "Kernel.Model.Contracts": "[1.0.0, )",
           "Kernel.Native.Activities": "[1.0.0, )"
         }
       },
       "kernel.native.activities": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
       "kernel.native.legacy": {
@@ -54,8 +54,8 @@
       "kernel.workflows": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Durable": "[1.0.0, )",
-          "Kernel.Model.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
+          "Kernel.Durable": "[1.0.0, )"
         }
       }
     }

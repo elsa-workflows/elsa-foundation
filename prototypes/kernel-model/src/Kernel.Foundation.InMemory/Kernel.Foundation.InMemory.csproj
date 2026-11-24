@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Kernel.Durable/Kernel.Durable.csproj" />
-    <ProjectReference Include="../Kernel.Foundation.Contracts/Kernel.Foundation.Contracts.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
     <InternalsVisibleTo Include="Kernel.Foundation.Postgres" />
     <InternalsVisibleTo Include="Kernel.Native.Run" />
     <InternalsVisibleTo Include="Kernel.Sim" />

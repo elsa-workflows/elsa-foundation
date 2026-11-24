@@ -17,7 +17,7 @@ internal static class MigrationPlanActorChecks
         const long initial = 1_701_800_000_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         var key = RandomNumberGenerator.GetBytes(32);
         var authority = new MigrationPlanAuthority(key);
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("real-plan"), "real-plan",
@@ -271,7 +271,7 @@ internal static class MigrationPlanActorChecks
         const long parkWindow = 1_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMilliseconds(parkWindow) };
-        var scope = new Contract.BoundScope("plan-park");
+        var scope = ContractScopes.Bind("plan-park");
         var authority = new MigrationPlanAuthority(RandomNumberGenerator.GetBytes(32));
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("plan-park"), "plan-park",
             (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate or Contract.Kinds.Migrate or Contract.Kinds.Discard);

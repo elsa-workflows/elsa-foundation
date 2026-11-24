@@ -13,8 +13,8 @@ internal static class WorkflowRunHistoryChecks
     {
         const long stamp = 1_792_000_000_000;
         var now = stamp;
-        var blue = new Contract.BoundScope("history-blue");
-        var red = new Contract.BoundScope("history-red");
+        var blue = ContractScopes.Bind("history-blue");
+        var red = ContractScopes.Bind("history-red");
         var store = new InMemoryStore(1, () => now);
         var ingress = new InMemoryIngress(store, new Requests("run-history"), "run-history", (_, kind) => kind == Contract.Kinds.Delete);
         Contract.IActorReads actors = new ActorList(store, 2);

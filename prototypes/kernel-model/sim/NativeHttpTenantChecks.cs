@@ -20,8 +20,8 @@ internal static partial class NativeHttpEdgeChecks
         const string ownerNode = "tenant-owner";
         var scopes = new Dictionary<string, Contract.BoundScope>(StringComparer.OrdinalIgnoreCase)
         {
-            ["blue.fixture"] = new("blue"),
-            ["red.fixture"] = new("red")
+            ["blue.fixture"] = ContractScopes.Bind("blue"),
+            ["red.fixture"] = ContractScopes.Bind("red")
         };
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var token = deadline.Token;

@@ -34,7 +34,7 @@ internal static class PostgresHttpOwnerLoss
         var admission = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
         await store.CreateAsync(1);
         await admission.InstallAsync(stop);
-        var scope = FixedTenantScope.Bind(Tenant);
+        var scope = EmbeddedTenant.Bind(Tenant);
         var receiver = new PostgresDirectRequests(admission, store, Receiver);
         var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType, directRequests: receiver);

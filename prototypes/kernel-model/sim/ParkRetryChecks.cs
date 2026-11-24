@@ -24,7 +24,7 @@ internal static class ParkRetryChecks
         var fixture = new Fixture { EventWaits = [name], EventWaitName = new string('w', limit) };
         var (store, _, owner) = await fixture.ActivateAsync();
         await using var activation = owner;
-        var scope = new Contract.BoundScope(new string('t', 64));
+        var scope = ContractScopes.Bind(new string('t', 64));
         var target = await fixture.StartRunningAsync(owner, scope, name, keyed: true);
         var publication = await fixture.Publish(scope, name, new string('e', limit), "boundary event");
         await fixture.Finish(owner);
@@ -53,7 +53,7 @@ internal static class ParkRetryChecks
         var fixture = new Fixture();
         var (store, _, owner) = await fixture.ActivateAsync();
         await using var activation = owner;
-        var scope = new Contract.BoundScope("retry-park-selection");
+        var scope = ContractScopes.Bind("retry-park-selection");
         var a = await fixture.StartRunningAsync(owner, scope, "first", keyed: true);
         var b = await fixture.StartRunningAsync(owner, scope, "second", keyed: true);
         await fixture.Submit(scope, a, "park-first", "fault");
@@ -101,7 +101,7 @@ internal static class ParkRetryChecks
         var fixture = new Fixture { EventWaits = correlations };
         var (store, worker, owner) = await fixture.ActivateAsync();
         await using var activation = owner;
-        var scope = new Contract.BoundScope("retry-legacy");
+        var scope = ContractScopes.Bind("retry-legacy");
         var target = await fixture.StartRunningAsync(owner, scope, "wait");
         var keys = new List<InboxKey>();
         foreach (var correlation in correlations)
@@ -375,7 +375,7 @@ internal static class ParkRetryChecks
 
         internal async Task<Parked?> StartParkedAsync(IScopeActivation owner, string tenant, string name)
         {
-            var scope = new Contract.BoundScope(tenant);
+            var scope = ContractScopes.Bind(tenant);
             var target = await StartRunningAsync(owner, scope, name);
             return await ParkAsync(owner, scope, target, "park-" + name);
         }

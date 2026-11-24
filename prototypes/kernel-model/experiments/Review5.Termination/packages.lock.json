@@ -2,19 +2,19 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
+      "elsa.actorfoundation.contracts": {
+        "type": "Project"
+      },
+      "elsa.actorfoundation.model.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "kernel.durable": {
         "type": "Project",
         "dependencies": {
           "Kernel.Runtime": "[1.0.0, )"
-        }
-      },
-      "kernel.foundation.contracts": {
-        "type": "Project"
-      },
-      "kernel.model.contracts": {
-        "type": "Project",
-        "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )"
         }
       },
       "kernel.runtime": {
@@ -23,8 +23,8 @@
       "kernel.workflows": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Durable": "[1.0.0, )",
-          "Kernel.Model.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
+          "Kernel.Durable": "[1.0.0, )"
         }
       }
     }

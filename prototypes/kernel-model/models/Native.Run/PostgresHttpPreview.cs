@@ -44,7 +44,7 @@ internal static class PostgresHttpPreview
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         await store.CreateAsync(1);
         await admission.InstallAsync(stop);
-        var tenant = FixedTenantScope.Bind("approval");
+        var tenant = EmbeddedTenant.Bind("approval");
         var receiver = new PostgresDirectRequests(admission, store, Receiver);
         var preview = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType, directRequests: receiver);

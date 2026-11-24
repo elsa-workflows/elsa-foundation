@@ -39,7 +39,7 @@ internal static class PostgresValueVolume
         await admission.InstallAsync(stop);
         await store.EnableRootValuesAsync(stop);
 
-        var scope = FixedTenantScope.Bind("value-volume");
+        var scope = EmbeddedTenant.Bind("value-volume");
         var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), turns + 2), ActorType);
         var (roots, partitions) = await store.BindWorkerPartitionAsync(0, stop);
         var actor = new ActorAdapter(new PostgresPreviewHosting.RootHeaders(roots), new VolumeActor(byReference, changes, pad, turns),

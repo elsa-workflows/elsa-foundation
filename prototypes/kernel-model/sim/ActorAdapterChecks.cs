@@ -38,7 +38,7 @@ internal static class ActorAdapterChecks
         var first = await Owner("typed-owner");
         await Pump(first);
         var reader = new ActorList(store, 10);
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         var rootView = await reader.GetAsync(scope, root);
         check(rootView is { Header: { TypeData: "typed", Labels.Count: 1, Status: Contract.ActorStatus.Running } } &&
             rootView.Header.Ref == root && rootView.Header.Labels["seed"] == "seed",
@@ -131,7 +131,7 @@ internal static class ActorAdapterChecks
         var requests = new Requests("public-event");
         var transport = new LocalReplies(requests);
         var probe = new Probe();
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         var bound = new EventIngress(store, requests, "receiving-node");
         var ambient = new object();
         var root = Arm(0, "local", "acme");

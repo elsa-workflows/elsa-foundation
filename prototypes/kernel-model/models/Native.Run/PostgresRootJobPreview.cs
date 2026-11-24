@@ -45,7 +45,7 @@ internal static class PostgresRootJobPreview
         }
         var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType);
-        var scope = FixedTenantScope.Bind("jobs");
+        var scope = EmbeddedTenant.Bind("jobs");
         var registry = new WorkflowRegistry().Add(Wf.Workflow(Definition, Wf.Sequence("main",
             Wf.Node<ReturnActor>(ActivityName), Wf.Node<ReturnActor>(Successor), Wf.Set("advance", "advanced", true)), ("advanced", false)))
             .Add(DirectApprovalWorkflow.Build());

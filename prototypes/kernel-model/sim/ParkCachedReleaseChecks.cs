@@ -46,7 +46,7 @@ internal static class ParkCachedReleaseChecks
             if (!landed && failCatchup && batch.Turns is [{ FoundationCatchUpStep: not null }])
                 throw new StoreException(Failure.Definite, "The event catch-up step could not commit.");
         });
-        var scope = new Contract.BoundScope("cached-release");
+        var scope = ContractScopes.Bind("cached-release");
         var ingress = new InMemoryIngress(store, new Requests("cached-release"), "cached-release",
             (_, kind) => kind == Contract.Kinds.Recover);
         var reads = new ActorList(store, 8);

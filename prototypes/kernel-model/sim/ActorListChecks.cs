@@ -35,7 +35,7 @@ internal static class ActorListChecks
         Add("acme", "at-end-bound", "finish");
         await Pump(firstOwner);
 
-        var scope = new Contract.BoundScope("acme");
+        var scope = ContractScopes.Bind("acme");
         var reader = new ActorList(store, 2);
         var labels = new Dictionary<string, string> { ["version"] = "1", ["definition"] = "invoice" };
         var query = new Contract.ActorQuery("list", Contract.ActorStatus.Finished, labels, stamp + 1, Parked: false);
@@ -76,7 +76,7 @@ internal static class ActorListChecks
               combined.SequenceEqual(started.Order(StringComparer.Ordinal)),
             "three pages visit tied results exactly once after owner replacement and label reordering");
 
-        var wrongTenant = new Contract.BoundScope("other");
+        var wrongTenant = ContractScopes.Bind("other");
         check(await Refused(wrongTenant, query, first.Next) && await Refused(scope, query with { Parked = true }, first.Next) &&
             await Refused(scope, query, new Contract.PageToken("journal-opaque")),
             "list continuations reject another tenant, altered filters and a different read kind");

@@ -19,8 +19,8 @@ internal static class EventByteBudgetChecks
         var now = start;
         var tag = authored ? "turn" : "outside";
         var store = new InMemoryStore(1, () => now);
-        var tenant = new Contract.BoundScope("wide-events");
-        var neighbour = new Contract.BoundScope("peer");
+        var tenant = ContractScopes.Bind("wide-events");
+        var neighbour = ContractScopes.Bind("peer");
         var requests = new Requests("event-byte-budget");
         var ingress = new InMemoryIngress(store, requests, "event-byte-budget");
         var events = new EventIngress(store, requests, "event-byte-budget");
@@ -101,7 +101,7 @@ internal static class EventByteBudgetChecks
         const long start = 1_702_702_001_000;
         var now = start;
         var store = new InMemoryStore(1, () => now);
-        var tenant = new Contract.BoundScope("wide-meet");
+        var tenant = ContractScopes.Bind("wide-meet");
         var requests = new Requests("meet-byte-budget");
         var ingress = new InMemoryIngress(store, requests, "meet-byte-budget", (_, kind) => kind == Contract.Kinds.Recover);
         var events = new EventIngress(store, requests, "meet-byte-budget");

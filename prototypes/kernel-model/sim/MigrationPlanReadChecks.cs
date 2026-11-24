@@ -15,7 +15,7 @@ internal static class MigrationPlanReadChecks
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var stop = timeout.Token;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("migration");
+        var scope = ContractScopes.Bind("migration");
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("migration-plan"), "migration-plan");
         Contract.IActorReads reads = new ActorList(store, 2);
         var type = new JournalActor();
@@ -115,7 +115,7 @@ internal static class MigrationPlanReadChecks
             afterRetry.Results.All(pair => final.Results[pair.Key] == pair.Value) && afterRetry.Results.Count == final.Results.Count,
             "A retry reads the same bookmark and rebuilds the complete view.");
 
-        var foreign = new MigrationPlanOutcomes(reads, new Contract.BoundScope("other"), plan);
+        var foreign = new MigrationPlanOutcomes(reads, ContractScopes.Bind("other"), plan);
         Require(await ProjectAsync(foreign) == 0 && foreign.Read().Results.Count == 0 && !foreign.Read().Closed,
             "The same opaque plan reference has no projection in another tenant.");
 

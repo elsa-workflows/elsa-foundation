@@ -16,7 +16,7 @@ internal static class MetadataEnvelopeChecks
         var fullEvent = new string('<', eventBytes);
         var model = new Probe(fullEvent);
         var store = new InMemoryStore(1, () => now) { ObserveLifecycles = true };
-        var scope = new Contract.BoundScope("metadata");
+        var scope = ContractScopes.Bind("metadata");
         var worker = new Worker("metadata", 0, store, new ActorAdapter(store, model),
             new WorkerOptions { Monotonic = () => 0, Lifecycle = store.Lifecycle });
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);

@@ -65,8 +65,8 @@ Everything below is **proposed and unverified**.
   kernel's Elsa hosting adapter package. That adapter reads the scope ADR 0097's binder bound with
   `PersistenceAccessContext.Scoped(scope)` in the request's DI scope, checks the tenant-id grammar below, and issues the
   `BoundScope`. The contracts package references no Elsa persistence package; only the adapter references both. The
-  internal constructor is also visible (`InternalsVisibleTo`) to the store conformance and simulation assemblies. A
-  standalone kernel host without Elsa uses the kernel's own fixed-tenant issuer, which binds one configured,
+  internal constructor is also visible (`InternalsVisibleTo`) to non-packable test support for store conformance and
+  simulation. The Embedded hosting adapter binds one configured,
   grammar-checked tenant id for the process, the kernel's equivalent of ADR 0097 (g)'s fixed-tenant scope source. A
   tenant named in a payload, a header or a domain object is verified against the bound scope and never selects it; a
   mismatch is refused (403) without naming the other tenant (ADR 0097 (a), (c)). No bound scope means refusal; the

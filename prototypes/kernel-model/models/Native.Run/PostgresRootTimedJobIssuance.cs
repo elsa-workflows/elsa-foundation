@@ -49,7 +49,7 @@ internal static class PostgresRootTimedJobIssuance
             await roots.InstallAsync(stop);
             var api = new PostgresPreviewFoundation(roots, new(store, await roots.OpenJournalCursorAsync(stop), 16),
                 WorkflowActor.WorkflowActor.ActorType);
-            var scope = FixedTenantScope.Bind(Tenant);
+            var scope = EmbeddedTenant.Bind(Tenant);
             var receipt = await new WorkflowRuntime(api, api).StartAsync(scope, "issue", NativeExecutionModel.Start(Definition), cancellationToken: stop);
             var actor = receipt is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } reference }
                 ? reference : throw new InvalidOperationException("The public Native workflow was not admitted.");

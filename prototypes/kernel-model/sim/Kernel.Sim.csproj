@@ -6,6 +6,10 @@
     <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../../essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
+    <Using Include="Elsa.ActorFoundation.TestSupport" />
+  </ItemGroup>
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Compile Include="../models/Native.Run/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
     <ProjectReference Include="../src/Kernel.Workflows/Kernel.Workflows.csproj" />

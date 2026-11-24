@@ -33,8 +33,8 @@ internal static class HostDrainChecks
         var requests = new Requests("drain");
         var ingress = new InMemoryIngress(store, requests, "owner");
         var reads = new ActorList(store, 10);
-        var blue = new Contract.BoundScope("blue");
-        var green = new Contract.BoundScope("green");
+        var blue = ContractScopes.Bind("blue");
+        var green = ContractScopes.Bind("green");
 
         await using var owner = Node("owner");
         await Start(owner, backing: ownerStore);

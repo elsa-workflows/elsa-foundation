@@ -5,6 +5,6 @@
     <InternalsVisibleTo Include="Kernel.Native.Run" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Kernel.Model.Contracts/Kernel.Model.Contracts.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
   </ItemGroup>
 </Project>

@@ -15,7 +15,7 @@ internal static class ParkOperatorDemo
             new WorkerOptions { MaxAttempts = 1, MaxBatch = 1, Monotonic = () => now });
         await using var owner = await new DurableHost([worker]).ActivateAsync(0)
             ?? throw new InvalidOperationException("Could not activate the demo partition.");
-        var scope = new Contract.BoundScope("approvals");
+        var scope = ContractScopes.Bind("approvals");
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
             (requested, kind) => requested.Tenant == scope.Tenant && kind is Contract.Kinds.Recover or Contract.Kinds.Discard);
         Contract.IActorReads reads = new ActorList(store, 1);
@@ -47,7 +47,7 @@ internal static class ParkOperatorDemo
         var second = await reads.InboxAsync(scope, reference, first.Next);
         Require(second.Items is [{ Id: "arrived", State: Contract.DeliveryState.Arrived }] && second.Next is null,
             "The next page shows the arrival during Park and excludes settled earlier deliveries.");
-        var foreign = new Contract.BoundScope("other-tenant");
+        var foreign = ContractScopes.Bind("other-tenant");
         Require((await reads.InboxAsync(foreign, reference)).Items.Count == 0 &&
             (await reads.ListAsync(foreign, new(Parked: true))).Items.Count == 0,
             "Park and kept deliveries are scoped to the actor's tenant.");

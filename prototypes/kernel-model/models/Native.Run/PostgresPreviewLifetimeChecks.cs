@@ -27,7 +27,7 @@ internal static class PostgresPreviewLifetimeChecks
         var store = new EfStore(Open, postgres: true);
         await store.CreateAsync(1);
         await store.InstallPreviewRootSchemaAsync(token);
-        var scope = FixedTenantScope.Bind("host-lifetime");
+        var scope = EmbeddedTenant.Bind("host-lifetime");
         var ingress = await store.OpenPreviewRootIngressAsync(WaitingActor.Name, TimeSpan.FromHours(1), token);
         var reads = await store.OpenPreviewRootReadsAsync(cancellationToken: token);
         var start = await ingress.SendAsync(scope, new Contract.Target.Start(new(WaitingActor.Name, "fixture")),

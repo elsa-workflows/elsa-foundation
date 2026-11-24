@@ -19,8 +19,8 @@ internal static class MigrationPlanRunnerChecks
         const string target = "target";
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("acme");
-        var other = new Contract.BoundScope("other");
+        var scope = ContractScopes.Bind("acme");
+        var other = ContractScopes.Bind("other");
         var key = RandomNumberGenerator.GetBytes(32);
         var authority = new MigrationPlanAuthority(key);
         Contract.IIngress edge = new InMemoryIngress(store, new Requests("plan-runner"), "plan-runner",
@@ -218,7 +218,7 @@ internal static class MigrationPlanRunnerChecks
         const long initial = 1_701_900_000_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("legacy-plan");
+        var scope = ContractScopes.Bind("legacy-plan");
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests("legacy-plan"), "legacy-plan",
             (_, kind) => kind == Contract.Kinds.Terminate);
         Contract.IActorReads reads = new ActorList(store, 8);

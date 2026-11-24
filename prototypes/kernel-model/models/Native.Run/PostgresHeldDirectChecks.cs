@@ -31,7 +31,7 @@ internal static class PostgresHeldDirectChecks
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         await store.CreateAsync(1);
         await admission.InstallAsync(stop);
-        var scope = FixedTenantScope.Bind(Tenant);
+        var scope = EmbeddedTenant.Bind(Tenant);
         var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 16),
             WorkflowActor.WorkflowActor.ActorType);
         var registry = new WorkflowRegistry().Add(Build());

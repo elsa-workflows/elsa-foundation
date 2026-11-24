@@ -29,7 +29,7 @@ internal static class ContractHttpWorkload
     private sealed class Schedule
     {
         private const string ReceivingNode = "request-edge";
-        private readonly Contract.BoundScope _scope = new("request-workload");
+        private readonly Contract.BoundScope _scope = ContractScopes.Bind("request-workload");
         private readonly Requests _requests = new(ReceivingNode);
         private readonly InMemoryStore _store;
         private readonly Contract.IIngress _ingress;

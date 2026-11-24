@@ -51,7 +51,7 @@ internal static class PostgresPublicPreview
         var store = new EfStore(() => new(measured), postgres: true);
         var probe = new EfStore(() => new(data), postgres: true);
         var admission = new PostgresRootAdmission(() => new(measured), TimeSpan.FromHours(1));
-        var scope = FixedTenantScope.Bind(tenantProbe ? "preview-other" : "preview");
+        var scope = EmbeddedTenant.Bind(tenantProbe ? "preview-other" : "preview");
 
         if (birth)
         {

@@ -12,7 +12,7 @@ internal static class ParkKeptChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var actor = new Probe();
-        var scope = new Contract.BoundScope("park");
+        var scope = ContractScopes.Bind("park");
         Worker MakeOwner(string node) => new(node, 0, store, new ActorAdapter(store, actor),
             new WorkerOptions { Monotonic = () => now - initial });
         var worker = MakeOwner("park-first");
@@ -140,7 +140,7 @@ internal static class ParkKeptChecks
         var now = openedAt;
         var store = new InMemoryStore(1, () => now);
         var actor = new Probe(withholdFaulted: true);
-        var scope = new Contract.BoundScope("discard");
+        var scope = ContractScopes.Bind("discard");
         var replies = new Requests("discard-operator");
         bool landedAtReply = false;
         Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, actor),
@@ -189,7 +189,7 @@ internal static class ParkKeptChecks
         var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
         var payload = Json.Write(new Contract.OperatorCommand(selection));
         var denied = await ingress.SendAsync(scope, target, "ordinary-discard", Contract.Kinds.Discard, payload);
-        var foreign = await operators.SendAsync(new Contract.BoundScope("foreign"), target, "cross-tenant",
+        var foreign = await operators.SendAsync(ContractScopes.Bind("foreign"), target, "cross-tenant",
             Contract.Kinds.Discard, payload);
         var missing = await operators.SendAsync(scope, target, "no-selection", Contract.Kinds.Discard);
         check(denied.Outcome == Contract.AdmissionOutcome.Refused && foreign.Outcome == Contract.AdmissionOutcome.Refused &&
@@ -313,7 +313,7 @@ internal static class ParkKeptChecks
         var due = initial + (phase == RecoveryPhase.Open ? 1 : 1_000);
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe();
-        var scope = new Contract.BoundScope("deferred-park-command");
+        var scope = ContractScopes.Bind("deferred-park-command");
         var requests = new Requests("deferred-park-command");
         var ingress = new InMemoryIngress(store, requests, "deferred-park-command", (_, name) => name == Contract.Kinds.Recover);
         var label = $"P-6 {kind} at {phase}";
@@ -431,7 +431,7 @@ internal static class ParkKeptChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(1) };
         var probe = new Probe(withholdFaulted: true) { FaultOnAdvance = faultOnAdvance, HoldAdvance = holdAdvance, HoldSuspend = holdControl };
-        var scope = new Contract.BoundScope("recover-arrivals");
+        var scope = ContractScopes.Bind("recover-arrivals");
         var opens = 0;
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
         {
@@ -595,7 +595,7 @@ internal static class ParkKeptChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe(withholdFaulted: takeover) { FaultOnAdvance = true, HoldTerminalInput = !takeover };
-        var scope = new Contract.BoundScope("terminal-recovery");
+        var scope = ContractScopes.Bind("terminal-recovery");
         var cleared = 0;
         Worker MakeWorker(string node, int limit, IKernelStore? actual = null) => new(node, 0, actual ?? store, new ActorAdapter(store, probe),
             new WorkerOptions
@@ -703,7 +703,7 @@ internal static class ParkKeptChecks
             FaultOnAdvance = endedTerminate is null, FinishOnAdvance = endedTerminate is not null,
             HoldTerminalInput = true, HonourTerminate = thenDelete || withRegistry, ArmJobOnEnd = withRegistry
         };
-        var scope = new Contract.BoundScope("terminal-recovery-delete");
+        var scope = ContractScopes.Bind("terminal-recovery-delete");
         var replies = new Requests("terminal-recovery-delete");
         var scheduler = new HeldScheduler();
         var ingress = new InMemoryIngress(store, replies, "terminal-recovery-delete",
@@ -948,7 +948,7 @@ internal static class ParkKeptChecks
         {
             FaultOnAdvance = !ordinaryEnd, HoldTerminalNotices = holdNotices
         };
-        var scope = new Contract.BoundScope("terminal-child");
+        var scope = ContractScopes.Bind("terminal-child");
         var worker = new Worker("terminal-parent", 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => now - initial });
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
@@ -1027,7 +1027,7 @@ internal static class ParkKeptChecks
         var now = 1_701_400_030_100L;
         var store = new InMemoryStore(1, () => now);
         var probe = new RestorePlanProbe();
-        var scope = new Contract.BoundScope("recover-invalid-plan");
+        var scope = ContractScopes.Bind("recover-invalid-plan");
         var siblingRefused = false;
         var worker = new Worker("recover-invalid-plan", 0, store, new ActorAdapter(store, probe), new WorkerOptions
         {
@@ -1134,7 +1134,7 @@ internal static class ParkKeptChecks
         var now = 1_701_400_030_200L;
         var store = new InMemoryStore(2, () => now);
         var probe = new KeepingRecoveryProbe();
-        var scope = new Contract.BoundScope("catch-up-lost-step");
+        var scope = ContractScopes.Bind("catch-up-lost-step");
         var losses = 0;
         var injectRecoveryLoss = false;
         var forward = new CountingStore(store, () => { }, (batch, landed) =>
@@ -1260,7 +1260,7 @@ internal static class ParkKeptChecks
         var now = 1_701_400_030_200L;
         var store = new InMemoryStore(1, () => now);
         var probe = new KeepingRecoveryProbe();
-        var scope = new Contract.BoundScope("catch-up-attempt");
+        var scope = ContractScopes.Bind("catch-up-attempt");
         using var measurements = new EventTicketMeasurements("meet");
         var faults = 0;
         CommitBatch? delayed = null;
@@ -1418,7 +1418,7 @@ internal static class ParkKeptChecks
         var comparisons = probePageWork ? new EventKeyComparisons() : null;
         var store = new InMemoryStore(1, () => now, Flaw.None, comparisons ?? StringComparer.Ordinal);
         var probe = new KeepingRecoveryProbe();
-        var scope = new Contract.BoundScope("recover-kept-event");
+        var scope = ContractScopes.Bind("recover-kept-event");
         var verifyCollisions = count == 171;
         Worker worker = null!;
         Worker MakeWorker(string node) => new(node, 0, store, new ActorAdapter(store, probe),
@@ -1648,7 +1648,7 @@ internal static class ParkKeptChecks
         const long now = 1_701_400_029_000;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe(withholdFaulted: true);
-        var scope = new Contract.BoundScope("no-expiry");
+        var scope = ContractScopes.Bind("no-expiry");
         var worker = new Worker("no-expiry", 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => 0 });
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
@@ -1680,7 +1680,7 @@ internal static class ParkKeptChecks
         var now = startAt;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMilliseconds(window) };
         var probe = new Probe(withholdFaulted: true);
-        var scope = new Contract.BoundScope("finite-expiry");
+        var scope = ContractScopes.Bind("finite-expiry");
         Worker Owner(string name) => new(name, 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => now - startAt, Horizon = TimeSpan.Zero });
         var first = Owner("expiry-first");
@@ -1811,7 +1811,7 @@ internal static class ParkKeptChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe();
-        var scope = new Contract.BoundScope("interrupted-drain");
+        var scope = ContractScopes.Bind("interrupted-drain");
         var ingress = new InMemoryIngress(store, new Requests("interrupted-drain"), "interrupted-drain",
             (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate);
         var first = Owner("interrupted-first", 32);
@@ -1895,7 +1895,7 @@ internal static class ParkKeptChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(1) };
         var probe = new Probe { FaultOnAdvance = ended };
-        var scope = new Contract.BoundScope("recalled-expiry");
+        var scope = ContractScopes.Bind("recalled-expiry");
         var ingress = new InMemoryIngress(store, new Requests("recalled-expiry"), "recalled-expiry", (_, kind) => kind == Contract.Kinds.Recover);
         var label = $"P-4(2a) {(ended ? "ended" : "running")} recovery";
         var first = Owner("recall-first", 32);
@@ -1987,7 +1987,7 @@ internal static class ParkKeptChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(20) };
         var probe = new Probe();
-        var scope = new Contract.BoundScope("stale-expiry");
+        var scope = ContractScopes.Bind("stale-expiry");
         var ingress = new InMemoryIngress(store, new Requests("stale-expiry"), "stale-expiry", (_, kind) => kind == Contract.Kinds.Recover);
         var label = interrupt ? "P-4(2b) expiry after re-park" : "P-4(3) expiry at a new Park";
         var first = Owner("capture-expiry");
@@ -2106,7 +2106,7 @@ internal static class ParkKeptChecks
         const long now = 1_701_400_070_000;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.Zero };
         var probe = new Probe(withholdFaulted: true);
-        var scope = new Contract.BoundScope("zero-window");
+        var scope = ContractScopes.Bind("zero-window");
         var worker = new Worker("zero-window", 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => 0 });
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
@@ -2128,7 +2128,7 @@ internal static class ParkKeptChecks
         long now = startAt, elapsed = 0;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMilliseconds(window) };
         var probe = new Probe(withholdFaulted: true);
-        var scope = new Contract.BoundScope("expiry-clock");
+        var scope = ContractScopes.Bind("expiry-clock");
         Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => elapsed, Horizon = TimeSpan.Zero });
         var first = Owner("expiry-clock-first");
@@ -2197,7 +2197,7 @@ internal static class ParkKeptChecks
         const long now = 1_701_400_025_000;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe(withholdFaulted: true);
-        var scope = new Contract.BoundScope("park-selection");
+        var scope = ContractScopes.Bind("park-selection");
         var worker = new Worker("park-selection", 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => 0 });
         var edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
@@ -2206,7 +2206,7 @@ internal static class ParkKeptChecks
         var created = new Contract.Target.Start(new(probe.Type, "ready", null));
         var a = (await edge.SendAsync(scope, created, "start-a", Contract.Kinds.Start)).Actor!.Value;
         var b = (await edge.SendAsync(scope, created, "start-b", Contract.Kinds.Start)).Actor!.Value;
-        var foreign = new Contract.BoundScope("another-tenant");
+        var foreign = ContractScopes.Bind("another-tenant");
         var c = (await edge.SendAsync(foreign, created, "start-a", Contract.Kinds.Start)).Actor!.Value;
         var targetA = new Contract.Target.Ref(a);
         var targetB = new Contract.Target.Ref(b);
@@ -2527,7 +2527,7 @@ internal static class ParkKeptChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var probe = new ParkedJobProbe("result", timed: false);
-        var scope = new Contract.BoundScope("pending-job-restart");
+        var scope = ContractScopes.Bind("pending-job-restart");
         var ingress = new InMemoryIngress(store, new Requests("pending-job-restart"), "pending-job-restart", (_, kind) => kind == Contract.Kinds.Recover);
         var first = Worker("original-job");
         await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
@@ -2642,7 +2642,7 @@ internal static class ParkKeptChecks
             ParkedRetentionWindow = sweep != SweepAt.None ? TimeSpan.FromMilliseconds(100) : null
         };
         var actor = new ParkedJobProbe("result", timed, arguments: recipe) { IncludeTimer = sweep != SweepAt.None };
-        var scope = new Contract.BoundScope("job-restart");
+        var scope = ContractScopes.Bind("job-restart");
         InboxKey? ticketToSweep = null;
         InboxKey? attemptedRestart = null;
         var survivedOpenSweep = false;
@@ -2851,7 +2851,7 @@ internal static class ParkKeptChecks
         var probe = new ParkedJobProbe("original", timed: true, key: jobKey) { FaultOnResult = true };
         var worker = new Worker("retry-job-result", 0, store, new ActorAdapter(store, probe), new WorkerOptions { Monotonic = () => 0 });
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
-        var scope = new Contract.BoundScope(wide ? new string('t', 64) : "retry-job-result");
+        var scope = ContractScopes.Bind(wide ? new string('t', 64) : "retry-job-result");
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
         var spec = new Contract.StartSpec(probe.Type, "ready");
         Contract.Target start = wide ? new Contract.Target.Key(new string('k', limit), spec) : new Contract.Target.Start(spec);
@@ -2921,7 +2921,7 @@ internal static class ParkKeptChecks
         var worker = new Worker("resume-pending-job", 0, store, adapter,
             new WorkerOptions { Monotonic = () => 0, JobScheduler = scheduler });
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
-        var scope = new Contract.BoundScope("resume-pending-job");
+        var scope = ContractScopes.Bind("resume-pending-job");
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
         var begun = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
         var target = new Contract.Target.Ref(begun.Actor!.Value);
@@ -3000,7 +3000,7 @@ internal static class ParkKeptChecks
         var scheduler = new HeldScheduler();
         var first = new Worker("before-poison-ticket", 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => 0, JobScheduler = scheduler });
-        var scope = new Contract.BoundScope("retry-consumed-ticket");
+        var scope = ContractScopes.Bind("retry-consumed-ticket");
         var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node,
             (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Delete);
         await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
@@ -3151,7 +3151,7 @@ internal static class ParkKeptChecks
         var overhead = System.Text.Encoding.UTF8.GetByteCount(Json.Write(new JobFinished(jobKey, Json.Write(""), null)));
         var store = new InMemoryStore(1, () => now);
         var actor = new ParkedJobProbe(new string('x', payloadLimit - overhead + 1), timed) { EndHoldingResult = endHoldingResult };
-        var scope = new Contract.BoundScope("parked-job");
+        var scope = ContractScopes.Bind("parked-job");
         Message? competingTicket = null;
         var attempted = false;
         var refused = false;

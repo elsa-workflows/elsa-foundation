@@ -460,7 +460,7 @@ internal static class RetentionDeleteChecks
     {
         private const long Initial = 1_702_710_000_000;
         private const string Node = "retention-fixture";
-        private readonly Contract.BoundScope scope = new("retention-check");
+        private readonly Contract.BoundScope scope = ContractScopes.Bind("retention-check");
         private readonly Requests requests = new(Node);
         private readonly InMemoryIngress ingress;
         private int nextOwner;
@@ -508,7 +508,7 @@ internal static class RetentionDeleteChecks
             ingress.SendAsync(scope, new Contract.Target.Ref(actor), id, kind, payload);
 
         internal ValueTask<Contract.Admission> SendFromAnotherTenant(Contract.ActorRef actor, string id, string payload) =>
-            ingress.SendAsync(new Contract.BoundScope("other-tenant"), new Contract.Target.Ref(actor), id, Contract.Kinds.Delete, payload);
+            ingress.SendAsync(ContractScopes.Bind("other-tenant"), new Contract.Target.Ref(actor), id, Contract.Kinds.Delete, payload);
 
         internal ((InMemoryStore.OperatorAdmission Outcome, string? Reference) Admission, Request Request)
             Retention(Contract.ActorRef actor, string selection, long? due = null)

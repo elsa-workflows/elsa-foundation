@@ -12,8 +12,8 @@ internal static class FoundationTenantChecks
         var now = start;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe();
-        var first = new Contract.BoundScope("acme");
-        var second = new Contract.BoundScope("beta");
+        var first = ContractScopes.Bind("acme");
+        var second = ContractScopes.Bind("beta");
         var ingress = new InMemoryIngress(store, new Requests("tenant-isolation"), "tenant-isolation");
         var reads = new ActorList(store, 10);
         var spec = new Contract.StartSpec(probe.Type, "ordinary");
@@ -167,7 +167,7 @@ internal static class FoundationTenantChecks
         const long start = 1_702_700_000_000;
         var now = start;
         var store = new InMemoryStore(1, () => now) { IngressDeduplicationWindow = TimeSpan.FromMilliseconds(100) };
-        var scope = new Contract.BoundScope("stored-tenant");
+        var scope = ContractScopes.Bind("stored-tenant");
         var observed = new List<FoundationScopeCheck>();
         store.OnInvalidStoredScope = observed.Add;
         var probe = new Probe();

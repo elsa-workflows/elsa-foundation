@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Hosting adapters for the Elsa actor foundation.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Contracts/Elsa.ActorFoundation.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

@@ -28,7 +28,7 @@ internal static partial class NativeHttpEdgeChecks
         long timestamp = initial;
         long Now() => Interlocked.Read(ref timestamp);
         var store = new InMemoryStore(1, Now);
-        var scope = new Contract.BoundScope("http-edge");
+        var scope = ContractScopes.Bind("http-edge");
         const string node = "http-edge-owner";
         var requests = new Requests(node);
         var reads = new ActorList(store, 16);

@@ -20,7 +20,7 @@ internal static class NativeDetachedHandleChecks
     {
         const long now = 1_702_310_000_000;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("native-detached-handles");
+        var scope = ContractScopes.Bind("native-detached-handles");
         var ingress = new InMemoryIngress(store, new Requests("native-detached"), "native-detached",
             (bound, kind) => bound == scope && kind == Contract.Kinds.Terminate);
         var reads = new ActorList(store, 16);

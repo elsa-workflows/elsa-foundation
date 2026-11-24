@@ -44,7 +44,7 @@ internal static partial class ContractActorWorkload
         var model = new PublicWorkflow([new CounterModel(), new ParentModel(flaws.HasFlag(Flaw.CancelKnownChildren)), new ChildModel()]);
         await using var driver = new ContractWorkload.InMemoryDriver(partitions, flaws, model);
         var runtime = new PublicRuntime(driver.Ingress, driver.Reads);
-        var scope = new Contract.BoundScope("actors");
+        var scope = ContractScopes.Bind("actors");
         var random = new Random(seed);
         var left = await Begin("counter-left", new("counter", "c"));
         var right = await Begin("counter-right", new("counter", "c"));

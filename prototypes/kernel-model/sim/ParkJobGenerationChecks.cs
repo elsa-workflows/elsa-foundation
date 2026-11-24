@@ -10,7 +10,7 @@ internal static class ParkJobGenerationChecks
         const long initial = 1_703_010_000_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("same-key-job");
+        var scope = ContractScopes.Bind("same-key-job");
         var probe = new Probe(() => store.Instances.Values.Single().ParkRecovery is not null);
         ParkJobOpen? latestPlan = null;
         var wire = new CountingStore(store, () => { }, (batch, landed) =>

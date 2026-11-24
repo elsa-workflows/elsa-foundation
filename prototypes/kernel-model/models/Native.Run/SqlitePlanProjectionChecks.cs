@@ -11,7 +11,7 @@ namespace Kernel.Native.Run;
 
 internal static class SqlitePlanProjectionChecks
 {
-    private static Contract.BoundScope Scope => FixedTenantScope.Bind("migration");
+    private static Contract.BoundScope Scope => EmbeddedTenant.Bind("migration");
     private const string OtherPlan = "second-plan-read-fixture";
     private const string OpaqueReferencePlan = "opaque-reference-plan";
 
@@ -290,7 +290,7 @@ internal static class SqlitePlanProjectionChecks
     internal static async Task<int> InspectNeighborAsync(string file, string plan, string actor, string? foreignToken)
     {
         using var timer = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var scope = FixedTenantScope.Bind("other");
+        var scope = EmbeddedTenant.Bind("other");
         var reference = new Contract.ActorRef(plan);
         var page = await new SqlitePlanProjection(file, scope, reference).ReadPageAsync(null, 2, timer.Token);
         Check(page is { After: null, Rows: [{ Result: null }], Closed: false } && page.Rows[0].Actor.Id == actor,

@@ -207,6 +207,35 @@
         "resolved": "10.0.15",
         "contentHash": "087ome/PndkacsUGmB6OoTyhQ3UwoSRqv9odKbvdD4h3o6TqSIVIK/v1WaNKZ/oiMUVuMcV0l2yXdt55RHRxGw=="
       },
+      "Microsoft.Extensions.Diagnostics.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "9uWiKpeOVac355STyChWR/pliFX/5CeLqChW9kKsaxyDH4EUTZxMkT4Jwp/J/peLm0GBFmSX5c0WCse3yCnq1Q==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Options": "10.0.10"
+        }
+      },
+      "Microsoft.Extensions.FileProviders.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "c5zqFCY9DiIpMovLd7/d/CTiEtrMOuQ639dhv3PABtKQIKNQikSHwQt8+N679uii9q+B55lgK28Uv64FOwEu8w==",
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "10.0.10"
+        }
+      },
+      "Microsoft.Extensions.Hosting.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "5LugpYGHk+mkn0a8IZgcyfBca8PCTAU9RQFoMrTdtOOidq88M2SI5f3px6ugnzgxC+eTkvYYJi8pzlUnG5xdAQ==",
+        "dependencies": {
+          "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Diagnostics.Abstractions": "10.0.10",
+          "Microsoft.Extensions.FileProviders.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.10"
+        }
+      },
       "Microsoft.Extensions.Logging": {
         "type": "Transitive",
         "resolved": "10.0.15",
@@ -454,6 +483,21 @@
         "resolved": "0.8.8",
         "contentHash": "UIDFkA5DC3en3tOJ3Mof11yBx9kUQLsaeo/oFdvN6Bbkr9E9+VCqfIadHci8cu+I51K2Sl7XYWVl2R/mA75NBQ=="
       },
+      "elsa.actorfoundation.contracts": {
+        "type": "Project"
+      },
+      "elsa.actorfoundation.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.actorfoundation.model.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "kernel.durable": {
         "type": "Project",
         "dependencies": {
@@ -463,46 +507,46 @@
       "kernel.entityframework": {
         "type": "Project",
         "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
           "Kernel.Durable": "[1.0.0, )",
-          "Kernel.Foundation.Contracts": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.15, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.15, )",
           "MySql.EntityFrameworkCore": "[10.0.12, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }
       },
-      "kernel.foundation.contracts": {
-        "type": "Project"
-      },
       "kernel.foundation.inmemory": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Durable": "[1.0.0, )",
-          "Kernel.Foundation.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Kernel.Durable": "[1.0.0, )"
+        }
+      },
+      "kernel.foundation.postgres": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.EntityFramework": "[1.0.0, )",
+          "Kernel.Foundation.InMemory": "[1.0.0, )",
+          "Kernel.Runtime.Hosting": "[1.0.0, )",
+          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )"
         }
       },
       "kernel.graph": {
         "type": "Project"
       },
-      "kernel.model.contracts": {
-        "type": "Project",
-        "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )"
-        }
-      },
       "kernel.native": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
           "Kernel.Graph": "[1.0.0, )",
-          "Kernel.Model.Contracts": "[1.0.0, )",
           "Kernel.Native.Activities": "[1.0.0, )"
         }
       },
       "kernel.native.activities": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
       "kernel.native.legacy": {
@@ -515,8 +559,10 @@
       "kernel.native.run": {
         "type": "Project",
         "dependencies": {
+          "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
           "Kernel.EntityFramework": "[1.0.0, )",
           "Kernel.Foundation.InMemory": "[1.0.0, )",
+          "Kernel.Foundation.Postgres": "[1.0.0, )",
           "Kernel.Native.Legacy": "[1.0.0, )",
           "Kernel.Runtime.Hosting": "[1.0.0, )",
           "Kernel.Statecharts.Native": "[1.0.0, )",
@@ -529,14 +575,14 @@
       "kernel.runtime.hosting": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
           "Kernel.Runtime": "[1.0.0, )"
         }
       },
       "kernel.statecharts": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Model.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       },
       "kernel.statecharts.native": {
@@ -555,15 +601,15 @@
       "kernel.workflowactor": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Foundation.Contracts": "[1.0.0, )",
-          "Kernel.Model.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       },
       "kernel.workflows": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Durable": "[1.0.0, )",
-          "Kernel.Model.Contracts": "[1.0.0, )"
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
+          "Kernel.Durable": "[1.0.0, )"
         }
       }
     }

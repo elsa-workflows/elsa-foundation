@@ -58,7 +58,7 @@ internal static class EventIdentityChecks
             .Add(Wf.Workflow("absent", Wf.Publish("publish", "Order-7")))
             .Add(Wf.Workflow("empty", Wf.Publish("publish", "Order-7", "")));
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("native-publication");
+        var scope = ContractScopes.Bind("native-publication");
         var probe = new Probe([("event:Order-7", "wait")], wire);
         var adapter = new ActorAdapter(store, probe);
         var native = new Kernel.WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]);
@@ -100,7 +100,7 @@ internal static class EventIdentityChecks
     private static async Task AtNameLimits(char fill, Action<bool, string> check)
     {
         const long now = 1_701_400_040_000;
-        var scope = new Contract.BoundScope(new string('t', 64));
+        var scope = ContractScopes.Bind(new string('t', 64));
         var name = new string(fill, 1_024);
         var otherWait = name[..^1] + 'w';
         var secondKey = name[..^1] + 'k';
@@ -176,7 +176,7 @@ internal static class EventIdentityChecks
         var label = slowConsumer ? "slow consumer" : folds ? "folded" : "ordinal";
         var store = new InMemoryStore(1, () => now, Flaw.None, equality)
             { IngressDeduplicationWindow = TimeSpan.FromMilliseconds(20) };
-        var scope = new Contract.BoundScope("events");
+        var scope = ContractScopes.Bind("events");
         var probe = new Probe(folds ? [("Order-7", "wait"), ("ORDER-7", "WAIT")] : [("Order-7", "wait")]);
         var worker = Owner("first", store, probe);
         var edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
@@ -264,7 +264,7 @@ internal static class EventIdentityChecks
     {
         var now = 1_701_400_070_000L;
         var store = new InMemoryStore(1, () => now, Flaw.None, StringComparer.OrdinalIgnoreCase);
-        var scope = new Contract.BoundScope("events");
+        var scope = ContractScopes.Bind("events");
         var probe = new Probe([]);
         var worker = Owner("registration", store, probe);
         var edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
@@ -312,7 +312,7 @@ internal static class EventIdentityChecks
     {
         var now = 1_701_400_080_000L;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("events");
+        var scope = ContractScopes.Bind("events");
         var probe = new Probe([("Order-7", "wait")]);
         var worker = Owner("legacy-first", store, probe);
         var edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
@@ -371,7 +371,7 @@ internal static class EventIdentityChecks
     {
         var now = 1_701_400_060_000L;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("events");
+        var scope = ContractScopes.Bind("events");
         var probe = new Probe([("Order-7", "wait")]);
         var worker = Owner("publisher", store, probe);
         var edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
@@ -415,7 +415,7 @@ internal static class EventIdentityChecks
         const long initial = 1_701_400_090_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("authored-step");
+        var scope = ContractScopes.Bind("authored-step");
         var count = paged ? InMemoryStore.ParkPageLimit + 1 : 1;
         var probe = new Probe(Enumerable.Range(0, count).Select(index => ("Order-7", $"wait-{index:D3}")).ToArray(), restoreKeep: true);
         var lost = false;
@@ -526,7 +526,7 @@ internal static class EventIdentityChecks
         {
             ParkedRetentionWindow = clear == ParkClearKind.Expiry ? TimeSpan.FromMilliseconds(1) : null
         };
-        var scope = new Contract.BoundScope("partial-publication");
+        var scope = ContractScopes.Bind("partial-publication");
         var count = 2 * InMemoryStore.ParkPageLimit + 1;
         var waits = Enumerable.Range(0, count).Select(index => ("Order-7", $"wait-{index:D3}")).ToArray();
         var probe = new Probe(waits, restoreKeep: false, separatePublisher: true);
@@ -694,7 +694,7 @@ internal static class EventIdentityChecks
     {
         var now = 1_701_400_091_000L;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("authored-restored-wait");
+        var scope = ContractScopes.Bind("authored-restored-wait");
         var probe = new Probe([("Order-7", "wait")], restoreKeep: keep);
         var publicationSteps = 0;
         var catchUpSteps = 0;
@@ -777,7 +777,7 @@ internal static class EventIdentityChecks
         var expectedWaits = Enumerable.Range(0, waitsPerActor).Select(i => $"wait-{i:D4}").ToArray();
         var waits = expectedWaits.Select(wait => ("Order-7", wait)).ToArray();
         var probe = new Probe(waits, restoreKeep: false, separatePublisher: true);
-        var scope = new Contract.BoundScope("large-broadcast");
+        var scope = ContractScopes.Bind("large-broadcast");
         var store = new InMemoryStore(1, () => now);
         var sizes = new List<int>();
         var before = 0;

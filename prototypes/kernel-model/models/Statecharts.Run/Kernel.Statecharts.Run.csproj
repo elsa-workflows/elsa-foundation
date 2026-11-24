@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+    <Using Include="Elsa.ActorFoundation.Hosting" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../Statecharts.Native/Kernel.Statecharts.Native.csproj" />
     <ProjectReference Include="../../sim/Kernel.Sim.csproj" />
     <ProjectReference Include="../../runtime/Kernel.Runtime.Hosting/Kernel.Runtime.Hosting.csproj" />

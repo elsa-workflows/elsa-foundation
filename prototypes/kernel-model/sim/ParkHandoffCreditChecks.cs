@@ -30,7 +30,7 @@ internal static partial class ParkHandoffCreditChecks
         var now = start;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe();
-        var scope = new Contract.BoundScope("drain-controls");
+        var scope = ContractScopes.Bind("drain-controls");
         var ingress = new InMemoryIngress(store, new Requests("drain-controls"), "drain-controls",
             (_, kind) => kind == Contract.Kinds.Recover);
         var issued = new List<(Message Control, long Serial)>();
@@ -155,7 +155,7 @@ internal static partial class ParkHandoffCreditChecks
         const long releaseDue = initial + 1_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("held-cohort-take");
+        var scope = ContractScopes.Bind("held-cohort-take");
         var ingress = new InMemoryIngress(store, new Requests("held-cohort-take"), "held-cohort-take",
             (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Suspend or Contract.Kinds.Resume);
         var probe = new Probe { HoldInputs = true };
@@ -277,7 +277,7 @@ internal static partial class ParkHandoffCreditChecks
         const long initial = 1_702_610_017_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("drain-credit");
+        var scope = ContractScopes.Bind("drain-credit");
         var edge = new InMemoryIngress(store, new Requests("drain-credit"), "drain-credit", (_, kind) => kind == Contract.Kinds.Recover);
         var probe = new Probe { HoldInputs = keepHeld };
         var measurements = new DrainMeasurements();
@@ -487,7 +487,7 @@ internal static partial class ParkHandoffCreditChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var probe = new Probe();
-        var scope = new Contract.BoundScope("drain-credit-cut");
+        var scope = ContractScopes.Bind("drain-credit-cut");
         var ingress = new InMemoryIngress(store, new Requests("drain-credit-cut"), "drain-credit-cut",
             (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Suspend or Contract.Kinds.Resume);
         var faultArmed = false;
@@ -605,7 +605,7 @@ internal static partial class ParkHandoffCreditChecks
         const long initial = 1_702_610_019_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var scope = new Contract.BoundScope("drain-credit-runner");
+        var scope = ContractScopes.Bind("drain-credit-runner");
         var probe = new Probe { KeepsJob = true };
         var scheduler = new HeldScheduler();
         var edge = new InMemoryIngress(store, new Requests("drain-credit-runner"), "drain-credit-runner", (_, kind) => kind == Contract.Kinds.Recover);

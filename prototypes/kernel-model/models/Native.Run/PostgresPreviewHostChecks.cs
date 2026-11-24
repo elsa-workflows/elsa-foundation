@@ -50,7 +50,7 @@ internal static class PostgresPreviewHostChecks
         await store.InstallPreviewRootSchemaAsync(stop);
         var ingress = await store.OpenPreviewRootIngressAsync(actor.Type, TimeSpan.FromHours(1), stop);
         var reads = await store.OpenPreviewRootReadsAsync(cancellationToken: stop);
-        var scope = FixedTenantScope.Bind("preview-host");
+        var scope = EmbeddedTenant.Bind("preview-host");
         var admitted = await ingress.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "fixture")),
             "start-external", Contract.Kinds.Start, cancellationToken: stop);
         if (admitted is not { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } root })

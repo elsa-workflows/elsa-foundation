@@ -38,7 +38,7 @@ internal static class PostgresFlowchartPreview
         }
 
         if (durable) await store.EnableRootSelfSendsAsync(stop);
-        var scope = FixedTenantScope.Bind("purchase");
+        var scope = EmbeddedTenant.Bind("purchase");
         var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), 8),
             WorkflowActor.WorkflowActor.ActorType);
         var registry = new WorkflowRegistry().Add(Build(mergeEarly));
