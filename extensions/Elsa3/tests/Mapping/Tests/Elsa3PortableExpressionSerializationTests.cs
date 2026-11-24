@@ -63,7 +63,7 @@ public sealed class Elsa3PortableExpressionSerializationTests
         resultType["Alias"] = resultType["alias"]!.DeepClone();
         resultType.Remove("alias");
         var refusedType = JsonSerializer.SerializeToElement(wrongCase, JsonBaseline.Options).Deserialize<ExpressionDefinition>(JsonBaseline.Options)!;
-        Assert.Equal(string.Empty, refusedType.ResultType.Alias); // Exact reads do not rescue a malformed producer.
+        Assert.Null(refusedType.ResultType.Alias); // Exact reads do not rescue a malformed producer.
     }
 
     [Fact]

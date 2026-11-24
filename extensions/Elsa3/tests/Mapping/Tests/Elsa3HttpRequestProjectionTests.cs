@@ -44,7 +44,7 @@ public sealed class Elsa3HttpRequestProjectionTests
         var resultType = wrongCase["resultType"]!.AsObject();
         resultType["Alias"] = resultType["alias"]!.DeepClone();
         resultType.Remove("alias");
-        Assert.Equal(string.Empty, JsonSerializer.SerializeToElement(wrongCase, JsonBaseline.Options)
+        Assert.Null(JsonSerializer.SerializeToElement(wrongCase, JsonBaseline.Options)
             .Deserialize<ExpressionDefinition>(JsonBaseline.Options)!.ResultType.Alias);
     }
 
