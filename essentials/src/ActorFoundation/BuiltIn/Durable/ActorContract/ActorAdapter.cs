@@ -102,8 +102,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     private bool CanKeepRootParkArrival(Durable.InstanceRow row, Durable.Delivery delivery) =>
         roots?.KeepsParkArrivals == true && row.Status == Durable.InstanceStatus.Faulted && delivery.Durable &&
-        CapturesParkArrival(delivery) && delivery.Message is
-        { InboxScope: Durable.InboxKey.FoundationOccurrenceScope, TargetCreation: 1, EventMatch: null,
+        delivery.Message.Target.Id == row.Id && CapturesParkArrival(delivery) && delivery.Message is
+        { InboxScope: Durable.InboxKey.FoundationOccurrenceScope, TargetCreation: 1, EventMatch: null, ActorAuthored: false,
             Sender: null, Operator: null, StorageId: not null, ReplyTo: null };
 
     private static bool CapturesParkArrival(Durable.Delivery delivery) => !delivery.Message.IsControl && !delivery.IsWorkerJobCompletion;
@@ -128,6 +128,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
         if (roots is not null && input.Row is { } qualifiedPark && input.Taken.All(item => CanKeepRootParkArrival(qualifiedPark, item)))
         {
+            if (input.Taken.Any(item => item.Attempts >= input.MaxAttempts))
+                return Park(qualifiedPark, input.Actor, input.Taken, input.Spec, "Attempt limit reached.");
             var revision = checked(qualifiedPark.Revision + 1);
             return new(input.Actor)
             {

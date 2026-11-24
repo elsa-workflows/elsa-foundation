@@ -82,13 +82,7 @@ internal static class PostgresRootParkOpeningChecks
             Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "later", "ordinary", "{}",
                 new(DueAt: tailDue), stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
                 "the ordinary ingress admits the earlier-sequence future input");
-            if (arrivals)
-        {
-            await ObserveArrivalsAsync();
-            return 0;
-        }
-
-        Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "poison", "fail", payload,
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "poison", "fail", payload,
                 cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the ordinary ingress admits the ready failing input");
             var parked = await Drive(owner, row => row is { Revision: >= 2, Status: InstanceStatus.Faulted } &&
                 (arrivals || row.Revision == 2));
@@ -99,8 +93,15 @@ internal static class PostgresRootParkOpeningChecks
             Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(sibling), "side-turn", "ordinary", "{}",
                 cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the parked root has a ready neighbor");
             await Drive(owner, row => row is { Revision: 2 }, sibling);
+            if (arrivals) await Drive(owner, row => row is { Revision: 3, Status: InstanceStatus.Faulted });
             Check(owner.Epoch == firstEpoch && !attemptedTail && probe.Ordinary == 1,
                 "the same owner withholds the buffered input without attempting to settle it, and advances the neighbor");
+        }
+
+        if (arrivals)
+        {
+            await ObserveArrivalsAsync();
+            return 0;
         }
 
         Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "poison", "fail", payload,
@@ -200,7 +201,9 @@ internal static class PostgresRootParkOpeningChecks
             Check(view?.Park == parked!.Park && view!.Header.Fault == fault, "arrivals preserve the original projected Park timestamp");
             Check(inbox.Items is [{ Id: "later", State: Contract.DeliveryState.Arrived },
                 { Id: "poison", State: Contract.DeliveryState.Consumed },
-                { Id: "fresh", State: Contract.DeliveryState.Arrived }], "public inspection distinguishes arrival and fault-causing input");
+                { Id: "fresh", State: Contract.DeliveryState.Arrived }],
+                "public inspection distinguishes arrival and fault-causing input (" +
+                string.Join(", ", inbox.Items.Select(item => item.Id + "/" + item.State)) + ")");
             var history = await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop);
             Check(history is [_, { Revision: 2, Entries: "[\"parked\"]" }], "arrivals do not replace or append to the opening journal");
             await using var db = Open();
@@ -213,6 +216,35 @@ internal static class PostgresRootParkOpeningChecks
                 { Done: true, Payload: payload, KeptBy: (short)ParkKeepReason.Consumed },
                 { Done: true, Payload: payload, KeptBy: (short)ParkKeepReason.Arrived }],
                 "all three physical occurrences retain their envelope and exact kept reason");
+
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "FoundationDirectReceipts" SET "Until" = 1
+                WHERE "Reference" = {actor.Id} AND "Operation" = {FoundationRootCreator.OperationDigest("poison")}
+                """, stop);
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "poison", "ordinary", "{}",
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "an expired operation id admits a new occurrence while the original stays kept");
+            await using (var third = await Own("reused-operation"))
+                await Drive(third, row => row is { Revision: 5, Status: InstanceStatus.Faulted });
+
+            var repeated = (await reads.InboxAsync(tenant, actor, cancellationToken: stop)).Items.Where(item => item.Id == "poison").ToArray();
+            Check(repeated is [{ State: Contract.DeliveryState.Consumed }, { State: Contract.DeliveryState.Arrived }] &&
+                repeated[0].Handle != repeated[1].Handle && (await reads.GetAsync(tenant, actor, stop))?.Park == parked.Park,
+                "the same outside id has two distinct kept handles and one unchanged Park");
+
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "exhausted", "ordinary", "{}",
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the exhausted-attempt control has a direct occurrence");
+            var exhausted = (await new PostgresRootAdmission(Open, TimeSpan.Zero)
+                .ReadPendingDirectAsync(tenant.Tenant, actor.Id, stop)).Single();
+            await db.Messages.Where(row => row.Id == exhausted.InboxKey.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.Attempts, new WorkerOptions().MaxAttempts), stop);
+            await using (var fourth = await Own("exhausted-attempt"))
+                await Drive(fourth, row => row is { Revision: 6, Status: InstanceStatus.Faulted });
+
+            var reparked = (await reads.InboxAsync(tenant, actor, cancellationToken: stop)).Items.Single(item => item.Id == "exhausted");
+            Check(reparked.State == Contract.DeliveryState.Consumed && (await reads.GetAsync(tenant, actor, stop))?.Park == parked.Park &&
+                (await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop)) is [_, { Revision: 2 }, { Revision: 6, Entries: "[\"parked\"]" }],
+                "an exhausted occurrence continues the same Park with the consumed reason and its own journal fact");
         }
 
         async Task InspectParkAsync()

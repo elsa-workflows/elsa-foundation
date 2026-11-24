@@ -47,8 +47,5 @@ public sealed partial class EfStore
     internal static Task InstallRootParkArrivalReasonAsync(KernelDb db, CancellationToken token) =>
         db.Database.ExecuteSqlRawAsync("""
             ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkRevision" bigint CHECK ("FoundationParkRevision" > 0);
-            ALTER TABLE "Messages" DROP CONSTRAINT IF EXISTS "Messages_FoundationKeptBy_check";
-            ALTER TABLE "Messages" ADD CONSTRAINT "Messages_FoundationKeptBy_check"
-                CHECK ("FoundationKeptBy" IS NULL OR ("FoundationKeptBy" IN (0, 1) AND "Done"));
             """, token);
 }

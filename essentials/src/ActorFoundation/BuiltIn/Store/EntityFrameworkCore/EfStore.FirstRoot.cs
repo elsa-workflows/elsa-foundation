@@ -138,7 +138,7 @@ public sealed partial class EfStore
                     AND NEW."Revision" = NEW."FoundationWriteRevision"
                     AND NEW."FoundationReference" = OLD."FoundationReference" AND NEW."FoundationTenant" = OLD."FoundationTenant"
                     AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired"
-                    AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR
+                    AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR /*root-park-continues*/ OR
                         (/*root-retirement*/ AND NEW."Retired" AND NEW."State" = 'null' AND NEW."FoundationHeader" IS NULL /*root-retirement-wire*/
                             AND ((OLD."Status" <> 0 AND NEW."Status" = OLD."Status"
                                 AND NEW."FoundationTerminalRevision" = OLD."FoundationTerminalRevision"
@@ -156,16 +156,27 @@ public sealed partial class EfStore
             BEGIN
                 IF EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance" AND i."FoundationReference" IS NOT NULL
                     AND (i."Partition" <> NEW."Partition" OR NEW."Revision" <> i."Revision" + 1 OR i."Status" <> 0 OR i."Retired")
-                    AND NOT (/*root-retirement*/ AND i."Retired" AND i."Partition" = NEW."Partition" AND NEW."Revision" = -1
+                    AND NOT (/*root-park-journal*/ OR (/*root-retirement*/ AND i."Retired" AND i."Partition" = NEW."Partition" AND NEW."Revision" = -1
                         AND NEW."Entries" = '["delete"]' AND NOT EXISTS (
-                            SELECT 1 FROM "Journal" j WHERE j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j."Revision" = -1)))
+                            SELECT 1 FROM "Journal" j WHERE j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j."Revision" = -1))))
                 THEN RAISE EXCEPTION 'Qualified actor journal requires the next running checkpoint revision' USING ERRCODE = '23514'; END IF;
                 RETURN NEW;
             END
             $fn$;
             CREATE OR REPLACE TRIGGER kernel_require_root_journal_revision BEFORE INSERT ON "Journal"
             FOR EACH ROW EXECUTE FUNCTION kernel_require_root_journal_revision();
-            """.Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
+            """.Replace("/*root-park-continues*/", db.UsesRootParkArrivals ? """
+                (OLD."Status" = 2 AND NEW."Status" = OLD."Status" AND NOT NEW."Retired"
+                    AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
+                    AND NEW."FoundationParkAt" = OLD."FoundationParkAt" AND NEW."FoundationParkRevision" = OLD."FoundationParkRevision"
+                    AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
+                    AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault")
+                """ : "false", StringComparison.Ordinal)
+            .Replace("/*root-park-journal*/", db.UsesRootParkArrivals ? """
+                (i."Status" = 2 AND NOT i."Retired" AND NEW."Partition" = i."Partition" AND NEW."Revision" = i."Revision" + 1
+                    AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0 AND NEW."Entries" = '["parked"]')
+                """ : "false", StringComparison.Ordinal)
+            .Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
             .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal), cancellationToken);

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kernel.EntityFramework;
@@ -44,7 +45,7 @@ public sealed partial class EfStore
         return new(journal, new RootParkOpening(root, current.Revision, opening, reason, DurableKeyJson.Write(fault), envelopes));
     }
 
-    private sealed record LockedParkCheckpoint(long At, long? ParkAt, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
+    private sealed record LockedParkCheckpoint(long At, long? ParkAt, long? OpenRevision, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
 
     private sealed record RootParkOpening(WorkerRoot Root, long Expected, bool Opening, ParkKeepReason Reason, string EncodedFault,
         IReadOnlyList<Message> Inputs)
@@ -54,9 +55,9 @@ public sealed partial class EfStore
         {
             if (!db.UsesRootParkOpening || !Opening && !db.UsesRootParkArrivals) return false;
             var priorStatus = Opening ? InstanceStatus.Running : InstanceStatus.Faulted;
-            var locked = await db.Database.SqlQuery<LockedParkCheckpoint>($"""
+            FormattableString read = $"""
                 SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "At", i."FoundationParkAt" AS "ParkAt",
-                    sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
+                    /*open-revision*/ AS "OpenRevision", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
                     sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
@@ -67,30 +68,27 @@ public sealed partial class EfStore
                     AND ({Opening} OR i."Fault" = {EncodedFault})
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
-                """).ToListAsync(cancellationToken);
-            if (locked is not [var prior]) return false;
+                """;
+            var openRevisionColumn = db.UsesRootParkArrivals ? """i."FoundationParkRevision" """ : "NULL::bigint";
+            var locked = await db.Database.SqlQuery<LockedParkCheckpoint>(FormattableStringFactory.Create(
+                read.Format.Replace("/*open-revision*/", openRevisionColumn, StringComparison.Ordinal), read.GetArguments()))
+                .ToListAsync(cancellationToken);
+            if (locked is not [var prior] || db.UsesRootParkArrivals &&
+                (Opening ? prior.OpenRevision is not null : prior.OpenRevision is not > 0 || prior.OpenRevision > Expected)) return false;
 
             var parkAt = prior.ParkAt ?? prior.At;
-            var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            var openRevision = prior.OpenRevision ?? JournalRevision;
+            FormattableString write = $"""
                 UPDATE "Instances" SET "Status" = {(int)InstanceStatus.Faulted}, "Fault" = {EncodedFault},
                     "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision}, "FoundationParkAt" = {parkAt}
+                    /*open-revision*/
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
-                """, cancellationToken);
-            if (updated != 1) return false;
+                """;
             if (db.UsesRootParkArrivals)
-            {
-                if (Opening && await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "Instances" SET "FoundationParkRevision" = {JournalRevision}
-                    WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {JournalRevision}
-                        AND "FoundationParkRevision" IS NULL
-                    """, cancellationToken) != 1) return false;
-                if (!await db.Database.SqlQuery<bool>($"""
-                    SELECT EXISTS (SELECT 1 FROM "Instances"
-                        WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {JournalRevision}
-                            AND ("FoundationParkRevision" = {JournalRevision} AND {Opening}
-                                OR "FoundationParkRevision" < {JournalRevision} AND NOT {Opening})) AS "Value"
-                    """).SingleAsync(cancellationToken)) return false;
-            }
+                write = FormattableStringFactory.Create(
+                    write.Format.Replace("/*open-revision*/", $$""", "FoundationParkRevision" = {{{write.ArgumentCount}}}""", StringComparison.Ordinal),
+                    [.. write.GetArguments(), openRevision]);
+            if (await db.Database.ExecuteSqlInterpolatedAsync(write, cancellationToken) != 1) return false;
 
             var keys = Inputs.Select(input => input.InboxKey.Id).ToArray();
             // A different input can mature between dispatch and Park. Lock the dispatched identities.
@@ -143,6 +141,10 @@ public sealed partial class EfStore
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
                 AS "Value"
                 """).SingleAsync(cancellationToken);
+            if (db.UsesRootParkArrivals && !await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
+                    AND "Revision" = {JournalRevision} AND "FoundationParkRevision" = {openRevision}) AS "Value"
+                """).SingleAsync(cancellationToken)) return false;
             return stored && (!db.UsesRootParkInspection || await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "FoundationActorList"
                     WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference}
