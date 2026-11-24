@@ -56,8 +56,8 @@ publishes `/app/workflows`.
 **Independent Test**: User Story 1 scenarios 1–6 with the example settings and `hello.json`.
 
 - [ ] T009 [US1] Write `apps/Elsa.Essentials.Server/Program.cs`: configuration via `AddEssentialsConfiguration`
-  (baked `appsettings.json`, user file `/app/config/appsettings.json`, overridable by `Elsa:Essentials:SettingsPath`
-  for local runs), then environment variables and command line; CShells with `EssentialsFeatureAssemblies` and Nuplane
+  (baked `appsettings.json`, user file `config/appsettings.json` under the content root, which is
+  `/app/config/appsettings.json` in the image), then environment variables and command line; CShells with `EssentialsFeatureAssemblies` and Nuplane
   feature discovery over `/app/packages`, as `apps/Elsa.Workbench/Program.cs` does for its feature catalog; the root
   health endpoint. Copy only the Workbench host wiring the listed features need, nothing Workbench-specific (boot
   timeline, composition observation endpoints, Weaver, OpenTelemetry bridge).
@@ -81,9 +81,11 @@ publishes `/app/workflows`.
   `/app/packages` and `/app/data` owned by the runtime user; build it locally.
 - [ ] T016 [US1] Check SC-004: list every assembly in the built image's `/app` and confirm none is an Elsa 3 assembly;
   record the command and result in the PR evidence.
-- [ ] T017 [US1] Run User Story 1 scenarios 1–6 against the local image (example settings, `hello.json`, one sample
-  feature package for scenario 2, a changed baked setting for scenario 3, a missing package, a missing secret, no
-  workflows mount) and record each result in the PR evidence.
+- [ ] T017 [US1] Run User Story 1 scenarios 1–6 against the local image (example settings, `hello.json`, the
+  locally packed Liquid feature package for scenario 2 with a definition that uses a Liquid expression, a changed baked
+  setting for scenario 3, a missing package, a missing secret, no workflows mount), plus the edge case of one
+  definition that fails to import next to `hello.json` (logged with its reason, `hello.json` still served); record each
+  result in the PR evidence.
 
 **Checkpoint**: the engine image runs a user's workflow with only a settings file (SC-002 for the engine).
 
@@ -123,7 +125,8 @@ publishes `/app/workflows`.
   locally.
 - [ ] T025 [US3] Write `docker/compose/docker-compose.essentials.yml`: both images, the four engine mounts, the Studio
   origin in the engine's CORS and identity return-URL settings through the example settings file, the shared
-  management key (FR-016).
+  management key (FR-016). Then walk [quickstart.md](quickstart.md) from a clean folder, changing only the
+  `change-me` values, and confirm `hello.json` runs and Studio signs in (SC-002).
 - [ ] T026 [US3] Composed proof: add an essentials host selection to `tools/ux-acceptance/run.py` and a journey for
   T022's states, or, if that grows beyond a host selection, run the journey by hand with screenshots and accessibility
   snapshots retained as a downloadable archive bound to the commit; check that navigation shows no module the engine

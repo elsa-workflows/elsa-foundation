@@ -25,7 +25,12 @@ The engine refuses to start, naming the setting, when one of these is empty:
 | `CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey` | HMAC key, at least 32 bytes. |
 | `CShells:Shells:default:Features:WorkflowsRuntimeApi:WorkflowAlterationPayloadProtectionKeys` and `...ActiveKeyId` | Protects workflow alteration payloads. |
 | `Elsa:ModuleManagement:ApiKey` | Shared with the Studio image's management bridge. |
-| `Cors:AllowedOrigins` and the identity `AllowedReturnUrlOrigins` | The Studio origin (needed only when Studio is used). |
+
+### Studio settings
+
+Not required to start; set them when Studio is used. `Cors:AllowedOrigins` and the identity feature's
+`AllowedReturnUrlOrigins` hold the Studio origin. The essentials list bakes no origins, so a user's list starts at
+index 0.
 
 The final list is whatever the composed features require; the implementation checks it against the refusals and
 updates this table and `appsettings.example.json` together.
