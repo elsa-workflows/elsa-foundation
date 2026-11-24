@@ -123,10 +123,12 @@ internal static class PostgresRootCompositionChecks
             "reinstalling over existing rows keeps the terminal mark, the Park mark and history");
 
         // The shipped qualified formats keep refusing history before any read: 13 has no pinned namespace and 14 retires roots.
-        await Refused(() => History(new EfStore(() => KernelDb.ForPostgresRootTerminalSelection(options), postgres: true), ct),
-            "the shipped terminal-selection profile still refuses workflow history");
-        await Refused(() => History(new EfStore(() => KernelDb.ForPostgresRootRetirement(options), postgres: true), ct),
-            "the shipped retirement profile still refuses workflow history");
+        // The connection never opens, so only the capability rule can refuse, and the message names it.
+        var unreachable = new DbContextOptionsBuilder<KernelDb>().UseNpgsql("Host=history-refusal.invalid").Options;
+        await RefusedByProfile(() => History(new EfStore(() => KernelDb.ForPostgresRootTerminalSelection(unreachable), postgres: true), ct),
+            "the shipped terminal-selection profile still refuses workflow history before any read");
+        await RefusedByProfile(() => History(new EfStore(() => KernelDb.ForPostgresRootRetirement(unreachable), postgres: true), ct),
+            "the shipped retirement profile still refuses workflow history before any read");
         return 0;
     }
 
@@ -141,6 +143,17 @@ internal static class PostgresRootCompositionChecks
         try { await read(); }
         catch (StoreFormatException) { Check(true, label); return; }
         throw new InvalidOperationException("Expected a refusal: " + label);
+    }
+
+    private static async Task RefusedByProfile<T>(Func<Task<T>> read, string label)
+    {
+        try { await read(); }
+        catch (StoreFormatException error) when (error.Message == "This store profile does not carry workflow history.")
+        {
+            Check(true, label);
+            return;
+        }
+        throw new InvalidOperationException("Expected the profile refusal: " + label);
     }
 
     private static void Check(bool ok, string label)
