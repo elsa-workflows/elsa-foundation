@@ -18,7 +18,7 @@
     <ProjectReference Include="../Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
     <ProjectReference Include="../../Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
     <ProjectReference Include="../../../../prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj" />
-    <ProjectReference Include="../../../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
     <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
   </ItemGroup>
   <ItemGroup>

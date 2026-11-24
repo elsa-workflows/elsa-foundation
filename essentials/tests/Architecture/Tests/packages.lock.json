@@ -3109,6 +3109,13 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.runtime.workflowactor": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "elsa3.activities.design.import": {
         "type": "Project",
         "dependencies": {

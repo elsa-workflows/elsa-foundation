@@ -33,6 +33,13 @@
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.runtime.workflowactor": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "kernel.runtime.conformance": {
         "type": "Project",
         "dependencies": {
@@ -45,13 +52,6 @@
         "dependencies": {
           "Elsa.ActorFoundation.TestSupport": "[1.0.0, )",
           "Kernel.Workflows": "[1.0.0, )"
-        }
-      },
-      "kernel.workflowactor": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
-          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       },
       "Kernel.Workflows": {

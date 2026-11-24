@@ -21,7 +21,7 @@
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
     <ProjectReference Include="../../Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
-    <ProjectReference Include="../../../../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
+    <ProjectReference Include="../../../../src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj" />
   </ItemGroup>
   <ItemGroup>

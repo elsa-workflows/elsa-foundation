@@ -61,12 +61,15 @@ if not all((native_runner / name).is_file() for name in ('DirectApprovalWorkflow
 native_model = Path('essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj')
 if not native_model.is_file():
     native_model = Path('prototypes/kernel-model/models/Native/Kernel.Native.csproj')
+workflow_actor = Path('essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj')
+if not workflow_actor.is_file():
+    workflow_actor = Path('prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj')
 project.write_text(text.replace('</Project>', f'''
   <ItemGroup>
     <ProjectReference Include="../../essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
     <ProjectReference Include="../../{postgres_host}" />
     <ProjectReference Include="../../{native_model}" />
-    <ProjectReference Include="../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
+    <ProjectReference Include="../../{workflow_actor}" />
     <Compile Include="../../tools/ci/actor-foundation/WorkbenchPostgresPreview.cs" Link="Qualification/WorkbenchPostgresPreview.cs" />
     <Compile Include="../../{native_runner}/DirectApprovalWorkflow.cs" Link="Qualification/DirectApprovalWorkflow.cs" />
     <Compile Include="../../prototypes/kernel-model/ef/Kernel.Ef.Run/Wire.cs" Link="Qualification/Wire.cs" />

@@ -272,9 +272,6 @@
     <Project Path="essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
     <Project Path="essentials/tests/ActorFoundation/Store/EntityFramework/Elsa.ActorFoundation.Store.EntityFramework.csproj" />
   </Folder>
-  <Folder Name="/prototypes/kernel-model/src/">
-    <Project Path="prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
-  </Folder>
   <Folder Name="/essentials/src/Activities/">
     <Project Path="essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
     <Project Path="essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
@@ -560,6 +557,9 @@
   </Folder>
   <Folder Name="/essentials/src/Workflows/Runtime/Inspection/">
     <Project Path="essentials/src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj" />
+  </Folder>
+  <Folder Name="/essentials/src/Workflows/Runtime/WorkflowActor/">
+    <Project Path="essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Workflows/Runtime/Native/">
     <Project Path="essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj" />

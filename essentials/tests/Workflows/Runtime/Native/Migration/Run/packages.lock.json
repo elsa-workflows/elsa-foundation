@@ -51,6 +51,13 @@
           "Elsa.Workflows.Runtime.Native.Activities": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.runtime.workflowactor": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "Kernel.Foundation.InMemory": {
         "type": "Project",
         "dependencies": {
@@ -70,23 +77,16 @@
         "dependencies": {
           "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.TestSupport": "[1.0.0, )",
+          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )",
           "Kernel.Foundation.InMemory": "[1.0.0, )",
           "Kernel.Native.Legacy": "[1.0.0, )",
           "Kernel.Statecharts": "[1.0.0, )",
-          "Kernel.WorkflowActor": "[1.0.0, )",
           "Kernel.Workflows": "[1.0.0, )"
         }
       },
       "kernel.statecharts": {
         "type": "Project",
         "dependencies": {
-          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
-        }
-      },
-      "kernel.workflowactor": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       },
