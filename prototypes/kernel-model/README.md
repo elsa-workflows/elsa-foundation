@@ -442,7 +442,8 @@ The service starts the node through `PostgresPreviewHosting.StartAsync` and stop
 The application passes the installed PostgreSQL context factory, a distinct node name and its public actor type.
 All nodes on the database use the same actor type and definitions. The launcher checks the installed
 partition layout and runs the owner-call watchdog. Supply a process-termination policy for a call
-that remains stuck after cancellation. The caller disposes the returned runtime to release ownership. The driver's start, direct input and journal reads use the EF
+that remains stuck after cancellation or when the application's shutdown deadline expires. The application
+stops and disposes its Generic Host. A direct caller of the launcher owns the returned runtime. The driver's start, direct input and journal reads use the EF
 provider's public surfaces. The Flowchart and StateMachine qualification fixtures keep their own setup.
 
 Run `pg-preview-host-lifetime` on a fresh disposable PostgreSQL database to watch application shutdown

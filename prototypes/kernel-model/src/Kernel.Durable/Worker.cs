@@ -2213,7 +2213,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         else
         {
             slot.Driving = true;
-            _ = Drive(input, cancellationToken);
+            var entered = Drive(input, cancellationToken);
+            slot.EnteredTurn = slot.Driving ? entered : null;
         }
     }
 
@@ -2224,6 +2225,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 : request.TargetCreation is { } target && target != request.Start.Creation.Generation ? "WrongCreation"
                 : CreationProtocol.StartError(slot.Row, request.Start, request.Kind, request.Payload, request.InboxKey)
             : CreationProtocol.TargetError(slot.Row, request);
+
+    // The scheduler has stopped entering turns before a graceful host wait. Completion seals the outcome
+    // under _turnSync for the ordinary release drain to flush while the fence still permits it.
+    internal Task WaitForEnteredTurnsAsync(CancellationToken cancellationToken)
+    {
+        lock (_turnSync)
+            return Task.WhenAll(_slots.Values.Where(slot => slot is { Driving: true, EnteredTurn: not null })
+                .Select(slot => slot.EnteredTurn!)).WaitAsync(cancellationToken);
+    }
 
     private async Task Drive(TurnInput input, CancellationToken cancellationToken)
     {
@@ -2240,6 +2250,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 ResumeAfterDetachedTurn(input.Slot);
                 if (fence != input.Slot.TurnFence || inline && !LeaseUsable()) return;
                 input.Slot.Driving = false;
+                input.Slot.EnteredTurn = null;
                 input.Slot.RollbackTurn?.Invoke();
                 unit = _type.Park(input.Row, input.Actor, input.Taken, input.Spec, e.Message, input.Unwritten ? input.Pending : null);
                 MarkPark(unit, input.Row);
@@ -2254,6 +2265,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             ResumeAfterDetachedTurn(input.Slot);
             if (fence != input.Slot.TurnFence || inline && !LeaseUsable()) return;
             input.Slot.Driving = false;
+            input.Slot.EnteredTurn = null;
             Enqueue(Bound(unit, input.Slot), cancellationToken);
         }
     }
@@ -3727,6 +3739,7 @@ internal sealed class Slot
     public long AbsentAt; // date of an alias-aware absence, whether observed or locally minted
     public long Comparison; // latest accepted provider lookup that included this canonical slot
     public bool Driving;            // a model turn, as distinct from a queued commit, is in flight
+    public Task? EnteredTurn;        // waits for the outcome to be queued during graceful preview shutdown
     public long TurnFence;          // invalidates an uncommitted turn during graceful stand-down
     public Action? RollbackTurn;    // abandon a failed unit without restarting unrelated physical work
     public Action? UndoTurn;        // unwind only the invalidated turn's provisional cancellations

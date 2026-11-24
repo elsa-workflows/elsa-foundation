@@ -49,8 +49,9 @@ internal static class PostgresPreviewLifetimeChecks
                 initial.Release.TrySetResult();
                 await stopping;
                 var after = await ReadFenceAsync();
-                Require(after.Owner is null && after.Epoch == owner.Epoch &&
-                    await store.ReadFirstRootAsync(scope.Tenant, reference.Id, token) is { Revision: 1, State: WaitingState },
+                var saved = await store.ReadFirstRootAsync(scope.Tenant, reference.Id, token);
+                Console.WriteLine($"shutdown witness: owner={after.Owner ?? "<none>"}, epoch={owner.Epoch}->{after.Epoch}, revision={saved?.Revision}, state={saved?.State}, status={saved?.Status}, turns={initial.Turns}");
+                Require(after.Owner is null && after.Epoch == owner.Epoch && saved is { Revision: 1, State: WaitingState },
                     "the entered turn commits before the application gives up ownership");
             }
             finally
@@ -62,7 +63,7 @@ internal static class PostgresPreviewLifetimeChecks
 
         var prefix = await reads.TailAsync(scope, reference, cancellationToken: token);
         var firstFence = await ReadFenceAsync();
-        var fresh = new WaitingActor();
+        var fresh = new WaitingActor(acceptStart: false);
         using (var replacement = Build("lifetime-second", fresh))
         {
             await replacement.StartAsync(token);
@@ -85,13 +86,96 @@ internal static class PostgresPreviewLifetimeChecks
             await replacement.StopAsync(token);
             Require((await ReadFenceAsync()).Owner is null, "the replacement also releases ownership through application shutdown");
         }
+        await CheckTurnDeadlineAsync();
+        await CheckStartupDeadlineAsync();
+        await CheckStartupRetryAsync();
         return 0;
 
-        IHost Build(string node, WaitingActor actor)
+        async Task CheckTurnDeadlineAsync()
+        {
+            var admitted = await ingress.SendAsync(scope, new Contract.Target.Start(new(WaitingActor.Name, "fixture")),
+                "deadline-start", Contract.Kinds.Start, cancellationToken: token);
+            Require(admitted.Outcome == Contract.AdmissionOutcome.Accepted, "the deadline probe admits an independent root");
+            var held = new WaitingActor();
+            var escalation = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var host = Build("lifetime-deadline", held, reason => escalation.TrySetResult(reason));
+            try
+            {
+                await host.StartAsync(token);
+                await held.Entered.Task.WaitAsync(token);
+                await ExpectDeadlineAsync(host.StopAsync, escalation);
+                Require(!held.Release.Task.IsCompleted && (await ReadFenceAsync()).Owner == "lifetime-deadline",
+                    "a host deadline requests process escalation while the entered turn still owns its fence");
+            }
+            finally { held.Release.TrySetResult(); }
+        }
+
+        async Task CheckStartupDeadlineAsync()
+        {
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var escalation = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            await using var service = new PostgresPreviewHostedService(() =>
+            {
+                entered.TrySetResult();
+                release.Task.GetAwaiter().GetResult();
+                return Open();
+            }, "lifetime-startup", new WaitingActor(false), reason => escalation.TrySetResult(reason));
+            var starting = service.StartAsync(token);
+            try
+            {
+                await entered.Task.WaitAsync(token);
+                await ExpectDeadlineAsync(service.StopAsync, escalation);
+                Require(!starting.IsCompleted, "a host deadline requests escalation while preflight is still blocked");
+            }
+            finally { release.TrySetResult(); }
+            try
+            {
+                await starting.WaitAsync(token);
+                throw new InvalidOperationException("Cancelled preflight started a node.");
+            }
+            catch (OperationCanceledException) when (!token.IsCancellationRequested) { }
+        }
+
+        async Task CheckStartupRetryAsync()
+        {
+            var attempts = 0;
+            await using var service = new PostgresPreviewHostedService(() =>
+            {
+                if (Interlocked.Increment(ref attempts) == 1) throw new IOException("Fixture startup failure.");
+                return Open();
+            }, "lifetime-retry", new WaitingActor(false), Environment.FailFast);
+            try
+            {
+                await service.StartAsync(token);
+                throw new InvalidOperationException("The initial startup failure was hidden.");
+            }
+            catch (IOException error) when (error.Message == "Fixture startup failure.") { }
+            await service.StartAsync(token);
+            await service.StopAsync(token);
+            Require(attempts > 1, "a failed startup can retry with a healthy database context");
+        }
+
+        async Task ExpectDeadlineAsync(Func<CancellationToken, Task> stop, TaskCompletionSource<string> escalation)
+        {
+            using var shutdown = new CancellationTokenSource();
+            var stopping = stop(shutdown.Token);
+            shutdown.Cancel();
+            try
+            {
+                await stopping.WaitAsync(token);
+                throw new InvalidOperationException("Application shutdown accepted an expired deadline.");
+            }
+            catch (OperationCanceledException) when (!token.IsCancellationRequested) { }
+            Require((await escalation.Task.WaitAsync(token)).Contains("shutdown deadline", StringComparison.Ordinal),
+                "the supplied process policy receives the shutdown deadline");
+        }
+
+        IHost Build(string node, WaitingActor actor, Action<string>? endProcess = null)
         {
             var builder = Host.CreateEmptyApplicationBuilder(new());
             builder.Logging.ClearProviders();
-            builder.Services.AddHostedService(_ => new PostgresPreviewHostedService(Open, node, actor, Environment.FailFast,
+            builder.Services.AddHostedService(_ => new PostgresPreviewHostedService(Open, node, actor, endProcess ?? Environment.FailFast,
                 new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25) }));
             return builder.Build();
         }
@@ -107,7 +191,7 @@ internal static class PostgresPreviewLifetimeChecks
         Console.WriteLine($"ok {message}");
     }
 
-    private sealed class WaitingActor : Contract.IActorType
+    private sealed class WaitingActor(bool acceptStart = true) : Contract.IActorType
     {
         internal const string Name = "lifetime-actor";
         public string Type => Name;
@@ -122,6 +206,7 @@ internal static class PostgresPreviewLifetimeChecks
             Turns++;
             if (turn.StartSettings is not null)
             {
+                if (!acceptStart) throw new InvalidOperationException("The successor received a duplicate creator turn.");
                 Entered.TrySetResult();
                 await Release.Task.WaitAsync(cancellationToken);
                 turn.State = WaitingState;
