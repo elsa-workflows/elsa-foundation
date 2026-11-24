@@ -46,8 +46,8 @@ internal static class ActivitiesDesignJsonOptions
 /// <summary>
 /// The owner-local source-generated contract for the Activities Design HTTP surface.
 ///
-/// The options deliberately mirror <c>SerializationFastEndpointConfigurator</c>: web defaults,
-/// case-insensitive input, camel-case properties and dictionary keys, and camel-case string enums.
+/// The context derives from the shared baseline: exact camelCase property matching, verbatim
+/// dictionary keys, and this owner's established enum vocabulary.
 /// Keeping this list explicit is important.  It makes the request/response graph a reviewable
 /// lifetime boundary instead of allowing API Explorer or a JSON call to fall back to reflection
 /// over a replaceable feature assembly.

@@ -85,9 +85,8 @@ public class WorkflowsPublishingApiFeature : IWebShellFeature
         services.TryAddKeyedSingleton<IEndpointProblemWriter, Endpoints.WorkflowPublishingProblemWriter>(WorkflowsPublishingApi.OwnerId);
         services.TryAddKeyedSingleton<IEndpointExceptionTranslator, Endpoints.WorkflowPublishingExceptionTranslator>(WorkflowsPublishingApi.OwnerId);
         services.TryAddKeyedSingleton<IEndpointFaultRenderer, Endpoints.WorkflowPublishingFaultRenderer>(WorkflowsPublishingApi.OwnerId);
-        // Keep the owner serializer contract ready for the Minimal API mapper. The effective host
-        // options preserve the former FastEndpoints web defaults while routing Publishing types
-        // through generated metadata before any general fallback resolver.
+        // Register this owner's generated metadata before the general fallback resolver.
+        // The host owns the shared JSON baseline settings.
         services.ConfigureHttpJsonOptions(options =>
         {
             if (!options.SerializerOptions.TypeInfoResolverChain.Any(resolver => resolver is JsonTypeInfoResolver))
