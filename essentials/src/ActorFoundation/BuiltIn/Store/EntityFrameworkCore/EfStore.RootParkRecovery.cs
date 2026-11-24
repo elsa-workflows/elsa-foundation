@@ -8,6 +8,8 @@ public sealed partial class EfStore
 {
     // Protocol 22 resolves a qualified root's Park in one page with Recover (Resume). A released row carries the
     // generation of the recover that restored it, and the root's current generation names the cohort that goes first.
+    // An outcome entry commits only with the checkpoint write at its revision: at commit the root's row must have moved
+    // to that revision and, for "recovered", be Running with its Park mark cleared. A lone entry would wedge the root.
     internal static Task InstallRootParkRecoveryAsync(KernelDb db, CancellationToken token) =>
         db.Database.ExecuteSqlRawAsync("""
             ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkGeneration" bigint NOT NULL DEFAULT 0
@@ -18,6 +20,20 @@ public sealed partial class EfStore
                 WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationReleasedBy" IS NOT NULL;
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootJournal_Outcome" ON "Journal" ("Partition", "Instance", "Revision")
                 WHERE {RootOutcomeEntry};
+            CREATE OR REPLACE FUNCTION kernel_require_root_outcome_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $fn$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance" AND i."FoundationReference" IS NOT NULL
+                    AND NOT (i."Partition" = NEW."Partition" AND i."Revision" = NEW."Revision"
+                        AND (NEW."Entries" NOT LIKE '{{"Outcome":"recovered",%' OR (i."Status" = 0 AND NOT i."Retired"
+                            AND i."FoundationParkAt" IS NULL AND i."FoundationParkRevision" IS NULL))))
+                THEN RAISE EXCEPTION 'A recover outcome entry requires the checkpoint write at its revision' USING ERRCODE = '23514'; END IF;
+                RETURN NULL;
+            END
+            $fn$;
+            DROP TRIGGER IF EXISTS kernel_require_root_outcome_checkpoint ON "Journal";
+            CREATE CONSTRAINT TRIGGER kernel_require_root_outcome_checkpoint AFTER INSERT ON "Journal"
+                DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.{RootOutcomeEntry})
+                EXECUTE FUNCTION kernel_require_root_outcome_checkpoint();
             """.Replace("{RootOutcomeEntry}", RootOutcomeEntry, StringComparison.Ordinal), token);
 
     // Operator outcome entries, the only journal entries that are JSON objects. The checkpoint trigger reads them
@@ -90,10 +106,13 @@ public sealed partial class EfStore
                 WHERE "Id" = {message.Target.Id} AND "Partition" = {message.Target.Partition} AND NOT "Retired"
                 """).SingleOrDefaultAsync(token);
             var kept = await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token);
-            // One page holds at most 170 rows and 4 MiB of stored rows, and always has room for its first row.
-            var fits = kept.Count <= InMemoryStore.ParkPageLimit && (kept.Count <= 1 || kept.Sum(row => row.Bytes) <= ParkRecoveryCredit.LimitBytes);
+            // A page restores at most 170 rows and 4 MiB of stored rows, and always has room for its first restored row.
+            // Only restored (Arrived) rows are charged; the cleared fault input is never restored.
+            var restored = kept.Where(row => row.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
+            var fits = restored.Length <= InMemoryStore.ParkPageLimit &&
+                (restored.Length <= 1 || restored.Sum(row => row.Bytes) <= ParkRecoveryCredit.LimitBytes);
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
-                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived), kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
+                restored.Length, kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
                 fits, KeptSetDigest(kept));
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }

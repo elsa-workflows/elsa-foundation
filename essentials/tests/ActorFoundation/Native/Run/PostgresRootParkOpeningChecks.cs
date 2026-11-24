@@ -728,7 +728,8 @@ internal static class PostgresRootParkOpeningChecks
                 Console.WriteLine("ok the owner moves on to the neighbor's later input");
             }
 
-            // The page's byte bound: a fault input over 4 MiB recovers alone, and with one more kept row the set is refused.
+            // The page's byte bound charges restored rows only: two arrivals over 4 MiB are refused, and the cleared
+            // fault input over 4 MiB with one small arrival recovers.
             var large = "{\"big\":\"" + new string('x', ParkRecoveryCredit.LimitBytes + 1024) + "\"}";
             Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(sibling), "large-fail", "fail", large,
                 cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the neighbor admits a failing input over 4 MiB");
@@ -738,28 +739,32 @@ internal static class PostgresRootParkOpeningChecks
             var neighborId = neighborParked.Actor.Id;
             var neighborSelection = (await reads.GetAsync(tenant, sibling, stop))?.Selection
                 ?? throw new InvalidOperationException("The parked neighbor has no Park selection.");
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(sibling), "small-arrival", "ordinary", "{}",
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the parked neighbor admits a small arrival");
+            await using (var keeper = await Own("large-keep"))
+                await Drive(keeper, row => row?.Revision == neighborParked.Revision + 1, sibling);
             await using (var db = Open())
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Kind", "Partition", "Due", "Seen", "Attempts", "Trial", "Done", "JobGeneration", "FoundationKeptBy")
-                    VALUES ('byte-filler', -4, {neighborId}, 'ordinary', 0, 0, 0, 0, 0, true, 0, 1)
+                    INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Kind", "Partition", "Due", "Seen", "Attempts", "Trial", "Done", "JobGeneration", "FoundationKeptBy", "Payload")
+                    VALUES ('byte-filler', -4, {neighborId}, 'ordinary', 0, 0, 0, 0, 0, true, 0, 1, {large})
                     """, stop);
             Check(await Send(sibling, "recover-bytes", new(neighborSelection)) is { Outcome: Contract.AdmissionOutcome.Accepted },
-                "ingress admits a recover of the two-row Park over 4 MiB");
+                "ingress admits a recover of two arrivals over 4 MiB");
             await using (var large2 = await Own("large-page"))
-                await Drive(large2, row => row?.Revision == neighborParked.Revision + 1, sibling);
+                await Drive(large2, row => row?.Revision == neighborParked.Revision + 2, sibling);
             Check((await store.ReadJournalOfAsync(0, neighborId, 0, stop))[^1].Entries ==
                     """{"Outcome":"refused","Operation":"recover-bytes","Reason":"page"}""" &&
                 (await store.ReadFirstRootAsync(tenant.Tenant, sibling.Id, stop)) is { Status: InstanceStatus.Faulted },
-                "the owner refuses a kept set over 4 MiB as page and keeps the Park");
+                "the owner refuses two restored rows over 4 MiB as page and keeps the Park");
             await using (var db = Open())
                 await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" = 'byte-filler'""", stop);
             Check(await Send(sibling, "recover-alone", new(neighborSelection)) is { Outcome: Contract.AdmissionOutcome.Accepted },
-                "ingress admits a recover of the one-row Park over 4 MiB");
+                "ingress admits a recover of the fault input over 4 MiB and one small arrival");
             await using (var large3 = await Own("large-alone"))
-                await Drive(large3, row => row is { Status: InstanceStatus.Running }, sibling);
+                await Drive(large3, row => row is { Status: InstanceStatus.Running } && probe.Delivered.Contains((sibling, "small-arrival")), sibling);
             Check((await store.ReadJournalOfAsync(0, neighborId, 0, stop))[^1].Entries ==
-                """{"Outcome":"recovered","Operation":"recover-alone","Restored":0,"Cleared":1,"AlreadyRearmed":0}""",
-                "a single kept row over 4 MiB fits the page alone and the neighbor recovers");
+                """{"Outcome":"recovered","Operation":"recover-alone","Restored":1,"Cleared":1,"AlreadyRearmed":0}""",
+                "the cleared fault input over 4 MiB is not charged, and the neighbor recovers with its small arrival");
         }
 
         // Each guard rolls back the whole recover and leaves the Faulted row, kept rows, journal and Park mark.
@@ -816,8 +821,10 @@ internal static class PostgresRootParkOpeningChecks
                     "the checkpoint trigger refuses a recover write with no recovered entry");
                 Check(!await TriggerProbe(turn.Instance, checkpoint.Revision, recovered, Continue(turn.Instance), token),
                     "the checkpoint trigger refuses a recovered entry with a Park-continue write");
-                Check(!await TriggerProbe(turn.Instance, checkpoint.Revision, refused, Transition(1), token),
-                    "the checkpoint trigger refuses a refused entry with the recover write");
+                Check(await TriggerProbe(turn.Instance, checkpoint.Revision, recovered, Transition(1), token, then: recovered),
+                    "two recovered entries with the recover write pass the triggers (rolled back)");
+                Check(!await TriggerProbe(turn.Instance, checkpoint.Revision, recovered, Transition(1), token, then: refused),
+                    "the checkpoint trigger refuses a refused entry beside a recovered entry with the recover write");
                 Check(await TriggerProbe(turn.Instance, checkpoint.Revision, refused, Continue(turn.Instance), token),
                     "a refused entry with only the revision moved passes the triggers (rolled back)");
                 Check(!await TriggerProbe(running.Actor.Id, running.Revision, recovered, null, token),
@@ -826,6 +833,15 @@ internal static class PostgresRootParkOpeningChecks
                     !await TriggerProbe(running.Actor.Id, running.Revision, refused,
                         Continue(running.Actor.Id, stateStep: 1), token),
                     "a refused entry on a Running root passes with the row unchanged and is refused with a changed row");
+                // A lone outcome entry passes the insert trigger but is refused at commit, so the next write at that revision still lands.
+                Check(!await LoneEntryCommits(turn.Instance, checkpoint.Revision, recovered, token) &&
+                    !await LoneEntryCommits(turn.Instance, checkpoint.Revision, refused, token) &&
+                    !await LoneEntryCommits(running.Actor.Id, running.Revision, refused, token),
+                    "a lone recovered or refused entry with no checkpoint write is refused at commit");
+                Check(await TriggerProbe(turn.Instance, checkpoint.Revision, refused, Continue(turn.Instance), token) &&
+                    await TriggerProbe(running.Actor.Id, running.Revision, refused, Continue(running.Actor.Id), token) &&
+                    (await store.ReadJournalOfAsync(0, running.Actor.Id, 0, token)).All(entry => entry.Revision <= running.Revision),
+                    "after a refused lone entry the parked and Running roots stay writable at the next revision");
 
                 var unchanged = await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, token);
                 Check((await ReadInputs(turn.Instance)).SequenceEqual(physical) && unchanged is { Status: InstanceStatus.Faulted, Fault: fault } &&
@@ -949,21 +965,20 @@ internal static class PostgresRootParkOpeningChecks
             await transaction.CommitAsync(token);
         }
 
-        // One raw journal entry at the next revision, then one write, in a transaction that is always rolled back.
-        // True when both pass the triggers; false when a trigger refuses either.
-        async Task<bool> TriggerProbe(string instance, long revision, string? entries, FormattableString? write, CancellationToken token)
+        // One or two raw journal entries at the next revision, then one write, in a transaction that is always rolled back
+        // after its deferred checks run. True when all pass the triggers; false when a trigger refuses any.
+        async Task<bool> TriggerProbe(string instance, long revision, string? entries, FormattableString? write, CancellationToken token,
+            string? then = null)
         {
             await using var db = Open();
             await using var transaction = await db.Database.BeginTransactionAsync(token);
             try
             {
-                if (entries is not null)
-                    await db.Database.ExecuteSqlInterpolatedAsync($"""
-                        INSERT INTO "Journal" ("Partition", "Position", "Instance", "Revision", "Entries")
-                        SELECT 0, coalesce(max("Position"), 0) + 1, {instance}, {revision + 1}, {entries} FROM "Journal" WHERE "Partition" = 0
-                        """, token);
+                foreach (var entry in new[] { entries, then }.OfType<string>())
+                    await InsertEntry(db, instance, revision, entry, token);
                 if (write is not null && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1)
                     throw new InvalidOperationException("The trigger probe did not write exactly the root row.");
+                await db.Database.ExecuteSqlRawAsync("SET CONSTRAINTS ALL IMMEDIATE", token);
                 return true;
             }
             catch (Exception error) when ((error as PostgresException ?? error.InnerException as PostgresException)?.SqlState == "23514")
@@ -973,6 +988,29 @@ internal static class PostgresRootParkOpeningChecks
             finally
             {
                 await transaction.RollbackAsync(CancellationToken.None);
+            }
+        }
+
+        static Task InsertEntry(KernelDb db, string instance, long revision, string entries, CancellationToken token) =>
+            db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Journal" ("Partition", "Position", "Instance", "Revision", "Entries")
+                SELECT 0, coalesce(max("Position"), 0) + 1, {instance}, {revision + 1}, {entries} FROM "Journal" WHERE "Partition" = 0
+                """, token);
+
+        // One raw journal entry at the next revision with no checkpoint write, committed. True when the commit lands.
+        async Task<bool> LoneEntryCommits(string instance, long revision, string entries, CancellationToken token)
+        {
+            await using var db = Open();
+            await using var transaction = await db.Database.BeginTransactionAsync(token);
+            try
+            {
+                await InsertEntry(db, instance, revision, entries, token);
+                await transaction.CommitAsync(token);
+                return true;
+            }
+            catch (Exception error) when ((error as PostgresException ?? error.InnerException as PostgresException)?.SqlState == "23514")
+            {
+                return false;
             }
         }
 

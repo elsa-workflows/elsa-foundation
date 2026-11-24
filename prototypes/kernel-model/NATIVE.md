@@ -864,10 +864,13 @@ The owner reads the Park mark and kept set when it polls the command and
 decides there. When the mark still matches, the actor's restore plan is
 empty and the kept set fits one page, one fenced commit makes the root
 Running, clears the fault, the Park mark and its projection, and increments
-the root's release generation. A page holds at most 170 rows and 4 MiB,
-counting each row's stored size as the inbox inspection does (id, kind,
-header and payload), and always has room for its first row, so a single
-kept row over 4 MiB fits alone. The commit puts each Arrived row back in the
+the root's release generation. A page restores at most 170 rows and 4 MiB.
+Both bounds count only the rows the page restores, the Arrived rows, as the
+design charges a page for its restored rows; the Consumed fault input is
+cleared, never restored, and is not charged. Each row's stored size is
+counted as the inbox inspection does (id, kind, header and payload), and the
+first restored row always fits, so a single arrival over 4 MiB is restored
+alone. The commit puts each Arrived row back in the
 inbox with that generation and clears the Consumed fault input, which stays
 settled. Both take the ordinary admission window from the commit as their
 KeepUntil; the recover carries that window from its admission. The journal
@@ -879,7 +882,11 @@ that a released arrival finished, settles like any other operator command on
 an ended root: it is consumed with no checkpoint write. The checkpoint
 trigger accepts a "recovered" entry only with the Faulted to Running write
 that moves the release generation by exactly one, and a "refused" entry
-only with the row unchanged apart from its revision.
+only with the row unchanged apart from its revision. A deferred constraint
+trigger on the journal checks each outcome entry at commit: the root's row
+must be at the entry's revision, and for "recovered" it must be Running with
+its Park mark cleared. So an outcome entry inserted without its checkpoint
+write never commits and cannot block later writes at that revision.
 While released rows of the current generation are pending, the poll and the
 settled prefix offer only them, in Seq order, so they reach the model before
 any later input. An earlier operator row does not hold them back; it is
@@ -899,9 +906,17 @@ the bind, probes the trigger branches with raw writes, and refuses an
 oversized kept set built from filler rows. It refuses a delayed recover and
 an old selection after the root parks again, recovers that second Park at
 generation 2 with the second recover moved ahead of the released row by raw
-SQL, and shows that second recover settle on the Finished root. A neighbor
-root then shows the byte bound: a fault input over 4 MiB with one more kept
-row is refused as "page", and alone it recovers. The multi-page drain under a cursor, with
+SQL, and shows that second recover settle on the Finished root. The trigger
+probes include a refused entry beside a recovered entry on the recover
+write, which only the refused-row rule refuses, and a lone recovered or
+refused entry committed with no checkpoint write, which the deferred trigger
+refuses while the root stays writable. A neighbor root then shows the byte
+bound: parked on a fault input over 4 MiB, with one small arrival and a raw
+arrival over 4 MiB, it is refused as "page"; without the raw arrival the
+fault input is not charged and it recovers with the small arrival. The
+released-cohort filter has no suspended conjunct and no Due bound, since
+format 22 has neither a suspended parked root nor a released row that is not
+yet due; composition with Suspend or delayed inputs must revisit both. The multi-page drain under a cursor, with
 only released inputs eligible during it, remains open, as do Retry and
 RetryAll, timers, jobs and subscriptions in the restore plan, Park expiry,
 discard, and terminate or delete of a parked root.
