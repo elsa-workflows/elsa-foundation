@@ -32,7 +32,7 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
   `git ls-files --eol` that every file matches the source index (FR-001). Then, in a second commit, give the Elsa 3
   side the same naming as Elsa 4: rename `templates/` to `templates-elsa3/`, `environments/dev.json` to
   `environments/elsa3.json` and `global-configuration.json` to `global-configuration.elsa3.json`, and point its
-  template search path at `templates-elsa3/*` (renames only, no content change).
+  template search path at `templates-elsa3/*` (renames plus that one search-path line).
 - [ ] T002 Check `JTest/` for secrets: credentials and base URLs are `${VARIABLE}` references; other literals in the
   environment files (dispatch channels, wait times, engine-specific expected values) are not secrets (FR-004).
 - [ ] T003 [P] Create the ledger files with their table headers from data-model.md: `JTest/ledger/suites.md` (one row
