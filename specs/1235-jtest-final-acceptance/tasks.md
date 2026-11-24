@@ -22,11 +22,13 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 ## Phase 1: Setup
 
-- [ ] T001 Copy the corpus at `b1cde13` unchanged into `JTest/`: `workflow-definitions/`, `tests/`, `templates/`,
+- [ ] T001 Add `/extensions/Elsa3/tests/JTest/** -text` to the repository `.gitattributes` first (the corpus stores
+  `import-and-publish-workflows.json` with CRLF line endings, which `core.autocrlf` would otherwise change), then copy
+  the corpus at `b1cde13` unchanged into `JTest/`: `workflow-definitions/`, `tests/`, `templates/`,
   `environments/`, `test-files/`, `global-configuration.json`, `import-and-publish-workflows.json`; leave out
-  `pipelines/` and the repository README. Commit this copy alone, with the source commit in the message (FR-001).
-- [ ] T002 Check `JTest/` for secrets and line endings: no credential values (environment files hold only
-  `${VARIABLE}` references), and add a `.gitattributes` entry if needed so the JSON files keep their original bytes
+  `pipelines/` and the repository README. Commit the attribute and the copy alone, with the source commit in the message, and check with
+  `git ls-files --eol` that every file matches the source index (FR-001).
+- [ ] T002 Check `JTest/` for secrets: no credential values (environment files hold only `${VARIABLE}` references)
   (FR-004).
 - [ ] T003 [P] Create the ledger files with their table headers from data-model.md: `JTest/ledger/suites.md` (one row
   per suite, all `not run`), `JTest/ledger/baseline-failures.md`, `JTest/ledger/refactor-scope.md`,
@@ -125,8 +127,8 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 ## Phase 5: User Story 3 - Converted definitions pass on Elsa 4 (Priority: P1)
 
-**Goal**: the Elsa 4 template set and run; every suite not blocked by JOIN behaviour, a 3.6.3 defect or an approved
-incompatibility passes.
+**Goal**: the Elsa 4 template set and run; every suite not blocked by JOIN behaviour, value capture, a 3.6.3 defect or
+an approved incompatibility passes.
 
 **Independent test**: fresh Workbench with reconciliation, `jtest run` with the Elsa 4 configuration, ledger read.
 
@@ -174,8 +176,8 @@ cannot produce with the same meaning fails the template with the output named (F
   `JTest/adjusted/` with the exact change and reason in `JTest/ledger/dispositions.md`, get the coordinator's
   approval, and run the Elsa 4 host with the adjusted copy in place of the original via the reconciliation `Files`
   list (FR-014, FR-015).
-- [ ] T037 [US3] Bucket every definition in `JTest/ledger/dispositions.md` whose suites are neither JOIN-blocked nor
-  issue-blocked; the rest stay `unclassified` with the reason, and T043 completes SC-003.
+- [ ] T037 [US3] Bucket every definition in `JTest/ledger/dispositions.md` whose suites are neither JOIN-blocked,
+  value-capture-blocked nor issue-blocked; the rest stay `unclassified` with the reason, and T043 completes SC-003.
 - [ ] T038 [US3] Once spec 1207 is implemented on the initiative branch (its status Implemented), merge the initiative branch into this branch and
   make the qualifying run: all suites on a fresh Workbench from that head; record it as the non-JOIN milestone run
   (FR-020, SC-004). Before recording it, confirm with `git diff` that `JTest/tests/**` differs from the T022 state

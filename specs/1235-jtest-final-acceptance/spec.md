@@ -252,7 +252,7 @@ blocks it, and J-001 through J-005 are open in the tasks.
 - **SC-002 - Engine-neutral**: Every suite file is identical between the Elsa 3 and Elsa 4 runs, and still passes on
   the Elsa 3 baseline.
 - **SC-003 - Dispositions**: All 36 definitions have exactly one bucket with its evidence (definitions whose suites
-  are JOIN-blocked are bucketed when the JOIN tasks close).
+  are JOIN-blocked or value-capture-blocked are bucketed when the JOIN and value-capture tasks close).
 - **SC-004 - Non-JOIN milestone**: Every suite not blocked by JOIN behaviour, by value capture (FR-024), by a 3.6.3
   defect (SC-001) or by an
   approved incompatibility passes on

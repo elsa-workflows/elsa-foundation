@@ -20,6 +20,8 @@ output with the same meaning, the template fails with a message naming the outpu
 | Workflow status | Elsa 4 status → Elsa 3 status/sub-status: Completed → Finished/Finished; Faulted → Finished/Faulted; Cancelled → Finished/Cancelled; Suspended → Running/Suspended; Running → Running/Executing; Pending → Running/Pending. |
 | Activity status | Elsa 4 `Completed`, `Faulted` and `Cancelled` output as Elsa 3 `Completed`, `Faulted` and `Canceled`; `Running`, `Waiting` and `Suspended` output as `Running`. Other Elsa 4 statuses fail the template with the value named. |
 | Workflow instance items | `instances` items carry the Elsa 3 field names suites read: `id` (from `workflowExecutionId`), `definitionId`, `definitionVersionId`, `correlationId`, `name`, `version` (integer, per the version rule) and `status`/`subStatus` (per the status table). |
+| Activity member names | `activityState` and `outputs` keys are the Elsa 3 member names, mapped from the converted Elsa 4 inputs and outputs with the converter's member map (see *Activity state and outputs*). |
+| HTTP status codes | An Elsa 4 integer HTTP status code outputs as the Elsa 3 enum name suites compare against (for example `202` → `Accepted`, as .NET's `HttpStatusCode` names it). |
 | Counts | Counts the Elsa 3 journal returned (`totalCount` for started or completed events) are computed from the activity execution list, which requires Durable persistence for the run. |
 
 **Activity state and outputs.** `activityState` and `outputs` of the `elsa-activity-instance-*` templates are part
