@@ -501,6 +501,12 @@
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
+      "elsa.actorfoundation.testsupport": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime.graph": {
         "type": "Project"
       },
@@ -528,6 +534,12 @@
           "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Graph": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Native.Activities": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.native.retentionfixture": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime.statecharts.orderfixture": {
@@ -564,7 +576,9 @@
           "Elsa.ActorFoundation.BuiltIn.PostgreSql": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.TestSupport": "[1.0.0, )",
           "Elsa.Workflows.Runtime.Native.Migration.SqliteFixture": "[1.0.0, )",
+          "Elsa.Workflows.Runtime.Native.RetentionFixture": "[1.0.0, )",
           "Elsa.Workflows.Runtime.Statecharts.OrderFixture": "[1.0.0, )",
           "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )",
           "Kernel.Foundation.InMemory": "[1.0.0, )",
