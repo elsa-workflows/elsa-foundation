@@ -3,8 +3,8 @@
 Run from `prototypes/kernel-model`:
 
 ```sh
-dotnet build ../../essentials/tests/ActorFoundation/Statecharts/Run -c Release
-dotnet ../../essentials/tests/ActorFoundation/Statecharts/Run/bin/Release/net10.0/Kernel.Statecharts.Run.dll
+dotnet build ../../essentials/tests/Workflows/Runtime/Statecharts/Run -c Release
+dotnet ../../essentials/tests/Workflows/Runtime/Statecharts/Run/bin/Release/net10.0/Kernel.Statecharts.Run.dll
 ```
 
 The runner sends frame-addressed business inputs through the simulation's real inbox. A transition from a compound state enters two parallel regions. One entry runs a normal native Event activity. A second signal remains in the inbox until that entry resumes and then transitions both regions. A denied guard and an unknown event each produce an unhandled outcome. A final transition exits both regions and returns control to the enclosing Flowchart when nested.
@@ -20,14 +20,14 @@ The engine takes no dependency on the kernel. The native composite stores its se
 From `prototypes/kernel-model`:
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Statecharts/Run -- --public-order
+dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Statecharts/Run -- --public-order
 ```
 
 The Embedded example starts a Native order workflow through `WorkflowRuntime`. It reserves stock, books a shipment and waits for payment. A replacement owner loads the same workflow. Approved orders fulfill. Declined orders enter explicit shipment and stock release states and wait for each acknowledgement. Local activity output shows the work, and the public journal shows one ordered state path after replaying the payment operation. The declined case retries that operation with a shipment acknowledgement and verifies that it appends no journal entry. Sending the acknowledgement with a fresh operation ID then enters the stock release state, visible from the same saved bookmark. Both paths run in Balanced and Durable.
 
 Append `--omit-stock-release` to remove the ordinary stock release activity. The assertion fails before the order can close.
 
-The [PostgreSQL Embedded example](../../../../../prototypes/kernel-model/README.md#order-statemachine-restart-on-the-public-postgresql-preview)
+The [PostgreSQL Embedded example](../../../../../../prototypes/kernel-model/README.md#order-statemachine-restart-on-the-public-postgresql-preview)
 uses this chart to verify one restart with a pending shipment acknowledgement. Cluster qualification has
 separate K7 acceptance cases.
 
@@ -43,7 +43,7 @@ Eight literal checkpoint-reader fixtures are listed separately from those workfl
 
 The existing public `Chart` constructors adapt the legacy sibling-only definition to that same engine; there is no second selector. The original20 and phase56 native schedules exercise this adapter. Full-graph fixtures are logical data, not actual native state-local scopes or support through a new public authored schema. The private native bridge below exercises full graphs without publishing a product schema.
 
-`--selection-export` produces JSON for the [Node reference comparison](../../../../../specs/1210-state-machine/selection-model/README.md). Twenty-eight common profiles compare candidate/selected sets, exited visits, source visits and phase dependencies. Two explicitly proposed child-to-ancestor re-entry cases are exercised only by the private .NET profile and excluded from that comparison. This is neither full SCXML compliance nor production architecture approval.
+`--selection-export` produces JSON for the [Node reference comparison](../../../../../../specs/1210-state-machine/selection-model/README.md). Twenty-eight common profiles compare candidate/selected sets, exited visits, source visits and phase dependencies. Two explicitly proposed child-to-ancestor re-entry cases are exercised only by the private .NET profile and excluded from that comparison. This is neither full SCXML compliance nor production architecture approval.
 
 ## Internal progress protocol
 
@@ -108,7 +108,7 @@ Checkpoint version3 introduced current/planned visits, a frame-scoped monotonic 
 
 `--scopes-list` discovers 55 cases and `--scopes` runs them: 24 actual native workflows, 17 explicit literal reader/definition fixtures and 14 deliberately seeded context-refusal schedules. `--scopes-red` is a separate minimal actual workflow that failed V1 before the attachment and now passes. Root and Flowchart placements cross Balanced/Durable; regional cases run both callback orders. Every wait is delivered using the real registration after a cold owner reload.
 
-One generic lexical resource belongs to the machine invocation, and one to each entered state visit. The same StateMachine, compiled selector and phase scheduler attach ordinary Entry, Exit and Action work to those resources. Values remain in the normal native evaluator/assignment/capture owner; chart state stores only handles/progress. The private `Defaults` dictionaries are literal JSON declarations, not the product Variable/binding schema. Targets initialize at their actual Entry step, after the Action barrier and their parent Entry. Source resources remain through Action, then retire child-first before target Entry. That source visibility is an explicitly proposed engineering profile in [the values contract](../../../../../specs/1210-state-machine/contracts/values.md), not a new accepted owner choice.
+One generic lexical resource belongs to the machine invocation, and one to each entered state visit. The same StateMachine, compiled selector and phase scheduler attach ordinary Entry, Exit and Action work to those resources. Values remain in the normal native evaluator/assignment/capture owner; chart state stores only handles/progress. The private `Defaults` dictionaries are literal JSON declarations, not the product Variable/binding schema. Targets initialize at their actual Entry step, after the Action barrier and their parent Entry. Source resources remain through Action, then retire child-first before target Entry. That source visibility is an explicitly proposed engineering profile in [the values contract](../../../../../../specs/1210-state-machine/contracts/values.md), not a new accepted owner choice.
 
 Lifecycle schedules assert ordinary bindings, output capture, ForEach shadowing, parent writes, repeated internal actions, fresh self/parent re-entry, preserved parent identity, machine value persistence, all three durable phases, final Entry waiting and disposal. Parallel schedules assert independent resources, concurrent work, opposite completion orders and whole-parent reset. An embedded machine proves its own declarations and ordinary outer-frame fallback; completion releases only its own resources. Ordinary cancellation and an absorbed activity fault prove generic cleanup, without claiming incident/retry or successful-sibling recovery.
 

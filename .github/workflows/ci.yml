@@ -109,7 +109,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
             if ! changed=$(git diff --name-only "$GITHUB_SHA^1" "$GITHUB_SHA"); then
               kernel=true
-            elif grep -Eq '^(prototypes/kernel-model/|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+            elif grep -Eq '^(prototypes/kernel-model/|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
               kernel=true
             fi
           fi
@@ -1782,7 +1782,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/ActorFoundation/Statecharts/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Recovery/Run/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/Workflows/Runtime/Statecharts/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Recovery/Run/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
@@ -1790,7 +1790,7 @@ jobs:
       # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
       - name: Build
         run: |
-          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/ActorFoundation/Statecharts/Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/Workflows/Runtime/Statecharts/Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1811,7 +1811,7 @@ jobs:
           if [ "$code" -ne 1 ] || ! grep -Eq '^placement: [0-9]+ check\(s\) FAILED$' <<<"$out"; then echo "--placement-check did not catch ContiguousOnlyBalancer (exit $code)"; exit 1; fi
           # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
           dotnet ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
-          dotnet ../../essentials/tests/ActorFoundation/Statecharts/Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
+          dotnet ../../essentials/tests/Workflows/Runtime/Statecharts/Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
 
       - name: Public contract workloads
         run: |
@@ -1923,13 +1923,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json', 'essentials/tests/ActorFoundation/Native/Run/packages.lock.json', 'essentials/tests/ActorFoundation/Statecharts/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Recovery/Run/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json', 'essentials/tests/ActorFoundation/Native/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Statecharts/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Recovery/Run/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
       - name: Build
         run: |
-          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/ActorFoundation/Statecharts/Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/Workflows/Runtime/Statecharts/Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1963,7 +1963,7 @@ jobs:
           if [ "$code" -ne 1 ] || ! grep -Eq '^placement: [0-9]+ check\(s\) FAILED$' <<<"$out"; then echo "--placement-check did not catch ContiguousOnlyBalancer (exit $code)"; exit 1; fi
           # Round 5 C: the effect-key witnesses the sweep's mix cannot reach (a retried activation, a re-entered statechart state).
           dotnet ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run/$BIN/Kernel.Native.Recovery.Run.dll --effect-keys
-          dotnet ../../essentials/tests/ActorFoundation/Statecharts/Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
+          dotnet ../../essentials/tests/Workflows/Runtime/Statecharts/Run/$BIN/Kernel.Statecharts.Run.dll --effect-keys
 
       - name: Mutation checks, full size
         run: |
