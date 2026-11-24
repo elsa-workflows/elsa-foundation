@@ -115,9 +115,8 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   kept the value outside the instance; it converts with `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED`. Both warnings
   carry `VariableName`, `InputName` or `OutputName` and `StorageDriverType` (the trimmed Elsa 3 driver type) as
   metadata, plus `ComponentKind` (`storage-driver`) and `ComponentName` (the same type) for the migration report's
-  component inventory. What to
-  do instead is the migrator's choice: [Elsa 3 storage drivers](../../../../docs/migration/elsa3-storage-drivers.md)
-  walks through it.
+  component inventory. What to do instead is the migrator's choice:
+  [Elsa 3 storage drivers](../../../../docs/migration/elsa3-storage-drivers.md) walks through it.
 
   A resource type (`FormFile`, `IFormFile`, `Stream`, `byte[]` or `Byte` with the array flag, alone, as a collection
   element or as a CLR generic type argument) is refused with or without a starting value: it stands for a file, a stream or raw bytes, which Elsa 4 cannot hold yet (#3194).

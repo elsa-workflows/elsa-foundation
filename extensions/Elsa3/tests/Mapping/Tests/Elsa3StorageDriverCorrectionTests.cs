@@ -112,21 +112,41 @@ public sealed class Elsa3StorageDriverCorrectionTests
             Assert.Equal("elsa.json", ContractDriver(result.Value!, member));
     }
 
-    [Fact]
-    public async Task A_container_variable_on_a_custom_driver_converts_with_a_warning()
+    [Theory]
+    [InlineData(MemoryDriver, Elsa3ImportDiagnosticCodes.MemoryStoragePersisted)]
+    [InlineData(CustomDriver, Elsa3ImportDiagnosticCodes.CustomStorageDriverReplaced)]
+    public async Task A_container_variable_converts_to_the_default_storage_with_a_warning(string driver, string code)
     {
         var root = Sequence("root", Activity("write", "Elsa.WriteLine", ("text", Literal("hi"))));
-        root.AdditionalProperties["variables"] = System.Text.Json.JsonSerializer.SerializeToElement(new[] { new { id = "local", name = "local", typeName = "String", storageDriverTypeName = CustomDriver } });
+        root.AdditionalProperties["variables"] = System.Text.Json.JsonSerializer.SerializeToElement(new[] { new { id = "local", name = "local", typeName = "String", storageDriverTypeName = driver } });
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        var warning = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.CustomStorageDriverReplaced);
+        var variable = Assert.Single(Node(result.Value!.State, "root").Structure!.Payload.GetProperty("variables").EnumerateArray());
+        Assert.True(!variable.TryGetProperty("storageDriverType", out var stored) || stored.ValueKind == System.Text.Json.JsonValueKind.Null, variable.GetRawText());
+        var warning = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code.Contains("STORAGE", StringComparison.Ordinal));
+        Assert.Equal(code, warning.Code);
         Assert.Equal(Elsa3MigrationDiagnosticSeverity.Warning, warning.Severity);
         Assert.Equal("local", warning.Metadata["VariableName"]);
-        Assert.Equal(CustomDriver, warning.Metadata["StorageDriverType"]);
-        Assert.Equal(CustomDriver, warning.Metadata["ComponentName"]);
+        Assert.Equal(driver, warning.Metadata["StorageDriverType"]);
+        Assert.Equal("storage-driver", warning.Metadata["ComponentKind"]);
+        Assert.Equal(driver, warning.Metadata["ComponentName"]);
         Assert.Equal("root", warning.Metadata["ActivityNodeId"]);
+    }
+
+    /// <summary>A reusable workflow's variable on a Memory or custom driver is an elsa.json graph variable.</summary>
+    [Theory]
+    [InlineData(MemoryDriver)]
+    [InlineData(CustomDriver)]
+    public async Task A_reusable_workflow_variable_becomes_an_elsa_json_graph_variable(string driver)
+    {
+        var result = await ConvertAsync(Definition(Member.Variable, driver, reusable: true), reusable: true);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var manifest = Elsa3ReusableActivityImportMaterializer.BuildGraphManifest(result.Value!);
+        var variable = Assert.Single(manifest.GetProperty("variables").EnumerateArray(), item => item.GetProperty("name").GetString() == "report");
+        Assert.Equal("elsa.json", variable.GetProperty("storageDriverKey").GetString());
     }
 
     /// <summary>

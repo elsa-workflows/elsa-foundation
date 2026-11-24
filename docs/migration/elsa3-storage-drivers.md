@@ -91,8 +91,8 @@ in the default storage after all. Record that decision.
 
 Elsa 4 cannot do this for a converted workflow today:
 
-- A workflow's own variables, container variables, inputs and outputs keep their values in the instance. Publication
-  refuses any other storage driver there (VF-ACT-005).
+- A workflow's own variables and container variables keep their values in the instance: publication refuses any other
+  storage driver on a variable (VF-ACT-005). A workflow's own inputs and outputs always live in the instance too.
 - Durable-value storage drivers (`IRuntimeDurableValueStorageDriver`, selected by key) apply only to a reusable
   activity's top-level inputs, outputs and graph variables. Only the `elsa.json` driver ships, and the driver contract
   says encoding must persist nothing outside the workflow's own commit. A blob driver would not meet that rule.
