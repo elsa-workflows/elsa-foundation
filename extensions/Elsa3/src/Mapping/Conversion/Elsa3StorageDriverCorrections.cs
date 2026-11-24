@@ -24,7 +24,7 @@ internal static class Elsa3StorageDriverCorrections
     /// <summary>The metadata key holding the Elsa 3 driver type (trimmed, assembly-qualified as exported).</summary>
     public const string StorageDriverTypeKey = "StorageDriverType";
 
-    /// <summary>The metadata key naming the component for the migration report's inventory and the migration skill (spec 1237 FR-016a, spec 1238).</summary>
+    /// <summary>The metadata key naming the component, so migration tooling can list storage drivers without parsing messages.</summary>
     public const string ComponentNameKey = "ComponentName";
 
     /// <summary>The metadata key holding the component's kind; for a storage driver <see cref="StorageDriverComponentKind"/>.</summary>

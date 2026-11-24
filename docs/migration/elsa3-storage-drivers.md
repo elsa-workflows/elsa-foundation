@@ -1,7 +1,7 @@
 # Elsa 3 storage drivers: what to do after conversion
 
 In Elsa 3, each workflow variable, input and output named a storage driver: where its value lived while the workflow
-ran. Elsa 4 converts every one of them to its default storage, `elsa.json`. The value is then stored with the workflow
+ran. The Elsa 3 converter turns every one of them into Elsa 4's default storage, `elsa.json`. The value is then stored with the workflow
 instance. For most workflows that is the same as before. It is not the same for two kinds of driver:
 
 - **Memory**: Elsa 3 never persisted the value.
@@ -29,12 +29,13 @@ Each warning carries structured metadata, so tools never parse the message:
 
 - `VariableName`, `InputName` or `OutputName`: the member;
 - `StorageDriverType`: the Elsa 3 driver type as exported, trimmed (for example `Acme.BlobStorageDriver, Acme`);
-- `ComponentKind`: `storage-driver`, and `ComponentName`: the same driver type. The migration report and the migration
-  skill find storage drivers through these two keys, Memory and custom alike.
+- `ComponentKind`: `storage-driver`, and `ComponentName`: the same driver type, so a tool can list storage drivers,
+  Memory and custom alike, as components.
 
-Both codes are `ELS3-BEHAVIOUR-*` warnings. The workflow converts and publishes, and the migration report files the
-warning under *Reconsider*: the run goes on, but the owner has a decision to make before the workflow runs in
-production.
+Both codes are `ELS3-BEHAVIOUR-*` warnings: the workflow converts and publishes, but Elsa 4 behaves differently at run
+time, and the owner has a decision to make before the workflow runs in production. The planned migration tooling
+([Elsa 3 workflows migration design](../initiatives/3052/2026-11-24-elsa3-workflows-migration-design.md)) files them under *Reconsider* and starts this conversation for each
+driver.
 
 ## When to start the conversation
 
@@ -65,22 +66,25 @@ Elsa 4 has no variable that skips persistence. Do not keep the secret in a varia
   `SecretsWorkflows` feature resolves the reference each time the activity is activated. The instance keeps only a
   withheld marker, never the value. See [Elsa.Secrets.Workflows](../../essentials/src/Secrets/Workflows/README.md) and
   [spec 188](../../specs/188-workflow-secret-safety/).
+- Only an input that accepts a secret reference can take one. Publication refuses a secret on an input that could
+  echo, copy or compute with it (VF-ACT-012), such as a script, a log line or Set Variable, and a credential input
+  cannot be bound to an expression. A script therefore cannot read the secret or combine it, as in `"Bearer " + token`.
 - A secret cannot be a variable's starting value. If several activities need it, bind each of them to the same
   reference.
-- If a script built the secret from parts, move that logic into a custom activity input or host configuration. The
-  script should not assemble it into a variable.
+- If the workflow combined the secret with other values, move that into a custom activity whose credential input takes
+  the secret reference and which builds the combined value itself.
 
 Marking an input `IsSensitive` hides the value in views and logs, but it is still persisted. On its own it does not
 meet goal A.
 
 ### 3. Goal B: bulky or short-lived data
 
-Elsa 4 persists what a variable or output holds. To keep the data out of the instance:
+Elsa 4 persists what a variable or output holds, and each activity's inputs. To keep the data out of the instance:
 
-- Fetch, use and drop it inside one activity: a custom activity (or a JavaScript host function called from one step)
-  that reads the data, does the work and returns only what later steps need, such as a status, an id or a summary.
-  The instance persists what the workflow keeps in variables and outputs. It does not persist what stays inside the
-  activity.
+- Fetch, use and drop it inside one activity: a custom activity that reads the data, does the work and returns only
+  what later steps need, such as a status, an id or a summary. The instance persists what the workflow keeps in
+  variables and outputs, and the inputs it passes to each activity. It does not persist what stays inside the
+  activity, provided the activity does not suspend between fetching and using the data.
 - If later steps need the data itself, keep a **reference** (a URL, a blob name, a document id) in the variable, and
   let each step read the data through it. This is goal C with a small value in the instance.
 

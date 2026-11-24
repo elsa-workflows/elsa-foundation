@@ -44,6 +44,8 @@ public sealed class Elsa3StorageDriverCorrectionTests
     [InlineData(Member.Variable, true, ObsoleteWorkflowDriver)]
     [InlineData(Member.Input, true, ObsoleteWorkflowDriver)]
     [InlineData(Member.Output, true, InstanceDriver)]
+    [InlineData(Member.Output, true, ObsoleteWorkflowDriver)]
+    [InlineData(Member.Input, false, ObsoleteWorkflowDriver)]
     public async Task A_driver_that_kept_the_value_with_the_instance_converts_silently(Member member, bool reusable, string driver)
     {
         var result = await ConvertAsync(Definition(member, driver, reusable), reusable);
@@ -133,6 +135,20 @@ public sealed class Elsa3StorageDriverCorrectionTests
         Assert.Equal("storage-driver", warning.Metadata["ComponentKind"]);
         Assert.Equal(driver, warning.Metadata["ComponentName"]);
         Assert.Equal("root", warning.Metadata["ActivityNodeId"]);
+    }
+
+    [Theory]
+    [InlineData(InstanceDriver)]
+    [InlineData(ObsoleteWorkflowDriver)]
+    public async Task A_container_variable_on_a_driver_that_kept_the_value_with_the_instance_converts_silently(string driver)
+    {
+        var root = Sequence("root", Activity("write", "Elsa.WriteLine", ("text", Literal("hi"))));
+        root.AdditionalProperties["variables"] = System.Text.Json.JsonSerializer.SerializeToElement(new[] { new { id = "local", name = "local", typeName = "String", storageDriverTypeName = driver } });
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code.Contains("STORAGE", StringComparison.Ordinal));
     }
 
     /// <summary>A reusable workflow's variable on a Memory or custom driver is an elsa.json graph variable.</summary>
