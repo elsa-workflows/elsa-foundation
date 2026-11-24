@@ -801,7 +801,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
-             {(db.UsesRootOperatorProtocol ? RootOperatorPollFilter : "")}
+             {(db.UsesRootOperatorProtocol ? db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter : RootOperatorPollFilter : "")}
              AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({RootInputScopes}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
@@ -823,13 +823,16 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                          AND prior."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND prior."EventMatch" IS NULL
                          AND NOT prior."Done" AND prior."Due" <= t.now
                          AND (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running} OR prior."Id" LIKE 'operator/%'))
-                   ELSE (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running}) AND NOT EXISTS (
+                   ELSE (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running}) AND (/*released-cohort*/ NOT EXISTS (
                        SELECT 1 FROM "Messages" op
                        WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
                          AND op."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND op."Id" LIKE 'operator/%'
-                         AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now)
+                         AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now))
                    END)))
         """;
+    // A released row of the root's current generation goes before every control: an earlier operator row waits for the cohort.
+    private static readonly string RootRecoveryOperatorPollFilter = RootOperatorPollFilter.Replace("/*released-cohort*/",
+        """m."FoundationReleasedBy" = target."FoundationParkGeneration" OR """, StringComparison.Ordinal);
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
         ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
     private string PollMessages => _ordinaryRoots is { Discover: true }

@@ -3456,6 +3456,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var item in retired.Inbox.ToArray()) Forget(item);
             if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
         }
+        if (unit.Slot is { CurrentRow.Status: InstanceStatus.Faulted } restored && unit.Row is { Status: InstanceStatus.Running } &&
+            unit.Consumed is [{ Message.Operator.RootParkMark: not null }])
+        {
+            // A qualified root's recover puts its released rows ahead of every input read before it. The next poll reads
+            // the inputs held here again, in that order, so no ordinary turn runs ahead of the cohort.
+            foreach (var item in restored.Inbox.Where(item => item.Durable && !item.Taken).ToArray()) Forget(item);
+            if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
+            _woken = true;
+        }
         foreach (var item in unit.Held)     // back in its place; its turn ran, so it is no suspect and no longer on trial
         {
             (item.Taken, item.Held, item.Suspect, item.Marked, item.HeldHere) = (false, true, false, true, true);

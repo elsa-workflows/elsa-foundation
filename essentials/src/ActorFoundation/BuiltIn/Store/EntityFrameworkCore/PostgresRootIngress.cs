@@ -85,7 +85,8 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         try { command = JsonSerializer.Deserialize<Contract.OperatorCommand>(payload, OperatorJson); }
         catch (JsonException) { return new(Contract.AdmissionOutcome.Refused); }
 
-        if (command is not { Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null })
+        if (command is not { Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null } ||
+            kind == Contract.Kinds.Recover && options?.DueAt is not null)
             return new(Contract.AdmissionOutcome.Refused);
         if (command.ExpectedTarget is { } selected && selected != actor)
             return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
