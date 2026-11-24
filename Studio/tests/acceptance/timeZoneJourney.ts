@@ -108,6 +108,12 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
       if (pause) {
         await expect(page.getByRole("button", { name: "Running...", exact: true }).first()).toBeDisabled();
         await capture(page, info, "run-busy");
+        const created = page.locator(".wf-instance-meta dt").filter({ hasText: /^Created$/ }).locator("xpath=following-sibling::dd[1]");
+        await created.scrollIntoViewIfNeeded();
+        await expect(created).toBeInViewport();
+        await expect(created.locator("time")).toContainText("UTC+00:00");
+        expect(await created.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+        await capture(page, info, "run-busy-created");
       }
     } finally { release(); }
     const result = await response;
@@ -140,6 +146,8 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
     await expect(created).toHaveAttribute("title", expected.full);
     await expect(created.locator(".studio-timestamp-date")).toHaveText(expected.date);
     await expect(created.locator(".studio-timestamp-time")).toHaveText(expected.time);
+    await created.scrollIntoViewIfNeeded();
+    await expect(created).toBeInViewport();
     await capture(page, info, name);
     return { created, instant: retained.instance.createdAt };
   }
@@ -154,6 +162,8 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
     await expect(mounted.created).toHaveAttribute("title", expected.full);
     await expect(mounted.created.locator(".studio-timestamp-date")).toHaveText(expected.date);
     await expect(mounted.created.locator(".studio-timestamp-time")).toHaveText(expected.time);
+    await mounted.created.scrollIntoViewIfNeeded();
+    await expect(mounted.created).toBeInViewport();
     await capture(page, info, "run-mounted-zone-change");
   } finally { await settings.close(); }
   const lastRun = await run("2026-07-15T09:30:12.345", "2026-07-15T09:30:12.345+00:00", "run-utc", true);
@@ -187,6 +197,8 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
   await page.goto("/settings/appearance");
   await page.getByRole("button", { name: "Reset appearance", exact: true }).click();
   await expect(picker()).toHaveValue("browser");
+  await picker().scrollIntoViewIfNeeded();
+  await expect(picker()).toBeInViewport();
   await capture(page, info, "reset-browser");
   await page.evaluate(() => localStorage.setItem("elsa-studio-time-zone", "Invalid/Unregistered"));
   await page.reload();
