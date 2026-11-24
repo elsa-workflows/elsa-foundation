@@ -1794,6 +1794,10 @@ public sealed class Elsa3ExpressionRewriter(
                 return;
             }
 
+            // new.target and import.meta name no binding: their identifiers are syntax, not references to a global.
+            if (node is MetaProperty)
+                return;
+
             // The converter rewrites only a direct call to a replaced global (#5664). Any other reference (an alias, a
             // callback, a stored function) names nothing in Elsa 4, so it is refused (#5691). A write to the name is
             // reported as an undeclared write instead.
@@ -2346,8 +2350,8 @@ public sealed class Elsa3ExpressionRewriter(
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
                     Elsa3ImportDiagnosticCodes.AmbiguousReference,
-                    $"JavaScript calls '{callee.Name}', which is both a replaced Elsa 3 function and the generated accessor of a variable or input.",
-                    $"Rename the variable or input in the Elsa 3 workflow, or register the host function under another name, so that '{callee.Name}' has one meaning, before import. " +
+                    $"JavaScript calls '{callee.Name}', which is both a replaced Elsa 3 function and the generated accessor of a variable, input or activity output.",
+                    $"Rename the variable, input or activity output in the Elsa 3 workflow, or register the host function under another name, so that '{callee.Name}' has one meaning, before import. " +
                     "The converter cannot tell whether Elsa 3 had a custom function of that name."));
                 return;
             }
