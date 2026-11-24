@@ -81,7 +81,7 @@ internal sealed partial class PostgresRootAdmission
             FoundationTerminalStamp? terminal = null;
             if (selected)
             {
-                await PinSelectedOperatorSchemaAsync(db, token);
+                await PinRootNamespaceAsync(db, token);
                 var cursor = await ReadJournalCursorAsync(db, token);
                 if (deletion)
                 {
@@ -184,7 +184,7 @@ internal sealed partial class PostgresRootAdmission
         }
         catch (PostgresException error) when (selected && IsUnavailableSelectedSchema(error))
         {
-            throw new StoreFormatException("The selected operator admission schema is unreadable.", error);
+            throw new StoreFormatException("The qualified root store schema is unreadable.", error);
         }
     }
 
@@ -207,16 +207,16 @@ internal sealed partial class PostgresRootAdmission
 
     private sealed record SelectedOperatorStore(int StoreSchema, int MessageProtocol, int JournalCodec, string Namespace);
 
-    internal static async Task PinSelectedOperatorSchemaAsync(KernelDb db, CancellationToken token)
+    internal static async Task PinRootNamespaceAsync(KernelDb db, CancellationToken token)
     {
-        try { await PinSelectedOperatorSourceAsync(db, token); }
+        try { await PinRootSourceAsync(db, token); }
         catch (PostgresException error) when (IsUnavailableSelectedSchema(error))
         {
-            throw new StoreFormatException("The selected operator admission schema is unreadable.", error);
+            throw new StoreFormatException("The qualified root store schema is unreadable.", error);
         }
     }
 
-    private static async Task PinSelectedOperatorSourceAsync(KernelDb db, CancellationToken token)
+    private static async Task PinRootSourceAsync(KernelDb db, CancellationToken token)
     {
         var marker = await db.Database.SqlQuery<SelectedOperatorStore>($"""
             SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", ns.nspname AS "Namespace"
@@ -231,6 +231,24 @@ internal sealed partial class PostgresRootAdmission
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             SELECT pg_catalog.set_config('search_path', 'pg_catalog,' || pg_catalog.quote_ident({source}) || ',pg_temp', true)
             """, token);
+        if (db.UsesRootParkOpening)
+        {
+            await db.Database.ExecuteSqlRawAsync("""
+                LOCK TABLE "FoundationRootIssuer", "FoundationRootBirths", "Instances", "Messages", "Partitions", "Nodes",
+                    "Journal", "Subscriptions", "FoundationDirectReceipts", "FoundationActorList", "FoundationRootReceipts", "Events"
+                IN ACCESS SHARE MODE
+                """, token);
+            var parkSources = await db.Database.SqlQuery<bool>($"""
+                SELECT count(*) = 13 AS "Value"
+                FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
+                    ('"Instances"'), ('"Messages"'), ('"Partitions"'), ('"Nodes"'), ('"Journal"'), ('"Subscriptions"'),
+                    ('"FoundationDirectReceipts"'), ('"FoundationActorList"'), ('"FoundationRootReceipts"'), ('"Events"')) required(name)
+                JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name) AND c.relkind = 'r'
+                JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace AND ns.nspname = {source}
+                """).SingleAsync(token);
+            if (!parkSources) throw new StoreFormatException("Park requires the source tables in the marker schema.");
+            return;
+        }
         await db.Database.ExecuteSqlRawAsync("""
             LOCK TABLE "FoundationRootIssuer", "FoundationRootBirths", "Instances", "FoundationOperatorReceipts", "Messages"
             IN ACCESS SHARE MODE
@@ -258,7 +276,7 @@ internal sealed partial class PostgresRootAdmission
     {
         await using var db = create();
         if (!db.UsesRootOperatorProtocol) return null;
-        await using var pinned = await EfStore.BeginRootRetirementOperationAsync(db, token);
+        await using var pinned = await EfStore.BeginPinnedRootOperationAsync(db, token);
         if (pinned is null) await EfStore.RequireStoreVersionsAsync(db, token);
         var row = await db.Messages.FromSqlInterpolated($"""
             SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
@@ -338,7 +356,7 @@ internal sealed partial class PostgresRootAdmission
     internal async Task<InstanceStatus?> ReadOperatorTimeoutStatusAsync(string tenant, string reference, CancellationToken token)
     {
         await using var db = create();
-        await using var pinned = await EfStore.BeginRootRetirementOperationAsync(db, token);
+        await using var pinned = await EfStore.BeginPinnedRootOperationAsync(db, token);
         return await db.Database.SqlQuery<InstanceStatus?>($"""
             SELECT i."Status" AS "Value"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"

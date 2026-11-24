@@ -117,6 +117,12 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             await db.Database.ExecuteSqlRawAsync("""
                 ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationStateWire" bytea
                 """, cancellationToken);
+        if (db.UsesRootParkOpening)
+            await db.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkAt" bigint;
+                ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "FoundationKeptBy" smallint
+                    CHECK ("FoundationKeptBy" IS NULL OR ("FoundationKeptBy" = 0 AND "Done"))
+                """, cancellationToken);
         if (db.UsesRootValueProtocol)
             await EfStore.InstallRootValuesAsync(db, cancellationToken);
         await EfStore.InstallRootActorListAsync(db, cancellationToken);
@@ -161,8 +167,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var name = tenant + "_" + Guid.NewGuid().ToString("N");
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
-        if (db.UsesRootRetirement)
-            await PinSelectedOperatorSchemaAsync(db, cancellationToken);
+        if (db.RequiresPinnedRootNamespace)
+            await PinRootNamespaceAsync(db, cancellationToken);
         var issuer = await ReadIssuerAsync(db, cancellationToken);
         var actor = InstanceRef.In(InstanceRef.Spread(name, issuer.Partitions), name);
         var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
@@ -287,9 +293,12 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal async Task<int> SweepReceiptsAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        return await db.Database.ExecuteSqlRawAsync("""
+        await using var pinned = db.UsesRootParkOpening ? await EfStore.BeginPinnedRootOperationAsync(db, cancellationToken) : null;
+        var removed = await db.Database.ExecuteSqlRawAsync("""
             DELETE FROM "FoundationRootReceipts" WHERE "Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
             """, cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
+        return removed;
     }
 
     internal static bool IsStoredCreator(string? start) => start?.StartsWith(CreatorPrefix, StringComparison.Ordinal) == true;
@@ -297,7 +306,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal async Task<Message?> ReadPendingCreatorAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        await using var pinned = await EfStore.BeginRootRetirementOperationAsync(db, cancellationToken);
+        await using var pinned = await EfStore.BeginPinnedRootOperationAsync(db, cancellationToken);
         var row = await db.Messages.FromSqlInterpolated($"""
             SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b
             ON b."Creator" = m."Id" AND m."InboxScope" = 0 AND b."Actor" = m."Target"
