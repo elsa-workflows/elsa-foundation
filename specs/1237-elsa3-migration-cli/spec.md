@@ -63,7 +63,7 @@ Check the exit code, the report sections, every finding's code, path, category a
 **Acceptance Scenarios**:
 
 1. **Given** an export folder (searched recursively) or a zip, **When** `inventory <export>` runs, **Then** it converts,
-   imports and publishes each selected definition on the image's composition. It writes `report.json`, `report.html`
+   imports each selected definition and publishes the newest selected version of each, on the image's composition. It writes `report.json`, `report.html`
    and `migrated/` to `--out` (default `/app/out`, the documented output mount), prints that path, and exits 0 when no finding is Must fix
    or Reconsider and 1 otherwise.
 2. **Given** definitions that use custom components, **When** the report is written, **Then** its custom-component
@@ -216,8 +216,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   host rebuild. Following the engine image's base contract, it bakes its addition list as
   `/app/composition/elsa3.features.json`, and composes through the engine's composition library, which reads the
   essentials list first and the addition list after it. The packages of the added features are this image's own: they
-  are baked into `/app/elsa3/packages/`, and the CLI's worker loads them itself, because the engine host loads nothing
-  that a derived image adds. The Dockerfile and the addition list are maintained under `extensions/Elsa3/`. The added
+  are baked into `/app/elsa3/packages/`, and the CLI's worker loads them itself, because the engine host reads every list in
+  that folder but loads no package a derived image adds, and the migration image never starts the engine host. The Dockerfile and the addition list are maintained under `extensions/Elsa3/`. The added
   features are the converter (`Elsa3Mapping`), the collection import for reusables, the import's EF ledger and the
   publishing bridge, with their dependencies. Neither the user nor the skill configures them.
 - **FR-007**: The image MUST contain the `dotnet-elsa` CLI, and its entry point MUST be the `elsa3-migration` command
@@ -257,7 +257,12 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   3. apply, excluding refused items and their dependents;
   4. `PublishWorkflow` per imported workflow.
 
-  It collects every diagnostic and skip into the report instead of the log.
+  It collects every diagnostic and skip into the report instead of the log. As in startup reconciliation, only the
+  newest selected version of each definition is published and exported. An older selected version is converted and
+  imported for its findings only, and is marked with the Info code `ELS3-MIGRATION-SUPERSEDED-VERSION`. A refusal that
+  the shared sequence cannot pin on one definition (a plan error that names no item, a refusal that covers the whole
+  selection at apply) is not thrown: it becomes a run-level Must fix finding, with its code and the code table's text,
+  and the run exits 1 with a report.
 - **FR-014**: Publish MUST stop at the first error per definition. The finding states that the publish stage was
   reached and that later errors may be hidden.
 

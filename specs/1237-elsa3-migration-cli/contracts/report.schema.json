@@ -16,7 +16,8 @@
     "notConverted",
     "missingTargets",
     "inputFindings",
-    "run"
+    "run",
+    "runFindings"
   ],
   "properties": {
     "schemaVersion": {
@@ -265,6 +266,12 @@
         "persistenceOverridden": {
           "type": "boolean"
         }
+      }
+    },
+    "runFindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
       }
     }
   },

@@ -51,6 +51,16 @@ registers `Elsa3FolderImportTask`. The extraction therefore also moves their reg
 `Elsa3ImportRunRegistration.Add(IServiceCollection)`. The feature calls it, and the tooling composition calls it
 without enabling the feature.
 
+Two behaviours of the startup sequence matter for the report:
+
+- `ImportedWorkflowPublisher.PublishAsync` groups by workflow definition and publishes only the newest imported
+  version. Older selected versions (from `--all-versions`, or a pinned reusable version's wrapper) are imported but
+  never published. The report marks them `ELS3-MIGRATION-SUPERSEDED-VERSION`.
+- The task throws `Elsa3ReconciliationFailedException`, ending the start, for a plan error that names no item and for
+  refusals that name no single workflow, such as a credential-literal refusal over the whole selection at apply
+  (`Elsa3FolderImportTask.cs`, `ReusableActivityCollectionImporter.cs`). `Elsa3ImportRun` returns these as run-level
+  refusals with their codes. The startup task throws on them as before, and the CLI reports them in `runFindings`.
+
 **Rejected**: running the startup task itself in the CLI. It reads only its `FilePath`/`FolderPath` options, it logs
 instead of returning a result, and it is registered only by `Elsa3JsonReconciliationFeature`, which throws without
 `SourceId` and a path.
@@ -177,7 +187,8 @@ The CLI runs inside an image built `FROM` the essentials engine image at the sam
   `<name>.features.json` there, and the composition library reads it after the essentials list, in ordinal file-name
   order.
 - `Elsa.Essentials.Composition.dll` and every listed essentials feature's assemblies are in `/app`.
-- The engine host loads no list or package that a derived image adds. A derived tool composes for itself.
+- The engine host reads every list in `/app/composition/`, but loads no package a derived image adds. A derived tool
+  composes for itself, and the migration image never starts the engine host.
 - A derived image uses its base's version tag, and replaces the entry point.
 
 **Decision**: the migration image uses that contract and rebuilds nothing.

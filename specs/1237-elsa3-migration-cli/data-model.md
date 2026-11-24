@@ -18,6 +18,7 @@ This page explains the entities and their rules.
 | `definitions` | One entry per converted or refused definition version, ordered by definition id, then version. |
 | `notConverted` | Versions skipped by selection (FR-012), ordered by definition id, then version. |
 | `missingTargets` | Dispatched or executed workflow targets absent from the export. |
+| `runFindings` | Refusals of the shared import that name no single definition, such as a plan error with no item or a refusal of the whole selection at apply. Each is a `mustFix` finding at stage `import`. |
 | `inputFindings` | Findings with no definition identity: a file that is not valid JSON, or valid JSON with no Elsa 3 definition. A duplicate input is a definition result, with an `error` finding and its own bucket. |
 | `run` | The settings and composition section (FR-018 item 4). |
 
@@ -87,7 +88,8 @@ remedy, used whenever the code is emitted at Error, because constants carry no s
 converter's, the import's and reconciliation's codes, and the tooling's own `ELS3-MIGRATION-*` codes:
 `ELS3-MIGRATION-INPUT-UNREADABLE` (a file that is not valid JSON; remedy `patch-definition`),
 `ELS3-MIGRATION-UNSUPPORTED-INPUT` (an existing code, for valid JSON that holds no Elsa 3 definition) and
-`ELS3-MIGRATION-NO-PUBLISHED-VERSION` (Info). `fixedText` is the
+`ELS3-MIGRATION-NO-PUBLISHED-VERSION` (Info) and `ELS3-MIGRATION-SUPERSEDED-VERSION` (Info: an older selected version that
+is imported for its findings but neither published nor exported, as in startup reconciliation). `fixedText` is the
 report text for a code the converter does not own. Every Elsa 3 code needs an entry, whatever its severity. An Elsa 4
 code with no entry gets `patch-definition` and a default fixed text. Every skip is reported as an `error` finding. Codes with an `ELS3-BEHAVIOUR-` prefix are
 `reconsider` by severity rule; their entries still carry a remedy, used only if one is ever emitted at Error. Every component code needs a kind. The completeness test enforces both rules. `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY` has remedy

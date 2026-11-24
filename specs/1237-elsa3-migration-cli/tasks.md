@@ -176,7 +176,11 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   a selected version id, or a selected definition id and version, so that duplicates still reach the duplicate-input
   refusal. Test each fixture case, the duplicate case included.
 - [ ] T018 [US1] Wire the entry point: read, select, run `Elsa3ImportRun`, and collect every diagnostic with its stage.
-  Publish stops at the first error and marks `publishStoppedHere` (FR-013, FR-014).
+  Publish stops at the first error and marks `publishStoppedHere` (FR-013, FR-014). `Elsa3ImportRun` returns a refusal
+  it cannot pin on one definition instead of throwing (the startup task still throws on it), and the report lists it
+  in `runFindings`. Mark older selected versions `ELS3-MIGRATION-SUPERSEDED-VERSION`. Test a plan error that names no
+  item, a credential-literal refusal at apply (exit 1, a report, no message text), and `--all-versions` with three
+  versions (only the newest published and exported).
 - [ ] T019 [US1] Add `Tooling/ReportBuilder.cs`. It provides:
   - categories (FR-015);
   - remedies and component kinds from the code table (FR-016);
@@ -235,7 +239,7 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   with the fixed text only. Change each
   message so that it names the cause without quoting input, and add no workaround (FR-026).
 - [ ] T029 [US5] Add the sentinel test: the fixture run's `report.json` and `report.html` contain no `SENTINEL-1237`,
-  including from the publish-stage refusal of the .NET-member call (SC-005).
+  including from the conversion-stage `VF-IMP-012` refusal of the .NET-member call (SC-005).
 - [ ] T030 [US5] Add the schema test: every report the tests produce validates against
   [contracts/report.schema.json](contracts/report.schema.json). Copy the schema into `Tooling/` as an embedded resource,
   and add a test that keeps it identical to the contract file (FR-020).
