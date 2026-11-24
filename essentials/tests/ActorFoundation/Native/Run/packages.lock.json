@@ -272,8 +272,8 @@
         "dependencies": {
           "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )",
           "Kernel.Foundation.InMemory": "[1.0.0, )",
-          "Kernel.WorkflowActor": "[1.0.0, )",
           "Microsoft.Data.Sqlite": "[10.0.10, )",
           "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.3, )"
         }
@@ -291,6 +291,13 @@
         "type": "Project",
         "dependencies": {
           "Kernel.Statecharts.Native": "[1.0.0, )"
+        }
+      },
+      "elsa.workflows.runtime.workflowactor": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       },
       "Kernel.Foundation.InMemory": {
@@ -318,13 +325,6 @@
         "dependencies": {
           "Elsa.Workflows.Runtime.Native.Model": "[4.0.0-dev, )",
           "Kernel.Statecharts": "[1.0.0, )"
-        }
-      },
-      "kernel.workflowactor": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
-          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       },
       "Kernel.Workflows": {
