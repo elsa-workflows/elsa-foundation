@@ -34,7 +34,7 @@ No persisted model changes. The change is in how one Elsa 3 shape maps to one El
 | a type Elsa 4 does not know | anything but a JSON object or array (`order-1`, `42`) | refused |
 | a resource: `FormFile`, `IFormFile`, `Stream`, `byte[]`, alone or as an element | any, or none | refused (#3194) |
 | `ObjectDictionary`, `HttpHeaders` | a JSON object | `Object` holding the object |
-| any collection | text that is not a JSON array (`a, b`) | refused; the guidance shows `["a","b"]` |
+| a collection whose element type Elsa 4 knows | text that is not a JSON array (`a, b`) | refused; the guidance shows `["a","b"]` |
 | any dictionary | text that is not a JSON object | refused, with an example object |
 | a scalar type | text that does not convert in strict mode (`"abc"` for `Int32`) | refused |
 | a scalar type Elsa 4's registry does not know (an unregistered enum) | anything but a JSON object or array | refused; a JSON object or array starts as that JSON, as for any type Elsa 4 does not know (clarification 2026-11-24, #5684) |
