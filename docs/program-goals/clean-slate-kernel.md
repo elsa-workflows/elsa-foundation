@@ -583,12 +583,12 @@ The [timed settlement fixture](../../prototypes/kernel-model/README.md#timed-nat
 checks both completion and deadline across ownership changes and applies one recorded result through Native.
 Public production activation, Worker inline promotion and the remaining provider runs still need K4 qualification.
 The [current-owner trial schedule](../../essentials/tests/ActorFoundation/Simulation/ContractJobTrialChecks.cs)
-also covers timeout while the callback is still unwinding. The [PostgreSQL Worker fixture](../../prototypes/kernel-model/README.md#timed-jobs-on-the-postgresql-worker)
-checks that part with an unrelated actor's admitted start. The job's timeout lands while its callback
-is still active, with no model entry for the unrelated start. That start commits once after the
-current callback exits, even while the displaced callback is still active. The timeout checkpoint,
-inbox and journal stay unchanged after both Workers run again. The public qualified-command schedule and physical runs on the
-other release providers still need qualification. MongoDB-specific checks are deferred.
+also covers timeout while the callback is still unwinding. The [relational Worker fixture](../../prototypes/kernel-model/README.md#run-the-same-schedule-on-the-relational-providers)
+checks that part on SQLite, PostgreSQL, SQL Server and MySQL with an unrelated actor's admitted start. The
+job's timeout lands while its callback is still active, with no model entry for the unrelated start. That
+start commits once after the current callback exits, even while the displaced callback is still active.
+The timeout checkpoint, inbox and journal stay unchanged after both Workers run again. The public
+qualified-command schedule remains open. MongoDB-specific checks are deferred.
 
 ### K11 foundation contract cases
 

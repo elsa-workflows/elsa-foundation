@@ -15,6 +15,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Compile Include="../../../../../prototypes/kernel-model/ef/Kernel.Ef.Run/Wire.cs" Link="Wire.cs" />
     <Compile Include="../../Simulation/Models.cs" Link="Models.cs" />
+    <Compile Include="../../Store/EntityFramework/RelationalTimedJobChecks.cs" Link="RelationalTimedJobChecks.cs" />
     <ProjectReference Include="../../../Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj" />
     <ProjectReference Include="../../../Workflows/Runtime/Native/Migration/SqliteFixture/Elsa.Workflows.Runtime.Native.Migration.SqliteFixture.csproj" />
     <ProjectReference Include="../../../Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />

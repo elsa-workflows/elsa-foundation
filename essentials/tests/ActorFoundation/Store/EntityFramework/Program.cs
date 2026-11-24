@@ -33,6 +33,10 @@ switch (args)
         Console.WriteLine(await store.UpgradeJobGenerationFormatAsync() ? "advanced" : "already current");
         return 0;
     }
+    case ["sqlite", "timed-job-worker", .. var options]:
+        return await new EfProvider("sqlite", null, options).CheckTimedJobWorkerAsync();
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "timed-job-worker", .. var options]:
+        return await new EfProvider(engine, connection, options).CheckTimedJobWorkerAsync();
     case ["sqlite", "checkpoint-byte-count", .. var options]:
         await new EfProvider("sqlite", null, options).CheckCheckpointBytesAsync();
         return 0;
@@ -157,6 +161,13 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
         if (remaining.Id != stale.Partition || remaining.Owner != "successor" || remaining.Epoch != current.Epoch)
             throw new InvalidOperationException("A stale set release cleared a later owner epoch.");
         Console.WriteLine($"ok SQLite released {count} scopes together and retained the newer epoch in a stale set");
+    }
+
+    internal async Task<int> CheckTimedJobWorkerAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(1, new());
+        return await RelationalTimedJobChecks.RunAsync((EfStore)fixture.Store, fixture.CreateContext, Name,
+            trialWithdrawal: !flags.Contains("--without-trial-withdrawal"));
     }
 
     internal async Task CheckCheckpointBytesAsync()
