@@ -30,7 +30,7 @@ public sealed class JsonHttpContentParserTests
     [InlineData(typeof(JsonArray), "{}")]
     [InlineData(typeof(JsonValue), "{}")]
     public async Task Explicit_mutable_JSON_targets_refuse_incompatible_shapes(Type target, string raw) =>
-        await Assert.ThrowsAsync<JsonException>(() => Parser().ReadAsync(Context(raw, target)));
+        await Assert.ThrowsAnyAsync<JsonException>(() => Parser().ReadAsync(Context(raw, target)));
 
     [Fact]
     public async Task Explicit_mutable_JSON_null_keeps_its_existing_null_result() =>

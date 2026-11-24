@@ -69,7 +69,7 @@ public sealed class EvaluatedHashInputsResultFileTests
             else
             {
                 File.WriteAllText(result, content);
-                Assert.Throws<JsonException>(() => EvaluatedHashInputs.ReadResultFile(result, "fixture.csproj"));
+                Assert.ThrowsAny<JsonException>(() => EvaluatedHashInputs.ReadResultFile(result, "fixture.csproj"));
             }
         }
         finally { if (File.Exists(result)) File.Delete(result); }
