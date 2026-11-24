@@ -3,7 +3,8 @@
 24 November 2026, `main` at `92bc067918`. Part of [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229).
 Draft for the owner. Read from the source only; nothing was run and no code changes.
 
-The GA test drive's gap map (`core-preview-map.md` in this folder, landing in its own PR) found that no designer-built
+The GA test drive's gap map (`core-preview-map.md` in this folder, landing with
+[#5701](https://github.com/elsa-workflows/elsa-foundation/pull/5701)) found that no designer-built
 HTTP workflow runs on the Core Preview yet. A parallel session is adding query strings, headers, Flowchart start routes
 and duplicate-route refusal to the Native model. Three gaps need an owner decision first, because they touch the
 foundation contract or the side-effect rules:
@@ -41,6 +42,17 @@ None of the recommended options changes the accepted K2 contracts
   ([HttpEndpointMiddleware.cs:250](../../../essentials/src/Activities/Http/Middleware/HttpEndpointMiddleware.cs)).
 - A mid-flow resume goes to every bookmark on the template's stimulus. Route values do not pick the instance. On the
   old core, `POST /orders/42/cancel` resumes every order that waits on `orders/{id}/cancel`.
+
+### Elsa 3
+
+Elsa 3 (`Elsa.Http`'s `RouteTable`, `RouteMatcher` and `HttpWorkflowsMiddleware`) matches the path with the same
+`TemplateMatcher`, taking the first hit in an unordered table. It hashes `(template, method)` for starts and resumes
+alike, and picks the waiting instance by an `X-Correlation-ID` header or `correlationId` query value, or by
+`X-Workflow-Instance-ID`. More than one matching trigger or bookmark is an error per request. Route values, query and
+headers are the endpoint's `RouteData`, `QueryStringData` and `Headers` outputs. **Option A keeps** the template
+matcher and the route values on the request. **It improves** three things: specificity orders the matches, conflicts
+are refused at publish, and the route value picks the instance without a correlation header. **It drops** the
+correlation and instance-id headers for HTTP resumes in release 1; option C's caller key is how they can come back.
 
 ### Options
 
@@ -112,6 +124,15 @@ Size M: about 400 to 600 lines with tests, after the parallel session's work lan
 - The old core's `SendHttpRequest` awaits the response inside the activity. It returns status, headers and body. Its
   outcomes are one port per expected status code, `Unmatched status code`, `Failed` and `Timeout`, plus a `Timeout`
   input and credentials through a `Connection`. W3 needs all of this.
+- **Elsa 3** (`SendHttpRequestBase`, `FlowSendHttpRequest`) also awaits the call inside the activity. It sets
+  `StatusCode`, `ParsedContent` and `ResponseHeaders` outputs, and completes on one outcome per expected status code,
+  `Unmatched status code`, `Failed to connect` or `Timeout`. An opt-in `EnableResiliency` retries 408, 409, 429, 500,
+  502, 503 and 504 through Polly, with no idempotency key, and `Authorization` is a plain input. **Option A keeps** the
+  outputs and outcomes. **It improves** where the call runs: in a job, so the instance stays responsive, parallel
+  calls run side by side and every send carries the effect key. **It drops** the in-activity Polly retries for
+  release 1, since resending a POST is only safe with a key; a job-level retry with the same `Idempotency-Key` can
+  follow in 1.x. It also drops the plain `Authorization` input in favour of the `Connection`, as the old core already
+  did.
 
 The rules that bind every option:
 
@@ -192,6 +213,16 @@ Studio's toolbox already has a layered availability policy ([ADR 0026](../../adr
 The picker shows only addable activities. ADR 0026 also says availability decides what can be added; it does not
 decide what is valid or what runs. An imported or older definition can still hold a hidden activity, so a kernel host
 also needs a publish check.
+
+[#5701](https://github.com/elsa-workflows/elsa-foundation/pull/5701) leaves toolbox filtering on a kernel host to this
+decision.
+
+**Elsa 3** hides an activity through the descriptor's `IsBrowsable` flag: `[Browsable(false)]` on the class, or an
+`IActivityDescriptorModifier` that reads a host option, as the C# module does for `RunCSharp`. A hidden activity stays
+registered and runs if a definition holds it. **Option A keeps** the host deciding what the toolbox shows. **It
+improves** on that with configuration in place of code, through the availability baseline, and with a publish check,
+which Elsa 3 has no need for because every registered activity runs there. **It drops** nothing that Elsa 3 users
+rely on.
 
 ### Inventory
 
