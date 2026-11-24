@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -674,6 +675,35 @@ public sealed class ValueConversionPlanTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Xml_property_converters_can_delegate_to_normal_type_metadata_without_becoming_global(bool nullableFactory)
+    {
+        const string dateText = "2026-10-28T09:15:00";
+        var date = JsonSerializer.SerializeToElement(dateText, JsonBaseline.Options);
+        var at = new DateTimeOffset(2026, 10, 28, 9, 15, 0, TimeSpan.FromHours(5));
+        object holder = nullableFactory
+            ? new NullableDelegatingXmlHolder { Value = new() { CustomerName = "Ada", RawDate = date, At = at } }
+            : new DelegatingXmlHolder { Value = new() { CustomerName = "Ada", RawDate = date, At = at } };
+        var holderType = holder.GetType();
+        var options = JsonConversionContract.For(holderType).Options;
+        // This is legitimate property-converter delegation before the XML path is involved.
+        var direct = JsonSerializer.SerializeToElement(holder, holderType, options);
+        Assert.Equal("Ada", direct.GetProperty("value").GetProperty("customerName").GetString());
+        Assert.Equal(dateText, direct.GetProperty("value").GetProperty("rawDate").GetString());
+
+        var type = new ValueTypeDescriptor("delegating-member");
+        var executor = new RuntimeValueConversionExecutor(new TestTypeRegistry(new Dictionary<string, Type> { [type.Alias] = holderType }));
+        var result = executor.Convert(XmlSource("""
+            <root><value><customerName>Ada</customerName><rawDate>2026-10-28T09:15:00</rawDate><at>2026-10-28T09:15:00+05:00</at></value></root>
+            """), XmlPlan(type)).InlineValue!.Value;
+        Assert.Equal("Ada", result.GetProperty("value").GetProperty("customerName").GetString());
+        Assert.Equal(dateText, result.GetProperty("value").GetProperty("rawDate").GetString());
+        Assert.Equal("2026-10-28T09:15:00+05:00", result.GetProperty("value").GetProperty("at").GetString());
+        Assert.True(JsonCanonicalForm.Equals(direct, result));
+    }
+
+    [Theory]
     [InlineData("<root><customerName>Ada</customerName><CUSTOMERNAME>Lin</CUSTOMERNAME></root>")]
     [InlineData("<root customerName=\"Ada\" CUSTOMERNAME=\"Lin\" />")]
     [InlineData("<root><named><KeepKey><customerName>Ada</customerName></KeepKey><KeepKey><customerName>Lin</customerName></KeepKey></named></root>")]
@@ -1127,6 +1157,74 @@ public sealed class ValueConversionPlanTests
         public OpaqueXmlConverter() { }
         public override OpaqueXmlContract Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => throw new InvalidOperationException("An opaque converter must not be given an inferred XML object.");
         public override void Write(Utf8JsonWriter writer, OpaqueXmlContract value, JsonSerializerOptions options) => throw new InvalidOperationException("An opaque converter must not be given an inferred XML object.");
+    }
+
+    private sealed class DelegatingXmlHolder
+    {
+        [JsonConverter(typeof(DelegatingXmlMemberConverter))] public DelegatingXmlValue? Value { get; init; }
+    }
+
+    private sealed class NullableDelegatingXmlHolder
+    {
+        [JsonConverter(typeof(NullableDelegatingXmlMemberFactory))] public NullableDelegatingXmlValue? Value { get; init; }
+    }
+
+    private sealed record DelegatingXmlValue
+    {
+        public string? CustomerName { get; init; }
+        public JsonElement RawDate { get; init; }
+        public DateTimeOffset At { get; init; }
+    }
+
+    private readonly record struct NullableDelegatingXmlValue
+    {
+        public string? CustomerName { get; init; }
+        public JsonElement RawDate { get; init; }
+        public DateTimeOffset At { get; init; }
+    }
+
+    private static bool MatchDelegatingXmlMember(string name, out Type memberType)
+    {
+        memberType = name == "at" ? typeof(DateTimeOffset) : typeof(string);
+        return name is "customerName" or "rawDate" or "at";
+    }
+
+    private sealed class DelegatingXmlMemberConverter : JsonConverter<DelegatingXmlValue>, IJsonConversionMemberMatcher
+    {
+        private int writeDepth;
+        public DelegatingXmlMemberConverter() { }
+        public bool TryGetMemberType(string name, out Type memberType) => MatchDelegatingXmlMember(name, out memberType);
+        public override DelegatingXmlValue? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+            JsonSerializer.Deserialize<DelegatingXmlValue>(ref reader, options);
+        public override void Write(Utf8JsonWriter writer, DelegatingXmlValue value, JsonSerializerOptions options)
+        {
+            if (writeDepth > 0) throw new JsonException("xml-property-converter-recursion: property delegation selected itself.");
+            writeDepth++;
+            try { JsonSerializer.Serialize(writer, value, options); }
+            finally { writeDepth--; }
+        }
+    }
+
+    private sealed class NullableDelegatingXmlMemberFactory : JsonConverterFactory
+    {
+        public NullableDelegatingXmlMemberFactory() { }
+        public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(NullableDelegatingXmlValue?);
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) => new NullableDelegatingXmlMemberConverter();
+    }
+
+    private sealed class NullableDelegatingXmlMemberConverter : JsonConverter<NullableDelegatingXmlValue?>, IJsonConversionMemberMatcher
+    {
+        private int writeDepth;
+        public bool TryGetMemberType(string name, out Type memberType) => MatchDelegatingXmlMember(name, out memberType);
+        public override NullableDelegatingXmlValue? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+            JsonSerializer.Deserialize<NullableDelegatingXmlValue?>(ref reader, options);
+        public override void Write(Utf8JsonWriter writer, NullableDelegatingXmlValue? value, JsonSerializerOptions options)
+        {
+            if (writeDepth > 0) throw new JsonException("xml-property-converter-recursion: nullable property delegation selected itself.");
+            writeDepth++;
+            try { JsonSerializer.Serialize(writer, value, options); }
+            finally { writeDepth--; }
+        }
     }
 
     private sealed record XmlFormattingNestedContract

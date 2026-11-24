@@ -568,15 +568,15 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
     }
 
     private static void WriteNormalizedXml(Utf8JsonWriter writer, JsonElement projected, object? typed, Type type,
-        JsonConversionContract contract, XmlConversionContext context, JsonConverter? customConverter = null)
+        JsonConversionContract contract, XmlConversionContext context, JsonConverter? customConverter = null, JsonSerializerOptions? converterOptions = null)
     {
         var options = context.Options(contract);
         var info = options.GetTypeInfo(Nullable.GetUnderlyingType(type) ?? type);
         if (customConverter is not null && !JsonConversionContract.IsContractAdapter(customConverter))
         {
-            var memberOptions = new JsonSerializerOptions(options);
-            memberOptions.Converters.Insert(0, customConverter);
-            JsonSerializer.Serialize(writer, typed, type, memberOptions);
+            // A property converter is not a global type converter. Keep its owner's options unchanged
+            // so its own delegation to ordinary type metadata does not select itself recursively.
+            JsonSerializer.Serialize(writer, typed, context.ConverterInfo(type, converterOptions ?? options, customConverter));
             return;
         }
         if (typed is null || projected.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array) || info.Kind == JsonTypeInfoKind.None)
@@ -628,7 +628,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
                 (member.ObjectCreationHandling ?? info.PreferredPropertyObjectCreationHandling ?? options.PreferredObjectCreationHandling) == JsonObjectCreationHandling.Populate;
             if (member.Get is null || !readsMember) JsonSerializer.Serialize(writer, property.Value, JsonBaseline.Options);
             else WriteNormalizedXml(writer, property.Value, member.Get(typed), member.PropertyType,
-                ChildContract(member.PropertyType, contract, member.AttributeProvider as MemberInfo), context, member.CustomConverter);
+                ChildContract(member.PropertyType, contract, member.AttributeProvider as MemberInfo), context, member.CustomConverter, options);
         }
         writer.WriteEndObject();
     }
@@ -740,13 +740,28 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
     // Metadata belongs to a conversion, so it can be reused for collection elements without pinning a module type.
     private sealed class XmlConversionContext
     {
+        private static readonly MethodInfo CreateValueInfo = typeof(XmlConversionContext).GetMethod(nameof(ValueInfo), BindingFlags.NonPublic | BindingFlags.Static)!;
         private readonly Dictionary<JsonConversionContract, JsonSerializerOptions> options = new();
         private readonly Dictionary<JsonTypeInfo, IReadOnlyDictionary<string, XmlMember>> members = new();
+        private readonly Dictionary<(Type Type, JsonSerializerOptions Options, JsonConverter Converter), JsonTypeInfo> converterInfos = new();
         internal JsonSerializerOptions Options(JsonConversionContract contract)
         {
             if (!options.TryGetValue(contract, out var selected)) options.Add(contract, selected = contract.Options);
             return selected;
         }
+
+        internal JsonTypeInfo ConverterInfo(Type type, JsonSerializerOptions activeOptions, JsonConverter converter)
+        {
+            var key = (type, activeOptions, converter);
+            if (converterInfos.TryGetValue(key, out var existing)) return existing;
+            var expanded = converter is JsonConverterFactory factory ? factory.CreateConverter(type, activeOptions) : converter;
+            var info = (JsonTypeInfo)CreateValueInfo.MakeGenericMethod(type).Invoke(null, [activeOptions, expanded])!;
+            converterInfos.Add(key, info);
+            return info;
+        }
+
+        private static JsonTypeInfo ValueInfo<T>(JsonSerializerOptions activeOptions, JsonConverter converter) =>
+            JsonMetadataServices.CreateValueInfo<T>(activeOptions, converter);
 
         internal IReadOnlyDictionary<string, XmlMember> Members(JsonTypeInfo info, JsonConversionContract contract)
         {
