@@ -149,11 +149,11 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             throw Reject(plan, "recursive numeric widening requires every collection element to be a JSON number");
 
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
+        using (var writer = new Utf8JsonWriter(stream, new() { Encoder = JsonBaseline.Options.Encoder }))
         {
             writer.WriteStartArray();
             foreach (var item in values)
-                item.WriteTo(writer);
+                JsonSerializer.Serialize(writer, item, JsonBaseline.Options);
             writer.WriteEndArray();
         }
 
@@ -164,7 +164,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
     private static JsonElement CanonicalizeAny(JsonElement value, ValueConversionPlan plan)
     {
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
+        using (var writer = new Utf8JsonWriter(stream, new() { Encoder = JsonBaseline.Options.Encoder }))
             WriteCanonicalJson(writer, value, plan, depth: 1);
         using var document = JsonDocument.Parse(stream.ToArray());
         return document.RootElement.Clone();
@@ -219,7 +219,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         var document = ReadXmlDocument(value, plan);
         var targetType = TypeReferenceFactory.Close(elementType, plan.TargetType.ToTypeReference());
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
+        using (var writer = new Utf8JsonWriter(stream, new() { Encoder = JsonBaseline.Options.Encoder }))
             WriteXmlAsJson(writer, document.Root!, targetType, plan, "$", depth: 1);
         using var json = JsonDocument.Parse(stream.ToArray());
         return json.RootElement.Clone();

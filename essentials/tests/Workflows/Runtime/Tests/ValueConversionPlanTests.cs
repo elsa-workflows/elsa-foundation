@@ -218,6 +218,48 @@ public sealed class ValueConversionPlanTests
     }
 
     [Fact]
+    public void Collection_shape_conversion_preserves_the_text_of_every_carried_element()
+    {
+        const string json = """[ { "\u00e9<+>" : "Ren\u00e9<+>", "nested" : [1.0,9007199254740993,null,{"x":"a\/b"}] }, "é<+>","\u00e9<+>",1e0,0.10,null ]""";
+        const string expected = """[{ "\u00e9<+>" : "Ren\u00e9<+>", "nested" : [1.0,9007199254740993,null,{"x":"a\/b"}] },"é<+>","\u00e9<+>",1e0,0.10,null]""";
+        var sourceType = new ValueTypeDescriptor("Any", CollectionKind.List);
+        var targetType = new ValueTypeDescriptor("Any", CollectionKind.Array);
+        var plan = Plan(sourceType, targetType, ValueRepresentation.TypedValue, ValueConversionOperation.RecursiveCollection);
+        using var document = JsonDocument.Parse(json);
+
+        var converted = new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Inline(sourceType, document.RootElement, ValueProtectionPolicy.InstanceInline), plan);
+
+        Assert.Equal(expected, converted.InlineValue!.Value.GetRawText());
+        Assert.Equal(document.RootElement.EnumerateArray().Select(item => item.GetRawText()),
+            converted.InlineValue.Value.EnumerateArray().Select(item => item.GetRawText()));
+        Assert.Equal(targetType, converted.Type);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Canonical_any_projection_uses_the_relaxed_format_for_keys_and_nested_values(bool formattedContent)
+    {
+        const string json = """{ "\u00e9<+>" : {"raw":"a\/b","list":[{"null":null,"name":"Ren\u00e9<+>","n":1.0},9007199254740993]}, "z":null }""";
+        const string expected = """{"z":null,"é<+>":{"list":[{"n":1.0,"name":"René<+>","null":null},9007199254740993],"raw":"a/b"}}""";
+        var sourceType = new ValueTypeDescriptor("Acme.Customer");
+        var targetType = new ValueTypeDescriptor("Any");
+        var plan = formattedContent
+            ? JsonPlan(targetType)
+            : Plan(sourceType, targetType, ValueRepresentation.TypedValue, ValueConversionOperation.CanonicalAny);
+        using var document = JsonDocument.Parse(json);
+        var source = formattedContent ? JsonSource(json)
+            : ValueEnvelope.Inline(sourceType, document.RootElement, ValueProtectionPolicy.InstanceInline);
+
+        var converted = new RuntimeValueConversionExecutor().Convert(source, plan);
+
+        Assert.Equal(expected, converted.InlineValue!.Value.GetRawText());
+        Assert.True(JsonCanonicalForm.Equals(document.RootElement, converted.InlineValue.Value));
+        Assert.Equal(targetType, converted.Type);
+    }
+
+    [Fact]
     public void Canonical_any_projection_returns_json_not_an_arbitrary_clr_identity()
     {
         var sourceType = new ValueTypeDescriptor("Acme.Customer");
@@ -546,6 +588,35 @@ public sealed class ValueConversionPlanTests
         Assert.Equal("Brussels", converted.InlineValue.Value.GetProperty("address").GetProperty("city").GetString());
         Assert.Equal("A-1", converted.InlineValue.Value.GetProperty("orders")[0].GetProperty("id").GetString());
         Assert.Equal(19.5m, converted.InlineValue.Value.GetProperty("orders")[0].GetProperty("total").GetDecimal());
+    }
+
+    [Fact]
+    public void Xml_projection_uses_the_relaxed_format_for_keys_and_nested_values()
+    {
+        var targetType = new ValueTypeDescriptor("Acme.XmlFormatting");
+        var plan = XmlPlan(targetType);
+        var executor = new RuntimeValueConversionExecutor(new TestTypeRegistry(
+            new Dictionary<string, Type> { [targetType.Alias] = typeof(XmlFormattingContract) }));
+        var converted = executor.Convert(XmlSource("""
+            <root>
+              <éLabel>Top é&lt;+&gt; &#92;u00e9</éLabel>
+              <nested>
+                <names><café>Ren&#xE9;&lt;+&gt;</café></names>
+                <number>1234567890.123456789012345</number>
+                <whole>9007199254740993</whole>
+              </nested>
+            </root>
+            """), plan);
+
+        Assert.Equal("""{"nested":{"names":{"café":"René<+>"},"number":1234567890.123456789012345,"whole":9007199254740993},"éLabel":"Top é<+> \\u00e9"}""",
+            converted.InlineValue!.Value.GetRawText());
+        Assert.False(converted.InlineValue.Value.TryGetProperty("optional", out _));
+
+        // XML has no JSON-null token. Its existing explicit-null envelope bypass remains unchanged.
+        var nullValue = executor.Convert(ValueEnvelope.Null(plan.SourceType, ValueProtectionPolicy.InstanceInline), plan);
+        Assert.Equal(ValuePresence.ExplicitNull, nullValue.Presence);
+        Assert.Null(nullValue.InlineValue);
+        Assert.Equal(targetType, nullValue.Type);
     }
 
     [Fact]
@@ -911,6 +982,21 @@ public sealed class ValueConversionPlanTests
         public string GetAliasOrDefault(Type type) => TryGetAlias(type, out var alias) ? alias : type.FullName!;
         public Type GetTypeOrDefault(string alias) => TryGetType(alias, out var type) ? type : typeof(object);
         public bool TryGetTypeOrDefault(string alias, out Type type) => TryGetType(alias, out type);
+    }
+
+    private sealed record XmlFormattingContract
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("éLabel")]
+        public required string Label { get; init; }
+        public XmlFormattingNestedContract? Nested { get; init; }
+        public string? Optional { get; init; }
+    }
+
+    private sealed record XmlFormattingNestedContract
+    {
+        public IReadOnlyDictionary<string, string> Names { get; init; } = new Dictionary<string, string>();
+        public decimal Number { get; init; }
+        public long Whole { get; init; }
     }
 
     private sealed record CustomerContract
