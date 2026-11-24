@@ -24,19 +24,19 @@
       "elsa.workflows.runtime.graph": {
         "type": "Project"
       },
-      "kernel.native": {
+      "elsa.workflows.runtime.native.activities": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.native.model": {
         "type": "Project",
         "dependencies": {
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Graph": "[4.0.0-dev, )",
-          "Kernel.Native.Activities": "[1.0.0, )"
-        }
-      },
-      "kernel.native.activities": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+          "Elsa.Workflows.Runtime.Native.Activities": "[4.0.0-dev, )"
         }
       },
       "Kernel.Workflows": {

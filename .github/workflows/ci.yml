@@ -109,7 +109,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
             if ! changed=$(git diff --name-only "$GITHUB_SHA^1" "$GITHUB_SHA"); then
               kernel=true
-            elif grep -Eq '^(prototypes/kernel-model/|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+            elif grep -Eq '^(prototypes/kernel-model/|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|tools/architecture/check-kernel-model-references\.targets$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
               kernel=true
             fi
           fi

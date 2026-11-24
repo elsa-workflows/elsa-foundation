@@ -26,9 +26,10 @@ Every claim says how it is known: **run** means a command below produced it; **r
 
 | Path | What |
 |---|---|
-| `models/Native` | The authoring surface, the activities (the Flowchart hosts the graph engine), the model (`NativeModel.cs`), the live channel and HTTP host (`Live.cs`) |
+| [Native model](../../essentials/src/Workflows/Runtime/Native/Model) | The execution model and structural activities, including Flowchart |
+| [Native activities](../../essentials/src/Workflows/Runtime/Native/Activities) | Activity authoring contracts, bindings and built-in leaf activities |
 | [the Graph engine](../../essentials/src/Workflows/Runtime/Graph), `../../essentials/tests/Workflows/Runtime/Graph/Tests` | The graph engine (main's Flowchart engine) and main's conformance corpus against it (`dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release`) |
-| `../../essentials/tests/ActorFoundation/Native/Run` | Smoke tests of every activity and the HTTP cases, the cost measurement, the in-memory cost |
+| `../../essentials/tests/ActorFoundation/Native/Run` | Smoke tests, the live channel and HTTP host (`Live.cs`), and cost measurements |
 | `../../essentials/tests/ActorFoundation/Simulation/NativeWorkflows.cs`, `../../essentials/tests/ActorFoundation/Simulation/NativeSim.cs` | Native instances in the simulation's mix, the native checks N1 to N7 and the graph checks G1 to G5, the model's and the engine's deliberate flaws |
 
 ```
