@@ -531,7 +531,7 @@ public sealed class JsonBaselineArchitectureTests
         Assert.Empty(JsonBaselineSourceScan.Scan("class C { void M() { model.MaxDepth = 128; var parsing = new JsonDocumentOptions { MaxDepth = 128 }; parsing.MaxDepth = 256; RuntimeCompleteActivityPayloadMemo.Deserialize(workItem); var value = codec.Deserialize(input); } }"));
     }
 
-    [Fact]
+    [ShippingCensusFact]
     public void Every_production_root_uses_the_baseline_or_a_specific_recorded_deviation()
     {
         var register = JsonBaselineSourceScan.ReadRegister(File.ReadAllText(Path.Join(RepoPaths.RepoRoot, "docs/serialization.md")));

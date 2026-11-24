@@ -145,7 +145,7 @@ public sealed class JsonConversionContract
         type == typeof(float) || type == typeof(double) || type == typeof(decimal);
 
     /// <summary>Writes with the same effective contract used for reads.</summary>
-    public JsonElement Write(object? value, Type type) => JsonSerializer.SerializeToElement(value, type, ForRoot(type).Options);
+    public JsonElement Write(object? value, Type type) => JsonSerializer.SerializeToElement(value, type, options: ForRoot(type).Options);
 
     /// <summary>Converts a CLR value using its type's declared contract.</summary>
     public static JsonElement SerializeToElement(object? value, Type? type = null)

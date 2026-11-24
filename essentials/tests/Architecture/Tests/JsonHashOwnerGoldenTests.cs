@@ -13,7 +13,7 @@ public sealed class JsonHashOwnerGoldenTests : IDisposable
 {
     private readonly ServiceProvider services = new ServiceCollection().BuildServiceProvider();
     public void Dispose() => services.Dispose();
-    [Fact]
+    [ShippingCensusFact]
     public void Shipping_hash_owners_pin_their_canonical_migration_inputs()
     {
         var configuration = typeof(JsonHashOwnerGoldenTests).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;

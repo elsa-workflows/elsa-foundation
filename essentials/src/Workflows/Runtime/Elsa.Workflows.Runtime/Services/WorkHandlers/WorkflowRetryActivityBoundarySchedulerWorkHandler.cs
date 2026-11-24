@@ -87,7 +87,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
         provenanceMetadata[RuntimeMetadataKeys.RetryReason] = command.Reason;
         provenanceMetadata[RuntimeMetadataKeys.RetryAbsentBoundaryInputs] = JsonSerializer.Serialize(
             prior.InputSnapshot?.Values.Where(pair => pair.Value.Presence == ValuePresence.Absent)
-                .Select(pair => pair.Key).Order(StringComparer.Ordinal).ToArray() ?? []);
+                .Select(pair => pair.Key).Order(StringComparer.Ordinal).ToArray() ?? [], options: Elsa.Serialization.Core.JsonBaseline.Options);
         var enclosingExecutionScopeId = prior.EnclosingExecutionScopeId ?? newActivityExecutionId;
         var provenance = ActivitySchedulingProvenance.From(
             workItem.WorkflowExecutionId,

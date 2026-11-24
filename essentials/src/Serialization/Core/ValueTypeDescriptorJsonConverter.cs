@@ -13,10 +13,10 @@ internal sealed class ValueTypeDescriptorJsonConverter : JsonConverter<ValueType
     private static readonly ConditionalWeakTable<JsonSerializerOptions, JsonSerializerOptions> DescriptorOptions = new();
 
     public override ValueTypeDescriptor Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
-        JsonSerializer.Deserialize<ValueTypeDescriptor>(ref reader, ForDescriptor(options))!;
+        JsonSerializer.Deserialize<ValueTypeDescriptor>(ref reader, options: ForDescriptor(options))!;
 
     public override void Write(Utf8JsonWriter writer, ValueTypeDescriptor value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, value, ForDescriptor(options));
+        JsonSerializer.Serialize(writer, value, options: ForDescriptor(options));
 
     private static JsonSerializerOptions ForDescriptor(JsonSerializerOptions options) => DescriptorOptions.GetValue(options, selected =>
     {

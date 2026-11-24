@@ -1201,6 +1201,27 @@
       ]
     },
     {
+      "identity": "Elsa.Activities.Graph.Design|Elsa.Activities.Graph.Design.Models.ActivityGraphManifest::ToCanonicalUtf8Bytes()->System.Byte[]",
+      "classification": "json_routed",
+      "reason": "Explicit graph manifest canonical projection; stored manifests keep carried JSON and only this hash/equality output canonicalizes, through JsonHashInput.CanonicalBytes.",
+      "sources": [
+        "essentials/src/Activities/Graph/Design/Models/ActivityGraphManifest.cs"
+      ],
+      "goldenEvidence": [
+        "essentials/tests/Activities/Graph/Tests/GraphJsonIntegrityTests.cs"
+      ],
+      "sites": [
+        {
+          "role": "json-hash-input",
+          "target": "Elsa.Serialization.Core|Elsa.Serialization.Core.JsonHashInput::CanonicalBytes(System.Text.Json.JsonElement)->System.Byte[]",
+          "operation": "call",
+          "occurrence": 1,
+          "genericArguments": [],
+          "declaringTypeContext": "Elsa.Serialization.Core.JsonHashInput"
+        }
+      ]
+    },
+    {
       "identity": "Elsa.Activities.Http|Elsa.Activities.Http.Activities.HttpEndpointStimulus::Hash(System.String,System.String)->System.String",
       "classification": "non_json",
       "reason": "HTTP stimulus hashes normalized route template plus lowercased method separated by newline; paired publish/request routing recipe.",

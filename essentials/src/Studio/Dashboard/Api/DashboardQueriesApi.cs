@@ -236,7 +236,7 @@ internal static class DashboardQueriesApi
     private static async ValueTask<DashboardSavedQueryExecutionInput> ReadOptional(HttpContext http)
     {
         var bytes = await ReadBytes(http);
-        return bytes.Length == 0 ? new() : JsonSerializer.Deserialize(bytes, DashboardQueriesJsonContext.WireContext.DashboardSavedQueryExecutionInput)
+        return bytes.Length == 0 ? new DashboardSavedQueryExecutionInput() : JsonSerializer.Deserialize(bytes, DashboardQueriesJsonContext.WireContext.DashboardSavedQueryExecutionInput)
             ?? throw new DashboardResourceException("invalidBody", "Supply valid typed parameter overrides.");
     }
 

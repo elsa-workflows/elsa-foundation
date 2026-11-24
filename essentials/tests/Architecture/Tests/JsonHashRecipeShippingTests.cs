@@ -8,7 +8,7 @@ namespace Elsa.Architecture.Tests;
 
 public sealed class JsonHashRecipeShippingTests(ITestOutputHelper output)
 {
-    [Fact]
+    [ShippingCensusFact]
     public void Every_shipping_hash_ingress_primitive_and_gateway_has_a_current_reviewed_recipe()
     {
         var configuration = GetType().Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;

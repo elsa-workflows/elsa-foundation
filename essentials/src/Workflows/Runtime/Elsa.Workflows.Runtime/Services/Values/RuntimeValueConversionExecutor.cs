@@ -425,7 +425,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             var text = element.Value.Trim();
             if (!Enum.TryParse(targetType, text, ignoreCase: true, out var value))
                 throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected enum value at '{path}'");
-            JsonSerializer.Serialize(writer, value, targetType, options);
+            JsonSerializer.Serialize(writer, value, targetType, options: options);
             return;
         }
         if (info.Kind == JsonTypeInfoKind.Dictionary && CollectionElement(targetType, dictionary: true) is { } valueType)
@@ -572,12 +572,12 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         {
             // A property converter is not a global type converter. Keep its owner's options unchanged
             // so its own delegation to ordinary type metadata does not select itself recursively.
-            JsonSerializer.Serialize(writer, typed, context.ConverterInfo(type, converterOptions ?? options, customConverter));
+            JsonSerializer.Serialize(writer, typed, jsonTypeInfo: context.ConverterInfo(type, converterOptions ?? options, customConverter));
             return;
         }
         if (typed is null || projected.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array) || info.Kind == JsonTypeInfoKind.None)
         {
-            JsonSerializer.Serialize(writer, typed, type, options);
+            JsonSerializer.Serialize(writer, typed, type, options: options);
             return;
         }
         if (info.Kind == JsonTypeInfoKind.Enumerable && projected.ValueKind == JsonValueKind.Array && typed is System.Collections.IEnumerable items)
@@ -589,7 +589,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             foreach (var item in items)
             {
                 if (index < projected.GetArrayLength()) WriteNormalizedXml(writer, projected[index], item, itemType, selected, context);
-                else JsonSerializer.Serialize(writer, item, itemType, context.Options(selected));
+                else JsonSerializer.Serialize(writer, item, itemType, options: context.Options(selected));
                 index++;
             }
             writer.WriteEndArray();
@@ -605,14 +605,14 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
                 var name = (string)item.Key;
                 writer.WritePropertyName(name);
                 if (projected.TryGetProperty(name, out var supplied)) WriteNormalizedXml(writer, supplied, item.Value, valueType, selected, context);
-                else JsonSerializer.Serialize(writer, item.Value, valueType, context.Options(selected));
+                else JsonSerializer.Serialize(writer, item.Value, valueType, options: context.Options(selected));
             }
             writer.WriteEndObject();
             return;
         }
         if (info.Kind != JsonTypeInfoKind.Object)
         {
-            JsonSerializer.Serialize(writer, typed, type, options);
+            JsonSerializer.Serialize(writer, typed, type, options: options);
             return;
         }
         writer.WriteStartObject();

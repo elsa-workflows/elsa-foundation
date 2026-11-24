@@ -56,7 +56,7 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
         }
     }
 
-    [Fact]
+    [ShippingCensusFact]
     public void Every_shipping_CSharp_assembly_can_be_inspected_by_resolved_hash_identity()
     {
         using var inventory = ShippingHashAssemblies.Load(RepoPaths.RepoRoot, Configuration);
