@@ -123,6 +123,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                 ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "FoundationKeptBy" smallint
                     CHECK ("FoundationKeptBy" IS NULL OR ("FoundationKeptBy" = 0 AND "Done"))
                 """, cancellationToken);
+        if (db.UsesRootParkArrivals)
+            await EfStore.InstallRootParkArrivalReasonAsync(db, cancellationToken);
         if (db.UsesRootValueProtocol)
             await EfStore.InstallRootValuesAsync(db, cancellationToken);
         await EfStore.InstallRootActorListAsync(db, cancellationToken);

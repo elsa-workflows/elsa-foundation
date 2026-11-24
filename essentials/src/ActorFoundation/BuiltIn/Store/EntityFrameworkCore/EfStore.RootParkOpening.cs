@@ -4,31 +4,35 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    // This qualification accepts the first Park of an existing generated root consuming
-    // direct input. Park arrival, control, jobs and recovery have separate transitions.
+    // Qualified generated roots keep only ordinary direct inputs here. The same fenced
+    // path covers opening and continuing the Park without entering the actor model.
     private async Task<PreparedRoot?> PrepareRootParkOpeningAsync(WorkerRoot root, TurnCommit turn,
         CancellationToken cancellationToken)
     {
+        var opening = turn.OpensPark;
+        var reason = turn.Journal is null ? ParkKeepReason.Arrived : ParkKeepReason.Consumed;
+        var repark = !opening && reason == ParkKeepReason.Consumed;
         if (turn.Row is not { Status: InstanceStatus.Faulted, Suspended: false, Fault: { } fault } row ||
-            turn.Expected is not > 0 || turn.Journal is null || turn.Done.Count == 0 ||
+            turn.Expected is not > 0 || opening && reason != ParkKeepReason.Consumed || turn.Done.Count == 0 ||
             turn.FoundationKept is not { } kept || kept.Count != turn.Done.Count ||
             turn.FoundationRootParkInputs is not { } envelopes || !SameInputs(envelopes, turn.Done) ||
             turn.Done.Any(key => key.Scope != InboxKey.FoundationOccurrenceScope || !root.Owns(key) ||
-                PostgresRootAdmission.IsOperatorOccurrence(key) || !kept.TryGetValue(key, out var reason) ||
-                reason != ParkKeepReason.Consumed) || turn.Done.Distinct().Count() != kept.Count ||
+                PostgresRootAdmission.IsOperatorOccurrence(key) || !kept.TryGetValue(key, out var actual) ||
+                actual != reason) || turn.Done.Distinct().Count() != kept.Count ||
             turn.Consumed.Count != 0 || turn.Sent.Count != 0 || turn.Subscribed.Count != 0 ||
             turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
             turn != new TurnCommit(root.Actor, row, turn.Expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed,
-                turn.Unsubscribed, turn.Journal, Unsubscribe: true, Held: turn.Held)
-                { OpensPark = true, FoundationKept = kept, FoundationRootParkInputs = envelopes } ||
+                turn.Unsubscribed, turn.Journal, Unsubscribe: opening || repark, Held: turn.Held)
+                { OpensPark = opening, FoundationKept = kept, FoundationRootParkInputs = envelopes } ||
             row.FoundationDispatchHeader is not { } header)
             throw RootShape();
 
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, cancellationToken);
-        if (current?.Revision != turn.Expected || current.Status != InstanceStatus.Running || current.Suspended) return null;
+        var priorStatus = opening ? InstanceStatus.Running : InstanceStatus.Faulted;
+        if (current?.Revision != turn.Expected || current.Status != priorStatus || current.Suspended) return null;
         var expected = WorkerRow(root, current) with
         {
-            Status = InstanceStatus.Faulted, Revision = checked(current.Revision + 1), Fault = fault,
+            Status = InstanceStatus.Faulted, Revision = checked(current.Revision + 1), Fault = opening ? fault : current.Fault,
             FoundationDispatchHeader = header
         };
         if (row != expected || header.Tenant != root.Tenant || header.Reference != root.Reference ||
@@ -36,38 +40,57 @@ public sealed partial class EfStore
             current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))
             throw RootShape();
 
-        var journal = new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal);
-        return new(journal, new RootParkOpening(root, current.Revision, DurableKeyJson.Write(fault), envelopes));
+        var journal = turn.Journal is null ? null : new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal);
+        return new(journal, new RootParkOpening(root, current.Revision, opening, reason, DurableKeyJson.Write(fault), envelopes));
     }
 
-    private sealed record LockedParkCheckpoint(long At, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
+    private sealed record LockedParkCheckpoint(long At, long? ParkAt, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
 
-    private sealed record RootParkOpening(WorkerRoot Root, long Expected, string EncodedFault, IReadOnlyList<Message> Inputs)
+    private sealed record RootParkOpening(WorkerRoot Root, long Expected, bool Opening, ParkKeepReason Reason, string EncodedFault,
+        IReadOnlyList<Message> Inputs)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
-            if (!db.UsesRootParkOpening) return false;
+            if (!db.UsesRootParkOpening || !Opening && !db.UsesRootParkArrivals) return false;
+            var priorStatus = Opening ? InstanceStatus.Running : InstanceStatus.Faulted;
             var locked = await db.Database.SqlQuery<LockedParkCheckpoint>($"""
-                SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "At",
+                SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "At", i."FoundationParkAt" AS "ParkAt",
                     sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
                     sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired"
-                    AND NOT i."Suspended" AND i."Status" = {(int)InstanceStatus.Running} AND i."Revision" = {Expected}
-                    AND i."FoundationParkAt" IS NULL AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
+                    AND NOT i."Suspended" AND i."Status" = {(int)priorStatus} AND i."Revision" = {Expected}
+                    AND (i."FoundationParkAt" IS NULL) = {Opening}
+                    AND ({Opening} OR i."Fault" = {EncodedFault})
+                    AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
                 """).ToListAsync(cancellationToken);
             if (locked is not [var prior]) return false;
 
+            var parkAt = prior.ParkAt ?? prior.At;
             var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "Status" = {(int)InstanceStatus.Faulted}, "Fault" = {EncodedFault},
-                    "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision}, "FoundationParkAt" = {prior.At}
+                    "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision}, "FoundationParkAt" = {parkAt}
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                 """, cancellationToken);
             if (updated != 1) return false;
+            if (db.UsesRootParkArrivals)
+            {
+                if (Opening && await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Instances" SET "FoundationParkRevision" = {JournalRevision}
+                    WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {JournalRevision}
+                        AND "FoundationParkRevision" IS NULL
+                    """, cancellationToken) != 1) return false;
+                if (!await db.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (SELECT 1 FROM "Instances"
+                        WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {JournalRevision}
+                            AND ("FoundationParkRevision" = {JournalRevision} AND {Opening}
+                                OR "FoundationParkRevision" < {JournalRevision} AND NOT {Opening})) AS "Value"
+                    """).SingleAsync(cancellationToken)) return false;
+            }
 
             var keys = Inputs.Select(input => input.InboxKey.Id).ToArray();
             // A different input can mature between dispatch and Park. Lock the dispatched identities.
@@ -83,14 +106,15 @@ public sealed partial class EfStore
                 return false;
 
             var kept = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Messages" SET "Done" = true, "Trial" = 0, "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
+                UPDATE "Messages" SET "Done" = true, "Trial" = 0, "FoundationKeptBy" = {(short)Reason}
                 WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
                 """, cancellationToken);
             if (kept != keys.Length) return false;
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                DELETE FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition}
-                """, cancellationToken);
+            if (Reason == ParkKeepReason.Consumed)
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    DELETE FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition}
+                    """, cancellationToken);
 
             var retained = await db.Messages.AsNoTracking()
                 .Where(row => row.Target == Root.Actor && row.Partition == Root.Partition &&
@@ -109,12 +133,12 @@ public sealed partial class EfStore
                     SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
                         AND "FoundationTenant" = {Root.Tenant} AND "FoundationReference" = {Root.Reference}
                         AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision}
-                        AND "Status" = {(int)InstanceStatus.Faulted} AND "Fault" = {EncodedFault} AND "FoundationParkAt" = {prior.At}
+                        AND "Status" = {(int)InstanceStatus.Faulted} AND "Fault" = {EncodedFault} AND "FoundationParkAt" = {parkAt}
                         AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
                         AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest}
                 ) AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor}
                         AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
-                        AND "EventMatch" IS NULL AND "Done" AND "Trial" = 0 AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
+                        AND "EventMatch" IS NULL AND "Done" AND "Trial" = 0 AND "FoundationKeptBy" = {(short)Reason}
                 ) = {keys.Length}
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
                 AS "Value"
@@ -122,7 +146,7 @@ public sealed partial class EfStore
             return stored && (!db.UsesRootParkInspection || await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "FoundationActorList"
                     WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference}
-                        AND "Status" = {(int)InstanceStatus.Faulted} AND "ParkAt" = {prior.At} AND "ParkFault" = {EncodedFault})
+                        AND "Status" = {(int)InstanceStatus.Faulted} AND "ParkAt" = {parkAt} AND "ParkFault" = {EncodedFault})
                 AS "Value"
                 """).SingleAsync(cancellationToken));
         }

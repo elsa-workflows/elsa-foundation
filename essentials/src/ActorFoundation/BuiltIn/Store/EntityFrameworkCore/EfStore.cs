@@ -135,10 +135,12 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     private sealed class RootTimedJobPreviewDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootParkOpeningDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootParkInspectionDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootParkArrivalsDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     internal StoreFormat RequiredFormat => this switch
     {
         RootParkOpeningDb => StoreFormat.RootParkOpening,
         RootParkInspectionDb => StoreFormat.RootParkInspection,
+        RootParkArrivalsDb => StoreFormat.RootParkArrivals,
         RootTimedJobPreviewDb => StoreFormat.RootTimedJobPreview,
         RootTimedJobSettlementDb => StoreFormat.RootTimedJobSettlement,
         RootReplyDb => StoreFormat.RootReplies,
@@ -166,7 +168,9 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     internal bool SupportsCorePreview => RequiredFormat == StoreFormat.Current || UsesRootJobPreview || UsesRootTimedJobPreview;
     internal static KernelDb ForPostgresRootTimedJobPreview(DbContextOptions<KernelDb> options) => new RootTimedJobPreviewDb(options);
     internal bool UsesRootParkOpening => this is RootParkOpeningDb || UsesRootParkInspection;
-    internal bool UsesRootParkInspection => this is RootParkInspectionDb;
+    internal bool UsesRootParkInspection => this is RootParkInspectionDb || UsesRootParkArrivals;
+    internal bool UsesRootParkArrivals => this is RootParkArrivalsDb;
+    internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => new RootParkArrivalsDb(options);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => new RootParkInspectionDb(options);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
     internal static KernelDb ForPostgresRootParkOpening(DbContextOptions<KernelDb> options) => new RootParkOpeningDb(options);
@@ -826,7 +830,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
                  WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired"
-                   {(db.UsesRootParkOpening ? """AND i."FoundationParkAt" IS NULL""" : "")})))
+                   {(db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL""" : "")})))
             """;
     // Commands are exposed only when database time makes them due. On a suspended root the
     // first due command can pass withheld ordinary inputs. Running roots first clear their ready FIFO prefix.

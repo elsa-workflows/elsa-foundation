@@ -37,6 +37,7 @@ public sealed partial class EfStore
     internal sealed record RootImage(CreationAddress Actor, string Model, string Definition, string TypeData,
         IReadOnlyDictionary<string, string> Labels, string? State, int StateVersion, long Revision)
     {
+        internal string? Fault { get; init; }
         internal string? Jobs { get; init; }
         internal long? NextJobGeneration { get; init; }
         internal History History { get; init; }
@@ -265,7 +266,7 @@ public sealed partial class EfStore
 
     private sealed record PhysicalRoot(string Id, long Creation, string State, byte[]? Wire, int StateVersion, long Revision, string Header,
         History History, InstanceStatus Status, bool Suspended, long? TerminalRevision, long? TerminalAt, long AsOf,
-        string? Jobs, long? NextJobGeneration);
+        string? Jobs, long? NextJobGeneration, string? Fault);
 
     internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
@@ -279,7 +280,7 @@ public sealed partial class EfStore
             SELECT i."Id", b."Creation", i."State", /*root-wire*/ AS "Wire", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
                 i."History", i."Status", i."Suspended", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
                 floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
-                i."Jobs", i."NextJobGeneration"
+                i."Jobs", i."NextJobGeneration", i."Fault"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Reference" = i."FoundationReference"
                 AND b."Actor" = i."Id" AND b."Tenant" = i."FoundationTenant"
             WHERE i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference} AND i."Partition" = b."Partition" AND NOT i."Retired"
@@ -310,6 +311,7 @@ public sealed partial class EfStore
             header.Labels.ToDictionary(StringComparer.Ordinal), state, physical.StateVersion, physical.Revision)
             {
                 History = physical.History, Status = physical.Status, Suspended = physical.Suspended, TerminalRevision = physical.TerminalRevision,
+                Fault = db.UsesRootParkArrivals && physical.Fault is not null ? DurableKeyJson.Read<string>(physical.Fault) : null,
                 TerminalAt = physical.TerminalAt, AsOf = physical.AsOf, Jobs = physical.Jobs, NextJobGeneration = physical.NextJobGeneration
             };
     }

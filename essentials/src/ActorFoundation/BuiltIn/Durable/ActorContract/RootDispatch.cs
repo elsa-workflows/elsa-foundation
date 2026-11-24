@@ -11,6 +11,7 @@ internal interface IRootDispatchHeaders
     Durable.FoundationDispatchHeader Checkpoint(Durable.InstanceRow row);
     bool RequiresCommittedTerminal { get; }
     bool KeepsParkInputs { get; }
+    bool KeepsParkArrivals { get; }
 }
 
 internal sealed partial class ActorAdapter

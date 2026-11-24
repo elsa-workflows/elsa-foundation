@@ -89,7 +89,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     }
 
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        roots is null && row.ParkDiscard?.Kind != Durable.ParkClearKind.Terminate &&
+        roots is not null ? CanKeepRootParkArrival(row, delivery) :
+        row.ParkDiscard?.Kind != Durable.ParkClearKind.Terminate &&
         (row.ParkRecovery is null && store.FoundationTurnHeader(row).Park is not null
             ? !delivery.Message.IsControl
             : SettlesEndedChildNotice(row, delivery.Message) ||
@@ -98,6 +99,12 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     private static bool SettlesEndedChildNotice(Durable.InstanceRow? row, Durable.Message message) =>
         message.Kind == Contract.Kinds.ChildFinished && row is
             { EndedDuringParkRecovery: true, Status: not Durable.InstanceStatus.Running, ParkRecovery: null, ParkDiscarded: false };
+
+    private bool CanKeepRootParkArrival(Durable.InstanceRow row, Durable.Delivery delivery) =>
+        roots?.KeepsParkArrivals == true && row.Status == Durable.InstanceStatus.Faulted && delivery.Durable &&
+        CapturesParkArrival(delivery) && delivery.Message is
+        { InboxScope: Durable.InboxKey.FoundationOccurrenceScope, TargetCreation: 1, EventMatch: null,
+            Sender: null, Operator: null, StorageId: not null, ReplyTo: null };
 
     private static bool CapturesParkArrival(Durable.Delivery delivery) => !delivery.Message.IsControl && !delivery.IsWorkerJobCompletion;
 
@@ -119,6 +126,15 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var message = delivery.Message;
         if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition, spec.Input))
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
+        if (roots is not null && input.Row is { } qualifiedPark && input.Taken.All(item => CanKeepRootParkArrival(qualifiedPark, item)))
+        {
+            var revision = checked(qualifiedPark.Revision + 1);
+            return new(input.Actor)
+            {
+                Expected = qualifiedPark.Revision, Row = qualifiedPark with { Revision = revision }, Revision = revision, Status = qualifiedPark.Status,
+                Consumed = [.. input.Taken], FoundationKeep = Durable.ParkKeepReason.Arrived
+            };
+        }
         if (roots is not null)
             return SettleRootDeletion(input) ?? SettleRootTimedJob(input) ?? (RootRefusal(input) is { } reason
                 ? Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, reason) : null);
@@ -489,7 +505,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         result.Status = next.Status;
         result.Revision = next.Revision;
         result.Unsubscribe = true;
-        if (running || roots is null && row is not null && store.FoundationTurnHeader(row).Park is not null)
+        if (running || roots?.KeepsParkArrivals == true && row?.Status == Durable.InstanceStatus.Faulted ||
+            roots is null && row is not null && store.FoundationTurnHeader(row).Park is not null)
             result.FoundationKeep = Durable.ParkKeepReason.Consumed;
         result.Journal = pending is List<object> entries
             ? Durable.Json.Write((object[])[.. entries, "parked"])

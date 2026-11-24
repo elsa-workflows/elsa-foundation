@@ -9,7 +9,7 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootParkOpeningChecks
 {
-    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool inspection = false)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool inspection = false, bool arrivals = false)
     {
         const string fault = "deliberate actor failure";
         const string original = "{\"before\":true}";
@@ -17,8 +17,8 @@ internal static class PostgresRootParkOpeningChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Profile(DbContextOptions<KernelDb> settings) => inspection
-            ? KernelDb.ForPostgresRootParkInspection(settings) : KernelDb.ForPostgresRootParkOpening(settings);
+        KernelDb Profile(DbContextOptions<KernelDb> settings) => arrivals ? KernelDb.ForPostgresRootParkArrivals(settings)
+            : inspection ? KernelDb.ForPostgresRootParkInspection(settings) : KernelDb.ForPostgresRootParkOpening(settings);
         KernelDb Open() => Profile(options);
         EfStore Store(Func<KernelDb>? open = null) => new(open ?? Open, postgres: true, fenceInBatch: inBatch)
             { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
@@ -82,9 +82,16 @@ internal static class PostgresRootParkOpeningChecks
             Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "later", "ordinary", "{}",
                 new(DueAt: tailDue), stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
                 "the ordinary ingress admits the earlier-sequence future input");
-            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "poison", "fail", payload,
+            if (arrivals)
+        {
+            await ObserveArrivalsAsync();
+            return 0;
+        }
+
+        Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "poison", "fail", payload,
                 cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the ordinary ingress admits the ready failing input");
-            var parked = await Drive(owner, row => row is { Revision: 2, Status: InstanceStatus.Faulted });
+            var parked = await Drive(owner, row => row is { Revision: >= 2, Status: InstanceStatus.Faulted } &&
+                (arrivals || row.Revision == 2));
             Check(parked.State == before.State && parked.TypeData == before.TypeData && parked.StateVersion == before.StateVersion &&
                 probe.Failed == 1, "the failed turn records Park and preserves the committed actor state and header");
             Check(observedTail && controlsRan && parked.AsOf >= tailDue,
@@ -169,6 +176,44 @@ internal static class PostgresRootParkOpeningChecks
         }
         if (inspection) await InspectParkAsync();
         return 0;
+
+        async Task ObserveArrivalsAsync()
+        {
+            var reads = await Store(OpenMixed).OpenPreviewRootReadsAsync(8, stop);
+            var parked = await reads.GetAsync(tenant, actor, stop);
+            Check(parked is { Park.At: > 0, Header.Fault: fault }, "the earlier Park has a fixed projected mark");
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "fresh", "ordinary", payload,
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "public ingress accepts new input for the parked generation");
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "fresh", "ordinary", payload,
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Duplicate },
+                "repeating the operation does not create a second arrival");
+
+            await using (var successor = await Own("arrival-successor"))
+            {
+                var after = await Drive(successor, row => row is { Revision: 4, Status: InstanceStatus.Faulted });
+                Check(successor.Epoch > firstEpoch && after.State == before.State && after.Fault == fault && probe.Ordinary == 1,
+                    "the successor captures the arrivals without calling the actor and retains its state");
+            }
+            var view = await reads.GetAsync(tenant, actor, stop);
+            var inbox = await reads.InboxAsync(tenant, actor, cancellationToken: stop);
+            Check(view?.Park == parked!.Park && view!.Header.Fault == fault, "arrivals preserve the original projected Park timestamp");
+            Check(inbox.Items is [{ Id: "later", State: Contract.DeliveryState.Arrived },
+                { Id: "poison", State: Contract.DeliveryState.Consumed },
+                { Id: "fresh", State: Contract.DeliveryState.Arrived }], "public inspection distinguishes arrival and fault-causing input");
+            var history = await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop);
+            Check(history is [_, { Revision: 2, Entries: "[\"parked\"]" }], "arrivals do not replace or append to the opening journal");
+            await using var db = Open();
+            var revision = await db.Database.SqlQuery<long>($"""
+                SELECT "FoundationParkRevision" AS "Value" FROM "Instances" WHERE "Id" = {before.Actor.Id}
+                """).SingleAsync(stop);
+            Check(revision == 2, "the opening revision remains two after the two retained arrivals");
+            var retained = await ReadInputs(before.Actor.Id);
+            Check(retained is [{ Done: true, KeptBy: (short)ParkKeepReason.Arrived },
+                { Done: true, Payload: payload, KeptBy: (short)ParkKeepReason.Consumed },
+                { Done: true, Payload: payload, KeptBy: (short)ParkKeepReason.Arrived }],
+                "all three physical occurrences retain their envelope and exact kept reason");
+        }
 
         async Task InspectParkAsync()
         {
