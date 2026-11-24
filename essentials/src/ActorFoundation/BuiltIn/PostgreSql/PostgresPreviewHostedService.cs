@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Kernel.Foundation.Postgres;
 
-/// <summary>Runs one ordinary PostgreSQL preview node for the lifetime of its application host.</summary>
+/// <summary>Runs one PostgreSQL Core Preview node for the lifetime of its application host.</summary>
 public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor,
     Action<string> endProcess, LoopOptions? options = null) : IHostedService, IAsyncDisposable
 {

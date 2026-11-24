@@ -153,6 +153,7 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     };
     internal bool UsesRootSelfProtocol => this is RootSelfDb or RootTimerDb;
     internal bool UsesRootJobProtocol => this is RootJobDb or RootTimedJobIssuanceDb or RootTimedJobSettlementDb;
+    internal bool UsesRootJobPreview => this is RootJobDb;
     internal bool UsesRootTimedJobIssuance => this is RootTimedJobIssuanceDb;
     internal bool UsesRootTimedJobSettlement => this is RootTimedJobSettlementDb;
     internal bool UsesRootReplyProtocol => this is RootReplyDb;

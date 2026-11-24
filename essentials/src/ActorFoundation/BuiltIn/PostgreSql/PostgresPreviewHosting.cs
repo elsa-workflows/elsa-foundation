@@ -7,9 +7,12 @@ using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Foundation.Postgres;
 
-/// <summary>Starts the Built-in Actor Foundation on an installed ordinary PostgreSQL preview store.</summary>
+/// <summary>Starts the Built-in Actor Foundation on an installed PostgreSQL Core Preview store.</summary>
 public static class PostgresPreviewHosting
 {
+    /// <summary>Selects the preview format for a dedicated PostgreSQL database with Native background jobs.</summary>
+    public static KernelDb CreateNativeJobContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootJobs(options);
+
     /// <summary>
     /// Starts one runtime node for a public actor type. Each node opens its own store and uses the installed
     /// partition count. Configure the same actor type and definitions on every node sharing the store.
@@ -35,19 +38,23 @@ public static class PostgresPreviewHosting
             throw new ArgumentException("Configure positive millisecond loop intervals and a membership window of at least two balance rounds.", nameof(options));
 
         int partitions;
+        bool nativeJobs;
         await using (var db = create())
         {
-            if (!db.Database.IsNpgsql() || db.RequiredFormat != StoreFormat.Current)
-                throw new NotSupportedException("Hosting requires an ordinary PostgreSQL generated-root preview.");
+            nativeJobs = db.UsesRootJobPreview;
+            if (!db.Database.IsNpgsql() || (db.RequiredFormat != StoreFormat.Current && !nativeJobs))
+                throw new NotSupportedException("Hosting requires the ordinary or Native job PostgreSQL Core Preview format.");
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             partitions = await PostgresRootAdmission.ReadInstalledPartitionCountAsync(db, cancellationToken);
         }
 
         var store = new EfStore(create, postgres: true);
+        if (nativeJobs) await store.EnableRootJobsAsync(cancellationToken);
         var scope = store.BindWorkerNode();
         var watchdog = new Watchdog(Defaults.Lease, endProcess);
         var watched = watchdog.Watch(store);
-        var host = DurableHost.ForNode(node, watched, new ActorAdapter(new EfStore.RootHeaders(scope), actor), partitions);
+        var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actor, rootJobHandle: store.RootJobHandle);
+        var host = DurableHost.ForNode(node, watched, adapter, partitions);
         var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
             beforeRelease: host.DrainEnteredTurnsAsync);
         try
