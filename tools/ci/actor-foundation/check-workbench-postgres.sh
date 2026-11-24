@@ -84,16 +84,22 @@ expected = json.loads(Path('expected-workbench-providers.json').read_text())
 manifest = Path('apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.deps.json')
 compile_assets = Path('prototypes/kernel-model/ef/Kernel.EntityFramework/obj/project.assets.json')
 actual = dict(key.rsplit('/', 1) for key in json.loads(manifest.read_text())['libraries'])
-compiled = dict(key.rsplit('/', 1) for key in json.loads(compile_assets.read_text())['targets']['net10.0'])
+compile_entries = json.loads(compile_assets.read_text())['targets']['net10.0']
+compiled = {name: (version, compile_entries[key])
+            for key in compile_entries for name, version in [key.rsplit('/', 1)]}
 critical = ('Microsoft.EntityFrameworkCore', 'Microsoft.EntityFrameworkCore.Relational',
     'Microsoft.EntityFrameworkCore.Sqlite', 'Microsoft.EntityFrameworkCore.SqlServer',
     'Npgsql.EntityFrameworkCore.PostgreSQL', 'Npgsql', 'MySql.EntityFrameworkCore', 'Microsoft.Data.SqlClient')
 for package in sorted((compiled.keys() & expected.keys()) | set(critical)):
     version = expected[package]
-    if compiled.get(package) != version or actual.get(package) != version:
+    compile_version, assets = compiled.get(package, (None, {}))
+    has_runtime_assets = any(not path.endswith('/_._') for group in ('runtime', 'native', 'runtimeTargets')
+                             for path in assets.get(group, {}))
+    requires_runtime = has_runtime_assets or package in critical or package in actual
+    if compile_version != version or requires_runtime and actual.get(package) != version:
         raise SystemExit(f'Provider version mismatch for {package}: Workbench locked {version}, '
-                         f'compile {compiled.get(package)}, host runtime {actual.get(package)}')
-    print(f'ok matching provider compile and runtime dependency {package} {version}')
+                         f'compile {compile_version}, host runtime {actual.get(package)}')
+    print(f'ok matching provider dependency {package} {version} (runtime {actual.get(package, "none")})')
 PYDEPS
 
 for major in "${versions[@]}"; do
@@ -113,24 +119,31 @@ for major in "${versions[@]}"; do
   echo "PostgreSQL $major"
   receipt="$scratch/pg$major-receipt.json"
   dotnet "$workbench" --qualify-workbench-postgres birth "$receipt"
-  invalid="$scratch/pg$major-invalid-receipt.json"
-  python3 - "$receipt" "$invalid" <<'PYRECEIPT'
+  state_counts() {
+    docker exec "$container" psql -XAtq -U postgres -d workbench_preview \
+      -c 'SELECT (SELECT count(*) FROM "Nodes"), (SELECT count(*) FROM "Messages")'
+  }
+  expect_rejected_receipt() {
+    local field=$1 diagnostic=$2 invalid="$scratch/pg$major-invalid-receipt.json" before
+    python3 - "$receipt" "$invalid" "$field" <<'PYRECEIPT'
 import json, sys
 from pathlib import Path
 
 receipt = json.loads(Path(sys.argv[1]).read_text())
-receipt['StateHash'] = ''
+receipt[sys.argv[3]] = "changed"
 Path(sys.argv[2]).write_text(json.dumps(receipt))
 PYRECEIPT
-  nodes() { docker exec "$container" psql -XAtq -U postgres -d workbench_preview -c 'SELECT count(*) FROM "Nodes"'; }
-  before=$(nodes)
-  if dotnet "$workbench" --qualify-workbench-postgres restart "$invalid" > "$scratch/refusal.log" 2>&1; then
-    echo "Restart accepted an invalid receipt." >&2
-    exit 1
-  fi
-  grep -Fq 'the receipt matches the stopped waiting actor before owner startup' "$scratch/refusal.log"
-  [[ "$(nodes)" == "$before" ]]
-  echo "ok invalid receipt refused without registering an owner"
+    before=$(state_counts)
+    if dotnet "$workbench" --qualify-workbench-postgres restart "$invalid" > "$scratch/refusal.log" 2>&1; then
+      echo "Restart accepted a receipt with an invalid $field." >&2
+      exit 1
+    fi
+    grep -Fq "$diagnostic" "$scratch/refusal.log"
+    [[ "$(state_counts)" == "$before" ]]
+    echo "ok invalid $field refused without registering an owner or writing new input"
+  }
+  expect_rejected_receipt StateHash 'the receipt matches the stopped waiting actor before owner startup'
+  expect_rejected_receipt Frame 'the receipt matches the frame, journal and bookmark before owner startup'
   dotnet "$workbench" --qualify-workbench-postgres restart "$receipt"
   docker stop --time 3 "$container" >/dev/null
   container=

@@ -60,6 +60,13 @@ internal static class WorkbenchPostgresPreview
             Require(checkpoint is { Revision: 2, Owner: null } && checkpoint.Epoch == previous.Epoch &&
                 previous.Process != Environment.ProcessId && StateHash(checkpoint.State) == previous.StateHash,
                 "the receipt matches the stopped waiting actor before owner startup");
+            var observation = new EfStore(OpenObservation, postgres: true);
+            var observer = await observation.OpenPreviewRootReadsAsync(64, token);
+            var stoppedActor = new Contract.ActorRef(previous.Actor);
+            var prefix = await observer.TailAsync(scope, stoppedActor, cancellationToken: token);
+            Require(prefix.Next?.Value == previous.Bookmark && JournalHash(prefix) == previous.JournalHash &&
+                WaitFrame(prefix) == previous.Frame,
+                "the receipt matches the frame, journal and bookmark before owner startup");
         }
 
         var wire = Wire.Start("postgres", $"Host={settings.Host};Port={settings.Port}");
@@ -91,8 +98,7 @@ internal static class WorkbenchPostgresPreview
                 actor = start.Actor!.Value;
                 await WaitFor(actor, 1);
                 var initial = await reads.TailAsync(scope, actor, cancellationToken: token);
-                var frame = initial.Items.Select(Entry).Single(entry => entry.StartsWith(DirectApprovalWorkflow.WaitEntry, StringComparison.Ordinal))
-                    [DirectApprovalWorkflow.WaitEntry.Length..];
+                var frame = WaitFrame(initial);
                 Require(await Approve(actor, "approval-1", "Ada", frame) == Contract.AdmissionOutcome.Accepted, "first approval was admitted");
                 var waiting = await WaitFor(actor, 2);
                 Require(Native(waiting).Frames[frame].State!.AsArray().Select(item => item!.GetValue<string>()).SequenceEqual(["Ada"]),
@@ -188,6 +194,10 @@ internal static class WorkbenchPostgresPreview
         Require(checkpoint.State.StartsWith(prefix, StringComparison.Ordinal), "the state uses the ordinary preview framing");
         return JsonSerializer.Deserialize<NativeState>(checkpoint.State[prefix.Length..])!;
     }
+
+    private static string WaitFrame(Contract.Page<Contract.JournalEntry> page) =>
+        page.Items.Select(Entry).Single(entry => entry.StartsWith(DirectApprovalWorkflow.WaitEntry, StringComparison.Ordinal))
+            [DirectApprovalWorkflow.WaitEntry.Length..];
 
     private static string JournalHash(Contract.Page<Contract.JournalEntry> page) =>
         StateHash(JsonSerializer.Serialize(page.Items));
