@@ -162,8 +162,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 - Docker is not available, or the migration image for the skill's tool version cannot be pulled: the skill stops
   before running anything and says what to install or which version to use.
 - A JavaScript global is used other than as a direct call (assigned to a variable, passed as a callback): the
-  converter does not rewrite it, so it would fail at run time. The skill points the user to change it into a direct
-  call in the Elsa 3 definition before the next run (case 14), relying on the report to name such references.
+  converter does not rewrite it, so it would fail at run time. The converter reports such a reference as an ordinary
+  finding; neither the tool nor the skill scans scripts. The skill points the user to case 14.
 - The user's Elsa 3 activity uses several catalog cases at once (a trigger with bookmarks, services and outputs): the
   plan lists every case, and the port follows them in catalog order.
 - A definition is refused only because a dependency was refused: the skill fixes the root first and does not work on
@@ -233,7 +233,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   skill starts it with `docker run`, mounting the export, the packages folder, the `appsettings.json` and the output
   folder, and records the command in the plan. Before the first run of a session, the skill MUST check that Docker is
   available and that the migration image tagged with the tool version the skill is released with (FR-004) can be
-  pulled. When either fails, it stops, says what is missing, and runs nothing.
+  pulled. When either fails, it stops, says what is missing, and runs nothing. When the tool refuses to run, the skill
+  shows the tool's reason and stops.
 
 **The porting catalog**
 
@@ -284,8 +285,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 - **FR-019**: The main README MUST gain a short "Migrating from Elsa 3" section that names `SKILL.md` as the file to
   read, says that installing it as an AI skill is optional, and lists what the migration does not cover (FR-021).
 - **FR-020**: The skill MUST end with the handoff, as text only: the user keeps their feature projects in any
-  repository, publishes their packages through any pipeline and stores the converted workflows anywhere; going live
-  means starting the essentials engine image with their `appsettings.json`, their packages and the converted folder
+  repository, publishes their packages through any pipeline and stores the migrated workflows anywhere; going live
+  means starting the essentials engine image with their `appsettings.json`, their packages and the `migrated/` folder
   mounted. The skill performs no publishing or deployment step.
 - **FR-021**: The skill and the README section MUST state what is out of scope: live workflow instances, running
   Elsa 3 next to Elsa 4, persistence data migration, identity and authentication migration, Elsa 3 Studio
