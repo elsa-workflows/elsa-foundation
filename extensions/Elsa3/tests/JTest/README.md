@@ -129,32 +129,3 @@ Invoke-RestMethod -Method Put "$base/runtime/workflows/diagnostics/settings" -He
 
 The response's `effective` block shows the levels in force; host policy caps every value at bounded snapshots
 (`snapshotLimits`).
-
-## For the Nexxbiz workspace (T047)
-
-Changes and decisions to take back to the JTest-Nexxbiz repository and the Nexxbiz workflows at the end of the
-initiative. The ledger rows hold the evidence.
-
-**Corpus fixes to bring back** (`ledger/baseline-failures.md`, applied in this folder):
-
-- B9 `tests/branching/join-wait-all-tests.json`: expect instance status `Running`, not `Finished` (Elsa 3.5.2+ `WaitAll`).
-- B10, B11 the two dispatch `channels` suites: typo `chanels` → `channels`. The Elsa 3 environment's channel values are
-  empty here because a stock 3.6.3 server registers no dispatch channels; the Nexxbiz executor keeps its own channel names.
-- B12, B13 `tests/http/headers-tests.json`, `tests/logging/logging-tests.json`: read response headers as
-  `$.this.headers['<name>']` (JTest 2.x).
-- B14 `javascript-script-handler-functions.json`: `base64Encode(...)` → `stringToBase64(...)`, `base64Decode(...)` →
-  `stringFromBase64(...)`; its suite no longer has the `getConfiguration` cases.
-- Q14 `storage-drivers-variables-root-workflow.json`: version 1.
-
-**To reconsider for Nexxbiz on Elsa 4**:
-
-- Replace the Executor V3 `base64Encode`/`base64Decode` calls in all Nexxbiz workflows with the Elsa 3 natives
-  `stringToBase64`/`stringFromBase64` (same UTF-8 Base64). Elsa 4 has both as built-ins and the conversion keeps them as
-  written; the Executor V3 names are refused as unknown host functions.
-- `getConfiguration()` (for example `getConfiguration("BusinessSettings")[name]`) has no Elsa 3 or Elsa 4 equivalent:
-  Elsa 3's `getConfig` returns one string value, and the Elsa 4 conversion refuses configuration reads. Direction
-  (coordinator, 2026-11-24): a Nexxbiz feature of its own on Elsa 4 with purpose-specific functions such as
-  `getBusinessSettings()`, so workflows stop indexing raw configuration. Until then workflows that call it are refused
-  on import.
-- The implicit-merge and `WaitAllActive` join suites are excluded here (spec Q15) and come back, or are replaced by
-  Elsa 4-only suites, once the Elsa 4 join behaviour is decided (#4193).

@@ -47,9 +47,9 @@ One row per definition (spec 1235, data-model.md). Buckets stay `unclassified` u
 - `storage-drivers-variables-root-workflow.json` is patched to version 1 in T017 (spec Q14).
 - `branching-implicit.json` and `branching-wait-all-active.json` are excluded from acceptance, to re-evaluate on Elsa 4
   with the JOIN work (#4193); coordinator decision 2026-11-24, see `suites.md` Notes.
-- `javascript-script-handler-functions.json`: `base64Encode`/`base64Decode` (Nexxbiz Executor V3 host functions) are
+- `javascript-script-handler-functions.json`: `base64Encode`/`base64Decode` (host functions outside elsa-core) are
   replaced by the Elsa 3 natives `stringToBase64`/`stringFromBase64`, which Elsa 4 has as built-ins and the converter
-  keeps as written (coordinator-approved correction, 2026-11-24; to apply in the Nexxbiz workflows too). `getConfiguration`
+  keeps as written (coordinator-approved correction, 2026-11-24). `getConfiguration`
   stays in the definition: it has no native equivalent (baseline-failures B14). Its suite cases are removed; the definition
   itself still calls it, so the Elsa 4 conversion refuses it (`VF-IMP-005`) until an adjusted copy without that branch is
-  approved (T036) or Nexxbiz replaces the call.
+  approved (T036).
