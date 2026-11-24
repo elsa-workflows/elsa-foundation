@@ -124,20 +124,25 @@ public class KernelDb : DbContext
     {
         RequiredFormat = format;
         Capabilities = capabilities;
+        RootStateFamily = RootStateFamily.Of(capabilities);
     }
 
     private static KernelDb Profile(DbContextOptions<KernelDb> options, StoreFormat format) =>
         new(options, format, RootProfiles.CapabilitiesOf(format));
 
     // A capability set that no shipped format carries, for database-backed composition guards only. Its format must be unshipped,
-    // so that its marker is refused by every shipped profile.
+    // so that its marker is refused by every shipped profile, and the set must hold every prerequisite of its members.
     internal static KernelDb ForUnshippedComposition(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) =>
         RootProfiles.Formats.ContainsKey(format)
             ? throw new ArgumentOutOfRangeException(nameof(format), format, "A shipped format carries its own capabilities.")
-            : new(options, format, capabilities);
+            : RootProfiles.MissingPrerequisites(capabilities) is not RootCapabilities.None and var missing
+                ? throw new ArgumentException($"The capability set lacks the prerequisites {missing}.", nameof(capabilities))
+                : new(options, format, capabilities);
 
     internal StoreFormat RequiredFormat { get; }
     internal RootCapabilities Capabilities { get; }
+    // The one state family this set writes and reads, with its terminal statuses.
+    internal RootStateFamily RootStateFamily { get; }
     private bool Has(RootCapabilities capability) => (Capabilities & capability) != 0;
     internal bool UsesRootSelfProtocol => Has(RootCapabilities.SelfProtocol);
     internal bool UsesRootTimers => Has(RootCapabilities.Timers);

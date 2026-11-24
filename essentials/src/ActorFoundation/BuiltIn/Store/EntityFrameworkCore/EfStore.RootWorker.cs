@@ -227,22 +227,30 @@ public sealed partial class EfStore
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
-            var terminal = await db.Database.SqlQuery<long>($"""
-                SELECT i."FoundationTerminalRevision" AS "Value" FROM "Instances" i
-                JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
-                    AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
-                WHERE b."Tenant" = {Root.Tenant} AND b."Reference" = {Root.Reference} AND b."Actor" = {Root.Actor}
-                    AND b."Creation" = 1 AND i."Partition" = {Root.Partition} AND NOT i."Retired"
-                    AND (i."Status" = {(int)InstanceStatus.Finished} OR
-                        ({db.UsesRootTermination} AND i."Status" = {(int)InstanceStatus.Cancelled}
-                            AND starts_with(i."State", {RootTerminationStateFamily(db)})) OR
-                        ({db.UsesRootTimedJobSettlement} AND i."Status" = {(int)InstanceStatus.Faulted}
-                            AND starts_with(i."State", {TimedRootStateFamily})))
-                    AND i."FoundationTerminalAt" IS NOT NULL AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
-                """).ToListAsync(cancellationToken);
+            var terminal = await LockQualifiedTerminalAsync(db, Root, cancellationToken);
             return terminal.Count == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys,
                 HeldOperator is null ? null : [HeldOperator], Issue, false, cancellationToken);
         }
+    }
+
+    // The terminal revision of the exact unretired root, share-locked until the transaction ends: Finished, or a status
+    // that its state family ends under the family's prefix.
+    internal static Task<List<long>> LockQualifiedTerminalAsync(KernelDb db, WorkerRoot root, CancellationToken cancellationToken)
+    {
+        var family = db.RootStateFamily;
+        return db.Database.SqlQuery<long>($"""
+            SELECT i."FoundationTerminalRevision" AS "Value" FROM "Instances" i
+            JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
+                AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
+            WHERE b."Tenant" = {root.Tenant} AND b."Reference" = {root.Reference} AND b."Actor" = {root.Actor}
+                AND b."Creation" = 1 AND i."Partition" = {root.Partition} AND NOT i."Retired"
+                AND (i."Status" = {(int)InstanceStatus.Finished} OR
+                    ({family.EndsCancelled} AND i."Status" = {(int)InstanceStatus.Cancelled}
+                        AND starts_with(i."State", {family.Prefix})) OR
+                    ({family.EndsFaulted} AND i."Status" = {(int)InstanceStatus.Faulted}
+                        AND starts_with(i."State", {family.Prefix})))
+                AND i."FoundationTerminalAt" IS NOT NULL AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
+            """).ToListAsync(cancellationToken);
     }
 
     private sealed record PreparedRoot(TurnCommit? JournalTurn, QualifiedRootCheckpoint Checkpoint);
