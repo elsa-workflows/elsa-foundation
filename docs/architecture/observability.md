@@ -158,7 +158,7 @@ Restore and recovery, the remaining resolution kinds and the physical providers 
    `(Id, Scope, Match)` ([Messages.cs](../../prototypes/kernel-model/src/Kernel.Durable/Messages.cs), `InboxKey`), so
    two rows can share a wire id: a private delivery and an ordinary one, or two event matches. The conformance suite
    creates such twins and consumes them one at a time
-   ([PhysicalRetirementChecks.cs](../../prototypes/kernel-model/conformance/Kernel.Store.Conformance/PhysicalRetirementChecks.cs)).
+   ([PhysicalRetirementChecks.cs](../../essentials/tests/ActorFoundation/Store/Conformance/PhysicalRetirementChecks.cs)).
    Every place that names a kept row uses a **delivery handle**: an opaque string that layer 2 encodes from the full
    key (`Id`, `Scope` and the exact `Match`) and only layer 2 decodes. The Park's journal entry lists the handles of
    the rows it consumed (bounded by the parking turn's inbox), operators select by handle, the waits lookup below goes

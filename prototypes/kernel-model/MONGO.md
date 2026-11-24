@@ -20,7 +20,7 @@ partition is a *pass*. `src/Kernel` is now three projects: `src/Kernel.Runtime`,
 
 | Path | What |
 |---|---|
-| `conformance/Kernel.Store.Conformance` | The suite: 46 semantic cases, the stress test, the cost runs, a command line (`Cli`) |
+| `../../essentials/tests/ActorFoundation/Store/Conformance` | The suite: 46 semantic cases, the stress test, the cost runs, a command line (`Cli`) |
 | `conformance/Kernel.Store.Conformance.Run` | The suite against `InMemoryStore`, the reference |
 | `mongo/Kernel.Mongo` | `MongoStore : IKernelStore` (MongoDB.Driver 3.9; needs a replica set and MongoDB 8.0) |
 | `mongo/Kernel.Mongo.Run` | The suite's plug for MongoDB, a TCP proxy that cuts connections, probes |

@@ -252,6 +252,13 @@
   <Folder Name="/essentials/tests/ActorFoundation/">
     <Project Path="essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
   </Folder>
+  <Folder Name="/essentials/tests/ActorFoundation/Store/">
+    <Project Path="essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
+  </Folder>
+  <Folder Name="/prototypes/kernel-model/src/">
+    <Project Path="prototypes/kernel-model/src/Kernel.Durable/Kernel.Durable.csproj" />
+    <Project Path="prototypes/kernel-model/src/Kernel.Workflows/Kernel.Workflows.csproj" />
+  </Folder>
   <Folder Name="/essentials/src/Activities/">
     <Project Path="essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
     <Project Path="essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
