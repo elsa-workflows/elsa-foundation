@@ -74,7 +74,8 @@ export function physicalModuleInputs(repoRoot, sources) {
 export function studioHashBuildInputs(repoRoot, clients) {
   const files = new Set(), queue = [], active = new Set(), ownedPackages = new Set();
   const baseline = resolve(repoRoot, "Studio/scripts/baselines/json-hash-review.json");
-  const excluded = new Set(["node_modules", "bin", "obj", "dist", ".git", ".agent-prefs", "test-results", "tests", "__tests__", "probes"]);
+  const excluded = new Set(["node_modules", "bin", "obj", "dist", ".git", ".agent-prefs", ".github", ".specify", ".claude", ".agents",
+    "docs", "specs", "examples", "test-results", "tests", "__tests__", "probes"]);
   const text = /\.(?:[cm]?[jt]sx?|html?|json|ya?ml|css|scss|svg)$/;
   function add(file, build = false) {
     file = resolve(file);

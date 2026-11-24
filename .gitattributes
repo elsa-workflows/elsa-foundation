@@ -1,6 +1,7 @@
 # Match .editorconfig so raw/verbatim C# literals and compiled hash recipes are portable.
 *.cs text eol=lf
 *.css text eol=lf
+/Studio/.stylelintrc*.json text eol=lf
 
 # Retained compatibility fixtures are checked by byte length and SHA-256.
 # Preserve their captured bytes on checkouts with core.autocrlf enabled.
