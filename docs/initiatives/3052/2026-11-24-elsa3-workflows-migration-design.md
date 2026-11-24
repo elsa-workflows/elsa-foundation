@@ -45,7 +45,8 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
   match, for example when Elsa 3's `[Activity(namespace, type)]` changed the name.
 - **JS functions:** the Elsa 4 namespace-prefix rule stays (ADR 0045 §5 D-5). The migrator picks one or more
   prefixes, and that choice is a recorded step in the plan. The converter maps declared Elsa 3 globals to prefixed
-  Elsa 4 host functions: **#5664** (PR #5667).
+  Elsa 4 host functions: **#5664** (PR #5667). Since PR #5703 no declaration: a global matches the host function whose
+  name after the prefix is the Elsa 3 name.
 - **Variable types:** register the type in an Elsa 4 feature under a dotted alias and it converts typed. This is not
   related to proxies (#4103); a script calling .NET members on a value stays refused (`VF-IMP-012`). The converter
   gains the missing diagnostics: **#5666**.

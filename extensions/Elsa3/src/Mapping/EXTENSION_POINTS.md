@@ -80,9 +80,10 @@ Replace both: implement both contracts on one class, or register a node converte
   read by `Elsa3ExpressionRewriter` (#5664). No declaration or mapping: the name after the namespace prefix is the match.
 - **Purpose:** an Elsa 3 custom function rebuilt as a prefixed Elsa 4 host function of the same member name:
   `getSettings()` converts to `acme.getSettings()`. A name two namespaces carry, a name that is also a variable's or
-  input's generated accessor, or a script that declares the namespace root is refused with `VF-IMP-002`. An Elsa 3
-  built-in or JavaScript global the converter converts itself keeps that conversion; an Elsa 3 built-in it refuses
-  (`getConfiguration`, …) is matched like a custom function.
+  input's generated accessor (the converter cannot tell whether Elsa 3 had a custom function of that name), or a script
+  that declares the namespace root is refused with `VF-IMP-002`. A standard JavaScript global, an Elsa 4 built-in or an
+  Elsa 3 built-in the converter converts itself is never matched; an Elsa 3 built-in it refuses
+  (`getConfig`, `getLastResult`, …) is matched like a custom function.
 - **When to use:** register each Elsa 3 custom JavaScript function a host rebuilt for Elsa 4 under its Elsa 3 name with a
   namespace prefix; the migration plan records the prefix. Registering or removing such a function alters converter
   output (spec 235's converter revision rule).

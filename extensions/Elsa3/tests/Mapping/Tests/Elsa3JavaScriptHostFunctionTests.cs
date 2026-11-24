@@ -395,7 +395,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     /// argument's toString, which changes the variable.
     /// </summary>
     [Fact]
-    public async Task A_reusable_script_writing_through_a_claimed_converted_name_is_refused()
+    public async Task A_reusable_script_writing_through_a_converted_name_a_host_function_carries_is_refused()
     {
         var claim = new JavaScriptHostFunctionDeclaration("acme.String", _ => default);
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script",
@@ -430,18 +430,36 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     }
 
     /// <summary>
+    /// A standard JavaScript global, or an Elsa 3 built-in the converter converts itself, is never matched: a host function
+    /// that happens to carry the name neither takes the call nor turns a reference into a replaced-function refusal.
+    /// </summary>
+    [Theory]
+    [InlineData("url.encodeURIComponent", "encodeURIComponent('a b')")]
+    [InlineData("acme.isNaN", "isNaN(1)")]
+    [InlineData("acme.isNullOrEmpty", "['a', ''].filter(isNullOrEmpty)")]
+    [InlineData("acme.getWorkflowInstanceId", "[getWorkflowInstanceId][0]")]
+    public async Task A_host_function_named_like_a_native_or_converted_global_is_not_matched(string hostFunction, string expression)
+    {
+        var result = await ConvertTextAsync(expression, [new JavaScriptHostFunctionDeclaration(hostFunction, _ => default)]);
+
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ReplacedFunctionReference);
+        if (result.Succeeded)
+            Assert.DoesNotContain(hostFunction, ReadExpression(result).Source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// An Elsa 3 built-in the converter refuses (spec 247) is matched like a custom function: a host that rebuilt it under a
     /// namespace gets the call rewritten instead of the refusal.
     /// </summary>
     [Fact]
     public async Task A_host_function_named_like_a_refused_elsa3_built_in_takes_the_call()
     {
-        var configuration = new JavaScriptHostFunctionDeclaration("acme.getConfiguration", _ => default);
+        var configuration = new JavaScriptHostFunctionDeclaration("acme.getConfig", _ => default);
 
-        var result = await ConvertTextAsync("getConfiguration('Key')", [configuration]);
+        var result = await ConvertTextAsync("getConfig('Key')", [configuration]);
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("acme.getConfiguration('Key')", ReadExpression(result).Source);
+        Assert.Equal("acme.getConfig('Key')", ReadExpression(result).Source);
     }
 
     /// <summary>Only the whole name after the prefix matches; a host function with another member name leaves the refusal.</summary>

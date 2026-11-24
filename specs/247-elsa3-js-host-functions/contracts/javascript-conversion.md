@@ -43,10 +43,10 @@ what to change so the workflow converts.
 | `setOutcome(…)`, `setOutcomes(…)` in an input expression | VF-IMP-005 | Only a RunJavaScript script selects outcomes in Elsa 4. Move the call into a RunJavaScript, or route with a Decision or Switch activity. In a RunJavaScript script they convert since spec 1208 (S-3, FR-027): see the [Elsa 3 mapping README](../../../Extensions/Elsa3/src/Mapping/README.md) |
 | `toJson(x)` | VF-IMP-005 | Use `JSON.stringify(x)`; to copy, use `JSON.parse(JSON.stringify(x))`. Elsa 3's `toJson` escapes HTML characters and keeps .NET casing |
 | `parseGuid(s)` | VF-IMP-005 | Keep the GUID as a string, and validate its format in the script if needed |
-| `bytesToString`, `bytesFromString`, `bytesToBase64`, `bytesFromBase64`, `streamToBytes`, `streamToBase64` | VF-IMP-005 | Elsa 4 values are JSON and have no bytes or streams. Move the conversion into an activity |
+| `bytesToString`, `bytesFromString`, `bytesToBase64`, `bytesFromBase64`, `streamToBytes`, `streamToBase64` | VF-IMP-005 | Elsa 4 values are JSON and have no bytes or streams. Move the conversion into an activity. Since #5664 a registered host function with the name after its namespace prefix converts the call |
 | `stringToBase64`, `stringFromBase64` | VF-IMP-005 | Elsa 4 expressions have no Base64 helpers. Move the conversion into an activity |
-| `getConfig(…)` | VF-IMP-005 | Pass the setting in as a workflow input |
-| `getWorkflowDefinitionId`, `getWorkflowDefinitionVersionId`, `getWorkflowDefinitionVersion`, `getWorkflowInstanceName`, `setWorkflowInstanceName`, `setCorrelationId`, `getLastResult` | VF-IMP-005 | Specific message per name. Elsa 4 expressions cannot read or set these |
+| `getConfig(…)` | VF-IMP-005 | Pass the setting in as a workflow input. Since #5664 a registered host function with this name after its namespace prefix (`acme.getConfig`) converts the call |
+| `getWorkflowDefinitionId`, `getWorkflowDefinitionVersionId`, `getWorkflowDefinitionVersion`, `getWorkflowInstanceName`, `setWorkflowInstanceName`, `setCorrelationId`, `getLastResult` | VF-IMP-005 | Specific message per name. Elsa 4 expressions cannot read or set these. Since #5664 a registered host function with the name after its namespace prefix converts the call |
 | `DateTime`, `DateTimeOffset`, `TimeSpan`, `Guid`, `Random`, lodash `_`, `moment` | VF-IMP-005 | Unchanged from spec 236 |
 | Elsa 3 `args` | VF-IMP-005 | Unchanged from spec 236 |
 | `getOutputFrom` or helpers with a computed name, or an accessor used as a value | VF-IMP-006 | Unchanged from spec 236 |
