@@ -20,7 +20,7 @@ internal static class PostgresRootParkOpeningChecks
         KernelDb Open() => KernelDb.ForPostgresRootParkOpening(options);
         EfStore Store(Func<KernelDb>? open = null) => new(open ?? Open, postgres: true, fenceInBatch: inBatch)
             { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var stop = timeout.Token;
         await using (var db = Open())
             Check(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "the Park fixture uses an empty PostgreSQL database");
@@ -35,6 +35,8 @@ internal static class PostgresRootParkOpeningChecks
                 CREATE SCHEMA park_shadow;
                 CREATE TABLE park_shadow."Subscriptions" (LIKE "Subscriptions" INCLUDING ALL);
                 CREATE TABLE park_shadow."Partitions" (LIKE "Partitions" INCLUDING ALL);
+                CREATE TABLE park_shadow."FoundationDirectReceipts" (LIKE "FoundationDirectReceipts" INCLUDING ALL);
+                CREATE TABLE park_shadow."FoundationRootReceipts" (LIKE "FoundationRootReceipts" INCLUDING ALL);
                 """, stop);
         }
         using var quoting = new NpgsqlCommandBuilder();
@@ -56,6 +58,7 @@ internal static class PostgresRootParkOpeningChecks
         string? tailOccurrence = null;
         var controlsRan = false;
         Exception? controlError = null;
+        long tailDue = 0;
         EfStore.RootImage before;
         long firstEpoch;
         await using (var owner = await Own("first"))
@@ -71,18 +74,17 @@ internal static class PostgresRootParkOpeningChecks
                     new SubscriptionEntity { Key = "signal", Instance = "0/other", Wait = "w", Partition = 0 });
                 await db.SaveChangesAsync(stop);
             }
-            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "poison", "fail", payload,
-                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the ordinary ingress admits the failing input");
-            var at = (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop))!.AsOf + 2_500;
+            tailDue = (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop))!.AsOf + 8_000;
             Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "later", "ordinary", "{}",
-                new(DueAt: at), stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the ordinary ingress admits a future input");
+                new(DueAt: tailDue), stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "the ordinary ingress admits the earlier-sequence future input");
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "poison", "fail", payload,
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the ordinary ingress admits the ready failing input");
             var parked = await Drive(owner, row => row is { Revision: 2, Status: InstanceStatus.Faulted });
             Check(parked.State == before.State && parked.TypeData == before.TypeData && parked.StateVersion == before.StateVersion &&
                 probe.Failed == 1, "the failed turn records Park and preserves the committed actor state and header");
-            Check(observedTail && controlsRan && parked.AsOf < at,
-                "the same owner has already buffered the future input when Park commits");
-            while ((await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop))!.AsOf < at)
-                await Task.Delay(50, stop);
+            Check(observedTail && controlsRan && parked.AsOf >= tailDue,
+                "the already buffered input matures before the failing turn's Park commits");
             Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(sibling), "side-turn", "ordinary", "{}",
                 cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the parked root has a ready neighbor");
             await Drive(owner, row => row is { Revision: 2 }, sibling);
@@ -108,8 +110,8 @@ internal static class PostgresRootParkOpeningChecks
         var journal = await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop);
         Check(journal is [_, { Revision: 2, Entries: "[\"parked\"]" }], "the original journal contains one Park entry");
         var inputs = await ReadInputs(before.Actor.Id);
-        Check(inputs is [{ Kind: "fail", Done: true, Trial: 0, Payload: payload, KeptBy: (short)ParkKeepReason.Consumed },
-            { Kind: "ordinary", Done: false, KeptBy: null }], "only the failing input becomes a kept occurrence and retains its payload");
+        Check(inputs is [{ Kind: "ordinary", Done: false, KeptBy: null },
+            { Kind: "fail", Done: true, Trial: 0, Payload: payload, KeptBy: (short)ParkKeepReason.Consumed }], "only the failing input becomes a kept occurrence and retains its payload");
         await using (var db = Open())
         {
             var saved = await db.Instances.AsNoTracking().SingleAsync(row => row.Id == before.Actor.Id, stop);
@@ -123,7 +125,10 @@ internal static class PostgresRootParkOpeningChecks
                 .ExecuteUpdateAsync(update => update.SetProperty(row => row.KeepUntil, 1), stop);
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "FoundationDirectReceipts" SET "Until" = 1
-                WHERE "Reference" = {actor.Id} AND "Operation" = {FoundationRootCreator.OperationDigest("poison")}
+                WHERE "Reference" = {actor.Id} AND "Operation" = {FoundationRootCreator.OperationDigest("poison")};
+                UPDATE "FoundationRootReceipts" SET "Until" = 1 WHERE "Reference" = {actor.Id};
+                INSERT INTO park_shadow."FoundationDirectReceipts" SELECT * FROM "FoundationDirectReceipts" WHERE "Until" = 1;
+                INSERT INTO park_shadow."FoundationRootReceipts" SELECT * FROM "FoundationRootReceipts" WHERE "Until" = 1;
                 """, stop);
             db.Messages.Add(new MessageEntity
             {
@@ -135,6 +140,15 @@ internal static class PostgresRootParkOpeningChecks
         Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "poison", "fail", payload,
             cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Refused },
             "retry after the actual direct admission receipt expires admits no new occurrence");
+        Check(await admission.SweepDirectReceiptsAsync(stop) == 1 && await admission.SweepReceiptsAsync(stop) == 1,
+            "both sweepers remove the expired canonical receipts");
+        await using (var db = Open())
+            Check(await db.Database.SqlQueryRaw<bool>("""
+                SELECT NOT EXISTS (SELECT 1 FROM "FoundationDirectReceipts" WHERE "Until" = 1)
+                    AND NOT EXISTS (SELECT 1 FROM "FoundationRootReceipts" WHERE "Until" = 1)
+                    AND EXISTS (SELECT 1 FROM park_shadow."FoundationDirectReceipts" WHERE "Until" = 1)
+                    AND EXISTS (SELECT 1 FROM park_shadow."FoundationRootReceipts" WHERE "Until" = 1) AS "Value"
+                """).SingleAsync(stop), "receipt sweeping leaves the shadow schema untouched");
         await Store(OpenMixed).SweepAsync(stop);
         await using (var db = Open())
             Check(!await db.Messages.AnyAsync(row => row.Id == "expired-unrelated", stop),
@@ -146,7 +160,7 @@ internal static class PostgresRootParkOpeningChecks
             await successor.WokenAsync(null, stop);
             await successor.RunAsync(stop);
             Check(successor.Epoch > firstEpoch && probe.Ordinary == 1 &&
-                (await ReadInputs(before.Actor.Id)) is [_, { Done: false }],
+                (await ReadInputs(before.Actor.Id)) is [{ Done: false }, _],
                 "a newer owner leaves the queued input pending while the actor remains parked");
         }
         return 0;
@@ -159,10 +173,11 @@ internal static class PostgresRootParkOpeningChecks
             var proxy = (ObservedCommit)(object)observed;
             proxy.Store = ownerStore;
             proxy.Write = (batch, token) => Write(ownerStore, batch, token);
-            var lease = TimeSpan.FromSeconds(35);
+            var lease = TimeSpan.FromSeconds(75);
             var worker = new Worker(node, 0, observed, new ActorAdapter(new EfStore.RootHeaders(roots), probe), new()
             {
                 Lease = lease,
+                Horizon = TimeSpan.FromSeconds(30),
                 OnObservedDelivery = row => observedTail |= row.Message.Id == "later"
             });
             var host = new DurableHost([worker]);
@@ -178,6 +193,15 @@ internal static class PostgresRootParkOpeningChecks
                 controlsRan = true;
                 try
                 {
+                    var asOf = (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, token))!.AsOf;
+                    Check(asOf < tailDue && observedTail, "the ready input fails while the earlier buffered input is still future");
+                    do
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(1, tailDue - asOf)), token);
+                        asOf = (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, token))!.AsOf;
+                    }
+                    while (asOf < tailDue);
+
                     await using var db = Open();
                     var physical = await ReadInputs(park.Instance);
                     tailOccurrence = physical.Single(row => row.Kind == "ordinary").Id;

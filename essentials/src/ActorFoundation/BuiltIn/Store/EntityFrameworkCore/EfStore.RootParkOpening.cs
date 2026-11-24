@@ -46,10 +46,13 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             if (!db.UsesRootParkOpening) return false;
+            var at = await db.Database.SqlQueryRaw<long>(
+                """SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "Value" """)
+                .SingleAsync(cancellationToken);
             var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" i
                 SET "Status" = {(int)InstanceStatus.Faulted}, "Fault" = {EncodedFault}, "Revision" = {JournalRevision},
-                    "FoundationWriteRevision" = {JournalRevision}, "FoundationParkAt" = floor(extract(epoch from statement_timestamp()) * 1000)::bigint
+                    "FoundationWriteRevision" = {JournalRevision}, "FoundationParkAt" = {at}
                 FROM "FoundationRootBirths" b
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired"
                     AND NOT i."Suspended" AND i."Status" = {(int)InstanceStatus.Running} AND i."Revision" = {Expected}
@@ -59,23 +62,29 @@ public sealed partial class EfStore
                 """, cancellationToken);
             if (updated != 1) return false;
 
-            var pending = await db.Messages.FromSqlRaw($$"""
-                SELECT * FROM "Messages" WHERE "Target" = {0} AND "Partition" = {1} AND "InboxScope" = {2}
-                    AND "EventMatch" IS NULL AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}}
-                ORDER BY "Seq" LIMIT {3} FOR UPDATE
-                """, Root.Actor, Root.Partition, InboxKey.FoundationOccurrenceScope, Inputs.Count)
-                .AsNoTracking().ToListAsync(cancellationToken);
+            var keys = Inputs.Select(input => input.InboxKey.Id).ToArray();
+            // A different input can mature between dispatch and Park. Lock the dispatched identities.
+            var pending = await db.Messages.FromSqlInterpolated($"""
+                SELECT * FROM "Messages" WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
+                    AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({keys})
+                    AND "EventMatch" IS NULL AND NOT "Done" ORDER BY "Seq" FOR UPDATE
+                """).AsNoTracking().ToListAsync(cancellationToken);
             var inputs = pending.Select(row => DecodeRootInput(db, row, Root.Reference, null)).ToArray();
-            if (!inputs.SequenceEqual(Inputs) || inputs.Any(input => input.TargetCreation != 1 || input.Operator is not null))
+            if (inputs.Any(input => input.TargetCreation != 1 || input.Operator is not null) ||
+                !inputs.OrderBy(input => input.InboxKey.Id, StringComparer.Ordinal)
+                    .SequenceEqual(Inputs.OrderBy(input => input.InboxKey.Id, StringComparer.Ordinal)))
                 return false;
 
-            var keys = Inputs.Select(input => input.InboxKey.Id).ToArray();
             var kept = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Done" = true, "Trial" = 0, "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
                 WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
                 """, cancellationToken);
             if (kept != keys.Length) return false;
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                DELETE FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition}
+                """, cancellationToken);
+
             var retained = await db.Messages.AsNoTracking()
                 .Where(row => row.Target == Root.Actor && row.Partition == Root.Partition &&
                     row.InboxScope == InboxKey.FoundationOccurrenceScope && row.EventMatch == null && keys.Contains(row.Id))
@@ -85,17 +94,15 @@ public sealed partial class EfStore
                 row.Id, row.Seq, row.Kind, row.Payload, row.Start, row.Sender, row.Due, row.KeepUntil, row.ReplyTo,
                 row.JobGeneration, row.Seen, row.Attempts
             };
-            if (!retained.Select(envelope).SequenceEqual(pending.Select(envelope))) return false;
+            if (!retained.Select(envelope).OrderBy(row => row.Id, StringComparer.Ordinal)
+                .SequenceEqual(pending.Select(envelope).OrderBy(row => row.Id, StringComparer.Ordinal))) return false;
 
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                DELETE FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition}
-                """, cancellationToken);
             return await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (
                     SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
                         AND "FoundationTenant" = {Root.Tenant} AND "FoundationReference" = {Root.Reference}
                         AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision}
-                        AND "Status" = {(int)InstanceStatus.Faulted} AND "Fault" = {EncodedFault} AND "FoundationParkAt" IS NOT NULL
+                        AND "Status" = {(int)InstanceStatus.Faulted} AND "Fault" = {EncodedFault} AND "FoundationParkAt" = {at}
                 ) AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor}
                         AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
                         AND "EventMatch" IS NULL AND "Done" AND "Trial" = 0 AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
@@ -103,7 +110,6 @@ public sealed partial class EfStore
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
                 AS "Value"
                 """).SingleAsync(cancellationToken);
-
         }
     }
 }

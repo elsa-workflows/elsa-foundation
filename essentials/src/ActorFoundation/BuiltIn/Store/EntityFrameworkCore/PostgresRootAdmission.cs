@@ -293,9 +293,12 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal async Task<int> SweepReceiptsAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        return await db.Database.ExecuteSqlRawAsync("""
+        await using var pinned = db.UsesRootParkOpening ? await EfStore.BeginPinnedRootOperationAsync(db, cancellationToken) : null;
+        var removed = await db.Database.ExecuteSqlRawAsync("""
             DELETE FROM "FoundationRootReceipts" WHERE "Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
             """, cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
+        return removed;
     }
 
     internal static bool IsStoredCreator(string? start) => start?.StartsWith(CreatorPrefix, StringComparison.Ordinal) == true;
