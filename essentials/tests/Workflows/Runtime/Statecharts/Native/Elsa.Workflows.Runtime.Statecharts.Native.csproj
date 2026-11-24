@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>Kernel.Statecharts.Native</AssemblyName>
+    <RootNamespace>Kernel.Statecharts.Native</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <PropertyGroup><KernelContractOnly>true</KernelContractOnly></PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kernel.Statecharts.Run" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Statecharts.OrderFixture" />
+    <ProjectReference Include="../../../../../../prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj" />
+    <ProjectReference Include="../../../../../../prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
+  </ItemGroup>
+  <Import Project="../../../../../../prototypes/kernel-model/Directory.Build.targets" />
+</Project>
