@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
-  "consumerSignature": "58b4ca0e44e307dedd66acb2edd3812103cce17e231b255374da0fe217e4299c",
-  "authoritySignature": "7e5046990f33b55a145f413445185423cfb6ded889538439f5d1e76ebe8875c5",
+  "consumerSignature": "20c84be5ef7ac35ec8b284c4103221246c9f7ab07777669d09881d44767e11bc",
+  "authoritySignature": "15eb1c75a5e6ec9b3181b5b7faa1c046312c01a62fc77fafed44a95c6df1a705",
   "owners": [
     {
       "identity": "Acme.Processing|Acme.Processing.ProcessingDashboardSource::GroupKey(System.Collections.Generic.IReadOnlyList`1[System.String],System.Collections.Generic.IReadOnlyDictionary`2[System.String,Elsa.Studio.Dashboard.Core.Models.DashboardValue])->System.String",
@@ -103,7 +103,7 @@
       ]
     },
     {
-      "identity": "Elsa.Activities.Bpmn.Interchange|Elsa.Activities.Bpmn.Interchange.Services.BpmnAuthoredDirectPublisher+<PublishCoreAsync>d__20::MoveNext()->System.Void",
+      "identity": "Elsa.Activities.Bpmn.Interchange|Elsa.Activities.Bpmn.Interchange.Services.BpmnAuthoredDirectPublisher+<PublishCoreAsync>d__22::MoveNext()->System.Void",
       "classification": "json_routed",
       "reason": "Two JSON inputs: tenant/actor/request publication ID array and publication-intent object; shared routing retains prefix, supplied-intent flag and nullable expectations.",
       "sources": [
@@ -3037,7 +3037,7 @@
       ]
     },
     {
-      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer+<>c__DisplayClass19_0+<<PublishInputSnapshotAsync>b__0>d::MoveNext()->System.Void",
+      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer+<>c__DisplayClass23_0+<<PublishInputSnapshotAsync>b__0>d::MoveNext()->System.Void",
       "classification": "physical_file_witness",
       "reason": "Connector preparer snapshots CSV or JSONL source bytes verbatim and verifies exact pinned source digest; JSONL may include malformed records.",
       "sources": [
@@ -3072,34 +3072,9 @@
       ]
     },
     {
-      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer+<PublishInputSnapshotAsync>d__19::MoveNext()->System.Void",
+      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer::CsvSourceIndexIdentity(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission,System.String,Elsa.Etl.Runtime.Output.EtlChunk)->System.String",
       "classification": "json_routed",
-      "reason": "Current file-backed connector publisher delegates to InputSnapshotIdentity: canonical normal {formatVersion:2,kind:\"connector-input-snapshot\",invocation:<InvocationFingerprint>,role:role-name,pinHandle}. connector-input-identity/* pins the exact production helper used here and by SQL snapshots. This old async ingress identity awaits fresh compiled reconciliation.",
-      "sources": [
-        "extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs"
-      ],
-      "goldenEvidence": [
-        "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
-        "specs/1207-json-data-integrity-baseline/evidence/additional-owner-hash-vectors.json",
-        "specs/1207-json-data-integrity-baseline/evidence/generate-additional-owner-hash-vectors.py"
-      ],
-      "sites": [
-        {
-          "role": "json-hash-input",
-          "target": "Elsa.Serialization.Core|Elsa.Serialization.Core.JsonHashInput::Hash<!!0>(!!0)->System.String",
-          "operation": "call",
-          "occurrence": 1,
-          "genericArguments": [
-            "anonymous{FormatVersion:System.Int32;Invocation:System.String;Kind:System.String;PinHandle:System.String;Role:System.String}"
-          ],
-          "declaringTypeContext": "Elsa.Serialization.Core.JsonHashInput"
-        }
-      ]
-    },
-    {
-      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer+<PublishJsonlSourceIndexAsync>d__22::MoveNext()->System.Void",
-      "classification": "json_routed",
-      "reason": "Current JSONL index publisher delegates to JsonlSourceIndexIdentity: canonical normal {formatVersion:2,kind:\"connector-jsonl-source-index\",invocation:<InvocationFingerprint>,sourcePinHandle,sourceKey,sourceHash}. connector-jsonl-index/* invokes the exact helper, independently from physical JSONL/index bytes. This old async identity awaits fresh reconciliation.",
+      "reason": "Lowercase canonical SHA-256 of normal {formatVersion:2,kind:\"connector-csv-source-index\",invocation:<InvocationFingerprint>,sourcePinHandle,sourceKey:<chunk key>,sourceHash:<chunk content hash>}. Chunk byte length is excluded; physical index bytes remain separate witnesses.",
       "sources": [
         "extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs"
       ],
@@ -3122,9 +3097,59 @@
       ]
     },
     {
-      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer+<PublishRabbitMqSnapshotAsync>d__18::MoveNext()->System.Void",
+      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer::InputSnapshotIdentity(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission,Elsa.Etl.Runtime.Bindings.EtlFileRole,System.String)->System.String",
       "classification": "json_routed",
-      "reason": "Current PublishRabbitMqSnapshotAsync passes its existing fresh Guid into RabbitMqSnapshotIdentity: canonical normal {formatVersion:2,kind:\"connector-input-snapshot\",invocation:<InvocationFingerprint>,role:\"Source\",pinHandle,attempt:Guid-N}. rabbitmq-snapshot-identity/* pins that private production helper with a literal nonce; the public random-attempt lifetime is unchanged. This old async ingress identity awaits fresh compiled reconciliation.",
+      "reason": "Lowercase canonical SHA-256 of normal {formatVersion:2,kind:\"connector-input-snapshot\",invocation:<InvocationFingerprint>,role:<enum ToString>,pinHandle:<selected handle>}. File and SQL publishers call this one shared recipe; they do not earn separate terminal hash exemptions.",
+      "sources": [
+        "extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs"
+      ],
+      "goldenEvidence": [
+        "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
+        "specs/1207-json-data-integrity-baseline/evidence/additional-owner-hash-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/generate-additional-owner-hash-vectors.py"
+      ],
+      "sites": [
+        {
+          "role": "json-hash-input",
+          "target": "Elsa.Serialization.Core|Elsa.Serialization.Core.JsonHashInput::Hash<!!0>(!!0)->System.String",
+          "operation": "call",
+          "occurrence": 1,
+          "genericArguments": [
+            "anonymous{FormatVersion:System.Int32;Invocation:System.String;Kind:System.String;PinHandle:System.String;Role:System.String}"
+          ],
+          "declaringTypeContext": "Elsa.Serialization.Core.JsonHashInput"
+        }
+      ]
+    },
+    {
+      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer::JsonlSourceIndexIdentity(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission,System.String,Elsa.Etl.Runtime.Output.EtlChunk)->System.String",
+      "classification": "json_routed",
+      "reason": "Lowercase canonical SHA-256 of normal {formatVersion:2,kind:\"connector-jsonl-source-index\",invocation:<InvocationFingerprint>,sourcePinHandle,sourceKey:<chunk key>,sourceHash:<chunk content hash>}. Chunk byte length is excluded; JSONL content and index byte witnesses remain separate.",
+      "sources": [
+        "extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs"
+      ],
+      "goldenEvidence": [
+        "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
+        "specs/1207-json-data-integrity-baseline/evidence/additional-owner-hash-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/generate-additional-owner-hash-vectors.py"
+      ],
+      "sites": [
+        {
+          "role": "json-hash-input",
+          "target": "Elsa.Serialization.Core|Elsa.Serialization.Core.JsonHashInput::Hash<!!0>(!!0)->System.String",
+          "operation": "call",
+          "occurrence": 1,
+          "genericArguments": [
+            "anonymous{FormatVersion:System.Int32;Invocation:System.String;Kind:System.String;SourceHash:System.String;SourceKey:System.String;SourcePinHandle:System.String}"
+          ],
+          "declaringTypeContext": "Elsa.Serialization.Core.JsonHashInput"
+        }
+      ]
+    },
+    {
+      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer::RabbitMqSnapshotIdentity(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission,System.Guid)->System.String",
+      "classification": "json_routed",
+      "reason": "Lowercase canonical SHA-256 of normal {formatVersion:2,kind:\"connector-input-snapshot\",invocation:<InvocationFingerprint>,role:\"Source\",pinHandle:<source revision handle>,attempt:<Guid N>}. The actual caller still supplies Guid.NewGuid(); fixed literal-nonce goldens pin this exact helper without changing attempt lifetime.",
       "sources": [
         "extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs"
       ],
@@ -3141,56 +3166,6 @@
           "occurrence": 1,
           "genericArguments": [
             "anonymous{Attempt:System.String;FormatVersion:System.Int32;Invocation:System.String;Kind:System.String;PinHandle:System.String;Role:System.String}"
-          ],
-          "declaringTypeContext": "Elsa.Serialization.Core.JsonHashInput"
-        }
-      ]
-    },
-    {
-      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer+<PublishSourceIndexAsync>d__21::MoveNext()->System.Void",
-      "classification": "json_routed",
-      "reason": "Current CSV index publisher delegates to CsvSourceIndexIdentity: canonical normal {formatVersion:2,kind:\"connector-csv-source-index\",invocation:<InvocationFingerprint>,sourcePinHandle,sourceKey,sourceHash}. Source byte length is excluded. connector-csv-index/* invokes that actual helper; physical index bytes remain a separate protocol. This old async identity awaits fresh reconciliation.",
-      "sources": [
-        "extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs"
-      ],
-      "goldenEvidence": [
-        "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
-        "specs/1207-json-data-integrity-baseline/evidence/additional-owner-hash-vectors.json",
-        "specs/1207-json-data-integrity-baseline/evidence/generate-additional-owner-hash-vectors.py"
-      ],
-      "sites": [
-        {
-          "role": "json-hash-input",
-          "target": "Elsa.Serialization.Core|Elsa.Serialization.Core.JsonHashInput::Hash<!!0>(!!0)->System.String",
-          "operation": "call",
-          "occurrence": 1,
-          "genericArguments": [
-            "anonymous{FormatVersion:System.Int32;Invocation:System.String;Kind:System.String;SourceHash:System.String;SourceKey:System.String;SourcePinHandle:System.String}"
-          ],
-          "declaringTypeContext": "Elsa.Serialization.Core.JsonHashInput"
-        }
-      ]
-    },
-    {
-      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlConnectorPreparer+<PublishSqlSnapshotAsync>d__20::MoveNext()->System.Void",
-      "classification": "json_routed",
-      "reason": "Current SQL snapshot publisher delegates to the same InputSnapshotIdentity helper as file snapshots, selecting Source role and the SQL revision handle. connector-input-identity/* pins its canonical formatVersion/kind/invocation/role/pinHandle projection; no independent recipe is invented for this caller. This old async ingress identity awaits fresh compiled reconciliation.",
-      "sources": [
-        "extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs"
-      ],
-      "goldenEvidence": [
-        "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
-        "specs/1207-json-data-integrity-baseline/evidence/additional-owner-hash-vectors.json",
-        "specs/1207-json-data-integrity-baseline/evidence/generate-additional-owner-hash-vectors.py"
-      ],
-      "sites": [
-        {
-          "role": "json-hash-input",
-          "target": "Elsa.Serialization.Core|Elsa.Serialization.Core.JsonHashInput::Hash<!!0>(!!0)->System.String",
-          "operation": "call",
-          "occurrence": 1,
-          "genericArguments": [
-            "anonymous{FormatVersion:System.Int32;Invocation:System.String;Kind:System.String;PinHandle:System.String;Role:System.String}"
           ],
           "declaringTypeContext": "Elsa.Serialization.Core.JsonHashInput"
         }
@@ -3228,31 +3203,6 @@
           "occurrence": 1,
           "genericArguments": [],
           "declaringTypeContext": "System.Security.Cryptography.IncrementalHash"
-        }
-      ]
-    },
-    {
-      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlFilePreparer+<PublishInputSnapshotAsync>d__12::MoveNext()->System.Void",
-      "classification": "json_routed",
-      "reason": "Current v1 input publisher delegates to InputSnapshotIdentity(PinnedFileBinding,runId): canonical normal {formatVersion:1,snapshotFormatVersion:1,runId,role:role-name,pinHandle}. v1-input-identity/* pins that actual private helper and excludes pin scope/alias/revision already represented by handle. This old async ingress identity awaits fresh compiled reconciliation.",
-      "sources": [
-        "extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlFilePreparer.cs"
-      ],
-      "goldenEvidence": [
-        "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
-        "specs/1207-json-data-integrity-baseline/evidence/additional-owner-hash-vectors.json",
-        "specs/1207-json-data-integrity-baseline/evidence/generate-additional-owner-hash-vectors.py"
-      ],
-      "sites": [
-        {
-          "role": "json-hash-input",
-          "target": "Elsa.Serialization.Core|Elsa.Serialization.Core.JsonHashInput::Hash<!!0>(!!0)->System.String",
-          "operation": "call",
-          "occurrence": 1,
-          "genericArguments": [
-            "anonymous{FormatVersion:System.Int32;PinHandle:System.String;Role:System.String;RunId:System.String;SnapshotFormatVersion:System.Int32}"
-          ],
-          "declaringTypeContext": "Elsa.Serialization.Core.JsonHashInput"
         }
       ]
     },
@@ -3329,6 +3279,31 @@
           "occurrence": 1,
           "genericArguments": [],
           "declaringTypeContext": "System.Security.Cryptography.IncrementalHash"
+        }
+      ]
+    },
+    {
+      "identity": "Elsa.Etl.Runtime|Elsa.Etl.Runtime.Preparation.EtlFilePreparer::InputSnapshotIdentity(Elsa.Etl.Runtime.Bindings.PinnedFileBinding,System.String)->System.String",
+      "classification": "json_routed",
+      "reason": "Lowercase canonical SHA-256 of normal {formatVersion:1,snapshotFormatVersion:1,runId,role:<pin role ToString>,pinHandle:<pin handle>}. Scope/alias/revision are represented by the selected handle and are not added as separate input fields.",
+      "sources": [
+        "extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlFilePreparer.cs"
+      ],
+      "goldenEvidence": [
+        "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
+        "specs/1207-json-data-integrity-baseline/evidence/additional-owner-hash-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/generate-additional-owner-hash-vectors.py"
+      ],
+      "sites": [
+        {
+          "role": "json-hash-input",
+          "target": "Elsa.Serialization.Core|Elsa.Serialization.Core.JsonHashInput::Hash<!!0>(!!0)->System.String",
+          "operation": "call",
+          "occurrence": 1,
+          "genericArguments": [
+            "anonymous{FormatVersion:System.Int32;PinHandle:System.String;Role:System.String;RunId:System.String;SnapshotFormatVersion:System.Int32}"
+          ],
+          "declaringTypeContext": "Elsa.Serialization.Core.JsonHashInput"
         }
       ]
     },
@@ -5092,41 +5067,17 @@
       ]
     },
     {
-      "identity": "Elsa.Studio.Hosting.Nuplane|Elsa.Studio.Hosting.Nuplane.ShellFeatureStore+<SaveAsync>d__13::MoveNext()->System.Void",
+      "identity": "Elsa.Studio.Hosting.Nuplane|Elsa.Studio.Hosting.Nuplane.ShellFeatureStore::HashRevision(System.Text.Json.JsonElement,System.Byte[])->System.String",
       "classification": "json_routed",
-      "reason": "Current SaveAsync preflight and SnapshotAsync both call HashRevision(JsonElement,RevisionKey): lowercase HMAC-SHA256 of canonical feature JSON with the existing process secret. shell-revision/* pins that private helper with a literal key, and FeatureAdministrationTests exercises actual load/save/reload and process-key isolation. These two old async ingress identities await fresh compiled reconciliation.",
+      "reason": "Lowercase HMAC-SHA256 of canonical feature configuration JSON with the existing process RevisionKey. Save preflight and Snapshot revision share this exact helper; fixed ascending/descending 32-byte-key goldens pin it, while FeatureAdministrationTests exercises the real process-key callers.",
       "sources": [
         "Studio/src/essentials/Elsa.Studio.Hosting.Nuplane/ShellFeatureStore.cs"
       ],
       "goldenEvidence": [
-        "Studio/tests/Elsa.Studio.Tests/Administration/FeatureAdministrationTests.cs",
         "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
         "specs/1207-json-data-integrity-baseline/evidence/additional-owner-hash-vectors.json",
-        "specs/1207-json-data-integrity-baseline/evidence/generate-additional-owner-hash-vectors.py"
-      ],
-      "sites": [
-        {
-          "role": "json-hash-input",
-          "target": "Elsa.Serialization.Core|Elsa.Serialization.Core.JsonHashInput::HashKeyed(System.Text.Json.JsonElement,System.ReadOnlySpan`1[System.Byte])->System.Byte[]",
-          "operation": "call",
-          "occurrence": 1,
-          "genericArguments": [],
-          "declaringTypeContext": "Elsa.Serialization.Core.JsonHashInput"
-        }
-      ]
-    },
-    {
-      "identity": "Elsa.Studio.Hosting.Nuplane|Elsa.Studio.Hosting.Nuplane.ShellFeatureStore+<SnapshotAsync>d__15::MoveNext()->System.Void",
-      "classification": "json_routed",
-      "reason": "Current SaveAsync preflight and SnapshotAsync both call HashRevision(JsonElement,RevisionKey): lowercase HMAC-SHA256 of canonical feature JSON with the existing process secret. shell-revision/* pins that private helper with a literal key, and FeatureAdministrationTests exercises actual load/save/reload and process-key isolation. These two old async ingress identities await fresh compiled reconciliation.",
-      "sources": [
-        "Studio/src/essentials/Elsa.Studio.Hosting.Nuplane/ShellFeatureStore.cs"
-      ],
-      "goldenEvidence": [
-        "Studio/tests/Elsa.Studio.Tests/Administration/FeatureAdministrationTests.cs",
-        "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
-        "specs/1207-json-data-integrity-baseline/evidence/additional-owner-hash-vectors.json",
-        "specs/1207-json-data-integrity-baseline/evidence/generate-additional-owner-hash-vectors.py"
+        "specs/1207-json-data-integrity-baseline/evidence/generate-additional-owner-hash-vectors.py",
+        "Studio/tests/Elsa.Studio.Tests/Administration/FeatureAdministrationTests.cs"
       ],
       "sites": [
         {
@@ -6283,16 +6234,17 @@
       ]
     },
     {
-      "identity": "Elsa.Workflows.Publishing|Elsa.Workflows.Publishing.SourceCapture.NativeCatalogSourceMemberContributor::<ExecuteAsync>g__CapturedPayload|16_0(Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember,Elsa.Workflows.Publishing.SourceCapture.NativeCatalogSourceMemberContributor+<>c__DisplayClass16_0&)->System.Byte[]",
+      "identity": "Elsa.Workflows.Publishing|Elsa.Workflows.Publishing.SourceCapture.NativeCatalogSourceMemberContributor::ValidateCapturedPayload(System.ReadOnlyMemory`1[System.Byte],Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember,System.Int32)->System.Byte[]",
       "classification": "json_routed",
-      "reason": "Native captured payload compares shared JSON digest plus exact descriptor/length/scope facts; malformed JSON maps to native capture conflict. Fixed actual-owner recipes: native-catalog-payload.",
+      "reason": "Captured-member verifier checks maximum and exact declared byte length, then compares sha256: plus the canonical JSON HashUtf8 to descriptor.PayloadDigest and returns the original byte copy. Malformed JSON/hash/length conflicts retain native_catalog_captured_member_conflict; no physical-byte hash fallback is admitted.",
       "sources": [
         "essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/SourceCapture/NativeCatalogSourceMemberContributor.cs"
       ],
       "goldenEvidence": [
         "essentials/tests/Architecture/Tests/JsonHashOwnerGoldenTests.cs",
         "specs/1207-json-data-integrity-baseline/evidence/additional-owner-hash-vectors.json",
-        "specs/1207-json-data-integrity-baseline/evidence/generate-additional-owner-hash-vectors.py"
+        "specs/1207-json-data-integrity-baseline/evidence/generate-additional-owner-hash-vectors.py",
+        "essentials/tests/Workflows/Publishing/Releases/NativeCapture/Tests/NativeCatalogAcquisitionTests.cs"
       ],
       "sites": [
         {
@@ -8001,7 +7953,7 @@
       ]
     },
     {
-      "identity": "Elsa.Workflows.Runtime|Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher+<>c::<FormatExpression>b__16_3(System.Collections.Generic.KeyValuePair`2[System.String,Elsa.Expressions.Core.Models.ExpressionParameterBinding])->System.String",
+      "identity": "Elsa.Workflows.Runtime|Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher+<>c::<FormatExpression>b__17_3(System.Collections.Generic.KeyValuePair`2[System.String,Elsa.Expressions.Core.Models.ExpressionParameterBinding])->System.String",
       "classification": "json_routed",
       "reason": "Node-text expression parameter component: serialize each named binding with its DECLARED ExpressionParameterBinding contract, then canonicalize JSON before its ordered name=value insertion. Actual executable node ComputeHash expression tests traverse this projection and preserve polymorphic discriminators; runtime-derived serialization is not substituted.",
       "sources": [
@@ -8675,5 +8627,6 @@
         }
       ]
     }
-  ]
+  ],
+  "goldenSignature": ""
 }
