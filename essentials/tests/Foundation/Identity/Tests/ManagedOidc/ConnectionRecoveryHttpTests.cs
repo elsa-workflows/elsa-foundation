@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Core.Authentication;
@@ -13,6 +15,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -22,6 +25,78 @@ namespace Elsa.Foundation.Identity.Tests.ManagedOidc;
 
 public sealed partial class ExternalAuthenticationHttpTests
 {
+    [Fact]
+    public async Task Protected_recovery_metadata_keeps_the_previous_reader_and_old_writer_bytes_with_current_authority()
+    {
+        await using var host = await HttpHost.Start();
+        await MakeAdministrative(host, "company");
+        using var browser = host.Browser();
+        var callback = await host.StartAndAuthorize(browser);
+        using (var completed = await browser.GetAsync(callback)) Assert.Equal(HttpStatusCode.Found, completed.StatusCode);
+        var userId = (await Session(browser)).Subject;
+        var view = await View(host, "company");
+        await using var global = host.Services.CreateAsyncScope();
+        global.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
+            PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("test-retained-recovery-metadata")));
+        var database = global.ServiceProvider.GetRequiredService<IdentityProviderConfigurationDbContext>();
+        var document = Assert.Single((await database.GlobalProviderConfigurations.AsNoTracking().ToArrayAsync())
+            .Where(row => row.Provider.StartsWith("external-recovery:", StringComparison.Ordinal)));
+        var store = global.ServiceProvider.GetRequiredService<IRevisionAwareProviderConfigurationStore>();
+        var current = (await store.FindGlobalWithRevisionAsync(document.Provider))!;
+        var protector = global.ServiceProvider.GetRequiredService<IDataProtectionProvider>()
+            .CreateProtector("Elsa.ExternalAuthentication.Recovery.v1", "default", "company");
+        var actualJson = protector.Unprotect(current.Record.Settings["protectedProofs"]);
+        var previous = JsonSerializer.Deserialize<PreviousRecoveryMetadata>(actualJson, JsonSerializerOptions.Default)!;
+        using (var actual = JsonDocument.Parse(actualJson))
+        using (var oldReader = JsonDocument.Parse(JsonSerializer.Serialize(previous, JsonSerializerOptions.Default)))
+        {
+            Assert.True(actual.RootElement.TryGetProperty("Proofs", out _));
+            Assert.False(actual.RootElement.TryGetProperty("proofs", out _));
+            Assert.True(JsonElement.DeepEquals(actual.RootElement, oldReader.RootElement), "The old reader lost current recovery metadata.");
+        }
+        Assert.Equal(1, previous.Format);
+        Assert.Equal("default", previous.Tenant);
+        Assert.Equal("company", previous.Key);
+        var proof = Assert.Single(previous.Proofs);
+        Assert.Equal(userId, proof.UserId);
+        Assert.Equal(view.Record.Id, proof.RecordId);
+        Assert.Equal(view.MaterialRevision, proof.MaterialRevision);
+        Assert.Equal("opaque-Subject", proof.Subject);
+        Assert.Equal(64, proof.AuthenticationSessionId!.Length);
+        Assert.False(string.IsNullOrWhiteSpace(proof.SecurityVersion));
+        Assert.False(string.IsNullOrWhiteSpace(proof.SessionProvider));
+        Assert.False(string.IsNullOrWhiteSpace(proof.ExternalLinkRevision));
+
+        // Retain every issued-session/link/credential binding. A format witness must not
+        // turn a legacy observation without current authority into a usable recovery proof.
+        var oldJson = JsonSerializer.Serialize(previous with
+        {
+            Proofs = [proof with { ObservedAt = proof.ObservedAt.ToOffset(TimeSpan.FromMinutes(330)) }]
+        }, JsonSerializerOptions.Default);
+        var oldProtected = protector.Protect(oldJson);
+        var written = await store.SaveWithRevisionAsync(current.Record with
+        {
+            Settings = new Dictionary<string, string>(current.Record.Settings) { ["protectedProofs"] = oldProtected }
+        }, current.Revision);
+        Assert.Equal(IamRevisionSaveStatus.Saved, written.Status);
+        await using (var scope = host.Scope())
+            Assert.True(await scope.ServiceProvider.GetRequiredService<IConnectionRecovery>().IsUsableAsync(view.Record));
+        var retained = (await store.FindGlobalWithRevisionAsync(document.Provider))!;
+        Assert.Equal(written.Revision, retained.Revision);
+        Assert.Equal(oldProtected, retained.Record.Settings["protectedProofs"]);
+        Assert.Equal(Encoding.UTF8.GetBytes(oldJson), Encoding.UTF8.GetBytes(protector.Unprotect(retained.Record.Settings["protectedProofs"])));
+    }
+
+    private sealed record PreviousRecoveryMetadata(int Format, string Tenant, string Key, PreviousRecoveryProof[] Proofs);
+    private sealed record PreviousRecoveryProof(string RecordId, string MaterialRevision, string RedirectUri, string Issuer, string Subject,
+        string UserId, string CredentialBinding, DateTimeOffset ObservedAt)
+    {
+        public string? AuthenticationSessionId { get; init; }
+        public string? SecurityVersion { get; init; }
+        public string? SessionProvider { get; init; }
+        public string? ExternalLinkRevision { get; init; }
+    }
+
     [Fact]
     public async Task Qualified_link_recreation_cannot_revive_its_recovery_proof_and_preserves_another_provider_proof_for_the_same_user()
     {

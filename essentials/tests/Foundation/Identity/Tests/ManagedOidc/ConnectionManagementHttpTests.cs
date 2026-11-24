@@ -13,6 +13,9 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Foundation.Identity.ExternalAuthentication;
+using Elsa.Secrets.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.Tests.ManagedOidc;
@@ -20,6 +23,70 @@ namespace Elsa.Foundation.Identity.Tests.ManagedOidc;
 public sealed partial class ExternalAuthenticationHttpTests
 {
     private const string Management = "_elsa/identity/external-connections";
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Stored_connection_catalog_keeps_the_previous_reader_and_old_writer_bytes(bool archived)
+    {
+        await using var host = await HttpHost.Start();
+        await using var scope = host.Scope();
+        var catalog = scope.ServiceProvider.GetRequiredService<IConnectionCatalogStore>();
+        var record = host.Options.Connections[0] with
+        {
+            Id = "retained-company", Key = "retained", DisplayName = "René <+>", Enabled = false,
+            Admission = new() { Type = "reject", Matcher = null },
+            Settings = new Dictionary<string, string>(host.Options.Connections[0].Settings) { ["CaseKey"] = "René <+>" },
+            ArchivedAt = archived ? new DateTimeOffset(2026, 11, 24, 11, 25, 30, TimeSpan.FromMinutes(330)) : null
+        };
+        Assert.True((await catalog.SaveAsync(new([record]))).Saved);
+        await using var global = host.Services.CreateAsyncScope();
+        global.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
+            PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("test-retained-connection-catalog")));
+        var store = global.ServiceProvider.GetRequiredService<IRevisionAwareProviderConfigurationStore>();
+        var current = (await store.FindGlobalWithRevisionAsync("external-authentication"))!;
+        var currentJson = current.Record.Settings["catalog"];
+        var previous = JsonSerializer.Deserialize<PreviousConnectionMetadata[]>(currentJson, JsonSerializerOptions.Default)!;
+        using (var actual = JsonDocument.Parse(currentJson))
+        using (var oldReader = JsonDocument.Parse(JsonSerializer.Serialize(previous, JsonSerializerOptions.Default)))
+        {
+            Assert.True(actual.RootElement[0].TryGetProperty("DisplayName", out _));
+            Assert.False(actual.RootElement[0].TryGetProperty("displayName", out _));
+            Assert.True(JsonElement.DeepEquals(actual.RootElement, oldReader.RootElement), "The old reader lost current connection metadata.");
+        }
+        var oldRecord = Assert.Single(previous);
+        Assert.Equal(record.Id, oldRecord.Id);
+        Assert.Equal(record.DisplayName, oldRecord.DisplayName);
+        Assert.Equal("René <+>", oldRecord.Settings["CaseKey"]);
+        Assert.Null(oldRecord.Admission.Matcher);
+        Assert.Equal(record.ArchivedAt, oldRecord.ArchivedAt);
+        var oldJson = JsonSerializer.Serialize(previous, JsonSerializerOptions.Default);
+        Assert.Contains("\\u00E9", oldJson, StringComparison.Ordinal);
+        var written = await store.SaveWithRevisionAsync(current.Record with
+        {
+            Settings = new Dictionary<string, string>(current.Record.Settings) { ["catalog"] = oldJson }
+        }, current.Revision);
+        Assert.Equal(IamRevisionSaveStatus.Saved, written.Status);
+
+        var read = Assert.Single((await catalog.ReadAsync()).Records);
+        Assert.Equal(record.Id, read.Id);
+        Assert.Equal(record.DisplayName, read.DisplayName);
+        Assert.Equal(record.Settings["CaseKey"], read.Settings["CaseKey"]);
+        Assert.Null(read.Admission.Matcher);
+        Assert.Equal(record.ArchivedAt, read.ArchivedAt);
+        if (archived) Assert.Equal(TimeSpan.FromMinutes(330), read.ArchivedAt!.Value.Offset);
+        using (var expected = JsonDocument.Parse(oldJson))
+        using (var actual = JsonDocument.Parse(JsonSerializer.Serialize(new[] { read }, JsonSerializerOptions.Default)))
+            Assert.True(JsonElement.DeepEquals(expected.RootElement, actual.RootElement), "The current reader lost an old catalog member.");
+        var retained = (await store.FindGlobalWithRevisionAsync("external-authentication"))!;
+        Assert.Equal(written.Revision, retained.Revision);
+        Assert.Equal(Encoding.UTF8.GetBytes(oldJson), Encoding.UTF8.GetBytes(retained.Record.Settings["catalog"]));
+    }
+
+    private sealed record PreviousConnectionMetadata(string Id, string Key, string DisplayName, string Protocol,
+        IReadOnlyDictionary<string, string> Settings, IReadOnlyDictionary<string, SecretReference> Secrets,
+        PreviousAdmissionMetadata Admission, bool Enabled, bool Preferred, int DisplayOrder, bool OverridesDeployment, DateTimeOffset? ArchivedAt);
+    private sealed record PreviousAdmissionMetadata(string Type, IReadOnlyList<string> DefaultRoleIds, string? Matcher);
 
     [Fact]
     public async Task Management_discovery_and_form_metadata_describe_the_installed_client_contract_and_current_read_only_grants()
