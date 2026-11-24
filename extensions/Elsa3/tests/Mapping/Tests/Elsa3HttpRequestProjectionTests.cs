@@ -1,5 +1,8 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.Resolution;
 using Elsa3.Mapping.Tests.Support;
@@ -16,6 +19,35 @@ namespace Elsa3.Mapping.Tests;
 /// </summary>
 public sealed class Elsa3HttpRequestProjectionTests
 {
+    [Theory]
+    [InlineData("headers", "headers")]
+    [InlineData("queryStringData", "query")]
+    public async Task Captured_request_projections_keep_the_exact_portable_expression_contract(string capture, string suffix)
+    {
+        var result = await ConvertAsync(Sequence("root", Endpoint((capture, Captured("CapturedRequest")))),
+            new Elsa3Variable { Id = "CapturedRequest", Name = "CapturedRequest", TypeName = "Object" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var node = Node(result.Value!.State, "endpoint.http-" + suffix);
+        var payload = Assert.IsType<JsonElement>(Input(node, "value").Value.Value);
+        Assert.Equal("Any", payload.GetProperty("resultType").GetProperty("alias").GetString());
+        Assert.Equal(nameof(CollectionKind.Single), payload.GetProperty("resultType").GetProperty("collectionKind").GetString());
+        Assert.False(payload.GetProperty("resultType").TryGetProperty("Alias", out _));
+        var expression = payload.Deserialize<ExpressionDefinition>(JsonBaseline.Options)!;
+        Assert.Equal("Any", expression.ResultType.Alias);
+        Assert.Equal("CapturedRequest", node.Intrinsic!.Variable!.ReferenceKey);
+        var request = Assert.IsType<ActivityResultExpressionParameterBinding>(Assert.Single(expression.Parameters).Value);
+        Assert.Equal("endpoint", request.ProducerNodeId);
+        Assert.Equal("Request", request.ProjectionKey);
+
+        var wrongCase = JsonNode.Parse(payload.GetRawText())!;
+        var resultType = wrongCase["resultType"]!.AsObject();
+        resultType["Alias"] = resultType["alias"]!.DeepClone();
+        resultType.Remove("alias");
+        Assert.Equal(string.Empty, JsonSerializer.SerializeToElement(wrongCase, JsonBaseline.Options)
+            .Deserialize<ExpressionDefinition>(JsonBaseline.Options)!.ResultType.Alias);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

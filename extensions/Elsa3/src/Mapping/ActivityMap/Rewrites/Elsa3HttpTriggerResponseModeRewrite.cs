@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.Conversion;
 using Elsa3.Mapping.Resolution;
@@ -103,7 +104,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
             {
                 ["request"] = new ActivityResultExpressionParameterBinding(Elsa3ConversionDiagnostics.NodeId(endpoint), RequestOutput)
             },
-            JsonSerializer.SerializeToElement(new { }),
+            JsonSerializer.SerializeToElement(new { }, JsonBaseline.Options),
             ExpressionCapabilityProfiles.BindingReadonlyV1);
         var setNode = new Elsa3Activity
         {
@@ -117,7 +118,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
                 {
                     typeName = "Object",
                     expression = new { type = "JavaScript", value = expression }
-                })
+                }, JsonBaseline.Options)
             }
         };
 

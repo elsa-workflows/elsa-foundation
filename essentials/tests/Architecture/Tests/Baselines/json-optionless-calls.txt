@@ -132,9 +132,6 @@ extensions/Agent/src/Elsa.Agent/Activities/AgentActivity.cs | Elsa.Agent.Activit
 # extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Rules.cs — retained own-contract metadata/protocol or constant/string literal helper.
 extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Rules.cs | Elsa3.Mapping.ActivityMap.Elsa3BuiltInActivityMap::Literal(string?)#1 | JsonSerializer.SerializeToElement(value)
 extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Rules.cs | Elsa3.Mapping.ActivityMap.Elsa3BuiltInActivityMap::Literal(string?)#1 | JsonSerializer.SerializeToElement<string?>(null)
-# extensions/Elsa3/src/Mapping/ActivityMap/Rewrites/Elsa3HttpTriggerResponseModeRewrite.cs — retained own-contract metadata/protocol or constant/string literal helper.
-extensions/Elsa3/src/Mapping/ActivityMap/Rewrites/Elsa3HttpTriggerResponseModeRewrite.cs | Elsa3.Mapping.ActivityMap.Rewrites.Elsa3HttpTriggerResponseModeRewrite::Insert(Elsa3RewriteContext,string,string,string,string)#1 | JsonSerializer.SerializeToElement(new { typeName = "Object", expression = new { type = "JavaScript", value = expression } })
-extensions/Elsa3/src/Mapping/ActivityMap/Rewrites/Elsa3HttpTriggerResponseModeRewrite.cs | Elsa3.Mapping.ActivityMap.Rewrites.Elsa3HttpTriggerResponseModeRewrite::Insert(Elsa3RewriteContext,string,string,string,string)#1 | JsonSerializer.SerializeToElement(new { })
 # extensions/Elsa3/src/Mapping/ActivityMap/Rewrites/Elsa3SwitchValueSynthesisRewrite.cs — retained own-contract metadata/protocol or constant/string literal helper.
 extensions/Elsa3/src/Mapping/ActivityMap/Rewrites/Elsa3SwitchValueSynthesisRewrite.cs | Elsa3.Mapping.ActivityMap.Rewrites.Elsa3SwitchValueSynthesisRewrite::ApplyAsync(Elsa3RewriteContext,CancellationToken)#1 | JsonSerializer.Serialize(label)
 # extensions/Elsa3/src/Mapping/Conversion/Elsa3ActivityNormalizer.cs — retained own-contract metadata/protocol or constant/string literal helper.

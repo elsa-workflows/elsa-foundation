@@ -40,7 +40,7 @@ public sealed class Elsa3PortableExpressionSerializationTests
         var state = converted.Value!.State;
         var payload = Assert.IsType<JsonElement>(Input(Node(state, "subject"), targetKey).Value.Value);
         Assert.Equal(alias, payload.GetProperty("resultType").GetProperty("alias").GetString());
-        Assert.Equal((int)CollectionKind.Single, payload.GetProperty("resultType").GetProperty("collectionKind").GetInt32());
+        Assert.Equal(nameof(CollectionKind.Single), payload.GetProperty("resultType").GetProperty("collectionKind").GetString());
         Assert.False(payload.GetProperty("resultType").TryGetProperty("Alias", out _));
         var expression = payload.Deserialize<ExpressionDefinition>(JsonBaseline.Options)!;
         Assert.Equal(alias, expression.ResultType.Alias);

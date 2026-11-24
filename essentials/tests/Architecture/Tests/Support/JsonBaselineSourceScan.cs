@@ -34,6 +34,7 @@ internal static class JsonBaselineSourceScan
         "BackgroundActivityCompletionCodec.cs", "RuntimeDurableValueStorageDrivers.cs", "GraphActivity.cs", "WorkflowBuilder.cs",
         "DescriptorPayloadSerializer.cs", "ObjectConverter.cs", "RuntimeWorkflowStateSeed.cs", "ActivitySecretInputResolver.cs", "ParentResumeExecutor.cs",
         "VariableMapper.cs", "VariableDefaultValueFormatter.cs", "ActivityInputOption.cs", "AgentSchemaCompiler.cs", "AgentSchemaValidator.cs", "Elsa3ValueFlowLowerer.cs",
+        "Elsa3HttpTriggerResponseModeRewrite.cs",
         "AgentActivityProvider.cs", "GraphActivityProvider.cs", "GraphBodyReferenceValidator.cs", "ShellFeatureStore.cs", "JsonShellFeatureConfigurationStore.cs", "SecretSettingMask.cs"
     };
 

@@ -1,8 +1,10 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Services;
@@ -18,6 +20,79 @@ namespace Elsa3.Activities.Design.Import.Integration.Tests;
 public sealed class PortableExpressionPublicationTests
 {
     private const string RawDefault = "{ \"OwnerKey\":\"Ren\\u00e9\", \"N\":1.0, \"x\":null }";
+
+    [Theory]
+    [InlineData("headers", "headers")]
+    [InlineData("queryStringData", "query")]
+    public async Task Captured_HTTP_request_projections_publish_with_exact_result_aliases(string capture, string suffix)
+    {
+        await using var host = await Elsa3ImportHost.StartAsync(withHttp: true);
+        var collection = JsonNode.Parse(Elsa3ImportHost.Collection("http-response-content-type"))!.AsArray();
+        var source = collection[0]!;
+        source["variables"]!.AsArray().Add(new JsonObject
+        {
+            ["id"] = "CapturedRequest", ["name"] = "CapturedRequest", ["typeName"] = "Object"
+        });
+        source["root"]!["activities"]![0]![capture] = new JsonObject
+        {
+            ["typeName"] = "Object", ["memoryReference"] = new JsonObject { ["id"] = "CapturedRequest" }
+        };
+        var original = source.ToJsonString();
+        var handle = await host.UploadCollectionJsonAsync(collection.ToJsonString());
+        var (plan, items) = await host.AnalyzeAsync(handle);
+        var selected = Assert.Single(items);
+        const string sourceVersionId = "http-response-content-type-v1";
+        await host.SelectAsync(handle, plan, sourceVersionId);
+        var applied = await host.ApplyAsync(handle, plan, "import-captured-request", sourceVersionId);
+        Assert.True(applied.StatusCode == HttpStatusCode.Created, applied.Body.ToJsonString());
+        var versionId = Elsa3ImportHost.Required(selected, "workflowVersionId");
+        var projectionId = "endpoint.http-" + suffix;
+
+        await host.ReadAsync(async services =>
+        {
+            var version = await services.GetRequiredService<IWorkflowDefinitionVersionStore>().GetAsync(versionId);
+            var node = Elsa3ImportedActivityNodes.Walk(version.State!.RootActivity!).Single(node => node.NodeId == projectionId);
+            var argument = Assert.Single(node.Inputs, input => input.ReferenceKey == "value");
+            var payload = Assert.IsType<JsonElement>(argument.Value.Value);
+            Assert.Equal("Any", payload.GetProperty("resultType").GetProperty("alias").GetString());
+            Assert.False(payload.GetProperty("resultType").TryGetProperty("Alias", out _));
+            Assert.Equal("CapturedRequest", node.Intrinsic!.Variable!.ReferenceKey);
+
+            // The intrinsic's authored Any target uses the same paired reader as normal activity inputs.
+            var target = new InputDefinition("value", "value", new TypeReference("Any"), null, "value", null, true);
+            var compiler = services.GetRequiredService<RuntimeInputBindingCompiler>();
+            var compiled = compiler.Compile(node.NodeId, target, argument);
+            Assert.Equal("Any", compiled.Expression!.ResultType!.Id);
+            var request = Assert.IsType<ActivityResultExpressionParameterBinding>(Assert.Single(compiled.Expression.Parameters).Value);
+            Assert.Equal("endpoint", request.ProducerNodeId);
+            Assert.Equal("Request", request.ProjectionKey);
+
+            var malformed = JsonNode.Parse(payload.GetRawText())!;
+            var resultType = malformed["resultType"]!.AsObject();
+            resultType["Alias"] = resultType["alias"]!.DeepClone();
+            resultType.Remove("alias");
+            var wrongCase = argument with { Value = argument.Value with { Value = JsonSerializer.SerializeToElement(malformed, JsonBaseline.Options) } };
+            var refusal = Assert.Throws<ArgumentException>(() => compiler.Compile(node.NodeId, target, wrongCase));
+            Assert.Contains("result type ''", refusal.Message, StringComparison.Ordinal);
+            return true;
+        });
+
+        var publication = await host.PublishWorkflowAsync(versionId);
+        await host.ReadAsync(async services =>
+        {
+            var executable = await services.GetRequiredService<IWorkflowExecutableStore>().FindAsync(publication.ArtifactId);
+            Assert.NotNull(executable);
+            var node = Assert.Single(executable.NodesById.Values, node => node.AuthoredActivityId == projectionId);
+            Assert.Equal(WorkflowIntrinsicKind.Set, node.IntrinsicKind);
+            var expression = node.InputBindings["value"].Expression!;
+            Assert.Equal("Any", expression.ResultType!.Id);
+            var request = Assert.IsType<ActivityResultExpressionParameterBinding>(Assert.Single(expression.Parameters).Value);
+            Assert.Equal("endpoint", request.ProducerNodeId);
+            Assert.Equal("Request", request.ProjectionKey);
+            return true;
+        });
+        Assert.Equal(original, source.ToJsonString());
+    }
 
     [Theory]
     [InlineData("String", "Elsa.WriteLine", "text", "text", "Customer", "String", "getInput('Customer') + getVariable('Greeting')")]
