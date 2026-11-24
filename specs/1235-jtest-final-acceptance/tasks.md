@@ -24,12 +24,13 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 - [ ] T001 Add `/extensions/Elsa3/tests/JTest/** -text` to the repository `.gitattributes` first (the corpus stores
   `import-and-publish-workflows.json` with CRLF line endings, which `core.autocrlf` would otherwise change), then copy
-  the corpus at `b1cde13` unchanged into `JTest/`: `workflow-definitions/`, `tests/`, `templates/`,
+  the corpus at `b1cde13` unchanged into `JTest/` from the commit, not a working tree (for example
+  `git -C <corpus> archive b1cde13 <paths> | tar -x -C extensions/Elsa3/tests/JTest`): `workflow-definitions/`, `tests/`, `templates/`,
   `environments/`, `test-files/`, `global-configuration.json`, `import-and-publish-workflows.json`; leave out
   `pipelines/` and the repository README. Commit the attribute and the copy alone, with the source commit in the message, and check with
   `git ls-files --eol` that every file matches the source index (FR-001).
-- [ ] T002 Check `JTest/` for secrets: no credential values (environment files hold only `${VARIABLE}` references)
-  (FR-004).
+- [ ] T002 Check `JTest/` for secrets: credentials and base URLs are `${VARIABLE}` references; other literals in the
+  environment files (dispatch channels, wait times, engine-specific expected values) are not secrets (FR-004).
 - [ ] T003 [P] Create the ledger files with their table headers from data-model.md: `JTest/ledger/suites.md` (one row
   per suite, all `not run`), `JTest/ledger/baseline-failures.md`, `JTest/ledger/refactor-scope.md`,
   `JTest/ledger/suite-changes.md`,
@@ -136,8 +137,8 @@ an approved incompatibility passes.
 case-insensitive lookup, and normalizes nothing the contract's translation table does not list; an output Elsa 4
 cannot produce with the same meaning fails the template with the output named (FR-011, FR-013).
 
-- [ ] T023 [P] [US3] Create `JTest/environments/elsa4.json` (same keys as `dev.json`, executor base
-  `{base}/workflows/http`) and `JTest/global-configuration.elsa4.json` (template search path `templates-elsa4/*`)
+- [ ] T023 [P] [US3] Create `JTest/environments/elsa4.json` (same keys as `dev.json`, differing only in
+  engine-specific values; the executor base `{base}/workflows/http` comes from `ELSA_EXECUTOR_BASE_URL`) and `JTest/global-configuration.elsa4.json` (template search path `templates-elsa4/*`)
   per contracts/run-hosts.md.
 - [ ] T024 [P] [US3] Write `templates-elsa4/elsa-api-login-template.json`: `elsa-authenticate` per
   contracts/templates.md.

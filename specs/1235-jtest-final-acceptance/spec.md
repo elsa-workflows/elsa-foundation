@@ -21,8 +21,9 @@ The work runs in three phases, each gated on the previous one:
 2. **Engine-neutral suites**: Elsa 3-specific values move out of the suite files into templates, environment or
    suite parameters, while the suites stay green on Elsa 3.
 3. **Elsa 4**: an Elsa 4 template set with the same template names, parameters and outputs; the definitions load
-   through startup reconciliation; every suite that JOIN behaviour does not block passes on Elsa 4. JOIN-blocked suites
-   follow once the JOIN initiative delivers.
+   through startup reconciliation; every suite not blocked by JOIN behaviour, value capture or a 3.6.3 defect, and not carrying an approved
+   incompatibility, passes on Elsa 4 (SC-004). Suites blocked by JOIN behaviour or value capture follow once
+   their initiatives deliver.
 
 **Example.** `if-then-else-tests.json` posts to the `qa/branching/flows` endpoint with `ifConditionValue: true` and
 asserts that the `if` and `if_Then_WriteLine` activities both completed and `if_Else_WriteLine` never executed. The
@@ -108,8 +109,8 @@ blocks it, and J-001 through J-005 are open in the tasks.
 
 1. **Given** a suite whose definition contains a join, **When** it runs on Elsa 4, **Then** it is marked JOIN-blocked
    only if the join is what stops it; a suite whose path does not depend on the join stays in the main run.
-2. **Given** all non-JOIN suites passing, **When** status is reported, **Then** this is named the non-JOIN milestone,
-   and the specification stays non-terminal while any JOIN task is open.
+2. **Given** every suite passing that SC-004 does not exempt, **When** status is reported, **Then** this is named the
+   non-JOIN milestone, and the specification stays non-terminal while any JOIN or value-capture task is open.
 
 ### Edge Cases
 

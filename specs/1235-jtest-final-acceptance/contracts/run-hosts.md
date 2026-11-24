@@ -23,4 +23,5 @@
 | Templates and environment | `templates-elsa4/`, `environments/elsa4.json` (`ELSA_API_BASE_URL={base}`, `ELSA_EXECUTOR_BASE_URL={base}/workflows/http`, Workbench's seeded development admin through `ADMIN_USERNAME`/`ADMIN_PASSWORD`, plus `CORRELATION_ID` and `DATE_NOW_ISO_STRING` as for Elsa 3) |
 | Default shell | Unchanged: the reconciliation feature stays off unless the run enables it |
 
-The committed environment files contain only `${VARIABLE}` references, as the corpus's `dev.json` does.
+In the committed environment files, credentials and base URLs are `${VARIABLE}` references, as in the corpus's
+`dev.json`; other non-secret literals (dispatch channels, wait times, engine-specific expected values) are allowed.
