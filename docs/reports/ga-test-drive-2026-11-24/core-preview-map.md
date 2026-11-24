@@ -48,11 +48,11 @@ release 1 milestone on [#4229](https://github.com/elsa-workflows/elsa-foundation
 
 Without these cases, K13 could pass with every gate green while a designer user still cannot build W1. The
 program plan now carries one case for each gap: gap 2 in the K6 row, gap 1 in the K10 row, and gap 3's routing,
-request and response points in the K8 row. The `SendHttpRequest` point of gap 3 gets its case with the owner's card 2,
-through [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702).
+request and response points in the K8 row. The `SendHttpRequest` point of gap 3 has its case in the K6 row, from the owner's
+[card 2](design-cards.md#2-the-sendhttprequest-response).
 Route templates carry over from the old core, which matches `orders/{id}`. Later the same day the owner decided the
 three open design cards ([#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7145147047),
-design in [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702)): route templates by resolved waits,
+design in [the design cards](design-cards.md)): route templates by resolved waits,
 `SendHttpRequest` as a Background job, and 26 activities on the kernel with 8 hidden from the toolbox.
 
 ## Status of the milestones this map relies on
@@ -85,12 +85,12 @@ design in [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702)):
 | W2 | 201/400 with headers | ✅ since #5706 | | K8 |
 | W3 `/orders/{id}/enrich` | Route value `{id}` | ❌ | Route templates in `HttpRoutes` | K8 |
 | W3 | Parallel calls, join | ✅ Parallel, Flowchart joins | | K6, K7 |
-| W3 | Read the downstream response, react to a 500 | ❌ | A response result; a shipped HTTP sender | **No case**; the owner decided a Background job for K6 (card 2) |
-| W3 | Timeout on the call | ❌ | Timeout input | **No case**; decided with card 2 for K6 |
+| W3 | Read the downstream response, react to a 500 | ❌ | A response result; a shipped HTTP sender | K6 (card 2: a Background job) |
+| W3 | Timeout on the call | ❌ | Timeout input | K6 (card 2) |
 | W4 `/orders/{id}/ship` | Respond 202, then continue | ✅ WriteHttpResponse does not end the workflow | | K8 |
 | W4 | `Delay` 2 min, survive restart | ✅ timer as message to self; restart proven for an approval wait | Proof on a designed workflow | **No case** |
 | W4 | Child via `DispatchWorkflow` | ✅ | Parked-child registry | K6 |
-| W5 `/orders/{id}/cancel` | Resume the waiting W4 | 🟡 Event and mid-flow HttpEndpoint exist; no correlation input, so an event name per order is the workaround | Route values or a correlation key | K8 for route values; **No case** for resuming a wait on a template route, decided for K8 (card 1) |
+| W5 `/orders/{id}/cancel` | Resume the waiting W4 | 🟡 Event and mid-flow HttpEndpoint exist; no correlation input, so an event name per order is the workaround | Route values or a correlation key | K8 (card 1: a mid-flow wait subscribes on its resolved path) |
 | W6 `POST /batch` | ForEach over 1,000 items into children | ✅ ForEach, DispatchWorkflow | Fan-out limits on a provider | K6 (large fan-out decision 5), K12 |
 | W7 payment | `Fault` raises an incident | 🟡 thrown errors and leaf faults become incidents | A Fault activity in the toolbox | K6 |
 | W7 | Compensation | ❌ | | **Out** (release 1 has no compensation port) |
@@ -101,7 +101,7 @@ design in [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702)):
 |---|---|---|
 | Build, validate and lay out a workflow | Core-independent; works today on the old core | n/a |
 | Test-run from the designer | ❌ no path from a draft to the kernel | **No case** |
-| Toolbox shows only what the kernel runs | ❌ the toolbox lists activities the kernel lacks or will not have (compensation) | **No case**; the owner decided on a kernel-unsupported set (#4229) |
+| Toolbox shows only what the kernel runs | ❌ the toolbox lists activities the kernel lacks or will not have (compensation) | K6 and K10 (card 3: the `kernel-unsupported` set and the publish refusal) |
 | Expression editor | 🟡 JavaScript in the designer, built-in language in the kernel | K12 item 3 |
 
 ## Management pass
