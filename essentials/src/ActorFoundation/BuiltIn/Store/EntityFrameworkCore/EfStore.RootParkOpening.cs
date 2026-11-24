@@ -12,13 +12,15 @@ public sealed partial class EfStore
         if (turn.Row is not { Status: InstanceStatus.Faulted, Suspended: false, Fault: { } fault } row ||
             turn.Expected is not > 0 || turn.Journal is null || turn.Done.Count == 0 ||
             turn.FoundationKept is not { } kept || kept.Count != turn.Done.Count ||
+            turn.FoundationRootParkInputs is not { } envelopes || !SameInputs(envelopes, turn.Done) ||
             turn.Done.Any(key => key.Scope != InboxKey.FoundationOccurrenceScope || !root.Owns(key) ||
                 PostgresRootAdmission.IsOperatorOccurrence(key) || !kept.TryGetValue(key, out var reason) ||
                 reason != ParkKeepReason.Consumed) || turn.Done.Distinct().Count() != kept.Count ||
             turn.Consumed.Count != 0 || turn.Sent.Count != 0 || turn.Subscribed.Count != 0 ||
             turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
             turn != new TurnCommit(root.Actor, row, turn.Expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed,
-                turn.Unsubscribed, turn.Journal, Unsubscribe: true, Held: turn.Held) { OpensPark = true, FoundationKept = kept } ||
+                turn.Unsubscribed, turn.Journal, Unsubscribe: true, Held: turn.Held)
+                { OpensPark = true, FoundationKept = kept, FoundationRootParkInputs = envelopes } ||
             row.FoundationDispatchHeader is not { } header)
             throw RootShape();
 
@@ -35,10 +37,10 @@ public sealed partial class EfStore
             throw RootShape();
 
         var journal = new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal);
-        return new(journal, new RootParkOpening(root, current.Revision, DurableKeyJson.Write(fault), turn.Done));
+        return new(journal, new RootParkOpening(root, current.Revision, DurableKeyJson.Write(fault), envelopes));
     }
 
-    private sealed record RootParkOpening(WorkerRoot Root, long Expected, string EncodedFault, IReadOnlyList<InboxKey> Inputs)
+    private sealed record RootParkOpening(WorkerRoot Root, long Expected, string EncodedFault, IReadOnlyList<Message> Inputs)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
@@ -64,10 +66,10 @@ public sealed partial class EfStore
                 """, Root.Actor, Root.Partition, InboxKey.FoundationOccurrenceScope, Inputs.Count)
                 .AsNoTracking().ToListAsync(cancellationToken);
             var inputs = pending.Select(row => DecodeRootInput(db, row, Root.Reference, null)).ToArray();
-            if (!SameInputs(inputs, Inputs) || inputs.Any(input => input.TargetCreation != 1 || input.Operator is not null))
+            if (!inputs.SequenceEqual(Inputs) || inputs.Any(input => input.TargetCreation != 1 || input.Operator is not null))
                 return false;
 
-            var keys = Inputs.Select(key => key.Id).ToArray();
+            var keys = Inputs.Select(input => input.InboxKey.Id).ToArray();
             var kept = await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Done" = true, "Trial" = 0, "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
                 WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
@@ -77,7 +79,19 @@ public sealed partial class EfStore
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 DELETE FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition}
                 """, cancellationToken);
-            return true;
+            return await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (
+                    SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
+                        AND "FoundationTenant" = {Root.Tenant} AND "FoundationReference" = {Root.Reference}
+                        AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision}
+                        AND "Status" = {(int)InstanceStatus.Faulted} AND "Fault" = {EncodedFault} AND "FoundationParkAt" IS NOT NULL
+                ) AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor}
+                        AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        AND "EventMatch" IS NULL AND "Done" AND "Trial" = 0 AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
+                ) = {keys.Length}
+                AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
+                AS "Value"
+                """).SingleAsync(cancellationToken);
         }
     }
 }

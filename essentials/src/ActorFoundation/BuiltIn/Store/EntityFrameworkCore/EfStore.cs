@@ -164,6 +164,7 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     internal bool SupportsCorePreview => RequiredFormat == StoreFormat.Current || UsesRootJobPreview || UsesRootTimedJobPreview;
     internal static KernelDb ForPostgresRootTimedJobPreview(DbContextOptions<KernelDb> options) => new RootTimedJobPreviewDb(options);
     internal bool UsesRootParkOpening => this is RootParkOpeningDb;
+    internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
     internal static KernelDb ForPostgresRootParkOpening(DbContextOptions<KernelDb> options) => new RootParkOpeningDb(options);
     internal bool UsesRootReplyProtocol => this is RootReplyDb;
     internal static KernelDb ForPostgresRootReplies(DbContextOptions<KernelDb> options) => new RootReplyDb(options);
@@ -413,7 +414,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         if (pinned is null) await RequireStoreVersionsAsync(db, cancellationToken);
         return await db.Partitions.CountAsync(cancellationToken);
     }
@@ -478,7 +479,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         var now = Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken) : (await db.Database.SqlQueryRaw<long>(
             $"""INSERT INTO "Nodes" ("Id", "SeenAt", {NodeAdvertisement.Columns}) VALUES ({"{0}"}, {Now}, {NodeAdvertisement.Parameters}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", {NodeAdvertisement.Update} RETURNING "SeenAt" AS "Value" """,
             NodeAdvertisement.Arguments(node, messageProtocol: db.RequiredFormat.MessageProtocol)).ToListAsync(cancellationToken))[0];
@@ -499,7 +500,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Partitions" SET "Owner" = NULL WHERE "Id" = {0} AND "Epoch" = {1}"""), [partition, epoch], cancellationToken);
         if (pinned is not null) await pinned.CommitAsync(cancellationToken);
     }
@@ -522,7 +523,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         if (root is null && batch.Turns.Any(turn => turn.FoundationRootJobCompletion is not null))
             throw new StoreException(Failure.Definite, "Generated-root job completions require the qualified writer.");
         // The ordinary Done mark remains eligible for sweeping. It cannot preserve a Park's kept inputs.
-        if (batch.Turns.Any(turn => turn.FoundationKept is not null))
+        if (batch.Turns.Any(turn => turn.FoundationKept is not null || turn.FoundationRootParkInputs is not null))
             throw new StoreException(Failure.Definite, "This store does not support retaining Park inputs.");
         StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable,
             supportsJobTrialClear:SupportsJobTrialClear);
@@ -622,8 +623,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
         db.Database.AutoSavepointsEnabled = false;      // ENGINES.md E4: SAVEPOINT and RELEASE were two more round trips per commit on PostgreSQL
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        if (root is not null && db.UsesRootRetirement)
-            await PinRootRetirementSchemaAsync(db, cancellationToken);
+        if (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
+            await PinRootNamespaceForCommitAsync(db, cancellationToken);
         var now = 0L;
         if (FenceInBatch)
         {
@@ -763,9 +764,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
     }
 
-    private async Task PinRootRetirementSchemaAsync(KernelDb db, CancellationToken cancellationToken)
+    private async Task PinRootNamespaceForCommitAsync(KernelDb db, CancellationToken cancellationToken)
     {
-        try { await PostgresRootAdmission.PinSelectedOperatorSchemaAsync(db, cancellationToken); }
+        try { await PostgresRootAdmission.PinRootNamespaceAsync(db, cancellationToken); }
         catch (Exception error) when (error is not OperationCanceledException &&
             Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
         {
@@ -783,7 +784,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private async Task<bool> HoldsAsync(CommitBatch batch, CancellationToken cancellationToken)
     {
         await using var db = create();
-        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         var fenced = batch.Fenced;
         var ids = fenced.Select(f => f.Partition).ToList();
         var rows = await db.Partitions.AsNoTracking().Where(p => ids.Contains(p.Id)).Select(p => new PartitionFence(p.Id, p.Epoch, p.Position)).ToListAsync(cancellationToken);
@@ -793,7 +794,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         // A plain read. The left join returns database time even when no message does.
         var sql = PollSql(db);
         if (_ordinaryRoots is { } root)
@@ -1156,9 +1157,12 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        await RequireStoreVersionsAsync(db, cancellationToken);
+        await using var pinned = db.UsesRootParkOpening ? await BeginPinnedRootOperationAsync(db, cancellationToken) : null;
+        if (pinned is null) await RequireStoreVersionsAsync(db, cancellationToken);
         var keep = db.UsesRootParkOpening ? """ AND "FoundationKeptBy" IS NULL""" : "";
-        return await db.Database.ExecuteSqlRawAsync(Q($"""DELETE FROM "Messages" WHERE "Done" <> {False} AND "KeepUntil" < {Now}{keep}; DELETE FROM "Events" WHERE "KeepUntil" < {Now}"""), cancellationToken);
+        var removed = await db.Database.ExecuteSqlRawAsync(Q($"""DELETE FROM "Messages" WHERE "Done" <> {False} AND "KeepUntil" < {Now}{keep}; DELETE FROM "Events" WHERE "KeepUntil" < {Now}"""), cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
+        return removed;
     }
 
     private MessageEntity MailKey(InboxKey key, long seen = 0, long trial = 0)

@@ -75,8 +75,8 @@ internal sealed partial class PostgresRootAdmission
         var digest = FoundationRootCreator.OperationDigest(id);
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
-        if (db.UsesRootRetirement)
-            await PinSelectedOperatorSchemaAsync(db, cancellationToken);
+        if (db.RequiresPinnedRootNamespace)
+            await PinRootNamespaceAsync(db, cancellationToken);
         if (reply is not null)
         {
             if (!db.UsesRootReplyProtocol) return await RefuseAsync(DirectResult.Refused);

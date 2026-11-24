@@ -167,8 +167,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var name = tenant + "_" + Guid.NewGuid().ToString("N");
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
-        if (db.UsesRootRetirement)
-            await PinSelectedOperatorSchemaAsync(db, cancellationToken);
+        if (db.RequiresPinnedRootNamespace)
+            await PinRootNamespaceAsync(db, cancellationToken);
         var issuer = await ReadIssuerAsync(db, cancellationToken);
         var actor = InstanceRef.In(InstanceRef.Spread(name, issuer.Partitions), name);
         var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
@@ -303,7 +303,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal async Task<Message?> ReadPendingCreatorAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        await using var pinned = await EfStore.BeginRootRetirementOperationAsync(db, cancellationToken);
+        await using var pinned = await EfStore.BeginPinnedRootOperationAsync(db, cancellationToken);
         var row = await db.Messages.FromSqlInterpolated($"""
             SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b
             ON b."Creator" = m."Id" AND m."InboxScope" = 0 AND b."Actor" = m."Target"

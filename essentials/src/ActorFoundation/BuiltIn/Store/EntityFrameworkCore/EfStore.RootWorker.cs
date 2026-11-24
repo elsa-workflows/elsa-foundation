@@ -28,6 +28,7 @@ public sealed partial class EfStore
         internal bool Includes(int home) => FixedPartition is null || FixedPartition == home;
         internal bool Discover { get; } = discover;
         internal bool RequiresCommittedTerminal { get; set; }
+        internal bool KeepsParkInputs { get; set; }
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
         private readonly Dictionary<string, WorkerRoot> _actors = roots.ToDictionary(r => r.Actor, StringComparer.Ordinal);
         private readonly Dictionary<string, WorkerRoot> _references = roots.ToDictionary(r => r.Reference, StringComparer.Ordinal);
@@ -56,6 +57,7 @@ public sealed partial class EfStore
         }
 
         public bool RequiresCommittedTerminal => roots.RequiresCommittedTerminal;
+        public bool KeepsParkInputs => roots.KeepsParkInputs;
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
             throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
@@ -105,6 +107,7 @@ public sealed partial class EfStore
             if (db.UsesRootValueProtocol != RootValuesEnabled)
                 throw new StoreFormatException("The PostgreSQL owner must initialize its value capability before binding to the value qualification profile.");
             scope.RequiresCommittedTerminal = db.UsesRootRetirement;
+            scope.KeepsParkInputs = db.UsesRootParkOpening;
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
         }
@@ -125,7 +128,7 @@ public sealed partial class EfStore
         var ids = actorIds.ToArray();
         var refs = references.ToArray();
         await using var db = create();
-        await using var pinned = await BeginRootRetirementOperationAsync(db, token);
+        await using var pinned = await BeginPinnedRootOperationAsync(db, token);
         var found = await db.Database.SqlQuery<WorkerRoot>($"""
             SELECT "Tenant", "Reference", "Actor", "Partition", "Fingerprint" FROM "FoundationRootBirths"
             WHERE ({scope.FixedPartition}::integer IS NULL OR "Partition" = {scope.FixedPartition}) AND "Creation" = 1 AND ("Actor" = ANY({ids}) OR "Reference" = ANY({refs}))
@@ -149,7 +152,7 @@ public sealed partial class EfStore
         var references = requested.Select(r => r.Reference).ToArray();
         var tenants = requested.Select(r => r.Tenant).ToArray();
         await using var db = create();
-        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         var bindings = await db.Database.SqlQuery<WorkerRoot>($"""
             SELECT "Tenant", "Reference", "Actor", "Partition", "Fingerprint" FROM "FoundationRootBirths"
             WHERE ("Tenant", "Reference") IN (SELECT * FROM unnest({tenants}::text[], {references}::text[])) AND "Creation" = 1
@@ -444,7 +447,7 @@ public sealed partial class EfStore
         if (RootTimedJobSettlementEnabled && (!RootTimedJobPreviewEnabled || turn.Consumed.Any(key => key.Scope == -1 || key.Scope > 0)))
             return await PrepareRootTimedTurnAsync(root, turn, row, state, current, fence, wires, cancellationToken);
         await using var db = create();
-        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         var ids = turn.Done.Concat(turn.Consumed).Select(key => key.Scope > 0 ? StoredJobId(key) : key.Id).ToArray();
         var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
         var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&

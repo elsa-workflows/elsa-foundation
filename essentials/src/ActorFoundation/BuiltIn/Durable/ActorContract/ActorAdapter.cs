@@ -80,7 +80,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
-        if (roots is not null) return actor.Withholds(RootHeader(row));
+        if (roots is not null) return roots.KeepsParkInputs && row.Status == Durable.InstanceStatus.Faulted || actor.Withholds(RootHeader(row));
         if (row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate) return true;
         var checkpoint = store.FoundationTurnHeader(row);
         if (row.ParkRecovery is not null)
