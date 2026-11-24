@@ -287,7 +287,7 @@
                     "typeName": "Object",
                     "expression": {
                         "type": "JavaScript",
-                        "value": "const text = getHttpRequestBody().text;\r\nreturn{\r\n    result: base64Encode(text), correlationId: getCorrelationId()\r\n}"
+                        "value": "const text = getHttpRequestBody().text;\r\nreturn{\r\n    result: stringToBase64(text), correlationId: getCorrelationId()\r\n}"
                     }
                 },
                 "contentType": {
@@ -369,7 +369,7 @@
                     "typeName": "Object",
                     "expression": {
                         "type": "JavaScript",
-                        "value": "const base64 = getHttpRequestBody().base64;\r\nreturn{\r\n    result: base64Decode(base64), correlationId: getCorrelationId()\r\n}"
+                        "value": "const base64 = getHttpRequestBody().base64;\r\nreturn{\r\n    result: stringFromBase64(base64), correlationId: getCorrelationId()\r\n}"
                     }
                 },
                 "contentType": {

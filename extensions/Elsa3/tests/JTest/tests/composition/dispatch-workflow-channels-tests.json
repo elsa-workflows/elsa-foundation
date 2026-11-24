@@ -45,25 +45,25 @@
                 {
                     "name": "channel1",
                     "case": {
-                        "channel": "{{ $.env.dispatch.chanels.channel_1 }}"
+                        "channel": "{{ $.env.dispatch.channels.channel_1 }}"
                     }
                 },
                 {
                     "name": "channel2",
                     "case": {
-                        "channel": "{{ $.env.dispatch.chanels.channel_2 }}"
+                        "channel": "{{ $.env.dispatch.channels.channel_2 }}"
                     }
                 },
                 {
                     "name": "channel3",
                     "case": {
-                        "channel": "{{ $.env.dispatch.chanels.channel_3 }}"
+                        "channel": "{{ $.env.dispatch.channels.channel_3 }}"
                     }
                 },
                 {
                     "name": "default",
                     "case": {
-                        "channel": "{{ $.env.dispatch.chanels.channel_Default }}"                        
+                        "channel": "{{ $.env.dispatch.channels.channel_Default }}"                        
                     }
                 }
             ],

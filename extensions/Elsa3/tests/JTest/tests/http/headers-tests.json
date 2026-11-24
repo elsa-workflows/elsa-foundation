@@ -46,12 +46,12 @@
                         },
                         {
                             "op": "exists",
-                            "actualValue": "{{ $.this.headers[?(@.name == '{{ $.globals.headerName }}')] }}",                            
+                            "actualValue": "{{ $.this.headers['{{ $.globals.headerName }}'] }}",                            
                             "description": "Response headers contain request header (pass-through)"
                         },
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.headers[?(@.name == '{{ $.globals.headerName }}')].value }}",
+                            "actualValue": "{{ $.this.headers['{{ $.globals.headerName }}'] }}",
                             "expectedValue": "{{ $.globals.headerValue }}",
                             "description": "Request header is returned as response header"
                         }

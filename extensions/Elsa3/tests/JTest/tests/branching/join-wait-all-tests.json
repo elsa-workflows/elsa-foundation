@@ -97,7 +97,7 @@
                         {
                             "op": "equals",
                             "actualValue": "{{ $.this.instances[0].status }}",
-                            "expectedValue": "Finished"
+                            "expectedValue": "Running"
                         },
                         {
                             "op": "equals",

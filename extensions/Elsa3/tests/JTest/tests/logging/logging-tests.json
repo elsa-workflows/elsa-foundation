@@ -81,7 +81,7 @@
                         },
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.headers[?(@.name == '{{ $.globals.requestBody.expectedResponseHeader.name }}')].value }}",
+                            "actualValue": "{{ $.this.headers['{{ $.globals.requestBody.expectedResponseHeader.name }}'] }}",
                             "expectedValue": "{{ $.globals.requestBody.expectedResponseHeader.value }}"
                         },
                         {
