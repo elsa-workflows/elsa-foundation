@@ -155,8 +155,8 @@ cannot produce with the same meaning fails the template with the output named (F
 - [ ] T028 [US3] Start a fresh Workbench with the T007 override on the HTTP definition (`http-endpoints.json`), run the
   six `tests/http/*` suites with the Elsa 4 configuration, and fix templates until they pass or a failure is shown to
   be an engine or conversion result; record the run and receipt.
-- [ ] T029 [US3] **Approval gate** for suite edits: any change to a suite file needed on Elsa 4 (including a raised
-  `wait`) is added to `JTest/ledger/suite-changes.md` with its reason, approved by the coordinator, and verified on
+- [ ] T029 [US3] **Approval gate** for suite edits: any change to a suite file or an Elsa 3 template needed on Elsa 4,
+  and any raised `wait` in a suite or a template of either set, is added to `JTest/ledger/suite-changes.md` with its reason, approved by the coordinator, and verified on
   3.6.3 before it lands (FR-012).
 - [ ] T030 [US3] Run `tests/single-outcome/single-outcome-tests.json` the same way; record the run.
 - [ ] T031 [US3] Start a fresh Workbench with all 36 definitions; copy the reconciliation receipt into

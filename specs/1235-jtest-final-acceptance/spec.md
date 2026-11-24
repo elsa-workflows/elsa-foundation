@@ -170,8 +170,9 @@ blocks it, and J-001 through J-005 are open in the tasks.
   outputs as the Elsa 3 set. A template that cannot produce an output with the same meaning on Elsa 4 MUST be reported,
   not approximated.
 - **FR-012**: Any change to a suite file after the engine-neutral refactor MUST be recorded per assertion with its
-  reason and approved by the coordinator. Raising a `wait` step is such a change. A timing change inside a template
-  (the templates hold 7 of the 22 waits) is recorded the same way, for the engine set it changes.
+  reason and approved by the coordinator. Raising a `wait` step is such a change. Any change to the Elsa 3 templates after the refactor,
+  and a timing change inside a template of either set (the templates hold 7 of the 22 waits), is recorded and approved
+  the same way, for the engine set it changes.
 - **FR-013**: Templates MUST observe the full value an assertion checks. A preview, a case-insensitive lookup or a
   summary MUST NOT stand in for an exact value, and a template MUST NOT normalize a value unless the suite asked for it.
 

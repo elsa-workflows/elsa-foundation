@@ -46,8 +46,9 @@ returns to `not run`.
 | Reason | why it is needed, which engine needs it |
 | Approved | coordinator approval (FR-012) |
 
-Template changes after the refactor (including a raised template wait) are recorded here too, with the engine set
-they change.
+Also recorded here, with the engine set they change: any change to the Elsa 3 `templates/` folder after the refactor,
+and a timing change (a raised wait) in either set. Writing and fixing the Elsa 4 templates otherwise needs no row: they
+are checked by the suites they serve.
 
 The engine-neutral refactor itself is one reviewed diff; its rule (values move, expectations stay) is checked by the
 reviewer and by a green Elsa 3 rerun, not row by row. Its scope list lives in `ledger/refactor-scope.md`: one row per
