@@ -49,7 +49,7 @@ and a separate [abrupt owner loss demo](https://github.com/elsa-workflows/elsa-f
 partition. The program issue records the verified revisions and the remaining release work.
 [Owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7091776914)
 
-For the shipped Core Preview, [ADR 0099](../adr/0099-clean-slate-execution-kernel.md) admits the EF Core edge in
+For the shipped Core Preview, the EF Core edge from [ADR 0099](../adr/0099-clean-slate-execution-kernel.md) lives in
 `Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore` and its consumer `Elsa.ActorFoundation.BuiltIn.PostgreSql`.
 The architecture guard checks the exact EF package set of both projects in Debug and Release. The provider carries
 the four relational engines. The PostgreSQL package uses the ordinary PostgreSQL preview configuration. The Actor
