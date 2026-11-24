@@ -1117,7 +1117,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             // A suspended turn may be mutating its live object. Fence its eventual result and write only the
             // previous sealed row; its taken volatile inputs are still in _items and Promote writes them too.
-            if (slot.Busy) { slot.TurnFence++; slot.UndoTurn?.Invoke(); slot.Driving = false; }
+            if (slot.Busy) { slot.TurnFence++; slot.UndoTurn?.Invoke(); slot.Driving = false; slot.EnteredTurn = null; }
             slot.Busy = true;
             var unit = Bound(_type.Write(slot.Row!, null, slot.Pending), slot);
             Promote(unit);
@@ -2226,13 +2226,40 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 : CreationProtocol.StartError(slot.Row, request.Start, request.Kind, request.Payload, request.InboxKey)
             : CreationProtocol.TargetError(slot.Row, request);
 
-    // The scheduler has stopped entering turns before a graceful host wait. Completion seals the outcome
-    // under _turnSync for the ordinary release drain to flush while the fence still permits it.
-    internal Task WaitForEnteredTurnsAsync(CancellationToken cancellationToken)
+    // The host has stopped scheduling new turns. A drain pass reconciles heartbeat answers and flushes
+    // completed outcomes. Keeping those passes live lets legitimate waiting work renew through the normal gate.
+    internal async Task DrainEnteredTurnsAsync(CancellationToken cancellationToken)
     {
-        lock (_turnSync)
-            return Task.WhenAll(_slots.Values.Where(slot => slot is { Driving: true, EnteredTurn: not null })
-                .Select(slot => slot.EnteredTurn!)).WaitAsync(cancellationToken);
+        if (!Owns) return;
+        var generation = _generation;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Volatile.Read(ref _answered) is not null) await AnsweredAsync(cancellationToken);
+            RequireDrainFence();
+
+            Task entered;
+            lock (_turnSync)
+                entered = Task.WhenAll(_slots.Values.Where(slot => slot is { Driving: true, EnteredTurn: not null })
+                    .Select(slot => slot.EnteredTurn!));
+            if (_queue.Count > 0) await FlushAsync(cancellationToken);
+            RequireDrainFence();
+            cancellationToken.ThrowIfCancellationRequested();
+            Volatile.Write(ref _lastPass, _options.Monotonic());
+
+            if (entered.IsCompleted)
+            {
+                await entered;
+                return;
+            }
+            await Task.WhenAny(entered, Task.Delay(_options.Lease / 3, cancellationToken));
+        }
+
+        void RequireDrainFence()
+        {
+            if (_generation != generation || !LeaseUsable())
+                throw new InvalidOperationException("Ownership was lost while draining actor turns during shutdown.");
+        }
     }
 
     private async Task Drive(TurnInput input, CancellationToken cancellationToken)
@@ -2852,6 +2879,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     slot.TurnFence++;
                     slot.UndoTurn?.Invoke();
                     slot.Driving = false;
+                    slot.EnteredTurn = null;
                     // The checkpoint can promote while the rejected continuation exits. No second public turn enters meanwhile.
                     slot.DetachedAuthoredTurn = slot.Row?.FoundationInlineBirth is not null;
                 }
@@ -3739,7 +3767,7 @@ internal sealed class Slot
     public long AbsentAt; // date of an alias-aware absence, whether observed or locally minted
     public long Comparison; // latest accepted provider lookup that included this canonical slot
     public bool Driving;            // a model turn, as distinct from a queued commit, is in flight
-    public Task? EnteredTurn;        // waits for the outcome to be queued during graceful preview shutdown
+    public Task? EnteredTurn;        // completion queues the outcome for a graceful shutdown drain
     public long TurnFence;          // invalidates an uncommitted turn during graceful stand-down
     public Action? RollbackTurn;    // abandon a failed unit without restarting unrelated physical work
     public Action? UndoTurn;        // unwind only the invalidated turn's provisional cancellations

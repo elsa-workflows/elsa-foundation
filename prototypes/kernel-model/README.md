@@ -447,8 +447,9 @@ stops and disposes its Generic Host. A direct caller of the launcher owns the re
 provider's public surfaces. The Flowchart and StateMachine qualification fixtures keep their own setup.
 
 Run `pg-preview-host-lifetime` on a fresh disposable PostgreSQL database to watch application shutdown
-wait for an entered turn to commit before releasing ownership. A replacement application resumes the root
-through public ingress and verifies the saved journal bookmark and replay.
+keep renewing through fenced drain passes while an entered turn waits beyond one lease. The completed
+sibling commits first and the slow turn commits before release. A replacement application resumes the root,
+then verifies the saved journal bookmark and replay.
 
 To check launcher validation, a plain public actor and watchdog escalation, run
 `pg-preview-host-watchdog` on a fresh disposable PostgreSQL database. The fixture stalls an entered

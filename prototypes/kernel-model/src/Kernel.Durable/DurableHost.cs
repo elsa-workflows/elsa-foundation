@@ -209,8 +209,8 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         finally { _turn.Release(); }
     }
 
-    internal Task WaitForEnteredTurnsAsync(CancellationToken cancellationToken) =>
-        _node?.WaitForEnteredTurnsAsync(cancellationToken) ?? Task.CompletedTask;
+    internal Task DrainEnteredTurnsAsync(CancellationToken cancellationToken) =>
+        _node?.DrainEnteredTurnsAsync(cancellationToken) ?? Task.CompletedTask;
 
     private NodeScope Scope(int scope) =>
         _scopes.TryGetValue(scope, out var known) ? known : _scopes[scope] = new NodeScope(this, scope);

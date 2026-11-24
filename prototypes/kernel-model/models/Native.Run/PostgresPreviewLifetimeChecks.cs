@@ -34,6 +34,10 @@ internal static class PostgresPreviewLifetimeChecks
             "start", Contract.Kinds.Start, cancellationToken: token);
         Require(start is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "the first root is admitted");
         var reference = start.Actor!.Value;
+        var sibling = await ingress.SendAsync(scope, new Contract.Target.Start(new(WaitingActor.Name, "sibling")),
+            "sibling-start", Contract.Kinds.Start, cancellationToken: token);
+        Require(sibling is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "an independent sibling root is admitted");
+        var siblingReference = sibling.Actor!.Value;
         var initial = new WaitingActor();
         using (var host = Build("lifetime-first", initial))
         {
@@ -41,11 +45,26 @@ internal static class PostgresPreviewLifetimeChecks
             try
             {
                 await host.StartAsync(token);
-                await initial.Entered.Task.WaitAsync(token);
+                await Task.WhenAll(initial.Entered.Task, initial.SiblingEntered.Task).WaitAsync(token);
                 stopping = host.StopAsync(token);
                 var owner = await ReadFenceAsync();
+                var lease = await observer.Nodes.AsNoTracking().Where(node => node.Id == owner.Owner)
+                    .Select(node => node.LeaseUntil).SingleAsync(token);
                 Require(!stopping.IsCompleted && owner.Owner == "lifetime-first" &&
                     await reads.GetAsync(scope, reference, token) is null, "application stop waits while the entered turn still owns its fence");
+                initial.ReleaseSibling.TrySetResult();
+                while (await reads.GetAsync(scope, siblingReference, token) is null && !stopping.IsCompleted)
+                    await Task.Delay(25, token);
+                Require(!stopping.IsCompleted && !initial.Release.Task.IsCompleted &&
+                    await store.ReadFirstRootAsync(scope.Tenant, siblingReference.Id, token) is { Revision: 1, State: WaitingState },
+                    "the completed sibling commits while the slower entered turn is still waiting");
+
+                // A short turn could pass with the heartbeat already stopped. Hold this turn past the original lease.
+                await Task.Delay(Defaults.Lease, token);
+                var renewed = await observer.Nodes.AsNoTracking().Where(node => node.Id == owner.Owner)
+                    .Select(node => node.LeaseUntil).SingleAsync(token);
+                Require(!stopping.IsCompleted && renewed > lease && (await ReadFenceAsync()).Owner == "lifetime-first",
+                    "the drain renews ownership beyond the original lease while the slow turn remains entered");
                 initial.Release.TrySetResult();
                 await stopping;
                 var after = await ReadFenceAsync();
@@ -57,6 +76,7 @@ internal static class PostgresPreviewLifetimeChecks
             finally
             {
                 initial.Release.TrySetResult();
+                initial.ReleaseSibling.TrySetResult();
                 if (stopping is not null) await stopping;
             }
         }
@@ -197,6 +217,8 @@ internal static class PostgresPreviewLifetimeChecks
         public string Type => Name;
         internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource SiblingEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource ReleaseSibling { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal int Turns { get; private set; }
 
         public bool Withholds(Contract.ActorHeader header) => false;
@@ -207,8 +229,9 @@ internal static class PostgresPreviewLifetimeChecks
             if (turn.StartSettings is not null)
             {
                 if (!acceptStart) throw new InvalidOperationException("The successor received a duplicate creator turn.");
-                Entered.TrySetResult();
-                await Release.Task.WaitAsync(cancellationToken);
+                var sibling = turn.Header.TypeData == "sibling";
+                (sibling ? SiblingEntered : Entered).TrySetResult();
+                await (sibling ? ReleaseSibling : Release).Task.WaitAsync(cancellationToken);
                 turn.State = WaitingState;
                 return;
             }
