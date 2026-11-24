@@ -21,7 +21,7 @@ interface SecretDetailProps {
   onClose(): void;
 }
 export function SecretDetail(props: SecretDetailProps) {
-  
+
   return props.presentation === "page" ? <SecretMetadataForm {...props} /> : <SecretDetailDialog {...props} />;
 }
 function SecretDetailDialog(props: SecretDetailProps) {

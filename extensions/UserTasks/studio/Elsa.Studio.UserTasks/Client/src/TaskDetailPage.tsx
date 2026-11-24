@@ -13,7 +13,7 @@ import { readTaskBrowseLocation, taskCollectionPath } from "./taskNavigation";
 const responsePendingNotice = "Your response is recorded. The workflow will continue when delivery completes. You can leave this page.";
 
 export function TaskDetailPage({ api, id, navigate }: { api: ElsaStudioModuleApi; id: string; navigate(path: string): void }) {
-  
+
   const location = useStudioRouteLocation();
   const backPath = taskCollectionPath(readTaskBrowseLocation(location.search), id);
   const scope = api.backendSession ?? api.backend;

@@ -216,7 +216,7 @@ function AgentPublishedVersion({ row }: { row: AgentRow }) {
 }
 
 function AgentAuthority({ row }: { row: AgentRow }) {
-  
+
   const allowed = (name: string) => row.actions.some(action => action.action === name && action.allowed);
   const configuration = isEnumValue(row.definition.contentAuthority.kind, "ProviderSource");
   return (
@@ -233,7 +233,7 @@ function CreateAgentForm({ context, authoring, onCancel, onCreated }: {
   onCancel(): void;
   onCreated(definitionId: string, draftId: string): void;
 }) {
-  
+
   const nameId = useId();
   const [name, setName] = useState("");
   const [purpose, setPurpose] = useState("");

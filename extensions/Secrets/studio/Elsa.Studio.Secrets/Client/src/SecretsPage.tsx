@@ -365,7 +365,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
 }
 
 function FilterSelect({ label, value, options, helpText, description, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; helpText?: string; description?: string; onChange(value: string): void }) {
-  
+
   const id = useId();
   const combinedDescription = helpText ? (description ? `${helpText}. ${description}` : helpText) : description;
   return (

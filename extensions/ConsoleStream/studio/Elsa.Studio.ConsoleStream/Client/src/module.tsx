@@ -186,12 +186,12 @@ export function register(api: ElsaStudioModuleApi) {
 }
 
 export function ConsoleStreamPanel() {
-  
+
   return <ConsoleStreamView />;
 }
 
 export function ConsoleStreamPage() {
-  
+
   return <ConsoleStreamView page />;
 }
 

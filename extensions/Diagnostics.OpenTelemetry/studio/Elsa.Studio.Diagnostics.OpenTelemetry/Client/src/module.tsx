@@ -209,7 +209,7 @@ export function register(api: ElsaStudioModuleApi) {
 }
 
 export function OpenTelemetryPanel() {
-  
+
   const state = useOpenTelemetry();
   const selectedTrace = state.selectedTrace;
   const selectedSpan = selectedTrace?.spans.find(span => span.spanId === state.selectedSpanId) ?? selectedTrace?.spans[0] ?? null;
@@ -605,7 +605,7 @@ function TracesPanel({ state, selectedTrace, selectedSpan }: { state: OTelState;
 }
 
 function TraceToolbar({ state }: { state: OTelState }) {
-  
+
   return (
     <div className="otel-toolbar">
       <input aria-label="Filter by trace ID" placeholder="Trace ID" value={state.filters.traceId} onChange={event => state.setFilters({ ...state.filters, traceId: event.target.value })} />
@@ -646,7 +646,7 @@ function TraceDetailHeader({ trace, onCopy, onDownload }: { trace: OTelTraceDeta
 }
 
 function TraceWaterfall({ trace, selectedSpanId, onSelectSpan }: { trace: OTelTraceDetail; selectedSpanId: string | null; onSelectSpan(spanId: string): void }) {
-  
+
   const rows = useMemo(() => buildWaterfallRows(trace.spans), [trace.spans]);
   const start = Math.min(...trace.spans.map(span => Date.parse(span.startTime)));
   const duration = Math.max(1, trace.durationMs);
@@ -694,13 +694,13 @@ function SpanInspector({ span, id }: { span: OTelSpan; id: string }) {
 }
 
 function StoredCountCard({ label, count }: { label: string; count: number | null | undefined }) {
-  
+
   const displayCount = typeof count === "number" && Number.isFinite(count) && count >= 0 ? count : "Unavailable";
   return <div className="otel-signal-card"><span>Stored data</span><strong>{displayCount}</strong><h4>{label} stored</h4><p>Currently stored by the backend.</p></div>;
 }
 
 function StatusChip({ status }: { status: SpanStatus }) {
-  
+
   return <span className="otel-status-chip" data-status={status.toLowerCase()}>{status}</span>;
 }
 

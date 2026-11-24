@@ -769,7 +769,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
 }
 
 function FailureNotice({ failure, subject, onRetry }: { failure: RequestFailure; subject: string; onRetry(): void }) {
-  
+
   const message = failure.kind === "forbidden"
     ? `You do not have permission to read ${subject}.`
     : failure.kind === "unavailable"

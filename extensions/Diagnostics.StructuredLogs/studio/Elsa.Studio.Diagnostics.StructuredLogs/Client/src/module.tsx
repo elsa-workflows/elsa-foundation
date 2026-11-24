@@ -127,7 +127,7 @@ export function register(api: ElsaStudioModuleApi) {
 }
 
 export function StructuredLogsPanel() {
-  
+
   const state = useStructuredLogs({ includeInspector: false });
 
   return (
@@ -139,7 +139,7 @@ export function StructuredLogsPanel() {
 }
 
 export function StructuredLogsPage() {
-  
+
   const state = useStructuredLogs({ includeInspector: true });
   const selectedEntry = state.rows.find(row => row.id === state.selectedEntryId) ?? null;
 
@@ -417,7 +417,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
 type StructuredLogsState = ReturnType<typeof useStructuredLogs>;
 
 function StructuredLogsHeader({ state, compactControls = false }: { state: StructuredLogsState; compactControls?: boolean }) {
-  
+
   const statusLabel = getConnectionStatusLabel(state.status);
   const selectedRows = state.selectedEntryId ? state.rows.filter(row => row.id === state.selectedEntryId) : [];
   const levelSelect = (
@@ -640,7 +640,7 @@ function handleStructuredLogRowKeyDown(event: React.KeyboardEvent<HTMLDivElement
 }
 
 function DetailRow({ name, value }: { name: string; value?: string | null }) {
-  
+
   if (!value)
     return null;
 
