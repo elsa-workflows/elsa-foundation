@@ -10,6 +10,20 @@ internal static class JsonBaselineSourceScan
     internal sealed record Registration(string File, IReadOnlySet<string> Settings, string Reason, string Approval);
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<SyntaxNode>, HashSet<string>> ContextNameCache = new();
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<SyntaxNode>, TypeDeclarationSyntax[]> TypeCache = new();
+    private static readonly Lazy<CSharpCompilation> ConstructionCompilation = new(() =>
+    {
+        // The test host's dependency closure includes the shipping contracts. Reuse their actual
+        // metadata, rather than guessing constructor, delegate, indexer or collection signatures.
+        // Do not inject global usings or combine unrelated projects into one synthetic assembly.
+        var paths = (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string trusted
+                ? trusted.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+                : [typeof(object).Assembly.Location, typeof(Enumerable).Assembly.Location])
+            .Append(typeof(System.Text.Json.JsonSerializerOptions).Assembly.Location)
+            .Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase);
+        return CSharpCompilation.Create("JsonBaselineConstructionTargets", references: paths.Select(path => MetadataReference.CreateFromFile(path)),
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true,
+                nullableContextOptions: NullableContextOptions.Enable));
+    });
     private static readonly HashSet<string> WorkflowDataFiles = new(StringComparer.Ordinal)
     {
         "ActivityCompletionProjector.cs", "ActivityInputHydrator.cs", "StepVariableSession.cs", "RuntimeActivityInputMaterializer.cs",
@@ -25,7 +39,7 @@ internal static class JsonBaselineSourceScan
         System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(finding.Site + " | " + finding.Signature)))[..12];
     internal static bool IsWorkflowData(string path) => WorkflowDataFiles.Contains(Path.GetFileName(path));
     internal static bool IsAccounted(string path, Finding finding, IReadOnlySet<string> legacy, IReadOnlyList<Registration> registrations) =>
-        finding.Setting == "optionless"
+        finding.Setting == "construction-unresolved" ? false : finding.Setting == "optionless"
             ? !IsWorkflowData(path) && !finding.CarriesData && legacy.Contains(Identity(path, finding))
             : registrations.Any(row => row.File == path.Replace('\\', '/') && row.Settings.Contains(RegistrationKey(finding)));
 
@@ -46,21 +60,34 @@ internal static class JsonBaselineSourceScan
         return rows;
     }
 
-    internal static IReadOnlyList<Finding> Scan(string source, IReadOnlyList<SyntaxNode>? storageRoots = null)
+    internal static IReadOnlyList<Finding> Scan(string source, IReadOnlyList<SyntaxNode>? storageRoots = null) =>
+        Scan(CSharpSyntaxTree.ParseText(source).GetRoot(), storageRoots);
+
+    internal static IReadOnlyList<Finding> Scan(SyntaxNode root, IReadOnlyList<SyntaxNode>? storageRoots = null,
+        JsonBaselineConstructionContexts? constructionContexts = null)
     {
-        var root = CSharpSyntaxTree.ParseText(source).GetRoot();
+        if (constructionContexts is null) return ScanCore(root, storageRoots, null);
+        // Parse before walking syntax: enabled #if code is otherwise DisabledTextTrivia and
+        // cannot be recovered by asking for semantic facts after the source scan skipped it.
+        return constructionContexts.Views(root).SelectMany(view => ScanCore(view.Root, view.StorageRoots, view.Model)).Distinct().ToArray();
+    }
+
+    private static IReadOnlyList<Finding> ScanCore(SyntaxNode root, IReadOnlyList<SyntaxNode>? storageRoots,
+        Func<SemanticModel>? constructionModel)
+    {
         var findings = new List<Finding>();
         var optionAliases = root.DescendantNodes().OfType<UsingDirectiveSyntax>()
             .Where(x => x.Alias is not null && x.Name?.ToString().EndsWith("JsonSerializerOptions", StringComparison.Ordinal) == true)
             .Select(x => x.Alias!.Name.Identifier.ValueText).ToHashSet(StringComparer.Ordinal);
         bool OptionsType(string value) => value.TrimEnd('?') is { } name && (name == "JsonSerializerOptions" || name.EndsWith(".JsonSerializerOptions", StringComparison.Ordinal) || optionAliases.Contains(name));
         bool BaselineCopy(ArgumentListSyntax? args) => args?.Arguments.Count == 1 && IsBaselineExpression(args.Arguments[0].Expression);
+        SemanticModel? cachedConstructionModel = null;
+        var constructionTargets = new Dictionary<ImplicitObjectCreationExpressionSyntax, bool>();
         foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
             if (OptionsType(creation.Type.ToString()) && !BaselineCopy(creation.ArgumentList)) Add("construction", creation);
         foreach (var creation in root.DescendantNodes().OfType<ImplicitObjectCreationExpressionSyntax>())
         {
-            var type = ImplicitConstructionType(creation);
-            if (type is not null && OptionsType(type) && !BaselineCopy(creation.ArgumentList)) Add("construction", creation);
+            if (!BaselineCopy(creation.ArgumentList) && IsOptionsConstruction(creation)) Add("construction", creation);
         }
         foreach (var access in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
             if (OptionsType(access.Expression.ToString()) && access.Name.Identifier.ValueText is "Web" or "Default") Add("defaults", access);
@@ -87,7 +114,7 @@ internal static class JsonBaselineSourceScan
                 if (IsModifierCollection(collection) || index.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Modifiers" }) Add("modifier-mutation:replace", assignment);
             }
             var name = assignment.Left is MemberAccessExpressionSyntax member ? member.Name.Identifier.ValueText : assignment.Left.ToString();
-            if (IsDeviation(name, assignment.Right.ToString()) && IsOptionsAssignment(assignment, OptionsType)) Add(name, assignment);
+            if (IsDeviation(name, assignment.Right.ToString()) && IsOptionsAssignment(assignment, OptionsType, IsOptionsConstruction)) Add(name, assignment);
         }
         foreach (var argument in root.DescendantNodes().OfType<AttributeArgumentSyntax>().Where(x => x.NameEquals is not null))
             if (AttributeTypeName(argument.Ancestors().OfType<AttributeSyntax>().First()).Contains("JsonSourceGenerationOptions", StringComparison.Ordinal))
@@ -207,6 +234,46 @@ internal static class JsonBaselineSourceScan
             return (alias?.Name?.ToString() ?? name).Split('.').Last();
         }
 
+        bool IsOptionsConstruction(ImplicitObjectCreationExpressionSyntax creation)
+        {
+            if (constructionTargets.TryGetValue(creation, out var known)) return known;
+            var resolved = IsOptionsConstructionCore(creation);
+            constructionTargets.Add(creation, resolved);
+            return resolved;
+        }
+
+        bool IsOptionsConstructionCore(ImplicitObjectCreationExpressionSyntax creation)
+        {
+            cachedConstructionModel ??= constructionModel?.Invoke() ?? ConstructionCompilation.Value.AddSyntaxTrees(root.SyntaxTree)
+                .GetSemanticModel(root.SyntaxTree, ignoreAccessibility: true);
+            var target = cachedConstructionModel.GetTypeInfo(creation).ConvertedType;
+            // A resolved business type is authoritative even when it happens to be named
+            // JsonSerializerOptions. Only System.Text.Json owns the protected options type.
+            if (target is not null && target.TypeKind != TypeKind.Error)
+            {
+                return target is INamedTypeSymbol { Name: "JsonSerializerOptions", Arity: 0 } &&
+                    target.ContainingNamespace.ToDisplayString() == "System.Text.Json" &&
+                    target.ContainingAssembly.Identity.Name == typeof(System.Text.Json.JsonSerializerOptions).Assembly.GetName().Name;
+            }
+            if (constructionModel is not null)
+            {
+                // The production sweep has its owning sources and built dependency closure.
+                // An unresolved target is a coverage failure, never an implicit exemption.
+                Add("construction-unresolved", creation);
+                return false;
+            }
+            if (target is IErrorTypeSymbol error)
+            {
+                // Source-scan controls intentionally include incomplete fragments. An unbound
+                // named parameter can still give new() an exact declared target; an ambiguous
+                // symbol never licenses borrowing a same-named declaration elsewhere.
+                if (error.CandidateSymbols.Length != 0) return false;
+                if (OptionsType(error.ToDisplayString())) return true;
+            }
+            var declared = ImplicitConstructionType(creation);
+            return declared is not null && OptionsType(declared);
+        }
+
         string? ImplicitConstructionType(ImplicitObjectCreationExpressionSyntax creation)
         {
             ExpressionSyntax value = creation;
@@ -217,9 +284,19 @@ internal static class JsonBaselineSourceScan
                 return DeclaredType(assignment.Left, assignment);
             if (value.Parent is ArgumentSyntax argument)
                 return ArgumentTargetType(argument);
-            return creation.Ancestors().OfType<VariableDeclarationSyntax>().FirstOrDefault()?.Type.ToString()
-                ?? creation.Ancestors().OfType<PropertyDeclarationSyntax>().FirstOrDefault()?.Type.ToString()
-                ?? creation.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.ReturnType.ToString();
+            // Stop at the nearest target boundary. In particular, an object local function or
+            // lambda inside an options-returning method must not borrow the outer return type.
+            foreach (var ancestor in creation.Ancestors())
+                switch (ancestor)
+                {
+                    case VariableDeclarationSyntax variable: return variable.Type.ToString();
+                    case LocalFunctionStatementSyntax local: return local.ReturnType.ToString();
+                    case LambdaExpressionSyntax: return null;
+                    case AnonymousMethodExpressionSyntax: return null;
+                    case PropertyDeclarationSyntax property: return property.Type.ToString();
+                    case MethodDeclarationSyntax method: return method.ReturnType.ToString();
+                }
+            return null;
         }
 
         string? ArgumentTargetType(ArgumentSyntax argument)
@@ -368,7 +445,8 @@ internal static class JsonBaselineSourceScan
         }
     }
 
-    private static bool IsOptionsAssignment(AssignmentExpressionSyntax assignment, Func<string, bool> optionsType)
+    private static bool IsOptionsAssignment(AssignmentExpressionSyntax assignment, Func<string, bool> optionsType,
+        Func<ImplicitObjectCreationExpressionSyntax, bool>? implicitOptionsType = null)
     {
         if (assignment.Left is MemberAccessExpressionSyntax member)
         {
@@ -389,9 +467,10 @@ internal static class JsonBaselineSourceScan
             return receiver.EndsWith("options", StringComparison.OrdinalIgnoreCase) || receiver.EndsWith("Options.Value.SerializerOptions", StringComparison.Ordinal) ||
                 receiver.Contains(".JsonSerializerOptions", StringComparison.Ordinal) || receiver.Contains(".SerializerOptions", StringComparison.Ordinal);
         }
-        var creation = assignment.Ancestors().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
-        if (creation is not null) return optionsType(creation.Type.ToString());
-        var implicitCreation = assignment.Ancestors().OfType<ImplicitObjectCreationExpressionSyntax>().FirstOrDefault();
+        var creation = assignment.Ancestors().FirstOrDefault(node => node is ObjectCreationExpressionSyntax or ImplicitObjectCreationExpressionSyntax);
+        if (creation is ObjectCreationExpressionSyntax explicitCreation) return optionsType(explicitCreation.Type.ToString());
+        var implicitCreation = creation as ImplicitObjectCreationExpressionSyntax;
+        if (implicitCreation is not null && implicitOptionsType is not null) return implicitOptionsType(implicitCreation);
         var declaredType = implicitCreation?.Ancestors().OfType<VariableDeclarationSyntax>().FirstOrDefault()?.Type.ToString()
             ?? implicitCreation?.Ancestors().OfType<PropertyDeclarationSyntax>().FirstOrDefault()?.Type.ToString()
             ?? implicitCreation?.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.ReturnType.ToString();

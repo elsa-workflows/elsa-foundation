@@ -258,6 +258,91 @@ public sealed class JsonBaselineArchitectureTests
     public void Target_typed_constructions_accept_baseline_copies_and_respect_declared_types(string source) =>
         Assert.Empty(JsonBaselineSourceScan.Scan(source));
 
+    [Theory]
+    [InlineData("class H { public H(JsonSerializerOptions options) {} } class C { object M() => new H(new()); }")]
+    [InlineData("class H { public H(JsonSerializerOptions options) {} } class C { H M() => new(new()); }")]
+    [InlineData("class H { public H(object business, JsonSerializerOptions options) {} } class C { object M() => new H(new(), new()); }")]
+    [InlineData("class H { public H(object business, JsonSerializerOptions options) {} } class C { object M() => new H(options: new(), business: new()); }")]
+    [InlineData("class H { public H(JsonSerializerOptions options, int count) {} public H(object value, string text) {} } class C { object M() => new H(new(), 1); }")]
+    [InlineData("class C { C(JsonSerializerOptions options) {} C() : this(new()) {} }")]
+    [InlineData("class B { protected B(JsonSerializerOptions options) {} } class C : B { C() : base(new()) {} }")]
+    [InlineData("class B(JsonSerializerOptions options) {} class C() : B(new()) {}")]
+    [InlineData("class C { void M() { JsonSerializerOptions Local() => new(); } }")]
+    [InlineData("class C { JsonSerializerOptions P { get => new(); } }")]
+    [InlineData("class C { void M() { JsonSerializerOptions[] values = [new()]; } }")]
+    [InlineData("class C { void M() { var values = new JsonSerializerOptions[] { new() }; } }")]
+    [InlineData("class C { void M() { List<JsonSerializerOptions> values = [new()]; } }")]
+    [InlineData("class C { void M() { var values = new List<JsonSerializerOptions> { new() }; } }")]
+    [InlineData("class C { void M() { Func<JsonSerializerOptions> make = () => new(); } }")]
+    [InlineData("class C { Func<JsonSerializerOptions> M() => () => new(); }")]
+    [InlineData("class C { void M() { Func<JsonSerializerOptions> make = delegate { return new(); }; } }")]
+    [InlineData("class H { public JsonSerializerOptions P { get; set; } } class C { object M() => new H { P = new() }; }")]
+    [InlineData("class C { void M(Action<JsonSerializerOptions> use) { use(new()); } }")]
+    [InlineData("class C { void M(JsonSerializerOptions[] values) { values[0] = new(); } }")]
+    [InlineData("class H { public JsonSerializerOptions this[int index] { get => JsonBaseline.Options; set {} } } class C { void M(H value) { value[0] = new(); } }")]
+    [InlineData("class C { static void Use<T>(T value) {} void M() { Use<JsonSerializerOptions>(new()); } }")]
+    [InlineData("class C { (JsonSerializerOptions Options, object Business) M() => (new(), new()); }")]
+    [InlineData("class C { async System.Threading.Tasks.Task<JsonSerializerOptions> M() { await System.Threading.Tasks.Task.Yield(); return new(); } }")]
+    [InlineData("namespace A { class H { public H(object value) {} } } namespace B { class H { public H(JsonSerializerOptions options) {} } class C { object M() => new H(new()); } }")]
+    public void Every_valid_target_typed_options_construction_requires_a_baseline_or_receipt(string body)
+    {
+        var source = TargetTypedSource(body);
+        // These controls exercise valid C# target conversions, not a syntax shape that cannot ship.
+        _ = FixtureCompiler.Compile("TargetTypedOptionsControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
+        var finding = Assert.Single(JsonBaselineSourceScan.Scan(source));
+        Assert.Equal("construction", finding.Setting);
+        Assert.False(JsonBaselineSourceScan.IsAccounted("NewOwner.cs", finding, new HashSet<string>(), []));
+    }
+
+    [Theory]
+    [InlineData("class H { public H(object business) {} } class C { object M() => new H(new()); }")]
+    [InlineData("class H { public H(object business) {} } class C { H M() => new(new()); }")]
+    [InlineData("class H { public H(object business, JsonSerializerOptions options) {} } class C { object M() => new H(new(), JsonBaseline.Options); }")]
+    [InlineData("class H { public H(object business, JsonSerializerOptions options) {} } class C { object M() => new H(options: JsonBaseline.Options, business: new()); }")]
+    [InlineData("class H { public H(JsonSerializerOptions options, int count) {} public H(object value, string text) {} } class C { object M() => new H(new(), \"text\"); }")]
+    [InlineData("class H { public H(JsonSerializerOptions options) {} } class C { object M() => new H(new(JsonBaseline.Options)); }")]
+    [InlineData("class C { C(object value) {} C() : this(new()) {} }")]
+    [InlineData("class B { protected B(object value) {} } class C : B { C() : base(new()) {} }")]
+    [InlineData("class B(object value) {} class C() : B(new()) {}")]
+    [InlineData("class C { JsonSerializerOptions M() { object Local() => new(); return JsonBaseline.Options; } }")]
+    [InlineData("class C { void M() { object[] values = [new()]; } }")]
+    [InlineData("class C { void M() { var values = new object[] { new() }; } }")]
+    [InlineData("class C { void M() { List<object> values = [new()]; } }")]
+    [InlineData("class C { void M() { var values = new List<object> { new() }; } }")]
+    [InlineData("class C { void M() { Func<object> make = () => new(); } }")]
+    [InlineData("class C { void M() { Func<object> make = delegate { return new(); }; } }")]
+    [InlineData("class H { public object P { get; set; } } class C { object M() => new H { P = new() }; }")]
+    [InlineData("class C { void M(Action<object> use) { use(new()); } }")]
+    [InlineData("class C { void M(object[] values) { values[0] = new(); } }")]
+    [InlineData("class H { public object this[int index] { get => new object(); set {} } } class C { void M(H value) { value[0] = new(); } }")]
+    [InlineData("class C { static void Use<T>(T value) {} void M() { Use<object>(new()); } }")]
+    [InlineData("namespace A { class H { public H(JsonSerializerOptions options) {} } } namespace B { class H { public H(object value) {} } class C { object M() => new H(new()); } }")]
+    [InlineData("namespace Business { class JsonSerializerOptions {} class C { JsonSerializerOptions M() => new(); } }")]
+    public void Compiler_targets_do_not_borrow_unrelated_types_or_enclosing_options_returns(string body)
+    {
+        var source = TargetTypedSource(body);
+        _ = FixtureCompiler.Compile("TargetTypedBusinessControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
+        Assert.Empty(JsonBaselineSourceScan.Scan(source));
+    }
+
+    [Theory]
+    [InlineData("class H { public H(JsonSerializerOptions options) {} } class C { object M() => new H(new()); }")]
+    [InlineData("class C { JsonSerializerOptions M() => new(); }")]
+    public void Incomplete_fragments_retain_their_exact_declared_options_target_without_ambient_usings(string source) =>
+        Assert.Equal("construction", Assert.Single(JsonBaselineSourceScan.Scan(source)).Setting);
+
+    [Fact]
+    public void A_target_typed_baseline_copy_in_a_constructor_still_checks_its_protected_initializer_settings()
+    {
+        var source = TargetTypedSource("class H { public H(JsonSerializerOptions options) {} } class C { object M() => new H(new(JsonBaseline.Options) { DictionaryKeyPolicy = JsonNamingPolicy.CamelCase }); }");
+        _ = FixtureCompiler.Compile("TargetTypedProtectedInitializerControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
+        Assert.Equal("DictionaryKeyPolicy", Assert.Single(JsonBaselineSourceScan.Scan(source)).Setting);
+        Assert.Empty(JsonBaselineSourceScan.Scan(source.Replace("JsonNamingPolicy.CamelCase", "null", StringComparison.Ordinal)));
+    }
+
+    private static string TargetTypedSource(string body) =>
+        "using System; using System.Collections.Generic; using System.Text.Json; using Elsa.Serialization.Core; " + body;
+
     [Fact]
     public void Reordered_explicit_baseline_profile_and_null_body_are_accepted()
     {
@@ -282,6 +367,10 @@ public sealed class JsonBaselineArchitectureTests
             .Where(path => !RepoPaths.IsBuildOutput(path) && ModuleRoots.IsNotTestFile(path)).Distinct().ToArray();
         Assert.NotEmpty(paths);
         var storageRoots = paths.Select(path => Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path).GetRoot()).ToArray();
+        var configuration = typeof(JsonBaselineArchitectureTests).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyConfigurationAttribute), false)
+            .Cast<System.Reflection.AssemblyConfigurationAttribute>().Single().Configuration;
+        var constructionContexts = new JsonBaselineConstructionContexts(storageRoots, ShippingHashAssemblies.Discover(RepoPaths.RepoRoot, configuration), configuration);
+        var rootsByPath = storageRoots.ToDictionary(root => root.SyntaxTree.FilePath, StringComparer.Ordinal);
         Assert.All(register, row => Assert.True(File.Exists(Path.Join(RepoPaths.RepoRoot, row.File)), $"Stale register path: {row.File}"));
         var failures = new List<string>();
         var observedLegacy = new HashSet<string>(StringComparer.Ordinal);
@@ -289,7 +378,7 @@ public sealed class JsonBaselineArchitectureTests
         foreach (var path in paths)
         {
             var relative = Path.GetRelativePath(RepoPaths.RepoRoot, path).Replace('\\', '/');
-            foreach (var finding in JsonBaselineSourceScan.Scan(File.ReadAllText(path), storageRoots))
+            foreach (var finding in JsonBaselineSourceScan.Scan(rootsByPath[path], storageRoots, constructionContexts))
             {
                 if (finding.Setting == "optionless") observedLegacy.Add(JsonBaselineSourceScan.Identity(relative, finding));
                 else observedDeviations.Add((relative, JsonBaselineSourceScan.RegistrationKey(finding)));
