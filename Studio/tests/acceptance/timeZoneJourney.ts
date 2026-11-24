@@ -108,6 +108,8 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
       if (pause) {
         await expect(page.getByRole("button", { name: "Running...", exact: true }).first()).toBeDisabled();
         await capture(page, info, "run-busy");
+        const expandInspector = page.getByRole("button", { name: "Expand inspector panel", exact: true });
+        if (await expandInspector.isVisible()) await expandInspector.click();
         const created = page.locator(".wf-instance-meta dt").filter({ hasText: /^Created$/ }).locator("xpath=following-sibling::dd[1]");
         await created.scrollIntoViewIfNeeded();
         await expect(created).toBeInViewport();
