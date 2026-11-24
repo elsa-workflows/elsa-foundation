@@ -45,11 +45,19 @@ public sealed partial class EfStore
                             + coalesce(octet_length(m."Payload"), 0)) AS "Size",
                         m."ReplyTo" IS NOT NULL AS "HasReply",
                         (m."JobGeneration" = 0 AND m."Sender" IS NULL AND m."KeepUntil" IS NOT NULL
-                            AND (m."Id" NOT LIKE 'operator/%' OR m."Payload" IS NULL)) AS "SupportedShape"
+                            AND (m."Id" NOT LIKE 'operator/%' OR m."Payload" IS NULL)
+                            AND (m."ReplyTo" IS NULL OR (
+                                (CASE WHEN right(m."ReplyTo", 6) = '|early' THEN left(m."ReplyTo", -6)
+                                    ELSE m."ReplyTo" END) ~ '^[^|]+[|][1-9][0-9]*[|].+$'
+                                AND (length(split_part(m."ReplyTo", '|', 2)) < 19 OR
+                                     length(split_part(m."ReplyTo", '|', 2)) = 19 AND
+                                     split_part(m."ReplyTo", '|', 2) COLLATE "C" <= '9223372036854775807')
+                                AND (m."Id" NOT LIKE 'operator/%' OR right(m."ReplyTo", 6) <> '|early')
+                            ))) AS "SupportedShape"
                     FROM "FoundationRootBirths" b JOIN "Instances" i
                         ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
                         AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
-                    JOIN "Messages" m ON m."Partition" = b."Partition" AND m."Target" = b."Actor"
+                    JOIN "Messages" m ON m."Partition" = b."Partition" AND m."Target" COLLATE "C" = b."Actor"
                     WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
                         AND m."InboxScope" = -4 AND m."EventMatch" IS NULL AND NOT m."Done"
                         AND (m."Seq", m."Id" COLLATE "C") > ({afterSeq}, {afterOccurrence})
@@ -68,6 +76,12 @@ public sealed partial class EfStore
         catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
         {
             throw new StoreFormatException("The root inbox has an unreadable schema.", error);
+        }
+        catch (PostgresException error) when (error.SqlState == PostgresErrorCodes.FeatureNotSupported ||
+            error.SqlState.StartsWith("42", StringComparison.Ordinal) && error.SqlState != PostgresErrorCodes.InsufficientPrivilege)
+        {
+            await RequireStoreVersionsAsync(db, cancellationToken);
+            throw;
         }
 
         var first = sampled[0];

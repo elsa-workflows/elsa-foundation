@@ -748,8 +748,9 @@ and run `pg-held-operator owned checked` against an empty PostgreSQL database.
 
 `IActorReads.InboxAsync` returns pending direct inputs and admitted operator
 commands on direct-input root profiles. The page binds to the tenant and
-generated actor reference. A single statement reads the format marker, page
-metadata and database time. The index orders each root's occurrences by
+generated actor reference. The issuer and inbox sources must share the marker's
+schema. Each page reads its own committed metadata and database time together
+with that format marker. The index orders each root's occurrences by
 delivery sequence and physical occurrence. Continuations and handles are
 opaque. Handles remain stable across reader and owner changes.
 

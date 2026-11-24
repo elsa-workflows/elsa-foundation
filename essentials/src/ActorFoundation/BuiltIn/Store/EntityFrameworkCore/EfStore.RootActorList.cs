@@ -19,8 +19,8 @@ public sealed partial class EfStore
     internal static async Task RequirePreviewInstallSchemaAsync(KernelDb db, CancellationToken token)
     {
         if (!await db.Database.SqlQueryRaw<bool>("""
-            SELECT to_regclass('"Instances"') IS NOT NULL AND NOT EXISTS (
-                SELECT 1 FROM (VALUES ('"Instances"'), ('"Journal"'), ('"Partitions"'), ('"KernelStoreVersions"'),
+            SELECT to_regclass('"Instances"') IS NOT NULL AND to_regclass('"Messages"') IS NOT NULL AND NOT EXISTS (
+                SELECT 1 FROM (VALUES ('"Instances"'), ('"Messages"'), ('"Journal"'), ('"Partitions"'), ('"KernelStoreVersions"'),
                     ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'), ('"FoundationRootReceipts"'),
                     ('"FoundationActorList"'), ('"FoundationWorkflowHistory"'), ('"FoundationWorkflowHistoryFormat"')) expected(name)
                 JOIN pg_catalog.pg_class relation ON relation.oid = to_regclass(expected.name)
