@@ -146,27 +146,27 @@ cannot produce with the same meaning fails the template with the output named (F
   per contracts/run-hosts.md.
 - [X] T024 [P] [US3] Write `templates-elsa4/elsa-api-login-template.json`: `elsa-authenticate` per
   contracts/templates.md.
-- [ ] T025 [P] [US3] Write the Elsa 4 versions of the templates added in T020, in `templates-elsa4/`, with outputs of
+- [X] T025 [P] [US3] Write the Elsa 4 versions of the templates added in T020, in `templates-elsa4/`, with outputs of
   the same meaning (the execute template follows contracts/templates.md, *Execute*: resolve the published artifact, start, read the
   instance until terminal within a deadline, take its `outputs`). The definition
   import, publish, delete and composite templates are not written for Elsa 4 (contracts/templates.md).
-- [ ] T026 [P] [US3] Write `templates-elsa4/elsa-api-workflow-instance-templates.json`: get, search, not-exists and
+- [X] T026 [P] [US3] Write `templates-elsa4/elsa-api-workflow-instance-templates.json`: get, search, not-exists and
   variable value, with the status and version translations.
-- [ ] T027 [P] [US3] Write `templates-elsa4/elsa-api-activity-instance-templates.json`: the eight
+- [X] T027 [P] [US3] Write `templates-elsa4/elsa-api-activity-instance-templates.json`: the eight
   `elsa-activity-instance-*` templates, with node-id suffix matching, execution-list counts and the counting rules of
   `assert-all-completed` and `assert-none-executed` in contracts/templates.md.
-- [ ] T028 [US3] Start a fresh Workbench with the T007 override on the HTTP definition (`http-endpoints.json`), run the
+- [X] T028 [US3] Start a fresh Workbench with the T007 override on the HTTP definition (`http-endpoints.json`), run the
   six `tests/http/*` suites with the Elsa 4 configuration, and fix templates until they pass or a failure is shown to
   be an engine or conversion result; record the run and receipt.
 - [ ] T029 [US3] **Approval gate** for suite edits: any change to a suite file or an Elsa 3 template needed on Elsa 4,
   and any raised `wait` in a suite or a template of either set, is added to `JTest/ledger/suite-changes.md` with its reason, approved by the coordinator, and, when it
   touches a suite file or the Elsa 3 set, verified on 3.6.3 before it lands (FR-012).
 - [ ] T030 [US3] Run `tests/single-outcome/single-outcome-tests.json` the same way; record the run.
-- [ ] T031 [US3] Start a fresh Workbench with the 32 definitions of the acceptance set (a `Files` list leaving out the
+- [X] T031 [US3] Start a fresh Workbench with the 32 definitions of the acceptance set (a `Files` list leaving out the
   four excluded ones, spec Q13 and Q15); copy the reconciliation receipt into
   `JTest/ledger/runs.md` and fill the Reconciliation column of `JTest/ledger/dispositions.md`.
-- [ ] T032 [US3] Run the 39 suites of the acceptance set on that host; record the Elsa 4 result per suite in `JTest/ledger/suites.md`.
-- [ ] T033 [US3] For each failing suite, find the cause (template, converter, engine, prerequisite) and record it in
+- [X] T032 [US3] Run the 39 suites of the acceptance set on that host; record the Elsa 4 result per suite in `JTest/ledger/suites.md`.
+- [X] T033 [US3] For each failing suite, find the cause (template, converter, engine, prerequisite) and record it in
   `JTest/ledger/suites.md`; a template cause is fixed in `templates-elsa4/` and rerun; a missing prerequisite marks
   the suite `blocked: <prerequisite>` (FR-016); a value that comes back truncated or unavailable under the capture
   limits marks it `blocked: value capture` with the key and limit (FR-024).

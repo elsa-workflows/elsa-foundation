@@ -230,31 +230,53 @@
                 },
                 "steps": [
                     {
-                        "type": "wait",
-                        "name": "Wait for journal availability",
-                        "ms": 500
-                    },
-                    {
-                        "type": "http",
-                        "name": "Execute endpoint: 'Query Workflow Instances' (Elsa 4)",
-                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/page?definitionId={{ $.workflowDefinitionId }}&correlationId={{ $.correlationId }}&take={{ $.pageSize }}",
-                        "method": "GET",
-                        "headers": [
-                            {
-                                "name": "Authorization",
-                                "value": "{{$.authHeader}}"
-                            }
-                        ],
+                        "type": "assert",
+                        "name": "Nothing found yet",
                         "assert": [
                             {
-                                "op": "equals",
-                                "actualValue": "{{$.this.status}}",
-                                "expectedValue": 200
+                                "op": "exists",
+                                "actualValue": "{{ $.workflowDefinitionId }}"
                             }
                         ],
                         "save": {
-                            "pageItems": "{{ $.this.body.items }}"
+                            "serverTotal": 0
                         }
+                    },
+                    {
+                        "type": "while",
+                        "name": "Read until an instance matches (instances created by asynchronous work appear a moment later)",
+                        "timeoutMs": 15000,
+                        "delayMs": 200,
+                        "condition": {
+                            "op": "equals",
+                            "actualValue": "{{ $.serverTotal }}",
+                            "expectedValue": 0
+                        },
+                        "steps": [
+                            {
+                                "type": "http",
+                                "name": "Execute endpoint: 'Query Workflow Instances' (Elsa 4)",
+                                "url": "{{ $.baseUrl }}/runtime/workflows/instances/page?definitionId={{ $.workflowDefinitionId }}&correlationId={{ $.correlationId }}&take={{ $.pageSize }}",
+                                "method": "GET",
+                                "headers": [
+                                    {
+                                        "name": "Authorization",
+                                        "value": "{{$.authHeader}}"
+                                    }
+                                ],
+                                "assert": [
+                                    {
+                                        "op": "equals",
+                                        "actualValue": "{{$.this.status}}",
+                                        "expectedValue": 200
+                                    }
+                                ],
+                                "save": {
+                                    "pageItems": "{{ $.this.body.items }}",
+                                    "serverTotal": "{{ $.this.body.totalCount }}"
+                                }
+                            }
+                        ]
                     },
                     {
                         "type": "assert",
