@@ -22,11 +22,12 @@ public sealed partial class BpmnDirectExecutionTests
         await using (var host = await OpenAsync(activityIds: ["raw-input-worker"]))
         await using (var scope = await ScopeAsync(host))
         {
+            RegisterJsonDataType(host);
             var worker = new WorkflowExecutable(WorkflowExecutionHarness.Identity,
                 WorkflowExecutionHarness.NewFaultingNode("raw-input-worker", "Expected worker fault"),
                 new Dictionary<string, WorkflowExecutableResumeTarget>(), WorkflowExecutionHarness.Timestamp,
                 new Dictionary<string, string>(), inputContract: new(1,
-                [new("RawData", new("Any"), true), new("ExplicitNull", new("String"), true, isNullable: true),
+                [new("RawData", new(TypeAliasConvention.AnyAlias), true), new("ExplicitNull", new("String"), true, isNullable: true),
                     new("FromModel", new("String"), true)]), dependencies: null,
                 incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
             await host.PublishAsync(worker, "raw-input-worker-source");
@@ -56,10 +57,20 @@ public sealed partial class BpmnDirectExecutionTests
         await using (var host = await OpenAsync(admitNewExecutions: false, activityIds: ["raw-input-worker"]))
         await using (var scope = await ScopeAsync(host))
         {
+            RegisterJsonDataType(host);
             var retained = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindMaterialAsync(artifactId);
             Assert.NotNull(retained);
             Assert.Equal(retainedDefinition, retained.Model!.Definition.GetRawText());
             AssertMapping(retained.Model.Definition);
+        }
+
+        static void RegisterJsonDataType(WorkflowExecutionHarness host)
+        {
+            // The lightweight harness omits Expressions' descriptor provider, which normally seeds Any.
+            var types = host.Services.GetRequiredService<IWellKnownTypeRegistry>();
+            types.RegisterType(typeof(JsonElement), TypeAliasConvention.AnyAlias);
+            Assert.True(types.TryGetTypeOrDefault(TypeAliasConvention.AnyAlias, out var rawDataType));
+            Assert.Equal(typeof(JsonElement), rawDataType);
         }
 
         static void AssertMapping(JsonElement definition)
