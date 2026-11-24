@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -10,6 +11,9 @@ using Kernel.Native.Preview;
 using Kernel.Native.Run;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 using WorkflowActorType = Kernel.WorkflowActor.WorkflowActor;
@@ -23,8 +27,12 @@ internal static class WorkbenchPostgresPreview
 
     internal static async Task RunAsync(string[] arguments)
     {
-        if (arguments is not [var phase and ("birth" or "restart"), var receiptPath])
-            throw new ArgumentException("Expected birth or restart and a receipt file.");
+        if (arguments is not [var phase and ("birth" or "restart" or "disabled"), var receiptPath])
+            throw new ArgumentException("Expected birth, restart or disabled and a receipt file.");
+
+        var executable = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_WORKBENCH");
+        if (phase == "disabled" && executable is null)
+            throw new ArgumentException("The disabled check requires a Workbench executable.");
 
         PrintVersion(typeof(DbContext).Assembly);
         PrintVersion(typeof(NpgsqlDbContextOptionsBuilderExtensions).Assembly);
@@ -42,6 +50,23 @@ internal static class WorkbenchPostgresPreview
         var scope = EmbeddedTenant.Bind("workbench-preview");
         var observationOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings.ConnectionString).Options;
         KernelDb OpenObservation() => new(observationOptions);
+        var wire = Wire.Start("postgres", $"Host={settings.Host};Port={settings.Port}");
+        settings.Port = wire.LocalPort;
+        if (phase == "disabled")
+        {
+            using var disabled = WorkbenchProcess.Start(executable!, settings.ConnectionString, enabled: false);
+            try
+            {
+                await disabled.WaitReadyAsync(token);
+            }
+            finally
+            {
+                await disabled.StopAsync();
+            }
+            Require(wire.Connections == 0 && wire.Trips == 0, "disabled Workbench never opened the preview database");
+            return;
+        }
+
         if (phase == "birth")
         {
             await using var db = OpenObservation();
@@ -58,7 +83,7 @@ internal static class WorkbenchPostgresPreview
                 ?? throw new InvalidOperationException("A birth receipt is required.");
             var checkpoint = await Read(new(previous.Actor));
             Require(checkpoint is { Revision: 2, Owner: null } && checkpoint.Epoch == previous.Epoch &&
-                previous.Process != Environment.ProcessId && StateHash(checkpoint.State) == previous.StateHash,
+                StateHash(checkpoint.State) == previous.StateHash,
                 "the receipt matches the stopped waiting actor before owner startup");
             var observation = new EfStore(OpenObservation, postgres: true);
             var observer = await observation.OpenPreviewRootReadsAsync(64, token);
@@ -70,27 +95,27 @@ internal static class WorkbenchPostgresPreview
             Require(suffix.Items.Count == 0, "the receipt bookmark is caught up before owner startup");
         }
 
-        var wire = Wire.Start("postgres", $"Host={settings.Host};Port={settings.Port}");
-        settings.Port = wire.LocalPort;
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings.ConnectionString).Options;
         KernelDb Open() => new(options);
         var store = new EfStore(Open, postgres: true);
         var ingress = await store.OpenPreviewRootIngressAsync(WorkflowActorType.ActorType, TimeSpan.FromHours(1), token);
         var reads = await store.OpenPreviewRootReadsAsync(64, token);
         var definition = DirectApprovalWorkflow.Build();
-        var model = new NativeExecutionModel(new WorkflowRegistry().Add(definition));
         var node = $"workbench-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
-        var builder = Host.CreateEmptyApplicationBuilder(new());
-        builder.Logging.ClearProviders();
-        builder.Services.AddHostedService(_ => new PostgresPreviewHostedService(Open, node,
-            new WorkflowActorType([model]), Environment.FailFast));
-        using var host = builder.Build();
-        await host.StartAsync(token);
+        using var host = executable is null ? CreateFixtureHost() : null;
+        using var workbench = executable is null ? null : WorkbenchProcess.Start(executable, settings.ConnectionString, enabled: true);
+        var ownerPid = workbench?.Id ?? Environment.ProcessId;
+        var nodePrefix = workbench is null ? node : $"workbench-core-preview-{ownerPid}-";
         Receipt? receipt = null;
         Contract.ActorRef actor;
         Checkpoint last;
         try
         {
+            if (host is not null)
+                await host.StartAsync(token);
+            if (workbench is not null)
+                await workbench.WaitReadyAsync(token);
+
             if (previous is null)
             {
                 var runtime = new WorkflowRuntime(ingress, reads);
@@ -107,7 +132,7 @@ internal static class WorkbenchPostgresPreview
                 var journal = await reads.TailAsync(scope, actor, cancellationToken: token);
                 Require(journal.Next is not null && journal.Items.Count(entry => Entry(entry) == "approved:approval-1" && entry.Revision == 2) == 1,
                     "the public journal records the first approval once");
-                receipt = new(actor.Id, journal.Next!.Value.Value, frame, StateHash(waiting.State), JournalHash(journal), waiting.Epoch, Environment.ProcessId);
+                receipt = new(actor.Id, journal.Next!.Value.Value, frame, StateHash(waiting.State), JournalHash(journal), waiting.Epoch, ownerPid);
                 last = waiting;
             }
             else
@@ -115,7 +140,7 @@ internal static class WorkbenchPostgresPreview
                 actor = new(previous.Actor);
                 var bookmark = new Contract.PageToken(previous.Bookmark);
                 var waiting = await WaitFor(actor, 2);
-                Require(waiting.Epoch > previous.Epoch && Environment.ProcessId != previous.Process && StateHash(waiting.State) == previous.StateHash,
+                Require(waiting.Epoch > previous.Epoch && ownerPid != previous.Process && StateHash(waiting.State) == previous.StateHash,
                     "a different Workbench process owns the same waiting checkpoint at a later epoch");
                 Require(await reads.GetAsync(scope, actor, token) is { Header.Status: Contract.ActorStatus.Running },
                     "the public read reports the waiting actor");
@@ -140,8 +165,13 @@ internal static class WorkbenchPostgresPreview
         }
         finally
         {
-            using var shutdown = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            await host.StopAsync(shutdown.Token);
+            if (workbench is not null)
+                await workbench.StopAsync();
+            if (host is not null)
+            {
+                using var shutdown = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                await host.StopAsync(shutdown.Token);
+            }
         }
 
         Require(await Read(actor) == (last with { Owner = null }),
@@ -150,7 +180,17 @@ internal static class WorkbenchPostgresPreview
             await File.WriteAllTextAsync(receiptPath, JsonSerializer.Serialize(receipt), token);
         Require(wire.Trips > 0 && wire.Connections > 0 && wire.ProtocolRequests > 0, "the meter observed the preview provider traffic");
         Console.WriteLine($"wire {phase} {wire.Trips} round trips, {wire.ProtocolRequests} protocol groups, {wire.Connections} connections");
-        Console.WriteLine($"ok Workbench process {Environment.ProcessId} {phase} stopped");
+        Console.WriteLine($"ok Workbench process {ownerPid} {phase} stopped");
+
+        IHost CreateFixtureHost()
+        {
+            var model = new NativeExecutionModel(new WorkflowRegistry().Add(definition));
+            var builder = Host.CreateEmptyApplicationBuilder(new());
+            builder.Logging.ClearProviders();
+            builder.Services.AddHostedService(_ => new PostgresPreviewHostedService(Open, node,
+                new WorkflowActorType([model]), Environment.FailFast));
+            return builder.Build();
+        }
 
         async Task<Contract.AdmissionOutcome> Approve(Contract.ActorRef actor, string id, string person, string frame) =>
             (await ingress.SendAsync(scope, new Contract.Target.Ref(actor), id, CompositeSignal.Kind,
@@ -173,10 +213,82 @@ internal static class WorkbenchPostgresPreview
                 var checkpoint = await Read(actor);
                 if (checkpoint?.Revision > revision)
                     throw new InvalidOperationException($"Unexpected checkpoint revision {checkpoint.Revision}.");
-                if (checkpoint is not null && checkpoint.Revision == revision && checkpoint.Owner == node)
+                if (checkpoint is not null && checkpoint.Revision == revision &&
+                    (workbench is null ? checkpoint.Owner == node : checkpoint.Owner?.StartsWith(nodePrefix, StringComparison.Ordinal) == true))
                     return checkpoint;
                 await Task.Delay(40, token);
             }
+        }
+    }
+
+    private sealed class WorkbenchProcess(Process process, DirectoryInfo workspace, Task<string> log) : IDisposable
+    {
+        internal int Id => process.Id;
+
+        internal static WorkbenchProcess Start(string executable, string connection, bool enabled)
+        {
+            var assembly = Path.GetFullPath(executable);
+            var workspace = Directory.CreateTempSubdirectory("elsa-workbench-core-preview-");
+            var start = new ProcessStartInfo("dotnet")
+            {
+                WorkingDirectory = workspace.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            foreach (var argument in new[] { assembly, "--contentRoot", Path.GetDirectoryName(assembly)!, "--urls", "http://127.0.0.1:0" })
+                start.ArgumentList.Add(argument);
+            start.Environment["DOTNET_ENVIRONMENT"] = "Development";
+            start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+            start.Environment.Remove("Elsa__CorePreview__Enabled");
+            if (enabled)
+                start.Environment["Elsa__CorePreview__Enabled"] = "true";
+            start.Environment["ConnectionStrings__KernelCorePreview"] = connection;
+            var process = Process.Start(start) ?? throw new InvalidOperationException("Workbench did not start.");
+            return new WorkbenchProcess(process, workspace, process.StandardError.ReadToEndAsync());
+        }
+
+        internal async Task WaitReadyAsync(CancellationToken token)
+        {
+            while (await process.StandardOutput.ReadLineAsync(token) is { } line)
+            {
+                // Kestrel emits this after hosted services have finished starting.
+                const string listening = "Now listening on: ";
+                var offset = line.IndexOf(listening, StringComparison.Ordinal);
+                if (offset < 0)
+                    continue;
+
+                _ = process.StandardOutput.ReadToEndAsync();
+                using var client = new HttpClient();
+                using var response = await client.GetAsync(line[(offset + listening.Length)..], token);
+                Require(response.IsSuccessStatusCode, "the normal Workbench root responds");
+                return;
+            }
+            throw new InvalidOperationException($"Workbench exited before listening. {await log.WaitAsync(token)}");
+        }
+
+        internal async Task StopAsync()
+        {
+            if (!process.HasExited)
+            {
+                using var terminate = Process.Start("kill", ["-TERM", process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)])
+                    ?? throw new InvalidOperationException("Could not request Workbench shutdown.");
+                await terminate.WaitForExitAsync();
+            }
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            await process.WaitForExitAsync(deadline.Token);
+            Require(process.ExitCode == 0, $"Workbench exited cleanly (exit {process.ExitCode})");
+        }
+
+        public void Dispose()
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit();
+            }
+            process.Dispose();
+            workspace.Delete(recursive: true);
         }
     }
 

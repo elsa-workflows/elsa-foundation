@@ -11,6 +11,17 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresPublicPreview
 {
+    private static Workflow BuildFlowchart() => Wf.Workflow("flowchart-approval",
+        Wf.Flowchart("flow",
+            [Wf.If("needs-approval", Binding.Expr("amount > 500")),
+                Wf.Node<DirectApprovalWorkflow>("approve"),
+                Wf.Set("automatic", "automaticPath", true),
+                Wf.Set("joined", "joinCount", Binding.Expr("joinCount + 1"))],
+            [new("needs-approval", "approve", "True"), new("needs-approval", "automatic", "False"),
+                new("approve", "joined"), new("automatic", "joined")],
+            ("needs-approval", Gateway.Decision), ("joined", Gateway.ParallelJoin)),
+        ("amount", 750), ("automaticPath", false), ("joinCount", 0));
+
     internal static async Task<int> RunAsync(string phase, string? suppliedReference = null, string? suppliedBookmark = null,
         long priorEpoch = 0, int priorPid = 0, long originalUntil = 0, bool flowchart = false)
     {
@@ -84,7 +95,7 @@ internal static class PostgresPublicPreview
             return 0;
         }
         var workflow = new WorkflowRuntime(ingress, reads);
-        var definition = flowchart ? DirectApprovalWorkflow.BuildFlowchart() : DirectApprovalWorkflow.Build();
+        var definition = flowchart ? BuildFlowchart() : DirectApprovalWorkflow.Build();
         var registry = new WorkflowRegistry().Add(definition);
         Report("host setup");
         Console.WriteLine("EF command estimates exclude one direct provider batch per admission.");

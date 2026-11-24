@@ -13,6 +13,11 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
+{
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunAsync(workbenchPreview);
+    return 0;
+}
 if (args is ["pg-root-operators", "admit"])
     return await PostgresRootOperatorChecks.RunAsync(null);
 if (args is ["pg-root-operators", var defaultOperatorPhase and ("read" or "resume"), var operatorA, var operatorB, var operatorC])
