@@ -14,9 +14,10 @@ instead of assumptions. Decisions are in the spec's *Spec decisions* table.
 | `test-files/` | 5 request fixtures, one about 6 MB (`big-mock-data.json`) |
 | `environments/dev.json` | Base URLs, credentials, correlation ID and date bound from environment variables; dispatch channels; dispatch wait time |
 | `global-configuration.json` | Template search path |
-| `pipelines/` | Original Azure pipelines (not used here); they pinned an Elsa 3.5.0 server image and `jtest` 0.1.3 |
+| `pipelines/` | Original Azure pipelines (not used here); they pinned an Elsa 3.5.0 server image and `jtest` 0.1.3 (0.1.2 in the dev pipeline) |
 
-Step kinds across suites and templates: 178 `use` (template calls), 98 `http`, 22 `wait` (fixed sleeps), 12 `assert`,
+Step kinds across suites, templates and the setup suite: 178 `use` (170 in suites), 98 `http`, 22 `wait` (fixed
+sleeps: 15 in suites, 7 in templates), 12 `assert`,
 plus loops. Assertion operators: 358 `equals`, 115 `exists`, 22 `length`, 18 `notexists`, and a few numeric
 comparisons. Performance suites assert completion counts, not timings. No secret values and no external URLs.
 
@@ -33,8 +34,8 @@ comparisons. Performance suites assert completion counts, not timings. No secret
 | `javascript-*` (7 definitions) | 7 `javascript/*` suites | No |
 | `correlate-guid.json`, `events-publisher.json`/`events-listener.json`, `logging-workflow.json` | one suite each | No |
 | `performance-*` (6 definitions) | 4 `performance/*` suites; `performance-minimal-baseline.json` has no suite | No |
+| `simple-write-hello-world.json` | `performance/concurrency` (bulk-dispatched by `performance-concurrency.json`) | No |
 | `storage-drivers-variables-*` (2 definitions) | `storage-drivers/variables` | Root: yes |
-| `simple-write-hello-world.json` | none | No |
 
 "Yes" means the definition contains a join or wait construct, not that its suites are JOIN-blocked. Per FR-018 a
 suite is blocked only when the join is what stops it on Elsa 4.

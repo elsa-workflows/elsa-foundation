@@ -45,7 +45,7 @@ the engine-neutral refactor adds.
 | §E2.7 Elsa 3 stays behind the import boundary | PASS | Elsa 3 runs only as a separate baseline container. The Workbench already references four Elsa 3 import projects; adding the reconciliation project to the same host adds no runtime reference (`Elsa3MigrationBoundaryTests`, `Runtime_projects_do_not_reference_elsa3_compatibility_projects` stay green). |
 | §E2.2 Runtime takes no Design reference | PASS | No runtime project changes. |
 | §E7 CI test tiers | PASS | No new test project. The JTest folder has no csproj and is not part of any tier, by design (FR-002). |
-| §2.21 faithful behaviour | PASS | Suite assertions are the baseline; templates keep output meaning or fail (contract). |
+| §2.21.1 refactoring keeps behaviour | PASS | The engine-neutral refactor moves values without changing expectations and is checked by a green Elsa 3 rerun; templates keep output meaning or fail (contract). |
 | §2.23 risk-based tests | PASS | The risky change is host composition; existing feature-composition and boundary tests cover it, and the Elsa 4 run itself exercises the feature end to end. No new unit test is needed for a project reference and a catalog line. |
 | §2.22 docs | ACTION | Suite README with run instructions; Elsa 3 migration readiness guide gains a pointer to the suite and its ledger once results exist. |
 | ADR 0080 (internal by default, pre-GA cleanup) | PASS | No public API added. |
@@ -65,7 +65,7 @@ the engine-neutral refactor adds.
 | P-6 | Ids | R-7: definition ids carry over; Elsa 4 templates match short activity ids against node-id suffixes. |
 | P-7 | Vocabulary | R-8: templates translate status and version words; table in [contracts/templates.md](contracts/templates.md). |
 | P-8 | Observation | R-9: Elsa 4 sources per template; gaps fail loudly. |
-| P-9 | Waits | R-10: unchanged; raising one is a recorded suite change. |
+| P-9 | Waits | R-10: unchanged; raising one is a recorded change (suite or template). |
 | P-10 | Ledger | [data-model.md](data-model.md): Markdown files in `ledger/`. |
 | P-11 | Prerequisites | R-11: spec 1207 implemented before the qualifying Elsa 4 run only. |
 | P-12 | Order of suites | HTTP suites first, then single-outcome, then the rest; suites whose definitions contain a join run too and are marked blocked only when the join stops them. |
@@ -109,12 +109,14 @@ extensions/Elsa3/tests/JTest/
 └── ledger/
     ├── suites.md
     ├── baseline-failures.md
+    ├── refactor-scope.md
     ├── suite-changes.md
     ├── dispositions.md
     └── runs.md
 
 apps/Elsa.Workbench/
 ├── Elsa.Workbench.csproj              # + reference to the Elsa 3 reconciliation project
+├── packages.lock.json                 # restored after the new reference
 └── Program.cs                         # + its assembly in the feature catalog
 ```
 

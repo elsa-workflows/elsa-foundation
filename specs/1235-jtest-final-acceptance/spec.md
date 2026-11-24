@@ -25,7 +25,7 @@ The work runs in three phases, each gated on the previous one:
    follow once the JOIN initiative delivers.
 
 **Example.** `if-then-else-tests.json` posts to the `qa/branching/flows` endpoint with `ifConditionValue: true` and
-asserts that exactly the `if` and `if_Then_WriteLine` activities completed and `if_Else_WriteLine` never executed. The
+asserts that the `if` and `if_Then_WriteLine` activities both completed and `if_Else_WriteLine` never executed. The
 suite asks the `elsa-activity-instance-*` templates for those facts. On Elsa 3 the templates call the Elsa 3 REST API;
 on Elsa 4 the same template names call the Elsa 4 API and return the same outputs. The suite file and its expected
 values do not change between engines.
@@ -89,9 +89,10 @@ environment.
    refused with its diagnostic, and the receipt matches each definition's recorded bucket.
 2. **Given** a suite whose definitions converted, **When** it runs with the Elsa 4 templates, **Then** every assertion
    passes, with the suite file unchanged from User Story 2.
-3. **Given** a suite whose definition was refused or cannot pass for a reason other than JOIN behaviour, **When** the
-   result is recorded, **Then** the definition is bucketed `convert-with-adjustments` with an approved adjusted copy,
-   or `incompatible` with its refusal and guidance; a refusal never counts as a pass.
+3. **Given** a suite that fails on Elsa 4 for a reason other than JOIN behaviour, **When** the cause is found, **Then**
+   it follows the failure rule (FR-016): a template defect is fixed; a converter defect or Elsa 4 gap gets its own
+   issue and blocks the suite until fixed, adjusted or bucketed `incompatible`; a definition that cannot convert
+   faithfully is refused with guidance and bucketed `incompatible`. A refusal never counts as a pass.
 
 ### User Story 4 - JOIN-blocked suites finish later in this specification (Priority: P2)
 
@@ -145,9 +146,10 @@ blocks it, and J-001 through J-005 are open in the tasks.
   `jtest run`. They MUST NOT be wrapped in or rewritten as xunit tests. Report collection and pipeline integration are
   out of scope.
 - **FR-006**: The Elsa 3 baseline MUST be an Elsa server built from `docker/ElsaServer.Dockerfile` at elsa-core
-  release tag `3.6.3` (commit `d6a57f5f`), the version production pins; no such image is published. The build
+  release tag `3.6.3` (commit `7eac7de6`), the pinned baseline version. The build
   command and image digest MUST be recorded with each baseline run. The suite assertions are the
-  baseline; no Elsa 3 host runs alongside Elsa 4 during acceptance. An Elsa 3 run settles a disputed assertion only.
+  baseline; no Elsa 3 host runs alongside Elsa 4 during acceptance. During Elsa 4 work an Elsa 3 run only settles a disputed assertion or verifies an approved
+  suite change.
 - **FR-007**: Before conversion work starts, the corpus MUST run on the Elsa 3 baseline. Every failing assertion MUST
   be classified as one of: suite defect, behaviour the pinned version corrected, or defect of the pinned version,
   with the evidence and the suite description. The coordinator MUST approve the whole classified list before any fix
@@ -167,7 +169,8 @@ blocks it, and J-001 through J-005 are open in the tasks.
   outputs as the Elsa 3 set. A template that cannot produce an output with the same meaning on Elsa 4 MUST be reported,
   not approximated.
 - **FR-012**: Any change to a suite file after the engine-neutral refactor MUST be recorded per assertion with its
-  reason and approved by the coordinator. Raising a `wait` step is such a change.
+  reason and approved by the coordinator. Raising a `wait` step is such a change. A timing change inside a template
+  (the templates hold 7 of the 22 waits) is recorded the same way, for the engine set it changes.
 - **FR-013**: Templates MUST observe the full value an assertion checks. A preview, a case-insensitive lookup or a
   summary MUST NOT stand in for an exact value, and a template MUST NOT normalize a value unless the suite asked for it.
 
@@ -181,7 +184,11 @@ blocks it, and J-001 through J-005 are open in the tasks.
   approved by the coordinator) or `incompatible` (refused with a diagnostic and guidance, or a feature with no Elsa 4
   equivalent). Execution status and JOIN blocking MUST be recorded separately from the bucket.
 - **FR-016**: Translating API calls in templates MUST NOT move a definition out of `convert-as-is`. A refusal or a
-  publication alone MUST NOT count as a passing suite. Missing setup MUST be recorded as blocked, not incompatible.
+  publication alone MUST NOT count as a passing suite. A suite failing on Elsa 4 for a reason other than JOIN
+  behaviour MUST follow one rule: a template defect is fixed in the template; a converter defect or Elsa 4 gap gets
+  its own issue and the suite is `blocked: <issue>` until it is fixed, an approved adjusted copy passes, or the
+  definition is bucketed `incompatible`; missing setup is `blocked: <prerequisite>`, never incompatible. A blocked
+  suite other than a JOIN-blocked one does not satisfy the non-JOIN milestone.
 - **FR-017**: Where an adjusted copy is needed, the converter MUST NOT gain a workaround for it; a construct that
   cannot convert faithfully MUST be refused with guidance, and a genuine Elsa 4 gap gets its own issue.
 
@@ -220,7 +227,7 @@ blocks it, and J-001 through J-005 are open in the tasks.
 | Q1 | Which material is the complete corpus? | The JTest-Nexxbiz repository at `b1cde13`. 36 definitions and 42 suites. |
 | Q2 | Where does the suite live? | In the Elsa 3 converter test area, because the flow is reconcile-then-run. A broader Elsa 4-native workflow-regression suite is a later, separate piece of work. |
 | Q3 | Can the corpus be committed? | Yes, unchanged; it carries no secrets. |
-| Q4 | What is the Elsa 3 baseline? | The suite assertions, made green on an Elsa server built from elsa-core tag `3.6.3` (the version production pins; no published image exists). No paired dual-host runs. |
+| Q4 | What is the Elsa 3 baseline? | The suite assertions, made green on an Elsa server built from elsa-core tag `3.6.3` (the pinned baseline version). No paired dual-host runs. |
 | Q5 | How are failures on the baseline settled? | Classified into three kinds and approved as one list by the coordinator before any fix (FR-007, FR-008). |
 | Q6 | Which runner? | `jtest run`, latest version; no xunit wrapper; CI and reports later. |
 | Q7 | How are engine differences expressed? | Same-name Elsa 4 templates; Elsa 3-specific values in suite files move behind templates or parameters first. |
@@ -238,7 +245,8 @@ blocks it, and J-001 through J-005 are open in the tasks.
 - **SC-002 - Engine-neutral**: Every suite file is identical between the Elsa 3 and Elsa 4 runs, and still passes on
   the Elsa 3 baseline.
 - **SC-003 - Dispositions**: All 36 definitions have exactly one bucket with its evidence.
-- **SC-004 - Non-JOIN milestone**: Every suite not blocked by JOIN behaviour or a recorded incompatibility passes on
+- **SC-004 - Non-JOIN milestone**: Every suite not blocked by JOIN behaviour, by a 3.6.3 defect (SC-001) or by an
+  approved incompatibility passes on
   Elsa 4, on an initiative head with spec 1207 implemented (its status Implemented). This is a milestone, not completion.
 - **SC-005 - Full acceptance**: SC-001 to SC-004 hold on the final initiative head, J-001 to J-005 are closed with
   evidence, and every suite passes or carries an approved incompatibility.

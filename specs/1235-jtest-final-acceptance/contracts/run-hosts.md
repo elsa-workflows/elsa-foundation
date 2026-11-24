@@ -4,7 +4,7 @@
 
 | Item | Value |
 |---|---|
-| Source | elsa-core release tag `3.6.3`, commit `d6a57f5f`, `docker/ElsaServer.Dockerfile` |
+| Source | elsa-core release tag `3.6.3`, commit `7eac7de6`, `docker/ElsaServer.Dockerfile` |
 | Container settings | `ASPNETCORE_ENVIRONMENT=Development`, `HTTP_PORTS=8080`, `HTTP__BASEURL={published base}` |
 | Ready when | `GET {base}/` returns 200 with body `Healthy` |
 | Definitions | Imported by the corpus's `import-and-publish-workflows.json` |

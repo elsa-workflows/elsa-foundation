@@ -29,21 +29,23 @@ recorded approval before the tasks after them start.
   `${VARIABLE}` references), and add a `.gitattributes` entry if needed so the JSON files keep their original bytes
   (FR-004).
 - [ ] T003 [P] Create the ledger files with their table headers from data-model.md: `JTest/ledger/suites.md` (one row
-  per suite, all `not run`), `JTest/ledger/baseline-failures.md`, `JTest/ledger/suite-changes.md`,
+  per suite, all `not run`), `JTest/ledger/baseline-failures.md`, `JTest/ledger/refactor-scope.md`,
+  `JTest/ledger/suite-changes.md`,
   `JTest/ledger/dispositions.md` (one row per definition, bucket `unclassified`), `JTest/ledger/runs.md`.
 
 ---
 
-## Phase 2: Foundational (Elsa 4 host composition)
+## Phase 2: Elsa 4 host composition (parallel with US1 and US2)
 
 - [ ] T004 Add a `ProjectReference` to the Elsa 3 reconciliation project
   (`extensions/Elsa3/src/Activities/Design/Import/Reconciliation/`) in `apps/Elsa.Workbench/Elsa.Workbench.csproj`.
 - [ ] T005 Add `typeof(Elsa3JsonReconciliationFeature).Assembly` to the Elsa 3 feature assemblies in
   `apps/Elsa.Workbench/Program.cs`, next to the four existing Elsa 3 entries; leave the feature disabled in
   `apps/Elsa.Workbench/shells.json`.
-- [ ] T006 Build the Workbench and run the existing architecture tests that cover feature composition and the Elsa 3
-  boundary (`Essentials/tests/Architecture/Tests/`); regenerate committed solution filters only if the maps check says
-  they changed.
+- [ ] T006 Run `dotnet restore Elsa.Server.slnx` and commit the updated `apps/Elsa.Workbench/packages.lock.json` (CI
+  restores in locked mode); regenerate the maps (`dotnet run --project tools/maps/Elsa.Maps.Generator -- all`) and
+  commit any changed solution filters; build the Workbench and run the architecture tests that cover feature
+  composition and the Elsa 3 boundary (`Essentials/tests/Architecture/Tests/`).
 - [ ] T007 Find and verify the configuration override that enables `Elsa3JsonReconciliation` (`SourceId`, `Files` or
   `FolderPath`) together with `Elsa3ImportActivitiesEntityFrameworkCore`, sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` and turns on value and variable payload
   capture for one Workbench run without editing the committed `shells.json` (environment variables or a run-specific
@@ -77,7 +79,7 @@ recorded approval before the tasks after them start.
   (blocked)`.
 - [ ] T015 [US1] Check the If and Switch suites (`tests/branching/if-then-else-tests.json`, `switch-*`,
   `switchflow-*`) are present and cover the corpus's If, Switch and FlowSwitch activities; record any activity the
-  corpus definitions use that no suite covers as a finding in `JTest/ledger/baseline-failures.md` notes.
+  corpus definitions use that no suite covers in the *Notes* section of `JTest/ledger/baseline-failures.md`.
 - [ ] T016 [US1] **Approval gate**: post the classified list on the PR and get the coordinator's approval of the whole
   list; record the approval link in `JTest/ledger/baseline-failures.md`.
 - [ ] T017 [US1] Apply the approved fixes to `JTest/tests/`, `JTest/templates/` and `JTest/import-and-publish-workflows.json`
@@ -102,7 +104,8 @@ recorded approval before the tasks after them start.
   `/elsa/api/workflow-definitions/{id}/execute` and `/elsa/api/workflow-instances`), response fields read from those
   steps, reads inside template outputs beyond the projected fields (for example
   `instance.workflowState.activityExecutionContexts[0].properties.Variables[...]`), status words the translation table
-  does not cover, and Elsa 3 generated identifiers; add the list to `JTest/ledger/suite-changes.md` as the refactor scope.
+  does not cover, and Elsa 3 generated identifiers; include the keys suites read inside `activityState` and `outputs`, which the Elsa 4
+  templates must supply (contracts/templates.md); write the list to `JTest/ledger/refactor-scope.md`.
 - [ ] T020 [US2] For each Elsa 4 template that needs a parameter its Elsa 3 version lacks (for example the workflow
   instance id for `elsa-activity-instance-get`, contracts/templates.md), add the parameter to the Elsa 3 template in
   `JTest/templates/` without changing its outputs; for each direct API call or internal read listed in T019, add a new
@@ -149,11 +152,14 @@ cannot produce with the same meaning fails the template with the output named (F
 - [ ] T031 [US3] Start a fresh Workbench with all 36 definitions; copy the reconciliation receipt into
   `JTest/ledger/runs.md` and fill the Reconciliation column of `JTest/ledger/dispositions.md`.
 - [ ] T032 [US3] Run all 42 suites on that host; record the Elsa 4 result per suite in `JTest/ledger/suites.md`.
-- [ ] T033 [US3] For each failing suite, find the cause (template, converter, engine, prerequisite) and record it; a
-  template cause is fixed in `templates-elsa4/` and rerun.
+- [ ] T033 [US3] For each failing suite, find the cause (template, converter, engine, prerequisite) and record it in
+  `JTest/ledger/suites.md`; a template cause is fixed in `templates-elsa4/` and rerun; a missing prerequisite marks
+  the suite `blocked: <prerequisite>` (FR-016).
 - [ ] T034 [US3] For a converter or engine cause: if the definition cannot convert faithfully, confirm it is refused
   with guidance and bucket it `incompatible`; if a genuine Elsa 4 gap or converter defect, file a `needs-triage` issue
-  (sub-issue of the initiative) and record it; never add a converter workaround (FR-017).
+  (sub-issue of the initiative), mark the suite `blocked: <issue>` and leave the bucket `unclassified` until the
+  issue is fixed, an approved adjusted copy passes (T036) or the definition is bucketed `incompatible`; never add a
+  converter workaround (FR-016, FR-017).
 - [ ] T035 [US3] For each suite whose definition contains a join, decide from the failure whether the join is what stops
   it; mark `blocked: JOIN` with the construct and failure only then (FR-018), and keep the rest in the main run.
 - [ ] T036 [US3] **Approval gate** for adjustments: for a definition that needs an adjusted copy, add it under
@@ -203,7 +209,8 @@ exists.
 
 ## Dependencies and execution order
 
-- Phase 1 → Phase 2 → US1 → US2 → US3 → US4 → Polish (T044 and T045 may start any time after US3 starts).
+- Phase 1 → US1 → US2 → US3 → US4 → Polish. Phase 2 needs only Phase 1, runs alongside US1 and US2, and must be done
+  before T028. T044 and T045 may start any time after US3 starts.
 - Within US1: T008 to T015 in order; T016 gates T017; T018 closes the phase.
 - Within US2: T019 → T020 → T021 → T022.
 - Within US3: T023 to T027 can run in parallel; T028 needs T007 and T023 to T027; T030 to T037 follow; T038 waits for

@@ -22,7 +22,14 @@ output with the same meaning, the template fails with a message naming the outpu
 | Workflow instance items | `instances` items carry the Elsa 3 field names suites read: `id` (from `workflowExecutionId`), `definitionId`, `definitionVersionId`, `correlationId`, `name`, `version` (integer, per the version rule) and `status`/`subStatus` (per the status table). |
 | Counts | Counts the Elsa 3 journal returned (`totalCount` for started or completed events) are computed from the activity execution list, which requires Durable persistence for the run. |
 
-Values suites read **inside** an output beyond the fields above (for example
+**Activity state and outputs.** `activityState` and `outputs` of the `elsa-activity-instance-*` templates are part
+of the contract, keyed as Elsa 3 keyed them: suites read keys such as `activityState.Text`, `activityState.StatusCode`,
+`activityState.ResponseHeaders[...]`, `outputs.ParsedContent` and `outputs.Headers[...]`. The Elsa 4 template builds
+them from the activity execution's value snapshots, mapping each converted input or output back to its Elsa 3 name
+with the converter's member map, and keeps values as the suite compares them (for example `StatusCode` as the Elsa 3
+enum name `Accepted`). A key with no Elsa 4 counterpart fails the template with the key named.
+
+Other values suites read **inside** an output beyond the fields above (for example
 `instance.workflowState.activityExecutionContexts[0].properties.Variables[...]`) are Elsa 3 internals. They are not
 projected: the engine-neutral refactor moves those reads behind a template, existing or new, before the Elsa 4 work.
 

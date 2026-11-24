@@ -8,17 +8,17 @@ repository unless they name the corpus.
 - **Decision**: Use the latest `JTest.Cli` release, installed as a global dotnet tool (install or update it
   outside this repository: its package source mapping blocks `JTest.Cli`).
 - **Rationale**: `jtest validate` with 2.0.3 reports all 42 suite files and the setup suite valid against JTest language
-  schema 1.0.0, so the 2.x line reads the corpus without conversion. The original pipelines pinned 0.1.3.
-- **Alternatives considered**: Pin 0.1.3 as the original pipelines did. Rejected by the coordinator: the latest CLI is
+  schema 1.0.0, so the 2.x line reads the corpus without conversion. The original pipelines pinned 0.1.3 and 0.1.2.
+- **Alternatives considered**: Pin an old version as the original pipelines did. Rejected by the coordinator: the latest CLI is
   wanted and reads the files.
 
 ## R-2 Elsa 3.6.3 baseline server
 
-- **Decision**: Build `docker/ElsaServer.Dockerfile` from elsa-core release tag `3.6.3` (commit `d6a57f5f`) and run it
+- **Decision**: Build `docker/ElsaServer.Dockerfile` from elsa-core release tag `3.6.3` (tag object `d6a57f5f`, commit `7eac7de6`) and run it
   as the original pipeline ran its image: `ASPNETCORE_ENVIRONMENT=Development`, `HTTP_PORTS=8080`, `HTTP__BASEURL`
   set to the published base URL, health check on the root returning `Healthy`. Record the image digest per run.
-- **Rationale**: No `elsa-server-v3-6-3` image exists on Docker Hub; the published `elsa-server` tags skip 3.6.x. The
-  release tag is the exact version production pins.
+- **Rationale**: The release tag is the exact pinned baseline version, built from source rather than taken from a
+  registry.
 - **Alternatives considered**: `elsa-server-v3-6-preview` (not exactly 3.6.3); a production image (not public).
 
 ## R-3 Where the suite lives and how it is laid out
@@ -103,8 +103,9 @@ repository unless they name the corpus.
 
 ## R-10 Fixed waits
 
-- **Decision**: Keep the 22 fixed `wait` steps as they are. A wait that proves too short on either engine is raised
-  as a recorded suite change (FR-012).
+- **Decision**: Keep the 22 fixed `wait` steps as they are: 15 in suites and 7 in templates. A suite wait that proves
+  too short is raised as a recorded suite change (FR-012); a template wait is changed in the engine set that needs it
+  and recorded in the same ledger.
 - **Rationale**: Changing waits silently would hide timing behaviour the suite was written to tolerate.
 - **Alternatives considered**: Template-level polling; possible later, but it changes how suites wait.
 

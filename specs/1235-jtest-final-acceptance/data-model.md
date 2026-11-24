@@ -45,8 +45,16 @@ with its reason. A row never returns to `not run`.
 | Reason | why it is needed, which engine needs it |
 | Approved | coordinator approval (FR-012) |
 
+Template changes after the refactor (including a raised template wait) are recorded here too, with the engine set
+they change.
+
 The engine-neutral refactor itself is one reviewed diff; its rule (values move, expectations stay) is checked by the
-reviewer and by a green Elsa 3 rerun, not row by row.
+reviewer and by a green Elsa 3 rerun, not row by row. Its scope list lives in `ledger/refactor-scope.md`: one row per
+suite location, the Elsa 3-specific value, and where it moves.
+
+## Notes
+
+Each ledger file may end with a *Notes* section for findings that are not rows, such as an activity no suite covers.
 
 ## Definition disposition (`ledger/dispositions.md`, one row per definition)
 
@@ -72,7 +80,9 @@ copy taking the place of its original, passed to the reconciliation as an explic
 |---|---|
 | Run id | sequential |
 | Engine | Elsa 3 or Elsa 4 |
-| Source | for Elsa 3 the image digest; for Elsa 4 the commit and whether spec 1207 is implemented on it |
+| Commit | this repository's commit (the suite files differ between phases) |
+| Source | for Elsa 3 the build command and image digest; for Elsa 4 whether spec 1207 is implemented on the commit |
+| Environment file | the file used, without secret values |
 | jtest | version |
 | Scope | suites run |
 | Result | per-suite pass/fail counts; failures by suite |
