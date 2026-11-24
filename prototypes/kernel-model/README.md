@@ -97,7 +97,7 @@ dotnet run --project ../../essentials/tests/ActorFoundation/Simulation -c Releas
 From `prototypes/kernel-model`, run:
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --migration-plan-reads
+dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --migration-plan-reads
 ```
 
 This K9 example projects one plan's committed journal through `IActorReads`, using its opaque page token.
@@ -159,7 +159,7 @@ tenant and reads the view file locally. Application hosting and operator authent
 From `prototypes/kernel-model`:
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --migration-plan-dispatch
+dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --migration-plan-dispatch
 ```
 
 This K11 dispatch example reads a committed batch and sends `Migrate` outside actor turns to its exact actor refs.
@@ -176,7 +176,7 @@ remain separate K11 work.
 ### Validate a waiting Native checkpoint
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --native-migration-validation
+dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --native-migration-validation
 ```
 
 This K11 check loads real Balanced and Durable checkpoints through the in-memory Actor Foundation.
@@ -190,7 +190,7 @@ outstanding jobs, Flowchart and StateMachine compatibility are separate work.
 ### Apply a compatible Native migration
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --native-migration-apply
+dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --native-migration-apply
 ```
 
 The public in-memory command suspends a waiting Native workflow, rebinds a compatible Sequence and
@@ -205,7 +205,7 @@ exercises real actor delivery. Declaration mapping and graph and statechart migr
 ### Dispatch a real migration plan
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --migration-plan-actor
+dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --migration-plan-actor
 ```
 
 The in-memory demo pages two Native workflows from the public instance read model. The plan model
@@ -225,7 +225,7 @@ automatic selection scheduling and provider qualification remain separate work.
 ### Run migration selection and completion
 
 ```sh
-dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --migration-plan-runner
+dotnet run -c Release --project ../../essentials/tests/Workflows/Runtime/Native/Migration/Run -- --migration-plan-runner
 ```
 
 The in-memory operator service selects through the public actor list, dispatches the committed

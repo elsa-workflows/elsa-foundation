@@ -952,6 +952,9 @@
     <Project Path="essentials/tests/Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj" />
     <Project Path="essentials/tests/Workflows/Runtime/Statecharts/Run/Elsa.Workflows.Runtime.Statecharts.Run.csproj" />
   </Folder>
+  <Folder Name="/essentials/tests/Workflows/Runtime/Native/Migration/">
+    <Project Path="essentials/tests/Workflows/Runtime/Native/Migration/Run/Elsa.Workflows.Runtime.Native.Migration.Run.csproj" />
+  </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Native/Scopes/">
     <Project Path="essentials/tests/Workflows/Runtime/Native/Scopes/Run/Elsa.Workflows.Runtime.Native.Scopes.Run.csproj" />
   </Folder>

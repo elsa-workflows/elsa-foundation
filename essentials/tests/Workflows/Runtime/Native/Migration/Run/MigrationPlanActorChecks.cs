@@ -8,7 +8,7 @@ using Models = Kernel.Model.Contracts;
 using PublicRuntime = Kernel.WorkflowActor.WorkflowRuntime;
 using PublicWorkflow = Kernel.WorkflowActor.WorkflowActor;
 
-namespace Kernel.Sim;
+namespace Elsa.Workflows.Runtime.Native.Migration;
 
 internal static class MigrationPlanActorChecks
 {
@@ -20,9 +20,10 @@ internal static class MigrationPlanActorChecks
         var scope = ContractScopes.Bind("acme");
         var key = RandomNumberGenerator.GetBytes(32);
         var authority = new MigrationPlanAuthority(key);
-        Contract.IIngress ingress = new InMemoryIngress(store, new Requests("real-plan"), "real-plan",
+        var foundation = new InMemoryActorFixture(store, "real-plan", 1,
             (_, kind) => kind is Contract.Kinds.Migrate or Contract.Kinds.Terminate or Contract.Kinds.Delete);
-        Contract.IActorReads reads = new ActorList(store, 1);
+        var ingress = foundation.Ingress;
+        var reads = foundation.Reads;
         var runtime = new PublicRuntime(ingress, reads);
         var tooWide = new string('é', 600);
         var registry = new WorkflowRegistry().Add(Definition("source", "old")).Add(Definition("target", "new"))
@@ -125,7 +126,7 @@ internal static class MigrationPlanActorChecks
         var requested = await nextReader.TryCompleteAsync();
         await Pump(successor);
         await Refresh(outcomes);
-        var saved = store.ReadFoundationActor(scope.Tenant, plan.Id).Actor!.Row.State;
+        var saved = foundation.ReadCheckpoint(scope.Tenant, plan.Id)!.State;
         check(requested && outcomes.Read().Closed && (await reads.GetAsync(scope, plan))?.Header.Status == Contract.ActorStatus.Finished &&
             !saved.Contains(first.Id, StringComparison.Ordinal) && !saved.Contains(second.Id, StringComparison.Ordinal) &&
             (await reads.InboxAsync(scope, plan)).Items.All(item => item.Kind != MigrationPlanControl.Deadline),
@@ -196,11 +197,11 @@ internal static class MigrationPlanActorChecks
         check(await cancelledReader.ReadPendingAsync(scope, cancelled, default) is { Number: 1 },
             "the cancellation case begins with a cached committed batch");
         var openPlan = (await reads.GetAsync(scope, cancelled))!;
-        var openState = store.ReadFoundationActor(scope.Tenant, cancelled.Id).Actor!.Row.State;
+        var openState = foundation.ReadCheckpoint(scope.Tenant, cancelled.Id)!.State;
         var growth = actorType.TerminalGrowth(openPlan.Header, openState);
         await ingress.SendAsync(scope, new Contract.Target.Ref(cancelled), "terminate-plan", Contract.Kinds.Terminate);
         await Pump(successor);
-        var cancelledState = store.ReadFoundationActor(scope.Tenant, cancelled.Id).Actor!.Row.State;
+        var cancelledState = foundation.ReadCheckpoint(scope.Tenant, cancelled.Id)!.State;
         check(Encoding.UTF8.GetByteCount(cancelledState) - Encoding.UTF8.GetByteCount(openState) == 2 && growth >= 2,
             "the reserved terminal growth covers clearing a one-digit pending batch");
         var cancelledOutcomes = new MigrationPlanOutcomes(reads, scope, cancelled);
@@ -217,7 +218,7 @@ internal static class MigrationPlanActorChecks
         var waiting = await StartWorkflow("late-workflow");
         await Pump(successor);
         var beforeExpiry = (await reads.GetAsync(scope, expiring))!;
-        var waitingState = store.ReadFoundationActor(scope.Tenant, expiring.Id).Actor!.Row.State;
+        var waitingState = foundation.ReadCheckpoint(scope.Tenant, expiring.Id)!.State;
         var timer = (await reads.InboxAsync(scope, expiring)).Items.Single();
         check(actorType.RestoreWaits(beforeExpiry.Header, waitingState).Timers is
             [{ Id: var timerId, Kind: MigrationPlanControl.Deadline, Payload: null, Due: var due }] &&
@@ -256,12 +257,12 @@ internal static class MigrationPlanActorChecks
         async Task<Contract.ActorRef> StartWorkflow(string id) =>
             (await runtime.StartAsync(scope, id, NativeExecutionModel.Start("source"))).Actor!.Value;
         async Task<IScopeActivation> Open(string node) => (await new DurableHost(
-            [new Worker(node, 0, store, new ActorAdapter(store, actorType), new WorkerOptions { Monotonic = () => now - initial })])
+            [new Worker(node, 0, store, foundation.Bind(actorType), new WorkerOptions { Monotonic = () => now - initial })])
             .ActivateAsync(0))!;
         JournalMigrationDispatchState NewReader(Contract.ActorRef reference, MigrationPlanAuthority? authenticator = null) =>
             new(ingress, reads, authenticator ?? authority, scope, reference);
         bool FinishedUnderTarget(Contract.ActorRef reference) =>
-            store.ReadFoundationActor(scope.Tenant, reference.Id).Actor is { Row: { Status: InstanceStatus.Finished } row } &&
+            foundation.ReadCheckpoint(scope.Tenant, reference.Id) is { Status: InstanceStatus.Finished } row &&
             Json.Read<NativeState>(row.State).Variables["output"]?.GetValue<string>() == "new";
     }
 
@@ -270,18 +271,19 @@ internal static class MigrationPlanActorChecks
         const long initial = 1_701_900_000_000;
         const long parkWindow = 1_000;
         var now = initial;
-        var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMilliseconds(parkWindow) };
+        var store = InMemoryActorFixture.CreateWithParkRetention(() => now, TimeSpan.FromMilliseconds(parkWindow));
         var scope = ContractScopes.Bind("plan-park");
         var authority = new MigrationPlanAuthority(RandomNumberGenerator.GetBytes(32));
-        Contract.IIngress ingress = new InMemoryIngress(store, new Requests("plan-park"), "plan-park",
+        var foundation = new InMemoryActorFixture(store, "plan-park", 8,
             (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate or Contract.Kinds.Migrate or Contract.Kinds.Discard);
-        Contract.IActorReads reads = new ActorList(store, 8);
+        var ingress = foundation.Ingress;
+        var reads = foundation.Reads;
         var runtime = new PublicRuntime(ingress, reads);
         var registry = new WorkflowRegistry().Add(Definition("source", "old")).Add(Definition("target", "new"));
         var plans = new MigrationPlanModel(authority, (executionModel, from, to) =>
             executionModel is null or NativeExecutionModel.ModelKey && registry.TryGet(from, out _) && registry.TryGet(to, out _));
         var wrapper = new ParkPlanActor(new PublicWorkflow([new NativeExecutionModel(registry), plans]));
-        var worker = new Worker("plan-park", 0, store, new ActorAdapter(store, wrapper), new WorkerOptions { Monotonic = () => now - initial });
+        var worker = new Worker("plan-park", 0, store, foundation.Bind(wrapper), new WorkerOptions { Monotonic = () => now - initial });
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
 
         var timerPlan = await StartPlan("retry-deadline", initial + 200);
@@ -290,10 +292,9 @@ internal static class MigrationPlanActorChecks
         now += 200;
         await Pump(owner);
         var parkedTimer = await reads.GetAsync(scope, timerPlan);
-        var timerId = store.FoundationTarget(scope.Tenant, timerPlan.Id)!.Id;
+        var timer = foundation.ResolveTargetId(scope, timerPlan);
         check(parkedTimer is { Park: not null, Header.Status: Contract.ActorStatus.Faulted } &&
-            store.Messages.Values.Any(row => row.Message.Target.Id == timerId &&
-                row.Message.Kind == MigrationPlanControl.Deadline && row.KeptBy == ParkKeepReason.Consumed),
+            foundation.HasConsumedDelivery(timer, MigrationPlanControl.Deadline),
             "a failed deadline is retained by the actual Park path");
         await Resolve(timerPlan, "retry", Contract.Kinds.Recover, Contract.RecoverMode.RetryAll);
         await Pump(owner);
@@ -315,7 +316,7 @@ internal static class MigrationPlanActorChecks
         await Pump(owner);
         for (var i = 0; i < 2; i++)
             await ingress.SendAsync(scope, new Contract.Target.Ref(plan), $"kept-{i}", "arrival",
-                new string('x', ParkRecoveryCredit.LimitBytes + 1));
+                new string('x', InMemoryActorFixture.RecoveryCreditLimit + 1));
         await Pump(owner);
         await Resolve(plan, "resume-open", Contract.Kinds.Recover, Contract.RecoverMode.Resume);
         await Step(plan);
@@ -323,8 +324,8 @@ internal static class MigrationPlanActorChecks
             await dispatch.ReadPendingAsync(scope, plan, default) is null,
             "an open recovery with a Running header keeps the cached batch unavailable");
         await Resolve(plan, "terminate-recovery", Contract.Kinds.Terminate);
-        var physicalPlan = store.FoundationTarget(scope.Tenant, plan.Id)!.Id;
-        for (var pass = 0; pass < 5 && store.Instances[physicalPlan].ParkDiscard is null; pass++) await Step(plan);
+        var physicalPlan = foundation.ResolveTargetId(scope, plan);
+        for (var pass = 0; pass < 5 && !foundation.HasDiscardDrain(physicalPlan); pass++) await Step(plan);
         check(await reads.GetAsync(scope, plan) is { Park.OpenResolution: "terminating" } &&
             await dispatch.ReadPendingAsync(scope, plan, default) is null,
             "a parked termination keeps dispatch closed throughout the drain");
@@ -380,7 +381,7 @@ internal static class MigrationPlanActorChecks
 
         async Task Step(Contract.ActorRef planRef)
         {
-            var actor = store.FoundationTarget(scope.Tenant, planRef.Id)!.Id;
+            var actor = foundation.ResolveTargetId(scope, planRef);
             await worker.PollAsync();
             await worker.LoadAsync();
             await worker.FlushAsync();
