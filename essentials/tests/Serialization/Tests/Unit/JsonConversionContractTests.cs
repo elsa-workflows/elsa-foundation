@@ -107,6 +107,40 @@ public sealed class JsonConversionContractTests
         Assert.Equal("$[\"order\"][\"unknown\"]", unmatched.Path);
     }
 
+    [Fact]
+    public void Constructor_read_annotations_match_the_actual_deserializer_parameter_contract()
+    {
+        // In .NET 10 WhenReading removes the setter, while constructor arguments still read
+        // unless the matching property is ignored Always. Assert the reader, not an inferred rule.
+        var type = typeof(ConstructorWhenReadingDate);
+        var contract = JsonConversionContract.For(type);
+        var options = contract.Options;
+        var member = Assert.Single(options.GetTypeInfo(type).Properties);
+        Assert.Null(member.Set);
+        Assert.NotNull(member.Get);
+        Assert.NotNull(member.AssociatedParameter);
+        var valid = Element("""{"startAt":"2026-10-28T09:15:00+01:00"}""");
+        var direct = valid.Deserialize<ConstructorWhenReadingDate>(options)!;
+        var warnings = new List<JsonConversionDiagnostic>();
+        var scanned = (ConstructorWhenReadingDate)contract.Read(valid, type, warnings.Add)!;
+        Assert.Equal(new DateTime(2026, 10, 28, 8, 15, 0, DateTimeKind.Utc), direct.StartAt);
+        Assert.Equal(direct.StartAt, scanned.StartAt);
+        Assert.Empty(warnings);
+        var offsetless = Element("""{"startAt":"2026-10-28T09:15:00"}""");
+        var directError = Assert.Throws<JsonConversionException>(() => offsetless.Deserialize<ConstructorWhenReadingDate>(options));
+        var scanError = Assert.Throws<JsonConversionException>(() => contract.Read(offsetless, type));
+        Assert.Equal("json-datetime-offset-missing", directError.Code);
+        Assert.Equal(directError.Code, scanError.Code);
+        Assert.Equal("$[\"startAt\"]", scanError.Path);
+
+        var ignored = JsonConversionContract.For(typeof(ConstructorAlwaysIgnoredDate));
+        var ignoredDirect = offsetless.Deserialize<ConstructorAlwaysIgnoredDate>(ignored.Options)!;
+        var ignoredScanned = (ConstructorAlwaysIgnoredDate)ignored.Read(offsetless, typeof(ConstructorAlwaysIgnoredDate), warnings.Add)!;
+        Assert.Equal(default, ignoredDirect.StartAt);
+        Assert.Equal(ignoredDirect.StartAt, ignoredScanned.StartAt);
+        Assert.Empty(warnings);
+    }
+
     [Theory]
     [InlineData(typeof(MemberPopulateReadMembers))]
     [InlineData(typeof(TypePopulateReadMembers))]
@@ -395,6 +429,16 @@ public sealed class JsonConversionContractTests
     {
         public DateTime StartAt { get; } = startAt;
         public Order Order { get; } = order;
+    }
+    [JsonConversion(RefuseUnmatchedMembers = true)]
+    private sealed class ConstructorWhenReadingDate(DateTime startAt)
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenReading)] public DateTime StartAt { get; } = startAt;
+    }
+    [JsonConversion(RefuseUnmatchedMembers = true)]
+    private sealed class ConstructorAlwaysIgnoredDate(DateTime startAt)
+    {
+        [JsonIgnore] public DateTime StartAt { get; } = startAt;
     }
     [JsonConversion(RefuseUnmatchedMembers = true)]
     private sealed class MemberPopulateReadMembers
