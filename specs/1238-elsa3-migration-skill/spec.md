@@ -235,7 +235,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 - **FR-012**: **Test migration.** The skill MUST run `workflows assess` in the Elsa 3 migration image
   (FR-022) with the user's packages folder and settings file, record the report path in the plan, and work through the report: Must fix, then Reconsider,
   then Take into account; root causes before definitions blocked by a dependency; findings that belong to no definition (an unreadable
-  export file) before the rest. It reruns until no such finding is left unaccepted and every remaining
+  export file, a refusal of the whole import) before the rest. It reruns until no such finding is left unaccepted and every remaining
   definition converts or carries a refusal the user accepted, recorded in the plan with the reason.
 - **FR-013**: The skill MUST NOT hard-code diagnostic knowledge. It reads each finding's code, message, JSON path and
   guidance from the report, and it reads the categories and buckets the report defines (spec 1237). The skill folder

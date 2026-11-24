@@ -16,7 +16,7 @@ worked around here.
 | Settings and closure the run used (features loaded) | Check every planned feature is loaded (FR-011). |
 | Dispatched-workflow targets missing from the export | Tell the user (Take into account). |
 | Per definition, the exported file relative to the output folder, and for a reusable also its wrapper workflow's file | Point the user at them under the host folder the skill mounted; the handoff names `migrated/`. |
-| Findings that belong to no definition (input findings, such as an unreadable export file) | Show them first; the run is not finished while one is neither fixed nor accepted (FR-012). |
+| Findings that belong to no definition: input findings (such as an unreadable export file) and run findings (a refusal of the shared import that names no single definition) | Show them first; the run is not finished while one is neither fixed nor accepted (FR-012). |
 
 JavaScript globals used other than as a direct call are to reach the report (a converter change spec 1237 depends on) as ordinary converter findings that name the
 global as a JavaScript-function component; the skill needs nothing special for them.
