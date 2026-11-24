@@ -468,6 +468,16 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.Equal(matchable, diagnostic.Guidance?.Contains($"'<prefix>.{name}'", StringComparison.Ordinal) == true);
     }
 
+    /// <summary>A refused call whose name is also a variable's generated accessor gets no advice to register a host function.</summary>
+    [Fact]
+    public async Task A_refused_call_that_is_also_a_generated_accessor_gets_no_registration_guidance()
+    {
+        var result = await ConvertTextAsync("getConfig('Key')", new Elsa3Variable { Id = "v", Name = "Config", TypeName = "String" });
+
+        Assert.False(result.Succeeded);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Guidance?.Contains("register a host function", StringComparison.Ordinal) == true);
+    }
+
     /// <summary>A refused call to a name no host function can take over gets no advice to register one.</summary>
     [Theory]
     [InlineData("encodeURIComponent('a b')")]

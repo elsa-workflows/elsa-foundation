@@ -727,8 +727,8 @@ public sealed class Elsa3ExpressionRewriter(
 
         /// <summary>
         /// Each member name of a prefixed host function, with the functions that carry it: the Elsa 3 globals they replace.
-        /// A name in <c>ConvertedGlobals</c> (<c>getVariable</c>, the setters, <c>getCorrelationId</c>, …) keeps its
-        /// conversion. Of the Elsa 3 functions the converter refuses, the byte and stream helpers, <c>getConfig</c>, the
+        /// A name in <c>NeverMatchedGlobals</c> (<c>getVariable</c>, the setters, <c>getCorrelationId</c>, JavaScript and CLR
+        /// globals, …) keeps its own conversion or refusal. Of the Elsa 3 functions the converter refuses, the byte and stream helpers, <c>getConfig</c>, the
         /// definition readers and <c>getLastResult</c> can be replaced.
         /// </summary>
         public IReadOnlyDictionary<string, string[]> ReplacedGlobals { get; init; } = new Dictionary<string, string[]>(StringComparer.Ordinal);
@@ -1024,6 +1024,7 @@ public sealed class Elsa3ExpressionRewriter(
             "SuppressedError", "Temporal", "arguments",
             // The global object inherits Object.prototype, so Elsa 3 ran these bare calls natively too.
             "toString", "toLocaleString", "valueOf", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "constructor",
+            "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__",
         };
 
         /// <summary>
@@ -1034,7 +1035,7 @@ public sealed class Elsa3ExpressionRewriter(
         /// function with one of them as its member name does not take it over, and a reference to one is not refused as a
         /// replaced function.
         /// </summary>
-        private static readonly HashSet<string> ConvertedGlobals = new(
+        private static readonly HashSet<string> NeverMatchedGlobals = new(
             PureGlobalCalls
                 .Concat(JavaScriptBuiltInFunctions.Names)
                 .Concat(["toJson", "setOutcome", "setOutcomes", "Date", "getVariable", "setVariable", "getInput", "getOutputFrom"])
@@ -1542,7 +1543,7 @@ public sealed class Elsa3ExpressionRewriter(
                 }
 
                 // An Elsa 3 custom function the host rebuilt as a prefixed Elsa 4 host function (#5664).
-                if (!ConvertedGlobals.Contains(callee.Name) && ReplacedGlobals.TryGetValue(callee.Name, out var replacements))
+                if (!NeverMatchedGlobals.Contains(callee.Name) && ReplacedGlobals.TryGetValue(callee.Name, out var replacements))
                 {
                     ConvertReplacedGlobal(call, callee, replacements);
                     return;
@@ -1647,9 +1648,9 @@ public sealed class Elsa3ExpressionRewriter(
                 if (RefusedHostFunctions.TryGetValue(callee.Name, out var refused))
                 {
                     // A refused Elsa 3 built-in a host function may take over says so (#5664); one it may not does not.
-                    var guidance = ConvertedGlobals.Contains(callee.Name)
-                        ? refused.Guidance
-                        : $"{refused.Guidance} {RebuiltFunctionGuidance(callee.Name)}";
+                    var guidance = CanBeMatched(callee.Name)
+                        ? $"{refused.Guidance} {RebuiltFunctionGuidance(callee.Name)}"
+                        : refused.Guidance;
                     Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, refused.Message, guidance));
                     return;
                 }
@@ -1659,7 +1660,7 @@ public sealed class Elsa3ExpressionRewriter(
                     Issues.Add(new Elsa3ExpressionRewriteIssue(
                         Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                         $"JavaScript calls unknown or unapproved host function '{callee.Name}'.",
-                        ConvertedGlobals.Contains(callee.Name) ? UnmatchableFunctionGuidance : UndeclaredFunctionGuidance(callee.Name)));
+                        CanBeMatched(callee.Name) ? UndeclaredFunctionGuidance(callee.Name) : UnmatchableFunctionGuidance));
                     return;
                 }
             }
@@ -1797,7 +1798,7 @@ public sealed class Elsa3ExpressionRewriter(
             // callback, a stored function) names nothing in Elsa 4, so it is refused (#5691). A write to the name is
             // reported as an undeclared write instead.
             if (node is Identifier replacedValue && !IsDeclared(replacedValue.Name) &&
-                !ConvertedGlobals.Contains(replacedValue.Name) && ReplacedGlobals.TryGetValue(replacedValue.Name, out var replacedBy) &&
+                !NeverMatchedGlobals.Contains(replacedValue.Name) && ReplacedGlobals.TryGetValue(replacedValue.Name, out var replacedBy) &&
                 !IsWriteTarget(replacedValue))
             {
                 if (_reportedReplacedReferences.Add(replacedValue.Name))
@@ -2086,7 +2087,7 @@ public sealed class Elsa3ExpressionRewriter(
         public bool ReusableScriptMayWrite(Script script) =>
             new Elsa3ReusableVariableWriteAnalyzer(CachedScope, IsSessionVariable,
                 name => TryGetAccessorName(name, "get", out var accessor) ? accessor : null,
-                name => !ConvertedGlobals.Contains(name) && ReplacedGlobals.ContainsKey(name)).MayWrite(script);
+                name => !NeverMatchedGlobals.Contains(name) && ReplacedGlobals.ContainsKey(name)).MayWrite(script);
 
         /// <summary>
         /// A Run JavaScript body reads a loop's item or index through args, as a copy: Elsa 4 freezes a loop value in a body
@@ -2290,9 +2291,20 @@ public sealed class Elsa3ExpressionRewriter(
             return false;
         }
 
+        /// <summary>Whether Elsa 3 generated an accessor under <paramref name="name"/>, resolvable or not.</summary>
+        private bool ClashesWithGeneratedAccessor(string name) =>
+            (HasAccessorShape(name, "get", out var accessor) || HasAccessorShape(name, "set", out accessor)) &&
+            !resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor)).NoSource;
+
+        /// <summary>
+        /// Whether registering a host function with <paramref name="name"/> as its member name would convert a call to it, so
+        /// a refusal may name that route (#5664).
+        /// </summary>
+        private bool CanBeMatched(string name) => !NeverMatchedGlobals.Contains(name) && !ClashesWithGeneratedAccessor(name);
+
         /// <summary>
         /// Whether <paramref name="name"/> has the shape of an Elsa 3 generated accessor (<c>get{Name}</c> or
-        /// <c>set{Name}</c>) rather than a built-in, and the <c>{Name}</c> part as written.
+        /// <c>set{Name}</c>), built-in or not, and the <c>{Name}</c> part as written.
         /// </summary>
         private static bool HasAccessorShape(string name, string prefix, out string accessor)
         {
@@ -2300,6 +2312,10 @@ public sealed class Elsa3ExpressionRewriter(
             return accessor.Length > 0 && name.StartsWith(prefix, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Whether <paramref name="name"/> has the shape of an Elsa 3 generated accessor (<c>get{Name}</c> or
+        /// <c>set{Name}</c>) rather than a built-in, and the <c>{Name}</c> part as written.
+        /// </summary>
         private static bool TryGetAccessorName(string name, string prefix, out string accessor)
         {
             accessor = name.Length > prefix.Length ? name[prefix.Length..] : string.Empty;
@@ -2326,8 +2342,7 @@ public sealed class Elsa3ExpressionRewriter(
             // accessor Elsa 3 generated under the name, resolvable or not (two variables, an activity output), clashes.
             // A matched Elsa 3 built-in (getConfig, getLastResult, …) clashes with an accessor too: Elsa 3 generated one for a
             // variable named Config whatever the built-in was called.
-            if ((HasAccessorShape(callee.Name, "get", out var accessor) || HasAccessorShape(callee.Name, "set", out accessor)) &&
-                !resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor)).NoSource)
+            if (ClashesWithGeneratedAccessor(callee.Name))
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
                     Elsa3ImportDiagnosticCodes.AmbiguousReference,

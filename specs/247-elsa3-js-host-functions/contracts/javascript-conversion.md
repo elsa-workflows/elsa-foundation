@@ -50,5 +50,5 @@ what to change so the workflow converts.
 | `DateTime`, `DateTimeOffset`, `TimeSpan`, `Guid`, `Random`, lodash `_`, `moment` | VF-IMP-005 | Unchanged from spec 236 |
 | Elsa 3 `args` | VF-IMP-005 | Unchanged from spec 236 |
 | `getOutputFrom` or helpers with a computed name, or an accessor used as a value | VF-IMP-006 | Unchanged from spec 236 |
-| Any other call to an undeclared function | VF-IMP-005 | "unknown or unapproved host function". Since #5664 a registered host function whose name after its namespace prefix is the Elsa 3 name (`acme.lookupCustomer` for `lookupCustomer`) converts the call, and the guidance says to register one named `<prefix>.<name>` |
+| Any other call to an undeclared function | VF-IMP-005 | "unknown or unapproved host function". Since #5664 a registered host function whose name after its namespace prefix is the Elsa 3 name (`acme.lookupCustomer` for `lookupCustomer`) converts the call, and the guidance says to register one named `<prefix>.<name>`; a standard JavaScript or CLR global is never matched, and its refusal gives no such advice |
 | A body with a top-level `return` whose last statement is neither a `return` nor an expression | VF-IMP-006 | End the script with `return` |
