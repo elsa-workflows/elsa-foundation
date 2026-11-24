@@ -292,8 +292,8 @@ and Timer and Cron are new on the schedule actor. Option A, the recommendation, 
 which is out by owner decision, and every basic control-flow and HTTP activity a designer user expects. Hiding uses
 the existing host baseline: a kernel host defines a named set, for example
 `Elsa:Activities:Availability:Sets:kernel-unsupported`, and lists it under `Exclude:Sets`, so Studio needs no code
-change. The kernel's publication path refuses a
-definition that holds a hidden type, with an error that names the node. Contract: none.
+change. The kernel's registry refuses a definition that
+holds a hidden type, and so does the publication path once K10 connects it, with an error that names the node. Contract: none.
 
 **B. A + Timer and Cron.** It adds a layer 3 schedule actor: a self-timer per schedule that publishes to the
 workflow's start key at each occurrence. This is buildable on the contract as it stands, with no change. It adds an
