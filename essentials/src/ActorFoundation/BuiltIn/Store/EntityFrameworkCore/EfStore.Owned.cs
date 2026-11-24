@@ -400,7 +400,7 @@ public sealed partial class EfStore
         var single = Q("""m."Partition" = {0} AND m."Seen" < {1}""");
         await using var db = create();
         await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
-        var poll = PollSql(db.UsesRootOperatorProtocol);
+        var poll = PollSql(db);
         if (!poll.Contains(single, StringComparison.Ordinal)) throw new InvalidOperationException("The poll has no partition predicate where the set poll replaces it.");
         var set = Q($"""m."Partition" IN ({List(owned.Select(f => f.Partition).Order())}) AND m."Seen" < {EpochOf(owned, "m.\"Partition\"")}""");
         var sql = string.Format(System.Globalization.CultureInfo.InvariantCulture, poll.Replace(single, set, StringComparison.Ordinal), 0, 0, (long)horizon.TotalMilliseconds, limit);

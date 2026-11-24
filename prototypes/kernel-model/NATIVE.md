@@ -775,6 +775,24 @@ These profiles qualify generated roots with no attached work. Descendant and
 job cascades, parked work, retention scheduling and production reply transport
 have separate acceptance cases.
 
+### PostgreSQL first Park opening
+
+The opt-in protocol 19 qualification runs a public actor that throws while
+handling a direct input. One fenced transaction keeps its prior checkpoint
+body and public header, updates the status and fault, records the Park time
+and revision, keeps the failed occurrence with its full envelope, removes
+the actor's subscriptions and writes the Park journal entry. An ordinary
+receipt retry still returns its original admission. The sweep preserves the
+kept occurrence after its receipt expires, and a later owner leaves queued
+input pending.
+
+Run `pg-root-park-opening owned checked` from a locked Release build of
+Native.Run against an empty PostgreSQL database. Repeat with each writer
+and fence mode in its own database. The fixture uses a generated root and
+direct input. The next provider increments cover fresh arrivals while
+parked, public inspection and recovery controls, and composition with the
+Workbench preview.
+
 ## 10. Private durable lexical-resource probe
 
 The [lexical runner](../../essentials/tests/Workflows/Runtime/Native/Scopes/Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.

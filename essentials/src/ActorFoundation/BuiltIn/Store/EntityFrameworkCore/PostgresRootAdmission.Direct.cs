@@ -95,6 +95,7 @@ internal sealed partial class PostgresRootAdmission
         if (status != InstanceStatus.Running)
         {
             var terminal = status == InstanceStatus.Finished ||
+                status == InstanceStatus.Faulted && db.UsesRootParkOpening ||
                 status == InstanceStatus.Faulted && db.UsesRootTimedJobSettlement &&
                 await IsQualifiedTerminalAsync(db, address, tenant, reference, InstanceStatus.Faulted,
                     EfStore.TimedRootStateFamily, cancellationToken) ||

@@ -357,6 +357,11 @@ public sealed partial class EfStore
 
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
+        if (turn.OpensPark)
+        {
+            await using var profile = create();
+            if (profile.UsesRootParkOpening) return await PrepareRootParkOpeningAsync(root, turn, cancellationToken);
+        }
         if (turn.Delete) return await PrepareRootRetirementAsync(root, turn, cancellationToken);
         if (turn.Row is null)
         {
