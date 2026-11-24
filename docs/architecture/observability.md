@@ -41,7 +41,7 @@ work extends the owner's 13 November Park decision; the owner adopted the extens
   ([Viewer.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Viewer.cs)).
 - **Releasing a partition:** `IKernelStore.ReleaseAsync` and `Worker.ReleaseAsync`, used by balancing.
 - **Not built:** recovery or discard of parked work, inbox inspection, an operator API, a handover command. The
-  [native intervention experiment](../../prototypes/kernel-model/models/Native.Recovery.Run/README.md) retries a fault
+  [native intervention experiment](../../essentials/tests/Workflows/Runtime/Native/Recovery/Run/README.md) retries a fault
   inside a still-running model; it does not recover a parked instance.
 
 ## Trace context on every message

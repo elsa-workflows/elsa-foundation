@@ -949,6 +949,12 @@
   <Folder Name="/essentials/tests/Workflows/Runtime/Graph/">
     <Project Path="essentials/tests/Workflows/Runtime/Graph/Tests/Elsa.Workflows.Runtime.Graph.Tests.csproj" />
   </Folder>
+  <Folder Name="/essentials/tests/Workflows/Runtime/Native/Scopes/">
+    <Project Path="essentials/tests/Workflows/Runtime/Native/Scopes/Run/Elsa.Workflows.Runtime.Native.Scopes.Run.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/Workflows/Runtime/Native/Recovery/">
+    <Project Path="essentials/tests/Workflows/Runtime/Native/Recovery/Run/Elsa.Workflows.Runtime.Native.Recovery.Run.csproj" />
+  </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/">
     <Project Path="essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />
   </Folder>
