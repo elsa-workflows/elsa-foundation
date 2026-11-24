@@ -265,6 +265,11 @@ static class ProviderWatchdog
             await command.ExecuteNonQueryAsync(cancellationToken);
             if (disconnectCheck is not null)
             {
+                if (command.Connection is NpgsqlConnection { PostgreSqlVersion.Major: >= 17 })
+                {
+                    command.CommandText = "SET LOCAL transaction_timeout = 0";
+                    await command.ExecuteNonQueryAsync(cancellationToken);
+                }
                 command.CommandText = disconnectCheck == "on"
                     ? "SET LOCAL client_connection_check_interval = '100ms'"
                     : "SET LOCAL client_connection_check_interval = 0";
