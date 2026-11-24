@@ -495,10 +495,10 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         while (true)
         {
             try { return await CommitOnceAsync(batch, waits, careful, sentAt, root, cancellationToken); }
-            catch (OversizedRootBirth)
+            catch (RootPreflightFailure error)
             {
                 if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new Committed(false, 0, []);
-                throw;
+                throw error.StoreFailure;
             }
             catch (PostgresException error) when (error.SqlState == PgCommitWindow.Expired)
             {
@@ -564,7 +564,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         if (OwnedCommit) return await CommitOwnedAsync(batch, waits, sentAt, root, cancellationToken);      // EfStore.Owned.cs
         await using var db = create();
-        if (root is not null) await root.CheckBeforeWriteAsync(db, cancellationToken);
+        if (root is not null) await CheckRootBeforeWriteAsync(root, db, cancellationToken);
         foreach(var turn in batch.Turns.Where(t=>t.Row is {} r && t.Instance!=r.Id))
         {
             db.AliasGuards.Add(turn.Row!.Id,turn.Instance);
@@ -690,6 +690,22 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // partition's owner writes its instances' waits, under the fence, so nothing else writes these rows meanwhile.
     private const string SubscribeIfAbsent = """INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ({0}, {1}, {2}, {3}) ON CONFLICT DO NOTHING""";
     private const string Unsubscribing = """DELETE FROM "Subscriptions" WHERE "Key" = {0} AND "Instance" = {1} AND "Wait" = {2} AND "Partition" = {3}""";
+
+    private sealed class RootPreflightFailure(StoreException failure) : Exception(failure.Message, failure)
+    {
+        internal StoreException StoreFailure { get; } = failure;
+    }
+
+    private async ValueTask CheckRootBeforeWriteAsync(QualifiedRootCheckpoint root, KernelDb db, CancellationToken cancellationToken)
+    {
+        try { await root.CheckBeforeWriteAsync(db, cancellationToken); }
+        catch (Exception error) when (error is not OperationCanceledException &&
+            Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
+        {
+            // Preflight runs before either writer can test the fence.
+            throw new RootPreflightFailure(failure);
+        }
+    }
 
     private async Task<bool> HoldsAfterFailureAsync(CommitBatch batch, CancellationToken cancellationToken)
     {

@@ -209,7 +209,7 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
         if (flags.Contains("--job-registry"))
             await RootCheckpointLimitChecks.RunJobs(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
         else
-            await RootCheckpointLimitChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient(), flags.Contains("--mixed-text"));
+            await RootCheckpointLimitChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient(), flags.Contains("--mixed-text"), flags.Contains("--unrepresentable-text"));
     }
 
     internal async Task CheckFirstRootAsync()

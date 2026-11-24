@@ -47,7 +47,7 @@ public sealed partial class EfStore
         {
             var (escape, state) = StoredState.EncodingParts(Row);
             var bytes = await MeasureRootContentAsync(db, RootStateFamily(db).Length + escape.Length, state, Header, Row.Jobs, cancellationToken);
-            if (bytes > RootContentBytes) throw new OversizedRootBirth();
+            if (bytes > RootContentBytes) throw new StoreException(Failure.Definite, RootContentFailure);
         }
 
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
@@ -178,8 +178,6 @@ public sealed partial class EfStore
 
     private const string RootContentFailure = "The encoded PostgreSQL checkpoint exceeds its storage budget.";
 
-    private sealed class OversizedRootBirth() : StoreException(Failure.Definite, RootContentFailure);
-
     private static ValueTask<long> MeasureRootContentAsync(KernelDb db, int framing, string state, string header,
         string? jobs, CancellationToken cancellationToken)
     {
@@ -189,9 +187,13 @@ public sealed partial class EfStore
         var units = (long)state.Length + header.Length + (jobs?.Length ?? 0);
         if (framing + 4 * units <= RootContentBytes)
             return new(framing + 4 * units);
-        if (Encoding.UTF8.GetByteCount(state) == state.Length && Encoding.UTF8.GetByteCount(header) == header.Length &&
-            (jobs is null || Encoding.UTF8.GetByteCount(jobs) == jobs.Length))
-            return new(framing + units);
+        var utf8 = (long)Encoding.UTF8.GetByteCount(state) + Encoding.UTF8.GetByteCount(header)
+            + (jobs is null ? 0 : Encoding.UTF8.GetByteCount(jobs));
+        // Every non-ASCII UTF-16 code unit adds at least one byte to the UTF-8 count.
+        // Each such unit can add up to three bytes in the database encoding.
+        var bound = framing + units + 3 * (utf8 - units);
+        if (utf8 == units || bound <= RootContentBytes)
+            return new(bound);
         return new(db.Database.SqlQuery<long>($"""
             SELECT {framing}::bigint + octet_length({state}) + octet_length({header}) + coalesce(octet_length({jobs}::text), 0) AS "Value"
             """).SingleAsync(cancellationToken));

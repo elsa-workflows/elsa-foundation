@@ -1,5 +1,6 @@
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Kernel.Ef.Conformance;
 
@@ -7,7 +8,7 @@ internal static class RootCheckpointLimitChecks
 {
     private const int Budget = 16 * 1024 * 1024 - 24 * 1024;
 
-    internal static async Task Run(Func<KernelDb> create, EfStore store, EfStore cold, bool mixedText)
+    internal static async Task Run(Func<KernelDb> create, EfStore store, EfStore cold, bool mixedText, bool unrepresentableText)
     {
         const string tenant = "checkpoint-limit";
         var typeData = mixedText ? "<storage>" : "<storage>🌐";
@@ -29,6 +30,24 @@ internal static class RootCheckpointLimitChecks
 
         var target = await Admit("target");
         var id = target.Creator.Target.Id;
+        if (unrepresentableText)
+        {
+            // EUC_JP cannot store this scalar. Passing the cheap size bound forces
+            // the provider measurement before either transactional fence runs.
+            var unrepresentable = fit + "🌐";
+            Check(!(await First(target, unrepresentable, fence with { Epoch = fence.Epoch - 1 })).Landed,
+                "a stale fence wins over the PostgreSQL measurement conversion error");
+            try
+            {
+                await First(target, unrepresentable, fence);
+                throw new InvalidOperationException("The current owner did not report the conversion error.");
+            }
+            catch (StoreException error) when (error is
+                { Failure: Failure.Definite, InnerException: PostgresException { SqlState: "22P05" } })
+            {
+                Console.WriteLine("ok a current owner reports the conversion error as a definite failure");
+            }
+        }
         Check(!(await First(target, overflow, fence with { Epoch = fence.Epoch - 1 })).Landed,
             "a stale fence wins over the oversized first checkpoint");
         await Reject(() => First(target, overflow, fence));
