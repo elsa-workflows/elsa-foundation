@@ -25,6 +25,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | [`Graph`](../../essentials/src/Workflows/Runtime/Graph) | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
 | `../../essentials/tests/Workflows/Runtime/Graph/Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
 | `models/Native` | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
+| `../../essentials/tests/Workflows/Runtime/Native/Legacy` | Nonpackable adapter that runs Native through the legacy simulation turn contract |
 | `../../essentials/tests/ActorFoundation/Native/Run` | Native smoke tests, cost and memory measurement, PostgreSQL Core Preview |
 | `../../essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs`; the commit as the store's own SQL in `EfStore.Owned.cs` and the `*CommitDialect.cs` files ([COMMIT-SQL.md](COMMIT-SQL.md)) |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`) |

@@ -264,7 +264,6 @@
   <Folder Name="/prototypes/kernel-model/models/">
     <Project Path="prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
     <Project Path="prototypes/kernel-model/models/Native.Activities/Kernel.Native.Activities.csproj" />
-    <Project Path="prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj" />
     <Project Path="prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj" />
     <Project Path="prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj" />
   </Folder>
@@ -948,6 +947,9 @@
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Graph/">
     <Project Path="essentials/tests/Workflows/Runtime/Graph/Tests/Elsa.Workflows.Runtime.Graph.Tests.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/Workflows/Runtime/Native/">
+    <Project Path="essentials/tests/Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Native/Scopes/">
     <Project Path="essentials/tests/Workflows/Runtime/Native/Scopes/Run/Elsa.Workflows.Runtime.Native.Scopes.Run.csproj" />
