@@ -4,7 +4,7 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    private sealed record LockedRoot(string Header, long ContentBytes);
+    private sealed record LockedRoot(string Header, long ContentBytes, int HeaderBytes);
 
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
         string State, string Header, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
@@ -15,14 +15,19 @@ public sealed partial class EfStore
         {
             var family = RootStateFamily(db);
             var jobs = JobState is null ? Current.Jobs : JobState.Jobs;
-            var contentBytes = await MeasureRootContentAsync(db, family.Length, State, Header, jobs, cancellationToken, comparePriorSize: true);
-            var overBudget = contentBytes > RootContentBytes;
+            var terminalHeader = db.UsesRootTermination && Status == InstanceStatus.Running
+                ? RootTerminalHeaderBytes(Current.Model, Current.Definition) : 0;
+            var reserve = Math.Max(0, terminalHeader - System.Text.Encoding.UTF8.GetByteCount(Header));
+            var projectedBytes = await MeasureRootContentAsync(db, family.Length + reserve, State, Header, jobs, cancellationToken,
+                comparePriorSize: true);
+            var overBudget = projectedBytes > RootContentBytes;
 
             var home = new InstanceRef(Current.Actor.Id).Partition;
             var locked = await db.Database.SqlQuery<LockedRoot>($"""
                 SELECT i."FoundationHeader" AS "Header", CASE WHEN {overBudget}
                     THEN octet_length(i."State")::bigint + octet_length(i."FoundationHeader") + coalesce(octet_length(i."Jobs"), 0)
-                    ELSE 0 END AS "ContentBytes"
+                    ELSE 0 END AS "ContentBytes",
+                    CASE WHEN {overBudget} THEN octet_length(i."FoundationHeader") ELSE 0 END AS "HeaderBytes"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Reference" = i."FoundationReference" AND b."Tenant" = i."FoundationTenant"
                     AND b."Actor" = i."Id" AND b."Partition" = i."Partition"
@@ -37,9 +42,12 @@ public sealed partial class EfStore
             var old = DurableKeyJson.Read<RootHeader>(prior.Header);
             if (old.Model != Current.Model || old.Definition != Current.Definition) return false;
 
-            // Predecessors omitted the framing and job registry. A row above today's
-            // budget can still settle input if the same locked revision does not grow.
-            if (overBudget && contentBytes > prior.ContentBytes)
+            // Compare an old over-budget row under the exact locked revision. The
+            // physical write and its projection may each stay put or shrink.
+            var contentBytes = projectedBytes - reserve;
+            var priorProjection = prior.ContentBytes + Math.Max(0, terminalHeader - prior.HeaderBytes);
+            if (overBudget && (contentBytes > Math.Max(RootContentBytes, prior.ContentBytes) ||
+                projectedBytes > Math.Max(RootContentBytes, priorProjection)))
                 throw new StoreException(Failure.Definite, RootContentFailure);
 
             if (OperatorSuspension is not null && !db.UsesRootOperatorProtocol || OperatorTermination && !db.UsesRootTermination)

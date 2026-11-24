@@ -649,6 +649,12 @@ Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database and run from the rep
 dotnet run -c Release --project essentials/tests/ActorFoundation/Native/Run -- pg-root-terminate owned checked fallback
 ```
 
+The format-11 writer also reserves the fully encoded terminal header on live writes.
+The provider fixture proves the boundary with an escaped state, 16 KiB of `TypeData`
+and four labels whose keys and values each use their full limit. Run the EF store
+conformance command `postgres <connection> root-checkpoint-limit --terminal-header`
+on a disposable PostgreSQL server.
+
 ## 10. Private durable lexical-resource probe
 
 The [lexical runner](../../essentials/tests/Workflows/Runtime/Native/Scopes/Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.

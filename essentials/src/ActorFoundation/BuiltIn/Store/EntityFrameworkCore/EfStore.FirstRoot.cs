@@ -36,6 +36,16 @@ public sealed partial class EfStore
 
     private sealed record RootHeader(string Model, string Definition, string TypeData, KeyValuePair<string, string>[] Labels, bool EscapedState);
 
+    // DurableKeyJson writes JSON escapes of up to six bytes per admitted UTF-8 byte.
+    // A tagged UTF-16 wire is smaller than that bound. Charge all four label wrappers
+    // as well as the two bounded label strings in each wrapper.
+    private static readonly int RootVariableHeaderBytes = 6 * HeaderLimits.VariableHeaderReserve +
+        DurableKeyJson.Write(Enumerable.Repeat(new KeyValuePair<string, string>("", ""), HeaderLimits.MaxLabels).ToArray()).Length - 2;
+
+    private static int RootTerminalHeaderBytes(string model, string definition) =>
+        Encoding.UTF8.GetByteCount(DurableKeyJson.Write(new RootHeader(model, definition, "", [], false))) + RootVariableHeaderBytes;
+
+
     private abstract record QualifiedRootCheckpoint(long JournalRevision)
     {
         internal virtual long RevisionFor(string actor) => JournalRevision;
@@ -48,7 +58,11 @@ public sealed partial class EfStore
         internal override async ValueTask CheckBeforeWriteAsync(KernelDb db, CancellationToken cancellationToken)
         {
             var (escape, state) = StoredState.EncodingParts(Row);
-            var bytes = await MeasureRootContentAsync(db, RootStateFamily(db).Length + escape.Length, state, Header, Row.Jobs, cancellationToken);
+            var terminalHeader = db.UsesRootTermination && Row.Status == InstanceStatus.Running
+                ? RootTerminalHeaderBytes(Creator.Start!.Model, Creator.Start.Definition) : 0;
+            var reserve = Math.Max(0, terminalHeader - Encoding.UTF8.GetByteCount(Header));
+            var bytes = await MeasureRootContentAsync(db, RootStateFamily(db).Length + escape.Length + reserve, state, Header,
+                Row.Jobs, cancellationToken);
             if (bytes > RootContentBytes) throw new StoreException(Failure.Definite, RootContentFailure);
         }
 

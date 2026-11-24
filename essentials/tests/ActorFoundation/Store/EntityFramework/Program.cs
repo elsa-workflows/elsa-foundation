@@ -206,7 +206,9 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
     {
         await using var fixture = (Provided)await CreateAsync(1, new());
         Console.WriteLine(Name);
-        if (flags.Contains("--job-registry"))
+        if (flags.Contains("--terminal-header"))
+            await RootTerminalHeaderChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
+        else if (flags.Contains("--job-registry"))
             await RootCheckpointLimitChecks.RunJobs(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
         else
             await RootCheckpointLimitChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient(), flags.Contains("--mixed-text"), flags.Contains("--unrepresentable-text"));
@@ -235,8 +237,11 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
             _ => builder.UseSqlite(connection),
         };
         var options = builder.AddInterceptors(interceptors).Options;
-        return engine == "postgres" && flags.Contains("--job-registry")
-            ? () => KernelDb.ForPostgresRootJobs(options) : () => new KernelDb(options);
+        if (engine == "postgres" && flags.Contains("--terminal-header"))
+            return () => KernelDb.ForPostgresRootTerminations(options);
+        if (engine == "postgres" && flags.Contains("--job-registry"))
+            return () => KernelDb.ForPostgresRootJobs(options);
+        return () => new KernelDb(options);
     }
 
     private EfStore Store(Func<KernelDb> create, bool fenceInBatch, bool unfenced = false) => new(create, engine != "sqlite", fenceInBatch)
