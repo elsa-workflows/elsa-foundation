@@ -128,7 +128,7 @@ public sealed class DispatchWorkflow(
         var inputs = Inputs ?? new Dictionary<string, JsonElement>();
         var inputValidation = inputValidator.Validate(
             inputContract,
-            inputs);
+            inputs, childExecutable.ValuePolicies);
         if (!inputValidation.IsValid)
         {
             throw new InvalidOperationException(

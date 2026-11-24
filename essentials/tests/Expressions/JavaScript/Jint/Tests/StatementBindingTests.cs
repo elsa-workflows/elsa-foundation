@@ -104,7 +104,7 @@ public sealed class StatementBindingTests
     [Fact]
     public async Task Statement_body_without_a_value_is_rejected()
     {
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             EvaluateAsync("const local = 1;"));
 
         Assert.Contains("undefined is not supported", exception.Message, StringComparison.Ordinal);

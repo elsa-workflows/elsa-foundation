@@ -61,7 +61,9 @@ public sealed class ActivityFaultMasking(IRuntimeSecretMask mask, string activit
     /// itself bypasses masking (a recorded limit, contracts/withheld-values-and-masking.md).
     /// </summary>
     public Exception Mask(Exception exception) =>
-        _protectedStateReads?.Invoke() == true ? new SecretMaskedException(exception, ValueFree) :
+        _protectedStateReads?.Invoke() == true ? new SecretMaskedException(exception, text =>
+            exception is Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure valueFree && StringComparer.Ordinal.Equals(text, exception.Message)
+                ? valueFree.ValueFreeMessage : ValueFree(text)) :
         !mask.HasRegistrations(activityExecutionId) || ActivationFailures.Classify(exception) is not null
             ? exception
             : new SecretMaskedException(exception, text => mask.Mask(activityExecutionId, text));

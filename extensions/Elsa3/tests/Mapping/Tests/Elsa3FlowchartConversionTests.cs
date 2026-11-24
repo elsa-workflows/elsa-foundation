@@ -269,7 +269,7 @@ public sealed class Elsa3FlowchartConversionTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         Assert.Equal(["a:Done->stop"], Connections(result.Value!.State.RootActivity!));
-        Assert.Equal(Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved, Assert.Single(result.Diagnostics).Code);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved, Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES").Code);
     }
 
     [Fact]

@@ -41,12 +41,14 @@ public static class ActivityContractViewMappings
             x.SourceRepresentation)).ToArray(),
         view.Outcomes.Select(x => new ActivityOutcomeContract(x.ReferenceKey, x.Name, x.IsEmitted, x.Description)).ToArray());
 
-    public static ActivityContractView ToView(this ActivityContract contract) => new(
+    public static ActivityContractView ToView(this ActivityContract contract) => ToView(contract, pinClrNullability: false);
+
+    public static ActivityContractView ToView(this ActivityContract contract, bool pinClrNullability) => new(
         contract.ContractSchemaVersion,
         contract.Inputs.Select(x => new ActivityInputContractView(
             x.ReferenceKey,
             x.Name,
-            x.Type.ToView(),
+            x.Type.ToView() with { SupportsNull = pinClrNullability ? x.IsNullable : null },
             x.IsRequired,
             x.IsNullable,
             x.Default is null ? null : new(x.Default.Syntax, x.Default.Value.Clone()),
@@ -61,7 +63,7 @@ public static class ActivityContractViewMappings
         contract.Outputs.Select(x => new ActivityOutputContractView(
             x.ReferenceKey,
             x.Name,
-            x.Type.ToView(),
+            x.Type.ToView() with { SupportsNull = pinClrNullability ? x.IsNullable : null },
             x.IsRequired,
             x.IsNullable,
             x.StorageDriverKey,

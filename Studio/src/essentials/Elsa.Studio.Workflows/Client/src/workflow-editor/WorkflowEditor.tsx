@@ -1553,7 +1553,7 @@ export function WorkflowEditor({
   const blockPromotion: BlockPromotionHost = {
     resourceKind: "workflow-definition",
     publicInputs: (draft.state.inputs ?? []).filter((input): input is WorkflowInput => Boolean(input) && typeof input === "object")
-      .map(input => ({ referenceKey: input.referenceKey, name: input.name, type: input.type, isRequired: input.isRequired, isNullable: input.isNullable })),
+      .map(input => ({ referenceKey: input.referenceKey, name: input.name, type: input.type, isRequired: input.isRequired })),
     capabilities: promotionCapabilities.data ?? null,
     capabilitiesState: promotionCapabilities.isPending ? "loading" : promotionCapabilities.isError ? "failed" : "ready",
     expressionBoundary: promotionExpressionSupport,

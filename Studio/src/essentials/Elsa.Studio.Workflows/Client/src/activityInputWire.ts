@@ -139,9 +139,9 @@ function normalizeStoredArgument(record: Record<string, unknown>): Record<string
 
 function normalizeArgumentDefinition(record: Record<string, unknown>, keepStorage: boolean, keepInputDefaults = false): Record<string, unknown> {
   const next = normalizeArgumentRecord(record, keepStorage);
-  const isNullable = record.isNullable ?? record.IsNullable;
   delete next.IsNullable;
-  next.isNullable = typeof isNullable === "boolean" ? isNullable : false;
+  delete next.isNullable;
+  delete next.IsNullable;
   if (keepInputDefaults) {
     const defaultValue = ownValue(record, ["defaultValue", "DefaultValue"]);
     const defaultSyntax = ownValue(record, ["defaultSyntax", "DefaultSyntax"]);

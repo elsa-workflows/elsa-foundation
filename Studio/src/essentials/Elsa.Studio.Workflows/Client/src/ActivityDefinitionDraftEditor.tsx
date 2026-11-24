@@ -1120,6 +1120,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
       publishedRunAvailability={publishedTestRunAvailability}
       definitionLabel={definitionLabel}
       inputEditors={inputEditors}
+      typeCapabilities={capabilitiesQuery.data?.types ?? []}
       expressionEditors={expressionEditors}
       prepareExactRevision={prepareExactTestRunRevision}
       onFocusDiagnostic={focusDiagnostic}

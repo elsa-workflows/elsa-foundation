@@ -17,6 +17,20 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Serialization` �
 - `Elsa.Serialization` — `BuiltInJsonConverterSource` *(intra-domain — default)*
 - `Elsa.Expressions` — `ExpressionsJsonConverterSource` *(cross-domain — registers expression-related converters)*
 
+### `IRuntimeTypeNullability` *(Core, `Elsa.Serialization.Core`)*
+
+- **Kind:** Replacement: one implementation is active per host. Register a singleton with `services.Replace(...)`;
+  competing registrations are refused by the startup composition check.
+- **Contract:** `TryGetSupportsNull(alias, out supportsNull)` finds the activated scalar alias's null contract.
+  Returning false means unknown, not non-nullable. Collection nullability remains the caller's type-shape rule.
+- **Default:** internal `RuntimeTypeNullability`, registered by `SerializationFeature`, snapshots the shared
+  `IVariableTypeDescriptorProvider` contributions without resolving the design picker catalog. Alias matching follows
+  the case-insensitive `IWellKnownTypeRegistry`, including convention aliases through its canonical lookup.
+- **Consumers:** workflow variable reads, assignments, captures, graph execution and operator alterations. Publishing
+  and picker APIs independently dispatch `IVariableTypeDescriptorCatalog` over the shared descriptor shape.
+- **Replace when:** a host supplies its own activated runtime type metadata authority. It must preserve the contracts
+  of the same aliases used during publication; a CLR reference-type fallback does not override a known null contract.
+
 ### `ITypeConverter` *(Core, `Elsa.Serialization.Core`)*
 - **Kind:** Contributor (a custom conversion `IObjectConverter` tries first).
 - **Signature:** `Type TargetType { get; set; }` and `object? Convert(object? value);`

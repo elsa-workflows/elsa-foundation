@@ -136,6 +136,7 @@ public sealed class RunJavaScriptProtectedFailureTests
         }
 
         public void WriteJson(StepVariableTarget target, JsonNode? value) { }
+        public void WriteUndefined(StepVariableTarget target) { }
         public T Get<T>(VariableReference<T> reference) => throw new NotSupportedException();
         public T Get<T>(ReadOnlyVariableReference<T> reference) => throw new NotSupportedException();
         public void Set<T>(VariableReference<T> reference, T value) => throw new NotSupportedException();

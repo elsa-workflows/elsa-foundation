@@ -446,4 +446,12 @@ public static class RuntimeMetadataKeys
     public const string StimulusHash = "runtime.stimulusHash";
     public const string StimulusType = "runtime.stimulusType";
     public const string SuspendReason = "runtime.suspendReason";
+    /// <summary>The script body input of an activity whose consumed result distinguishes no value from null.</summary>
+    /// <summary>Retains an external minimum policy when an explicit null has no external payload to store.</summary>
+    /// <summary>Prior committed absent inputs retained by a closed-boundary retry, as reference keys.</summary>
+    public const string RetryAbsentBoundaryInputs = "runtime.retry.absentBoundaryInputs";
+    public const string NullMinimumStorage = "runtime.null.minimumStorage";
+    public const string ScriptResultInputKey = "runtime.script.result-input";
+    /// <summary>A literal script body contains no return statement; a consumed result cannot be published.</summary>
+    public const string ScriptBodyWithoutReturn = "runtime.script.without-return";
 }

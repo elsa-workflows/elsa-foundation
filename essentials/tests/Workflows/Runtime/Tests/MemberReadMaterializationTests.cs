@@ -37,6 +37,44 @@ public sealed class MemberReadMaterializationTests
     public static TheoryData<string, bool> Roles => new() { { "request", false }, { "request", true }, { "variable", false }, { "variable", true } };
 
     [Theory]
+    [InlineData(false, "inline")]
+    [InlineData(true, "inline")]
+    [InlineData(false, "encrypted")]
+    [InlineData(true, "encrypted")]
+    [InlineData(false, "external")]
+    [InlineData(true, "external")]
+    public async Task Null_substitution_precedes_destination_storage_for_literal_and_member_reads(bool member, string storage)
+    {
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance,
+            storage == "external" ? DurableValueStorage.External : DurableValueStorage.Inline,
+            requiresEncryption: storage == "encrypted", metadata: storage == "external"
+                ? new Dictionary<string, string> { [ValuePolicyCombiner.StorageProfileMetadataKey] = "external" } : null);
+        var binding = member
+            ? new RuntimeInputBinding("message", Number, policy, RuntimeInputBindingSource.WorkflowRequestMember,
+                Deferred(["address", "zip"]), workflowRequest: new("customer"))
+            : new RuntimeInputBinding("message", Number, policy, RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Null(Number, policy));
+        var node = Node(binding);
+        var executable = new WorkflowExecutable(new("artifact", "definition", "version", "1", "hash"), node,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(),
+            null, null, null, null, IncidentStrategyBuiltIns.FaultReference, null, null, new(true, false));
+        var warnings = new ExecutionWarningCollector();
+        var context = new RuntimeInputBindingResolutionContext("workflow", "invocation-1", executable: executable,
+            workflowInputEnvelopes: Context("request", false).WorkflowInputEnvelopes) { Warnings = warnings };
+        var store = Store();
+        var snapshot = await new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new TypeRegistry(), externalPayloadStore: store)
+            .MaterializeSnapshotAsync(node, "invocation-1", context, Now);
+        var value = snapshot.Values["message"];
+        if (storage == "encrypted") Assert.Equal(ValuePresence.Withheld, value.Presence);
+        else if (storage == "external")
+        {
+            Assert.NotNull(value.ExternalReference); Assert.Null(value.InlineValue);
+            Assert.Equal(0, Assert.Single(store.Written).GetInt32());
+        }
+        else Assert.Equal(0, value.InlineValue!.Value.GetInt32());
+        Assert.Equal("VF-NULL-001", Assert.Single(warnings.Warnings).Code);
+    }
+
+    [Theory]
     [MemberData(nameof(Roles))]
     public async Task The_snapshot_records_exactly_the_selected_member(string role, bool external)
     {
@@ -519,8 +557,12 @@ public sealed class MemberReadMaterializationTests
 
     private sealed class RecordingExternalPayloadStore(IReadOnlyDictionary<string, JsonElement> payloads) : IExternalPayloadStore
     {
-        public ValueTask<DurableValueExternalReference> WriteAsync(ExternalPayloadWriteRequest request, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new DurableValueExternalReference(request.StorageProfile, $"payloads/{request.OwnerKey}", new Dictionary<string, string>()));
+        public List<JsonElement> Written { get; } = [];
+        public ValueTask<DurableValueExternalReference> WriteAsync(ExternalPayloadWriteRequest request, CancellationToken cancellationToken = default)
+        {
+            Written.Add(request.Payload.Clone());
+            return ValueTask.FromResult(new DurableValueExternalReference(request.StorageProfile, $"payloads/{request.OwnerKey}", new Dictionary<string, string>()));
+        }
 
         public ValueTask<JsonElement> ReadAsync(DurableValueExternalReference reference, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(payloads[reference.Locator].Clone());

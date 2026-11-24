@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Services;
 using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -17,7 +18,10 @@ internal sealed class TriggerInputMapper(IWorkflowExecutableInputValidator valid
         .Select(handler => handler.Language).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     public WorkflowExecutableInputValidation ValidateMappings(WorkflowExecutableInputContract contract,
-        IReadOnlyList<TriggerInputMapping> mappings)
+        IReadOnlyList<TriggerInputMapping> mappings) => ValidateMappings(contract, mappings, WorkflowValuePolicies.Off);
+
+    public WorkflowExecutableInputValidation ValidateMappings(WorkflowExecutableInputContract contract,
+        IReadOnlyList<TriggerInputMapping> mappings, WorkflowValuePolicies policies, TriggerInputSemantics semantics = TriggerInputSemantics.Native)
     {
         ArgumentNullException.ThrowIfNull(contract);
         ArgumentNullException.ThrowIfNull(mappings);
@@ -32,20 +36,25 @@ internal sealed class TriggerInputMapper(IWorkflowExecutableInputValidator valid
         }
         if (findings.Count > 0) return WorkflowExecutableInputValidation.Failure(findings);
         var known = validator.ValidateKnownInputs(contract, mappings.Where(mapping => mapping.Binding is TriggerLiteralBinding)
-            .Select(mapping => KeyValuePair.Create(mapping.InputName, ((TriggerLiteralBinding)mapping.Binding).Value)));
+            .Select(mapping => KeyValuePair.Create(mapping.InputName, ((TriggerLiteralBinding)mapping.Binding).Value)), policies);
         if (!known.IsValid) return known;
         var names = mappings.Select(mapping => mapping.InputName).ToHashSet(StringComparer.Ordinal);
-        foreach (var input in contract.Inputs.Where(input => input.IsRequired && input.DefaultValue is null && !names.Contains(input.Name)))
+        foreach (var input in contract.Inputs.Where(input => input.IsRequired && !names.Contains(input.Name) && (semantics == TriggerInputSemantics.Native || !input.DefaultValue.HasValue)))
             findings.Add(new(WorkflowExecutableInputValidationReasonCodes.MissingRequired,
-                "A required workflow input needs a mapping or a declared default.", input.Name));
+                "A required workflow input needs a mapping.", input.Name));
         return findings.Count == 0 ? known : WorkflowExecutableInputValidation.Failure(findings);
     }
 
     public async ValueTask<WorkflowExecutableInputValidation> MapAsync(WorkflowExecutableInputContract contract,
-        IReadOnlyList<TriggerInputMapping> mappings, JsonElement sourceEnvelope, CancellationToken cancellationToken = default)
+        IReadOnlyList<TriggerInputMapping> mappings, JsonElement sourceEnvelope, CancellationToken cancellationToken = default) =>
+        await MapAsync(contract, mappings, sourceEnvelope, WorkflowValuePolicies.Off, cancellationToken);
+
+    public async ValueTask<WorkflowExecutableInputValidation> MapAsync(WorkflowExecutableInputContract contract,
+        IReadOnlyList<TriggerInputMapping> mappings, JsonElement sourceEnvelope, WorkflowValuePolicies policies,
+        CancellationToken cancellationToken = default, TriggerInputSemantics semantics = TriggerInputSemantics.Native)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var preflight = ValidateMappings(contract, mappings);
+        var preflight = ValidateMappings(contract, mappings, policies, semantics);
         if (!preflight.IsValid) return preflight;
         if (sourceEnvelope.ValueKind != JsonValueKind.Object)
             return Failure("triggers.mapping.source-envelope", "A trigger source envelope must be a detached JSON object.");
@@ -98,7 +107,8 @@ internal sealed class TriggerInputMapper(IWorkflowExecutableInputValidator valid
                     return Failure("triggers.mapping.binding-unsupported", "The input binding is not supported.", mapping.InputName);
             }
         }
-        return validator.Validate(contract, values);
+        return semantics == TriggerInputSemantics.Native ? validator.Validate(contract, values, policies)
+            : ModelInputValidation.Normalize(validator, contract, values);
     }
 
     private static List<WorkflowExecutableInputValidationFinding> CheckDestinations(WorkflowExecutableInputContract contract,

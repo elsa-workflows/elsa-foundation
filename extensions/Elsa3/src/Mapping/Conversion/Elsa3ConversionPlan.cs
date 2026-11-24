@@ -16,6 +16,7 @@ namespace Elsa3.Mapping.Conversion;
 /// </summary>
 internal sealed class Elsa3ConversionPlan(Elsa3ConversionRequest request, Elsa3WorkflowDefinition definition)
 {
+    public Elsa.Workflows.Runtime.Core.Models.WorkflowValuePolicies ValuePolicies { get; init; } = Elsa.Workflows.Runtime.Core.Models.WorkflowValuePolicies.Off;
     public Elsa3ConversionRequest Request { get; } = request;
 
     /// <summary>The private, normalized clone.</summary>

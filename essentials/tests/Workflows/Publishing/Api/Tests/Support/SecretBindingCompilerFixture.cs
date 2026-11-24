@@ -71,7 +71,8 @@ internal static class SecretBindingCompilerFixture
         IReadOnlyCollection<VariableDefinition>? variables = null,
         bool includeDeclaredInputDefaults = false,
         IActivityStructureService? structures = null,
-        IReadOnlyCollection<InputDefinition>? workflowInputs = null)
+        IReadOnlyCollection<InputDefinition>? workflowInputs = null,
+        Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptOutcomeAnalyzer? scriptOutcomeAnalyzer = null)
     {
         var registry = TestWellKnownTypeRegistry.Create();
         foreach (var activityType in activityTypes)
@@ -86,7 +87,7 @@ internal static class SecretBindingCompilerFixture
             }),
             new FakeActivityVersionStore([.. activityTypes.Select(type => ClrActivityVersion(type, includeDeclaredInputDefaults)), .. otherVersions ?? []]),
             structures ?? StructureService,
-            registry);
+            registry, scriptOutcomeAnalyzer: scriptOutcomeAnalyzer);
         return await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             "version-1",
             WorkflowExecutableReferenceScope.Published,

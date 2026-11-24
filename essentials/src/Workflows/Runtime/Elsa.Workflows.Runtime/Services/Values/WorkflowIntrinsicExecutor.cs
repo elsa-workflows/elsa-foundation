@@ -6,6 +6,8 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
@@ -28,6 +30,24 @@ public sealed class WorkflowIntrinsicExecutor(
 {
     private readonly IRuntimePayloadCapturePolicy _payloadCapturePolicy = payloadCapturePolicy ?? new Elsa.Workflows.Runtime.Services.ActivityExecutions.DefaultRuntimePayloadCapturePolicy();
     private readonly IRuntimeDurableValueStorageDriverRegistry? _storageDrivers;
+    private readonly IWellKnownTypeRegistry? _typeRegistry;
+    private readonly IRuntimeTypeNullability? _typeDescriptors;
+
+    public WorkflowIntrinsicExecutor(IWellKnownTypeRegistry typeRegistry, IRuntimeTypeNullability typeDescriptors,
+        IWorkflowExecutionStateStore workflowExecutionStateStore, IActivityExecutionStateStore activityExecutionStateStore,
+        IRuntimeInputBindingResolver inputBindingResolver, IDurableValueStateStore durableValueStateStore,
+        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator, TimeProvider timeProvider,
+        IRuntimeDurableValueStorageDriverRegistry storageDrivers, IExternalPayloadStore? externalPayloadStore = null,
+        IPortableExpressionEvaluator? portableExpressionEvaluator = null, IRuntimeValueConversionExecutor? valueConversionExecutor = null,
+        IWorkflowExecutableInputValidator? inputValidator = null, IRuntimePayloadCapturePolicy? payloadCapturePolicy = null)
+        : this(workflowExecutionStateStore, activityExecutionStateStore, inputBindingResolver, durableValueStateStore,
+            inspectionAccumulator, timeProvider, storageDrivers, externalPayloadStore, portableExpressionEvaluator,
+            valueConversionExecutor, inputValidator, payloadCapturePolicy)
+    {
+        _typeRegistry = typeRegistry;
+        _typeDescriptors = typeDescriptors;
+        _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore, valueConversionExecutor, typeRegistry, typeDescriptors);
+    }
 
     public WorkflowIntrinsicExecutor(IWorkflowExecutionStateStore workflowExecutionStateStore,
         IActivityExecutionStateStore activityExecutionStateStore, IRuntimeInputBindingResolver inputBindingResolver,
@@ -131,6 +151,7 @@ public sealed class WorkflowIntrinsicExecutor(
             ?? throw new InvalidOperationException($"{intrinsicKind} intrinsic '{node.ExecutableNodeId}' references missing workflow execution '{startWorkItem.WorkflowExecutionId}'.");
         var runtimeView = await activityExecutionStateStore.ListAllAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
         var frameOwner = ResolveVisibleFrame(workflowState, intrinsicState, runtimeView, target.DeclaringScopeId);
+        var warnings = new ExecutionWarningCollector();
         var value = await MaterializeValueAsync(
             valueBinding,
             workflowState,
@@ -138,7 +159,8 @@ public sealed class WorkflowIntrinsicExecutor(
             executable,
             runtimeView,
             cancellationToken,
-            validateAssignmentPayload: true);
+            validateAssignmentPayload: true, warnings: warnings, targetLabel: $"Variable '{target.VariableKey}' in scope '{target.DeclaringScopeId}'");
+        intrinsicState = intrinsicState.WithWarnings(warnings.Warnings);
         ValidateAssignment(frameOwner.Frame, target.VariableKey, valueBinding, value, node.ExecutableNodeId);
 
         // Spec 1221: the intrinsic reads its value and commits the write in this one dispatch, so nothing can move the
@@ -331,8 +353,11 @@ public sealed class WorkflowIntrinsicExecutor(
             ? RuntimeClosedScope.NearestBoundaryId(intrinsicState, runtimeView.ToDictionary(x => x.InvocationId, StringComparer.Ordinal))
               ?? throw new InvalidOperationException($"Set Output '{node.ExecutableNodeId}' has no enclosing activity invocation.")
             : null;
+        var warnings = new ExecutionWarningCollector();
         var value = await MaterializeValueAsync(node.InputBindings[WorkflowIntrinsicInputKeys.Value], workflow, intrinsicState,
-            executable, runtimeView, cancellationToken, validateAssignmentPayload: scoped);
+            executable, runtimeView, cancellationToken, validateAssignmentPayload: true, warnings: warnings,
+            targetLabel: $"{(scoped ? "Activity" : "Workflow")} output '{outputName}'");
+        intrinsicState = intrinsicState.WithWarnings(warnings.Warnings);
         var durableChange = boundaryId is null
             ? NewWorkflowOutputChange(workflowId, intrinsicState.InvocationId, outputName, value, timeProvider.GetUtcNow())
             : await NewBoundaryOutputChangeAsync(workflowId, boundaryId, node.Descriptor.Payload, outputName, value, cancellationToken);
@@ -638,12 +663,21 @@ public sealed class WorkflowIntrinsicExecutor(
         if (value.Policy.RetentionPolicy is not null)
             metadata[RuntimeMetadataKeys.RetentionPolicy] = value.Policy.RetentionPolicy;
 
+        // Null has no external or custom payload. Keep its minimum policy separately from the physical JSON-null row.
+        metadata.Remove(RuntimeMetadataKeys.NullMinimumStorage);
+        var storage = value.Policy.Storage;
+        if (value.Presence == ValuePresence.ExplicitNull && storage != DurableValueStorage.Inline)
+        {
+            storage = DurableValueStorage.Inline;
+            metadata[RuntimeMetadataKeys.NullMinimumStorage] = value.Policy.Storage.ToString();
+        }
+
         var valueId = $"{RuntimeWorkflowStateSeed.OutputValueIdPrefix}{outputName}";
         var durableValueId = $"durable-{valueId}";
         JsonElement? inline = value.Presence switch
         {
             ValuePresence.Present => value.InlineValue,
-            ValuePresence.ExplicitNull when value.Policy.Storage is DurableValueStorage.Inline or DurableValueStorage.Custom =>
+            ValuePresence.ExplicitNull =>
                 JsonSerializer.SerializeToElement<object?>(null),
             _ => null
         };
@@ -653,7 +687,7 @@ public sealed class WorkflowIntrinsicExecutor(
             valueId,
             new RuntimeValueTypeDescriptor("alias", value.Type.Alias, JsonSerializer.SerializeToElement(value.Type)),
             value.Policy.Lifecycle,
-            value.Policy.Storage,
+            storage,
             inline,
             value.ExternalReference,
             activityExecutionId,
@@ -673,7 +707,8 @@ public sealed class WorkflowIntrinsicExecutor(
         WorkflowExecutable executable,
         IReadOnlyCollection<ActivityExecutionState> runtimeView,
         CancellationToken cancellationToken,
-        bool validateAssignmentPayload = false)
+        bool validateAssignmentPayload = false,
+        IExecutionWarningSink? warnings = null, string? targetLabel = null)
     {
         ThrowIfWithheld(binding);
         var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowState.WorkflowExecutionId, cancellationToken);
@@ -699,9 +734,9 @@ public sealed class WorkflowIntrinsicExecutor(
             workflowInputEnvelopes: workflowInputEnvelopes,
             variableEnvelopes: frameEnvelopes,
             visibleVariables: RuntimeContainerScopeService.ProjectReadableVariables(executable, visibleFrames, rootVariableNames),
-            correlationId: projections.CorrelationId);
+            correlationId: projections.CorrelationId) { Warnings = warnings };
         if (binding.Selection is not null)
-            return await MaterializeMemberAsync(binding, workflowState, intrinsicState, context, cancellationToken);
+            return await MaterializeMemberAsync(binding, workflowState, intrinsicState, context, cancellationToken, targetLabel);
 
         var resolved = inputBindingResolver.Resolve(binding, context);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
@@ -722,6 +757,7 @@ public sealed class WorkflowIntrinsicExecutor(
             var envelope = evaluated.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
                 ? ValueEnvelope.Null(binding.TargetType, evaluated.EffectivePolicy)
                 : ValueEnvelope.Inline(binding.TargetType, evaluated.Value, evaluated.EffectivePolicy);
+            envelope = NormalizeTargetNull(binding, envelope, executable.ValuePolicies, warnings, targetLabel);
             if (validateAssignmentPayload)
                 ValidateAssignmentPayload(binding, envelope, intrinsicState.Execution.ExecutableNodeId);
             return await ApplyStorageAsync(
@@ -746,6 +782,15 @@ public sealed class WorkflowIntrinsicExecutor(
             binding.EffectivePolicy,
             source.Policy,
             $"Intrinsic input '{binding.InputName}' on node '{intrinsicState.Execution.ExecutableNodeId}'");
+
+        // Null has no protected payload to inspect. Apply the target contract before storage can withhold a
+        // substituted scalar; an encryption requirement never permits a null in a non-nullable target.
+        if (source.Presence == ValuePresence.ExplicitNull)
+        {
+            var normalized = NormalizeTargetNull(binding, ValueEnvelope.Null(binding.TargetType, combinedPolicy), executable.ValuePolicies, warnings, targetLabel);
+            return await ApplyStorageAsync(workflowState.WorkflowExecutionId, intrinsicState.InvocationId, binding.InputName,
+                normalized, source.Policy, combinedPolicy, cancellationToken);
+        }
 
         // Encryption-required values are withheld by storage without inspecting their payload.
         if (combinedPolicy.RequiresEncryption)
@@ -787,6 +832,7 @@ public sealed class WorkflowIntrinsicExecutor(
         var combined = binding.ConversionPlan is null
             ? conversionSource.Retype(binding.TargetType)
             : _valueConversionExecutor.Convert(conversionSource, binding.ConversionPlan);
+        combined = NormalizeTargetNull(binding, combined, executable.ValuePolicies, warnings, targetLabel);
         if (validateAssignmentPayload)
             ValidateAssignmentPayload(binding, combined, intrinsicState.Execution.ExecutableNodeId);
         return await ApplyStorageAsync(
@@ -811,7 +857,7 @@ public sealed class WorkflowIntrinsicExecutor(
         WorkflowExecutionState workflowState,
         ActivityExecutionState intrinsicState,
         RuntimeInputBindingResolutionContext context,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string? targetLabel)
     {
         var nodeId = intrinsicState.Execution.ExecutableNodeId;
         var (source, selected) = await RuntimeMemberRead.ReadAsync(binding, nodeId, inputBindingResolver, context, externalPayloadStore, cancellationToken);
@@ -845,6 +891,7 @@ public sealed class WorkflowIntrinsicExecutor(
                 break;
         }
 
+        value = NormalizeTargetNull(binding, value, context.Executable?.ValuePolicies ?? WorkflowValuePolicies.Off, context.Warnings, targetLabel);
         return await ApplyStorageAsync(
             workflowState.WorkflowExecutionId,
             intrinsicState.InvocationId,
@@ -873,6 +920,11 @@ public sealed class WorkflowIntrinsicExecutor(
             throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' on node '{nodeId}' does not match '{binding.TargetType.Alias}': " +
                 string.Join(" ", validation.Findings.Select(finding => finding.Message)));
     }
+
+    private ValueEnvelope NormalizeTargetNull(RuntimeInputBinding binding, ValueEnvelope value,
+        WorkflowValuePolicies policies, IExecutionWarningSink? warnings, string? targetLabel) =>
+        NullPolicyDefaults.NormalizeNull(value, NullPolicyDefaults.AcceptsNull(binding.TargetType.ToTypeReference(), _typeRegistry, _typeDescriptors),
+            policies, targetLabel ?? $"Intrinsic input '{binding.InputName}'", _typeRegistry, warnings);
 
     private static bool HasExternalProjection(RuntimeInputBinding binding) =>
         binding.Source == RuntimeInputBindingSource.WorkflowRequest && !string.IsNullOrWhiteSpace(binding.WorkflowRequest!.Path) ||

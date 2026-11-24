@@ -186,6 +186,8 @@ public sealed record WorkflowExecutableDeclaredInputView(
 {
     /// <summary>Distinguishes a retained JSON-null default from absence.</summary>
     public bool HasDefaultValue { get; init; }
+    public bool SupportsNull { get; init; }
+
 }
 
 public sealed record WorkflowExecutableDependencyView(

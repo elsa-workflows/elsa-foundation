@@ -32,7 +32,7 @@ internal sealed class TriggerManagementTargets(TriggerTargetResolver resolver, I
             var target = actual[(row.DefinitionId, row.SlotName)];
             return target.Available && target.Model!.ModelKey == row.ModelKey &&
                 row.Grant is { Status: TriggerGrantStatus.Granted } grant && grant.SourceTypeKey == write.Trigger.TypeKey &&
-                mapper.ValidateMappings(target.InputContract!, row.Mappings).IsValid;
+                mapper.ValidateMappings(target.InputContract!, row.Mappings, target.Native?.ValuePolicies ?? WorkflowValuePolicies.Off, target.Native is null ? TriggerInputSemantics.ModelOwned : TriggerInputSemantics.Native).IsValid;
         }
         foreach (var row in write.Subscriptions.Where(row => row.Enabled))
         {

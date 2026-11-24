@@ -14,6 +14,14 @@ public sealed class JavaScriptScriptOutcomeAnalyzerTests
 {
     private readonly JavaScriptScriptOutcomeAnalyzer _analyzer = new();
 
+    [Theory]
+    [InlineData("function helper() { return 1; } helper();", false)]
+    [InlineData("const helper = () => { return 1; }; helper();", false)]
+    [InlineData("function helper() { return 1; } return helper();", true)]
+    [InlineData("if (args.ok) return 1;", true)]
+    public void Only_returns_from_the_activity_body_count_as_a_result(string source, bool expected) =>
+        Assert.Equal(expected, Analyze(source).HasReturnStatement);
+
     [Fact]
     public void The_JavaScript_feature_registers_the_analyzer()
     {

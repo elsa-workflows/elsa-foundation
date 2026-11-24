@@ -101,7 +101,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
         Intrinsic("SetVariable", Elsa3IntrinsicContracts.Set,
             [Structure("Variable", Elsa3MemberKind.Input), Carry("Value", Elsa3IntrinsicContracts.ValueKey) with
                 {
-                    OnNull = NullRefused("Elsa 3 sets the variable to null, which Elsa 4 cannot publish as a value (#3280).")
+                    OnNull = NullAsNull
                 }
             ],
             Elsa3NodeRewriteKind.VariableReference),
@@ -110,7 +110,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
                 Narrow("OutputName", Elsa3IntrinsicContracts.NameKey, Elsa3ValueContract.LiteralOnly) with { OnNull = NullRequired },
                 Carry("OutputValue", Elsa3IntrinsicContracts.ValueKey) with
                 {
-                    OnNull = NullRefused("Elsa 3 sets the workflow output to null, which Elsa 4 cannot publish as a value (#3280).")
+                    OnNull = NullAsNull
                 }
             ],
             Elsa3NodeRewriteKind.ReusableOutputWrite),

@@ -1,3 +1,5 @@
+import type { ActivityContractTypeCapability } from "./activityDefinitionTypes";
+import { typeAllowsNull } from "./typeNullability";
 import { ExpressionEditorWithDataInsertion } from "./ExpressionEditorWithDataInsertion";
 import { getActivityGraphOutputSetters } from "./activityGraphOutputSources";
 import { nextNativeBlockPosition } from "./graph-authoring/nativeBlockPlacement";
@@ -162,6 +164,7 @@ export function ActivityGraphPublicInterfaceEditor({
   onChange
 }: StudioActivityDefinitionImplementationEditorProps) {
   const catalogQuery = useWorkflowActivities(context);
+  const publicTypeCapabilities = useActivityAuthoringCapabilities(context);
   const catalog = useMemo(() => catalogQuery.data?.activities ?? [], [catalogQuery.data?.activities]);
   const catalogByVersion = useMemo(() => new Map(catalog.map(item => [item.activityVersionId, item])), [catalog]);
   const payload = normalizePayload(value.payload);
@@ -179,8 +182,8 @@ export function ActivityGraphPublicInterfaceEditor({
   const [boundaryOutcomeReferenceKey, setBoundaryOutcomeReferenceKey] = useState("");
   const expressionState = useActivityGraphExpressionDescriptors(context);
   const publicInputs = useMemo(
-    () => (contract?.inputs ?? []).map(toWorkflowInput),
-    [contract?.inputs]
+    () => (contract?.inputs ?? []).map(input => toWorkflowInput(input, publicTypeCapabilities.data?.types ?? [])),
+    [contract?.inputs, publicTypeCapabilities.data?.types]
   );
   const visibleVariables = useMemo(
     () => payload.variables.flatMap(toVisibleGraphVariable),
@@ -451,7 +454,7 @@ export function ActivityGraphImplementationEditor({
   const blockPromotion: BlockPromotionHost = {
     resourceKind: "activity-definition-graph",
     publicInputs: (contract?.inputs ?? []).filter(input => input.type).map(input => ({ referenceKey: input.referenceKey, name: input.name,
-      type: input.type as unknown as ArgumentType, isRequired: input.isRequired === true, isNullable: input.isNullable === true, default: input.default })),
+      type: input.type as unknown as ArgumentType, isRequired: input.isRequired === true, default: input.default })),
     capabilities: promotionCapabilities.data ?? null,
     capabilitiesState: promotionCapabilities.isPending ? "loading" : promotionCapabilities.isError ? "failed" : "ready",
     expressionBoundary: promotionExpressionSupport,
@@ -540,8 +543,8 @@ export function ActivityGraphImplementationEditor({
     readOnly
   };
   const publicInputs = useMemo(
-    () => (contract?.inputs ?? []).map(toWorkflowInput),
-    [contract?.inputs]
+    () => (contract?.inputs ?? []).map(input => toWorkflowInput(input, promotionCapabilities.data?.types ?? [])),
+    [contract?.inputs, promotionCapabilities.data?.types]
   );
   // The root lets pickers offer the variables of containers inside the body, as the workflow editor does.
   const workflowState = useMemo<WorkflowDefinitionState>(
@@ -1448,7 +1451,7 @@ export function useActivityGraphExpressionDescriptors(context: StudioActivityDef
   };
 }
 
-export function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["inputs"]>[number]): WorkflowInput {
+export function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["inputs"]>[number], capabilities: readonly ActivityContractTypeCapability[] = []): WorkflowInput {
   const type = isRecord(input.type) ? input.type : {};
   return {
     ...input,
@@ -1459,10 +1462,10 @@ export function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContr
     category: typeof input.category === "string" ? input.category : "",
     uiHint: typeof input.uiHint === "string" ? input.uiHint : "",
     storageDriverType: typeof input.storageDriverKey === "string" ? input.storageDriverKey : null,
-    isNullable: input.isNullable === true,
     type: {
       alias: typeof type.alias === "string" ? type.alias : "Any",
-      collectionKind: isCollectionKind(type.collectionKind) ? type.collectionKind : "Single"
+      collectionKind: isCollectionKind(type.collectionKind) ? type.collectionKind : "Single",
+      supportsNull: typeAllowsNull({ alias: typeof type.alias === "string" ? type.alias : "Any", collectionKind: isCollectionKind(type.collectionKind) ? type.collectionKind : "Single" }, capabilities)
     }
   };
 }

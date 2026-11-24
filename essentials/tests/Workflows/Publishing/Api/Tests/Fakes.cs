@@ -147,7 +147,8 @@ internal static class TestCompiler
         IExecutableNodeMetadataEnricher? metadataEnricher = null,
         IIncidentStrategyCatalog? incidentStrategyCatalog = null,
         IActivityDataSelectionAnalyzer? dataSelectionAnalyzer = null,
-        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? scriptVariableReadResolver = null)
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? scriptVariableReadResolver = null,
+        Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptOutcomeAnalyzer? scriptOutcomeAnalyzer = null)
     {
         var publications = activityPublications ?? new EmptyActivityPublicationStore();
         var templates = activityTemplates ?? new EmptyActivityTemplateReader();
@@ -179,7 +180,8 @@ internal static class TestCompiler
                 wellKnownTypeRegistry,
                 inputCompiler,
                 outputCompiler,
-                scriptVariableReadResolver: scriptVariableReadResolver),
+                operatorSchedulingCapabilityProviders: null, conversionPlanResolver: null,
+                scriptVariableReadResolver: scriptVariableReadResolver, scriptOutcomeAnalyzer: scriptOutcomeAnalyzer),
             placementSidecars,
             metadataEnricher,
             incidentStrategyCatalog: incidentStrategyCatalog);

@@ -35,4 +35,10 @@ public sealed class WorkflowExecutableHasher
 
     public string CreateArtifactId(string artifactIdPrefix, string artifactHash) =>
         _inner.CreateArtifactId(artifactIdPrefix, artifactHash);
+
+    public string ComputeHash(ExecutableNode rootActivity, WorkflowExecutableInputContract inputContract,
+        IReadOnlyCollection<WorkflowExecutableDependency> dependencies, PersistenceMode? persistenceMode,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables, IncidentStrategyReference? incidentStrategy,
+        WorkflowValuePolicies valuePolicies) =>
+        _inner.ComputeHash(rootActivity, inputContract, dependencies, persistenceMode, workflowVariables, incidentStrategy, valuePolicies);
 }

@@ -123,7 +123,7 @@ Elsa.Activities.Primitives.Activities.UserTaskWait.TenantId.get -> string!
 Elsa.Activities.Primitives.Activities.UserTaskWait.TenantId.init -> void
 Elsa.Activities.Primitives.Activities.UserTaskWait.UserTaskWait(string! TenantId, string! TaskId) -> void
 Elsa.Activities.Primitives.Activities.WriteLine
-Elsa.Activities.Primitives.Activities.WriteLine.Text.get -> string!
+Elsa.Activities.Primitives.Activities.WriteLine.Text.get -> string?
 Elsa.Activities.Primitives.Activities.WriteLine.Text.set -> void
 Elsa.Activities.Primitives.Activities.WriteLine.WriteLine() -> void
 Elsa.Activities.Primitives.Activities.WriteLines

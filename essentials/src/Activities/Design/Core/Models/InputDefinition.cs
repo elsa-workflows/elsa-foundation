@@ -37,7 +37,7 @@ public sealed record InputDefinition(
     string? StorageDriverType,
     string DisplayName,
     string? Category,
-    [property: JsonRequired] bool IsNullable,
+    bool IsNullable,
     bool? IsBrowsable = null,
     bool? IsSerializable = null,
     string? Description = null,

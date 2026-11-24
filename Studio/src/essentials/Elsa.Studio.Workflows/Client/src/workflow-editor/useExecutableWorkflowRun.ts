@@ -1,7 +1,8 @@
+import { typeAllowsNull } from "../typeNullability";
 import { useState } from "react";
 import { qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getWorkflowDefinitionVersion } from "../api/workflowDesign";
-import { listExecutables, runExecutable } from "../api/runtime";
+import { getExecutable, listExecutables, runExecutable } from "../api/runtime";
 import type {
   WorkflowExecutableReference,
   WorkflowExecutableRunResponse,
@@ -133,7 +134,12 @@ export function useExecutableWorkflowRun({ context, onDispatchStart, onStarted, 
     setRunningArtifactId(target.artifactId);
     try {
       const version = await getWorkflowDefinitionVersion(context, target.definitionVersionId);
-      const inputs = readWorkflowInputs(version.state?.inputs);
+      const rawInputs = readWorkflowInputs(version.state?.inputs);
+      const detail = rawInputs.length > 0 ? await getExecutable(context, target.artifactId, target.sourceReferenceId) : null;
+      const inputs = rawInputs.map(input => {
+        const pinned = detail?.inputContract?.inputs.find(member => member.name === input.name);
+        return { ...input, type: { ...input.type, supportsNull: pinned?.supportsNull ?? pinned?.isNullable ?? typeAllowsNull(input.type) } };
+      });
       setRunningArtifactId(null);
       if (inputs.length > 0) setPending({ target, inputs });
       else await dispatch(target, {});

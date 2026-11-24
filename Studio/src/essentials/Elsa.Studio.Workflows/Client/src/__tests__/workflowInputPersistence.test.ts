@@ -8,7 +8,7 @@ import type { WorkflowDraft } from "../workflowTypes";
 afterEach(() => clearApiCapabilityCache());
 
 describe("workflow input persistence", () => {
-  it("sends the required nullability flag for newly created and legacy inputs", async () => {
+  it("omits retired nullability flags for newly created and legacy inputs", async () => {
     const putJson = vi.fn(async (_path: string, body: {
       state: WorkflowDraft["state"];
       layout: WorkflowDraft["layout"];
@@ -49,9 +49,10 @@ describe("workflow input persistence", () => {
 
     const request = putJson.mock.calls[0][1];
     expect(request.state.inputs).toEqual([
-      expect.objectContaining({ name: "OrderId", isNullable: false }),
-      expect.objectContaining({ name: "LegacyInput", isNullable: false })
+      expect.objectContaining({ name: "OrderId" }),
+      expect.objectContaining({ name: "LegacyInput" })
     ]);
+    for (const input of request.state.inputs ?? []) expect(input).not.toHaveProperty("isNullable");
   });
 });
 

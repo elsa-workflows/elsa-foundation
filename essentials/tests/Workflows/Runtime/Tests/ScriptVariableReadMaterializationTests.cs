@@ -1,3 +1,6 @@
+using Elsa.Workflows.Runtime.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Elsa.Serialization.Core;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Contracts;
@@ -37,6 +40,24 @@ public sealed class ScriptVariableReadMaterializationTests
         new("unset", "workflow", "unset", Unset),
         new("scratch", "workflow", "scratch", Scratch)
     ];
+
+    [Theory]
+    [InlineData("Int32", "0")]
+    [InlineData("Boolean", "false")]
+    [InlineData("Acme.Status", "0")]
+    [InlineData("Acme.Status", "null", true)]
+    public async Task Pinned_and_computed_unassigned_scalar_reads_have_the_same_supported_type_default(string alias, string expected, bool? supportsNull = null)
+    {
+        var visible = new[] { new RuntimeReadableVariable("unset", "workflow", "unset", ValueEnvelope.Absent(new(alias), ValueProtectionPolicy.InstanceInline)) };
+        foreach (var computed in new[] { false, true })
+        {
+            var snapshot = await MaterializeAsync(new Script(request => computed ? request.VariableReader!.Read("unset").Value : request.ParameterValues["variables.unset"]),
+                pinned: computed ? null : ("unset", "workflow", "unset"), computed: computed, visible: visible, registry: new EnumRegistry(), descriptors: supportsNull.HasValue ? new EnumCatalog(supportsNull.Value) : null, useDi: supportsNull == true);
+            Assert.Equal(ValuePresence.Absent, visible[0].Envelope.Presence);
+            if (expected == "null") Assert.Equal(ValuePresence.ExplicitNull, snapshot.Values["value"].Presence);
+            else Assert.Equal(expected, snapshot.Values["value"].InlineValue!.Value.GetRawText());
+        }
+    }
 
     [Fact]
     public async Task A_literal_only_expression_loads_only_the_variable_it_names()
@@ -205,7 +226,7 @@ public sealed class ScriptVariableReadMaterializationTests
         bool computed = false,
         CountingPayloadStore? store = null,
         RuntimeVariableReadRecorder? recorder = null,
-        IReadOnlyList<RuntimeReadableVariable>? visible = null)
+        IReadOnlyList<RuntimeReadableVariable>? visible = null, IWellKnownTypeRegistry? registry = null, IRuntimeTypeNullability? descriptors = null, bool useDi = false)
     {
         visible ??= Visible;
         var parameters = new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal);
@@ -220,11 +241,20 @@ public sealed class ScriptVariableReadMaterializationTests
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding("JavaScript", "script", parameters: parameters, variableReadFallback: fallback));
-        var materializer = new RuntimeActivityInputMaterializer(
-            new RuntimeInputBindingResolver(),
-            [],
-            portableExpressionEvaluator: script,
-            externalPayloadStore: store ?? new CountingPayloadStore());
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddSingleton<IWellKnownTypeRegistry>(registry ?? new EnumRegistry());
+        services.AddSingleton<IPortableExpressionEvaluator>(script);
+        if (descriptors is not null) services.AddSingleton<IRuntimeTypeNullability>(descriptors);
+        using var runtimeOnly = services.BuildServiceProvider();
+        Assert.Null(runtimeOnly.GetService<IVariableTypeDescriptorCatalog>());
+        Assert.Null(runtimeOnly.GetService<IExternalPayloadStore>());
+        IRuntimeActivityInputMaterializer materializer = useDi ? runtimeOnly.GetRequiredService<IRuntimeActivityInputMaterializer>() : new RuntimeActivityInputMaterializer(
+            inputBindingResolver: new RuntimeInputBindingResolver(),
+            structurePolicies: [],
+            wellKnownTypeRegistry: registry,
+            portableExpressionEvaluator: script, valueConversionExecutor: null,
+            externalPayloadStore: store ?? new CountingPayloadStore(), typeDescriptors: descriptors);
         return await materializer.MaterializeSnapshotAsync(
             Consumer(binding),
             "consumer",
@@ -265,6 +295,23 @@ public sealed class ScriptVariableReadMaterializationTests
         ValueEnvelope.Inline(Any, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline);
 
     /// <summary>A stand-in engine: runs the given function against the request, as a script reads its roots.</summary>
+    private enum Status { Ready = 1 }
+    private sealed class EnumRegistry : IWellKnownTypeRegistry
+    {
+        public void RegisterType(Type type, string alias) => throw new NotSupportedException();
+        public bool TryGetAlias(Type type, out string alias) { alias = "Acme.Status"; return type == typeof(Status); }
+        public bool TryGetType(string alias, out Type type) => TryGetTypeOrDefault(alias, out type);
+        public IEnumerable<Type> ListTypes() => [typeof(Status)];
+        public string GetAliasOrDefault(Type type) => type == typeof(Status) ? "Acme.Status" : type.FullName!;
+        public Type GetTypeOrDefault(string alias) => alias == "Acme.Status" ? typeof(Status) : typeof(object);
+        public bool TryGetTypeOrDefault(string alias, out Type type) { type = GetTypeOrDefault(alias); return type != typeof(object); }
+    }
+
+    private sealed class EnumCatalog(bool supportsNull) : IRuntimeTypeNullability
+    {
+        public bool TryGetSupportsNull(string alias, out bool value) { value = supportsNull; return StringComparer.OrdinalIgnoreCase.Equals(alias, "Acme.Status"); }
+    }
+
     private sealed class Script(Func<ExpressionEvaluationRequest, JsonElement> run) : IPortableExpressionEvaluator
     {
         public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) => ValueTask.FromResult(run(request).Clone());

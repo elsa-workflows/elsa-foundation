@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
@@ -29,16 +30,25 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> options) : IScriptValueBridge
 {
     public IScriptValueEvaluation Begin(Engine engine)
+        => Begin(engine, undefinedAsNull: false);
+
+    public IScriptValueEvaluation Begin(Engine engine, bool undefinedAsNull)
     {
         ArgumentNullException.ThrowIfNull(engine);
-        return new Evaluation(engine, options.Value);
+        return new Evaluation(engine, options.Value, undefinedAsNull);
     }
 
     private sealed class Evaluation : IScriptValueEvaluation
     {
         private const char MarkerStart = '';
         private readonly Engine _engine;
+        private readonly JsValue _proxyConstructor;
+        private readonly JsValue _objectCreate;
+        private readonly Dictionary<ObjectInstance, ObjectInstance> _holeSafeArrays = new(ReferenceEqualityComparer.Instance);
         private readonly FeatureOptions _options;
+        private readonly bool _undefinedAsNull;
+        private readonly List<ExecutionWarning> _warnings = [];
+        public IReadOnlyList<ExecutionWarning> Warnings => _warnings;
         private readonly Dictionary<ObjectInstance, JsonElement> _origins = new(ReferenceEqualityComparer.Instance);
         private readonly Dictionary<ObjectInstance, string> _originPaths = new(ReferenceEqualityComparer.Instance);
         private readonly Dictionary<string, string> _markerPaths = new(StringComparer.Ordinal);
@@ -50,17 +60,18 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         private readonly string _markerPrefix = MarkerStart + Guid.NewGuid().ToString("N") + ":";
         private JsValue? _replacer;
         private JsValue? _infinityReplacer;
-        private bool _enteredInfinity;
-        private bool _wroteInfinity;
         private long _enterTicks;
         private long _collectTicks;
         private long _bytes;
         private bool _disposed;
 
-        public Evaluation(Engine engine, FeatureOptions options)
+        public Evaluation(Engine engine, FeatureOptions options, bool undefinedAsNull)
         {
             _engine = engine;
+            _proxyConstructor = engine.GetValue("Proxy");
+            _objectCreate = engine.Intrinsics.Object.Get("create");
             _options = options;
+            _undefinedAsNull = undefinedAsNull;
         }
 
         public IReadOnlyList<JavaScriptLossyNumber> LossyNumbers => _lossy;
@@ -202,9 +213,13 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 return new ScriptValueWrite(null, []);
 
             var marked = Mark(value);
+            if (IsUndefinedMarker(marked.Root))
+            {
+                Forget(marked.Markers);
+                return new ScriptValueWrite(null, []);
+            }
             var losses = new List<JavaScriptPrecisionLoss>();
             var buffer = new ArrayBufferWriter<byte>();
-            _wroteInfinity = false;
             // Plain .NET over JSON: no script code runs here, so its memory is not the script's.
             JsonElement json;
             try
@@ -218,9 +233,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
 
                     // The serialized value is returned as is only when nothing in it was replaced: no marker, no loss and
                     // no Infinity, which is written as null even when no lossy entered number has its sign.
-                    json = marked.Markers.Count == 0 && losses.Count == 0 && !_wroteInfinity
-                        ? marked.Root
-                        : JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
+                    json = JintResultMaterializer.ParseResult(System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan), _options);
                 }
             }
             finally
@@ -241,14 +254,6 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             var markers = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
             // A value with no object in it (a number, a string) cannot hold an entered value: no replacer is needed, unless
             // an entered number became Infinity, which JSON writes as null and so must be marked to be found.
-            if (!_enteredInfinity && (value is not ObjectInstance || _origins.Count == 0))
-            {
-                var plain = Serialize(value, infinity: false, markers: null)
-                    ?? throw new InvalidOperationException("A JavaScript result must be representable as persistable JSON.");
-                using (EvaluationLimits.ExcludeHostWork(_engine))
-                    return (JintResultMaterializer.ParseResult(plain, _options), markers);
-            }
-
             // Restored, not cleared: a toJSON can call a host function whose variable read previews another value.
             var outer = _currentMarkers;
             _currentMarkers = markers;
@@ -257,7 +262,9 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 var text = Serialize(value, infinity: true, markers)
                     ?? throw new InvalidOperationException("A JavaScript result must be representable as persistable JSON.");
                 using (EvaluationLimits.ExcludeHostWork(_engine))
-                    return (JintResultMaterializer.ParseResult(text, _options), markers);
+                {
+                    return (JintResultMaterializer.ParseResult(text, _options, intermediate: true), markers);
+                }
             }
             catch
             {
@@ -288,7 +295,8 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             {
                 _plainOnly = true;
                 using (EvaluationLimits.ExcludeHostWork(_engine))
-                    serialized = PlainJson.TryStringify(_engine, value, infinity ? InfinityMarkerText : null, markers is null ? null : MarkerFor, out plain);
+                    serialized = PlainJson.TryStringify(_engine, value, infinity ? InfinityMarkerText : null, markers is null ? null : MarkerFor, out plain,
+                        infinity ? () => UndefinedMarkerText : null);
             }
             catch (NotPlainInside) when (!outerPlainOnly)
             {
@@ -363,12 +371,14 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             var infinity = InfinityMarker();
             // .NET, not JavaScript: nothing the script changed on the prototypes can intercept it, and it runs no script
             // statement, so the bridge's work stays apart from the script's in the evaluation limits.
-            return new ClrFunction(_engine, "replacer", (_, arguments) =>
+            return new ClrFunction(_engine, "replacer", (holder, arguments) =>
             {
-                var value = arguments.At(1);
-                if (value.IsNumber() && double.IsInfinity(value.AsNumber()))
+                var value = UnboxNumber(arguments.At(1));
+                if (value.IsUndefined())
+                    return new JsString(UndefinedMarkerText);
+                if (value.IsNumber() && !double.IsFinite(value.AsNumber()))
                     return infinity.Call(JsValue.Undefined, [value]);
-                return value is ObjectInstance ? lookup.Call(JsValue.Undefined, [value]) : value;
+                return ProtectArrayHoles(value is ObjectInstance ? lookup.Call(JsValue.Undefined, [value]) : value);
             });
         }
 
@@ -380,7 +390,9 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
         private ClrFunction InfinityMarker() =>
             new(_engine, "infinity", (_, arguments) => new JsString(InfinityMarkerText(arguments.At(0).AsNumber())));
 
-        private string InfinityMarkerText(double value) => _markerPrefix + (value > 0 ? "+inf" : "-inf");
+        private string UndefinedMarkerText => _markerPrefix + "undefined";
+        private bool IsUndefinedMarker(JsonElement value) => value.ValueKind == JsonValueKind.String && value.GetString() == UndefinedMarkerText;
+        private string InfinityMarkerText(double value) => _markerPrefix + (double.IsNaN(value) ? "nan" : value > 0 ? "+inf" : "-inf");
 
         private bool TryReadInfinity(JsonElement element, out double value)
         {
@@ -392,6 +404,8 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 value = double.PositiveInfinity;
             else if (StringComparer.Ordinal.Equals(text, InfinityMarkerText(double.NegativeInfinity)))
                 value = double.NegativeInfinity;
+            else if (StringComparer.Ordinal.Equals(text, InfinityMarkerText(double.NaN)))
+                value = double.NaN;
             else
                 return false;
             return true;
@@ -402,12 +416,40 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             if (_infinityReplacer is not null)
                 return _infinityReplacer;
             var infinity = InfinityMarker();
-            return _infinityReplacer = new ClrFunction(_engine, "replacer", (_, arguments) =>
+            return _infinityReplacer = new ClrFunction(_engine, "replacer", (holder, arguments) =>
             {
-                var value = arguments.At(1);
-                return value.IsNumber() && double.IsInfinity(value.AsNumber()) ? infinity.Call(JsValue.Undefined, [value]) : value;
+                var value = UnboxNumber(arguments.At(1));
+                if (value.IsUndefined())
+                    return new JsString(UndefinedMarkerText);
+                return value.IsNumber() && !double.IsFinite(value.AsNumber()) ? infinity.Call(JsValue.Undefined, [value]) : ProtectArrayHoles(value);
             });
         }
+
+        // JSON.stringify reads an array index (and that value's toJSON) before calling its replacer. Guard the Get
+        // itself so an inherited getter or object never fills a hole. Own getters retain the original receiver and
+        // serialization order; cached proxies retain identity so cycles still fail rather than expanding forever.
+        private JsValue ProtectArrayHoles(JsValue value)
+        {
+            if (value is not ObjectInstance array || !array.IsArray()) return value;
+            if (_holeSafeArrays.TryGetValue(array, out var known)) return known;
+            var handler = _engine.Invoke(_objectCreate, JsValue.Undefined, [JsValue.Null]).AsObject();
+            handler.DefineOwnProperty("get", new PropertyDescriptor(new ClrFunction(_engine, "arrayIndex", (_, arguments) =>
+            {
+                var key = arguments.At(1);
+                if (key.IsString() && uint.TryParse(key.AsString(), NumberStyles.None, CultureInfo.InvariantCulture, out var index) &&
+                    index != uint.MaxValue && key.AsString() == index.ToString(CultureInfo.InvariantCulture) &&
+                    array.GetOwnProperty(key) == PropertyDescriptor.Undefined)
+                    return JsValue.Undefined;
+                return array.Get(key, array);
+            }), writable: false, enumerable: false, configurable: false));
+            var guarded = _engine.Construct(_proxyConstructor, [array, handler]).AsObject();
+            _holeSafeArrays[array] = guarded;
+            _holeSafeArrays[guarded] = guarded;
+            return guarded;
+        }
+
+        private static JsValue UnboxNumber(JsValue value) =>
+            value is IJsPrimitive { Type: Types.Number } ? JsNumber.Create(TypeConverter.ToNumber(value)) : value;
 
         private bool IsUnchanged(ObjectInstance instance)
         {
@@ -427,14 +469,14 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             if (!_origins.TryGetValue(instance, out var origin))
                 return false;
 
-            var text = Serialize(instance, _enteredInfinity, markers: null);
+            var text = Serialize(instance, infinity: true, markers: null);
             bool unchanged;
             if (text is null)
                 unchanged = false;
             else
             {
                 using var hostWork = EvaluationLimits.ExcludeHostWork(_engine);
-                using var document = JsonDocument.Parse(text, new JsonDocumentOptions { MaxDepth = Math.Max(_options.MaxResultDepth, _options.MaxInputDepth) + 1 });
+                using var document = JsonDocument.Parse(text, new JsonDocumentOptions { MaxDepth = JintResultMaterializer.DepthWithHeadroom(Math.Max(_options.MaxResultDepth, _options.MaxInputDepth)) });
                 unchanged = SameJavaScriptValue(origin, document.RootElement, null);
             }
 
@@ -490,7 +532,6 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 var lossy = new JavaScriptLossyNumber(path, text, JavaScriptNumberPrecision.JavaScriptText(held), held, isInteger);
                 _lossy.Add(lossy);
                 _lossyByValue.TryAdd(held, lossy);
-                _enteredInfinity |= double.IsInfinity(held);
             }
 
             return JsNumber.Create(held);
@@ -503,15 +544,22 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             string? arrayPath,
             Utf8JsonWriter writer,
             List<JavaScriptPrecisionLoss> losses,
-            IReadOnlyDictionary<string, JsonElement> markers)
+            IReadOnlyDictionary<string, JsonElement> markers,
+            bool arrayElement = false)
         {
             switch (element.ValueKind)
             {
+                case JsonValueKind.String when IsUndefinedMarker(element):
+                    if (arrayElement)
+                        Warn("VF-UNDEF-003", path, "An undefined array element or hole became a null placeholder.");
+                    writer.WriteNullValue();
+                    break;
                 case JsonValueKind.String when TryReadInfinity(element, out var infinity):
                     // JSON has no Infinity: it is written as null, and the number it came from carries that loss.
                     if (_lossyByValue.TryGetValue(infinity, out var lost))
                         losses.Add(new JavaScriptPrecisionLoss(path, lost, "null", arrayPath));
-                    _wroteInfinity = true;
+                    else
+                        Warn("VF-NUM-001", path, "A computed non-finite number became null.");
                     writer.WriteNullValue();
                     break;
                 case JsonValueKind.String when markers.TryGetValue(element.GetString()!, out var origin):
@@ -530,6 +578,11 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     writer.WriteStartObject();
                     foreach (var property in element.EnumerateObject())
                     {
+                        if (IsUndefinedMarker(property.Value) && !_undefinedAsNull)
+                        {
+                            Warn("VF-UNDEF-002", ValuePaths.Member(path, property.Name), "An undefined object property was dropped.");
+                            continue;
+                        }
                         writer.WritePropertyName(property.Name);
                         WriteMarked(property.Value, ValuePaths.Member(path, property.Name), arrayPath, writer, losses, markers);
                     }
@@ -540,13 +593,24 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     writer.WriteStartArray();
                     var index = 0;
                     foreach (var item in element.EnumerateArray())
-                        WriteMarked(item, ValuePaths.Index(path, index++), arrayPath ?? path, writer, losses, markers);
+                        WriteMarked(item, ValuePaths.Index(path, index++), arrayPath ?? path, writer, losses, markers, arrayElement: true);
                     writer.WriteEndArray();
                     break;
                 default:
                     element.WriteTo(writer);
                     break;
             }
+        }
+
+        private void Warn(string code, string path, string message)
+        {
+            if (_previewing)
+                return;
+            var root = ValuePaths.Root(path);
+            _warnings.Add(new ExecutionWarning(code, $"{message} Path: {path}.", ExecutionWarningSeverity.Warning)
+            {
+                ProtectedForm = new ExecutionWarning(code, $"{message} Path: {root}.", ExecutionWarningSeverity.Warning)
+            });
         }
 
         /// <summary>
@@ -589,6 +653,13 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     continue;
                 }
 
+                if (IsUndefinedMarker(now) && !_undefinedAsNull)
+                {
+                    changed.Add(memberPath);
+                    Warn("VF-UNDEF-002", memberPath, "An undefined object property was dropped.");
+                    continue;
+                }
+
                 writer.WritePropertyName(name);
                 Patch(value, now, memberPath, writer, changed, losses, markers);
             }
@@ -599,6 +670,11 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                     continue;
                 var memberPath = ValuePaths.Member(path, name);
                 changed.Add(memberPath);
+                if (IsUndefinedMarker(value) && !_undefinedAsNull)
+                {
+                    Warn("VF-UNDEF-002", memberPath, "An undefined object property was dropped.");
+                    continue;
+                }
                 writer.WritePropertyName(name);
                 WriteMarked(value, memberPath, arrayPath: null, writer, losses, markers);
             }

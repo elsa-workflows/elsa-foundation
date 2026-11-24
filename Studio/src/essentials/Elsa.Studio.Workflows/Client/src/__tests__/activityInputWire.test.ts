@@ -605,7 +605,7 @@ describe("argument collection wire adapter", () => {
     }
   });
 
-  it("sends required output nullability for new, reopened and legacy definitions without changing explicit values", () => {
+  it("drops retired authored output nullability from new, reopened and legacy definitions", () => {
     const rows = [
       { referenceKey: "missing", name: "Missing", type: { alias: "String", collectionKind: "Single" } },
       { referenceKey: "nullable", name: "Nullable", type: { alias: "String", collectionKind: "Single" }, isNullable: true },
@@ -613,12 +613,12 @@ describe("argument collection wire adapter", () => {
     ];
     for (const state of [canonicalizeStateForWire({ outputs: rows }), expandStateFromWire({ outputs: rows })]) {
       const outputs = state.outputs as Record<string, unknown>[];
-      expect(outputs.map(row => row.isNullable)).toEqual([false, true, false]);
+      expect(outputs.every(row => !("isNullable" in row))).toBe(true);
       expect(outputs.every(row => !("IsNullable" in row))).toBe(true);
     }
   });
 
-  it("defaults missing input nullability without overriding explicit booleans", () => {
+  it("drops retired authored input nullability while preserving the type", () => {
     const state: WorkflowDefinitionState = {
       inputs: [
         { referenceKey: "missing", name: "Missing", type: { alias: "String", collectionKind: "Single" } },
@@ -630,7 +630,7 @@ describe("argument collection wire adapter", () => {
 
     const inputs = canonicalizeStateForWire(state).inputs as Record<string, unknown>[];
 
-    expect(inputs.map(input => input.isNullable)).toEqual([false, true, false, true]);
+    expect(inputs.every(input => !("isNullable" in input))).toBe(true);
     expect(inputs.every(input => !("IsNullable" in input))).toBe(true);
   });
 

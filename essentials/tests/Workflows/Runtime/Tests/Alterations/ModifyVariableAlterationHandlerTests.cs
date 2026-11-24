@@ -13,6 +13,26 @@ namespace Elsa.Workflows.Runtime.Tests.Alterations;
 
 public sealed partial class ModifyVariableAlterationHandlerTests
 {
+    [Theory]
+    [InlineData("Int32", false)]
+    [InlineData("String", true)]
+    public async Task Operator_null_assignments_follow_TYPE_without_applying_workflow_default_on_null(string alias, bool accepted)
+    {
+        var identity = new WorkflowExecutableIdentity("null-artifact", "definition", "version", "1", "hash");
+        var type = new ValueTypeDescriptor(alias);
+        var original = Executable(identity, type, ValueProtectionPolicy.InstanceInline);
+        var executable = new WorkflowExecutable(original.Identity, original.RootActivity, original.ResumeTargets, original.CreatedAt,
+            original.CompatibilityMetadata, original.InputContract, original.Dependencies, original.RuntimeRequirements,
+            original.StorageDriverRequirements, original.IncidentStrategy, original.PersistenceMode, original.WorkflowVariables, new(true, false));
+        var store = new InMemoryWorkflowExecutableStore();
+        await store.SaveAsync(executable);
+        var staging = new Staging();
+        var result = await new ModifyVariableAlterationHandler(store).PreflightAsync(Context(Workflow(identity, 1, type, ValueProtectionPolicy.InstanceInline), 1,
+            staging, new { variableKey = "stable-name", value = (object?)null }));
+        Assert.Equal(accepted, result.IsAccepted);
+        if (!accepted) { Assert.Equal("VariableValueTypeMismatch", result.Failure!.Code); Assert.Empty(staging.StagedChanges); }
+    }
+
     [Fact]
     public async Task PreflightAsync_UsesStableKeyCapturedRevisionAndDeclaredProtection()
     {

@@ -94,7 +94,6 @@ function analyze(context: BlockPromotionContext, blockNodeId: string, requestedN
   const publicInput = (reference: PromotionReference, path: string) => {
     let valueType: ActivityTypeReference;
     let label: string;
-    let nullable = true;
     let sourceInputKey: string | undefined;
     if (reference.kind === "input") {
       const requestName = "memberKey" in reference.authored && context.resourceKind === "workflow-definition";
@@ -102,7 +101,7 @@ function analyze(context: BlockPromotionContext, blockNodeId: string, requestedN
       if (declaration.length !== 1) refuse("unknown-input", path, "This read does not name one current public input declaration.");
       if (declaration[0].isRequired !== true && !record(declaration[0].default))
         refuse("unpreserved-input-availability", path, "This optional input may be absent until its original read. Use a required input or an ordinary input default before promotion.");
-      valueType = type(declaration[0].type, path); label = declaration[0].name; nullable = declaration[0].isNullable === true;
+      valueType = type(declaration[0].type, path); label = declaration[0].name;
       sourceInputKey = declaration[0].referenceKey;
     } else {
       const producer = all.get(reference.key);
@@ -123,7 +122,7 @@ function analyze(context: BlockPromotionContext, blockNodeId: string, requestedN
         : { expressionType: "ActivityResult", value: clone(argumentReference(reference)) };
       binding = { referenceKey, name: label, type: valueType, source, uses: [] };
       inputs.push(binding); inputBySource.set(key, binding);
-      contract.inputs.push({ referenceKey, name: `Input${inputs.length}`, displayName: label, type: valueType, isRequired: true, isNullable: nullable,
+      contract.inputs.push({ referenceKey, name: `Input${inputs.length}`, displayName: label, type: valueType, isRequired: true,
         default: null, storageDriverKey: driver(valueType), durability: "Required" });
     }
     binding.uses.push(path);
@@ -192,7 +191,7 @@ function analyze(context: BlockPromotionContext, blockNodeId: string, requestedN
     const referenceKey = `output-${outputs.length + 1}`, outputName = `Output${outputs.length + 1}`;
     const binding = { referenceKey, name: label, type: valueType, source: clone(value), uses: [path] };
     outputs.push(binding);
-    contract.outputs.push({ referenceKey, name: outputName, displayName: label, type: valueType, isRequired: true, isNullable: context.capabilities.types.find(item => item.alias === valueType.alias)?.supportsNull === true,
+    contract.outputs.push({ referenceKey, name: outputName, displayName: label, type: valueType, isRequired: true,
       storageDriverKey: driver(valueType), durability: "Required" });
     const setters = context.catalog.filter(item => item.available !== false && item.intrinsic?.kind.toLowerCase() === "setoutput");
     if (setters.length !== 1 || !setters[0].intrinsic?.outputNameInputKey) refuse("output-capture-unavailable", "catalog", "This host needs the ordinary Set Output intrinsic for a reviewed reusable output.");

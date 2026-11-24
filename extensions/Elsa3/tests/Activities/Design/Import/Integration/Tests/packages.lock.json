@@ -956,6 +956,7 @@
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Elsa3.Activities.Design.Import": "[4.0.0-dev, )",
           "Elsa3.Models": "[4.0.0-dev, )",
           "Fluid.Core": "[2.31.0, )"

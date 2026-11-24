@@ -20,6 +20,8 @@ public interface IJavaScriptScriptEvaluator
 /// <summary>A complete, immutable request for one transient script-activity attempt.</summary>
 public sealed class JavaScriptScriptEvaluationRequest
 {
+    public bool UndefinedAsNull { get; init; }
+
     public JavaScriptScriptEvaluationRequest(
         string source,
         JsonElement arguments,

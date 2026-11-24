@@ -373,6 +373,25 @@ public sealed class GraphBodyScopeTests
         Assert.Equal(5, ReadInput(run, "node-sum"));
     }
 
+    [Theory]
+    [InlineData("({ a: undefined })", "VF-UNDEF-002", "{}")]
+    [InlineData("({ a: NaN })", "VF-NUM-001", "{\"a\":null}")]
+    public async Task Entry_expression_warnings_survive_child_scheduling(string source, string code, string expected)
+    {
+        await using var harness = ScriptingHarness();
+        var boundary = Boundary(GraphBoundaryCompleteTests.Probe("node-entry"), variables:
+            [new("sample", "Sample", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json,
+                new("JavaScript", JsonSerializer.SerializeToElement(source)))]);
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(boundary));
+        run.AssertWorkflowCompleted();
+        Assert.Equal(code, Assert.Single(run.State(BoundaryNodeId).Warnings!).Code);
+        var rows = await harness.Services.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(run.WorkflowState!.WorkflowExecutionId);
+        var row = Assert.Single(rows, value => value.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BoundaryValueRole) == ActivityExecutionScopeValues.VariableRole &&
+            value.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BoundaryReferenceKey) == "sample");
+        using var oracle = JsonDocument.Parse(expected);
+        Assert.True(JsonElement.DeepEquals(oracle.RootElement, row.InlineValue!.Value));
+    }
+
     private static WorkflowExecutionHarness ScriptingHarness() =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))

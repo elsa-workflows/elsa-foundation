@@ -57,7 +57,7 @@ public sealed class Elsa3ActivityToStateTests
             Leaf(("message", Argument("Literal", "first")), ("Message", Argument("Literal", "second")))));
 
         Assert.False(result.Succeeded);
-        var refusal = Assert.Single(result.Diagnostics);
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.DuplicateInputBinding, refusal.Code);
         Assert.Equal("node-1", refusal.Metadata["ActivityNodeId"]);
         Assert.Contains("'message' and 'Message'", refusal.Message, StringComparison.Ordinal);
@@ -78,7 +78,7 @@ public sealed class Elsa3ActivityToStateTests
     {
         var result = await ConversionServices.ConvertAsync(_urlCatalog, ConversionServices.Definition(Leaf(("url", Argument("Literal", "value")))));
 
-        var refusal = Assert.Single(result.Diagnostics);
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.DuplicateInputBinding, refusal.Code);
         Assert.Contains("'url' matches more than one declared input: 'Url', 'URL'", refusal.Message, StringComparison.Ordinal);
     }

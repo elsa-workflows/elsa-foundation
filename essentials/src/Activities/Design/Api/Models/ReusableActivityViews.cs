@@ -5,7 +5,12 @@ using System.Text.Json.Serialization;
 
 namespace Elsa.Activities.Design.Api.Models;
 
-public sealed record ActivityTypeReferenceView(string Alias, string CollectionKind);
+public sealed record ActivityTypeReferenceView(string Alias, string CollectionKind)
+{
+    /// <summary>The pinned C# type nullability on a read-only CLR contract. Authored contracts use the type catalog.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SupportsNull { get; init; }
+}
 
 public sealed record ActivityInputDefaultView(string Syntax, JsonElement Value);
 
@@ -14,7 +19,7 @@ public sealed record ActivityInputContractView(
     string Name,
     ActivityTypeReferenceView Type,
     bool IsRequired,
-    [property: JsonRequired] bool IsNullable,
+    [property: JsonIgnore] bool IsNullable,
     ActivityInputDefaultView? Default,
     string StorageDriverKey,
     ActivityBoundaryDurability Durability = ActivityBoundaryDurability.Required,
@@ -30,7 +35,7 @@ public sealed record ActivityOutputContractView(
     string Name,
     ActivityTypeReferenceView Type,
     bool IsRequired,
-    [property: JsonRequired] bool IsNullable,
+    [property: JsonIgnore] bool IsNullable,
     string StorageDriverKey,
     ActivityBoundaryDurability Durability = ActivityBoundaryDurability.Required,
     string? DisplayName = null,

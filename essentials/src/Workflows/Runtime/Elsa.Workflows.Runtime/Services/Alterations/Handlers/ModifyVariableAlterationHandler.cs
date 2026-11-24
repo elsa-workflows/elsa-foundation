@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Elsa.Serialization.Core;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -10,6 +12,16 @@ namespace Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 public sealed class ModifyVariableAlterationHandler(IWorkflowExecutableStore executableStore, TimeProvider? timeProvider = null) : IWorkflowAlterationPreflightHandler
 {
     private readonly IWorkflowExecutableStore _executableStore = executableStore ?? throw new ArgumentNullException(nameof(executableStore));
+    private readonly IWellKnownTypeRegistry? _registry;
+    private readonly IRuntimeTypeNullability? _typeDescriptors;
+
+    public ModifyVariableAlterationHandler(IWorkflowExecutableStore executableStore,
+        IWellKnownTypeRegistry registry, IRuntimeTypeNullability typeDescriptors, TimeProvider? timeProvider = null)
+        : this(executableStore, timeProvider)
+    {
+        _registry = registry;
+        _typeDescriptors = typeDescriptors;
+    }
 
     public async ValueTask<WorkflowAlterationPreflightResult> PreflightAsync(
         WorkflowAlterationPreflightContext context,
@@ -116,9 +128,11 @@ public sealed class ModifyVariableAlterationHandler(IWorkflowExecutableStore exe
     private static bool SupportsInlineReplacement(ValueProtectionPolicy policy) =>
         policy.Storage == DurableValueStorage.Inline && !policy.RequiresEncryption;
 
-    private static bool IsCompatible(JsonElement value, Elsa.Primitives.Models.ValueTypeDescriptor type)
+    private bool IsCompatible(JsonElement value, Elsa.Primitives.Models.ValueTypeDescriptor type)
     {
-        if (value.ValueKind == JsonValueKind.Null || Elsa.Primitives.Models.TypeAliasConvention.IsAny(type.Alias))
+        if (value.ValueKind == JsonValueKind.Null)
+            return Elsa.Workflows.Runtime.Core.Services.NullPolicyDefaults.AcceptsNull(type.ToTypeReference(), _registry, _typeDescriptors);
+        if (Elsa.Primitives.Models.TypeAliasConvention.IsAny(type.Alias))
             return true;
         if (type.CollectionKind != Elsa.Primitives.Models.CollectionKind.Single)
             return value.ValueKind == JsonValueKind.Array;

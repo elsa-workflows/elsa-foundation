@@ -575,11 +575,11 @@ public sealed class ActivityDefinitionAuthoringApiTests
 
         var input = Assert.Single(view!.ToDomain().Inputs);
         Assert.Equal(CollectionKind.Single, input.Type.CollectionKind);
-        Assert.True(input.IsNullable);
+        Assert.False(input.IsNullable); // Legacy authored flags are ignored; the type catalog supplies nullability.
     }
 
     [Fact]
-    public void Mutable_contract_wire_shape_requires_explicit_nullability()
+    public void Mutable_contract_wire_shape_no_longer_requires_independent_nullability()
     {
         const string json = """
             {
@@ -597,8 +597,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
             }
             """;
 
-        Assert.Throws<JsonException>(() =>
-            JsonSerializer.Deserialize<ActivityContractView>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        Assert.NotNull(JsonSerializer.Deserialize<ActivityContractView>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
     }
 
     [Fact]
@@ -613,7 +612,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
         var json = JsonSerializer.Serialize(domain.ToView(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
         Assert.Contains("\"collectionKind\":\"Single\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"isNullable\":false", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"isNullable\"", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"collectionKind\":\"None\"", json, StringComparison.Ordinal);
     }
 

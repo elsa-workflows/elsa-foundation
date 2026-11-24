@@ -37,8 +37,11 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
                 ActivityVersionBump.Major,
                 "The public activity contract schema changed."));
 
-        CompareMembers(request.FromContract.Inputs, request.ToContract.Inputs, "Input", changes, CompareInput, AddedInput, RemovedMember);
-        CompareMembers(request.FromContract.Outputs, request.ToContract.Outputs, "Output", changes, CompareOutput, AddedOutput, RemovedMember);
+        var compareClrNullability = request.FromProvider.ProviderKey == "elsa.clr-activity" || request.ToProvider.ProviderKey == "elsa.clr-activity";
+        CompareMembers(request.FromContract.Inputs, request.ToContract.Inputs, "Input", changes,
+            (before, after, kind, result) => CompareInput(before, after, kind, result, compareClrNullability), AddedInput, RemovedMember);
+        CompareMembers(request.FromContract.Outputs, request.ToContract.Outputs, "Output", changes,
+            (before, after, kind, result) => CompareOutput(before, after, kind, result, compareClrNullability), AddedOutput, RemovedMember);
         CompareMembers(request.FromContract.Outcomes, request.ToContract.Outcomes, "Outcome", changes, CompareOutcome, AddedOutcome, RemovedMember);
         CompareProvider(request.FromProvider, request.ToProvider, changes);
         CompareImplementation(request, changes);
@@ -106,12 +109,12 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
 
     private static ActivityVersionChange AddedInput(ActivityInputContract member, string memberKind)
     {
-        var breaking = member.IsRequired && member.Default is null;
+        var breaking = member.IsRequired;
         return MemberChange(member, memberKind, "MemberAdded", null, Project(member),
             breaking ? ActivityVersionChangeImpact.Breaking : ActivityVersionChangeImpact.Additive,
             breaking ? ActivityVersionBump.Major : ActivityVersionBump.Minor,
             breaking
-                ? $"Required input '{member.ReferenceKey}' was added without a compatible default."
+                ? $"Required input '{member.ReferenceKey}' was added as a required member."
                 : $"Input '{member.ReferenceKey}' was added.");
     }
 
@@ -140,18 +143,18 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
         ActivityInputContract before,
         ActivityInputContract after,
         string memberKind,
-        IDictionary<string, ActivityVersionChange> changes)
+        IDictionary<string, ActivityVersionChange> changes, bool compareClrNullability)
     {
         CompareCommon(before, after, memberKind, changes);
-        CompareNullability(before, after, memberKind, changes);
+        if (compareClrNullability) CompareNullability(before, after, memberKind, changes);
         if (before.IsRequired != after.IsRequired)
         {
-            var breaking = after.IsRequired && after.Default is null;
+            var breaking = after.IsRequired;
             Add(changes, MemberChange(after, memberKind, "RequirednessChanged", Project(before), Project(after),
                 breaking ? ActivityVersionChangeImpact.Breaking : ActivityVersionChangeImpact.Additive,
                 breaking ? ActivityVersionBump.Major : ActivityVersionBump.Minor,
                 breaking
-                    ? $"Input '{after.ReferenceKey}' changed from optional to required without a default."
+                    ? $"Input '{after.ReferenceKey}' changed from optional to required."
                     : $"Input '{after.ReferenceKey}' requiredness changed compatibly."));
         }
         CompareDefault(before, after, memberKind, changes);
@@ -161,10 +164,10 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
         ActivityOutputContract before,
         ActivityOutputContract after,
         string memberKind,
-        IDictionary<string, ActivityVersionChange> changes)
+        IDictionary<string, ActivityVersionChange> changes, bool compareClrNullability)
     {
         CompareCommon(before, after, memberKind, changes);
-        CompareNullability(before, after, memberKind, changes);
+        if (compareClrNullability) CompareNullability(before, after, memberKind, changes);
         if (before.SourceRepresentation != after.SourceRepresentation)
             Add(changes, MemberChange(after, memberKind, "SourceRepresentationChanged", Project(before), Project(after), ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major,
                 $"Output '{after.ReferenceKey}' changed source representation."));

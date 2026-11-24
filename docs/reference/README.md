@@ -6,6 +6,8 @@ Use the constitution files in `.specify/memory/` for gates, allowed exceptions, 
 
 ## Contents
 
+- [Workflow definition values](workflow-definition-values.md) - requiredness, TYPE nullability and portable engineer null policies.
+
 - [Elsa worked examples](elsa-worked-examples.md) - Elsa-specific examples, the elsa-core case study, and the long form of Elsa §E2.2-§E2.9 and §E5 moved out of `constitution.md` by #2578.
 - [Framework examples](framework-examples.md) - synthetic and application-instance examples formerly embedded in `constitution-framework.md`.
 - [Architecture rationale](architecture-rationale.md) - explanatory context, rejected alternatives, and decision rationale moved out of the constitutions.

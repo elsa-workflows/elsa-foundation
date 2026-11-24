@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -113,6 +114,7 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
                 context.CancellationToken)
             {
                 Warnings = context.Warnings,
+                UndefinedAsNull = context.UndefinedAsNull,
                 Variables = variables,
                 WorkflowState = workflowState
             });
@@ -150,8 +152,11 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
             // script, which a protected input can supply, so it keeps its text only when no input is protected.
             var isParseError = exception.GetType().Name is "ScriptPreparationException" or "ParseErrorException";
             if (context.HasProtectedInputs || ((session?.HasReadProtectedValue == true || workflowState?.HasReadProtectedValue == true) && !isParseError))
-                throw new InvalidOperationException(
-                    $"The script failed ({exception.GetType().Name}). Its message is withheld because a value it read is protected.");
+            {
+                if (exception is Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure valueFree)
+                    throw new RedactedScriptFailureException(valueFree.ValueFreeMessage);
+                throw new InvalidOperationException($"The script failed ({exception.GetType().Name}). Its message is withheld because a value it read is protected.");
+            }
             throw;
         }
 
@@ -214,5 +219,11 @@ public sealed record RunJavaScriptResult
     public RunJavaScriptResult(JsonElement? value) => Value = value?.Clone();
 
     [Output(Key = "result", Path = "value", IsRequired = false)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public JsonElement? Value { get; }
+}
+
+internal sealed class RedactedScriptFailureException(string message) : InvalidOperationException(message), Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure
+{
+    public string ValueFreeMessage => Message;
 }

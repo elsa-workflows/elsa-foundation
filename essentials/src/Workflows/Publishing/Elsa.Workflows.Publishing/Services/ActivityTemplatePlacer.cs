@@ -1,3 +1,4 @@
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using System.Security.Cryptography;
 using System.Reflection;
 using System.Collections.ObjectModel;
@@ -72,6 +73,21 @@ public sealed class ActivityTemplatePlacer(
     IWellKnownTypeRegistry? typeRegistry = null,
     Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? scriptVariableReadResolver = null)
 {
+    private readonly IJavaScriptScriptOutcomeAnalyzer? _scriptOutcomeAnalyzer;
+    public ActivityTemplatePlacer(IActivityDefinitionVersionPublicationStore publications, IExecutableActivityTemplateReader templates,
+        IWorkflowExecutableSourceReferenceReader sourceReferences, IActivityPlacementHasher placementHasher,
+        IActivityStructureService activityStructureService, RuntimeInputBindingCompiler inputBindingCompiler,
+        RuntimeOutputCaptureCompiler outputCaptureCompiler, IWellKnownTypeRegistry? typeRegistry,
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? scriptVariableReadResolver,
+        IJavaScriptScriptOutcomeAnalyzer? scriptOutcomeAnalyzer)
+        : this(publications, templates, sourceReferences, placementHasher, activityStructureService,
+            inputBindingCompiler, outputCaptureCompiler, typeRegistry, scriptVariableReadResolver)
+    { _scriptOutcomeAnalyzer = scriptOutcomeAnalyzer; }
+
+    internal ActivityTemplatePlacer WithInputBindingCompiler(RuntimeInputBindingCompiler compiler) =>
+        new(publications, templates, sourceReferences, placementHasher, activityStructureService, compiler,
+            outputCaptureCompiler, typeRegistry, scriptVariableReadResolver, _scriptOutcomeAnalyzer);
+
     private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
@@ -461,7 +477,7 @@ public sealed class ActivityTemplatePlacer(
             }
 
             var inputBindings = isBoundary && stackIsRoot(frame)
-                ? rootRequest.BoundaryInputBindings
+                ? CompileRootInputs(current.Node, frame, rootRequest.BoundaryInputBindings)
                 : isBoundary && frame.OccurrenceOverlay is not null
                     ? CompileOccurrenceInputs(current.Node, frame)
                     : current.Node.InputBindings;
@@ -477,6 +493,11 @@ public sealed class ActivityTemplatePlacer(
                     frame.OccurrenceOverlay?.InputContracts, frame.OccurrenceOverlay?.Structure)
                 : current.Node.ActivityContract;
             PinOccurrenceWorkflowState(current.Node, inputBindings, metadata);
+            var scriptType = typeRegistry is null ? null : BackgroundEligibilitySubject.ForPinnedNode(current.Node, typeRegistry).ActivityType;
+            var scriptKey = scriptType?.GetCustomAttribute<Elsa.Activities.Runtime.Core.Attributes.ActivityScriptOutcomesAttribute>(inherit: true)?.ScriptInputKey
+                ?? metadata.GetValueOrDefault(RuntimeMetadataKeys.ScriptResultInputKey);
+            metadata = ScriptResultMetadata.Pin(scriptKey, inputBindings, metadata, _scriptOutcomeAnalyzer,
+                outputCaptures.ContainsKey("result"), current.Node.AuthoredActivityId).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
             var placedStructure = isBoundary && frame.OccurrenceOverlay is not null
                 ? frame.OccurrenceOverlay.Structure
                 : current.Node.Structure;
@@ -485,6 +506,7 @@ public sealed class ActivityTemplatePlacer(
                 (!metadata.TryGetValue("accessesWorkflowState", out var access) || access != "false"))
                 throw Rejected(current.Node.AuthoredActivityId, "VF-STATE-002",
                     "Workflow outputs and identity require an inline leaf outside a closed reusable graph. Known read-only scripts remain supported.");
+            inputBindingCompiler.ValidateTemplateLiteralNulls(current.Node, inputBindings, activityContract);
             var placed = new ExecutableNode(
                 nodeIds[current.Node.ExecutableNodeId],
                 isBoundary && stackIsRoot(frame) ? rootRequest.InvocationOrigin.Segments.LastOrDefault(x => x.Kind == ActivityInvocationOriginSegmentKind.AuthoredNode)?.Id ?? current.Node.AuthoredActivityId : current.Node.AuthoredActivityId,
@@ -707,6 +729,9 @@ public sealed class ActivityTemplatePlacer(
                      graphScopeId))
             captures[key] = capture;
 
+        var metadata = ScriptResultMetadata.Pin(root.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ScriptResultInputKey),
+            root.InputBindings, root.Metadata, _scriptOutcomeAnalyzer, captures.ContainsKey("result"), root.AuthoredActivityId);
+
         return new ExecutableNode(
             root.ExecutableNodeId,
             root.AuthoredActivityId,
@@ -715,7 +740,7 @@ public sealed class ActivityTemplatePlacer(
             root.Descriptor,
             root.InputBindings,
             captures,
-            root.Metadata,
+            metadata,
             root.ExecutionPlacement,
             root.ChildSlots,
             root.Structure,
@@ -805,6 +830,31 @@ public sealed class ActivityTemplatePlacer(
         node.ActivityContract,
         node.IntrinsicKind,
         node.IntrinsicVariable);
+
+    private IReadOnlyDictionary<string, RuntimeInputBinding> CompileRootInputs(
+        ExecutableNode templateRoot,
+        PlacementFrame frame,
+        IReadOnlyDictionary<string, RuntimeInputBinding> supplied)
+    {
+        var missing = frame.Publication.Contract.Inputs.Where(input => !supplied.ContainsKey(input.ReferenceKey)).ToArray();
+        if (missing.Length == 0) return supplied;
+        var completed = new Dictionary<string, RuntimeInputBinding>(supplied, StringComparer.Ordinal);
+        if (templateRoot.Descriptor.ConsumerKey == WellKnownRuntimeActivityConsumers.ClrActivity)
+        {
+            var pinned = templateRoot.ActivityContract
+                ?? throw new InvalidOperationException("A CLR template root requires its pinned input contract.");
+            var contracts = missing.Select(input => pinned.Inputs.TryGetValue(input.ReferenceKey, out var contract)
+                ? contract : throw new InvalidOperationException("The public CLR input has no pinned input contract."));
+            foreach (var binding in inputBindingCompiler.CompileAll(templateRoot.AuthoredActivityId, contracts, []))
+                completed.Add(binding.Key, binding.Value);
+        }
+        else
+        {
+            foreach (var input in missing)
+                completed.Add(input.ReferenceKey, inputBindingCompiler.CompileUnboundPublishedBoundaryInput(templateRoot.AuthoredActivityId, input));
+        }
+        return completed;
+    }
 
     private IReadOnlyDictionary<string, RuntimeInputBinding> CompileOccurrenceInputs(
         ExecutableNode templateRoot,

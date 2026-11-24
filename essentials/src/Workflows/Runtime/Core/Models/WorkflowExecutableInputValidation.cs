@@ -71,6 +71,7 @@ public static class WorkflowExecutableInputValidationReasonCodes
     public const string UnknownName = "runtime.input.unknown-name";
     public const string DuplicateName = "runtime.input.duplicate-name";
     public const string MissingRequired = "runtime.input.missing-required";
+    public const string NullNotAllowed = "runtime.input.null-not-allowed";
     public const string UnknownTypeAlias = "runtime.input.unknown-type-alias";
     public const string IncompatibleValue = "runtime.input.incompatible-value";
 }

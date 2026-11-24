@@ -1,3 +1,4 @@
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -38,12 +39,36 @@ public sealed class ExecutableNodeCompiler(
     ValueConversionPlanResolver? conversionPlanResolver = null,
     ScriptVariableReadResolver? scriptVariableReadResolver = null)
 {
+    private readonly IJavaScriptScriptOutcomeAnalyzer? _scriptOutcomeAnalyzer;
+
+    public ExecutableNodeCompiler(IActivityStructureService activityStructureService, IWellKnownTypeRegistry wellKnownTypeRegistry,
+        RuntimeInputBindingCompiler inputBindingCompiler, RuntimeOutputCaptureCompiler outputCaptureCompiler,
+        IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders,
+        ValueConversionPlanResolver? conversionPlanResolver, ScriptVariableReadResolver? scriptVariableReadResolver,
+        IJavaScriptScriptOutcomeAnalyzer? scriptOutcomeAnalyzer)
+        : this(activityStructureService, wellKnownTypeRegistry, inputBindingCompiler, outputCaptureCompiler,
+            operatorSchedulingCapabilityProviders, conversionPlanResolver, scriptVariableReadResolver)
+    {
+        _scriptOutcomeAnalyzer = scriptOutcomeAnalyzer;
+    }
+
+    internal ExecutableNodeCompiler WithInputBindingCompiler(RuntimeInputBindingCompiler compiler) =>
+        new(activityStructureService, wellKnownTypeRegistry, compiler, outputCaptureCompiler,
+            operatorSchedulingCapabilityProviders, conversionPlanResolver, scriptVariableReadResolver, _scriptOutcomeAnalyzer) { _workflowOutputTypes = _workflowOutputTypes };
 
     /// <summary>
     /// The scoped-variable visibility of one compilation, iteration scopes included, kept per tree projection so the
     /// recursive node compilation reads it without threading it through every call (spec 1222 FR-001, FR-004a).
     /// </summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ActivityTreeProjection, ScopedVariableVisibility> ReadVisibility = new();
+
+    private IReadOnlyDictionary<string, TypeReference> _workflowOutputTypes = new Dictionary<string, TypeReference>();
+
+    internal ExecutableNodeCompiler WithOutputDeclarations(IEnumerable<OutputDefinition> outputs)
+    {
+        _workflowOutputTypes = outputs.ToDictionary(output => output.Name, output => output.Type, StringComparer.Ordinal);
+        return this;
+    }
 
     private readonly IReadOnlyCollection<IOperatorActivitySchedulingCapabilityProvider> _operatorSchedulingCapabilityProviders =
         (operatorSchedulingCapabilityProviders ?? []).ToArray();
@@ -112,7 +137,8 @@ public sealed class ExecutableNodeCompiler(
             descriptor: descriptor,
             inputBindings: new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal),
-            metadata: new Dictionary<string, string>(StringComparer.Ordinal),
+            metadata: ScriptResultMetadata.Pin(clrActivityType?.GetCustomAttribute<ActivityScriptOutcomesAttribute>(inherit: true)?.ScriptInputKey,
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), _scriptOutcomeAnalyzer, consumed: false, activityId: activity.NodeId),
             activityContract: activityContract);
     }
 
@@ -194,6 +220,7 @@ public sealed class ExecutableNodeCompiler(
             throw new ArgumentException($"VF-STATE-002: Structural node '{activity.NodeId}' cannot access workflow state from its body.");
 
         var outputCaptures = CompileOutputCaptures(activity, activityContract, workflowVariables);
+        var scriptInputKey = clrActivityType?.GetCustomAttribute<ActivityScriptOutcomesAttribute>(inherit: true)?.ScriptInputKey;
 
         return new ExecutableNode(
             executableNodeId: activity.NodeId,
@@ -203,7 +230,7 @@ public sealed class ExecutableNodeCompiler(
             descriptor: descriptor,
             inputBindings: inputBindings,
             outputCaptures: outputCaptures,
-            metadata: WithBodyReadPlan(
+            metadata: ScriptResultMetadata.Pin(scriptInputKey, inputBindings, WithBodyReadPlan(
                 StepVariableWriteMetadata.Pin(
                     CompileNodeMetadata(activity.NodeId, executionType, clrActivityType, activity.LostUpdateMode, activity.DisableBackgroundInputRefresh),
                     projectedInputs.Definitions,
@@ -213,7 +240,7 @@ public sealed class ExecutableNodeCompiler(
                     bodyWritePlan,
                     clrActivityType is not null && VariableReferenceTypes.DeclaresAccessesUndeclaredVariables(clrActivityType),
                     declaresState),
-                bodyReadPlan),
+                bodyReadPlan), _scriptOutcomeAnalyzer, outputCaptures.ContainsKey("result"), activity.NodeId),
             childSlots: childSlots,
             structure: structure,
             activityContract: activityContract,
@@ -539,6 +566,19 @@ public sealed class ExecutableNodeCompiler(
         var valueType = intrinsic.Variable is { } target
             ? ResolveIntrinsicVariableType(activity.NodeId, target, projection, workflowVariables)
             : intrinsic.ValueType;
+        if (runtimeKind == WorkflowIntrinsicKind.SetOutput &&
+            activity.Inputs.FirstOrDefault(input => input.ReferenceKey == WorkflowIntrinsicInputKeys.Name)?.Value is { } nameArgument &&
+            StringComparer.OrdinalIgnoreCase.Equals(nameArgument.ExpressionType, "Literal"))
+        {
+            var outputName = nameArgument.Value switch
+            {
+                string text => text,
+                JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+                _ => null
+            };
+            if (outputName is not null && _workflowOutputTypes.TryGetValue(outputName, out var declaredType))
+                valueType = declaredType;
+        }
         var inputTypes = runtimeKind switch
         {
             WorkflowIntrinsicKind.Control or WorkflowIntrinsicKind.Finish =>
@@ -576,7 +616,7 @@ public sealed class ExecutableNodeCompiler(
                     StorageDriverType: null,
                     DisplayName: input.Key,
                     Category: null,
-                    IsNullable: false,
+                    IsNullable: input.Key == WorkflowIntrinsicInputKeys.Value && inputBindingCompiler.AuthoredAllowsNull(input.Value),
                     IsRequired: true),
                 authoredInputs[input.Key]),
             StringComparer.Ordinal);

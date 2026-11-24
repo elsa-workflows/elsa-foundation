@@ -6,6 +6,11 @@ namespace Elsa.Activities.Design.Core.Services;
 /// <summary>Admits mutable public contracts only through the activated capability catalog.</summary>
 public sealed class ActivityContractAuthoringValidator(IActivityContractCapabilityCatalog catalog)
 {
+    /// <summary>Authored nullability follows the activated type capability, including collection types.</summary>
+    public bool AllowsNull(Elsa.Primitives.Models.TypeReference type) =>
+        type.CollectionKind != Elsa.Primitives.Models.CollectionKind.Single ||
+        catalog.Types.FirstOrDefault(capability => capability.Alias == type.Alias)?.SupportsNull == true;
+
     public IReadOnlyList<ActivityDiagnostic> Validate(
         ActivityContract contract,
         ActivityDiagnosticSubject subject)
@@ -15,8 +20,11 @@ public sealed class ActivityContractAuthoringValidator(IActivityContractCapabili
         for (var index = 0; index < contract.Inputs.Count; index++)
         {
             var input = contract.Inputs[index];
-            ValidateMember(input.ReferenceKey, input.Type, input.IsNullable, input.StorageDriverKey, $"/contract/inputs/{index}", subject, capabilities, diagnostics);
-            if (input.Default?.Value.ValueKind == System.Text.Json.JsonValueKind.Null && !input.IsNullable)
+            ValidateMember(input.ReferenceKey, input.Type, AllowsNull(input.Type), input.StorageDriverKey, $"/contract/inputs/{index}", subject, capabilities, diagnostics);
+            if (input.IsRequired && input.Default is not null)
+                diagnostics.Add(Diagnostic("VF-ACT-014", "A member with a default is optional.", subject,
+                    $"/contract/inputs/{index}/isRequired", input.ReferenceKey));
+            if (input.Default?.Value.ValueKind == System.Text.Json.JsonValueKind.Null && !AllowsNull(input.Type))
                 diagnostics.Add(Diagnostic(
                     "activity.contract.null-default-not-allowed",
                     "A null default requires the contract member to allow null.",
@@ -28,7 +36,7 @@ public sealed class ActivityContractAuthoringValidator(IActivityContractCapabili
         for (var index = 0; index < contract.Outputs.Count; index++)
         {
             var output = contract.Outputs[index];
-            ValidateMember(output.ReferenceKey, output.Type, output.IsNullable, output.StorageDriverKey, $"/contract/outputs/{index}", subject, capabilities, diagnostics);
+            ValidateMember(output.ReferenceKey, output.Type, AllowsNull(output.Type), output.StorageDriverKey, $"/contract/outputs/{index}", subject, capabilities, diagnostics);
         }
 
         return ActivityDiagnosticOrderer.Order(diagnostics);
@@ -83,7 +91,7 @@ public sealed class ActivityContractAuthoringValidator(IActivityContractCapabili
                 subject,
                 $"{pointer}/type/collectionKind",
                 referenceKey));
-        if (isNullable && !capability.SupportsNull)
+        if (isNullable && type.CollectionKind == Elsa.Primitives.Models.CollectionKind.Single && !capability.SupportsNull)
             diagnostics.Add(Diagnostic(
                 "activity.contract.nullability-unavailable",
                 "The selected type does not support nullable contract members.",

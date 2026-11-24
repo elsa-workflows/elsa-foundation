@@ -39,7 +39,7 @@ public sealed partial class GraphActivityProviderTests
         Assert.Equal("exact-version", document.RootActivity.ActivityVersionId);
         var input = Assert.Single(document.Inputs);
         Assert.Equal("customer-id", input.ReferenceKey);
-        Assert.True(input.IsNullable);
+        Assert.False(input.IsNullable); // Authored members carry their TYPE; no independent nullable flag.
         Assert.True(input.IsRequired);
         Assert.Equal("Literal", input.DefaultSyntax);
         Assert.Equal("default", input.DefaultValue!.Value.GetString());

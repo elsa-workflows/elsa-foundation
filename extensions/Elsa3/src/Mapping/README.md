@@ -8,6 +8,18 @@ decision record for every Elsa 3 member is
 [`specs/236-elsa3-activity-map/member-map.md`](../../../../specs/236-elsa3-activity-map/member-map.md); flowchart
 connections follow [`specs/239-elsa3-flowchart-connections`](../../../../specs/239-elsa3-flowchart-connections/spec.md).
 
+## Portable null policies
+
+The engineer option `Elsa3MappingOptions.ApplyElsa3NullPolicies` (also exposed by `Elsa3MappingFeature`) defaults to
+true and records both `strategyOptions.nullHandling.defaultOnNull` and `undefinedAsNull`. Turning it off records
+native Elsa 4 rules. Native authored workflows leave both policies off. The report includes `ELS3-NULL-POLICIES`.
+See [workflow definition values](../../../../docs/reference/workflow-definition-values.md) for each policy's runtime
+before/after examples, export/import behavior and diagnostics. These are configuration settings, not Studio controls.
+
+A variable or optional workflow input of a date, time, duration or Guid type without a starting value is refused before
+publication: declare a default or use String / Any. Elsa 3.6.3 exposes neither requiredness nor default on its workflow
+input definitions, so converted inputs are optional and their nullability follows TYPE.
+
 ## Pipeline
 
 A conversion clones the definition, so the caller's object is never changed, then runs four stages:
@@ -277,10 +289,10 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | A read of a `DateTime` or `DateTimeOffset` variable or input | A `Date` of the same instant (`v == null ? v : new Date(v)`), because Elsa 3 handed scripts a `Date` and Elsa 4 hands over ISO 8601 text |
 | Local date and time: `getHours()` and the other local getters and setters, `new Date(y, m, …)`, parsing text without an offset, parsing a value that is not a literal | Under `AssumeUtc`: as written, in UTC, with a warning. Under `SourceTimeZone`: rewritten into `Temporal` code in the server's zone, with `Date`'s roll-over of out-of-range fields and its handling of skipped and repeated hours. Refused under `Refuse` (below) |
 | `toLocaleString(locale)`, `localeCompare(other, locale)`, an `Intl` constructor with a locale | As written. On a date, the text also needs an explicit `timeZone` (below) |
-| A top-level `return` | The body runs as a function. A trailing expression gets a `return`; a bare `return;` returns `null` |
+| A top-level `return` | The body runs as a function. A trailing expression gets a `return`; a bare `return;` produces no value, normalized only by the pinned `UndefinedAsNull` policy |
 | A statement-form expression | A function that returns its last expression |
 | A RunJavaScript body | Reads go through the `arguments` input, and the completion value becomes a `return`. A body whose last line is a `//` comment ends with a newline, so the comment cannot break Elsa 4's script wrapper (#3171) |
-| An expression whose value is `undefined` (a missing property, a function that returns nothing) | `null`, as in Elsa 3: every value that leaves a bound expression ends in `?? null`, which leaves `0`, `""` and `false` alone. A RunJavaScript body needs nothing, because Elsa 4 already turns its `undefined` into `null` |
+| An expression whose value is `undefined` (a missing property, a function that returns nothing) | The pinned `UndefinedAsNull` policy gives null when the converter option is enabled; otherwise the native boundary refuses consumed undefined. Expression source is not rewritten with `?? null`. A bound RunJavaScript result uses the same explicit boundary. |
 | `setVariable('x', v)`, a generated `setX(v)` in a RunJavaScript body of a regular workflow | `variables.x = v` (`variables["x"] = v` when the name is not an identifier), a whole assignment written with the step (spec 1231 FR-032, Q6). Where the call's value could be read (the script's last statement, or inside an expression) it becomes `void (variables.x = v)`, since Elsa 3's setters returned nothing |
 | `setVariable(name, v)` with a computed name in a RunJavaScript body of a regular workflow | `variables[name] = v`: the name resolves when the script runs, nearest scope first; an undeclared name faults the step, where Elsa 3 created the variable (spec 1231 FR-033 as amended, #4899). A Run JavaScript body gets no import check of which names it can reach, as for a computed read in a body |
 | `getVariable('x').m = v`, `getX().m++`, `variables.x.m = v` in a RunJavaScript body of a regular workflow | The same member change through `variables.x`: written as the stored value with that change (ADR 0090 C2, C3) |
@@ -323,10 +335,10 @@ capability for them (#3026). Elsa 4 deliberately strips them from expressions to
 
 Known differences that convert without a diagnostic, because they depend on how the script is called or on the data:
 - `this` in a function called without a receiver was Elsa 3's global object; in Elsa 4 it is `undefined`.
-- An `undefined` value inside an object result (`{ discount: undefined }`) kept its key as `null` in Elsa 3; Elsa 4
-  drops the key, which shows in serialized bodies and in `in` or `Object.keys` (#3170).
-- A `null` result bound to a non-nullable input (`Int32`, `Boolean`, an enum) became the type's default in Elsa 3
-  (`0`, `false`); Elsa 4 refuses it at run time with `VF-ACT-004` (#3172).
+- With the converter's default `ApplyElsa3NullPolicies=true`, undefined object members retain their keys as null,
+  and null bound to a supported non-nullable scalar uses its type default (`0`, `false`, enum zero).
+  With that option off, undefined object members are omitted (#3170) and null bound to a non-nullable input
+  is refused with `VF-ACT-004` (#3172). See [workflow value policies](../../../../docs/reference/workflow-definition-values.md).
 - Elsa 3 handed scripts mutable .NET values; Elsa 4 hands them frozen JSON values.
 
 ## Missing, blank and deliberately null members (spec 267 follow-up)

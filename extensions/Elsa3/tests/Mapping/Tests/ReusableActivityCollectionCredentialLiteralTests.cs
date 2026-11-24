@@ -211,7 +211,7 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
             Argument(OtherCaseSpelling, "Literal", Literal))));
 
         Assert.Null(_command.Mutation);
-        var duplicate = Assert.Single(refusal.Diagnostics);
+        var duplicate = Assert.Single(refusal.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.DuplicateInputBinding, duplicate.Code);
         Assert.Contains($"'{CredentialInput}' and '{OtherCaseSpelling}'", duplicate.Message, StringComparison.Ordinal);
         var (status, body) = await RenderAsync(refusal);

@@ -154,7 +154,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   const outputSave = page.waitForResponse(response => response.request().method() === "PUT" && response.url().includes("/design/workflows/drafts/") && (response.request().postDataJSON().state?.outputs?.length ?? 0) > 0);
   await page.getByRole("button", { name: "Add output", exact: true }).click();
   const added = await outputSave; expect(added.status()).toBe(200);
-  expect(added.request().postDataJSON().state.outputs[0].isNullable).toBe(false);
+  expect(added.request().postDataJSON().state.outputs[0]).not.toHaveProperty("isNullable");
   await page.getByLabel("Output name", { exact: true }).fill("ReviewData");
   // A remounted editor briefly uses the text fallback while its descriptor catalog loads.
   // This composed host provides the catalog; wait for its native picker before selecting JSON.

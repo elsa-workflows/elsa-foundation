@@ -583,7 +583,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             storageDriverRequirements: null,
             incidentStrategy: executable.IncidentStrategy,
             persistenceMode: _workflowPersistenceMode ?? executable.PersistenceMode,
-            workflowVariables: executable.WorkflowVariables);
+            workflowVariables: executable.WorkflowVariables,
+            valuePolicies: executable.ValuePolicies);
 
     private ExecutableNode PinClrActivityContract(ExecutableNode node)
     {
@@ -713,10 +714,16 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var type = NewValueType(property.PropertyType);
         if (!node.InputBindings.TryGetValue(key, out var binding) &&
             !node.InputBindings.TryGetValue(property.Name, out binding))
-            return NewLiteralBinding(key, type, DefaultInputValue(property, attribute));
+            return property.GetCustomAttribute<RequiredAttribute>(inherit: true) is not null
+                ? new RuntimeInputBinding(key, type, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Absent(type, ValueProtectionPolicy.InstanceInline))
+                : NewLiteralBinding(key, type, DefaultInputValue(property, attribute));
 
         return binding.Source switch
         {
+            RuntimeInputBindingSource.Literal when binding.Literal?.Presence == ValuePresence.Absent =>
+                new RuntimeInputBinding(key, type, binding.EffectivePolicy, RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Absent(type, binding.EffectivePolicy)),
             RuntimeInputBindingSource.Literal => NewLiteralBinding(key, type, LiteralValue(binding)),
             RuntimeInputBindingSource.Expression => new RuntimeInputBinding(
                 key,

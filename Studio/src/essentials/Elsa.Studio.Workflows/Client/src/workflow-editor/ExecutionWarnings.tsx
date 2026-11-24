@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Info } from "lucide-react";
 import { StatusChip } from "@elsa-workflows/studio-ui";
 import type { ExecutionWarningView } from "../workflowTypes";
 import "./variableLifecycle.css";
@@ -24,9 +24,14 @@ export function warningBadgeLabel(count: number) {
 export function ExecutionWarningBadge({ warnings }: { warnings: readonly ExecutionWarningView[] | null | undefined }) {
   const count = warnings?.length ?? 0;
   if (count === 0) return null;
+  const informationCount = warnings!.filter(warning => warning.severity === "Information").length;
+  const warningCount = count - informationCount;
+  const informationOnly = warningCount === 0;
+  const badge = [warningCount ? warningBadgeLabel(warningCount) : null,
+    informationCount ? `${informationCount} information ${informationCount === 1 ? "record" : "records"}` : null].filter(Boolean).join(" · ");
   return (
     <span className="wf-lost-update-status" data-testid="execution-warning-badge">
-      <StatusChip tone="warning"><AlertTriangle size={12} aria-hidden="true" /> {warningBadgeLabel(count)}</StatusChip>
+      <StatusChip tone={informationOnly ? "neutral" : "warning"}>{informationOnly ? <Info size={12} aria-hidden="true" /> : <AlertTriangle size={12} aria-hidden="true" />} {badge}</StatusChip>
     </span>
   );
 }
@@ -43,10 +48,10 @@ export function ExecutionWarningsSection({ warnings }: { warnings: readonly Exec
       </header>
       <div className="wf-variable-write-list" role="list">
         {warnings.map((warning, index) => (
-          <article key={`${warning.code}:${warning.source}:${warning.inputKey ?? ""}:${index}`} className="wf-variable-write" role="listitem" data-outcome="Warning">
+          <article key={`${warning.code}:${warning.source}:${warning.inputKey ?? ""}:${index}`} className="wf-variable-write" role="listitem" data-outcome={warning.severity === "Information" ? "Information" : "Warning"}>
             <header>
               <strong>{warningSourceLabel(warning)}</strong>
-              <span className="wf-variable-write-outcome">{warning.code}</span>
+              <span className="wf-variable-write-outcome">{warning.severity || "Warning"} · {warning.code}</span>
             </header>
             <p>{warning.message}</p>
             {Object.keys(warning.details ?? {}).length > 0 ? (

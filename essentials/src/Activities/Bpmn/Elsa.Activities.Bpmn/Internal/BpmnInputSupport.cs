@@ -21,7 +21,7 @@ internal static class BpmnInputSupport
     };
 
     internal static void Validate(WorkflowExecutableInputContract modelContract, BpmnInputModelDefinition envelope,
-        IWorkflowExecutableInputValidator validator)
+        IWorkflowExecutableInputValidator validator, IReadOnlyDictionary<string, WorkflowValuePolicies>? workerPolicies = null)
     {
         // The v1 contract JSON cannot distinguish an absent default from a null default.
         // Refuse while presence is observable, before hashing or serializing the new envelope.
@@ -37,7 +37,7 @@ internal static class BpmnInputSupport
         {
             var contract = mapping.WorkerInputContract ?? throw Invalid("A model worker mapping lacks its pinned input contract.");
             Check(validator.ValidateKnownInputs(contract, mapping.Inputs.Where(item => item.Value.Kind == "Literal")
-                .Select(item => KeyValuePair.Create(item.Key, item.Value.Value!.Value))));
+                .Select(item => KeyValuePair.Create(item.Key, item.Value.Value!.Value)), workerPolicies is null ? WorkflowValuePolicies.Off : workerPolicies[mapping.BindingId]));
             foreach (var pair in mapping.Inputs)
             {
                 var target = contract.Inputs.SingleOrDefault(input => input.Name == pair.Key)
@@ -45,16 +45,17 @@ internal static class BpmnInputSupport
                 if (pair.Value.Kind != "Input") continue;
                 var source = modelContract.Inputs.SingleOrDefault(input => input.Name == pair.Value.Name)
                     ?? throw Invalid($"Model input '{pair.Value.Name}' is not declared.");
-                if (source.Type != target.Type || target.IsRequired && !target.DefaultValue.HasValue && !source.IsRequired && !source.DefaultValue.HasValue)
+                if (source.Type != target.Type || target.IsRequired && !source.IsRequired && !source.DefaultValue.HasValue)
                     throw Invalid($"Model input '{source.Name}' cannot satisfy worker input '{target.Name}'.");
             }
-            if (contract.Inputs.Any(input => input.IsRequired && !input.DefaultValue.HasValue && !mapping.Inputs.ContainsKey(input.Name)))
+            if (contract.Inputs.Any(input => input.IsRequired && !mapping.Inputs.ContainsKey(input.Name)))
                 throw Invalid("Every required worker input needs an explicit mapping or default.");
         }
     }
 
     internal static IReadOnlyDictionary<string, JsonElement> Realize(BpmnWorkerInputMapping mapping,
-        IReadOnlyDictionary<string, JsonElement> modelInputs, IWorkflowExecutableInputValidator validator)
+        IReadOnlyDictionary<string, JsonElement> modelInputs, IWorkflowExecutableInputValidator validator,
+        WorkflowValuePolicies? policies = null)
     {
         var values = new List<KeyValuePair<string, JsonElement>>();
         foreach (var pair in mapping.Inputs)
@@ -62,7 +63,7 @@ internal static class BpmnInputSupport
             if (pair.Value.Kind == "Literal") values.Add(new(pair.Key, pair.Value.Value!.Value));
             else if (modelInputs.TryGetValue(pair.Value.Name!, out var value)) values.Add(new(pair.Key, value));
         }
-        var result = validator.Validate(mapping.WorkerInputContract ?? throw Invalid("The worker contract is missing."), values);
+        var result = validator.Validate(mapping.WorkerInputContract ?? throw Invalid("The worker contract is missing."), values, policies ?? WorkflowValuePolicies.Off);
         Check(result);
         return result.NormalizedInputs;
     }

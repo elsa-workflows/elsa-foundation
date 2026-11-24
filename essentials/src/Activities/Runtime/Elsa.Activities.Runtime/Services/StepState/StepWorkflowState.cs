@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Services;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Services.StepVariables;
@@ -176,18 +177,11 @@ internal sealed class StepWorkflowState : IStepWorkflowState
             foreach (var row in durableValues.Where(row => row.ValueId.StartsWith(RuntimeWorkflowStateSeed.OutputValueIdPrefix, StringComparison.Ordinal)))
             {
                 var name = row.ValueId[RuntimeWorkflowStateSeed.OutputValueIdPrefix.Length..];
-                bool Flag(string key) => row.Metadata.TryGetValue(key, out var flag) && bool.TryParse(flag, out var parsed) && parsed;
-                var metadata = row.Metadata.Where(pair => pair.Key is not RuntimeMetadataKeys.OutputName and
-                    not RuntimeMetadataKeys.IsSensitive and not RuntimeMetadataKeys.RequiresEncryption and
-                    not RuntimeMetadataKeys.RedactionMode and not RuntimeMetadataKeys.RetentionPolicy).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-                if (row.ExternalReference is { } reference)
-                    metadata.TryAdd(ValuePolicyCombiner.StorageProfileMetadataKey, reference.StorageProfile);
-                var policy = new ValueProtectionPolicy(row.Lifecycle, row.Storage, Flag(RuntimeMetadataKeys.IsSensitive),
-                    Flag(RuntimeMetadataKeys.RequiresEncryption), row.Metadata.GetValueOrDefault(RuntimeMetadataKeys.RedactionMode),
-                    row.Metadata.GetValueOrDefault(RuntimeMetadataKeys.RetentionPolicy), metadata);
+                var policy = DurableValuePolicies.Read(row);
                 var type = new ValueTypeDescriptor(TypeAliasConvention.AnyAlias);
                 outputs[name] = row.ExternalReference is { } external
                     ? ValueEnvelope.External(type, external, policy)
+                    : row.InlineValue is { ValueKind: JsonValueKind.Null } ? ValueEnvelope.Null(type, policy)
                     : row.InlineValue is { } json ? ValueEnvelope.Inline(type, json, policy) : ValueEnvelope.Absent(type, policy);
                 if (row.InlineValue is { } inline) payloads[name] = inline.Clone();
 

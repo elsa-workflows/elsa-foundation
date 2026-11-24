@@ -11,13 +11,13 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class TriggerInputMapperTests
+public sealed partial class TriggerInputMapperTests
 {
     [Fact]
     public async Task Source_omission_applies_the_target_default_while_explicit_null_is_validated()
     {
         var mapper = Mapper();
-        var contract = Contract(new WorkflowDeclaredInput("count", new("Int32"), true, Json("7")));
+        var contract = Contract(new WorkflowDeclaredInput("count", new("Int32"), false, Json("7")));
         TriggerInputMapping[] mappings = [new("count", new TriggerSourceBinding(["payload", "count"]))];
 
         var omitted = await mapper.MapAsync(contract, mappings, Json("{\"payload\":{}}"));
@@ -26,7 +26,7 @@ public sealed class TriggerInputMapperTests
         Assert.True(omitted.IsValid);
         Assert.Equal(7, omitted.NormalizedInputs["count"].GetInt32());
         Assert.False(explicitNull.IsValid);
-        Assert.Equal(WorkflowExecutableInputValidationReasonCodes.IncompatibleValue, Assert.Single(explicitNull.Findings).ReasonCode);
+        Assert.Equal(WorkflowExecutableInputValidationReasonCodes.NullNotAllowed, Assert.Single(explicitNull.Findings).ReasonCode);
     }
 
     [Fact]

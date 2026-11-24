@@ -1,5 +1,6 @@
+import { typeAllowsNull } from "./typeNullability";
 import type { StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
-import type { ActivityInputContract } from "./activityDefinitionTypes";
+import type { ActivityContractTypeCapability, ActivityInputContract } from "./activityDefinitionTypes";
 import type {
   ActivityDraftTestRunInput,
   ActivityDraftTestRunView
@@ -44,7 +45,7 @@ export function toWorkflowRunInput(input: ActivityInputContract): WorkflowInput 
     category: input.category ?? "",
     uiHint: input.uiHint ?? "",
     storageDriverType: input.storageDriverKey || null,
-    type: readArgumentType({ type: input.type }),
+    type: { ...readArgumentType({ type: input.type }), ...(typeof input.type.supportsNull === "boolean" ? { supportsNull: input.type.supportsNull } : {}) },
     isRequired: input.isRequired
   };
 }
@@ -53,7 +54,8 @@ export function parseActivityTestRunInputs(
   contractInputs: ActivityInputContract[],
   drafts: Record<string, ActivityTestRunInputDraft>,
   editors: StudioWorkflowRunInputEditorContribution[] = [],
-  fallbackInputKeys: ReadonlySet<string> = new Set()
+  fallbackInputKeys: ReadonlySet<string> = new Set(),
+  types: readonly ActivityContractTypeCapability[] = []
 ): ActivityTestRunInputParseResult {
   const inputs: Record<string, ActivityDraftTestRunInput> = {};
   const errors: Record<string, string> = {};
@@ -61,17 +63,18 @@ export function parseActivityTestRunInputs(
 
   for (const contractInput of contractInputs) {
     const input = toWorkflowRunInput(contractInput);
+    input.type = { ...input.type, supportsNull: typeAllowsNull(input.type, types) };
     const current = drafts[input.referenceKey] ?? { presence: "Absent", draft: "" };
     if (current.presence === "Absent") {
-      if (input.isRequired && contractInput.default === null) {
-        errors[input.referenceKey] = `${input.displayName || input.name} is required and has no default.`;
+      if (input.isRequired) {
+        errors[input.referenceKey] = `${input.displayName || input.name} is required.`;
       } else {
         inputs[input.referenceKey] = { state: "Absent" };
       }
       continue;
     }
     if (current.presence === "Null") {
-      if (!contractInput.isNullable) {
+      if (!typeAllowsNull(contractInput.type, types)) {
         errors[input.referenceKey] = `${input.displayName || input.name} does not allow null.`;
       } else {
         inputs[input.referenceKey] = { state: "Present", value: null };

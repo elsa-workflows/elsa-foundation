@@ -112,8 +112,6 @@ public sealed class Elsa3NullMemberTests
     [InlineData("Elsa.DispatchWorkflow", "workflowDefinitionId", "")]
     [InlineData("Elsa.ExecuteWorkflow", "workflowDefinitionId", "")]
     [InlineData("Elsa.SetOutput", "outputName", "outputValue=42")]
-    [InlineData("Elsa.SetOutput", "outputValue", "outputName=Answer")]
-    [InlineData("Elsa.SetVariable", "value", "")]
     public async Task A_null_that_Elsa_4_cannot_reproduce_is_refused_once_naming_the_member(string type, string member, string others)
     {
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Root(type, member, Null, others)));

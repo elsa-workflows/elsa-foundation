@@ -1,3 +1,5 @@
+using Elsa.Serialization.Core;
+using Elsa.Expressions.Core.Contracts;
 using System.Collections.Immutable;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
@@ -25,8 +27,18 @@ internal sealed class ActivityDataSelectionAnalyzer(
     IEnumerable<IActivitySerializedShapeSource> shapeSources,
     IInlineEventPublisher events,
     IOptions<WorkflowDesignValidatorOptions> options,
-    IActivityBindingConversionPreviewer? conversionPreviewer = null) : IActivityDataSelectionAnalyzer
+    IActivityBindingConversionPreviewer? conversionPreviewer = null, IVariableTypeDescriptorCatalog? typeDescriptors = null, IWellKnownTypeRegistry? types = null) : IActivityDataSelectionAnalyzer
 {
+    private bool AuthoredAllowsNull(TypeReference type)
+    {
+        if (type.CollectionKind != CollectionKind.Single) return true;
+        var canonicalAlias = types?.TryGetTypeOrDefault(type.Alias, out var clrType) == true ? types.GetAliasOrDefault(clrType) : type.Alias;
+        return typeDescriptors?.GetDescriptors().FirstOrDefault(descriptor => StringComparer.OrdinalIgnoreCase.Equals(descriptor.Alias, type.Alias) ||
+                StringComparer.OrdinalIgnoreCase.Equals(descriptor.Alias, canonicalAlias))?.SupportsNull
+            ?? (TypeAliasConvention.IsAny(type.Alias) || type.Alias is "String" or "System.String" or
+                "JsonElement" or "System.Text.Json.JsonElement" or "JsonNode" or "System.Text.Json.Nodes.JsonNode");
+    }
+
     public async ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(
         ActivityDataSelectionDocument document,
         ActivityDataSelectionTarget? target = null,
@@ -249,8 +261,15 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 ? Visible(context, location).FirstOrDefault(item => item.Variable.ReferenceKey == variable.ReferenceKey &&
                     item.ScopeId == NormalizeScope(context.Document, variable.DeclaringScopeId))?.Variable.Type ?? valueType
                 : valueType;
+            if (intrinsic.Kind == AuthoredWorkflowIntrinsicKind.SetOutput &&
+                location.Node.Inputs.FirstOrDefault(input => input.ReferenceKey == "name")?.Value is { } nameArgument &&
+                StringComparer.OrdinalIgnoreCase.Equals(nameArgument.ExpressionType, "Literal"))
+            {
+                var name = nameArgument.Value switch { string text => text, JsonElement { ValueKind: JsonValueKind.String } json => json.GetString(), _ => null };
+                type = context.Document.Outputs.FirstOrDefault(output => StringComparer.Ordinal.Equals(output.Name, name))?.Type ?? type;
+            }
             definition = new("value", "Value", type, StorageDriverType: null, DisplayName: "Value", Category: null,
-                IsNullable: false, IsRequired: true);
+                IsNullable: AuthoredAllowsNull(type), IsRequired: true);
         }
         if (definition is null) return null;
         var constraints = new List<ActivityDataInputConstraint>();
@@ -316,7 +335,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
                     : new ArgumentValue(new VariableReference(input.ReferenceKey), "Input")
                 : RequestRead(context.WorkflowBoundary ? input.Name : input.ReferenceKey, binding, memberOfInput);
             return new($"input:{input.ReferenceKey}", input.DisplayName, null, value,
-                ActivityChildResultAvailability.Definite, input.Type, null, null, input.IsNullable, input.IsSensitive, input.IsCredential,
+                ActivityChildResultAvailability.Definite, input.Type, null, null, context.WorkflowBoundary ? AuthoredAllowsNull(input.Type) : input.IsNullable, input.IsSensitive, input.IsCredential,
                 binding.Path is null ? null : "LegacyRequestPath")
             { ParameterSource = context.WorkflowBoundary ? new WorkflowRequestExpressionParameterBinding(input.Name, binding.Path) : null };
         }

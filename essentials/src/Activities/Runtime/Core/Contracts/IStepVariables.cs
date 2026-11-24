@@ -59,6 +59,9 @@ public interface IStepVariableSession : IStepVariables
     /// <summary>Records a whole-value write of a pinned target, as JSON.</summary>
     void WriteJson(StepVariableTarget target, JsonNode? value);
 
+    /// <summary>Records an undefined assignment; the runtime applies the pinned workflow policy or faults the step.</summary>
+    void WriteUndefined(StepVariableTarget target);
+
     /// <summary>
     /// The variables the script body names literally, pinned at publish to their declaring scope (spec 1222 FR-004, the
     /// body read plan), by name. A literal read reads its pinned target, never the run-time lookup.
