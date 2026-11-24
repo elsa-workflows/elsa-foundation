@@ -714,8 +714,13 @@ against an empty PostgreSQL database. The test seeds a receipt in Native
 state and uses the real Native cancellation and protection logic.
 
 The opt-in format-16 retention fixture runs the existing WorkflowActor retention
-pass over the PostgreSQL instance list, one page at a time. The trusted host
-admission derives a reserved operation id from the exact tenant, generated
+pass over the public PostgreSQL actor projection, one page at a time. The public
+workflow list and retention selection read the persisted definition label and terminal
+time with the owner state and journal temporarily unavailable. This check covers
+planning, then restores the owner tables before the fenced retirement pass. A running
+workflow also exposes the source definition, model, state version and mode used by
+migration selection. The migration runner and production list routing retain their
+own K9 acceptance. The trusted host admission derives a reserved operation id from the exact tenant, generated
 creation and terminal mark. An interrupted scan can replay its admission
 receipts with newly sealed selections. The worker uses the policy in force at
 delivery and checks model protection against the committed checkpoint before

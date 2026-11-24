@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Elsa.ActorFoundation.TestSupport;
 using Elsa.Workflows.Runtime.Native.RetentionFixture;
@@ -12,6 +13,11 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootRetentionChecks
 {
+    private const string Expiring = "expire";
+    private const string PolicyChange = "policy-change";
+    private const string Keep = "keep";
+    private const string Wait = "wait";
+
     internal static async Task<int> RunAsync(bool owned, bool inBatch)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
@@ -28,31 +34,37 @@ internal static class PostgresRootRetentionChecks
         await cold.CreateAsync(1);
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         await admission.InstallAsync(stop);
-        var cursor = await admission.OpenJournalCursorAsync(stop);
-        var reads = new PostgresRootReads(cold, cursor, 2);
+        var reads = await cold.OpenPreviewRootReadsAsync(pageSize: 2, cancellationToken: stop);
         var blue = ContractScopes.Bind("retention-blue");
         var red = ContractScopes.Bind("retention-red");
         var ingress = await cold.OpenSelectedRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1),
             (scope, _) => ReferenceEquals(scope, blue), stop, (scope, _) => ReferenceEquals(scope, blue));
         var runtime = new WorkflowRuntime(ingress, reads);
         var registry = new WorkflowRegistry()
-            .Add(Wf.Workflow("finish", Wf.Sequence("done")))
-            .Add(Wf.Workflow("wait", Wf.Node<PostgresRootTerminateChecks.InvocationWait>("receive")));
+            .Add(Wf.Workflow(Expiring, Wf.Sequence("done")))
+            .Add(Wf.Workflow(PolicyChange, Wf.Sequence("done")))
+            .Add(Wf.Workflow(Keep, Wf.Sequence("done")))
+            .Add(Wf.Workflow(Wait, Wf.Node<PostgresRootTerminateChecks.InvocationWait>("receive")));
 
-        var expired = await Start(blue, "expired");
-        var later = await Start(blue, "policy-later");
-        var indefinite = await Start(blue, "keep");
-        var protectedActor = await Start(blue, "protected", "wait");
-        var running = await Start(blue, "running", "wait");
-        var otherTenant = await Start(red, "expired");
+        var expired = await Start(blue, "expired", Expiring);
+        var later = await Start(blue, "policy-later", PolicyChange);
+        var indefinite = await Start(blue, "keep", Keep);
+        var protectedActor = await Start(blue, "protected", Wait);
+        var running = await Start(blue, "running", Wait);
+        var otherTenant = await Start(red, "expired", Expiring);
 
         var actorType = new PublicActor([new PostgresRootThenDeleteChecks.SeededReceipt(new NativeExecutionModel(registry),
             reference => reference == protectedActor)]);
         var extended = false;
         const int expiryMilliseconds = 25;
-        TimeSpan? Window(Contract.ActorHeader header) => header.Ref == indefinite || header.Tenant != blue.Tenant ? null
-            : extended && header.Ref == later ? TimeSpan.FromHours(2)
-            : header.Ref == expired ? TimeSpan.FromMilliseconds(expiryMilliseconds) : TimeSpan.Zero;
+        TimeSpan? Window(Contract.ActorHeader header) => header.Tenant != blue.Tenant ? null
+            : header.Labels.GetValueOrDefault("definition") switch
+            {
+                Expiring => TimeSpan.FromMilliseconds(expiryMilliseconds),
+                PolicyChange when extended => TimeSpan.FromHours(2),
+                PolicyChange or Wait => TimeSpan.Zero,
+                _ => null
+            };
         var retention = new RetentionFixture(reads, Window, admission.AdmitRetentionDeleteAsync);
         EfStore.RootImage expiredBefore;
         EfStore.RootImage laterBefore;
@@ -97,6 +109,7 @@ internal static class PostgresRootRetentionChecks
             } while (now < due);
             Check(now >= due && due > expiredBefore.TerminalAt, "PostgreSQL time reaches the committed root's positive retention deadline");
         }
+        await CheckProjectedCandidates(due);
         await InterruptAfterAdmission();
         var first = await Sweep(blue);
         Check(first is (5, 2, 1, 3), "the real retention pass replays an interrupted admission across bounded PostgreSQL read pages");
@@ -155,6 +168,67 @@ internal static class PostgresRootRetentionChecks
             "the original retention operation returns its admission receipt after retirement");
         return 0;
 
+        async Task CheckProjectedCandidates(long endedBefore)
+        {
+            await using var db = Open();
+            // Quiesce owners, then remove the former owner-state and journal lookup paths for these readers.
+            await db.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "Instances" RENAME COLUMN "State" TO "FixtureOwnerState";
+                ALTER TABLE "Journal" RENAME TO "FixtureJournalRows";
+                """, stop);
+            try
+            {
+                var query = new Contract.ActorQuery(Status: Contract.ActorStatus.Finished, EndedBefore: endedBefore,
+                    Labels: new Dictionary<string, string> { ["definition"] = Expiring });
+                var list = await runtime.ListAsync(blue, query, cancellationToken: stop);
+                var point = await reads.GetAsync(blue, expired, stop);
+                Check(list is { Items: [var view], Next: null } && point is not null && view.Header.Ref == expired &&
+                    view.Header.Type == PublicActor.ActorType && view.Header.Labels["definition"] == Expiring &&
+                    view.Header.EndedAt == expiredBefore.TerminalAt && point.Header.EndedAt == view.Header.EndedAt &&
+                    view.Selection is { Length: > 0 } && view.AsOf == list.AsOf,
+                    "the public workflow list and point read still return the definition, end time and exact selection without owner state or journal");
+                Check((await runtime.ListAsync(blue, query with
+                    { Labels = new Dictionary<string, string> { ["definition"] = "missing" } }, cancellationToken: stop)).Items.Count == 0 &&
+                    await reads.GetAsync(blue, otherTenant, stop) is null,
+                    "a different definition and a foreign exact reference are excluded by the public projection");
+
+                Check((await runtime.ListAsync(blue, query with { EndedBefore = expiredBefore.TerminalAt }, cancellationToken: stop)).Items.Count == 0,
+                    "the ended-before filter excludes the exact end timestamp");
+
+                var runningList = await runtime.ListAsync(blue, new(Status: Contract.ActorStatus.Running,
+                    Labels: new Dictionary<string, string> { ["definition"] = Wait }), cancellationToken: stop);
+                Check(runningList.Items is [var runningView] && runningView.Header.Ref == running && runningView.Header.EndedAt is null,
+                    "the running definition filter excludes the cancelled actor with the same definition");
+                var current = runningList.Items.Single().Header;
+                using var metadata = JsonDocument.Parse(current.TypeData);
+                var workflow = metadata.RootElement;
+                Check(workflow.GetProperty("Model").GetString() == NativeExecutionModel.ModelKey &&
+                    workflow.GetProperty("Definition").GetString() == Wait && !workflow.GetProperty("Ephemeral").GetBoolean() &&
+                    workflow.GetProperty("Version").GetInt32().ToString(CultureInfo.InvariantCulture) == current.Labels["version"],
+                    "the projected running header carries the model, definition, state version and persistence mode used by migration selection");
+
+                var candidates = new HashSet<Contract.ActorRef>();
+                var planning = new RetentionFixture(reads, Window, (scope, actor, selection, _) =>
+                {
+                    Check(scope == blue && selection.Length > 0 && candidates.Add(actor),
+                        "the retention plan proposes one opaque selection per candidate");
+                    return new(new Contract.Admission(Contract.AdmissionOutcome.Accepted, Actor: actor));
+                });
+                Contract.PageToken? from = null;
+                do { from = (await planning.RunAsync(blue, from, stop)).Next; }
+                while (from is not null);
+                Check(candidates.SetEquals([expired, later, protectedActor]),
+                    "the retention pass derives its exact candidates from projected definitions and end times while owner state and journal are absent");
+            }
+            finally
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    ALTER TABLE "Instances" RENAME COLUMN "FixtureOwnerState" TO "State";
+                    ALTER TABLE "FixtureJournalRows" RENAME TO "Journal";
+                    """, CancellationToken.None);
+            }
+        }
+
         async Task InterruptAfterAdmission()
         {
             using var interrupted = CancellationTokenSource.CreateLinkedTokenSource(stop);
@@ -202,7 +276,7 @@ internal static class PostgresRootRetentionChecks
             return (examined, accepted, duplicates, pages);
         }
 
-        async Task<Contract.ActorRef> Start(Contract.BoundScope scope, string id, string definition = "finish") =>
+        async Task<Contract.ActorRef> Start(Contract.BoundScope scope, string id, string definition) =>
             (await runtime.StartAsync(scope, id, NativeExecutionModel.Start(definition), cancellationToken: stop)).Actor!.Value;
 
         async Task<IScopeActivation> Own(string node)
