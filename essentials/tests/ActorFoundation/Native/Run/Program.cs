@@ -142,6 +142,8 @@ if (args is ["pg-core-preview", var replayPhase and ("restart" or "terminal" or 
 if (args is ["pg-flowchart-preview", "birth"]) return await PostgresPublicPreview.RunAsync("birth", flowchart: true);
 if (args is ["pg-flowchart-preview", "restart", var flowchartActor, var flowchartBookmark])
     return await PostgresPublicPreview.RunAsync("restart", flowchartActor, flowchartBookmark, flowchart: true);
+if (args is ["pg-root-retention", var policyWriter and ("owned" or "ef"), var policyFence and ("in-batch" or "checked")])
+    return await PostgresRootRetentionChecks.RunAsync(policyWriter == "owned", policyFence == "in-batch");
 if (args is ["pg-root-then-delete", var thenWriter and ("owned" or "ef"), var thenFence and ("in-batch" or "checked")])
     return await PostgresRootThenDeleteChecks.RunAsync(thenWriter == "owned", thenFence == "in-batch");
 if (args is ["pg-root-retirement", var retirementWriter and ("owned" or "ef"), var retirementFence and ("in-batch" or "checked")])

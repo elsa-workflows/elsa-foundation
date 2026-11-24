@@ -33,9 +33,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Durable.FoundationSelfIssuer? issueSelf = null,
         Func<string, string>? rootJobHandle = null, bool rootTimedJobIssuance = false,
-        Func<CancellationToken, ValueTask<long>>? rootTimedJobClock = null, bool rootHeldReplies = false) =>
-        (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance, this.rootTimedJobClock, this.rootHeldReplies) =
-            (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootTimedJobClock, rootHeldReplies);
+        Func<CancellationToken, ValueTask<long>>? rootTimedJobClock = null, bool rootHeldReplies = false,
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null) =>
+        (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance, this.rootTimedJobClock, this.rootHeldReplies,
+            this.retentionWindow) = (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootTimedJobClock, rootHeldReplies, retentionWindow);
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, RootValueReader rootValueReader)
         : this(roots, actor) => this.rootValueReader = rootValueReader;
@@ -267,11 +268,14 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
         var checkpoint = store.FoundationTurnHeader(row);
         if (checkpoint.Park is null && checkpoint.Terminal is { } mark &&
-            retentionWindow?.Invoke(Header(checkpoint)) is { Ticks: >= 0 } window &&
-            ((decimal)input.Services.Now - mark.At) * TimeSpan.TicksPerMillisecond >= window.Ticks)
+            RetentionElapsed(Header(checkpoint), mark.At, input.Services.Now))
             return null;
         return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "NotEligible");
     }
+
+    private bool RetentionElapsed(Contract.ActorHeader header, long endedAt, long now) =>
+        retentionWindow?.Invoke(header) is { Ticks: >= 0 } window &&
+        ((decimal)now - endedAt) * TimeSpan.TicksPerMillisecond >= window.Ticks;
 
     private Durable.TurnOutcome TimeoutJob(Durable.TurnInput input, Durable.Message message)
     {

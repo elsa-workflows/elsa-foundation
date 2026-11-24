@@ -258,6 +258,12 @@
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
+      "elsa.actorfoundation.testsupport": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime.graph": {
         "type": "Project"
       },
@@ -285,6 +291,12 @@
           "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Graph": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Native.Activities": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.native.retentionfixture": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime.statecharts.orderfixture": {

@@ -28,7 +28,8 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
         {
             var running = Current.Status == InstanceStatus.Running;
-            if (!db.UsesRootRetirement || Position <= 0 || running && !db.UsesRootTerminateThenDelete)
+            if (!db.UsesRootRetirement || Position <= 0 || running && !db.UsesRootTerminateThenDelete ||
+                Command.Operator?.RetentionDelete == true && !db.UsesRootRetention)
                 return false;
 
             var occurrence = InboxKey.FoundationOccurrenceScope;
