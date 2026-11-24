@@ -174,6 +174,7 @@ public sealed class EfModuleDescriptorTests
         (typeof(WeaverDbContext).Assembly, "extensions/Weaver/src/Persistence/EntityFrameworkCore"),
         (typeof(ClusterMembershipDbContext).Assembly, "essentials/src/Cluster/EntityFrameworkCore"),
         (typeof(ConnectionsDbContext).Assembly, "essentials/src/Connections/Persistence/EntityFrameworkCore"),
+        (typeof(DecisionsEfModule).Assembly, "extensions/Decisions/src/Persistence/EntityFrameworkCore"),
         (typeof(AgentDbContext).Assembly, "extensions/Agent/src/Persistence/EntityFrameworkCore"),
         (typeof(DataProtectionKeysDbContext).Assembly, "essentials/src/Foundation/DataProtection/EntityFrameworkCore"),
         (typeof(EfOpenTelemetryDbContext).Assembly, "essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore"),
