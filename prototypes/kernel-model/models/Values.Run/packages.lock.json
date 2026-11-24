@@ -437,14 +437,44 @@
         "resolved": "0.8.8",
         "contentHash": "UIDFkA5DC3en3tOJ3Mof11yBx9kUQLsaeo/oFdvN6Bbkr9E9+VCqfIadHci8cu+I51K2Sl7XYWVl2R/mA75NBQ=="
       },
+      "elsa.actorfoundation.builtin.durable": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "elsa.actorfoundation.builtin.hosting": {
         "type": "Project",
         "dependencies": {
           "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )"
         }
       },
+      "elsa.actorfoundation.builtin.postgresql": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )"
+        }
+      },
       "elsa.actorfoundation.builtin.runtime": {
         "type": "Project"
+      },
+      "elsa.actorfoundation.builtin.store.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Durable": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Microsoft.Data.SqlClient": "[7.0.2, )",
+          "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.10, )",
+          "MySql.EntityFrameworkCore": "[10.0.9, )",
+          "Npgsql": "[10.0.3, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.0, )",
+          "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.3, )",
+          "System.Security.Cryptography.Pkcs": "[9.0.21, )"
+        }
       },
       "elsa.actorfoundation.contracts": {
         "type": "Project"
@@ -461,41 +491,11 @@
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
-      "kernel.durable": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
-        }
-      },
-      "kernel.entityframework": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
-          "Kernel.Durable": "[1.0.0, )",
-          "Microsoft.Data.SqlClient": "[7.0.2, )",
-          "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",
-          "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.10, )",
-          "MySql.EntityFrameworkCore": "[10.0.9, )",
-          "Npgsql": "[10.0.3, )",
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.0, )",
-          "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.3, )",
-          "System.Security.Cryptography.Pkcs": "[9.0.21, )"
-        }
-      },
       "Kernel.Foundation.InMemory": {
         "type": "Project",
         "dependencies": {
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
-          "Kernel.Durable": "[1.0.0, )"
-        }
-      },
-      "kernel.foundation.postgres": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",
-          "Kernel.EntityFramework": "[1.0.0, )",
-          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )"
+          "Elsa.ActorFoundation.BuiltIn.Durable": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
       "kernel.graph": {
@@ -527,10 +527,10 @@
         "type": "Project",
         "dependencies": {
           "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.BuiltIn.PostgreSql": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
-          "Kernel.EntityFramework": "[1.0.0, )",
           "Kernel.Foundation.InMemory": "[1.0.0, )",
-          "Kernel.Foundation.Postgres": "[1.0.0, )",
           "Kernel.Native.Legacy": "[1.0.0, )",
           "Kernel.Statecharts.Native": "[1.0.0, )",
           "Kernel.WorkflowActor": "[1.0.0, )"
@@ -565,8 +565,8 @@
       "Kernel.Workflows": {
         "type": "Project",
         "dependencies": {
-          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
-          "Kernel.Durable": "[1.0.0, )"
+          "Elsa.ActorFoundation.BuiltIn.Durable": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       }
     }

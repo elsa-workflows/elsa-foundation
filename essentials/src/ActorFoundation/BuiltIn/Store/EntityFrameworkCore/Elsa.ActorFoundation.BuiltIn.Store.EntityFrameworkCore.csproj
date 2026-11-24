@@ -1,7 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>Kernel.EntityFramework</RootNamespace>
-    <IsPackable>false</IsPackable>
+    <AssemblyName>Kernel.EntityFramework</AssemblyName>
+    <PackageId>Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore</PackageId>
+    <Description>Relational stores for the Built-in Actor Foundation, using Entity Framework Core for schema and cold paths.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <NoWarn>$(NoWarn);EF1002</NoWarn>
   </PropertyGroup>
   <ItemGroup>
@@ -16,8 +19,8 @@
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Kernel.Durable/Kernel.Durable.csproj" />
-    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
+    <ProjectReference Include="../../Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj" />
+    <ProjectReference Include="../../../Contracts/Elsa.ActorFoundation.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Ef.Conformance" />
@@ -25,5 +28,8 @@
     <InternalsVisibleTo Include="Kernel.Native.Run" />
     <Using Include="Kernel.Runtime" />
     <Using Include="Kernel.Durable" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

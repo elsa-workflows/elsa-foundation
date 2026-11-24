@@ -2,6 +2,13 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
+      "elsa.actorfoundation.builtin.durable": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "elsa.actorfoundation.builtin.hosting": {
         "type": "Project",
         "dependencies": {
@@ -23,13 +30,6 @@
       "elsa.actorfoundation.testsupport": {
         "type": "Project",
         "dependencies": {
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
-        }
-      },
-      "kernel.durable": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
@@ -57,8 +57,8 @@
       "Kernel.Workflows": {
         "type": "Project",
         "dependencies": {
-          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
-          "Kernel.Durable": "[1.0.0, )"
+          "Elsa.ActorFoundation.BuiltIn.Durable": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       }
     }

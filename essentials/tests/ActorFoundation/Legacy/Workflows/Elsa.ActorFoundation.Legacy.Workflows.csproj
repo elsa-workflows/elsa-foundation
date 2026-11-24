@@ -6,7 +6,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../../prototypes/kernel-model/src/Kernel.Durable/Kernel.Durable.csproj" />
+    <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj" />
     <ProjectReference Include="../../../../src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
   </ItemGroup>
 </Project>

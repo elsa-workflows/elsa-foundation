@@ -2,11 +2,14 @@
   <!-- Layer 2, durable actors: the inbox, the fenced commit, timers, background jobs, events, poison, the journal, live output, and the store contract. -->
   <PropertyGroup>
     <RootNamespace>Kernel.Durable</RootNamespace>
-    <IsPackable>false</IsPackable>
+    <AssemblyName>Kernel.Durable</AssemblyName>
+    <PackageId>Elsa.ActorFoundation.BuiltIn.Durable</PackageId>
+    <Description>The durable inbox, fenced commits, timers, jobs and journal for the Built-in Actor Foundation.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
-    <ProjectReference Include="../../../../essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj" />
+    <ProjectReference Include="../../Contracts/Elsa.ActorFoundation.Contracts.csproj" />
+    <ProjectReference Include="../Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj" />
     <InternalsVisibleTo Include="Kernel.Foundation.InMemory" />
     <InternalsVisibleTo Include="Kernel.EntityFramework" />
     <InternalsVisibleTo Include="Kernel.Foundation.Postgres" />
@@ -15,5 +18,8 @@
     <InternalsVisibleTo Include="Kernel.Ef.Conformance" />
     <InternalsVisibleTo Include="Kernel.Sim" />     <!-- test-only counters, such as Worker.ClaimedLookups -->
     <InternalsVisibleTo Include="Kernel.Store.Conformance" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

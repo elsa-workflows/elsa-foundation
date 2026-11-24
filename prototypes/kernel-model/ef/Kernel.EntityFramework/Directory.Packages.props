@@ -1,4 +1,0 @@
-<Project>
-  <!-- The relational provider builds against the same versions as its application host. -->
-  <Import Project="../../../../Directory.Packages.props" />
-</Project>

@@ -19,10 +19,10 @@
     <ProjectReference Include="../../../../../prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj" />
     <ProjectReference Include="../../../../../prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj" />
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
-    <ProjectReference Include="../../../../../prototypes/kernel-model/runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj" />
+    <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
     <ProjectReference Include="../../Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
     <ProjectReference Include="../../../../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
-    <ProjectReference Include="../../../../../prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
+    <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />
