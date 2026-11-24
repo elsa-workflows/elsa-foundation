@@ -1,8 +1,10 @@
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Kernel.EntityFramework;
 using Kernel.Foundation.InMemory;
 using Kernel.Native;
+using Kernel.Native.Preview;
 using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
@@ -17,7 +19,8 @@ namespace Kernel.Native.Run;
 // body, direct held replies and held operator replies: one on top of the S2 Park composition, one without Park in its own
 // schema, so that admission decides Faulted roots by the family prefix. Rows are seeded through the guarded checkpoint
 // update; admissions, point reads and the terminal lock are the store's own paths. On the Park-less set a public birth and one
-// direct input also drive the store's own first-root bind and root turn.
+// direct input also drive the store's own first-root bind and root turn, and two timed-job workflows drive both writers with
+// real job state up to and one byte over the content budget.
 internal static class PostgresRootStateFamilyChecks
 {
     private static readonly StoreFormat ParkComposed = StoreFormat.Current with { MessageProtocol = 98 };
@@ -25,6 +28,7 @@ internal static class PostgresRootStateFamilyChecks
     private const string FamilyPrefix = "!kernel-state/13:public-root-composed:timed-jobs+stable-body+replies:";
     private const string ParklessSchema = "state_family_parkless";
     private const string WriterSchema = "state_family_writer";
+    private const string JobsSchema = "state_family_jobs";
     private const string Tenant = "state-family";
     private const string Model = "composed";
     private const string Definition = "definition-a";
@@ -32,6 +36,7 @@ internal static class PostgresRootStateFamilyChecks
     private const string WriterDefinition = "family-approval";
 
     private sealed record PhysicalRow(long Revision, int Status, string State, bool Wire, bool NoJobs);
+    private sealed record PhysicalJobRow(long Revision, int Status, string State, string Header, byte[] Wire, string? Jobs);
     private sealed record Header(string Model, string Definition, string TypeData, KeyValuePair<string, string>[] Labels, bool EscapedState);
 
     internal static async Task<int> RunAsync(bool owned, bool inBatch)
@@ -39,7 +44,7 @@ internal static class PostgresRootStateFamilyChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(240));
         var ct = timeout.Token;
         var withoutPark = RootProfiles.Formats[StoreFormat.RootTerminalSelection] | RootProfiles.Formats[StoreFormat.RootTimedJobPreview] |
             RootCapabilities.ReplyProtocol | RootCapabilities.OperatorReplies;
@@ -66,6 +71,16 @@ internal static class PostgresRootStateFamilyChecks
         await using (var db = OpenWritten())
             await db.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(ct);
         await DriveWriterAsync(OpenWritten, owned, inBatch, ct);
+
+        // The store's own writers issue timed jobs on the Park-less set in a fourth schema.
+        await using (var db = KernelDb.ForUnshippedComposition(options, ParkComposed, withPark))
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + JobsSchema, ct);
+        var jobbed = new DbContextOptionsBuilder<KernelDb>()
+            .UseNpgsql(new NpgsqlConnectionStringBuilder(connection) { SearchPath = JobsSchema }.ConnectionString).Options;
+        KernelDb OpenJobbed() => KernelDb.ForUnshippedComposition(jobbed, ParklessComposed, withoutPark);
+        await using (var db = OpenJobbed())
+            await db.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(ct);
+        await DriveJobWritersAsync(OpenJobbed, owned, inBatch, ct);
         await using (var db = KernelDb.ForUnshippedComposition(parkless, ParklessComposed, withoutPark))
             await BudgetAsync(db, ct);
         return 0;
@@ -259,6 +274,164 @@ internal static class PostgresRootStateFamilyChecks
                 $"{writer} stores {FamilyPrefix}wire with the body in the wire column");
         }
     }
+
+    // Timed jobs written by the store's own first-root bind and root turn under the Park-less set. One workflow issues its job
+    // in its first turn, the other after one direct input; the job waits for cancellation, so the row keeps it. Each writer is
+    // probed once, then written once exactly at the content budget with its job and once one byte over it, where the job bytes
+    // alone push the row over the budget. The adapter's own envelope refuses a running row about 200 KB before the store's
+    // budget, so the worker's prepared-checkpoint hook pads the issuing checkpoint after the adapter and before the store.
+    private static async Task DriveJobWritersAsync(Func<KernelDb> open, bool owned, bool inBatch, CancellationToken ct)
+    {
+        var store = new EfStore(open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
+        await store.CreateAsync(1);
+        var admission = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
+        await admission.InstallAsync(ct);
+        var scope = EmbeddedTenant.Bind(Tenant);
+        var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(ct), 16),
+            WorkflowActor.WorkflowActor.ActorType);
+        var runtime = new WorkflowRuntime(api, api);
+        Node Work() => new("work", typeof(DirectApprovalWorkflow.WaitForCancellation)) { JobTimeout = TimeSpan.FromMinutes(10) };
+        var registry = new WorkflowRegistry()
+            .Add(Wf.Workflow(FirstJob, Wf.Sequence("flow", Wf.Set("fill", "pad", ""), Work()), ("pad", "")))
+            .Add(Wf.Workflow(TurnJob, Wf.Sequence("flow", Wf.Set("fill", "pad", ""),
+                Wf.Node<PostgresHeldDirectChecks.ApprovalSignal>("approve"), Work()), ("pad", "")));
+        var pads = new Dictionary<string, int>();
+        var padded = new HashSet<string>();
+        await store.EnableRootJobsAsync(ct);
+        var (roots, count) = await store.BindWorkerPartitionAsync(0, ct);
+        var worker = new Worker("family-jobs", 0, store, PostgresNativeRootOwner.Adapter(store, roots, registry),
+            new WorkerOptions { Partitions = count, OnPreparedCheckpoint = (turn, _, _) => Pad(turn) });
+        var host = new DurableHost([worker]);
+        await host.HeartbeatAsync(worker.Lease, ct);
+        Check(await host.ActivateAsync(0, ct) == worker, "the job writer owns the Park-less partition");
+        await using var db = open();
+        var prefix = db.RootStateFamily.Prefix;
+        var budget = (long)EfStore.RootContentBytes;
+
+        // The first-root bind issues the job.
+        var probe = await Measure(await Birth(FirstJob, 0), 1, "the first-root bind");
+        var firstEdge = checked((int)(budget - probe.With));
+        var edge = await Measure(await Birth(FirstJob, firstEdge), 1, "the padded first-root bind");
+        Check(edge.With == budget, $"the first-root bind accepts a row of exactly {budget} content bytes with its {edge.JobBytes} job bytes");
+
+        // The root turn issues the job after one direct input.
+        var turnProbe = await Measure(await Turn(0), 2, "the root turn");
+        var turnEdge = checked((int)(budget - turnProbe.With));
+        var turned = await Measure(await Turn(turnEdge), 2, "the padded root turn");
+        Check(turned.With == budget, $"the root turn accepts a row of exactly {budget} content bytes with its {turned.JobBytes} job bytes");
+
+        // One byte over the budget and under it without the job bytes: each writer refuses the row.
+        var overTurn = await Turn(turnEdge + 1);
+        await Idle();
+        Check(padded.Contains(overTurn) && await store.ReadFirstRootAsync(Tenant, overTurn, ct) is { Revision: 1, Status: InstanceStatus.Running, Jobs: null },
+            $"the root turn refuses a row one byte over the budget whose content without its {turned.JobBytes} job bytes is under it");
+        // Withdraw the refused approval, so that the next root is the writer's only work.
+        var overActor = (await store.ReadFirstRootAsync(Tenant, overTurn, ct))!.Actor.Id;
+        Check(await db.Database.ExecuteSqlInterpolatedAsync($"""
+                DELETE FROM "Messages" WHERE "Target" = {overActor} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND NOT "Done"
+                """, ct) == 1, "the refused approval is withdrawn");
+        await Idle();
+        Check(worker.Owns, "the writer owns the partition again after the withdrawal");
+        var overFirst = await Birth(FirstJob, firstEdge + 1);
+        await Idle();
+        Check(padded.Contains(overFirst) && await store.ReadFirstRootAsync(Tenant, overFirst, ct) is null && await db.Database.SqlQuery<bool>($"""
+                SELECT NOT EXISTS (SELECT 1 FROM "Instances" WHERE "FoundationReference" = {overFirst}) AS "Value"
+                """).SingleAsync(ct),
+            $"the first-root bind refuses a row one byte over the budget whose content without its {edge.JobBytes} job bytes is under it");
+        await worker.DisposeAsync();
+        return;
+
+        // Pads the pad variable of each checkpoint that issues the root's job.
+        void Pad(TurnCommit turn)
+        {
+            if (turn.Row is not { Jobs: not null, Status: InstanceStatus.Running, FoundationDispatchHeader.Reference: var reference } row ||
+                !pads.TryGetValue(reference, out var pad) || pad == 0) return;
+            padded.Add(reference);
+            var empty = "\"pad\":\"\"";
+            if (row.State.Split(empty).Length != 2) throw new InvalidOperationException("The issuing checkpoint carries no single empty pad variable.");
+            typeof(TurnCommit).GetProperty(nameof(TurnCommit.Row))!.SetValue(turn,
+                row with { State = row.State.Replace(empty, "\"pad\":\"" + new string('p', pad) + "\"", StringComparison.Ordinal) });
+        }
+
+        async Task<string> Turn(int pad)
+        {
+            var reference = await Birth(TurnJob, pad);
+            Check(await Drive(reference, 1) is { Jobs: null }, $"the first turn of {TurnJob} issues no job");
+            var state = (await store.ReadFirstRootAsync(Tenant, reference, ct))!.State!;
+            var frame = Json.Read<NativeState>(state).Frames.Values.Single(f => f.Node == "approve").Id;
+            Check(await admission.AdmitDirectResultAsync(Tenant, reference, "approve", CompositeSignal.Kind,
+                    Json.Write(new CompositeSignal(frame, "approve", "Ada"))) == PostgresRootAdmission.DirectResult.Accepted,
+                $"the Park-less set admits the approval of {TurnJob}");
+            return reference;
+        }
+
+        async Task<string> Birth(string definition, int pad)
+        {
+            var started = await runtime.StartAsync(scope, definition + "-" + pads.Count, NativeExecutionModel.Start(definition), cancellationToken: ct);
+            Check(started.Outcome == Contract.AdmissionOutcome.Accepted, $"the Park-less set admits a public start of {definition}");
+            pads.Add(started.Actor!.Value.Id, pad);
+            return started.Actor!.Value.Id;
+        }
+
+        // The physical row carries the composed prefix, the body in the wire column and the issued job. Its content is
+        // recomputed through the writers' own helper, with the terminal header reserve and no terminal growth.
+        async Task<(long With, long Without, int JobBytes)> Measure(string reference, long revision, string writer)
+        {
+            var image = await Drive(reference, revision);
+            var row = await db.Database.SqlQuery<PhysicalJobRow>($"""
+                SELECT "Revision", "Status", "State", "FoundationHeader" AS "Header", "FoundationStateWire" AS "Wire", "Jobs"
+                FROM "Instances" WHERE "FoundationReference" = {reference}
+                """).SingleAsync(ct);
+            Check(row is { Status: (int)InstanceStatus.Running, Jobs: not null } && row.Revision == revision && row.State == prefix + "wire" &&
+                image.Jobs == row.Jobs && JobRegistry.Read(row.Jobs) is [{ Generation: 0 }],
+                $"{writer} stores {prefix}wire with one issued job at revision {revision}");
+            var state = Json.Read<NativeState>(RootSelfContent.Decode(row.Wire));
+            Check(state.Inboxes is null or { Count: 0 } && state.Waits.Values.Single().Kind == "job",
+                $"{writer} waits only on its job and has no inbox to grow at termination");
+            var header = DurableKeyJson.Read<Header>(row.Header);
+            var reserve = Math.Max(0, TerminalHeaderBytes(header.Model, header.Definition) - Encoding.UTF8.GetByteCount(row.Header));
+            var with = EfStore.StableContentBytes(prefix, row.State[prefix.Length..], row.Header, row.Wire, row.Jobs, reserve, 0);
+            var without = EfStore.StableContentBytes(prefix, row.State[prefix.Length..], row.Header, row.Wire, null, reserve, 0);
+            var jobBytes = Encoding.UTF8.GetByteCount(row.Jobs!);
+            Check(with <= budget && with - without == jobBytes && jobBytes > 1,
+                $"{writer} was accepted at {with} of {budget} content bytes, {jobBytes} of them job bytes");
+            return (with, without, jobBytes);
+        }
+
+        async Task<EfStore.RootImage> Drive(string reference, long revision)
+        {
+            for (var pass = 0; pass < 40; pass++)
+            {
+                await worker.WokenAsync(null, ct);
+                await worker.RunAsync(ct);
+                if (!worker.Owns) throw new InvalidOperationException("The job writer lost its fence.");
+                if (await store.ReadFirstRootAsync(Tenant, reference, ct) is { } image && image.Revision >= revision) return image;
+                await Task.Delay(10, ct);
+            }
+            throw new InvalidOperationException($"The job writer did not commit revision {revision}.");
+        }
+
+        // A refused checkpoint has no Park to open on this set, so the writer stands down; it takes the partition again.
+        async Task Idle()
+        {
+            for (var pass = 0; pass < 10; pass++)
+            {
+                if (!worker.Owns)
+                {
+                    await host.HeartbeatAsync(worker.Lease, ct);
+                    await host.ActivateAsync(0, ct);
+                }
+                await worker.WokenAsync(null, ct);
+                await worker.RunAsync(ct);
+                await Task.Delay(10, ct);
+            }
+        }
+    }
+
+    private const string FirstJob = "family-first-job";
+    private const string TurnJob = "family-turns-job";
+    private static readonly Func<string, string, int> TerminalHeaderBytes = typeof(EfStore)
+        .GetMethod("RootTerminalHeaderBytes", BindingFlags.NonPublic | BindingFlags.Static)!.CreateDelegate<Func<string, string, int>>();
 
     // The stable-body budget charges jobs as the general measure does: a composed row that its jobs push over the content
     // budget is refused by both measures, and the same row without jobs is accepted by both.
