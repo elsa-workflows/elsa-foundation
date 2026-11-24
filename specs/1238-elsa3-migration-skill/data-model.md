@@ -31,7 +31,7 @@ Filled in from `migration-plan-template.md` ([contract](contracts/plan-template.
 | Tests to port | Paths |
 | Status | `todo` → `porting` → `ported` → `verified`, or `redesign` / `dropped` |
 
-`verified` means the last assessment shows no Must fix finding caused by this component. `redesign` and `dropped`
+`verified` means no finding of any category in the last assessment names this component (by kind and name). `redesign` and `dropped`
 need the user's decision recorded in the row.
 
 ## Porting case (repository, `porting-catalog.md`)

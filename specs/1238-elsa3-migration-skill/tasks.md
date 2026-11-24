@@ -92,7 +92,7 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
 - [ ] T021 [US1] Write `skill/SKILL.md`: front matter per [contracts/adapters.md](contracts/adapters.md); then, in
   order, the privacy statement (FR-005, FR-006: what reaches the AI provider; ask before each new raw definition or
   source file, naming the file and the JSON path), what the skill does and does not do (FR-021), "read the plan first" (FR-007),
-  the prerequisite check and `docker run` invocation (FR-022), the four stages (FR-008–FR-012, R-6 searches, the report fields of
+  the prerequisite check and the `docker run` invocation copied from spec 1237's command-line contract (FR-022), the four stages (FR-008–FR-012, R-6 searches, the report fields of
   [contracts/report-consumption.md](contracts/report-consumption.md)), the version check (R-4), the handoff
   (FR-020), and the edge cases of the spec as plain rules. No diagnostic code literal; read code, message and
   guidance from the report.
@@ -112,7 +112,8 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
 ## Phase 7: User Story 5 — contributor triggers (P2)
 
 - [ ] T025 [P] [US5] Add a "Changing the converter" section to `extensions/Elsa3/src/Mapping/README.md` (FR-018): a
-  converter change needs JTest suites for it (`extensions/Elsa3/tests/JTest/`) and a skill update (catalog, plan
+  converter change needs JTest suites for it (the JTest suite folder of spec 1235, written as a code path, not a link,
+  until that folder exists) and a skill update (catalog, plan
   template); an Elsa 4 activity authoring API change used by a *port* case needs the sample and catalog updated.
 - [ ] T026 [P] [US5] Add a one-line pointer to that section in `AGENTS.md`, and one line in `docs/skills/catalog.md`
   saying that user-facing product skills live under `plugins/` and are not contributor workflows.

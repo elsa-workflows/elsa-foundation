@@ -95,9 +95,10 @@ API change is a code change, so the full build runs and breaks the sample.
 named `Type` in namespace `Ns`; `[Activity("Ns"` on a class named `Type` (the second string argument of the common
 three-argument form is the category, not the type); `Type = "Type"` in an activity attribute; or the five-argument
 form `[Activity("Ns", "Type", <version>, ...)]`. A
-JavaScript function by `SetValue("name"`; a variable type by the alias in `AddVariableTypeAndAlias<`/`AddTypeAlias<`,
-or, because `AddVariableTypeAndAlias<T>(category)` and `AddVariableType<T>` use the class name as the alias, by a
-class named like the alias inside `AddVariableType<`, `AddVariableTypes(` or `AddVariableTypeAndAlias<`; a storage
+JavaScript function by `SetValue("name"`; a variable type by the alias in `AddVariableTypeAndAlias<`/`AddTypeAlias<` (with no alias argument, the alias
+is the class name); a variable type registered without an alias (`AddVariableType<`, `AddVariableTypes(`) appears in
+the export under its assembly-qualified name, so it is found, like a storage driver, by the namespace and class
+before the comma; a storage
 driver by the type name before the comma in its assembly-qualified name.
 
 **Rationale**: Elsa 3 forms the type name as `{attribute namespace or CLR namespace}.{attribute type or class name}`.
