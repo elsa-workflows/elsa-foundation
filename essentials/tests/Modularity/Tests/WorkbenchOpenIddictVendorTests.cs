@@ -1,5 +1,5 @@
 using Elsa.Workbench;
-using Elsa.Workbench.OpenIddict;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Persistence.EntityFramework;

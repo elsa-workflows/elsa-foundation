@@ -6,7 +6,7 @@ using Elsa.Persistence.EntityFramework.ResourceResolution;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Microsoft.Extensions.Configuration;
 
-namespace Elsa.Workbench;
+namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 
 /// <summary>
 /// The persistence providers the platform gives the default shell's EF consumers, resolved as the platform resolves them, so the
@@ -16,7 +16,7 @@ namespace Elsa.Workbench;
 /// <c>Elsa:Persistence:DefaultResource</c>, the shell's own default resource, a feature's <c>Bindings</c> entry, and a feature's
 /// own <c>Provider</c> setting.
 /// </summary>
-public static class WorkbenchOpenIddictPlatformProviders
+public static class OpenIddictPlatformProviders
 {
     /// <summary>
     /// The distinct providers, as configured, of the enabled EF consumers of <paramref name="shell"/>. A consumer selected by a

@@ -1,4 +1,3 @@
-using Elsa.Workbench.OpenIddict;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,10 +7,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 
-namespace Elsa.Workbench;
+namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 
 /// <summary>
-/// Prunes Workbench's OpenIddict store. Every access token and every refresh token is a row (access-token validation reads it), so
+/// Prunes the OpenIddict token store. Every access token and every refresh token is a row (access-token validation reads it), so
 /// without this the table only grows: nothing else deletes a token or an authorization.
 /// </summary>
 /// <remarks>
@@ -21,24 +20,24 @@ namespace Elsa.Workbench;
 /// enables the feature. A prune is idempotent, so every node runs it and none claims it: a row a sibling has already deleted is
 /// not an error to this node, and the next interval prunes whatever a failed one left.
 /// </remarks>
-public static class WorkbenchOpenIddictPruning
+public static class OpenIddictPruning
 {
-    public static IServiceCollection AddWorkbenchOpenIddictPruning(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddOpenIddictPruning(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOptions<WorkbenchOpenIddictPruningOptions>()
-            .Bind(configuration.GetSection(WorkbenchOpenIddictPruningOptions.SectionPath))
+        services.AddOptions<OpenIddictPruningOptions>()
+            .Bind(configuration.GetSection(OpenIddictPruningOptions.SectionPath))
             .Validate(options => options.Interval > TimeSpan.Zero, "The OpenIddict prune interval must be greater than zero.")
             .Validate(options => options.MinimumAge >= TimeSpan.Zero, "The OpenIddict prune minimum age cannot be negative.")
             .Validate(options => options.Timeout > TimeSpan.Zero, "The OpenIddict prune timeout must be greater than zero.")
             .ValidateOnStart();
         services.TryAddSingleton(TimeProvider.System);
-        services.AddHostedService<WorkbenchOpenIddictPruningService>();
+        services.AddHostedService<OpenIddictPruningService>();
         return services;
     }
 }
 
 /// <summary>When the OpenIddict store is pruned, and how old an entry must be before it is.</summary>
-public sealed class WorkbenchOpenIddictPruningOptions
+public sealed class OpenIddictPruningOptions
 {
     /// <summary>The prune's settings, under the default shell's OpenIddict settings.</summary>
     public const string SectionPath = "CShells:Shells:default:Features:FoundationIdentityOpenIddict:Prune";
@@ -65,11 +64,11 @@ public sealed class WorkbenchOpenIddictPruningOptions
 }
 
 /// <summary>Prunes the OpenIddict tokens and then the authorizations on the configured interval, for as long as the host runs.</summary>
-public sealed class WorkbenchOpenIddictPruningService(
+public sealed class OpenIddictPruningService(
     IServiceProvider services,
-    IOptions<WorkbenchOpenIddictPruningOptions> options,
+    IOptions<OpenIddictPruningOptions> options,
     TimeProvider time,
-    ILogger<WorkbenchOpenIddictPruningService> logger) : BackgroundService
+    ILogger<OpenIddictPruningService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -108,7 +107,7 @@ public sealed class WorkbenchOpenIddictPruningService(
     }
 
     /// <summary>
-    /// Prunes once: the tokens, then the authorizations, each under <see cref="WorkbenchOpenIddictPruningOptions.Timeout"/> and
+    /// Prunes once: the tokens, then the authorizations, each under <see cref="OpenIddictPruningOptions.Timeout"/> and
     /// independent of the other. A failure is logged and left for the next interval, never thrown: the store may not be migrated
     /// yet, or a sibling node's prune may have deleted what this one meant to, and neither is a reason to stop the host.
     /// </summary>

@@ -1,8 +1,8 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Workbench;
-using Elsa.Workbench.OpenIddict;
-using Elsa.Workbench.OpenIddictEngines;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -226,14 +226,14 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
     [Fact]
     public void The_migrations_history_table_is_named_for_the_module_as_the_sqlite_stores_always_was()
     {
-        Assert.Equal(OpenIddictEntityFrameworkCoreDefaults.MigrationsHistoryTable, EfMigrationsHistory.TableName(WorkbenchOpenIddictStoreProvider.Module));
+        Assert.Equal(OpenIddictEntityFrameworkCoreDefaults.MigrationsHistoryTable, EfMigrationsHistory.TableName(OpenIddictStoreProvider.Module));
     }
 
     private static async Task StartNoticesAsync(IServiceProvider services) =>
         await Notices(services).StartAsync(CancellationToken.None);
 
-    private static WorkbenchOpenIddictStoreNotices Notices(IServiceProvider services) =>
-        services.GetServices<IHostedService>().OfType<WorkbenchOpenIddictStoreNotices>().Single();
+    private static OpenIddictStoreNotices Notices(IServiceProvider services) =>
+        services.GetServices<IHostedService>().OfType<OpenIddictStoreNotices>().Single();
 
     /// <summary>
     /// The notice reads the features the process has loaded, as the host's CShells catalog has by the time the host has started; a test

@@ -154,17 +154,6 @@
           "Nuplane": "0.0.13"
         }
       },
-      "OpenIddict.EntityFrameworkCore": {
-        "type": "Direct",
-        "requested": "[7.5.0, )",
-        "resolved": "7.5.0",
-        "contentHash": "3xamhrqh8y+l22wiyy+A9D/UvWPjsS6N8TGybpVlpJIFU5g2QGqk3JPamHuXn3gvwmP4OlwzgAZDzzLv8YWEeQ==",
-        "dependencies": {
-          "Microsoft.EntityFrameworkCore.Relational": "10.0.7",
-          "OpenIddict.Core": "7.5.0",
-          "OpenIddict.EntityFrameworkCore.Models": "7.5.0"
-        }
-      },
       "Azure.Core": {
         "type": "Transitive",
         "resolved": "1.44.1",
@@ -2103,6 +2092,19 @@
           "OpenIddict.AspNetCore": "[7.5.0, )"
         }
       },
+      "elsa.foundation.identity.openiddict.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells": "[0.0.31, )",
+          "Elsa.Foundation.Identity.OpenIddict.Behavior": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore.InMemory": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.10, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.0, )",
+          "OpenIddict.EntityFrameworkCore": "[7.5.0, )"
+        }
+      },
       "elsa.foundation.identity.persistence.entityframeworkcore": {
         "type": "Project",
         "dependencies": {
@@ -3323,6 +3325,17 @@
           "OpenIddict.Server.DataProtection": "7.5.0",
           "OpenIddict.Validation.AspNetCore": "7.5.0",
           "OpenIddict.Validation.DataProtection": "7.5.0"
+        }
+      },
+      "OpenIddict.EntityFrameworkCore": {
+        "type": "CentralTransitive",
+        "requested": "[7.5.0, )",
+        "resolved": "7.5.0",
+        "contentHash": "3xamhrqh8y+l22wiyy+A9D/UvWPjsS6N8TGybpVlpJIFU5g2QGqk3JPamHuXn3gvwmP4OlwzgAZDzzLv8YWEeQ==",
+        "dependencies": {
+          "Microsoft.EntityFrameworkCore.Relational": "10.0.7",
+          "OpenIddict.Core": "7.5.0",
+          "OpenIddict.EntityFrameworkCore.Models": "7.5.0"
         }
       },
       "RabbitMQ.Client": {

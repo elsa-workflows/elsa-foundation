@@ -1,8 +1,7 @@
 using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tooling;
-using Elsa.Workbench.OpenIddict;
-using Elsa.Workbench.OpenIddictEngines;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -10,21 +9,21 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Workbench;
+namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 
 /// <summary>
-/// Elsa's selection of the engine under Workbench's OpenIddict vendor store, kept out of the vendor sources so they stay the
+/// Elsa's selection of the engine under the OpenIddict vendor store, kept out of the vendor sources so they stay the
 /// third-party store's alone (<c>OpenIddictPersistenceArchitectureTests</c>). The vendor registration binds the SQLite store, or the
 /// in-memory demo one, and this selects SQL Server or PostgreSQL beside it, by the engine names every Elsa EF module takes
 /// (<see cref="EfRelationalProviderBinding"/>), so the token store can sit in the database every node shares: access-token validation
 /// reads the token's row, so a token issued on one node is only valid on another when both read one store.
 /// </summary>
-public static class WorkbenchOpenIddictStoreProvider
+public static class OpenIddictStoreProvider
 {
     /// <summary>The module name its migrations history table is named for, as every Elsa EF module's is.</summary>
     public const string Module = "OpenIddict";
 
-    private const string Owner = "Workbench OpenIddict";
+    private const string Owner = "OpenIddict token store";
 
     /// <summary>
     /// OpenIddict prunes with a bulk delete over a subquery with a limit, which MySQL refuses (error 1235, "doesn't yet support
@@ -33,28 +32,28 @@ public static class WorkbenchOpenIddictStoreProvider
     /// without it.
     /// </summary>
     private const string MySqlRefusal =
-        "Workbench's OpenIddict store does not support MySQL: its provider cannot run OpenIddict's token prune, " +
+        "The OpenIddict token store does not support MySQL: its provider cannot run OpenIddict's token prune, " +
         "so the store would grow without bound. Use SQLite, SqlServer or PostgreSql.";
 
     /// <summary>
-    /// Registered right after <c>AddWorkbenchOpenIddictVendor</c>. The stores ask for <see cref="OpenIddictIdentityDbContext"/>, which
+    /// Registered right after <c>AddOpenIddictVendorStore</c>. The stores ask for <see cref="OpenIddictIdentityDbContext"/>, which
     /// this resolves to the selected engine's context: the SQLite store the vendor registration binds, for <c>Sqlite</c> and for the
     /// in-memory demo store, and otherwise the engine's own context, whose migrations are the engine's own. The host's start refuses
     /// a <c>Provider</c> that is not supported, and warns of the settings that leave the store per node.
     /// </summary>
-    public static IServiceCollection AddWorkbenchOpenIddictStoreProvider(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddOpenIddictStoreProvider(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOptions<WorkbenchOpenIddictStoreOptions>()
-            .Bind(configuration.GetSection(WorkbenchOpenIddictStoreOptions.SectionPath))
+        services.AddOptions<OpenIddictStoreOptions>()
+            .Bind(configuration.GetSection(OpenIddictStoreOptions.SectionPath))
             .ValidateOnStart();
-        services.AddSingleton<IValidateOptions<WorkbenchOpenIddictStoreOptions>, WorkbenchOpenIddictStoreOptionsValidator>();
-        services.AddHostedService(provider => new WorkbenchOpenIddictStoreNotices(
+        services.AddSingleton<IValidateOptions<OpenIddictStoreOptions>, OpenIddictStoreOptionsValidator>();
+        services.AddHostedService(provider => new OpenIddictStoreNotices(
             provider.GetRequiredService<IOptions<OpenIddictIdentityOptions>>(),
-            provider.GetRequiredService<IOptions<WorkbenchOpenIddictStoreOptions>>(),
+            provider.GetRequiredService<IOptions<OpenIddictStoreOptions>>(),
             configuration,
             provider.GetService<IEfToolingShellDefaults>(),
             provider.GetService<IHostApplicationLifetime>(),
-            provider.GetRequiredService<ILogger<WorkbenchOpenIddictStoreNotices>>()));
+            provider.GetRequiredService<ILogger<OpenIddictStoreNotices>>()));
 
         AddEngineContext<OpenIddictIdentitySqlServerDbContext>(services, "SqlServer");
         AddEngineContext<OpenIddictIdentityPostgreSqlDbContext>(services, "PostgreSql");
@@ -73,8 +72,8 @@ public static class WorkbenchOpenIddictStoreProvider
         }
         catch (ArgumentException)
         {
-            return $"Workbench's OpenIddict store does not know the provider '{provider}'. " +
-                   $"Set {WorkbenchOpenIddictStoreOptions.SectionPath}:Provider to Sqlite, SqlServer or PostgreSql.";
+            return $"The OpenIddict token store does not know the provider '{provider}'. " +
+                   $"Set {OpenIddictStoreOptions.SectionPath}:Provider to Sqlite, SqlServer or PostgreSql.";
         }
     }
 
@@ -106,7 +105,7 @@ public static class WorkbenchOpenIddictStoreProvider
         if (services.GetRequiredService<IOptions<OpenIddictIdentityOptions>>().Value.IsDevelopmentOrDemo)
             return CreateVendorContext(services);
 
-        var provider = services.GetRequiredService<IOptions<WorkbenchOpenIddictStoreOptions>>().Value.Provider;
+        var provider = services.GetRequiredService<IOptions<OpenIddictStoreOptions>>().Value.Provider;
         return EfRelationalProviderBinding.Select<Func<IServiceProvider, OpenIddictIdentityDbContext>>(
             string.IsNullOrWhiteSpace(provider) ? "Sqlite" : provider,
             Owner,
@@ -121,8 +120,8 @@ public static class WorkbenchOpenIddictStoreProvider
         ActivatorUtilities.CreateInstance<OpenIddictIdentityDbContext>(services);
 }
 
-/// <summary>Which engine Workbench's OpenIddict vendor store sits on, set beside the store's connection string.</summary>
-public sealed class WorkbenchOpenIddictStoreOptions
+/// <summary>Which engine the OpenIddict vendor store sits on, set beside the store's connection string.</summary>
+public sealed class OpenIddictStoreOptions
 {
     /// <summary>The default shell's OpenIddict settings, where the store's other settings (<c>ConnectionString</c>, <c>AutoMigrate</c>) are.</summary>
     public const string SectionPath = "CShells:Shells:default:Features:FoundationIdentityOpenIddict";
@@ -136,11 +135,11 @@ public sealed class WorkbenchOpenIddictStoreOptions
     public string? Provider { get; set; }
 }
 
-/// <summary>Fails the host's start for a <see cref="WorkbenchOpenIddictStoreOptions.Provider"/> the store cannot use, MySQL included, instead of its first use.</summary>
-public sealed class WorkbenchOpenIddictStoreOptionsValidator : IValidateOptions<WorkbenchOpenIddictStoreOptions>
+/// <summary>Fails the host's start for a <see cref="OpenIddictStoreOptions.Provider"/> the store cannot use, MySQL included, instead of its first use.</summary>
+public sealed class OpenIddictStoreOptionsValidator : IValidateOptions<OpenIddictStoreOptions>
 {
-    public ValidateOptionsResult Validate(string? name, WorkbenchOpenIddictStoreOptions options) =>
-        WorkbenchOpenIddictStoreProvider.Refusal(options.Provider) is { } refusal ? ValidateOptionsResult.Fail(refusal) : ValidateOptionsResult.Success;
+    public ValidateOptionsResult Validate(string? name, OpenIddictStoreOptions options) =>
+        OpenIddictStoreProvider.Refusal(options.Provider) is { } refusal ? ValidateOptionsResult.Fail(refusal) : ValidateOptionsResult.Success;
 }
 
 /// <summary>
@@ -150,19 +149,19 @@ public sealed class WorkbenchOpenIddictStoreOptionsValidator : IValidateOptions<
 /// </summary>
 /// <remarks>
 /// The platform's providers are those of the default shell's EF consumers as the platform resolves them
-/// (<see cref="WorkbenchOpenIddictPlatformProviders"/>): the root and shell default resources, per-feature bindings and the legacy
+/// (<see cref="OpenIddictPlatformProviders"/>): the root and shell default resources, per-feature bindings and the legacy
 /// per-feature <c>Provider</c> settings. That needs the host's loaded features, so it is read once the host has started, not while it
 /// is starting; a consumer a shell enables later, or a setting changed after the start, is not seen.
 /// </remarks>
-public sealed class WorkbenchOpenIddictStoreNotices(
+public sealed class OpenIddictStoreNotices(
     IOptions<OpenIddictIdentityOptions> identity,
-    IOptions<WorkbenchOpenIddictStoreOptions> store,
+    IOptions<OpenIddictStoreOptions> store,
     IConfiguration configuration,
     IEfToolingShellDefaults? hostDefaults,
     IHostApplicationLifetime? lifetime,
-    ILogger<WorkbenchOpenIddictStoreNotices> logger) : IHostedService
+    ILogger<OpenIddictStoreNotices> logger) : IHostedService
 {
-    private const string Setting = $"{WorkbenchOpenIddictStoreOptions.SectionPath}:Provider";
+    private const string Setting = $"{OpenIddictStoreOptions.SectionPath}:Provider";
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -196,7 +195,7 @@ public sealed class WorkbenchOpenIddictStoreNotices(
         {
             if (hostDefaults is null)
                 return;
-            platform = WorkbenchOpenIddictPlatformProviders.Resolve(configuration, hostDefaults, AppDomain.CurrentDomain.GetAssemblies());
+            platform = OpenIddictPlatformProviders.Resolve(configuration, hostDefaults, AppDomain.CurrentDomain.GetAssemblies());
         }
         catch (Exception failure) when (failure is not OutOfMemoryException)
         {
@@ -209,7 +208,7 @@ public sealed class WorkbenchOpenIddictStoreNotices(
         if (others.Length == 0)
             return;
 
-        var shareable = others.FirstOrDefault(provider => WorkbenchOpenIddictStoreProvider.Refusal(provider) is null);
+        var shareable = others.FirstOrDefault(provider => OpenIddictStoreProvider.Refusal(provider) is null);
         if (shareable is null)
             logger.LogWarning(
                 "The platform's persistence provider is {Platform}, which the OpenIddict token store does not support, so the token store is still a per-node SQLite file: a token issued on one node is not valid on another. Sharing it needs a SQL Server or PostgreSQL database, selected with {Setting}.",
