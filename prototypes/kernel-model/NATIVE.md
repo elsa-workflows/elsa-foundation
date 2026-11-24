@@ -234,7 +234,7 @@ captured variables, so in state: 571 bytes for http-reference).
 From `prototypes/kernel-model`, run:
 
 ```bash
-dotnet run -c Release --project sim -- --public-http-edge-check
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --public-http-edge-check
 ```
 
 This check starts Kestrel on a dynamically assigned loopback port and runs actual HTTP requests against the
@@ -249,7 +249,7 @@ assertion fail before the checkpoint lands.
 The companion check keeps the HTTP receiver live while its remote logical owner is lost:
 
 ```bash
-dotnet run -c Release --project sim -- --public-http-remote-check
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --public-http-remote-check
 ```
 
 Two Worker identities share the in-memory store and deliver replies through an in-process transport. The
@@ -583,7 +583,7 @@ Both detached children complete at revision 1. The attached child remains regist
 Run the check in Balanced and Durable from `prototypes/kernel-model`:
 
 ```bash
-dotnet run -c Release --project sim -- --native-detached-handles-check
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --native-detached-handles-check
 ```
 
 The terminal projection still counts every handle carried in a checkpoint. Older handles stay stored because the
