@@ -25,12 +25,11 @@ internal static class WorkbenchPostgresPreview
     private sealed record Receipt(string Actor, string Bookmark, string Frame, string StateHash, string JournalHash, long Epoch, int Process);
     private sealed record Checkpoint(long Revision, string State, long Epoch, string? Owner);
 
-    internal static async Task RunAsync(string[] arguments)
+    internal static async Task RunAsync(string[] arguments, string? executable = null)
     {
         if (arguments is not [var phase and ("birth" or "restart" or "disabled"), var receiptPath])
             throw new ArgumentException("Expected birth, restart or disabled and a receipt file.");
 
-        var executable = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_WORKBENCH");
         if (phase == "disabled" && executable is null)
             throw new ArgumentException("The disabled check requires a Workbench executable.");
 
@@ -229,17 +228,24 @@ internal static class WorkbenchPostgresPreview
         {
             var assembly = Path.GetFullPath(executable);
             var workspace = Directory.CreateTempSubdirectory("elsa-workbench-core-preview-");
-            var start = new ProcessStartInfo("dotnet")
+            var source = Path.GetDirectoryName(assembly)!;
+            foreach (var file in new[] { "appsettings.json", "appsettings.Development.json", "shells.json", "shells.Development.json" })
+                if (File.Exists(Path.Combine(source, file)))
+                    File.Copy(Path.Combine(source, file), Path.Combine(workspace.FullName, file));
+            workspace.CreateSubdirectory("packages");
+            var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
             {
                 WorkingDirectory = workspace.FullName,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false
             };
-            foreach (var argument in new[] { assembly, "--contentRoot", Path.GetDirectoryName(assembly)!, "--urls", "http://127.0.0.1:0" })
+            foreach (var argument in new[] { assembly, "--contentRoot", workspace.FullName, "--urls", "http://127.0.0.1:0" })
                 start.ArgumentList.Add(argument);
             start.Environment["DOTNET_ENVIRONMENT"] = "Development";
             start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+            start.Environment["Nuplane__Setup__StateFilePath"] = Path.Combine(workspace.FullName, ".nuplane", "store-state.json");
+            start.Environment["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information";
             start.Environment.Remove("Elsa__CorePreview__Enabled");
             if (enabled)
                 start.Environment["Elsa__CorePreview__Enabled"] = "true";

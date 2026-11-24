@@ -15,7 +15,13 @@ using Microsoft.EntityFrameworkCore;
 WriteLine.Out = null;
 if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
 {
-    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunAsync(workbenchPreview);
+    var workbenchExecutable = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_WORKBENCH");
+    if (string.IsNullOrWhiteSpace(workbenchExecutable) || !File.Exists(workbenchExecutable))
+    {
+        Console.Error.WriteLine("Set KERNEL_PREVIEW_WORKBENCH to the built Workbench executable.");
+        return 2;
+    }
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunAsync(workbenchPreview, workbenchExecutable);
     return 0;
 }
 if (args is ["pg-root-operators", "admit"])
