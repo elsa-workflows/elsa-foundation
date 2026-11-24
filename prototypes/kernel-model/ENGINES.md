@@ -72,6 +72,28 @@ available after cancellation while the independent blocker is still held. The ro
 the same journal position for a successor. The stage tests command cancellation and physical
 lock release under verified TLS.
 
+### PostgreSQL process exit while holding a fence
+
+Use a fresh disposable database for each run. Supply a direct loopback TCP connection on an explicit
+port with `SSL Mode=VerifyFull`, as above.
+
+```bash
+dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x watchdog postgres "$PG" stage=owner-exit disconnect-check=on commit=owned fence=batch disposable=1
+```
+
+A separate worker process waits on PostgreSQL's advisory lock inside its fenced transaction. The
+coordinator confirms that session uses TLS and holds the partition row, then stops the worker
+process. With `disconnect-check=on`, the worker sets PostgreSQL's `client_connection_check_interval`
+to 100 ms for that transaction. The fence must become available within three seconds while the
+competing transaction still holds its advisory lock. `disconnect-check=off` runs the control with
+the server setting disabled. The worker exits, but the fence remains held beyond the fixture's
+two-second lease. When the competing transaction ends, the old transaction rolls back and a later
+owner commits once at the unchanged journal position in either run. Both fence modes and writers
+use the same procedure.
+
+This covers process exit with TCP disconnect visible to PostgreSQL. K12 still measures a network
+path that stops delivering traffic and the resulting end-to-end takeover time.
+
 `EngineRun.cs` lists the options. The stress test is the one of FINDINGS section 4: three nodes, two partitions (four
 in the runs marked "no kills"), six workers on 150 ms leases, stalls of 150 to 500 ms, a busy worker session killed
 every 20 to 60 ms (`pg_terminate_backend`, `KILL`, `KILL CONNECTION`; SQLite has no sessions), an outside producer
