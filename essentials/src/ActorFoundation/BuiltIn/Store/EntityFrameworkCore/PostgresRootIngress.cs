@@ -9,7 +9,8 @@ namespace Kernel.EntityFramework;
 internal sealed class PostgresRootIngress(PostgresRootAdmission admission, string actorType,
     Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeTerminate = null,
     Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeDelete = null,
-    (Requests Requests, string Node, Func<long> Clock)? heldOperators = null) : Contract.IIngress
+    (Requests Requests, string Node, Func<long> Clock)? heldOperators = null,
+    Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeRecover = null) : Contract.IIngress
 {
     private static readonly JsonSerializerOptions OperatorJson = new()
     {
@@ -70,6 +71,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         {
             Contract.Kinds.Terminate => authorizeTerminate,
             Contract.Kinds.Delete => authorizeDelete,
+            Contract.Kinds.Recover => authorizeRecover,
             _ => null
         })?.Invoke(scope, actor) == true;
 

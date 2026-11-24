@@ -144,6 +144,8 @@ public class KernelDb : DbContext
     internal bool UsesRootParkOpening => Has(RootCapabilities.ParkOpening);
     internal bool UsesRootParkInspection => Has(RootCapabilities.ParkInspection);
     internal bool UsesRootParkArrivals => Has(RootCapabilities.ParkArrivals);
+    internal bool UsesRootParkRecovery => Has(RootCapabilities.ParkRecovery);
+    internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
