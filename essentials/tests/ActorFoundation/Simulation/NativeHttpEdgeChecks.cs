@@ -263,7 +263,7 @@ internal static partial class NativeHttpEdgeChecks
             using (var item = await PostAsync("items/7"))
                 Require(await listed.Content.ReadAsStringAsync(token) == "the list" && await item.Content.ReadAsStringAsync(token) == "item 7",
                     "The most specific template wins: items/list goes to its literal route, items/7 to items/{id}.");
-            foreach (var order in new[] { "41", "42", "a b" })
+            foreach (var order in new[] { "41", "42", "a b", "A", "%41", "A/42" })
                 using (var shipping = await PostAsync($"orders/{Uri.EscapeDataString(order)}/ship"))
                     Require(shipping.StatusCode == HttpStatusCode.Accepted && await shipping.Content.ReadAsStringAsync(token) == $"shipping {order}",
                         $"Order '{order}' is shipping and waits for its own cancel.");
@@ -273,10 +273,17 @@ internal static partial class NativeHttpEdgeChecks
             using (var again = await PostAsync("orders/42/cancel"))
             using (var spaced = await PostAsync("orders/a%20b/cancel"))
             using (var other = await PostAsync("orders/41/cancel"))
-            using (var dots = await PostAsync("orders/%2E%2E/cancel"))
                 Require(again.StatusCode == HttpStatusCode.NotFound && await spaced.Content.ReadAsStringAsync(token) == "cancelled a b by a b" &&
-                        await other.Content.ReadAsStringAsync(token) == "cancelled 41 by 41" && dots.StatusCode == HttpStatusCode.NotFound,
-                    $"A finished order's cancel finds nothing, an escaped id is decoded once, the other order is still there for its own cancel, and '..' is no id. Observed {(int)again.StatusCode} and {(int)dots.StatusCode}.");
+                        await other.Content.ReadAsStringAsync(token) == "cancelled 41 by 41",
+                    $"A finished order's cancel finds nothing, and the other order is still there for its own cancel. Observed {(int)again.StatusCode}.");
+            using (var percent = await PostAsync("orders/%2541/cancel"))
+            using (var plain = await PostAsync("orders/A/cancel"))
+            using (var slashed = await PostAsync("orders/A%2F42/cancel"))
+                Require(await percent.Content.ReadAsStringAsync(token) == "cancelled %41 by %41" && await plain.Content.ReadAsStringAsync(token) == "cancelled A by A" &&
+                        await slashed.Content.ReadAsStringAsync(token) == "cancelled A/42 by A/42",
+                    "Escaped ids are decoded exactly once: %2541 is order '%41', not order 'A', and A%2F42 is order 'A/42'.");
+            var dots = await RawPostAsync("orders/%2E%2E/cancel");
+            Require(dots.Status == 404, $"A '..' segment sent as the client wrote it is no id for the matcher. Observed {dots.Status}.");
             using (var computed = new HttpRequestMessage(HttpMethod.Post, "ship-computed") { Content = JsonContent.Create(new { id = "Zz" }) })
                 Require((await client.SendAsync(computed, token)).StatusCode == HttpStatusCode.OK, "A workflow waits on a cancel path it computes.");
             using (var computedCancel = await PostAsync("orders/Zz/cancel"))
@@ -361,8 +368,10 @@ internal static partial class NativeHttpEdgeChecks
         catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: refused.OverBound ? StatusCodes.Status414UriTooLong : 400); }
         try { headers = HttpFields.RequestHeaders(request.Headers.SelectMany(field => field.Value.Select(value => KeyValuePair.Create(field.Key, value ?? "")))); }
         catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: refused.OverBound ? StatusCodes.Status431RequestHeaderFieldsTooLarge : 400); }
-        // The route templates are matched on the path as the client escaped it (Request.Path is already decoded).
-        var match = HttpRouteMatcher.Match(routes, request.Method, request.Path.ToUriComponent());
+        // The route templates are matched on the path as the client sent it, so that the matcher decodes it once: Request.Path
+        // is already decoded but for %2F, and a value of '%41' sent as %2541 would be decoded twice.
+        var sent = context.Features.Get<IHttpRequestFeature>()?.RawTarget is ['/', ..] target ? target.Split('?', 2)[0] : request.Path.ToUriComponent();
+        var match = HttpRouteMatcher.Match(routes, request.Method, sent);
         Kernel.Native.HttpRequest message;
         try { message = new Kernel.Native.HttpRequest(request.Method, request.Path, body) { Query = query, Headers = headers, RouteValues = match.Values }; }
         catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: StatusCodes.Status414UriTooLong); }
@@ -379,7 +388,7 @@ internal static partial class NativeHttpEdgeChecks
                 eventOptions, new Contract.RequestOptions(null, deadline, match.Route?.RespondBeforeCommit ?? false), token);
             // A computed wait may share a wait template's shape: with no waiter on the template's key, the request goes to
             // its literal key, without route values (design card 1; a "no waiter" publishes nothing, FC-C2).
-            var literal = HttpRouteMatcher.Literal(request.Method, request.Path.ToUriComponent());
+            var literal = HttpRouteMatcher.Literal(request.Method, sent);
             if (match.Route is not null && reply.Error == "no waiter" && literal.Key != match.Key)
                 reply = await ingress.RequestAsync(scope, new Contract.Target.Event(literal.Key), eventId ?? id, Contract.Kinds.Event,
                     JsonSerializer.Serialize(message with { RouteValues = literal.Values }), eventOptions, new Contract.RequestOptions(null, deadline, false), token);
