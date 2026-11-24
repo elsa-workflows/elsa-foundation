@@ -46,7 +46,7 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
 
     private ActorView View(BoundScope scope, EfStore.RootListItem row, long asOf)
     {
-        var header = new ActorHeader(new(row.Reference), row.Type, scope.Tenant, (ActorStatus)row.Status, null, null,
+        var header = new ActorHeader(new(row.Reference), row.Type, scope.Tenant, (ActorStatus)row.Status, row.ParkFault, null,
             row.EndedAt, row.TypeData, row.Labels);
         var selection = row switch
         {
@@ -56,7 +56,7 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
                 PostgresRootSelection.SealTerminal(cursor, scope.Tenant, row.Reference, revision, at),
             _ => null
         };
-        return new(header, selection, null, asOf);
+        return new(header, selection, row.ParkAt is { } parkAt ? new(parkAt, null) : null, asOf);
     }
 
     public async ValueTask<Page<JournalEntry>> TailAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
@@ -103,7 +103,7 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
         var snapshot = await store.ReadRootInboxAsync(scope.Tenant, reference, afterSeq, afterOccurrence, _pageSize + 1, cancellationToken);
         var page = snapshot.Rows.Take(_pageSize).Select(row => new DeliveryView(
             cursor.InboxHandle(DurableKeyJson.Write(new { scope.Tenant, Reference = reference, row.Occurrence, row.Seq })),
-            row.Id, row.Kind, null, row.Due, DeliveryState.Pending, row.Attempts, row.Size)).ToArray();
+            row.Id, row.Kind, null, row.Due, row.Kept ? DeliveryState.Consumed : DeliveryState.Pending, row.Attempts, row.Size)).ToArray();
         PageToken? next = null;
         if (snapshot.Rows.Count > _pageSize)
         {

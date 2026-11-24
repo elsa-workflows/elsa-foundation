@@ -134,9 +134,11 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     private sealed class RootTimedJobSettlementDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootTimedJobPreviewDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootParkOpeningDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootParkInspectionDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     internal StoreFormat RequiredFormat => this switch
     {
         RootParkOpeningDb => StoreFormat.RootParkOpening,
+        RootParkInspectionDb => StoreFormat.RootParkInspection,
         RootTimedJobPreviewDb => StoreFormat.RootTimedJobPreview,
         RootTimedJobSettlementDb => StoreFormat.RootTimedJobSettlement,
         RootReplyDb => StoreFormat.RootReplies,
@@ -163,7 +165,9 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     internal bool UsesRootTimedJobSettlement => this is RootTimedJobSettlementDb || UsesRootTimedJobPreview;
     internal bool SupportsCorePreview => RequiredFormat == StoreFormat.Current || UsesRootJobPreview || UsesRootTimedJobPreview;
     internal static KernelDb ForPostgresRootTimedJobPreview(DbContextOptions<KernelDb> options) => new RootTimedJobPreviewDb(options);
-    internal bool UsesRootParkOpening => this is RootParkOpeningDb;
+    internal bool UsesRootParkOpening => this is RootParkOpeningDb || UsesRootParkInspection;
+    internal bool UsesRootParkInspection => this is RootParkInspectionDb;
+    internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => new RootParkInspectionDb(options);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
     internal static KernelDb ForPostgresRootParkOpening(DbContextOptions<KernelDb> options) => new RootParkOpeningDb(options);
     internal bool UsesRootReplyProtocol => this is RootReplyDb;
