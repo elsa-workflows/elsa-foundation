@@ -82,7 +82,8 @@ public class Elsa3MappingFeature : IShellFeature
         services.AddScoped<Elsa3MemoryReferenceGraph>();
         services.AddScoped(provider => new Elsa3ExpressionRewriter(
             provider.GetRequiredService<IJavaScriptDotNetUsageAnalyzer>(),
-            provider.GetRequiredService<IOptions<Elsa3ConversionOptions>>().Value));
+            provider.GetRequiredService<IOptions<Elsa3ConversionOptions>>().Value,
+            provider.GetServices<JavaScriptHostFunctionDeclaration>()));
         services.AddScoped<Elsa3ValueFlowLowerer>();
         services.AddScoped<Elsa3ActivityToState>();
         services.AddScoped<Elsa3WorkflowDefinitionToState>();

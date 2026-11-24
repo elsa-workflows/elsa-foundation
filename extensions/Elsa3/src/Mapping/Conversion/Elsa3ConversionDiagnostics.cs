@@ -28,6 +28,16 @@ internal static class Elsa3ConversionDiagnostics
         string? withinProperty = null) =>
         Create(Elsa3MigrationDiagnosticSeverity.Warning, plan, node, code, message, guidance, property, withinProperty);
 
+    public static Elsa3MigrationDiagnostic Info(
+        Elsa3ConversionPlan plan,
+        Elsa3NodePlan node,
+        string code,
+        string message,
+        string guidance,
+        string? property = null,
+        string? withinProperty = null) =>
+        Create(Elsa3MigrationDiagnosticSeverity.Info, plan, node, code, message, guidance, property, withinProperty);
+
     /// <summary>A definition-level diagnostic (no node), for reusable-workflow outcomes and the like.</summary>
     public static Elsa3MigrationDiagnostic ForDefinition(
         Elsa3ConversionPlan plan,

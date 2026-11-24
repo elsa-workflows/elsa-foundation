@@ -94,6 +94,10 @@ internal sealed class Elsa3RewriteContext(
     public void Warning(string code, string message, string guidance, string? property = null, string? withinProperty = null) =>
         Plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Warning(Plan, Node, code, message, guidance, property, withinProperty));
 
+    /// <inheritdoc cref="Error"/>
+    public void Info(string code, string message, string guidance, string? property = null, string? withinProperty = null) =>
+        Plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Info(Plan, Node, code, message, guidance, property, withinProperty));
+
     /// <summary>The node's ancestors, nearest first.</summary>
     public IEnumerable<Elsa3NodePlan> Ancestors()
     {
