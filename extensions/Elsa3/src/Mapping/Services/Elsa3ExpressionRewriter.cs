@@ -956,6 +956,9 @@ public sealed class Elsa3ExpressionRewriter(
 
         private readonly SortedSet<string> _helpers = new(StringComparer.Ordinal);
 
+        /// <summary>Replaced globals already refused for a non-call reference, so each is reported once (#5691).</summary>
+        private readonly HashSet<string> _reportedReplacedReferences = new(StringComparer.Ordinal);
+
         /// <summary>The local functions the rewritten source calls, one per line, or empty.</summary>
         public string Prelude =>
             string.Concat(_helpers.Select(helper => InlineHelpers[helper].Declaration + "\n")) +
@@ -1737,6 +1740,25 @@ public sealed class Elsa3ExpressionRewriter(
                 return;
             }
 
+            // The converter rewrites only a direct call to a replaced global (#5664). Any other reference (an alias, a
+            // callback, a stored function) names nothing in Elsa 4, so it is refused (#5691). A write to the name is
+            // reported as an undeclared write instead.
+            if (node is Identifier replacedValue && !IsDeclared(replacedValue.Name) &&
+                !ConvertedGlobals.Contains(replacedValue.Name) && ReplacedGlobals.TryGetValue(replacedValue.Name, out var replacedBy) &&
+                !IsDirectWriteTarget(replacedValue))
+            {
+                if (_reportedReplacedReferences.Add(replacedValue.Name))
+                {
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.ReplacedFunctionReference,
+                        $"JavaScript uses '{replacedValue.Name}' as a value instead of calling it; the converter rewrites only direct calls " +
+                        $"to {string.Join(" or ", replacedBy.Select(name => $"'{name}'"))}.",
+                        $"Call '{replacedValue.Name}' directly in the Elsa 3 script before import, for example " +
+                        $"'items.map(item => {replacedValue.Name}(item))' instead of 'items.map({replacedValue.Name})'."));
+                }
+                return;
+            }
+
             if (node is Identifier { Name: "args" } && !IsDeclared("args"))
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
@@ -2047,6 +2069,17 @@ public sealed class Elsa3ExpressionRewriter(
 
             return names;
         }
+
+        /// <summary>Whether the identifier being visited is the name an assignment, update or for-in/of loop writes.</summary>
+        private bool IsDirectWriteTarget(Identifier identifier) =>
+            (_syntaxParents.Count > 1 ? _syntaxParents[^2] : null) switch
+            {
+                AssignmentExpression assignment => ReferenceEquals(assignment.Left, identifier),
+                UpdateExpression update => ReferenceEquals(update.Argument, identifier),
+                ForInStatement forIn => ReferenceEquals(forIn.Left, identifier),
+                ForOfStatement forOf => ReferenceEquals(forOf.Left, identifier),
+                _ => false,
+            };
 
         private static Elsa3ExpressionRewriteIssue UndeclaredWrite(string name) => new(
             Elsa3ImportDiagnosticCodes.UnsupportedShape,
@@ -3042,4 +3075,11 @@ public static class Elsa3ImportDiagnosticCodes
     /// variable outside the workflow instance yet (publication refuses it with VF-ACT-005), with guidance to use the default.
     /// </summary>
     public const string VariableStorageDriverUnmapped = "ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED";
+
+    /// <summary>
+    /// A script uses an Elsa 3 global that a host function replaces (#5664) other than in a direct call: aliased, passed as
+    /// a callback or stored (#5691). The converter rewrites only direct calls, so this is refused, with guidance to call the
+    /// function directly.
+    /// </summary>
+    public const string ReplacedFunctionReference = "ELS3-REPLACED-FUNCTION-REFERENCE";
 }
