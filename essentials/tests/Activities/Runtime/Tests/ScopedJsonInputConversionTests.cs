@@ -46,6 +46,29 @@ public sealed class ScopedJsonInputConversionTests
         Assert.Empty(warnings.Warnings);
     }
 
+    [Theory]
+    [InlineData("literal")]
+    [InlineData("request")]
+    [InlineData("variable")]
+    [InlineData("member")]
+    [InlineData("expression")]
+    [InlineData("external")]
+    [InlineData("projection")]
+    public async Task XML_profile_inputs_emit_the_owning_members_JSON_contract_and_hydrate_it(string source)
+    {
+        var (snapshot, contract, store, warnings) = await Materialize(source, "mapped", "<order><name>René</name></order>", xml: true);
+        var envelope = snapshot.Values["mapped"];
+        var payload = envelope.InlineValue ?? await store.ReadAsync(envelope.ExternalReference!);
+        Assert.Equal("René", payload.GetProperty("wire_name").GetString());
+        Assert.False(payload.TryGetProperty("name", out _));
+        var activity = new Consumer();
+        var inputs = new ActivityInputSnapshot(snapshot.InvocationId, snapshot.ContractFingerprint, snapshot.BindingFingerprint,
+            new Dictionary<string, ValueEnvelope> { ["mapped"] = ValueEnvelope.Inline(OrderType, payload, envelope.Policy) }, snapshot.MaterializedAt);
+        new ActivityInputHydrator().Hydrate(activity, contract, inputs, warnings);
+        Assert.Equal("René", activity.Mapped!.Name);
+        Assert.Empty(warnings.Warnings);
+    }
+
     [Fact]
     public async Task A_member_override_can_select_case_insensitive_reads_without_changing_other_inputs()
     {
@@ -75,7 +98,7 @@ public sealed class ScopedJsonInputConversionTests
     }
 
     private static async Task<(ActivityInputSnapshot Snapshot, ActivityContract Contract, PayloadStore Store, ExecutionWarningCollector Warnings)> Materialize(
-        string source, string key, string raw, bool sensitive = false)
+        string source, string key, string raw, bool sensitive = false, bool xml = false)
     {
         var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(string), "String");
@@ -89,7 +112,7 @@ public sealed class ScopedJsonInputConversionTests
             ? ValueEnvelope.External(Text, new("external", "source", new Dictionary<string, string>()), policy)
             : ValueEnvelope.Inline(Text, text, policy);
         var plan = new ValueConversionPlan(ValueConversionPlan.CurrentSchemaVersion, ValueRepresentation.FormattedContent,
-            Text, OrderType, ValueConversionMode.Json, ValueConversionOperation.Profile, new("elsa.json", "1"), null, null);
+            Text, OrderType, xml ? ValueConversionMode.Xml : ValueConversionMode.Json, ValueConversionOperation.Profile, new(xml ? "elsa.xml" : "elsa.json", "1"), null, null);
         var role = source switch
         {
             "literal" => RuntimeInputBindingSource.Literal,

@@ -16,6 +16,44 @@ namespace Elsa3.Mapping.Tests;
 public sealed class Elsa3LiteralConversionTests
 {
     [Theory]
+    [InlineData("Child", false)]
+    [InlineData("Children", false)]
+    [InlineData("ListChildren", false)]
+    [InlineData("Named", false)]
+    [InlineData("Child", true)]
+    [InlineData("Children", true)]
+    [InlineData("ListChildren", true)]
+    [InlineData("Named", true)]
+    public void Recursive_contract_adapters_rewrite_nested_keys_and_dates_and_still_refuse_ambiguity(string shape, bool ambiguous)
+    {
+        const string carried = "{ \"Name\":\"Ren\\u00e9\", \"n\":1.0 }";
+        var child = "{\"CUSTOMER_NAME\":\"Nested\",\"AT\":\"2026-07-15T09:15:00\",\"CARRIED\":" + carried +
+            (ambiguous ? ",\"customer_name\":\"Second\"}" : "}");
+        var children = shape switch { "Child" => child, "Children" or "ListChildren" => "[" + child + "]", _ => "{\"KeepKey\":" + child + "}" };
+        var input = Parse("{\"CustomerName\":\"Root\",\"" + shape + "\":" + children + "}");
+        var original = input.GetRawText();
+        var member = typeof(RecursiveInputs).GetProperty(nameof(RecursiveInputs.Value))!;
+        var contract = JsonConversionContract.For(typeof(RecursiveOrder), member);
+        var notes = new List<Elsa3LiteralConversion.Note>();
+        JsonElement Convert() => Elsa3LiteralConversion.Rewrite(input, typeof(RecursiveOrder), Options(Elsa3DateInterpretation.SourceTimeZone), notes.Add, contract);
+        if (ambiguous)
+            Assert.Equal(Elsa3ActivityDiagnosticCodes.LiteralKeyAmbiguous, Assert.Throws<Elsa3LiteralConversion.LiteralRefusal>(() => Convert()).Code);
+        else
+        {
+            var converted = Convert();
+            var nested = shape switch { "Child" => converted.GetProperty(shape), "Children" or "ListChildren" => converted.GetProperty(shape)[0], _ => converted.GetProperty(shape).GetProperty("KeepKey") };
+            Assert.Equal("Nested", nested.GetProperty("customer_name").GetString());
+            Assert.Equal("2026-07-15T09:15:00+02:00", nested.GetProperty("at").GetString());
+            Assert.Equal(carried, nested.GetProperty("carried").GetRawText());
+            Assert.DoesNotContain(notes, note => note.Code == "json-unmatched-coverage-unavailable");
+            var typed = (RecursiveOrder)contract.Read(converted, typeof(RecursiveOrder))!;
+            Assert.Equal("Root", typed.CustomerName);
+            Assert.Equal("Nested", (shape switch { "Child" => typed.Child, "Children" => typed.Children![0], "ListChildren" => typed.ListChildren![0], _ => typed.Named!["KeepKey"] })!.CustomerName);
+        }
+        Assert.Equal(original, input.GetRawText());
+    }
+
+    [Theory]
     [InlineData("https://example.test/items?OwnerKey=%C3%A9")]
     [InlineData("items/next")]
     public async Task A_converter_backed_URI_literal_keeps_its_string_token(string text)
@@ -228,6 +266,21 @@ public sealed class Elsa3LiteralConversionTests
     { DateInterpretation = interpretation, SourceTimeZone = interpretation == Elsa3DateInterpretation.SourceTimeZone ? "Europe/Amsterdam" : null };
     private static JsonElement Parse(string json) { using var document = JsonDocument.Parse(json); return document.RootElement.Clone(); }
     private sealed record Item(string Code);
+    private sealed class RecursiveInputs
+    {
+        [JsonConversion(NamingPolicy = JsonKnownNamingPolicy.Unspecified)] public RecursiveOrder? Value { get; set; }
+    }
+    [JsonConversion(NamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+    private sealed class RecursiveOrder
+    {
+        public string? CustomerName { get; set; }
+        public RecursiveOrder? Child { get; set; }
+        public RecursiveOrder[]? Children { get; set; }
+        public List<RecursiveOrder>? ListChildren { get; set; }
+        public Dictionary<string, RecursiveOrder>? Named { get; set; }
+        public DateTimeOffset? At { get; set; }
+        public JsonElement? Carried { get; set; }
+    }
     private sealed record Order(string? Name, Item[]? Items, Dictionary<string, Item>? ByKey);
     [JsonConversion(MemberMappings = ["order_id=Id"])]
     private sealed record ScopedOrder(string Id, [property: JsonPropertyName("display")] string Name);

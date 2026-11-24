@@ -149,13 +149,19 @@ public sealed class JsonConversionContract
         public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) => CreateBoundaryConverter(typeToConvert, For(typeToConvert), operation);
     }
 
-    private sealed class BoundaryConverter<T>(JsonConversionContract contract, Operation operation) : JsonConverter<T>
+    private interface IContractAdapter { }
+
+    /// <summary>Identifies only the transparent adapters this contract adds around its own member metadata.</summary>
+    /// <remarks>Import and format adapters may inspect that metadata; user converters keep their own opaque shape.</remarks>
+    public static bool IsContractAdapter(JsonConverter? converter) => converter is IContractAdapter;
+
+    private sealed class BoundaryConverter<T>(JsonConversionContract contract, Operation operation) : JsonConverter<T>, IContractAdapter
     {
         public override T? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => JsonSerializer.Deserialize<T>(ref reader, options: operation.GetOptions(contract));
         public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) => JsonSerializer.Serialize(writer, value, options: operation.GetOptions(contract));
     }
 
-    private interface IRecursiveCollectionConverter { }
+    private interface IRecursiveCollectionConverter : IContractAdapter { }
 
     // A collection's elements must not inherit the root-only converter exclusion. Keep the enclosing
     // naming/mapping policy, but let annotated elements select their own contract in these local options.

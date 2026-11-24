@@ -1,8 +1,9 @@
 using System.Globalization;
+using System.Reflection;
 using System.Text;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using System.Xml;
 using System.Xml.Linq;
 using Elsa.Primitives.Models;
@@ -20,10 +21,6 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// </summary>
 public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellKnownTypeRegistry = null) : IRuntimeValueConversionExecutor
 {
-    // XML member mapping resolves aliases through the current registry on every call; only CLR member shape is invariant.
-    // Weak actual-Type keys distinguish module load contexts and permit collectible contracts to unload.
-    private static readonly ConditionalWeakTable<Type, Dictionary<string, TypeMember>> Members = new();
-
     public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan) => Convert(source, plan, report: null);
 
     public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan, Action<JsonConversionDiagnostic>? report)
@@ -175,7 +172,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         if (IsJsonStringProfile(plan))
             return SerializeJsonAsString(value, plan);
         if (IsXmlProfile(plan))
-            return ConvertXmlProfile(value, plan);
+            return ConvertXmlProfile(value, plan, conversionContract, report);
         if (!IsJsonProfile(plan))
             throw Reject(plan, "the pinned conversion profile is not available in this runtime slice");
         if (plan.SourceRepresentation is not (ValueRepresentation.FormattedContent or ValueRepresentation.StructuredValue))
@@ -204,7 +201,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         return JsonSerializer.SerializeToElement(value.GetRawText(), Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
-    private JsonElement ConvertXmlProfile(JsonElement value, ValueConversionPlan plan)
+    private JsonElement ConvertXmlProfile(JsonElement value, ValueConversionPlan plan, JsonConversionContract? conversionContract, Action<JsonConversionDiagnostic>? report)
     {
         if (plan.SourceRepresentation != ValueRepresentation.FormattedContent)
             throw Reject(plan, "XML conversion requires a formatted-content source representation");
@@ -218,11 +215,33 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
 
         var document = ReadXmlDocument(value, plan);
         var targetType = TypeReferenceFactory.Close(elementType, plan.TargetType.ToTypeReference());
+        var contract = conversionContract ?? JsonConversionContract.For(targetType);
+        var context = new XmlConversionContext();
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new() { Encoder = JsonBaseline.Options.Encoder }))
-            WriteXmlAsJson(writer, document.Root!, targetType, plan, "$", depth: 1);
+            WriteXmlAsJson(writer, document.Root!, targetType, plan, "$", depth: 1, contract, context);
         using var json = JsonDocument.Parse(stream.ToArray());
-        return json.RootElement.Clone();
+        var diagnostics = new List<JsonConversionDiagnostic>();
+        try
+        {
+            var typed = contract.Read(json.RootElement, targetType, diagnostics.Add);
+            // XML has no null token. Keep absence from its projection rather than adding CLR defaults
+            // while applying the contract's actual output (dates, durations, GUIDs and user converters).
+            var result = NormalizeXml(json.RootElement, typed, targetType, contract, context);
+            ValidatePayloadLimits(plan, result);
+            if (CountJsonNodes(result, plan, depth: 1) > plan.Limits.MaxCollectionItems)
+                throw Reject(plan, $"maximum JSON node count '{plan.Limits.MaxCollectionItems}' was exceeded");
+            foreach (var diagnostic in diagnostics) report?.Invoke(diagnostic);
+            return result;
+        }
+        catch (JsonException exception)
+        {
+            throw Reject(plan, $"typed XML conversion failed at '{exception.Path ?? "$"}': {exception.Message}");
+        }
+        catch (NotSupportedException exception)
+        {
+            throw Reject(plan, $"typed XML conversion is unsupported: {exception.Message}");
+        }
     }
 
     private static XDocument ReadXmlDocument(JsonElement value, ValueConversionPlan plan)
@@ -344,32 +363,48 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
                element.Elements().Sum(child => CountXmlNodes(child, plan, depth + 1));
     }
 
-    private static IReadOnlyDictionary<string, TypeMember> GetTypeMembers(Type targetType) =>
-        Members.GetValue(targetType, static type => type
-            .GetProperties()
-            .Where(property => property.GetMethod is not null && property.GetMethod.IsPublic && property.GetIndexParameters().Length == 0)
-            .Select(property => new TypeMember(
-                property.GetCustomAttributes(typeof(JsonPropertyNameAttribute), inherit: true)
-                    .Cast<JsonPropertyNameAttribute>()
-                    .SingleOrDefault()?.Name ?? JsonNamingPolicy.CamelCase.ConvertName(property.Name),
-                property.PropertyType,
-                property.GetCustomAttributes(inherit: true).Any(attribute =>
-                    attribute.GetType().FullName is "System.Runtime.CompilerServices.RequiredMemberAttribute" or "System.Text.Json.Serialization.JsonRequiredAttribute")))
-            .ToDictionary(property => property.JsonName, StringComparer.OrdinalIgnoreCase));
+    private static JsonConversionContract ChildContract(Type type, JsonConversionContract parent, MemberInfo? member = null) =>
+        member?.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null ||
+        (Nullable.GetUnderlyingType(type) ?? type).GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null
+            ? JsonConversionContract.For(type, member) : parent;
 
-    private static void WriteXmlAsJson(Utf8JsonWriter writer, XElement element, Type targetType, ValueConversionPlan plan, string path, int depth)
+    private static Type? CollectionElement(Type type, bool dictionary = false) => type.IsArray ? type.GetElementType() :
+        type.GetInterfaces().Append(type).FirstOrDefault(item => item.IsGenericType &&
+            (dictionary ? item.GetGenericTypeDefinition() == typeof(IDictionary<,>) || item.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)
+                : item.GetGenericTypeDefinition() == typeof(IEnumerable<>)))?.GetGenericArguments()[dictionary ? 1 : 0];
+
+    private static void WriteXmlAsJson(Utf8JsonWriter writer, XElement element, Type targetType, ValueConversionPlan plan, string path, int depth,
+        JsonConversionContract contract, XmlConversionContext context, JsonConverter? customConverter = null)
     {
         if (depth > plan.Limits.MaxDepth)
             throw Reject(plan, $"maximum conversion depth '{plan.Limits.MaxDepth}' was exceeded");
 
-        var nullableType = Nullable.GetUnderlyingType(targetType);
-        if (nullableType is not null)
+        var declaredType = targetType;
+        targetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        if (targetType == typeof(object) || targetType == typeof(JsonElement) || typeof(System.Text.Json.Nodes.JsonNode).IsAssignableFrom(targetType))
+            throw Reject(plan, $"XML has no universal JSON projection for member at '{path}'; select an explicitly typed member");
+        var options = context.Options(contract);
+        var info = options.GetTypeInfo(targetType);
+        if (customConverter is not null && JsonConversionContract.IsContractAdapter(customConverter)) customConverter = null;
+        var converter = customConverter ?? (info.Kind == JsonTypeInfoKind.None ? info.Converter : null);
+        if (converter is JsonConverterFactory factory) converter = factory.CreateConverter(declaredType, options);
+        if (converter is IJsonConversionMemberMatcher matcher)
         {
-            WriteXmlAsJson(writer, element, nullableType, plan, path, depth);
+            WriteXmlMatchedObject(writer, element, matcher, plan, path, depth, contract, context);
             return;
         }
-
-        if (targetType == typeof(string))
+        if (customConverter is not null || info.Kind == JsonTypeInfoKind.None && !IsXmlScalar(targetType))
+        {
+            // An opaque converter owns its JSON shape. A text leaf can be offered as a string token;
+            // structured XML needs its explicit matching information, never inferred CLR properties.
+            if (element.HasElements || element.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration))
+                throw Reject(plan, $"custom JSON converter '{converter?.GetType().FullName}' has no XML member-matching contract at '{path}'");
+            writer.WriteStringValue(element.Value);
+            return;
+        }
+        if (targetType == typeof(string) || targetType == typeof(char) || targetType == typeof(Guid) || targetType == typeof(Uri) ||
+            targetType == typeof(DateTime) || targetType == typeof(DateTimeOffset) || targetType == typeof(DateOnly) ||
+            targetType == typeof(TimeOnly) || targetType == typeof(TimeSpan))
         {
             writer.WriteStringValue(element.Value);
             return;
@@ -392,42 +427,37 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         if (targetType.IsEnum)
         {
             var text = element.Value.Trim();
-            if (string.IsNullOrWhiteSpace(text))
+            if (!Enum.TryParse(targetType, text, ignoreCase: true, out var value))
                 throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected enum value at '{path}'");
-            writer.WriteStringValue(text);
+            JsonSerializer.Serialize(writer, value, targetType, options);
             return;
         }
-
-        if (targetType.IsArray)
+        if (info.Kind == JsonTypeInfoKind.Dictionary && CollectionElement(targetType, dictionary: true) is { } valueType)
         {
-            WriteXmlArray(writer, element, targetType.GetElementType()!, plan, path, depth);
+            var shape = targetType.GetInterfaces().Append(targetType).First(item => item.IsGenericType &&
+                (item.GetGenericTypeDefinition() == typeof(IDictionary<,>) || item.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)));
+            if (shape.GetGenericArguments()[0] != typeof(string)) throw Reject(plan, $"XML dictionaries require string keys at '{path}'");
+            WriteXmlDictionary(writer, element, valueType, plan, path, depth, ChildContract(valueType, contract), context);
             return;
         }
-
-        if (targetType.IsGenericType)
+        if (info.Kind == JsonTypeInfoKind.Enumerable && CollectionElement(targetType) is { } elementType)
         {
-            var definition = targetType.GetGenericTypeDefinition();
-            if (definition == typeof(List<>) || definition == typeof(IList<>) || definition == typeof(ICollection<>) ||
-                definition == typeof(IReadOnlyList<>) || definition == typeof(IReadOnlyCollection<>) || definition == typeof(IEnumerable<>))
-            {
-                WriteXmlArray(writer, element, targetType.GetGenericArguments()[0], plan, path, depth);
-                return;
-            }
-
-            if ((definition == typeof(Dictionary<,>) || definition == typeof(IDictionary<,>) || definition == typeof(IReadOnlyDictionary<,>)) &&
-                targetType.GetGenericArguments()[0] == typeof(string))
-            {
-                WriteXmlDictionary(writer, element, targetType.GetGenericArguments()[1], plan, path, depth);
-                return;
-            }
+            WriteXmlArray(writer, element, elementType, plan, path, depth, ChildContract(elementType, contract), context);
+            return;
         }
-
-        WriteXmlObject(writer, element, targetType, plan, path, depth);
+        WriteXmlObject(writer, element, info, plan, path, depth, contract, context);
     }
 
-    private static void WriteXmlObject(Utf8JsonWriter writer, XElement element, Type targetType, ValueConversionPlan plan, string path, int depth)
+    private static bool IsXmlScalar(Type type) => type == typeof(string) || type == typeof(bool) || type == typeof(char) || type.IsEnum ||
+        IsNumericType(type) || type == typeof(Guid) || type == typeof(Uri) || type == typeof(DateTime) || type == typeof(DateTimeOffset) ||
+        type == typeof(DateOnly) || type == typeof(TimeOnly) || type == typeof(TimeSpan);
+
+    private static void WriteXmlObject(Utf8JsonWriter writer, XElement element, JsonTypeInfo info, ValueConversionPlan plan, string path, int depth,
+        JsonConversionContract contract, XmlConversionContext context)
     {
-        var members = GetTypeMembers(targetType);
+        // elsa.xml@1 keeps its source vocabulary: JsonPropertyName or camelCase CLR names,
+        // case-insensitive. A scoped JSON contract changes the emitted name, not admitted XML names.
+        var members = context.Members(info, contract);
         var attributes = element.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration).ToArray();
         var children = element.Elements().ToArray();
 
@@ -439,33 +469,36 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
                 throw Reject(plan, $"target contract '{plan.TargetType.Alias}' does not support XML element '{child.Name.LocalName}' at '{path}'");
 
         writer.WriteStartObject();
-        foreach (var member in members.Values.OrderBy(member => member.JsonName, StringComparer.Ordinal))
+        foreach (var member in members.Values.OrderBy(member => member.Property.Name, StringComparer.Ordinal))
         {
-            var attribute = attributes.SingleOrDefault(attribute => StringComparer.OrdinalIgnoreCase.Equals(attribute.Name.LocalName, member.JsonName));
-            var matchingChildren = children.Where(child => StringComparer.OrdinalIgnoreCase.Equals(child.Name.LocalName, member.JsonName)).ToArray();
+            var matchingAttributes = attributes.Where(attribute => StringComparer.OrdinalIgnoreCase.Equals(attribute.Name.LocalName, member.SourceName)).ToArray();
+            if (matchingAttributes.Length > 1) throw Reject(plan, $"target contract '{plan.TargetType.Alias}' has ambiguous XML mappings for member '{member.SourceName}' at '{path}'");
+            var attribute = matchingAttributes.SingleOrDefault();
+            var matchingChildren = children.Where(child => StringComparer.OrdinalIgnoreCase.Equals(child.Name.LocalName, member.SourceName)).ToArray();
             if (attribute is not null && matchingChildren.Length != 0)
-                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' has ambiguous XML mappings for member '{member.JsonName}' at '{path}'");
+                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' has ambiguous XML mappings for member '{member.SourceName}' at '{path}'");
             if (matchingChildren.Length > 1)
-                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' has ambiguous repeated XML elements for member '{member.JsonName}' at '{path}'");
+                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' has ambiguous repeated XML elements for member '{member.SourceName}' at '{path}'");
 
             if (attribute is null && matchingChildren.Length == 0)
             {
-                if (member.IsRequired)
-                    throw Reject(plan, $"target contract '{plan.TargetType.Alias}' is missing required XML member '{member.JsonName}' at '{path}'");
+                if (member.Property.IsRequired)
+                    throw Reject(plan, $"target contract '{plan.TargetType.Alias}' is missing required XML member '{member.SourceName}' at '{path}'");
                 continue;
             }
 
-            writer.WritePropertyName(member.JsonName);
+            writer.WritePropertyName(member.Property.Name);
             if (attribute is not null)
-                WriteXmlAttributeAsJson(writer, attribute, member.Type, plan, $"{path}.@{member.JsonName}");
+                WriteXmlAttributeAsJson(writer, attribute, member.Property.PropertyType, plan, $"{path}.@{member.Property.Name}", depth, member.Contract, context, member.Property.CustomConverter);
             else
-                WriteXmlAsJson(writer, matchingChildren[0], member.Type, plan, $"{path}.{member.JsonName}", depth + 1);
+                WriteXmlAsJson(writer, matchingChildren[0], member.Property.PropertyType, plan, $"{path}.{member.Property.Name}", depth + 1, member.Contract, context, member.Property.CustomConverter);
         }
 
         writer.WriteEndObject();
     }
 
-    private static void WriteXmlArray(Utf8JsonWriter writer, XElement element, Type elementType, ValueConversionPlan plan, string path, int depth)
+    private static void WriteXmlArray(Utf8JsonWriter writer, XElement element, Type elementType, ValueConversionPlan plan, string path, int depth,
+        JsonConversionContract contract, XmlConversionContext context)
     {
         var items = element.Elements().ToArray();
         if (items.Length > plan.Limits.MaxCollectionItems)
@@ -474,54 +507,130 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         writer.WriteStartArray();
         var index = 0;
         foreach (var item in items)
-            WriteXmlAsJson(writer, item, elementType, plan, $"{path}[{index++}]", depth + 1);
+            WriteXmlAsJson(writer, item, elementType, plan, $"{path}[{index++}]", depth + 1, contract, context);
         writer.WriteEndArray();
     }
 
-    private static void WriteXmlDictionary(Utf8JsonWriter writer, XElement element, Type elementType, ValueConversionPlan plan, string path, int depth)
+    private static void WriteXmlDictionary(Utf8JsonWriter writer, XElement element, Type elementType, ValueConversionPlan plan, string path, int depth,
+        JsonConversionContract contract, XmlConversionContext context)
     {
+        var names = new HashSet<string>(StringComparer.Ordinal);
         writer.WriteStartObject();
         foreach (var child in element.Elements().OrderBy(child => child.Name.LocalName, StringComparer.Ordinal))
         {
+            if (!names.Add(child.Name.LocalName)) throw Reject(plan, $"ambiguous repeated XML dictionary key '{child.Name.LocalName}' at '{path}'");
             writer.WritePropertyName(child.Name.LocalName);
-            WriteXmlAsJson(writer, child, elementType, plan, $"{path}.{child.Name.LocalName}", depth + 1);
+            WriteXmlAsJson(writer, child, elementType, plan, $"{path}.{child.Name.LocalName}", depth + 1, contract, context);
         }
         writer.WriteEndObject();
     }
 
-    private static void WriteXmlAttributeAsJson(Utf8JsonWriter writer, XAttribute attribute, Type targetType, ValueConversionPlan plan, string path)
+    private static void WriteXmlAttributeAsJson(Utf8JsonWriter writer, XAttribute attribute, Type targetType, ValueConversionPlan plan, string path, int depth,
+        JsonConversionContract contract, XmlConversionContext context, JsonConverter? converter)
     {
-        var nullableType = Nullable.GetUnderlyingType(targetType);
-        if (nullableType is not null)
-        {
-            WriteXmlAttributeAsJson(writer, attribute, nullableType, plan, path);
-            return;
-        }
+        if (!IsXmlScalar(Nullable.GetUnderlyingType(targetType) ?? targetType) && converter is null &&
+            context.Options(contract).GetTypeInfo(Nullable.GetUnderlyingType(targetType) ?? targetType).Kind != JsonTypeInfoKind.None)
+            throw Reject(plan, $"target contract '{plan.TargetType.Alias}' cannot map XML attribute '{attribute.Name.LocalName}' to complex member at '{path}'");
+        WriteXmlAsJson(writer, new XElement(attribute.Name, attribute.Value), targetType, plan, path, depth, contract, context, converter);
+    }
 
-        if (targetType == typeof(string))
+    private static void WriteXmlMatchedObject(Utf8JsonWriter writer, XElement element, IJsonConversionMemberMatcher matcher,
+        ValueConversionPlan plan, string path, int depth, JsonConversionContract contract, XmlConversionContext context)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        writer.WriteStartObject();
+        foreach (var attribute in element.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration))
         {
-            writer.WriteStringValue(attribute.Value);
-            return;
+            var name = attribute.Name.LocalName;
+            if (!names.Add(name)) throw Reject(plan, $"ambiguous XML mappings for member '{name}' at '{path}'");
+            if (!matcher.TryGetMemberType(name, out var type)) throw Reject(plan, $"custom JSON converter does not support XML attribute '{name}' at '{path}'");
+            writer.WritePropertyName(name);
+            WriteXmlAttributeAsJson(writer, attribute, type, plan, $"{path}.@{name}", depth, ChildContract(type, contract), context, null);
         }
-        if (targetType == typeof(bool))
+        foreach (var child in element.Elements())
         {
-            if (!bool.TryParse(attribute.Value.Trim(), out var value))
-                throw Reject(plan, $"target contract '{plan.TargetType.Alias}' expected boolean at '{path}'");
-            writer.WriteBooleanValue(value);
-            return;
+            var name = child.Name.LocalName;
+            if (!names.Add(name)) throw Reject(plan, $"ambiguous XML mappings for member '{name}' at '{path}'");
+            if (!matcher.TryGetMemberType(name, out var type)) throw Reject(plan, $"custom JSON converter does not support XML element '{name}' at '{path}'");
+            writer.WritePropertyName(name);
+            WriteXmlAsJson(writer, child, type, plan, $"{path}.{name}", depth + 1, ChildContract(type, contract), context);
         }
-        if (IsNumericType(targetType))
-        {
-            WriteXmlNumber(writer, attribute.Value.Trim(), targetType, plan, path);
-            return;
-        }
-        if (targetType.IsEnum)
-        {
-            writer.WriteStringValue(attribute.Value.Trim());
-            return;
-        }
+        writer.WriteEndObject();
+    }
 
-        throw Reject(plan, $"target contract '{plan.TargetType.Alias}' cannot map XML attribute '{attribute.Name.LocalName}' to complex member at '{path}'");
+    private static JsonElement NormalizeXml(JsonElement projected, object? typed, Type type, JsonConversionContract contract, XmlConversionContext context)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new() { Encoder = JsonBaseline.Options.Encoder }))
+            WriteNormalizedXml(writer, projected, typed, type, contract, context);
+        using var document = JsonDocument.Parse(stream.ToArray());
+        return document.RootElement.Clone();
+    }
+
+    private static void WriteNormalizedXml(Utf8JsonWriter writer, JsonElement projected, object? typed, Type type,
+        JsonConversionContract contract, XmlConversionContext context, JsonConverter? customConverter = null)
+    {
+        var options = context.Options(contract);
+        var info = options.GetTypeInfo(Nullable.GetUnderlyingType(type) ?? type);
+        if (customConverter is not null && !JsonConversionContract.IsContractAdapter(customConverter))
+        {
+            var memberOptions = new JsonSerializerOptions(options);
+            memberOptions.Converters.Insert(0, customConverter);
+            JsonSerializer.Serialize(writer, typed, type, memberOptions);
+            return;
+        }
+        if (typed is null || projected.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array) || info.Kind == JsonTypeInfoKind.None)
+        {
+            JsonSerializer.Serialize(writer, typed, type, options);
+            return;
+        }
+        if (info.Kind == JsonTypeInfoKind.Enumerable && projected.ValueKind == JsonValueKind.Array && typed is System.Collections.IEnumerable items)
+        {
+            var itemType = CollectionElement(type)!;
+            var selected = ChildContract(itemType, contract);
+            writer.WriteStartArray();
+            var index = 0;
+            foreach (var item in items)
+            {
+                if (index < projected.GetArrayLength()) WriteNormalizedXml(writer, projected[index], item, itemType, selected, context);
+                else JsonSerializer.Serialize(writer, item, itemType, context.Options(selected));
+                index++;
+            }
+            writer.WriteEndArray();
+            return;
+        }
+        if (info.Kind == JsonTypeInfoKind.Dictionary && typed is System.Collections.IDictionary dictionary)
+        {
+            var valueType = CollectionElement(type, dictionary: true)!;
+            var selected = ChildContract(valueType, contract);
+            writer.WriteStartObject();
+            foreach (System.Collections.DictionaryEntry item in dictionary)
+            {
+                var name = (string)item.Key;
+                writer.WritePropertyName(name);
+                if (projected.TryGetProperty(name, out var supplied)) WriteNormalizedXml(writer, supplied, item.Value, valueType, selected, context);
+                else JsonSerializer.Serialize(writer, item.Value, valueType, context.Options(selected));
+            }
+            writer.WriteEndObject();
+            return;
+        }
+        if (info.Kind != JsonTypeInfoKind.Object)
+        {
+            JsonSerializer.Serialize(writer, typed, type, options);
+            return;
+        }
+        writer.WriteStartObject();
+        foreach (var property in projected.EnumerateObject())
+        {
+            var member = info.Properties.Single(member => member.Name == property.Name);
+            writer.WritePropertyName(property.Name);
+            var readsMember = member.Set is not null || member.AssociatedParameter is not null ||
+                (member.ObjectCreationHandling ?? info.PreferredPropertyObjectCreationHandling ?? options.PreferredObjectCreationHandling) == JsonObjectCreationHandling.Populate;
+            if (member.Get is null || !readsMember) JsonSerializer.Serialize(writer, property.Value, JsonBaseline.Options);
+            else WriteNormalizedXml(writer, property.Value, member.Get(typed), member.PropertyType,
+                ChildContract(member.PropertyType, contract, member.AttributeProvider as MemberInfo), context, member.CustomConverter);
+        }
+        writer.WriteEndObject();
     }
 
     private static void WriteXmlNumber(Utf8JsonWriter writer, string text, Type targetType, ValueConversionPlan plan, string path)
@@ -626,5 +735,30 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
 
     private static RuntimeValueConversionException Reject(ValueConversionPlan plan, string reason) => new(plan, reason);
 
-    private sealed record TypeMember(string JsonName, Type Type, bool IsRequired);
+    private sealed record XmlMember(string SourceName, JsonPropertyInfo Property, JsonConversionContract Contract);
+
+    // Metadata belongs to a conversion, so it can be reused for collection elements without pinning a module type.
+    private sealed class XmlConversionContext
+    {
+        private readonly Dictionary<JsonConversionContract, JsonSerializerOptions> options = new();
+        private readonly Dictionary<JsonTypeInfo, IReadOnlyDictionary<string, XmlMember>> members = new();
+        internal JsonSerializerOptions Options(JsonConversionContract contract)
+        {
+            if (!options.TryGetValue(contract, out var selected)) options.Add(contract, selected = contract.Options);
+            return selected;
+        }
+
+        internal IReadOnlyDictionary<string, XmlMember> Members(JsonTypeInfo info, JsonConversionContract contract)
+        {
+            if (members.TryGetValue(info, out var existing)) return existing;
+            var selected = info.Properties.Where(property => !property.IsExtensionData && property.AttributeProvider is MemberInfo).Select(property =>
+            {
+                var member = (MemberInfo)property.AttributeProvider!;
+                var sourceName = member.GetCustomAttribute<JsonPropertyNameAttribute>(inherit: true)?.Name ?? JsonNamingPolicy.CamelCase.ConvertName(member.Name);
+                return new XmlMember(sourceName, property, ChildContract(property.PropertyType, contract, member));
+            }).ToDictionary(member => member.SourceName, StringComparer.OrdinalIgnoreCase);
+            members.Add(info, selected);
+            return selected;
+        }
+    }
 }

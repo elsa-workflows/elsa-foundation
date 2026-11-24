@@ -590,6 +590,101 @@ public sealed class ValueConversionPlanTests
         Assert.Equal(19.5m, converted.InlineValue.Value.GetProperty("orders")[0].GetProperty("total").GetDecimal());
     }
 
+    [Theory]
+    [InlineData("snake", "<root><CUSTOMERNAME>Ada</CUSTOMERNAME></root>", "customer_name")]
+    [InlineData("mapping", "<root><customerName>Ada</customerName></root>", "customer_id")]
+    [InlineData("insensitive", "<root><CUSTOMERNAME>Ada</CUSTOMERNAME></root>", "customerName")]
+    [InlineData("strict", "<root><customerName>Ada</customerName></root>", "customerName")]
+    [InlineData("custom", "<root><wireName>Ada</wireName></root>", "wireName")]
+    public void Xml_source_names_remain_compatible_while_output_and_hydration_use_the_type_contract(string alias, string xml, string name)
+    {
+        var diagnostics = new List<JsonConversionDiagnostic>();
+        var result = ContractExecutor().Convert(XmlSource(xml), XmlPlan(new(alias)), diagnostics.Add).InlineValue!.Value;
+        Assert.Equal("Ada", result.GetProperty(name).GetString());
+        Assert.Single(result.EnumerateObject());
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Xml_JsonPropertyName_source_and_explicit_JSON_mapping_have_distinct_roles()
+    {
+        var type = new ValueTypeDescriptor("named");
+        var executor = new RuntimeValueConversionExecutor(new TestTypeRegistry(new Dictionary<string, Type> { [type.Alias] = typeof(NamedXmlContract) }));
+        var result = executor.Convert(XmlSource("<root><wire_name>Ada</wire_name></root>"), XmlPlan(type)).InlineValue!.Value;
+        Assert.Equal("Ada", result.GetProperty("customer_id").GetString());
+        Assert.Equal("Ada", JsonConversionContract.Deserialize<NamedXmlContract>(result)!.CustomerName);
+        Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(XmlSource("<root><customerName>Ada</customerName></root>"), XmlPlan(type)));
+    }
+
+    [Fact]
+    public void Xml_member_scope_and_recursive_type_scopes_round_trip_without_adding_absent_members()
+    {
+        var type = new ValueTypeDescriptor("recursive");
+        var executor = new RuntimeValueConversionExecutor(new TestTypeRegistry(new Dictionary<string, Type> { [type.Alias] = typeof(RecursiveXmlContract) }));
+        var contract = JsonConversionContract.For(typeof(RecursiveXmlContract), typeof(XmlInputs).GetProperty(nameof(XmlInputs.Root))!);
+        var result = executor.Convert(XmlSource("""
+            <root><customerName>Root</customerName>
+              <child><customerName>Child</customerName><child><customerName>Grandchild</customerName></child></child>
+              <children><item><customerName>Array</customerName></item></children>
+              <named><KeepKey><customerName>Dictionary</customerName></KeepKey></named>
+            </root>
+            """), XmlPlan(type), contract, null).InlineValue!.Value;
+        Assert.Equal("Root", result.GetProperty("CustomerName").GetString());
+        Assert.Equal("Child", result.GetProperty("Child").GetProperty("customer_name").GetString());
+        Assert.Equal("Grandchild", result.GetProperty("Child").GetProperty("child").GetProperty("customer_name").GetString());
+        Assert.Equal("Array", result.GetProperty("Children")[0].GetProperty("customer_name").GetString());
+        Assert.Equal("Dictionary", result.GetProperty("Named").GetProperty("KeepKey").GetProperty("customer_name").GetString());
+        Assert.False(result.TryGetProperty("Optional", out _));
+        Assert.False(result.GetProperty("Child").TryGetProperty("optional", out _));
+        var typed = (RecursiveXmlContract)contract.Read(result, typeof(RecursiveXmlContract))!;
+        Assert.Equal("Array", typed.Children![0].CustomerName);
+        Assert.Equal("Dictionary", typed.Named!["KeepKey"].CustomerName);
+    }
+
+    [Fact]
+    public void Xml_temporal_and_scalar_values_use_the_contract_in_both_directions()
+    {
+        var type = new ValueTypeDescriptor("temporal");
+        var executor = new RuntimeValueConversionExecutor(new TestTypeRegistry(new Dictionary<string, Type> { [type.Alias] = typeof(TemporalXmlContract) }));
+        var result = executor.Convert(XmlSource("""
+            <root><at>2026-10-28T09:15:00+05:00</at><offset>2026-10-28T09:15:00+05:00</offset>
+              <day>2026-10-28T23:30:00-02:00</day><duration>01:30:00</duration><id>AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE</id>
+            </root>
+            """), XmlPlan(type)).InlineValue!.Value;
+        Assert.Equal("2026-10-28T04:15:00Z", result.GetProperty("at").GetString());
+        Assert.Equal("2026-10-28T09:15:00+05:00", result.GetProperty("offset").GetString());
+        Assert.Equal("2026-10-29", result.GetProperty("day").GetString());
+        Assert.Equal("PT1H30M", result.GetProperty("duration").GetString());
+        Assert.Equal("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", result.GetProperty("id").GetString());
+        var refused = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(XmlSource("<root><at>2026-10-28T09:15:00</at></root>"), XmlPlan(type)));
+        Assert.Contains("json-datetime-offset-missing", refused.Reason, StringComparison.Ordinal);
+        Assert.Contains("at", refused.Reason, StringComparison.Ordinal);
+        var absentInstant = executor.Convert(XmlSource("<root><duration>01:30:00</duration></root>"), XmlPlan(type)).InlineValue!.Value;
+        Assert.Equal("PT1H30M", absentInstant.GetProperty("duration").GetString());
+        Assert.False(absentInstant.TryGetProperty("at", out _));
+    }
+
+    [Fact]
+    public void Xml_does_not_infer_the_CLR_shape_of_an_opaque_user_converter()
+    {
+        var type = new ValueTypeDescriptor("opaque");
+        var executor = new RuntimeValueConversionExecutor(new TestTypeRegistry(new Dictionary<string, Type> { [type.Alias] = typeof(OpaqueXmlContract) }));
+        var refused = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(XmlSource("<root><customerName>Ada</customerName></root>"), XmlPlan(type)));
+        Assert.Contains("no XML member-matching contract", refused.Reason, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("<root><customerName>Ada</customerName><CUSTOMERNAME>Lin</CUSTOMERNAME></root>")]
+    [InlineData("<root customerName=\"Ada\" CUSTOMERNAME=\"Lin\" />")]
+    [InlineData("<root><named><KeepKey><customerName>Ada</customerName></KeepKey><KeepKey><customerName>Lin</customerName></KeepKey></named></root>")]
+    public void Xml_refuses_ambiguous_source_members_instead_of_losing_one_value(string xml)
+    {
+        var type = new ValueTypeDescriptor("recursive");
+        var executor = new RuntimeValueConversionExecutor(new TestTypeRegistry(new Dictionary<string, Type> { [type.Alias] = typeof(RecursiveXmlContract) }));
+        var refused = Assert.Throws<RuntimeValueConversionException>(() => executor.Convert(XmlSource(xml), XmlPlan(type)));
+        Assert.Contains("ambiguous", refused.Reason, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Xml_projection_uses_the_relaxed_format_for_keys_and_nested_values()
     {
@@ -990,6 +1085,48 @@ public sealed class ValueConversionPlanTests
         public required string Label { get; init; }
         public XmlFormattingNestedContract? Nested { get; init; }
         public string? Optional { get; init; }
+    }
+
+    [JsonConversion(MemberMappings = ["customer_id=CustomerName"])]
+    private sealed record NamedXmlContract
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("wire_name")]
+        public required string CustomerName { get; init; }
+    }
+
+    private sealed class XmlInputs
+    {
+        [JsonConversion(NamingPolicy = System.Text.Json.Serialization.JsonKnownNamingPolicy.Unspecified)]
+        public RecursiveXmlContract? Root { get; set; }
+    }
+
+    [JsonConversion(NamingPolicy = System.Text.Json.Serialization.JsonKnownNamingPolicy.SnakeCaseLower)]
+    private sealed record RecursiveXmlContract
+    {
+        public string? CustomerName { get; init; }
+        public RecursiveXmlContract? Child { get; init; }
+        public RecursiveXmlContract[]? Children { get; init; }
+        public Dictionary<string, RecursiveXmlContract>? Named { get; init; }
+        public string? Optional { get; init; }
+    }
+
+    private sealed record TemporalXmlContract
+    {
+        public DateTime At { get; init; }
+        public DateTimeOffset Offset { get; init; }
+        public DateOnly Day { get; init; }
+        public TimeSpan Duration { get; init; }
+        public Guid Id { get; init; }
+    }
+
+    [System.Text.Json.Serialization.JsonConverter(typeof(OpaqueXmlConverter))]
+    private sealed record OpaqueXmlContract(string CustomerName);
+
+    private sealed class OpaqueXmlConverter : System.Text.Json.Serialization.JsonConverter<OpaqueXmlContract>
+    {
+        public OpaqueXmlConverter() { }
+        public override OpaqueXmlContract Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => throw new InvalidOperationException("An opaque converter must not be given an inferred XML object.");
+        public override void Write(Utf8JsonWriter writer, OpaqueXmlContract value, JsonSerializerOptions options) => throw new InvalidOperationException("An opaque converter must not be given an inferred XML object.");
     }
 
     private sealed record XmlFormattingNestedContract

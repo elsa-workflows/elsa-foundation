@@ -622,7 +622,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         binding.ConversionPlan is null
             ? source
             : _valueConversionExecutor.Convert(source, binding.ConversionPlan,
-                binding.ConversionPlan is { Operation: ValueConversionOperation.Profile, Profile: { Id: "elsa.json", Version: "1" } } &&
+                binding.ConversionPlan is { Operation: ValueConversionOperation.Profile, Profile: { Id: "elsa.json" or "elsa.xml", Version: "1" } } &&
                     InputMemberFor(node, binding.InputKey) is { } member ? JsonConversionContract.For(member.PropertyType, member) : null,
                 reportDiagnostics ? diagnostic => ReportConversion(diagnostic, binding.InputName, source.Policy, context) : null);
 

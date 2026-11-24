@@ -85,7 +85,7 @@ internal static class Elsa3LiteralConversion
                     "Use the target's exact JSON member names in new workflows.", Elsa3MigrationDiagnosticSeverity.Info));
             var clrMember = member.AttributeProvider as MemberInfo;
             var memberSelection = clrMember?.GetCustomAttribute<JsonConversionAttribute>(true) is not null;
-            if (member.CustomConverter is { } customConverter && !memberSelection)
+            if (member.CustomConverter is { } customConverter && !memberSelection && !JsonConversionContract.IsContractAdapter(customConverter))
             {
                 report(CoverageUnavailable(MemberPath(path, member.Name), member.PropertyType, customConverter.GetType()));
                 return (member.Name, property.Value.Clone());
