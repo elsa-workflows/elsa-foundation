@@ -49,7 +49,8 @@ Fails when:
 2. a region has no catalog block, or a block has no region;
 3. a case number is missing, duplicated or out of order;
 4. any file in the skill folder contains an Elsa 3 conversion or value-flow code literal: a token starting with
-   `ELS3-` or `VF-` (other code families are left to review; examples use `<code>`);
-5. any file in the skill folder names an AI vendor or model.
+   `ELS3-` or `VF-` (other code families are left to review; examples use `<code>`).
+
+Provider-neutral wording (no AI vendor or model named) is checked in review, not by the check.
 
 `--self-test` runs the check against built-in good and bad inputs.

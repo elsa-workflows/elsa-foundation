@@ -10,7 +10,7 @@
 and the check's `--self-test`. The skill text itself is verified by the walkthrough (T029–T031). No test framework
 beyond xunit.
 
-**Dependencies outside this spec**: T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
+**Dependencies outside this spec**: T021 needs the migration image's published name, which spec 1237 owns. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
 need spec 1237's `report.json` schema agreed. Everything else can start once this spec is approved.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -24,7 +24,8 @@ need spec 1237's `report.json` schema agreed. Everything else can start once thi
 
 - [ ] T001 Create `Migration/Sample/Elsa3.Migration.Sample.csproj` (`IsPackable=false`, references only the Elsa 4
   authoring projects the plan lists, CShells abstractions) and `Migration/Sample.Tests/Elsa3.Migration.Sample.Tests.csproj`
-  (xunit); add both to `Elsa.Server.slnx` under `/extensions/Elsa3/tests/Migration/`.
+  (xunit); add both to `Elsa.Server.slnx` under `/extensions/Elsa3/tests/Migration/`, and restore both to create their
+  `packages.lock.json` (CI restores in locked mode).
 - [ ] T002 Add the test project to the PR tier in `tools/ci/test-tiers.json`; run
   `dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check`.
 - [ ] T003 Run `Elsa3MigrationBoundaryTests` and `ArchitectureGuardTests` with the new projects; if the folder or
@@ -34,7 +35,8 @@ need spec 1237's `report.json` schema agreed. Everything else can start once thi
 
 ## Phase 2: Foundational — sample and check (blocks US3)
 
-Each task adds one marked region `// catalog:case-NN begin/end` and its tests. All live in `Migration/Sample/` and
+Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T008, T013 and T014 also register in
+`AcmeFeature`, so they run one after another after T004, and the case 18 region is final only after T014. All live in `Migration/Sample/` and
 `Migration/Sample.Tests/`; tasks touching different files are [P].
 
 - [ ] T004 Feature registration (case 18): `AcmeFeature` as a `[ShellFeature]` `IShellFeature`; a test that the
@@ -45,7 +47,7 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
 - [ ] T006 [P] Outcomes (case 6): `Acme.Approve` with `[ActivityOutcome]`s; tests for each outcome.
 - [ ] T007 [P] Bookmarks (case 8, port part): `Acme.WaitForPayment` as a stateful activity that suspends and resumes on
   a `[ResumeTarget]`; tests for suspend and resume.
-- [ ] T008 [P] Trigger (case 9): `Acme.InvoiceReceived` trigger activity and its trigger stimulus provider registered
+- [ ] T008 Trigger (case 9): `Acme.InvoiceReceived` trigger activity and its trigger stimulus provider registered
   in `AcmeFeature`; tests for trigger delivery and stimulus description.
 - [ ] T009 [P] Services (case 10): an activity taking `IInvoiceClient` by constructor; test with a fake.
 - [ ] T010 [P] Variables and workflow state (case 11, port part): `VariableReference<decimal>` read and write through
@@ -54,10 +56,10 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
 - [ ] T011 [P] Background (case 12): an activity marked `[BackgroundExecutionSafe]` that honours the cancellation token
   and keys its effect on the invocation id; test for cancellation.
 - [ ] T012 [P] Cancellation and faults (case 13): fault and cancel transitions; tests for each.
-- [ ] T013 [P] JavaScript host function (case 14): `acme.lookupCustomer` declared in `AcmeFeature` with
+- [ ] T013 JavaScript host function (case 14): `acme.lookupCustomer` declared in `AcmeFeature` with
   `ReplacesGlobalFunctions = ["lookupCustomer"]`; test calling the
   implementation with JSON arguments.
-- [ ] T014 [P] Variable type (case 16): a descriptor provider registering `acme.Invoice`; test that the descriptor has
+- [ ] T014 Variable type (case 16): a descriptor provider registering `acme.Invoice`; test that the descriptor has
   the dotted alias.
 - [ ] T015 [P] Tests (case 19): the region is one of the tests above, chosen as the example of building an activity
   execution context and calling the activity.
@@ -96,7 +98,8 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
   [contracts/report-consumption.md](contracts/report-consumption.md)), the version check (R-4), the handoff
   (FR-020), and the edge cases of the spec as plain rules. No diagnostic code literal; read code, message and
   guidance from the report.
-- [ ] T022 [US1] Run the check on the skill folder (no diagnostic codes, no vendor names).
+- [ ] T022 [US1] Run the check on the skill folder (no diagnostic codes); review the folder for vendor or model
+  names (FR-002, SC-004).
 
 ## Phase 5: User Story 2 — readable without an AI (P1)
 
