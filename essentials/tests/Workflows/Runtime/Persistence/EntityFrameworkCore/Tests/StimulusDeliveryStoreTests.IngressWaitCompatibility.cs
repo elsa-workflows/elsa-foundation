@@ -114,7 +114,7 @@ public sealed partial class StimulusDeliveryStoreTests
         var wait = Assert.Single(accepted.Item.SubscriptionDelivery!.WaitDelivery!.Recipients);
         Assert.Equal("already-running", wait.Identity.WorkflowExecutionId);
         var seal = RuntimeIngressWaitCommand.CreateSeal(accepted.Item, wait);
-        var payload = RuntimeIngressWaitCommand.ReadEnvelope(seal).Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var payload = RuntimeIngressWaitCommand.ReadEnvelope(seal).Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         if (explicitType) Assert.Equal(type.Alias, payload.TriggerDelivery!.PayloadType.Alias);
         else Assert.Null(payload.TriggerDelivery);
         Assert.Equal(RuntimeIngressWaitPhase.Pending, Assert.Single(accepted.Item.SubscriptionDelivery.WaitDelivery.Progress).Phase);
