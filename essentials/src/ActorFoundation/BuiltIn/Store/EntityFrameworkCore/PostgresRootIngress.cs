@@ -132,7 +132,11 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
 
         var open = host.Requests.OpenBound(id, request.Deadline, scope.Tenant, null);
         var completion = host.Requests.CompletionOf(open);
-        var admissionTask = AdmitAsync();
+        var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var initialWait = Remaining();
+        if (initialWait <= int.MaxValue) lifetime.CancelAfter(TimeSpan.FromMilliseconds(initialWait));
+        var route = new PostgresRootAdmission.OperatorReply(open.ReplyAddress(host.Node), open.Deadline);
+        var admissionTask = OperateAsync(scope, exact.Actor, id, kind, payload, add, lifetime.Token, route).AsTask();
         var admitted = false;
         try
         {
@@ -160,7 +164,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
             await WaitUntilDeadlineAsync(completion);
             return completion.IsCompleted ? await PresentAsync(await completion) : await TimeoutAsync();
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && Remaining() == 0)
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             return await TimeoutAsync();
         }
@@ -171,18 +175,16 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         finally
         {
             host.Requests.Disconnect(open);
-            // A provider can still be unwinding an interrupted operation. Keep its cancellation owned
-            // by the admission task and observe any late fault independently of the caller.
-            ObserveFault(admissionTask);
-        }
-
-        async Task<Contract.Admission> AdmitAsync()
-        {
-            using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var timeLeft = Remaining();
-            if (timeLeft <= int.MaxValue) lifetime.CancelAfter(TimeSpan.FromMilliseconds(timeLeft));
-            var route = new PostgresRootAdmission.OperatorReply(open.ReplyAddress(host.Node), open.Deadline);
-            return await OperateAsync(scope, exact.Actor, id, kind, payload, add, lifetime.Token, route);
+            if (admissionTask.IsCompleted)
+            {
+                lifetime.Dispose();
+                ObserveFault(admissionTask);
+            }
+            else
+            {
+                // Cancel and dispose when the provider has unwound, independently of the settled caller.
+                _ = StopAdmissionAsync(lifetime, admissionTask);
+            }
         }
 
         async Task WaitUntilDeadlineAsync(Task signal)
@@ -235,6 +237,18 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
             catch (OperationCanceledException) when (observation.IsCancellationRequested && !cancellationToken.IsCancellationRequested) { return null; }
             catch (Exception error) when ((error is NpgsqlException or StoreFormatException or TimeoutException) &&
                 !cancellationToken.IsCancellationRequested) { return null; }
+        }
+    }
+
+    private static async Task StopAdmissionAsync(CancellationTokenSource lifetime, Task admissionTask)
+    {
+        using (lifetime)
+        {
+            try { await Task.WhenAll(lifetime.CancelAsync(), admissionTask); }
+            catch (Exception)
+            {
+                // Any late provider or cancellation failure belongs to the completed request.
+            }
         }
     }
 

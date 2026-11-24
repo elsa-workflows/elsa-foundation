@@ -208,10 +208,19 @@ internal static class PostgresHeldOperatorChecks
 
             var opening = queue.Opening.Arm();
             var blocked = Call(delayedSelection, "blocked", Clock() + 700, edge: pausedIngress).AsTask();
-            await opening.Task.WaitAsync(stop);
+            await opening.Seen.Task.WaitAsync(stop);
             Check(await blocked is { Error: "timeout", Status: null } && requests.All.Count == 0 &&
                 await admission.ReadDueRootOperatorAsync(tenant.Tenant, delayed.Id, stop) is null,
                 "the deadline cancels the first admission I/O without a durable operator or known admission");
+
+            var longOpening = queue.Opening.Arm();
+            var far = Clock() + int.MaxValue + 10_000L;
+            var longWait = Call(delayedSelection, "long-wait", far, edge: pausedIngress).AsTask();
+            await longOpening.Seen.Task.WaitAsync(stop);
+            requests.Expire(far);
+            Check(await longWait.WaitAsync(stop) is { Error: "timeout", Status: null } &&
+                await longOpening.Cancelled.Task.WaitAsync(stop) && requests.All.Count == 0,
+                "the deadline releases the caller and cancels admission even beyond the timer's maximum interval");
 
             var acknowledgement = queue.Commit.Arm();
             var due = Clock() + 4_000;
@@ -308,11 +317,50 @@ internal static class PostgresHeldOperatorChecks
                     limitedSelection.Selection, reply: new(ReplyTo.Of(receiver, id, reservedUntil), reservedUntil));
                 if (receipt is not { Duplicate: false }) throw new InvalidOperationException("The held capacity fixture could not fill its first slots.");
             }
-            var lastA = Call(limitedSelection, "last-a", Clock() + 2_000).AsTask();
-            var lastB = Call(limitedSelection, "last-b", Clock() + 2_000).AsTask();
-            Check(await (await Task.WhenAny(lastA, lastB)).WaitAsync(stop) is { Error: "operator reply capacity" } &&
-                (await lastA).Error != (await lastB).Error,
-                "two competing callers for the final held slot leave only one additional admitted request");
+            var reservation = new CapacityRead();
+            var limitOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).AddInterceptors(reservation).Options;
+            var limitStore = Store(() => KernelDb.ForPostgresRootOperatorReplies(limitOptions));
+            var limitEdge = await limitStore.OpenSelectedRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1),
+                (scope, _) => ReferenceEquals(scope, tenant), stop, (scope, _) => ReferenceEquals(scope, tenant), (requests, receiver, Clock));
+            var slotUnderLock = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseSlot = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            reservation.BeforeCount = () =>
+            {
+                slotUnderLock.TrySetResult();
+                return releaseSlot.Task;
+            };
+            var lastA = Call(limitedSelection, "last-a", Clock() + 4_000, edge: limitEdge).AsTask();
+            await slotUnderLock.Task.WaitAsync(stop);
+            Task<Contract.Reply> lastB;
+            try
+            {
+                await using var db = Open();
+                var available = await db.Database.SqlQuery<string>($"""
+                    SELECT "Reference" AS "Value" FROM "FoundationRootBirths"
+                    WHERE "Tenant" = {tenant.Tenant} AND "Reference" = {limited.Id} FOR NO KEY UPDATE SKIP LOCKED
+                    """).ToListAsync(stop);
+                if (available.Count != 0) throw new InvalidOperationException("The held count ran without holding the birth lock.");
+                lastB = Call(limitedSelection, "last-b", Clock() + 4_000).AsTask();
+            }
+            finally { releaseSlot.TrySetResult(); }
+            await using (var db = Open())
+            {
+                var birthLocked = await (await Task.WhenAny(lastA, lastB)).WaitAsync(stop);
+                var limitedRoot = (await cold.ReadFirstRootAsync(tenant.Tenant, limited.Id, stop))!.Actor.Id;
+                var held = await db.Messages.AsNoTracking().Where(row => row.Target == limitedRoot && !row.Done && row.ReplyTo != null)
+                    .ToListAsync(stop);
+                var remainingOperation = held.Select(row => PostgresRootAdmission.DecodeOperator(db, row, limited.Id).Id)
+                    .SingleOrDefault(id => id is "last-a" or "last-b");
+                var contenderDigests = new[] { FoundationRootCreator.OperationDigest("last-a"), FoundationRootCreator.OperationDigest("last-b") };
+                var lastReceipts = await db.Database.SqlQuery<string>($"""
+                    SELECT "Operation" AS "Value" FROM "FoundationOperatorReceipts"
+                    WHERE "Tenant" = {tenant.Tenant} AND "Reference" = {limited.Id} AND "Operation" = ANY({contenderDigests})
+                    """).ToListAsync(stop);
+                Check(birthLocked.Error == "operator reply capacity" && held.Count == PostgresRootAdmission.HeldReplyLimit &&
+                    remainingOperation is not null && lastReceipts.SequenceEqual([FoundationRootCreator.OperationDigest(remainingOperation)]) &&
+                    (await lastA).Error == "timeout" && (await lastB).Error == "operator reply capacity",
+                    "the final held slot leaves exactly one competing occurrence and its receipt under the birth lock");
+            }
             var duplicate = await Call(limitedSelection, "reserved-0", Clock() + 10_000);
             var oneWay = await ingress.SendAsync(tenant, new Contract.Target.Ref(limited), "one-way", Contract.Kinds.Terminate,
                 JsonSerializer.Serialize(new Contract.OperatorCommand(limitedSelection.Selection)), cancellationToken: stop);
@@ -441,6 +489,20 @@ internal static class PostgresHeldOperatorChecks
         }
     }
 
+    private sealed class CapacityRead : DbCommandInterceptor
+    {
+        internal Func<Task>? BeforeCount;
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("""SELECT EXISTS (SELECT 1 FROM "Messages" """.TrimEnd(), StringComparison.Ordinal) &&
+                Interlocked.Exchange(ref BeforeCount, null) is { } pause)
+                await pause();
+            return result;
+        }
+    }
+
     private sealed class RetirementRead : DbCommandInterceptor
     {
         internal Func<Task>? BeforeScrub;
@@ -476,16 +538,23 @@ internal static class PostgresHeldOperatorChecks
 
         internal sealed class OpeningPause : DbConnectionInterceptor
         {
-            private TaskCompletionSource? next;
-            internal TaskCompletionSource Arm() => next = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            internal sealed record Gate
+            {
+                internal TaskCompletionSource Seen { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                internal TaskCompletionSource<bool> Cancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            private Gate? next;
+            internal Gate Arm() => next = new();
 
             public override async ValueTask<InterceptionResult> ConnectionOpeningAsync(DbConnection connection, ConnectionEventData eventData,
                 InterceptionResult result, CancellationToken cancellationToken = default)
             {
                 if (Interlocked.Exchange(ref next, null) is { } opening)
                 {
-                    opening.TrySetResult();
-                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    opening.Seen.TrySetResult();
+                    try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken); }
+                    finally { opening.Cancelled.TrySetResult(cancellationToken.IsCancellationRequested); }
                 }
                 return result;
             }
