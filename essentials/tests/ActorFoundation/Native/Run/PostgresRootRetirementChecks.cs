@@ -91,9 +91,11 @@ internal static class PostgresRootRetirementChecks
         var pendingDelete = (await admission.ReadDueRootOperatorAsync(tenant.Tenant, target.Id, stop))!;
         var pendingProtected = (await admission.ReadDueRootOperatorAsync(tenant.Tenant, protectedActor.Id, stop))!;
         var neighborHistory = await cold.ReadJournalOfAsync(0, untouched.Actor.Id, 0, stop);
-        await LateMarkerRefusalRollsBack(before, pendingDelete, pending);
+        await LateMarkerRefusalRollsBack(before, pendingDelete, pending, suppress: false);
+        await LateMarkerRefusalRollsBack(before, pendingDelete, pending, suppress: true);
 
-        await using (var owner = await Own("successor"))
+        var shadow = await OpenShadowAsync();
+        await using (var owner = await Own("successor", shadow))
         {
             Check(((Worker)owner).Epoch > staleEpoch, "a successor owns the deletion partition");
             do
@@ -135,6 +137,37 @@ internal static class PostgresRootRetirementChecks
                 { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var original } && original == target &&
               (await Delete(target, "delete-again", chosenTarget.Selection)).Outcome == Contract.AdmissionOutcome.Refused,
             "the original operation retains its receipt and a fresh deletion is refused");
+        Check((await ingress.SendAsync(tenant, new Contract.Target.Ref(target), pendingId, "ordinary", "queued secret",
+                  cancellationToken: stop)).Outcome == Contract.AdmissionOutcome.Duplicate &&
+              (await ingress.SendAsync(tenant, new Contract.Target.Ref(target), "new-input", "ordinary", "queued secret",
+                  cancellationToken: stop)).Outcome == Contract.AdmissionOutcome.Refused,
+            "the retired creation replays its original direct receipt and refuses a new input");
+
+        await using (var owner = await Own("same-owner"))
+        {
+            var same = await Start("same-owner-finish", "finish");
+            var sameBefore = await Drive(owner, same, InstanceStatus.Finished);
+            var selected = (await reads.GetAsync(tenant, same, stop))!;
+            var epoch = ((Worker)owner).Epoch;
+            Check((await Delete(same, "same-owner-delete", selected.Selection)).Outcome == Contract.AdmissionOutcome.Accepted &&
+                  (await Delete(same, "same-owner-other", selected.Selection)).Outcome == Contract.AdmissionOutcome.Accepted,
+                "two distinct qualified deletes are admitted to the retained owner's ended root");
+            var command = (await admission.ReadDueRootOperatorAsync(tenant.Tenant, same.Id, stop))!;
+            do
+            {
+                await owner.WokenAsync(null, stop);
+                await owner.RunAsync(stop);
+            }
+            while (!(await Inbox(command)).Done);
+            await owner.WokenAsync(null, stop);
+            await owner.RunAsync(stop);
+
+            var probe = await Start("after-delete", "finish");
+            await Drive(owner, probe, InstanceStatus.Finished);
+            Check(((Worker)owner).Epoch == epoch && await reads.GetAsync(tenant, same, stop) is null &&
+                  (await cold.ReadJournalOfAsync(0, sameBefore.Actor.Id, 0, stop)) is [{ Revision: -1 }],
+                "same-owner deletion uses the committed stamp and drops a second polled delete without resetting");
+        }
         return 0;
 
         async Task<Contract.ActorRef> Start(string id, string definition) =>
@@ -144,7 +177,31 @@ internal static class PostgresRootRetirementChecks
             ingress.SendAsync(tenant, new Contract.Target.Ref(actor), operation, Contract.Kinds.Delete,
                 JsonSerializer.Serialize(new Contract.OperatorCommand(selection)), cancellationToken: stop);
 
-        async Task LateMarkerRefusalRollsBack(EfStore.RootImage current, Message command, Message future)
+        async Task<EfStore> OpenShadowAsync()
+        {
+            await using var db = Open();
+            var schema = await db.Database.SqlQueryRaw<string>("SELECT current_schema() AS \"Value\"").SingleAsync(stop);
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE SCHEMA retirement_shadow;
+                CREATE TABLE retirement_shadow."Instances" AS TABLE "Instances";
+                """, stop);
+            var altered = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE retirement_shadow."Instances" AS target
+                SET "State" = source."State", "FoundationStateWire" = source."FoundationStateWire"
+                FROM "Instances" AS source WHERE source."Id" = {before.Actor.Id} AND target."Id" = {protectedBefore.Actor.Id}
+                """, stop);
+            Check(altered == 1, "the shadow source keeps the terminal stamp and omits the protected invocation");
+            using var identifiers = new NpgsqlCommandBuilder();
+            var shadowConnection = new NpgsqlConnectionStringBuilder(connection)
+            {
+                SearchPath = "retirement_shadow," + identifiers.QuoteIdentifier(schema)
+            };
+            var shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(shadowConnection.ConnectionString).Options;
+            return new(() => KernelDb.ForPostgresRootRetirement(shadowOptions), postgres: true, fenceInBatch: inBatch)
+                { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
+        }
+
+        async Task LateMarkerRefusalRollsBack(EfStore.RootImage current, Message command, Message future, bool suppress)
         {
             var store = Store();
             await store.BindWorkerPartitionAsync(0, stop);
@@ -162,18 +219,26 @@ internal static class PostgresRootRetirementChecks
                 await db.Database.ExecuteSqlRawAsync("""
                     CREATE FUNCTION fixture_refuse_deletion_marker() RETURNS trigger LANGUAGE plpgsql AS $fn$
                     BEGIN
-                        RAISE EXCEPTION 'fixture refused deletion marker' USING ERRCODE = '23514';
+                        IF TG_ARGV[0] = 'throw' THEN
+                            RAISE EXCEPTION 'fixture refused deletion marker' USING ERRCODE = '23514';
+                        END IF;
+                        RETURN NULL;
                     END
                     $fn$;
+                    """, stop);
+                await db.Database.ExecuteSqlRawAsync(suppress ? """
                     CREATE TRIGGER fixture_refuse_deletion_marker BEFORE INSERT ON "Journal"
-                    FOR EACH ROW WHEN (NEW."Revision" = -1) EXECUTE FUNCTION fixture_refuse_deletion_marker();
+                    FOR EACH ROW WHEN (NEW."Revision" = -1) EXECUTE FUNCTION fixture_refuse_deletion_marker('suppress');
+                    """ : """
+                    CREATE TRIGGER fixture_refuse_deletion_marker BEFORE INSERT ON "Journal"
+                    FOR EACH ROW WHEN (NEW."Revision" = -1) EXECUTE FUNCTION fixture_refuse_deletion_marker('throw');
                     """, stop);
                 try
                 {
-                    await store.CommitAsync(new(0, lease.Epoch, lease.Position, Defaults.Lease, false, [retirement], [], []), stop);
-                    throw new InvalidOperationException("The marker refusal did not roll back the commit.");
+                    var result = await store.CommitAsync(new(0, lease.Epoch, lease.Position, Defaults.Lease, false, [retirement], [], []), stop);
+                    if (!suppress || result.Landed) throw new InvalidOperationException("The marker refusal did not roll back the commit.");
                 }
-                catch (StoreException error) when (error.Failure == Failure.Definite &&
+                catch (StoreException error) when (!suppress && error.Failure == Failure.Definite &&
                     error.InnerException?.GetBaseException() is PostgresException
                         { SqlState: PostgresErrorCodes.CheckViolation, MessageText: "fixture refused deletion marker" }) { }
 
@@ -184,7 +249,8 @@ internal static class PostgresRootRetirementChecks
                     (await cold.ReadJournalOfAsync(0, current.Actor.Id, 0, stop)).SequenceEqual(priorHistory) &&
                     !(await Inbox(command)).Done && !waiting.Done && waiting.Payload == future.Payload &&
                     await db.Partitions.Select(partition => partition.Position).SingleAsync(stop) == lease.Position,
-                    "a late marker refusal rolls back the checkpoint, inbox, projection, journal and fence");
+                    suppress ? "a suppressed marker rolls back the checkpoint, inbox, projection, journal and fence" :
+                        "a late marker refusal rolls back the checkpoint, inbox, projection, journal and fence");
             }
             finally
             {
@@ -198,9 +264,9 @@ internal static class PostgresRootRetirementChecks
             }
         }
 
-        async Task<IScopeActivation> Own(string node)
+        async Task<IScopeActivation> Own(string node, EfStore? selectedStore = null)
         {
-            var store = Store();
+            var store = selectedStore ?? Store();
             var scope = (await store.BindWorkerPartitionAsync(0, stop)).Scope;
             var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actorType);
             var host = new DurableHost([new Worker(node, 0, store, adapter, new WorkerOptions { Partitions = 1 })]);

@@ -63,7 +63,6 @@ public sealed partial class EfStore
     {
         internal virtual long RevisionFor(string actor) => JournalRevision;
         internal virtual bool WritesJournal(string actor) => false;
-        internal virtual bool RequiresRetirementSchema => false;
         internal virtual ValueTask CheckBeforeWriteAsync(KernelDb db, CancellationToken cancellationToken) => ValueTask.CompletedTask;
         internal abstract Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken);
     }
@@ -265,8 +264,12 @@ public sealed partial class EfStore
     internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        // The model's protection decision must see the same physical checkpoint as retirement.
+        await using var transaction = db.UsesRootRetirement ? await db.Database.BeginTransactionAsync(cancellationToken) : null;
+        if (transaction is not null)
+            await PostgresRootAdmission.PinSelectedOperatorSchemaAsync(db, cancellationToken);
         var family = RootStateFamily(db);
-        if (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol || db.UsesRootStableBody)
+        if (transaction is null && (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol || db.UsesRootStableBody))
             await RequireStoreVersionsAsync(db, cancellationToken);
         FormattableString query = $"""
             SELECT i."Id", b."Creation", i."State", /*root-wire*/ AS "Wire", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",

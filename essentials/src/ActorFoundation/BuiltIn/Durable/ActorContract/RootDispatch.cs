@@ -9,6 +9,7 @@ internal interface IRootDispatchHeaders
 {
     (string Tenant, string Reference) Creator(Durable.Message creator);
     Durable.FoundationDispatchHeader Checkpoint(Durable.InstanceRow row);
+    bool RequiresCommittedTerminal { get; }
 }
 
 internal sealed partial class ActorAdapter

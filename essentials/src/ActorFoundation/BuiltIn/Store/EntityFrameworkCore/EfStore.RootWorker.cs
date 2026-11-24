@@ -27,6 +27,7 @@ public sealed partial class EfStore
         internal int Partition => FixedPartition ?? throw new InvalidOperationException("This node serves a runtime-owned set.");
         internal bool Includes(int home) => FixedPartition is null || FixedPartition == home;
         internal bool Discover { get; } = discover;
+        internal bool RequiresCommittedTerminal { get; set; }
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
         private readonly Dictionary<string, WorkerRoot> _actors = roots.ToDictionary(r => r.Actor, StringComparer.Ordinal);
         private readonly Dictionary<string, WorkerRoot> _references = roots.ToDictionary(r => r.Reference, StringComparer.Ordinal);
@@ -53,6 +54,8 @@ public sealed partial class EfStore
             var root = roots.ForActor(creator.Target.Id);
             return root.Owns(creator.InboxKey) ? (root.Tenant, root.Reference) : throw new InvalidOperationException("Unexpected root creator.");
         }
+
+        public bool RequiresCommittedTerminal => roots.RequiresCommittedTerminal;
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
             throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
@@ -101,6 +104,7 @@ public sealed partial class EfStore
                 throw new NotSupportedException("The timed job fixture binds exactly one generated root.");
             if (db.UsesRootValueProtocol != RootValuesEnabled)
                 throw new StoreFormatException("The PostgreSQL owner must initialize its value capability before binding to the value qualification profile.");
+            scope.RequiresCommittedTerminal = db.UsesRootRetirement;
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
         }
@@ -251,7 +255,6 @@ public sealed partial class EfStore
     {
         internal override long RevisionFor(string actor) => Revisions[actor];
         internal override bool WritesJournal(string actor) => DeferredJournal.Contains(actor);
-        internal override bool RequiresRetirementSchema => DeferredJournal.Count > 0;
         internal override async ValueTask CheckBeforeWriteAsync(KernelDb db, CancellationToken cancellationToken)
         {
             foreach (var command in Commands) await command.CheckBeforeWriteAsync(db, cancellationToken);

@@ -588,8 +588,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
         db.Database.AutoSavepointsEnabled = false;      // ENGINES.md E4: SAVEPOINT and RELEASE were two more round trips per commit on PostgreSQL
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        if (root?.RequiresRetirementSchema == true)
-            await PostgresRootAdmission.PinSelectedOperatorSchemaAsync(db, cancellationToken);
+        if (root is not null && db.UsesRootRetirement)
+            await PinRootRetirementSchemaAsync(db, cancellationToken);
         var now = 0L;
         if (FenceInBatch)
         {
@@ -725,6 +725,16 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
         {
             // Preflight runs before either writer can test the fence.
+            throw new RootPreflightFailure(failure);
+        }
+    }
+
+    private async Task PinRootRetirementSchemaAsync(KernelDb db, CancellationToken cancellationToken)
+    {
+        try { await PostgresRootAdmission.PinSelectedOperatorSchemaAsync(db, cancellationToken); }
+        catch (Exception error) when (error is not OperationCanceledException &&
+            Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
+        {
             throw new RootPreflightFailure(failure);
         }
     }

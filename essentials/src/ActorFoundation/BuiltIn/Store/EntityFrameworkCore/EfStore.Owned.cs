@@ -43,8 +43,8 @@ public sealed partial class EfStore
         if (root is not null) await CheckRootBeforeWriteAsync(root, db, cancellationToken);
         db.Database.AutoSavepointsEnabled = false;
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        if (root?.RequiresRetirementSchema == true)
-            await PostgresRootAdmission.PinSelectedOperatorSchemaAsync(db, cancellationToken);
+        if (root is not null && db.UsesRootRetirement)
+            await PinRootRetirementSchemaAsync(db, cancellationToken);
         var commands = new List<OwnedCommand>();
         var c = new OwnedCommand(dialect) { HasFence = true };
         var window = batch.Window;

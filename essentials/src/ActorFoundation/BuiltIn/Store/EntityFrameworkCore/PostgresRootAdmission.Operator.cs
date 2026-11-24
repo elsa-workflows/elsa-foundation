@@ -164,14 +164,16 @@ internal sealed partial class PostgresRootAdmission
             IN ACCESS SHARE MODE
             """, token);
         if (db.UsesRootRetirement)
-            await db.Database.ExecuteSqlRawAsync("""LOCK TABLE "Partitions", "Journal", "Subscriptions" IN ACCESS SHARE MODE""", token);
+            await db.Database.ExecuteSqlRawAsync("""
+                LOCK TABLE "Partitions", "Journal", "Subscriptions", "FoundationDirectReceipts" IN ACCESS SHARE MODE
+                """, token);
         var sameSchema = await db.Database.SqlQuery<bool>($"""
-            SELECT count(*) = {(db.UsesRootRetirement ? 9 : 6)} AS "Value"
+            SELECT count(*) = {(db.UsesRootRetirement ? 10 : 6)} AS "Value"
             FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
-                ('"Instances"'), ('"FoundationOperatorReceipts"'), ('"Messages"'), ('"Partitions"'), ('"Journal"'), ('"Subscriptions"')) required(name)
+                ('"Instances"'), ('"FoundationOperatorReceipts"'), ('"Messages"'), ('"Partitions"'), ('"Journal"'), ('"Subscriptions"'), ('"FoundationDirectReceipts"')) required(name)
             JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name)
             JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace AND ns.nspname = {source}
-            WHERE {db.UsesRootRetirement} OR required.name NOT IN ('"Partitions"', '"Journal"', '"Subscriptions"')
+            WHERE {db.UsesRootRetirement} OR required.name NOT IN ('"Partitions"', '"Journal"', '"Subscriptions"', '"FoundationDirectReceipts"')
             """).SingleAsync(token);
         if (!sameSchema)
             throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");

@@ -45,10 +45,14 @@ public sealed partial class EfStore
                 UPDATE "Messages" SET "Done" = true, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL
                 WHERE "InboxScope" = {occurrence} AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND NOT "Done";
                 DELETE FROM "Journal" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" > 0;
-                INSERT INTO "Journal" ("Instance", "Partition", "Position", "Revision", "Entries")
-                VALUES ({Root.Actor}, {Root.Partition}, {Position}, -1, '["delete"]');
                 """, token);
-            return true;
+            return await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Journal" ("Instance", "Partition", "Position", "Revision", "Entries")
+                SELECT {Root.Actor}, {Root.Partition}, {Position}, -1, '["delete"]'
+                WHERE NOT EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
+                    AND NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
+                        AND (NOT "Done" OR "Payload" IS NOT NULL OR "Start" IS NOT NULL OR "ReplyTo" IS NOT NULL))
+                """, token) == 1;
         }
     }
 

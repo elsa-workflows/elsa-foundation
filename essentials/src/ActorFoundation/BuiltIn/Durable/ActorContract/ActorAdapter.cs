@@ -367,6 +367,9 @@ internal sealed partial class ActorAdapter : Durable.IActorType
                     Suspended = IsRootControl(delivery.Message) && delivery.Message.Kind != Durable.Kinds.Terminate
                         ? delivery.Message.Kind == Durable.Kinds.Suspend : nextRow.Suspended,
                     FoundationDispatchHeader = new(nextHeader.Tenant, nextHeader.Ref.Id, new(nextHeader.TypeData, nextHeader.Labels), growth)
+                    {
+                        RefreshTerminal = roots.RequiresCommittedTerminal && nextRow.Status != Durable.InstanceStatus.Running
+                    }
                 };
             }
             if (nextRow.ParkCohort is { } cohort && (nextRow.Status != Durable.InstanceStatus.Running ||
