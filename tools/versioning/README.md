@@ -393,8 +393,15 @@ verify_producer() {
 reader=tools/versioning/package-evidence/studio_archives.py
 if [[ "$PACKAGE" == *.nupkg && "$REGISTRY" == 'https://api.nuget.org/v3/index.json' ]]; then
   signature_index=https://api.nuget.org/v3-index/repository-signatures/5.0.0/index.json
-  fingerprints=$(curl -fsSL "$signature_index" | jq -er '[.signingCertificates[].fingerprints["2.16.840.1.101.3.4.2.1"]] | join(" ")')
-  dotnet nuget verify "$PACKAGE" --all --certificate-fingerprint $fingerprints
+  fingerprints=$(curl -fsSL "$signature_index" | jq -er '
+    [.signingCertificates[].fingerprints["2.16.840.1.101.3.4.2.1"]]
+    | select(length > 0 and all(.[]; type == "string" and test("^[0-9A-Fa-f]{64}$")))
+    | .[]')
+  certificate_args=()
+  while IFS= read -r fingerprint; do
+    certificate_args+=(--certificate-fingerprint "$fingerprint")
+  done <<< "$fingerprints"
+  dotnet nuget verify "$PACKAGE" --all "${certificate_args[@]}"
   python3 "$reader" "$PACKAGE" --payload "$PACKAGE.payload.json"
   verify_producer "$PACKAGE.payload.json"
 else
