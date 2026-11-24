@@ -42,72 +42,72 @@ internal sealed partial class PostgresRootAdmission
         if (selectedTermination != (runningSelection is not null)) return null;
 
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
-        if (selectedTermination)
+        try
         {
-            try
+            if (selectedTermination)
             {
                 await PinSelectedOperatorSchemaAsync(db, token);
                 if (!PostgresRootSelection.MatchesRunning(await ReadJournalCursorAsync(db, token), runningSelection, tenant, reference))
                     return null;
             }
-            catch (PostgresException error) when (IsUnavailableSelectedSchema(error))
+            else
+                await EfStore.RequireStoreVersionsAsync(db, token);
+            var address = await RootAddressAsync(db, tenant, reference, token);
+            if (address is null)
             {
-                throw new StoreFormatException("The selected operator admission schema is unreadable.", error);
+                await tx.RollbackAsync(token);
+                return null;
             }
-        }
-        else
-            await EfStore.RequireStoreVersionsAsync(db, token);
-        var address = await RootAddressAsync(db, tenant, reference, token);
-        if (address is null)
-        {
-            await tx.RollbackAsync(token);
-            return null;
-        }
-        // Lock the selected checkpoint before reading its receipt. If the command already
-        // ended this actor, the receipt committed before the owner could consume it.
-        var selectedStatus = selectedTermination
-            ? await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: true)
-            : null;
-        var prior = await db.Database.SqlQuery<string>($"""
-            SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts"
-            WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
-            """).SingleOrDefaultAsync(token);
-        if (prior is not null)
-        {
+            // Lock the selected checkpoint before reading its receipt. If the command already
+            // ended this actor, the receipt committed before the owner could consume it.
+            var selectedStatus = selectedTermination
+                ? await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: true)
+                : null;
+            var prior = await db.Database.SqlQuery<string>($"""
+                SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts"
+                WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                """).SingleOrDefaultAsync(token);
+            if (prior is not null)
+            {
+                await tx.CommitAsync(token);
+                return selectedTermination && prior != reference ? null : new(prior, true);
+            }
+            var status = selectedTermination ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
+            if (status != InstanceStatus.Running)
+            {
+                await tx.RollbackAsync(token);
+                return null;
+            }
+            var receipt = await db.Database.SqlQuery<long>($"""
+                INSERT INTO "FoundationOperatorReceipts" AS r ("Tenant","Operation","Reference","Until")
+                VALUES ({tenant},{digest},{reference},floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
+                ON CONFLICT ("Tenant","Operation") DO UPDATE SET "Reference" = EXCLUDED."Reference",
+                    "Until" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs}
+                WHERE r."Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint RETURNING "Until" AS "Value"
+                """).ToListAsync(token);
+            if (receipt.Count == 0)
+            {
+                // A competing transaction recorded this operation while we qualified the requested root.
+                prior = await db.Database.SqlQuery<string>($"""
+                    SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
+                    """).SingleAsync(token);
+                await tx.CommitAsync(token);
+                return selectedTermination && prior != reference ? null : new(prior, true);
+            }
+            var actor = new InstanceRef(address.Id);
+            var id = $"{OperatorOccurrencePrefix}{reference}/{digest}/{Guid.NewGuid():N}";
+            var header = OperatorPrefix + DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0));
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial")
+                VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0)
+                """, token);
             await tx.CommitAsync(token);
-            return selectedTermination && prior != reference ? null : new(prior, true);
+            return new(reference, false);
         }
-        var status = selectedTermination ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
-        if (status != InstanceStatus.Running)
+        catch (PostgresException error) when (selectedTermination && IsUnavailableSelectedSchema(error))
         {
-            await tx.RollbackAsync(token);
-            return null;
+            throw new StoreFormatException("The selected operator admission schema is unreadable.", error);
         }
-        var receipt = await db.Database.SqlQuery<long>($"""
-            INSERT INTO "FoundationOperatorReceipts" AS r ("Tenant","Operation","Reference","Until")
-            VALUES ({tenant},{digest},{reference},floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
-            ON CONFLICT ("Tenant","Operation") DO UPDATE SET "Reference" = EXCLUDED."Reference",
-                "Until" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs}
-            WHERE r."Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint RETURNING "Until" AS "Value"
-            """).ToListAsync(token);
-        if (receipt.Count == 0)
-        {
-            // A competing transaction recorded this operation while we qualified the requested root.
-            prior = await db.Database.SqlQuery<string>($"""
-                SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
-                """).SingleAsync(token);
-            await tx.CommitAsync(token);
-            return selectedTermination && prior != reference ? null : new(prior, true);
-        }
-        var actor = new InstanceRef(address.Id);
-        var id = $"{OperatorOccurrencePrefix}{reference}/{digest}/{Guid.NewGuid():N}";
-        var header = OperatorPrefix + DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0));
-        await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial")
-            VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0)
-            """, token);
-        await tx.CommitAsync(token);
-        return new(reference, false);
     }
 
     private static bool IsUnavailableSelectedSchema(PostgresException error) =>

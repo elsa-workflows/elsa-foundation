@@ -472,17 +472,25 @@ internal static class PostgresRootTerminateChecks
                     """, stop);
             await RequireUnavailable(async () => { _ = await shadow.OpenPreviewRootReadsAsync(cancellationToken: stop); });
 
-            await MissingRelationRefuses(
+            await InvalidSchemaRefuses(
                 """ALTER TABLE "FoundationOperatorReceipts" RENAME TO "HiddenOperatorReceipts" """,
-                """ "HiddenOperatorReceipts" """.Trim(),
+                """SELECT pg_catalog.to_regclass('"HiddenOperatorReceipts"') IS NOT NULL AS "Value" """,
                 """ALTER TABLE "HiddenOperatorReceipts" RENAME TO "FoundationOperatorReceipts" """);
-            await MissingRelationRefuses(
+            await InvalidSchemaRefuses(
                 """ALTER TABLE "KernelStoreVersions" RENAME TO "HiddenStoreVersions" """,
-                """ "HiddenStoreVersions" """.Trim(),
+                """SELECT pg_catalog.to_regclass('"HiddenStoreVersions"') IS NOT NULL AS "Value" """,
                 """ALTER TABLE "HiddenStoreVersions" RENAME TO "KernelStoreVersions" """);
+            await InvalidSchemaRefuses(
+                """ALTER TABLE "FoundationOperatorReceipts" RENAME COLUMN "Until" TO "HiddenUntil" """,
+                """
+                SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+                    WHERE attrelid = pg_catalog.to_regclass('"FoundationOperatorReceipts"')
+                    AND attname = 'HiddenUntil' AND NOT attisdropped) AS "Value"
+                """,
+                """ALTER TABLE "FoundationOperatorReceipts" RENAME COLUMN "HiddenUntil" TO "Until" """);
         }
 
-        async Task MissingRelationRefuses(string hide, string hiddenName, string restore)
+        async Task InvalidSchemaRefuses(string hide, string changed, string restore)
         {
             try
             {
@@ -494,9 +502,7 @@ internal static class PostgresRootTerminateChecks
             {
                 using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));
                 await using var formatDb = Open();
-                if (await formatDb.Database.SqlQuery<bool>($"""
-                    SELECT pg_catalog.to_regclass({hiddenName}) IS NOT NULL AS "Value"
-                    """).SingleAsync(cleanup.Token))
+                if (await formatDb.Database.SqlQueryRaw<bool>(changed).SingleAsync(cleanup.Token))
                     await formatDb.Database.ExecuteSqlRawAsync(restore, cleanup.Token);
             }
         }
