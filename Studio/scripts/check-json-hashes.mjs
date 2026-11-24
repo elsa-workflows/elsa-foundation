@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanJsonHashReferences } from "./lib/jsonHashReferences.mjs";
-import { authoritySources, createJsonHashReceipt, shippingTypeScriptSources, validateJsonHashReview } from "./lib/jsonHashReceipt.mjs";
+import { authoritySources, createJsonHashReceipt, readJsonHashGoldenEvidence, shippingTypeScriptSources, validateJsonHashReview } from "./lib/jsonHashReceipt.mjs";
 import { physicalModuleInputs, studioHashBuildInputs } from "./lib/jsonHashBuildInputs.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -27,7 +27,7 @@ if (args.length) {
   const output = resolve(args[1]);
   if (existsSync(output)) throw new Error("Preserve the previous hash report; use a new output path.");
   const reviewed = new Map(register.owners.map(owner => [owner.identity, owner]));
-  const observed = { ...receipt, owners: receipt.owners.map(owner => ({
+  const observed = { ...receipt, goldenSignature: readJsonHashGoldenEvidence(repoRoot, register.owners).signature, owners: receipt.owners.map(owner => ({
     ...owner, classification: reviewed.get(owner.identity)?.classification ?? "unreviewed",
     reason: reviewed.get(owner.identity)?.reason ?? "", goldenEvidence: reviewed.get(owner.identity)?.goldenEvidence ?? []
   })), findings, analysis: { clients: clients.length, references: result.references.length, moduleEdges: result.moduleEdges.length } };

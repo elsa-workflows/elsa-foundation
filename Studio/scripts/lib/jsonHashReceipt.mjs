@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const sdk = "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/";
 export const authoritySources = [sdk + "jsonHashInput.ts", sdk + "sha256.ts", sdk + "index.ts",
@@ -19,6 +19,88 @@ const textHash = (file, exact = false) => {
   return createHash("sha256").update(value).digest("hex");
 };
 const beneath = (root, file) => { const path = relative(root, file); return path !== ".." && !path.startsWith(".." + sep) && !isAbsolute(path); };
+const reviewRegisterPath = "Studio/scripts/baselines/json-hash-review.json";
+const goldenTextExtensions = new Set([".cs", ".json", ".jsonc", ".py", ".md", ".txt", ".ts", ".tsx", ".js", ".jsx",
+  ".mjs", ".cjs", ".mts", ".cts", ".xml", ".props", ".targets", ".csproj", ".yml", ".yaml"]);
+
+function goldenEvidenceDigest(file) {
+  const bytes = readFileSync(file);
+  if (!bytes.length) throw new Error("Golden evidence file is empty.");
+  if (!goldenTextExtensions.has(extname(file).toLowerCase()))
+    return "binary:" + createHash("sha256").update(bytes).digest("hex");
+  let text;
+  if (bytes.subarray(0, 4).equals(Buffer.from([0xff, 0xfe, 0, 0])) || bytes.subarray(0, 4).equals(Buffer.from([0, 0, 0xfe, 0xff]))) {
+    const little = bytes[0] === 0xff;
+    if ((bytes.length - 4) % 4) throw new Error("Invalid UTF-32 golden evidence.");
+    const characters = [];
+    for (let index = 4; index < bytes.length; index += 4) {
+      const value = little ? bytes.readUInt32LE(index) : bytes.readUInt32BE(index);
+      if (value > 0x10ffff || value >= 0xd800 && value <= 0xdfff) throw new Error("Invalid UTF-32 golden evidence scalar.");
+      characters.push(String.fromCodePoint(value));
+    }
+    text = characters.join("");
+  } else {
+    let encoding = "utf-8", offset = 0;
+    if (bytes.subarray(0, 2).equals(Buffer.from([0xff, 0xfe]))) { encoding = "utf-16le"; offset = 2; }
+    else if (bytes.subarray(0, 2).equals(Buffer.from([0xfe, 0xff]))) { encoding = "utf-16be"; offset = 2; }
+    else if (bytes.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf]))) offset = 3;
+    // Strip only the initial encoding marker; a second U+FEFF is actual file content.
+    text = new TextDecoder(encoding, { fatal: true, ignoreBOM: true }).decode(bytes.subarray(offset));
+  }
+  if (!text.length) throw new Error("Decoded golden evidence text is empty.");
+  return "text:" + createHash("sha256").update(text.replace(/\r\n/g, "\n"), "utf8").digest("hex");
+}
+
+/** Bind complete reviewed proof files and their exact owner mappings, independently of shipping source selection. */
+export function readJsonHashGoldenEvidence(repoRoot, owners) {
+  const findings = [], files = new Map(), bindings = [], identities = new Set();
+  const root = resolve(repoRoot), register = resolve(root, reviewRegisterPath);
+  const comparable = file => process.platform === "win32" ? file.toLowerCase() : file;
+  if (!Array.isArray(owners)) return { signature: "", findings: ["TypeScript golden evidence needs a reviewed owner list."] };
+  for (const owner of owners) {
+    if (typeof owner.identity !== "string" || !owner.identity.trim() || identities.has(owner.identity)) {
+      findings.push("Invalid/duplicate TypeScript golden evidence owner: " + owner.identity);
+      continue;
+    }
+    identities.add(owner.identity);
+    if (owner.goldenEvidence !== undefined && !Array.isArray(owner.goldenEvidence)) {
+      findings.push("TypeScript golden evidence must be a file list: " + owner.identity);
+      continue;
+    }
+    const evidenceFiles = owner.goldenEvidence ?? [], selected = new Set(), physical = new Set();
+    if (["json_routed", "shared_json_authority", "shared_sha_implementation", "non_json_identifier_hash"].includes(owner.classification) && !evidenceFiles.length)
+      findings.push("Missing TypeScript hash golden evidence: " + owner.identity);
+    for (const evidence of evidenceFiles) {
+      try {
+        if (typeof evidence !== "string" || !evidence.trim() || evidence !== evidence.trim() || evidence.includes(":") || evidence.includes("\0") || isAbsolute(evidence))
+          throw new Error("Golden evidence must be a relative repository file.");
+        const portable = evidence.replace(/\\/g, "/");
+        if (portable.split("/").some(part => !part || part === "." || part === ".."))
+          throw new Error("Golden evidence cannot contain traversal or path aliases.");
+        const path = resolve(root, portable);
+        if (!beneath(root, path)) throw new Error("Golden evidence escapes the repository.");
+        if (comparable(path) === comparable(register)) throw new Error("The hash review register cannot be its own golden evidence.");
+        const item = lstatSync(path);
+        if (!item.isFile()) throw new Error("Golden evidence must be an ordinary file.");
+        // Refuse links even when they currently resolve inside the checkout, including linked directories/junctions.
+        for (let current = path; ; current = dirname(current)) {
+          if (lstatSync(current).isSymbolicLink()) throw new Error("Golden evidence has a linked ancestor.");
+          if (current === dirname(current)) break;
+        }
+        const real = realpathSync(path);
+        if (!beneath(realpathSync(root), real)) throw new Error("Golden evidence escaped the physical repository.");
+        if (selected.has(portable) || physical.has(comparable(real))) throw new Error("Duplicate golden evidence reference.");
+        selected.add(portable); physical.add(comparable(real));
+        if (!files.has(portable)) files.set(portable, goldenEvidenceDigest(path));
+      } catch (error) {
+        findings.push(`Invalid TypeScript golden evidence for ${owner.identity}: ${String(evidence)}: ${error.message}`);
+      }
+    }
+    bindings.push({ owner: owner.identity, files: [...selected].sort(ordinal) });
+  }
+  return { signature: findings.length ? "" : digest({ bindings: bindings.sort((a, b) => ordinal(a.owner, b.owner)),
+    files: [...files].sort(([a], [b]) => ordinal(a, b)).map(([path, contentDigest]) => ({ path, contentDigest })) }), findings };
+}
 
 export function shippingTypeScriptSources(repoRoot) {
   const clients = [], files = [];
@@ -134,12 +216,11 @@ export function validateJsonHashReview(receipt, register, repoRoot) {
     const json = owner.sites.some(site => site.role === "json-hash-input");
     if (json && entry.classification !== "json_routed") findings.push("JSON hash routing was misclassified: " + owner.identity);
     if ((json || primitive) && !entry.goldenEvidence?.length) findings.push("Missing TypeScript hash golden evidence: " + owner.identity);
-    for (const evidence of entry.goldenEvidence ?? []) {
-      const path = resolve(repoRoot, evidence);
-      if (!beneath(repoRoot, path) || !existsSync(path) || !statSync(path).isFile() || !beneath(realpathSync(repoRoot), realpathSync(path)))
-        findings.push("Missing/escaped TypeScript golden evidence file: " + evidence);
-    }
   }
   for (const owner of reviewed.keys()) findings.push("Removed TypeScript hash owner needs review: " + owner);
+  const goldens = readJsonHashGoldenEvidence(repoRoot, register.owners);
+  findings.push(...goldens.findings);
+  if (typeof register.goldenSignature !== "string" || !register.goldenSignature || register.goldenSignature !== goldens.signature)
+    findings.push("Changed or missing TypeScript goldenSignature: review the complete actual-owner proof files and mappings before updating it.");
   return findings;
 }

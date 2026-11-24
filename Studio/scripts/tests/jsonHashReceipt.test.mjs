@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync, unlinkSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { scanJsonHashReferences } from "../lib/jsonHashReferences.mjs";
-import { createJsonHashReceipt, shippingTypeScriptSources, sourceDocument, validateJsonHashReview } from "../lib/jsonHashReceipt.mjs";
+import { createJsonHashReceipt, readJsonHashGoldenEvidence, shippingTypeScriptSources, sourceDocument, validateJsonHashReview } from "../lib/jsonHashReceipt.mjs";
 import { physicalModuleInputs, studioHashBuildInputs } from "../lib/jsonHashBuildInputs.mjs";
 
 const parent = resolve(import.meta.dirname, "../../../.agent-prefs");
@@ -22,7 +22,10 @@ function fixture(run) {
     const result = scanJsonHashReferences({ repoRoot: root, rootNames, gateways: [{ file: join(root, "gateway.ts"), exports: ["hashJson"] }] });
     return createJsonHashReceipt({ repoRoot: root, rootNames, ...result, authorities: ["gateway.ts"] });
   };
-  const review = receipt => ({ ...receipt, owners: receipt.owners.map(owner => ({ ...owner, classification: "json_routed", reason: "Owned Payload projection through the canonical gateway.", goldenEvidence: ["golden.txt"] })) });
+  const review = receipt => {
+    const register = { ...receipt, owners: receipt.owners.map(owner => ({ ...owner, classification: "json_routed", reason: "Owned Payload projection through the canonical gateway.", goldenEvidence: ["golden.txt"] })) };
+    return { ...register, goldenSignature: readJsonHashGoldenEvidence(root, register.owners).signature };
+  };
   try { run({ root, files, write, scan, review }); }
   finally { assert.ok(resolve(root).startsWith(parent + sep)); rmSync(root, { recursive: true }); }
 }
@@ -55,6 +58,129 @@ test("authority claims, empty reasons, duplicate owners and missing golden links
     assert.notDeepEqual(validateJsonHashReview(receipt, changed, root), []);
   }
   assert.ok(validateJsonHashReview(receipt, { ...register, owners: [...register.owners, register.owners[0]] }, root).some(finding => finding.includes("Duplicate")));
+}));
+
+test("golden assertion content cannot change while its shipping source receipt remains current", () => fixture(({ root, scan, review }) => {
+  const receipt = scan(), register = review(receipt);
+  const original = readFileSync(join(root, "golden.txt"));
+  writeFileSync(join(root, "golden.txt"), "The actual-owner assertion was removed.");
+  assert.equal(scan().sourceSignature, receipt.sourceSignature, "The negative must exercise proof content outside shipping source selection.");
+  assert.ok(validateJsonHashReview(receipt, register, root).some(finding => finding.includes("goldenSignature")));
+  writeFileSync(join(root, "golden.txt"), original);
+  assert.deepEqual(validateJsonHashReview(receipt, register, root), []);
+  const { goldenSignature, ...unbound } = register;
+  assert.ok(goldenSignature);
+  assert.ok(validateJsonHashReview(receipt, unbound, root).some(finding => finding.includes("goldenSignature")));
+}));
+
+test("golden receipts bind owner mappings and complete file paths even when bytes match", () => fixture(({ root, scan, review }) => {
+  const receipt = scan(), register = review(receipt);
+  writeFileSync(join(root, "copied-golden.txt"), readFileSync(join(root, "golden.txt")));
+  const remapped = { ...register, owners: register.owners.map(owner => ({ ...owner, goldenEvidence: ["copied-golden.txt"] })) };
+  assert.equal(scan().sourceSignature, receipt.sourceSignature);
+  assert.ok(validateJsonHashReview(receipt, remapped, root).some(finding => finding.includes("goldenSignature")));
+  const renamed = register.owners.map(owner => ({ ...owner, identity: owner.identity + "-another-owner" }));
+  assert.notEqual(readJsonHashGoldenEvidence(root, renamed).signature, register.goldenSignature);
+  assert.equal(readJsonHashGoldenEvidence(root, [...register.owners].reverse()).signature, register.goldenSignature);
+}));
+
+test("golden files cannot be deleted, empty, BOM-only or malformed text", () => fixture(({ root, scan, review }) => {
+  const register = review(scan());
+  const variants = [
+    ["empty.ts", Buffer.alloc(0)], ["empty.bin", Buffer.alloc(0)],
+    ["utf8.json", Buffer.from([0xef, 0xbb, 0xbf])], ["utf16le.txt", Buffer.from([0xff, 0xfe])],
+    ["utf16be.txt", Buffer.from([0xfe, 0xff])], ["utf32le.txt", Buffer.from([0xff, 0xfe, 0, 0])],
+    ["utf32be.txt", Buffer.from([0, 0, 0xfe, 0xff])], ["invalid-utf8.txt", Buffer.from([0xff])],
+    ["invalid-utf16.txt", Buffer.from([0xff, 0xfe, 0])],
+    ["invalid-utf32.txt", Buffer.from([0xff, 0xfe, 0, 0, 0, 0xd8, 0, 0])]
+  ];
+  for (const [file, bytes] of variants) {
+    writeFileSync(join(root, file), bytes);
+    const result = readJsonHashGoldenEvidence(root, register.owners.map(owner => ({ ...owner, goldenEvidence: [file] })));
+    assert.equal(result.signature, "", file);
+    assert.ok(result.findings.length, file);
+  }
+  unlinkSync(join(root, "golden.txt"));
+  assert.ok(readJsonHashGoldenEvidence(root, register.owners).findings.some(finding => finding.includes("golden.txt")));
+}));
+
+test("golden paths reject traversal, URIs, absolute names, directories, duplicates and the register itself", () => fixture(({ root, scan, review }) => {
+  const register = review(scan());
+  mkdirSync(join(root, "nested")); writeFileSync(join(root, "nested/proof.txt"), "pin");
+  const baseline = "Studio/scripts/baselines/json-hash-review.json";
+  mkdirSync(join(root, "Studio/scripts/baselines"), { recursive: true }); writeFileSync(join(root, baseline), "{}");
+  for (const evidence of [[], ["missing.txt"], ["../outside.txt"], ["./golden.txt"], ["nested/../golden.txt"],
+    ["nested//proof.txt"], [""], [" "], [" golden.txt"], ["golden.txt "], ["nested"], ["golden.txt\0"],
+    ["file:///outside.txt"], ["https://example.com/proof.txt"], ["C:/outside.txt"], ["\\outside.txt"], [resolve(root, "golden.txt")],
+    ["golden.txt", "golden.txt"], ["nested\\proof.txt", "nested/proof.txt"], [baseline]]) {
+    const result = readJsonHashGoldenEvidence(root, register.owners.map(owner => ({ ...owner, goldenEvidence: evidence })));
+    assert.equal(result.signature, "", JSON.stringify(evidence));
+    assert.ok(result.findings.length, JSON.stringify(evidence));
+  }
+  const valid = readJsonHashGoldenEvidence(root, register.owners.map(owner => ({ ...owner, goldenEvidence: ["nested\\proof.txt"] })));
+  assert.deepEqual(valid.findings, []);
+}));
+
+function encodedGolden(text, encoding) {
+  if (encoding.startsWith("utf32")) {
+    const points = [...text].map(character => character.codePointAt(0));
+    const bytes = Buffer.alloc(4 + points.length * 4), little = encoding === "utf32le";
+    (little ? Buffer.from([0xff, 0xfe, 0, 0]) : Buffer.from([0, 0, 0xfe, 0xff])).copy(bytes);
+    points.forEach((point, index) => little ? bytes.writeUInt32LE(point, 4 + index * 4) : bytes.writeUInt32BE(point, 4 + index * 4));
+    return bytes;
+  }
+  if (encoding.startsWith("utf16")) {
+    const bytes = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, "utf16le")]);
+    return encoding === "utf16be" ? bytes.swap16() : bytes;
+  }
+  return Buffer.concat([encoding === "utf8bom" ? Buffer.from([0xef, 0xbb, 0xbf]) : Buffer.alloc(0), Buffer.from(text)]);
+}
+
+test("golden text BOM and CRLF portability retains escaped literals while binary evidence stays exact", () => fixture(({ root, scan, review }) => {
+  const owners = review(scan()).owners;
+  const text = 'Expected "\\r\\n" and René 🚀.\nIndependent assertion.\n';
+  writeFileSync(join(root, "golden.txt"), text);
+  const original = readJsonHashGoldenEvidence(root, owners).signature;
+  for (const encoding of ["utf8", "utf8bom", "utf16le", "utf16be", "utf32le", "utf32be"]) {
+    writeFileSync(join(root, "golden.txt"), encodedGolden(text.replace(/\n/g, "\r\n"), encoding));
+    assert.equal(readJsonHashGoldenEvidence(root, owners).signature, original, encoding);
+  }
+  writeFileSync(join(root, "golden.txt"), text.replace('"\\r\\n"', '"\\n"'));
+  assert.notEqual(readJsonHashGoldenEvidence(root, owners).signature, original);
+  writeFileSync(join(root, "golden.txt"), Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), encodedGolden(text, "utf8bom")]));
+  assert.notEqual(readJsonHashGoldenEvidence(root, owners).signature, original, "Only one initial BOM is encoding metadata.");
+  writeFileSync(join(root, "golden.txt"), " \t\n");
+  assert.deepEqual(readJsonHashGoldenEvidence(root, owners).findings, [], "Nonempty whitespace is not rejected by a semantic-content heuristic.");
+  const binary = owners.map(owner => ({ ...owner, goldenEvidence: ["golden.bin"] }));
+  writeFileSync(join(root, "golden.bin"), Buffer.from([0]));
+  assert.deepEqual(readJsonHashGoldenEvidence(root, binary).findings, []);
+  writeFileSync(join(root, "golden.bin"), Buffer.from([13, 10]));
+  const first = readJsonHashGoldenEvidence(root, binary).signature;
+  writeFileSync(join(root, "golden.bin"), Buffer.from([10]));
+  assert.notEqual(readJsonHashGoldenEvidence(root, binary).signature, first);
+}));
+
+test("golden evidence refuses file symlinks both inside and outside the repository", t => fixture(({ root, scan, review }) => {
+  const owners = review(scan()).owners;
+  const outside = join(parent, "s9-ts-golden-outside-" + root.split(sep).at(-1) + ".txt");
+  writeFileSync(outside, "outside pin");
+  try {
+    for (const [name, target] of [["inside-link.txt", join(root, "golden.txt")], ["outside-link.txt", outside]]) {
+      try { symlinkSync(target, join(root, name), "file"); }
+      catch (error) { if (process.platform === "win32" && ["EPERM", "EACCES"].includes(error.code)) { t.skip("Windows file symlink privilege unavailable; mandatory controls run on Linux."); return; } throw error; }
+      const result = readJsonHashGoldenEvidence(root, owners.map(owner => ({ ...owner, goldenEvidence: [name] })));
+      assert.equal(result.signature, ""); assert.ok(result.findings.length);
+    }
+  } finally { unlinkSync(outside); }
+}));
+
+test("golden evidence refuses linked directories even when their target is inside the repository", t => fixture(({ root, scan, review }) => {
+  const owners = review(scan()).owners;
+  mkdirSync(join(root, "real")); writeFileSync(join(root, "real/proof.txt"), "pin");
+  try { symlinkSync(join(root, "real"), join(root, "linked"), process.platform === "win32" ? "junction" : "dir"); }
+  catch (error) { if (process.platform === "win32" && ["EPERM", "EACCES"].includes(error.code)) { t.skip("Windows junction privilege unavailable; mandatory controls run on Linux."); return; } throw error; }
+  const result = readJsonHashGoldenEvidence(root, owners.map(owner => ({ ...owner, goldenEvidence: ["linked/proof.txt"] })));
+  assert.equal(result.signature, ""); assert.ok(result.findings.some(finding => finding.includes("linked ancestor")));
 }));
 
 test("anonymous default-function owner identities are portable across checkout line endings", () => fixture(({ root, files, write, scan, review }) => {
