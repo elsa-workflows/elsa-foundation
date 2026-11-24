@@ -31,3 +31,14 @@ dotnet run --project apps/Elsa.Essentials.Host --launch-profile https
 It listens on `https://localhost:7262` and `http://localhost:5262`. Development runs on SQLite (`elsa-essentials.db`), ephemeral identity keys, demo-only runtime keys and a seeded `admin` / `Password123!` user. Production (`ASPNETCORE_ENVIRONMENT=Production`) blanks those values. You must then supply the keys and the initial admin password as secrets, and apply migrations before the host starts (`Elsa:Persistence:EntityFramework:Migrate:Policy` is `Validate`).
 
 `/health/live` and `/health/ready` are the probes. Point Studio at the host and add its origin to `Cors:AllowedOrigins`.
+
+## Running it in Docker
+
+The `Dockerfile` here builds the image from the repository root. CI publishes it from main as `elsaworkflows/elsa-essentials`, beside the Workbench and Foundation host images (`.github/workflows/docker.yml`).
+
+```bash
+docker build -f apps/Elsa.Essentials.Host/Dockerfile -t elsa-essentials:local .
+docker run --rm -p 13010:8080 -e ASPNETCORE_ENVIRONMENT=Development elsa-essentials:local
+```
+
+The container listens on port 8080. `Development` keeps the demo keys, the seeded admin user and SQLite inside the container. Without it the container runs as `Production`, with the secrets and migration requirements above. Add-on packages go in `/app/packages`. To keep the SQLite database when the container is recreated, mount a volume at `/app/data` and set `ConnectionStrings__Elsa=Data Source=/app/data/elsa-essentials.db`.
