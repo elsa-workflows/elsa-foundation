@@ -70,8 +70,7 @@ public sealed class JsonModuleReflectionTests
             var converters = host.Converters.ToArray();
             var chain = host.TypeInfoResolverChain.ToArray();
             var errors = ClaimErrors(type, resolvers, host);
-            Assert.True(errors.Count == 0, string.Join('
-', errors));
+            Assert.True(errors.Count == 0, string.Join('\n', errors));
             Assert.Equal(converters, host.Converters);
             Assert.Equal(chain, host.TypeInfoResolverChain);
             Assert.Null(host.DictionaryKeyPolicy);
