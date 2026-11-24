@@ -265,6 +265,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
+          "path": "essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Api.Capabilities",
           "path": "essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
@@ -675,6 +680,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Native.Model",
+          "path": "essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
           "path": "essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
         },
@@ -697,6 +707,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Scheduling",
           "path": "essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.WorkflowActor",
+          "path": "essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj"
         },
         {
           "type": "internal",
