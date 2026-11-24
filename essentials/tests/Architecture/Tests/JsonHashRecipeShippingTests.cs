@@ -82,6 +82,8 @@ public sealed class JsonHashRecipeShippingTests(ITestOutputHelper output)
             return new JsonHashReviewRegister.Owner(group.Key, row?.Classification ?? "UNREVIEWED", row?.Reason ?? "Review required.",
                 sources, row?.GoldenEvidence ?? [], JsonHashReviewRegister.Sites(group));
         }).ToArray());
+        var goldens = JsonHashReviewRegister.ReadGoldenEvidence(RepoPaths.RepoRoot, observed.Owners);
+        observed = observed with { GoldenSignature = goldens.Signature };
         File.WriteAllText(Path.Join(evidence, "observed-review.json"), JsonSerializer.Serialize(observed, Elsa.Serialization.Core.JsonBaseline.Options));
         File.WriteAllText(Path.Join(evidence, "union-measurements.json"), JsonSerializer.Serialize(new
         {
@@ -91,6 +93,7 @@ public sealed class JsonHashRecipeShippingTests(ITestOutputHelper output)
         }));
         output.WriteLine("Exhaustive shipping hash review evidence: " + evidence);
         var errors = JsonHashReviewRegister.Validate(graph, reviewed, authorityOwners).ToList();
+        errors.AddRange(JsonHashReviewRegister.ValidateGoldenEvidence(reviewed, goldens));
         if (reviewed.ConsumerSignature != consumers.Signature) errors.Add("Changed consumer producer/DTO/converter/source closure. Review its classification and actual-owner goldens before updating the receipt.");
         if (reviewed.AuthoritySignature != authorityReceipt.Signature) errors.Add("Changed shared JsonHashInput authority. Apply the first-stable hash freeze and explicit migration rule before updating the receipt.");
         foreach (var row in reviewed.Owners)
