@@ -11,8 +11,9 @@ amendment_context: 2026-09-29, decided by Sipke Schoorstra on #2093 and delivere
 # Persistence tooling runs inside the host's closure
 
 Amendment (further entry points), proposed: the worker may reach one further frozen entry point per command group, each
-named, versioned and refused by name when missing (D14). The first case is the Elsa 3 migration CLI, which runs inside
-the Elsa 3 migration image. D10 is unchanged.
+named, versioned and refused by name when missing (D14). Such a group may, by default, reconcile local directory
+feeds into a private, run-scoped install root that it deletes at the end, never a host's shared store and never the
+network (D1, D10). The first case is the Elsa 3 migration CLI, which runs inside the Elsa 3 migration image.
 
 Status: accepted (2026-09-21). Sipke Schoorstra accepted ADR 0076 after the design it records — the
 out-of-process worker, the `[EfModule]` descriptor, and the two-gate activation guard — was
@@ -302,7 +303,7 @@ closure — instead of reimplementing assembly resolution; for a host that carri
 own deps file, it needs nothing extra. The worker never reconciles on its own initiative, because a
 reconcile pass always rewrites `store-state.json` and extracts into the install root — unacceptable for
 a process sharing the host's directories unless the operator asked for it, which is what D10's opt-in
-`--restore` exception covers and nothing else does. It calls `LoadFromStateAsync` at most once per process: the
+`--restore` exception covers, plus D10's second, private exception for a D14 command group. It calls `LoadFromStateAsync` at most once per process: the
 load is irreversible for the process lifetime, which fits the short-lived worker this decision already
 chose but rules out a long-running one. It passes no `TargetFrameworkOverride`, because the worker
 already runs on the host's own runtimeconfig; RID-specific assets follow the worker's own runtime
@@ -693,6 +694,13 @@ frozen `EfToolingHost` contract is untouched. Spec 171 FR-083 to FR-086 specify 
 still rules out is unchanged: an *implicit* restore, triggered by an empty install root or a stale
 state file rather than by the operator.
 
+**A second exception, local and private.** A D14 command group may, by default, reconcile local directory feeds
+(folders of `.nupkg` files baked into an image or named by the user) into a private install root of its own, created
+for the run and deleted at the end, including after a failure. It never reads or writes a host's `store-state.json`
+or install root, and never touches the network. The risk this decision guards against, a shared state rewritten and
+an artifact that depends on feed state when it was produced, does not arise: nothing shared is written, and the
+feeds are local folders the run was given.
+
 Reason: the issue asks the tool to avoid silently falling back to a different provider or migration
 set, and an implicit restore is the same category of surprise applied to packages instead of
 providers — a script generated today should reflect exactly the packages an operator already pinned,
@@ -798,8 +806,9 @@ loading product code into the tool. Each such entry point:
 - lives in the assembly that owns its product code, so the tool and the worker gain no reference to it. In particular
   an entry point that runs Elsa 3 code lives under `extensions/Elsa3/`, which keeps Elsa 3 behind the import boundary
   (Elsa constitution §E2.7);
-- reuses the worker's package loading (D1, D10, D12) unchanged. A group that loads packages the host does not record
-  reads them from folders already on disk, never from a feed.
+- reuses the worker's package loading (D1, D10, D12). A group that loads packages the host does not record reads them
+  from local folders as directory feeds, reconciled into a private run-scoped install root under D10's second
+  exception, never from a network feed.
 
 The first such entry point is `Elsa3.Migration.Tooling.Elsa3MigrationToolingHost`, for the
 `elsa3-migration workflows` group.
