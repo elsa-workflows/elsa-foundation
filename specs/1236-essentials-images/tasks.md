@@ -33,7 +33,10 @@ worktree path on Windows (MSB3030).
   `extensions/Elsa3/tests/JTest/` and the `DependsOn` of each feature; settle the R-7 "to confirm" items; drop every
   candidate without a reason. Write `apps/Elsa.Essentials.Composition/essentials.features.json` in the format of
   [contracts/feature-list.md](contracts/feature-list.md), with `JsonWorkflowReconciliation` and `JsonActivityReconciliation` set as R-4 describes, no
-  secret values and `IsDevelopmentOrDemo: false` on both identity features (R-5).
+  secret values and `IsDevelopmentOrDemo: false` on both identity features (R-5). Bake what the S-15 run sets outside
+  its environment file: checkpoint persistence in `Durable` mode, the HTTP activity base path the Elsa 4 environment's
+  executor URL uses, the seeded admin user name `admin`; and confirm which feature provides the `Variable` expression
+  type.
 - [ ] T005 Add the project references of every listed feature to `Elsa.Essentials.Composition.csproj` and list their
   assemblies in `apps/Elsa.Essentials.Composition/EssentialsFeatureAssemblies.cs`.
 - [ ] T006 Implement `EssentialsFeatureList` (reads `essentials.features.json` first, then every other `*.features.json` in the composition folder in ordinal file-name order, R-12) and
@@ -88,9 +91,7 @@ publishes `/app/migrated/workflows`.
   locally packed Liquid feature package for scenario 2 with a definition that uses a Liquid expression, a changed baked
   setting for scenario 3 (`PublishOnReconcile: false`, checking `hello.json` is imported but not published, FR-009), a missing package, a missing secret, no `migrated/` mount, a mounted `migrated/` without an
   activities file, and for scenario 7 a composite in `activities.json` used by a workflow), plus the import-failure
-  edge case (a malformed file next to `hello.json`: the pass fails and the log names the file), and the order case: a
-  definition using a reusable workflow in a file that sorts after it (S-15's `composition-workflow-as-activity-root`
-  and `-sub`). If the root is not published, record the order rule in FR-010 and the hand-over note for the CLI spec; record each
+  edge case (a malformed file next to `hello.json`: the pass fails and the log names the file); record each
   result in the PR evidence.
 
 **Checkpoint**: the engine image runs a user's workflow with only a settings file (SC-002 for the engine).
@@ -148,17 +149,17 @@ publishes `/app/migrated/workflows`.
   configuration through `Elsa.Essentials.Composition` alone, with no reference to `Elsa.Essentials.Server` (scenario 3);
   confirm the T011 guard fails naming a feature when one is removed from `EssentialsFeatureAssemblies` (scenario 2).
 - [ ] T029 [US4] Leave a hand-over note for the migration CLI specification in the PR: the library name and path, the
-  two entry points and the `migrated/` layout rule (R-4).
+  three public members, that it is not packed and must be shared in the migration tooling's Nuplane setup (R-12), and
+  the `migrated/` layout (R-4, FR-010, FR-025).
 
-- [ ] T030 [US4] Make the engine read its baked composition from `/app/composition/` (`essentials.features.json` first,
-  then the other `*.features.json` in ordinal order) and register `/app/composition/packages` as a second Nuplane directory feed (R-12): in
-  `apps/Elsa.Essentials.Server/Program.cs`, and in the Dockerfile (copy `essentials.features.json` there, create
-  `packages/`). Add a test in `essentials/tests/Essentials/Tests/` that a second list file in the folder adds
-  a feature and merges key by key over an essentials entry.
-- [ ] T031 [US4] Write `essentials/tests/Essentials/DerivedImage/Dockerfile` (`FROM` the local engine image,
-  adds `liquid.features.json` and the locally packed Liquid package) and its README; build and start it with a
-  definition that uses a Liquid expression and record the result in the PR evidence (SC-007, scenario 4). Document the
-  extension paths in `docs/docker.md` (T033).
+- [ ] T030 [US4] In the Dockerfile, copy `essentials.features.json` to `/app/composition/`; make
+  `apps/Elsa.Essentials.Server/Program.cs` read it from there through `EssentialsFeatureList.Read`. Add a test in
+  `essentials/tests/Essentials/Tests/` that a second list file in the folder adds a feature and merges key by key over
+  an essentials entry, and that the essentials list is read first whatever the other file is called (scenario 4).
+- [ ] T031 [US4] Check the built image against the base-image layout in
+  [contracts/engine-image.md](contracts/engine-image.md) (list path, library and feature assemblies in `/app`, the
+  entry point replaced with `docker run --entrypoint`) and record it in the PR evidence (SC-007). Document the layout in
+  `docs/docker.md` (T033).
 
 ## Phase 7: Polish
 

@@ -39,10 +39,12 @@ index 0.
 | Path | Owner | Purpose |
 |---|---|---|
 | `/app/composition/essentials.features.json` | engine image | The essentials list. A derived image does not change it. |
-| `/app/composition/<name>.features.json` | derived image | Its added baked features. The essentials list is read first, then the other files in ordinal file-name order. |
-| `/app/composition/packages/` | derived image | Packages of its added features, loaded by Nuplane like `/app/packages`. |
+| `/app/composition/<name>.features.json` | derived image | Its added list, read by the composition library after the essentials list, in ordinal file-name order. |
+| `/app/Elsa.Essentials.Composition.dll` and the listed features' assemblies | engine image | What a derived tool composes from. |
+| Entry point `dotnet Elsa.Essentials.Server.dll` | engine image | A derived image replaces it. |
 
-A derived image uses the same version tag as its base. Users configure it exactly as the engine.
+A derived image uses the same version tag as its base. The engine host does not load lists or packages a derived
+image adds (R-12).
 
 ## `elsaworkflows/elsa-studio-essentials`
 

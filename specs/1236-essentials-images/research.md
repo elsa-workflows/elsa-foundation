@@ -102,7 +102,7 @@ acceptance set and templates from the merged S-15 or the then-current head).
 Derived from the S-15 acceptance definitions (activity types used: Flowchart, FlowDecision, FlowFork, FlowJoin,
 FlowSwitch, If, Switch, For, ForEach, ParallelForEach, While, WriteLine, SetVariable, SetOutput, SetName, Correlate,
 RunJavaScript, HttpEndpoint, WriteHttpResponse, DispatchWorkflow, BulkDispatchWorkflows, ExecuteWorkflow, PublishEvent,
-Event, Complete, one reusable workflow used as an activity; expressions Literal, JavaScript and Object, no Liquid),
+Event, Complete, one reusable workflow used as an activity; expressions Literal, JavaScript, Object and Variable, no Liquid),
 the S-15 Elsa 4 templates (identity login and token, `runtime/workflows/executables`, instances page and detail,
 activity executions, `runtime/workflows/diagnostics/settings`), the S-15 run configuration (checkpoint persistence in
 `Durable` mode) and the essentials Studio's backend needs. Names are CShells feature names (most as in the Workbench's `shells.json`; `JsonWorkflowReconciliation` is in its catalog but
@@ -110,7 +110,7 @@ not enabled there).
 
 | Group | Candidates | Reason |
 |---|---|---|
-| Host infrastructure | Primitives, Serialization, Mediator, Events, MemoryCache, Tasks, FileSystemDistributedLocking, ApiCapabilities | required by the features below (reconciliation is a single-node task and needs a lock provider) |
+| Host infrastructure | Primitives, Serialization, Mediator, Events, MemoryCache, Tasks, FileSystemDistributedLocking, ApiCapabilities | required by the features below (`Tasks` resolves `IDistributedLockProvider` in `TaskExecutor`, so a lock provider must be composed) |
 | Identity | FoundationIdentityAbstractions, FoundationIdentityApi, FoundationIdentityAspNetCoreIdentity, FoundationIdentityAspNetCoreIdentityEntityFrameworkCore, FoundationIdentityOpenIddict, IdentityIamEntityFrameworkCore | `elsa-authenticate` template (login, token); Studio sign-in |
 | Expressions | Expressions, ExpressionsApi, JavaScriptExpressions, JavaScriptJintEngine, JavaScriptActivities, JavaScriptWorkflowsDesign, JavaScriptEndpoints | JavaScript expressions and `RunJavaScript`; the designer's expression editor |
 | HTTP | Http, HttpJavaScript, ActivitiesHttp, WorkflowsRuntimeHttp | six HTTP suites; `HttpEndpoint`, `WriteHttpResponse` |
@@ -178,19 +178,22 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
 
 ## R-12 Base image for derived images
 
-- **Decision**: the engine reads its baked composition from a folder, `/app/composition/`: `essentials.features.json`
-  first, then every other `*.features.json` in ordinal file-name order (the essentials image holds only the first), and registers
-  `/app/composition/packages` as a second Nuplane directory feed next to the user's `/app/packages`. An image built
-  `FROM` the engine adds a list file (for example `elsa3.features.json`) and its packages there. Its features are baked
-  like the essentials ones; the user's `appsettings.json` applies over both.
-- **Rationale**: the Elsa 3 migration image is built `FROM` the engine at the same version (Joey on PR #5669, spec Q7)
-  and must add the converter and import features without copying the essentials list. Packages are the extension
-  path the engine already has for user features, so a derived image needs no rebuilt host. Keeping baked packages out
-  of `/app/packages` means a user's mount there cannot hide them.
-- **Proof**: a test Dockerfile, `essentials/tests/Essentials/DerivedImage/Dockerfile`, builds `FROM` the
-  local engine image, adds a list naming the Liquid feature and the locally packed Liquid package, and starts; a
-  Liquid expression in a definition in the workflows folder then evaluates (SC-007). It is a manual check recorded in
-  the PR evidence, not a CI job.
+- **Decision**: the image places the essentials list at `/app/composition/essentials.features.json`, and the engine
+  host reads it from there through `EssentialsFeatureList.Read`, which reads `essentials.features.json` first and then
+  every other `*.features.json` in the folder in ordinal order. A derived image adds its own list file there. The
+  library, `Elsa.Essentials.Composition.dll`, and every listed feature's assemblies are in `/app`; the entry point is
+  the default `dotnet Elsa.Essentials.Server.dll`, which a derived image replaces.
+- **Rationale**: the Elsa 3 migration image is built `FROM` the engine at the same version (Joey on PR #5669, spec Q7).
+  It starts no web host: its worker composes the lists and reconciles its own packages (spec 1237). So it needs the
+  list, the merge and the assemblies at known paths, not an engine host that loads extra lists and packages. That
+  engine-side extension is not built until an image that runs the engine with additions exists.
+- **Library packaging**: `Elsa.Essentials.Composition` is not packed. It ships only in `/app` of the engine image.
+  Code that loads it through Nuplane in a derived image (the migration tooling) declares it a shared assembly in its own
+  Nuplane setup; the migration CLI specification owns that. Its public surface is the three members in
+  [contracts/feature-list.md](contracts/feature-list.md); everything else is internal, and its tests use only that
+  surface, so no `InternalsVisibleTo` grant is needed.
+- **Proof**: a library test merges a second list file over the essentials list (T030), and T031 checks the image layout.
 - **Alternatives**: the derived image rebuilds its own host from source with extra project references (it then ships a
-  second engine binary and the "same composition" promise rests on two builds staying in step); environment variables
-  in the derived Dockerfile (settings only, cannot add assemblies).
+  second engine binary and the "same composition" promise rests on two builds staying in step); an engine host that
+  also loads derived lists and a second package feed (no image needs it; the Nuplane shared-assembly list would have to
+  admit the derived packages' EF dependencies).

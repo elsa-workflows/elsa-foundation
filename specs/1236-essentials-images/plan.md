@@ -51,7 +51,7 @@ Workbench unchanged (FR-017); no JTest CI tier (FR-023).
 | §2.20 EF Core admission | PASS | The library references EF feature projects only through project references; it resolves no EF package itself. If the guard counts transitive resolution, the library is admitted like the Workbench. |
 | §2.23 risk-based tests | PASS | Tests cover drift, Elsa 3 leakage, merge order and secret refusal (R-6). |
 | §2.22 feature documentation | PASS | No feature or extension point; `docs/docker.md` gains an essentials section. |
-| ADR 0080 (internal by default, plain names) | PASS | Library types are internal except the two entry points the hosts and CLI call. |
+| ADR 0080 (internal by default, plain names) | PASS | Library types are internal except the three public members of the feature-list contract; the library is not packed (R-12). |
 | Accepted initiative ADRs | PASS | No ADR point is applied or changed. |
 | Studio work in this repository | PASS | The Studio app and its UX acceptance are tasks here (FR-012–FR-014). |
 | xunit only | PASS | No other framework. |

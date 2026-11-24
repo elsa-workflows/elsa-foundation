@@ -124,8 +124,8 @@ the same version. Its promise, that a clean assessment means the workflows run o
 start from the same composition.
 
 **Independent Test**: Add a feature to the list and see the engine host compose it; remove a feature from the engine
-host's references and see the guard test name it; build a test image `FROM` the engine that adds one baked feature
-and see it composed next to the essentials list.
+host's references and see the guard test name it; read the essentials list plus a second list file through the composition library and see both
+merged.
 
 **Acceptance Scenarios**:
 
@@ -134,9 +134,9 @@ and see it composed next to the essentials list.
 2. **Given** a feature in the list that the engine host cannot resolve, **When** the guard test runs, **Then** it fails
    and names the feature.
 3. **Given** the list, **When** a separate tool reads it, **Then** it can do so without referencing the engine host.
-4. **Given** an image built `FROM` the engine that adds a baked feature list and that feature's package, **When** it
-   starts, **Then** it composes the essentials list plus the added features, and the user's `appsettings.json` still
-   applies over both.
+4. **Given** the engine image's composition folder with a second list file added next to the essentials list, **When**
+   the composition library reads the folder and merges the settings, **Then** it returns the essentials features plus
+   the added ones, and the user's `appsettings.json` still applies over both.
 
 ### Edge Cases
 
@@ -200,17 +200,17 @@ activities file).
   the image and is empty by default, and MUST publish what it imports by default. A user MAY turn publishing off in
   `appsettings.json`.
 - **FR-010**: The workflows folder MUST be read as a flat folder of files in the JSON workflow reconciliation format.
-  This is the format and layout the migration CLI writes to `migrated/workflows/`. Files are read in ordinal file-name order;
-  if a definition that uses a reusable workflow cannot be published before that reusable is, the CLI names its files so
-  that reusables sort first, and this order rule is part of the `migrated/` interface.
+  This is the format and layout the migration CLI writes to `migrated/workflows/`. Reusables do not go here;
+  they are composite activities in the activities file (FR-025), so the order of workflow files does not matter.
 - **FR-025**: The engine MUST compose JSON activity reconciliation, reading the activities file in the JSON activity
   reconciliation format, so the reusables the CLI converts to composite activities load at startup. The image MUST ship
   an empty activities file, so an engine without a mounted `migrated/` starts. A mounted `migrated/` MUST hold the
   file (the CLI writes it, empty when there are no reusables). Loading a source-owned composite that depends on other
   activities needs the engine fix for source-owned composites with dependencies, a separate issue this specification
   depends on and does not deliver.
-- **FR-011**: The engine MUST store its data in SQLite under a data folder meant for a volume by default. The other
-  storage providers the persistence layer already supports MUST remain selectable through settings.
+- **FR-011**: The engine MUST store its data in SQLite under a data folder meant for a volume by default. This
+  specification does not change which other storage providers the persistence layer supports; the documentation names
+  the settings that select one.
 
 **Studio**
 
@@ -238,11 +238,13 @@ activities file).
 - **FR-018**: The feature list MUST be machine-readable and readable, together with the settings merge, by the
   migration CLI inside the migration image without referencing the engine host. A guard test MUST fail, naming the feature, when the engine host cannot resolve a listed feature or composes
   one that is not listed.
-- **FR-024**: The engine image MUST be usable as a base image. An image built `FROM` it MUST be able to add features
-  to the baked composition by adding its own feature list and those features' packages at documented paths, without
-  changing or copying the essentials list. The added features stay baked: the user's `appsettings.json` applies over
-  them as over the essentials list. The Elsa 3 migration image, which belongs to the migration CLI's specification,
-  is the first such image; this specification delivers only the extension point and a test image that proves it.
+- **FR-024**: The engine image MUST be usable as a base image. Its layout MUST be documented and stable within a
+  version: the essentials list at `/app/composition/essentials.features.json`, the composition library and every
+  listed feature's assemblies in `/app`, an entry point a derived image can replace. An image built `FROM` it adds its
+  own baked list file next to the essentials list, without changing or copying it, and reads both through the
+  composition library (FR-006, FR-018). The Elsa 3 migration image, which starts no web host and belongs to the
+  migration CLI's specification, is the only such image; the engine host itself does not load packages or lists a
+  derived image adds, because nothing needs that yet.
 
 **Acceptance**
 
@@ -294,8 +296,8 @@ activities file).
 - **SC-005**: Drift between the list and the engine host fails a test that names the feature.
 - **SC-006**: The essentials Studio journey passes the Studio UX acceptance, and its navigation shows no module the
   engine does not compose.
-- **SC-007**: An image built `FROM` the engine adds a baked feature with one list file and one package, and composes
-  it next to every essentials feature, with zero edits to the essentials list.
+- **SC-007**: A second list file next to the essentials list is merged by the composition library with zero edits to
+  the essentials list, and the published engine image holds the documented base-image layout.
 
 ## Dependencies and boundaries
 
