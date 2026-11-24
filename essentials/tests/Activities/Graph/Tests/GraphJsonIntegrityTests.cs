@@ -54,7 +54,7 @@ public sealed partial class GraphActivityProviderTests
         {
             ScopedVariables = new Dictionary<string, IReadOnlyCollection<VariableDefinition>>
             {
-                ["graph-root"] = [new("local", "Local", new("Object"), null, new ArgumentValue(ParseJson(CarriedGraphJson), "Literal"))]
+                ["graph-root"] = [new("local", "Local", new("Any"), null, new ArgumentValue(ParseJson(CarriedGraphJson), "Literal"))]
             }
         };
         var provider = new GraphActivityProvider(structures,
@@ -115,13 +115,13 @@ public sealed partial class GraphActivityProviderTests
     private static ActivityProviderManifest RawGraphManifest(string schema, string structure = "null") => new(
         GraphActivityProvider.Key, schema, ParseJson($$$"""
         {"rootActivity":{"nodeId":"graph-root","activityVersionId":"activity-ver-root","inputs":[{"referenceKey":"payload","value":{"expressionType":"Literal","value":{{{CarriedGraphJson}}}}}],"outputs":[],"structure":{{{structure}}}},
-         "variables":[{"referenceKey":"state","name":"State","type":{"alias":"Object","collectionKind":"Single"},"storageDriverKey":"elsa.json","initialValue":{"syntax":"Literal","value":{{{CarriedGraphJson}}}}}],
+         "variables":[{"referenceKey":"state","name":"State","type":{"alias":"Any","collectionKind":"Single"},"storageDriverKey":"elsa.json","initialValue":{"syntax":"Literal","value":{{{CarriedGraphJson}}}}}],
          "outputMappings":[{"outputReferenceKey":"result","source":{"syntax":"Literal","value":{{{CarriedGraphJson}}}}}]{{{(schema == "2" ? ",\"outcomeMappings\":[{\"sourceOutcomeReferenceKey\":\"done\",\"boundaryOutcomeReferenceKey\":\"done\"}]" : "")}}}}
         """));
 
     private static DesignActivityContract RawGraphContract() => new("1",
-        [new("payload", "Payload", new("Object"), false, true, new("Literal", ParseJson(CarriedGraphJson)), "elsa.json")],
-        [new("result", "Result", new("Object"), true, true, "elsa.json")], [new("done", "Done", true)]);
+        [new("payload", "Payload", new("Any"), false, true, new("Literal", ParseJson(CarriedGraphJson)), "elsa.json")],
+        [new("result", "Result", new("Any"), true, true, "elsa.json")], [new("done", "Done", true)]);
 
     private static void AssertRawGraphManifest(JsonElement payload)
     {
@@ -132,7 +132,7 @@ public sealed partial class GraphActivityProviderTests
 
     private static RuntimeVariableDeclaration RawGraphDeclaration()
     {
-        var type = new ValueTypeDescriptor("Object");
+        var type = new ValueTypeDescriptor("Any");
         var policy = ValueProtectionPolicy.InstanceInline;
         return new("local", "Local", type, policy, new("local", type, policy, RuntimeInputBindingSource.Literal,
             literal: ValueEnvelope.Inline(type, ParseJson(CarriedGraphJson), policy)));
@@ -141,7 +141,7 @@ public sealed partial class GraphActivityProviderTests
     private sealed class RawGraphCapabilityCatalog : IActivityContractCapabilityCatalog
     {
         public IReadOnlyCollection<ActivityContractTypeCapability> Types { get; } =
-            [new("Object", "Object", "Test", "Test", Enum.GetValues<CollectionKind>().ToHashSet(), true, true, new HashSet<string> { "elsa.json" })];
+            [new("Any", "Any", "Test", "Test", Enum.GetValues<CollectionKind>().ToHashSet(), true, true, new HashSet<string> { "elsa.json" })];
     }
 
     private sealed class RawGraphVariableCompiler(JsonElement variables) : IActivityTemplateInputBindingCompiler
