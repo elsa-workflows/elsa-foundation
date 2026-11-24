@@ -113,6 +113,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly HashSet<CancellationTokenSource> _enteredJobs = [];
     private TaskCompletionSource? _jobsDrained;
     private long _jobEntryEpoch; // A scheduler callback submitted before shutdown cannot enter after a host restart.
+    private TaskCompletionSource? _drainBeat; // set while the node's job drain keeps ownership: a heartbeat answer wakes it
     private readonly HashSet<Delivery> _schedulerRetries = [];
     private readonly ConcurrentQueue<(long Generation, Message Creator)> _inlineStarts = new();
     private int _jobsDeferredByCancellation;
@@ -658,6 +659,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </para>
     /// </summary>
     public void HeartbeatAnswered(HeartbeatSent sent, NodeBeat answer, Func<int, bool>? sibling = null)
+    {
+        try { Answer(sent, answer, sibling); }
+        finally { Volatile.Read(ref _drainBeat)?.TrySetResult(); }     // a job drain judges the answer and passes again
+    }
+
+    private void Answer(HeartbeatSent sent, NodeBeat answer, Func<int, bool>? sibling)
     {
         lock (_turnSync)
         {
@@ -2363,7 +2370,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     // ---- background jobs -------------------------------------------------------------------------------------------
 
-    internal async Task DrainJobsAsync()
+    /// <summary>
+    /// Close job entry, cancel the entered jobs and wait for them to exit. With <paramref name="keepOwnership"/> (the node's
+    /// Worker) the wait counts as this Worker's pass, as the actor-turn drain does: each heartbeat answer is judged, the
+    /// fence must stay usable, and the pass gate stays open so the node lease keeps renewing until the jobs have exited or
+    /// <paramref name="cancellationToken"/> (the stop deadline) ends the wait.
+    /// </summary>
+    internal async Task DrainJobsAsync(bool keepOwnership = false, CancellationToken cancellationToken = default)
     {
         CancellationTokenSource[] entered;
         Task exited;
@@ -2379,7 +2392,27 @@ public sealed class Worker : IScopeActivation, ITurnServices
             exited = _jobsDrained.Task;
         }
         // Use asynchronous cancellation so cleanup callbacks cannot hold up admission closure or a kill deadline.
-        await Task.WhenAll(entered.Select(CancelAsync).Append(exited));
+        var ended = Task.WhenAll(entered.Select(CancelAsync).Append(exited));
+        if (keepOwnership && Owns)
+        {
+            var generation = _generation;
+            try
+            {
+                while (!ended.IsCompleted)
+                {
+                    var beat = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    Volatile.Write(ref _drainBeat, beat);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (Volatile.Read(ref _answered) is not null) await AnsweredAsync(cancellationToken);
+                    if (_generation != generation || !LeaseUsable())
+                        throw new InvalidOperationException("Ownership was lost while draining entered jobs during shutdown.");
+                    Volatile.Write(ref _lastPass, _options.Monotonic());
+                    await Task.WhenAny(ended, beat.Task, Task.Delay(_options.Lease / 3, cancellationToken));
+                }
+            }
+            finally { Volatile.Write(ref _drainBeat, null); }
+        }
+        await ended;
 
         static async Task CancelAsync(CancellationTokenSource source)
         {

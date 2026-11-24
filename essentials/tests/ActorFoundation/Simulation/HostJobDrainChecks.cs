@@ -25,6 +25,8 @@ internal static class HostJobDrainChecks
         await BeforeEntryAsync();
         await AbruptAsync(duringStop: false);
         await AbruptAsync(duringStop: true);
+        await LongDrainRenewsAsync(deadline: false);
+        await LongDrainRenewsAsync(deadline: true);
         return 0;
     }
 
@@ -558,6 +560,88 @@ internal static class HostJobDrainChecks
         }
     }
 
+    // The drain of an entered job can outlast the node lease. The test clock moves past one lease plus a margin while the
+    // job runs: a graceful stop keeps renewing the node lease, so a sibling cannot take over, and releases after the
+    // job exits at the same epoch. Once the stop deadline passes nothing renews, and the fence runs out by its lease.
+    private static async Task LongDrainRenewsAsync(bool deadline)
+    {
+        var fixture = new Fixture(manualClock: true);
+        var type = new JobProbe();
+        var lease = fixture.Options.Lease;
+        var step = TimeSpan.FromSeconds(1);
+        var margin = TimeSpan.FromSeconds(2);
+        long? releasedEpoch = null;
+        var exitedBeforeRelease = false;
+        var store = new CountingStore(fixture.Store, static () => { }, beforeRelease: () =>
+        {
+            exitedBeforeRelease = type.Exited.Task.IsCompleted;
+            releasedEpoch ??= fixture.Fence.Epoch;
+        });
+        await using var node = fixture.Node("long-drain");
+        await node.StartAsync(fixture.Host(node, type, store, ownedSet: true));
+        var actor = await fixture.StartActorAsync(node);
+        await type.Entered.Task.WaitAsync(Timeout);
+        var before = fixture.Checkpoint(actor);
+        var epoch = fixture.Fence.Epoch;
+        using var limit = new CancellationTokenSource();
+        var stop = node.StopAsync(limit.Token).AsTask();
+        try
+        {
+            await type.Canceled.Task.WaitAsync(Timeout);
+            async Task<bool> AdvanceAsync(TimeSpan span, bool renews)
+            {
+                var every = true;
+                for (var moved = TimeSpan.Zero; moved < span; moved += step)
+                {
+                    var renewed = node.Heartbeats.Renewed;
+                    fixture.Advance(step);
+                    if (renews) every &= await RenewedAsync(node, renewed);
+                }
+                return every;
+            }
+            if (!deadline)
+            {
+                var renewedThroughDrain = await AdvanceAsync(lease + margin, renews: true);
+                var sibling = await fixture.Store.TakeAsync(0, "sibling", lease);
+                Console.WriteLine($"  long drain: renewed every step {renewedThroughDrain}, sibling took epoch {sibling?.Epoch.ToString() ?? "none"}, " +
+                    $"owner {fixture.Fence.Owner ?? "none"} at epoch {fixture.Fence.Epoch} (entered at {epoch}), renewals {node.Heartbeats.Renewed}");
+                Check(renewedThroughDrain && sibling is null && fixture.Fence.Owner == node.Node && fixture.Fence.Epoch == epoch &&
+                    !type.Exited.Task.IsCompleted && !stop.IsCompleted,
+                    "a graceful stop renews the node lease while an entered job drains past one lease, and no sibling can take over");
+                type.Finish.TrySetResult();
+                await stop.WaitAsync(Timeout);
+                Check(exitedBeforeRelease && releasedEpoch == epoch && fixture.Fence.Owner is null && fixture.Fence.Epoch == epoch &&
+                    fixture.Checkpoint(actor) == before,
+                    "the long-drained job exits before release, and the release happens at the original epoch");
+            }
+            else
+            {
+                var renewedBeforeDeadline = await AdvanceAsync(TimeSpan.FromSeconds(3), renews: true);
+                limit.Cancel();
+                await stop.WaitAsync(Timeout);
+                var beats = node.Heartbeats.Renewed;
+                await AdvanceAsync(lease + margin, renews: false);
+                await Task.Delay(TimeSpan.FromMilliseconds(300));
+                var sibling = await fixture.Store.TakeAsync(0, "sibling", lease);
+                Check(renewedBeforeDeadline && node.Heartbeats.Renewed == beats && sibling is { } taken && taken.Epoch == epoch + 1 &&
+                    releasedEpoch is null && !type.Exited.Task.IsCompleted,
+                    "after the stop deadline nothing renews, and the fence runs out by its lease to a sibling");
+            }
+        }
+        finally
+        {
+            type.Finish.TrySetResult();
+            await type.Exited.Task.WaitAsync(Timeout);
+        }
+    }
+
+    private static async Task<bool> RenewedAsync(RuntimeNode node, long renewed)
+    {
+        var elapsed = Stopwatch.StartNew();
+        while (node.Heartbeats.Renewed <= renewed && elapsed.Elapsed < TimeSpan.FromSeconds(2)) await Task.Delay(5);
+        return node.Heartbeats.Renewed > renewed;
+    }
+
     private static (Message Message, long Seq, long Seen, long Trial, int Attempts, bool Done) TicketImage(InMemoryStore.MessageRow ticket) =>
         (ticket.Message, ticket.Seq, ticket.Seen, ticket.Trial, ticket.Attempts, ticket.Done);
 
@@ -584,16 +668,23 @@ internal static class HostJobDrainChecks
     private sealed class Fixture
     {
         private readonly Stopwatch _clock = Stopwatch.StartNew();
+        private readonly bool _manual;
+        private long _manualNow;
         internal InMemoryStore Store { get; }
         internal WorkerOptions Options { get; }
         internal InMemoryStore.PartitionRow Fence => Store.Partitions[0];
 
-        internal Fixture(int partitions = 1)
+        internal Fixture(int partitions = 1, bool manualClock = false)
         {
-            Store = new(partitions, () => 1_701_000_000_000 + _clock.ElapsedMilliseconds);
-            Options = new() { Partitions = partitions, Lease = Timeout, Monotonic = () => _clock.ElapsedMilliseconds,
+            _manual = manualClock;
+            Store = new(partitions, () => 1_701_000_000_000 + Elapsed);
+            Options = new() { Partitions = partitions, Lease = Timeout, Monotonic = () => Elapsed,
                 JobScheduler = TaskScheduler.Default };
         }
+
+        // The test clock: the store's and the Workers' time, moved only by Advance when manual.
+        private long Elapsed => _manual ? Interlocked.Read(ref _manualNow) : _clock.ElapsedMilliseconds;
+        internal void Advance(TimeSpan span) => Interlocked.Add(ref _manualNow, (long)span.TotalMilliseconds);
 
         internal RuntimeNode Node(string name) => new(name, Store, 1, new LoopOptions
         {

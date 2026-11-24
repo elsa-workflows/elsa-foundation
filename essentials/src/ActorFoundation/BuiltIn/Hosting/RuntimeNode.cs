@@ -211,8 +211,9 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     {
         _gone = true;
         _exit.Cancel();
-        if (_beforeRelease is null) _heartbeatsExit.Cancel();
 
+        // The node lease keeps renewing through both drains: the entered actor turns here, then the host's entered jobs
+        // inside the runtime's stop. Heartbeats end just before the first release, or at the deadline (the kill token).
         Exception? drainError = null;
         try
         {
@@ -223,21 +224,23 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
                 catch (Exception error) { drainError = error; }
             }
-        }
-        finally
-        {
-            _heartbeatsExit.Cancel();
-            if (_heartbeats is not null) await _heartbeats;
-        }
 
-        // A kill during shutdown leaves remaining ownership to expire instead of returning it as clean.
-        if (!_kill.IsCancellationRequested)
-        {
-            try { await OnNode(() => _runtime.StopAsync(_kill.Token).AsTask()).WaitAsync(_kill.Token); }
-            catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
-            catch (Exception releaseError) when (drainError is not null) { throw new AggregateException(drainError, releaseError); }
+            // A kill during shutdown leaves remaining ownership to expire instead of returning it as clean.
+            if (!_kill.IsCancellationRequested)
+            {
+                try { await OnNode(() => _runtime.StopAsync(_kill.Token, StopHeartbeatsAsync).AsTask()).WaitAsync(_kill.Token); }
+                catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
+                catch (Exception releaseError) when (drainError is not null) { throw new AggregateException(drainError, releaseError); }
+            }
         }
+        finally { await StopHeartbeatsAsync(); }
         if (drainError is not null) ExceptionDispatchInfo.Throw(drainError);
+    }
+
+    private async Task StopHeartbeatsAsync()
+    {
+        _heartbeatsExit.Cancel();
+        if (_heartbeats is not null) await _heartbeats;
     }
 
     /// <summary>Run on the node's scheduler, one task at a time with the loop and what it started.</summary>

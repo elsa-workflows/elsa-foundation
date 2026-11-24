@@ -103,7 +103,13 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     }
 
     /// <summary>End this run once. Concurrent callers share the shutdown and a new start waits for it to finish.</summary>
-    public ValueTask StopAsync(CancellationToken cancellationToken = default)
+    public ValueTask StopAsync(CancellationToken cancellationToken = default) => StopAsync(cancellationToken, beforeRelease: null);
+
+    /// <summary>
+    /// As <see cref="StopAsync(CancellationToken)"/>; the run that starts the shutdown calls <paramref name="beforeRelease"/>
+    /// after the host's off-turn work has ended and before the first scope is given up. Its host stops renewing there.
+    /// </summary>
+    public ValueTask StopAsync(CancellationToken cancellationToken, Func<Task>? beforeRelease)
     {
         if (cancellationToken.IsCancellationRequested) return default;
         IScopeHostRun? hostRun;
@@ -120,7 +126,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             _stopping = stopped.Task;
             _stopJoined = joined.Task;
         }
-        _ = StopRunAsync(hostRun, stopped, joined, cancellationToken);
+        _ = StopRunAsync(hostRun, beforeRelease, stopped, joined, cancellationToken);
         return AwaitOwnStopAsync(stopped.Task, cancellationToken);
     }
 
@@ -137,8 +143,8 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
     }
 
-    private async Task StopRunAsync(IScopeHostRun? hostRun, TaskCompletionSource stopped, TaskCompletionSource joined,
-        CancellationToken cancellationToken)
+    private async Task StopRunAsync(IScopeHostRun? hostRun, Func<Task>? beforeRelease, TaskCompletionSource stopped,
+        TaskCompletionSource joined, CancellationToken cancellationToken)
     {
         // The first caller sets the stop deadline. Other callers can give up their own wait.
         // What is not given up yet runs out by its lease, as after a crash.
@@ -150,6 +156,11 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             if (hostRun is not null)
             {
                 operation = hostRun.PrepareToStopAsync(cancellationToken).AsTask();
+                await operation.WaitAsync(cancellationToken);
+            }
+            if (beforeRelease is not null)
+            {
+                operation = beforeRelease();
                 await operation.WaitAsync(cancellationToken);
             }
             // The clocked host joins its loops before stopping. Retain the scalar path when a caller stops with work in flight.

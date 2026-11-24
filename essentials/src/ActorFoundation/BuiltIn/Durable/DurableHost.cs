@@ -155,7 +155,9 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
                     throw new InvalidOperationException("Only the attached runtime can prepare this durable host for shutdown.");
                 host._stopping = true;
             }
-            await Task.WhenAll(host.Workers.Select(worker => worker.DrainJobsAsync())).WaitAsync(cancellationToken);
+            // The node's Worker keeps its ownership live while it waits; the runtime's host stops renewing only after this.
+            await Task.WhenAll(host.Workers.Select(worker => worker.DrainJobsAsync(worker == host._node, cancellationToken)))
+                .WaitAsync(cancellationToken);
         }
 
         public void Stopped()
