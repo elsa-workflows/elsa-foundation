@@ -430,6 +430,65 @@ public sealed class JsonBaselineArchitectureTests
         Assert.Empty(JsonBaselineSourceScan.Scan(source));
     }
 
+    [Theory]
+    [InlineData("void M() { JsonSerializerOptions profile = new(JsonBaseline.Options); profile = null; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = JsonBaseline.Options; profile = null; var alias = profile; profile = JsonBaseline.Options; JsonSerializer.Serialize(1, alias); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = null; var alias = profile; var final = alias; JsonSerializer.Serialize(1, final); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions profile = JsonBaseline.Options; if (flag) profile = null; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions profile = flag ? JsonBaseline.Options : null; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions profile = JsonBaseline.Options; Action reset = () => profile = null; reset(); if (flag) profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions profile = JsonBaseline.Options; void Reset() { if (flag) profile = null; } Reset(); JsonSerializer.Serialize(1, profile); }")]
+    public void Nullable_disabled_code_still_refuses_reaching_null_profiles(string member)
+    {
+        var source = "#nullable disable\n" + TargetTypedSource("class C { " + member + " }");
+        _ = FixtureCompiler.Compile("DisabledNullProfileFlowControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
+        Assert.Equal("optionless", Assert.Single(JsonBaselineSourceScan.Scan(source)).Setting);
+    }
+
+    [Theory]
+    [InlineData("void M() { JsonSerializerOptions profile = null; profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = null; var alias = profile; alias = JsonBaseline.Options; JsonSerializer.Serialize(1, alias); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = JsonBaseline.Options; var alias = profile; profile = null; JsonSerializer.Serialize(1, alias); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = JsonBaseline.Options; if (false) profile = null; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = JsonBaseline.Options; Action reset = () => profile = null; if (false) reset(); JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = JsonBaseline.Options; Action reset = () => { if (false) profile = null; }; reset(); JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = JsonBaseline.Options; Action reset = () => profile = null; reset(); profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions profile = null; if (flag) profile = JsonBaseline.Options; else profile = JsonBaseline.CreateCopy(); JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("JsonSerializerOptions profile; void M() { JsonSerializerOptions profile = JsonBaseline.Options; this.profile = null; JsonSerializer.Serialize(1, profile); }")]
+    public void Nullable_disabled_code_keeps_nonnull_aliases_and_CFG_cuts(string member)
+    {
+        var source = "#nullable disable\n" + TargetTypedSource("class C { " + member + " }");
+        _ = FixtureCompiler.Compile("DisabledNonnullProfileFlowControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
+        Assert.Empty(JsonBaselineSourceScan.Scan(source));
+    }
+
+    [Theory]
+    [InlineData("disable")]
+    [InlineData("disable annotations")]
+    [InlineData("disable warnings")]
+    public void Nullable_directive_modes_cannot_disable_the_JSON_profile_guard(string mode)
+    {
+        var source = "#nullable " + mode + "\n" + TargetTypedSource("class C { void M() { JsonSerializerOptions profile = JsonBaseline.Options; profile = null; JsonSerializer.Serialize(1, profile); } }");
+        _ = FixtureCompiler.Compile("NullableDirectiveProfileFlowControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
+        Assert.Equal("optionless", Assert.Single(JsonBaselineSourceScan.Scan(source)).Setting);
+    }
+
+    [Fact]
+    public void A_disabled_compiler_flow_state_does_not_prove_an_assigned_null_profile_safe()
+    {
+        var source = "#nullable disable\n" + TargetTypedSource("class C { void M() { JsonSerializerOptions profile = new(JsonBaseline.Options); profile = null; JsonSerializer.Serialize(1, profile); } }");
+        _ = FixtureCompiler.Compile("DisabledRawCompilerFlowControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
+        var tree = CSharpSyntaxTree.ParseText(source);
+        var paths = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Append(typeof(Elsa.Serialization.Core.JsonBaseline).Assembly.Location).Distinct(StringComparer.OrdinalIgnoreCase);
+        var compilation = CSharpCompilation.Create("DisabledRawCompilerFlowFacts", [tree], paths.Select(path => MetadataReference.CreateFromFile(path)),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+        var read = tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.InvocationExpressionSyntax>()
+            .Single(call => call.Expression.ToString() == "JsonSerializer.Serialize").ArgumentList.Arguments[1].Expression;
+        Assert.Equal(NullableFlowState.None, compilation.GetSemanticModel(tree).GetTypeInfo(read).Nullability.FlowState);
+        Assert.Equal("optionless", Assert.Single(JsonBaselineSourceScan.Scan(source)).Setting);
+    }
+
     [Fact]
     public void A_business_codecs_nullable_input_is_not_mistaken_for_a_JSON_profile()
     {
@@ -477,30 +536,50 @@ public sealed class JsonBaselineArchitectureTests
         var legacy = File.ReadAllLines(legacyPath).Where(line => line.Length > 0 && !line.StartsWith('#')).ToHashSet(StringComparer.Ordinal);
         var configuration = typeof(JsonBaselineArchitectureTests).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyConfigurationAttribute), false)
             .Cast<System.Reflection.AssemblyConfigurationAttribute>().Single().Configuration;
-        var projects = ShippingHashAssemblies.Discover(RepoPaths.RepoRoot, configuration);
+        using var shipping = ShippingHashAssemblies.Load(RepoPaths.RepoRoot, configuration);
+        Assert.Empty(shipping.Errors);
+        var projects = shipping.Projects;
         var storageRoots = JsonBaselineConstructionContexts.ReadSources(RepoPaths.RepoRoot, projects);
         var paths = storageRoots.Select(root => root.SyntaxTree.FilePath).ToArray();
         Assert.NotEmpty(paths);
         var constructionContexts = new JsonBaselineConstructionContexts(storageRoots, projects, configuration);
         var rootsByPath = storageRoots.ToDictionary(root => root.SyntaxTree.FilePath, StringComparer.Ordinal);
-        Assert.All(register, row => Assert.True(File.Exists(Path.Join(RepoPaths.RepoRoot, row.File)), $"Stale register path: {row.File}"));
+        var packagePaths = projects.SelectMany(project => project.PackageSources ?? new Dictionary<string, string>())
+            .GroupBy(pair => pair.Key, OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Select(pair => pair.Value).Distinct(StringComparer.Ordinal).Single(),
+                OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        Assert.All(register, row => Assert.True(packagePaths.ContainsValue(row.File) || File.Exists(Path.Join(RepoPaths.RepoRoot, row.File)), $"Stale register path: {row.File}"));
         var failures = new List<string>();
+        var observations = new List<object>();
         var observedLegacy = new HashSet<string>(StringComparer.Ordinal);
         var observedDeviations = new HashSet<(string File, string Setting)>();
         foreach (var path in paths)
         {
-            var relative = Path.GetRelativePath(RepoPaths.RepoRoot, path).Replace('\\', '/');
+            var relative = packagePaths.TryGetValue(path, out var package) ? package : Path.GetRelativePath(RepoPaths.RepoRoot, path).Replace('\\', '/');
             foreach (var finding in JsonBaselineSourceScan.Scan(rootsByPath[path], storageRoots, constructionContexts))
             {
+                var accounted = JsonBaselineSourceScan.IsAccounted(relative, finding, legacy, register);
+                observations.Add(new { file = relative, physicalPath = path, key = JsonBaselineSourceScan.RegistrationKey(finding),
+                    setting = finding.Setting, line = finding.Line, site = finding.Site, signature = finding.Signature,
+                    carriesData = finding.CarriesData, accounted });
                 if (finding.Setting == "optionless") observedLegacy.Add(JsonBaselineSourceScan.Identity(relative, finding));
                 else observedDeviations.Add((relative, JsonBaselineSourceScan.RegistrationKey(finding)));
-                if (!JsonBaselineSourceScan.IsAccounted(relative, finding, legacy, register)) failures.Add($"{relative}:{finding.Line} | {finding.Setting} | {finding.Signature}");
+                if (!accounted) failures.Add($"{path}:{finding.Line} ({relative}) | {finding.Setting} | {finding.Signature}");
             }
         }
         failures.AddRange(legacy.Except(observedLegacy).Select(identity => "Remove stale migrated legacy receipt: " + identity));
         failures.AddRange(register.SelectMany(row => row.Settings.Select(setting => (row.File, Setting: setting)))
             .Except(observedDeviations).Select(site => "Remove stale deviation receipt: " + site.File + " | " + site.Setting));
-        Assert.True(failures.Count == 0, "Unregistered JSON options or new/workflow-data option-less calls:\n" + string.Join('\n', failures));
+        var evidenceDirectory = Path.Join(Path.GetTempPath(), "elsa-s9-baseline-source-observations-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(evidenceDirectory);
+        var evidencePath = Path.Join(evidenceDirectory, "source-findings.json");
+        File.WriteAllText(evidencePath, System.Text.Json.JsonSerializer.Serialize(new
+        {
+            assemblyMvid = typeof(JsonBaselineArchitectureTests).Assembly.ManifestModule.ModuleVersionId,
+            configuration, scannedProjects = projects.Count, scannedFiles = paths.Length, findings = observations
+        }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        Console.Error.WriteLine("JSON baseline source observations: " + evidencePath);
+        Assert.True(failures.Count == 0, "Unregistered JSON options or new/workflow-data option-less calls:\n" + string.Join('\n', failures) + "\nSource observations: " + evidencePath);
     }
 
     [Fact]

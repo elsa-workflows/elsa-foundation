@@ -34,17 +34,35 @@ internal sealed class JsonBaselineConstructionContexts
             .Where(path => !RepoPaths.IsBuildOutput(repoRoot, path) && ModuleRoots.IsNotTestFile(repoRoot, path))
             .Select(Path.GetFullPath).ToHashSet(comparer);
         foreach (var project in projects)
+        {
+            JsonHashSourceDocuments? externalWitness = null;
             foreach (var input in project.CompileSources ?? AuthoredDocuments(project.AssemblyPath, repoRoot))
             {
                 var path = Path.GetFullPath(input);
                 if (!path.EndsWith(".cs", comparison) || RepoPaths.IsBuildOutput(repoRoot, path)) continue;
                 // A linked authored input is production code regardless of the directory it lives
                 // in. Unknown external inputs are coverage failures, not silent root exemptions.
-                if (!path.StartsWith(prefix, comparison))
-                    throw new InvalidOperationException("A JSON baseline compile source is outside the repository: " + path);
                 if (!File.Exists(path)) throw new InvalidOperationException("A JSON baseline compile source is missing: " + path);
+                if (!path.StartsWith(prefix, comparison))
+                {
+                    var compileSources = project.CompileSources;
+                    var packageSources = project.PackageSources;
+                    if (compileSources is null || packageSources is null || !compileSources.Contains(path) || !packageSources.ContainsKey(path))
+                        throw new InvalidOperationException("An unknown JSON baseline compile source is outside the repository: " + path);
+                    // Package labels identify exact evaluated inputs; they never authenticate
+                    // bytes. Reuse the shipping PE/PDB/source-checksum witness before admission.
+                    externalWitness ??= JsonHashSourceDocuments.Read(project.AssemblyPath, repoRoot,
+                        new Dictionary<string, string> { ["/_/"] = repoRoot },
+                        externalCompileSources: packageSources.Keys.Where(compileSources.Contains).ToHashSet(comparer),
+                        generatedSourceRoots: project.IntermediateRoot is { } intermediate ? [intermediate] : null);
+                    if (externalWitness.Errors.Count != 0)
+                        throw new InvalidOperationException("Cannot authenticate JSON baseline package sources for " + project.Path + ":\n" + string.Join('\n', externalWitness.Errors));
+                    if (!externalWitness.Documents.TryGetValue(path, out var document) || document.Origin != "external-compile")
+                        throw new InvalidOperationException("A JSON baseline package source has no authenticated compiled document: " + path);
+                }
                 paths.Add(path);
             }
+        }
         return paths.Order(StringComparer.Ordinal)
             .Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path).GetRoot()).ToArray();
     }

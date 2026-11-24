@@ -96,9 +96,9 @@ internal static class JsonBaselineSourceScan
         bool NullProfile(ExpressionSyntax expression, SyntaxNode site)
         {
             var semantic = Model();
-            // ! affects annotations, never the runtime value. Ask the compiler about a view
-            // without those suppressions so null assignments, branch joins and alias copies
-            // keep their actual null state, including the operand of the serializer argument.
+            // ! and #nullable affect analysis, never runtime values. Ask the compiler about
+            // an enabled view without those suppressions so actual null assignments, branch
+            // joins and alias copies cannot disappear behind NotNull or FlowState.None.
             var flow = nullableFlow ??= new NullableFlowView(root, semantic);
             var selected = flow.Select(expression);
             return IsNullProfile(selected, selected, () => flow.Model);
@@ -619,10 +619,14 @@ internal static class JsonBaselineSourceScan
         internal NullableFlowView(SyntaxNode root, SemanticModel model)
         {
             Model = model;
-            if (!root.DescendantNodes().Any(node => node.IsKind(SyntaxKind.SuppressNullableWarningExpression))) return;
+            var options = (CSharpCompilationOptions)model.Compilation.Options;
+            if (options.NullableContextOptions == NullableContextOptions.Enable &&
+                !root.DescendantNodes().Any(node => node.IsKind(SyntaxKind.SuppressNullableWarningExpression)) &&
+                !root.DescendantTrivia(descendIntoTrivia: true).Any(trivia => trivia.IsKind(SyntaxKind.NullableDirectiveTrivia))) return;
             var rewritten = new SuppressionRewriter().Visit(root)!;
             var tree = root.SyntaxTree.WithRootAndOptions(rewritten, root.SyntaxTree.Options);
-            Model = model.Compilation.ReplaceSyntaxTree(root.SyntaxTree, tree).GetSemanticModel(tree, ignoreAccessibility: true);
+            Model = model.Compilation.ReplaceSyntaxTree(root.SyntaxTree, tree)
+                .WithOptions(options.WithNullableContextOptions(NullableContextOptions.Enable)).GetSemanticModel(tree, ignoreAccessibility: true);
             expressions = tree.GetRoot().DescendantNodesAndSelf().OfType<ExpressionSyntax>()
                 .SelectMany(expression => expression.GetAnnotations(Annotation).Select(annotation => (annotation.Data!, expression)))
                 .ToDictionary(pair => pair.Item1, pair => pair.expression, StringComparer.Ordinal);
@@ -636,11 +640,17 @@ internal static class JsonBaselineSourceScan
 
         private sealed class SuppressionRewriter : CSharpSyntaxRewriter
         {
+            internal SuppressionRewriter() : base(visitIntoStructuredTrivia: true) { }
+
+            public override SyntaxTrivia VisitTrivia(SyntaxTrivia trivia) => trivia.IsKind(SyntaxKind.NullableDirectiveTrivia)
+                ? SyntaxFactory.EndOfLine("\n") : base.VisitTrivia(trivia);
+
             public override SyntaxNode? Visit(SyntaxNode? node)
             {
                 if (node is null) return null;
-                var result = node is PostfixUnaryExpressionSyntax suppression && suppression.IsKind(SyntaxKind.SuppressNullableWarningExpression)
-                    ? Visit(suppression.Operand)!.WithTriviaFrom(suppression) : base.Visit(node)!;
+                var result = base.Visit(node)!;
+                if (result is PostfixUnaryExpressionSyntax suppression && suppression.IsKind(SyntaxKind.SuppressNullableWarningExpression))
+                    result = suppression.Operand.WithTriviaFrom(suppression);
                 return node is ExpressionSyntax ? result.WithAdditionalAnnotations(new SyntaxAnnotation(Annotation, Key(node))) : result;
             }
         }

@@ -72,6 +72,37 @@ public sealed class JsonBaselineConstructionContextTests
         Assert.Throws<InvalidOperationException>(() => JsonBaselineConstructionContexts.ReadSources(fixture.RepositoryRoot, [record]));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void An_exact_package_compile_source_is_scanned_only_with_matching_build_authenticated_bytes(bool mutate)
+    {
+        using var package = new Sources("public class PackageOwner {}", "public class OriginalPackageInput {}");
+        using var fixture = new Sources("public class C {}", "using System.Text.Json; public class PackageInput { public static object Write() => JsonSerializer.SerializeToElement(1); }",
+            linkedPath: package.Linked);
+        var record = fixture.Record(fixture.Roots());
+        var assets = Path.Join(fixture.RepositoryRoot, "project.assets.json");
+        File.WriteAllText(assets, System.Text.Json.JsonSerializer.Serialize(new
+        {
+            packageFolders = new Dictionary<string, object> { [package.RepositoryRoot] = new { } },
+            libraries = new Dictionary<string, object> { ["Example/1.2.3"] = new { type = "package", path = "tools", files = new[] { "Linked/Contract.cs" } } }
+        }));
+        record = record with { PackageSources = JsonHashExternalSources.Read(assets, record.CompileSources!) };
+        Assert.Equal("nuget:example/1.2.3/Linked/Contract.cs", Assert.Single(record.PackageSources!).Value);
+        if (mutate)
+        {
+            File.AppendAllText(fixture.Linked, "\n// Bytes changed after the owning PE/PDB was built.\n");
+            Assert.Throws<InvalidOperationException>(() => JsonBaselineConstructionContexts.ReadSources(fixture.RepositoryRoot, [record]));
+            return;
+        }
+        var roots = JsonBaselineConstructionContexts.ReadSources(fixture.RepositoryRoot, [record]);
+        var linked = Assert.Single(roots.Where(root => root.SyntaxTree.FilePath == fixture.Linked));
+        var contexts = new JsonBaselineConstructionContexts(roots, [record], "Debug");
+        var finding = Assert.Single(JsonBaselineSourceScan.Scan(linked, roots, contexts));
+        Assert.Equal("optionless", finding.Setting);
+        Assert.False(JsonBaselineSourceScan.IsAccounted(Assert.Single(record.PackageSources!).Value, finding, new HashSet<string>(), []));
+    }
+
     [Fact]
     public void Linked_partial_constructor_declarations_supply_the_actual_target_outside_the_project_folder()
     {
@@ -262,12 +293,12 @@ public sealed class JsonBaselineConstructionContextTests
         internal string Image { get; }
         private string? Globals { get; }
 
-        internal Sources(string source, string linked, bool external = false, string? globals = null, string[]? symbols = null)
+        internal Sources(string source, string linked, bool external = false, string? globals = null, string[]? symbols = null, string? linkedPath = null)
         {
             this.external = external;
             defines = symbols ?? [];
             Source = Path.Join(root, "essentials", "src", "Owner", "Source.cs");
-            Linked = Path.Join(root, "tools", "Linked", "Contract.cs");
+            Linked = linkedPath ?? Path.Join(root, "tools", "Linked", "Contract.cs");
             Project = Path.Join(Path.GetDirectoryName(Source), "Owner.csproj");
             Image = Path.Join(Path.GetDirectoryName(Source), "bin", "Debug", "net10.0", "Owner.dll");
             Directory.CreateDirectory(Path.GetDirectoryName(Source)!);
