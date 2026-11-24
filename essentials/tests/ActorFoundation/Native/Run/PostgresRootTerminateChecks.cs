@@ -251,7 +251,10 @@ internal static class PostgresRootTerminateChecks
             {
                 await db.Database.ExecuteSqlRawAsync("""
                     ALTER TABLE "Instances" ENABLE TRIGGER kernel_project_root_actor_list_v13;
-                    UPDATE "FoundationActorList" SET "Status" = 0 WHERE "Status" = 3;
+                    INSERT INTO "FoundationActorList" ("Tenant", "Reference", "Status", "EndedAt", "TerminalRevision", "Header", "Type", "Labels")
+                    SELECT "Tenant", repeat('0', 64), "Status", "EndedAt", "TerminalRevision", "Header", "Type", "Labels"
+                    FROM "FoundationActorList" WHERE "Status" = 3;
+                    UPDATE "FoundationActorList" SET "Status" = 0 WHERE "Status" = 3 AND "Reference" <> repeat('0', 64);
                     """, stop);
             }
             await RequireUnavailable(async () => { _ = await reads.GetAsync(tenant, actor, stop); });
@@ -262,17 +265,29 @@ internal static class PostgresRootTerminateChecks
             var restored = (await reopened.GetAsync(tenant, actor, stop))!;
             var rebuilt = (await reopened.ListAsync(tenant, new(Status: Contract.ActorStatus.Cancelled), cancellationToken: stop)).Items.Single();
             Check(restored.Header.Status == Contract.ActorStatus.Cancelled && rebuilt.Header.Ref == actor &&
-                  PostgresRootTerminalSelection.Matches(cursor, restored.Selection, tenant.Tenant, actor.Id, revision, endedAt),
-                "exclusive reinstall restores the complete projection from the same physical transition");
+                  PostgresRootTerminalSelection.Matches(cursor, restored.Selection, tenant.Tenant, actor.Id, revision, endedAt) &&
+                  await reopened.GetAsync(tenant, new(new string('0', 64)), stop) is null,
+                "exclusive reinstall restores the full projection and removes rows without a source");
 
+            string installationSchema;
             await using (var db = Open())
+            {
+                installationSchema = await db.Database.SqlQueryRaw<string>("""
+                    SELECT ns.nspname AS "Value" FROM pg_catalog.pg_class relation
+                    JOIN pg_catalog.pg_namespace ns ON ns.oid = relation.relnamespace
+                    WHERE relation.oid = to_regclass('"Instances"')
+                    """).SingleAsync(stop);
                 await db.Database.ExecuteSqlRawAsync("""
                     CREATE SCHEMA selection_shadow;
                     CREATE TABLE selection_shadow."FoundationActorList" (LIKE "FoundationActorList" INCLUDING ALL);
                     INSERT INTO selection_shadow."FoundationActorList" SELECT * FROM "FoundationActorList";
                     """, stop);
-            var shadowConnection = new NpgsqlConnectionStringBuilder(connection);
-            shadowConnection.SearchPath = "selection_shadow," + (shadowConnection.SearchPath ?? "public");
+            }
+            using var identifiers = new NpgsqlCommandBuilder();
+            var shadowConnection = new NpgsqlConnectionStringBuilder(connection)
+            {
+                SearchPath = "selection_shadow," + identifiers.QuoteIdentifier(installationSchema)
+            };
             var shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(shadowConnection.ConnectionString).Options;
             KernelDb ShadowDb() => KernelDb.ForPostgresRootTerminalSelection(shadowOptions);
             var shadow = new EfStore(ShadowDb, postgres: true, fenceInBatch: inBatch)
@@ -299,6 +314,19 @@ internal static class PostgresRootTerminateChecks
                     """, stop);
             await RequireUnavailable(async () => { _ = await shadowReads.GetAsync(tenant, instant, stop); });
             await RequireUnavailable(async () => { _ = await shadowReads.ListAsync(tenant, new(), cancellationToken: stop); });
+
+            await using (var db = Open())
+                await db.Database.ExecuteSqlRawAsync("""
+                    DROP TABLE selection_shadow."KernelStoreVersions";
+                    CREATE FUNCTION selection_shadow.kernel_actor_list_filter(text)
+                        RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$ SELECT '[]'::jsonb $$;
+                    """, stop);
+            Check((await shadowReads.GetAsync(tenant, instant, stop))?.Header.Ref == instant,
+                "the canonical point read needs no label filter function");
+            await RequireUnavailable(async () =>
+            {
+                _ = await shadowReads.ListAsync(tenant, new(Type: PublicActor.ActorType), cancellationToken: stop);
+            });
         }
 
         async Task RequireWriterRefusal(Contract.ActorRef reference)

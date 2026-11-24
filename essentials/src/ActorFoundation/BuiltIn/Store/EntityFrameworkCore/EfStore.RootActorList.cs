@@ -130,6 +130,9 @@ public sealed partial class EfStore
             FOR EACH ROW WHEN (NEW."FoundationReference" IS NOT NULL)
             EXECUTE FUNCTION kernel_require_root_actor_list_v13();
 
+            DELETE FROM "FoundationActorList" p WHERE NOT EXISTS (
+                SELECT 1 FROM "Instances" i WHERE i."FoundationTenant" = p."Tenant" AND
+                    i."FoundationReference" = p."Reference" AND NOT i."Retired");
             INSERT INTO "FoundationActorList" AS p ("Tenant", "Reference", "Status", "EndedAt", "TerminalRevision", "Header", "Type", "Labels")
             SELECT i."FoundationTenant", i."FoundationReference", i."Status", i."FoundationTerminalAt", i."FoundationTerminalRevision",
                 i."FoundationHeader", f.header->'Model', f.header->'Labels'
@@ -224,6 +227,9 @@ public sealed partial class EfStore
                                 SELECT count(*) FROM pg_catalog.pg_class dependency
                                 WHERE dependency.relnamespace = relation.relnamespace AND dependency.oid IN (
                                     to_regclass('"FoundationActorList"'), to_regclass('"KernelStoreVersions"'))))
+                            AND (NOT {db.UsesRootTerminalSelection} OR relation.relnamespace = (
+                                SELECT f.pronamespace FROM pg_catalog.pg_proc f
+                                WHERE f.oid = to_regprocedure('kernel_actor_list_filter(text)')))
                         GROUP BY source.tgrelid HAVING count(*) = {triggers.Length}
                     ) AS "SourceReady"
                 ), page AS (
