@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Inspection.Core;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Contracts;
 using WorkflowActor = Kernel.WorkflowActor.WorkflowActor;
@@ -72,8 +73,12 @@ internal sealed class WorkbenchCorePreviewReads(Func<KernelDb> open, BoundScope 
         var claims = principal.FindAll(IdentityClaimTypes.TenantId).Take(2).ToArray();
         if (claims is not [var claim] || !string.Equals(claim.Value, tenant.Tenant, StringComparison.Ordinal)) return false;
 
-        // A per-resource policy may hide rows or affect continuation. This preview has no visibility projection for those policies.
-        return !services.GetServices<IPermissionResourceHandler>().Any();
+        // A replacement may hide runs even when the endpoint permission passes. Without a query
+        // visibility contract, return neither rows nor a cursor if that authorization path is present.
+        return services.GetService<IActivityInspectionContextAsync>() is HttpContextActivityExecutionInspectionAuthorizationContext &&
+            services.GetService<IPermissionAuthorizationService>() is PermissionAuthorizationService &&
+            services.GetService<IPermissionEvaluator>() is ClaimsPermissionEvaluator &&
+            !services.GetServices<IPermissionResourceHandler>().Any();
     }
 
     private sealed record Row(string Ref, string Status, string? Definition, string? Version, long? EndedAt);

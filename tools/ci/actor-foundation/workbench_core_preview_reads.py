@@ -45,7 +45,7 @@ def request(client, base, path, payload=None):
 
 
 @contextmanager
-def host(workspace, principals, resource_handler=False, enabled=True, reads=True):
+def host(workspace, principals, resource_handler=False, replacement=False, enabled=True, reads=True):
     workspace.mkdir()
     for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
         shutil.copy(WORKBENCH.parent / name, workspace / name)
@@ -53,7 +53,10 @@ def host(workspace, principals, resource_handler=False, enabled=True, reads=True
     if not resource_handler:
         shells_file = workspace / "shells.json"
         shells = json.loads(shells_file.read_text())
-        del shells["CShells"]["Shells"]["default"]["Features"]["DecisionsWorkflowsApi"]
+        features = shells["CShells"]["Shells"]["default"]["Features"]
+        del features["DecisionsWorkflowsApi"]
+        if replacement:
+            features["PreviewReadQualification"] = {}
         shells_file.write_text(json.dumps(shells))
 
     env = {name: os.environ[name] for name in ("PATH", "DOTNET_ROOT") if name in os.environ}
@@ -118,15 +121,32 @@ def run(scratch):
     env = {"KERNEL_PREVIEW_WORKBENCH": str(WORKBENCH), "KERNEL_PREVIEW_POSTGRES": CONNECTION, "PATH": os.environ["PATH"]}
     subprocess.run([RUNNER, "pg-workbench-core-preview", "birth", receipt], env=env, check=True, timeout=100)
     actor = json.loads(receipt.read_text())["Actor"]
+    seed_file = scratch / "expected-roots.json"
+    subprocess.run([RUNNER, "pg-workbench-preview-reads-seed", actor, seed_file], env=env, check=True, timeout=45)
+    references = sorted(json.loads(seed_file.read_text()))
     reader = ("preview-allowed", TENANT, [READ, INSPECT])
     principals = [reader, ("preview-other", "other-preview-tenant", [READ, INSPECT]),
                   ("preview-no-inspection", TENANT, [READ]), ("preview-no-runtime", TENANT, [INSPECT])]
     with host(scratch / "enabled", principals) as (base, anonymous, clients):
         allowed = clients[reader[0]]
-        code, snapshot = request(allowed, base, ROUTE)
-        expect(code == 200 and snapshot is not None and len(snapshot.get("items", [])) == 1,
-               f"authorized tenant receives the PostgreSQL-backed preview page (status {code})")
-        row = snapshot["items"][0]
+        stop = time.monotonic() + 30
+        while True:
+            code, snapshot = request(allowed, base, ROUTE)
+            if code != 200:
+                raise AssertionError(f"Expected an authorized preview page, received HTTP {code}")
+            if snapshot.get("next") or time.monotonic() >= stop:
+                break
+            time.sleep(.25)
+        expect(len(references) == 26 and [item["ref"] for item in snapshot["items"]] == references[:25] and snapshot["next"],
+               "the authorized first page has 25 ordered exact references and an opaque continuation")
+        query = urllib.parse.urlencode({"cursor": snapshot["next"]})
+        code, continuation = request(allowed, base, ROUTE + "?" + query)
+        expect(code == 200 and [item["ref"] for item in continuation["items"]] == references[25:] and continuation["next"] is None,
+               "the provider-issued continuation reaches the distinct final reference")
+        expect(request(allowed, base, ROUTE + "?" + query + "&status=Running")[0] == 400,
+               "a valid continuation is refused when its filters change")
+        rows = snapshot["items"] + continuation["items"]
+        row = next(item for item in rows if item["ref"] == actor)
         expect(row["ref"] == actor and row["status"] == "Running" and row["definition"] == "direct-approval",
                "the preview page contains the exact persisted workflow, projected status and definition")
         expect(set(row) == {"ref", "status", "definition", "version", "endedAt"} and snapshot["asOf"] > 0,
@@ -140,7 +160,7 @@ def run(scratch):
             query = urllib.parse.urlencode({"status": status})
             expect(request(allowed, base, ROUTE + "?" + query)[0] == 400, "the status must be one named state")
         code, matches = request(allowed, base, ROUTE + "?status=running&definition=direct-approval")
-        expect(code == 200 and [item["ref"] for item in matches["items"]] == [actor], "status and definition filter the projection")
+        expect(code == 200 and [item["ref"] for item in matches["items"]] == references[:25], "status and definition filter the projection")
         code, empty = request(allowed, base, ROUTE + "?definition=no-such-definition")
         expect(code == 200 and empty["items"] == [], "a different definition is a clean miss")
         code, inherited = request(allowed, base, LEGACY_ROUTE)
@@ -151,6 +171,10 @@ def run(scratch):
         allowed = clients[reader[0]]
         expect(request(allowed, base, LEGACY_ROUTE)[0] == 200, "the stock shell accepts the same tenant's read permissions")
         expect(request(allowed, base, ROUTE)[0] == 403, "the preview refuses the stock shell's custom resource policy")
+    with host(scratch / "replacement", [reader], replacement=True) as (base, _, clients):
+        allowed = clients[reader[0]]
+        expect(request(allowed, base, LEGACY_ROUTE)[0] == 200, "the replacement-only shell accepts the tenant's endpoint permissions")
+        expect(request(allowed, base, ROUTE)[0] == 403, "the preview refuses the replacement inspection context without a resource handler")
     with host(scratch / "preview-off", [], enabled=False) as (base, anonymous, _):
         expect(request(anonymous, base, ROUTE)[0] == 404, "the endpoint is absent when Core Preview is disabled")
     with host(scratch / "reads-off", [], reads=False) as (base, anonymous, _):

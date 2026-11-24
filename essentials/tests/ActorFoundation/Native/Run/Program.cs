@@ -24,6 +24,8 @@ if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
     await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunAsync(workbenchPreview, workbenchExecutable);
     return 0;
 }
+if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile])
+    return await PostgresCorePreviewReadSeed.RunAsync(originalRoot, seedFile);
 if (args is ["pg-root-operators", "admit"])
     return await PostgresRootOperatorChecks.RunAsync(null);
 if (args is ["pg-root-operators", var defaultOperatorPhase and ("read" or "resume"), var operatorA, var operatorB, var operatorC])

@@ -16,6 +16,7 @@
         <DefineConstants>$(DefineConstants);ELSA_DASHBOARD_QUALIFICATION</DefineConstants>
     </PropertyGroup>
     <ItemGroup Condition="'$(ElsaDashboardQualification)' == 'true'">
+        <Compile Include="../../tools/ci/actor-foundation/PreviewReadQualificationFeature.cs" Link="Qualification/PreviewReadQualificationFeature.cs" />
         <Compile Include="../../tools/ux-acceptance/DashboardQualificationBootstrap.cs" Link="Qualification/DashboardQualificationBootstrap.cs" />
         <Compile Include="../../tools/ux-acceptance/HistoryQualificationControls.cs" Link="Qualification/HistoryQualificationControls.cs" />
         <Compile Include="../../tools/ux-acceptance/ActivityPlaybackQualificationControls.cs" Link="Qualification/ActivityPlaybackQualificationControls.cs" />

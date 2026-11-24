@@ -349,9 +349,9 @@ the preview database. Existing workflow and Studio endpoints still use their cur
 Set `Elsa__CorePreview__ReadsTenant` to the preview's Embedded tenant id to expose
 `GET /runtime/core-preview/workflows/instances`. Workbench requires both workflow runtime read
 and activity structure inspection permissions. The authenticated tenant and ordinary persistence
-scope must match the configured preview tenant. Use a dedicated preview shell whose permissions
-are tenant-wide for these reads. The route refuses a shell with resource authorization handlers,
-including the stock shell's Decisions workflow disclosure feature. The route accepts `definition`, `status` and an
+scope must match the configured preview tenant. Use a dedicated preview shell with the built-in
+inspection context and permission evaluator and without resource authorization handlers. The stock
+shell's Decisions workflow disclosure feature provides such a handler. The route accepts `definition`, `status` and an
 opaque `cursor`. It returns up to 25 workflow references with their status, definition, model state
 version and end time, alongside `next` and `asOf`. The route is available only with the Core Preview
 enabled and its read tenant configured.
