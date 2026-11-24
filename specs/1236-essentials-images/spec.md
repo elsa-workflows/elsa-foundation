@@ -51,9 +51,10 @@ with an HTTP trigger in the workflows folder and no packages; call the trigger a
 3. **Given** an `appsettings.json` that changes a setting of a baked feature, **When** the container starts, **Then**
    the changed value applies and every other baked setting keeps its default.
 4. **Given** an `appsettings.json` that adds a feature whose package is not in the packages folder, **When** the
-   container starts, **Then** it refuses to start and names the missing feature.
+   container starts, **Then** it refuses to start (see *Refusing to start*) and the log
+   names the missing feature.
 5. **Given** an `appsettings.json` without a required secret, **When** the container starts, **Then** it refuses to
-   start and names the missing setting.
+   start and the log names the missing setting.
 6. **Given** no `migrated/` folder is mounted, **When** the container starts, **Then** it starts with no workflows
    and reports no error.
 7. **Given** a `migrated/` folder whose activities file holds a reusable composite and whose workflows folder holds a
@@ -147,11 +148,11 @@ merged.
 - A converted definition fails to publish at startup: the engine logs the definition and the reason, keeps running and
   serves the other definitions, as JSON workflow reconciliation does today.
 - A file in the workflows folder cannot be imported (malformed JSON, a store error), or a mounted `migrated/` has no
-  activities file: the reconcile startup task fails, shell activation fails, the engine never reports ready and the
-  log names the file and the reason, as the reconciliation startup tasks do today. The migration CLI writes only definitions that converted (refused ones stay in its
+  activities file: the reconcile startup task fails and the engine refuses to start, naming the file, as the
+  reconciliation startup tasks do today. The migration CLI writes only definitions that converted (refused ones stay in its
   report), so this case means a hand-edited or foreign file; this specification builds no per-file isolation for it.
-- A converted definition uses a reusable workflow defined in another file of the folder: it is published only if the
-  engine accepts that order (see FR-010).
+- A converted workflow uses a reusable that the activities file holds as a composite with activity dependencies: it
+  loads only once the engine fix for source-owned composites with dependencies has landed (FR-025).
 - The workflows folder holds subfolders: only the top level is read, as JSON workflow reconciliation does today; the
   migration CLI writes a flat folder (FR-010).
 - A user package needs a newer Elsa share than the image carries: Nuplane refuses it, as it does for the Workbench
@@ -162,6 +163,10 @@ merged.
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
+
+**Refusing to start** means, everywhere in this specification: shell activation fails, `GET /health/ready` never
+returns 200 (so the image health check and an orchestrator see the container as unhealthy), and the log names the
+setting, feature or file and the reason. The process is not required to exit.
 
 **Composition**
 

@@ -62,17 +62,20 @@ publishes `/app/migrated/workflows`.
 - [ ] T009 [US1] Write `apps/Elsa.Essentials.Server/Program.cs`: configuration via `AddEssentialsConfiguration`
   (baked `appsettings.json`, user file `config/appsettings.json` under the content root, which is
   `/app/config/appsettings.json` in the image), then environment variables and command line; CShells with `EssentialsFeatureAssemblies` and Nuplane
-  feature discovery over `/app/packages`, as `apps/Elsa.Workbench/Program.cs` does for its feature catalog; the root
-  health endpoint. Copy only the Workbench host wiring the listed features need, nothing Workbench-specific (boot
+  feature discovery over `/app/packages`, as `apps/Elsa.Workbench/Program.cs` does for its feature catalog; and this host
+  wiring, which is not a feature: the readiness endpoint `/health/ready` with eager activation of the default shell at
+  startup (the Workbench's `Readiness/` `DefaultShellWarmup` and `MapShellReadiness`, not its lazy default), the CORS
+  policy reading `Cors:AllowedOrigins`, and the root health endpoint. Copy nothing else Workbench-specific (boot
   timeline, composition observation endpoints, Weaver, OpenTelemetry bridge).
 - [ ] T010 [US1] Write `apps/Elsa.Essentials.Server/appsettings.json`: persistence resource `Elsa` on
-  `Data Source=/app/data/elsa.db`, every EF feature on that resource, OpenIddict store under `/app/data`,
+  `Data Source=/app/data/elsa.db`, every EF feature on that resource, OpenIddict's SQLite token store at `/app/data/elsa-identity.db`,
   `Migrate:Policy` `AutoMigrate`, Data Protection keys under `/app/data` (R-9).
 - [ ] T011 [US1] Add a guard test in `essentials/tests/Essentials/Tests/` that boots the engine's shell
   composition with the list in memory (no web listener) and asserts the composed feature set equals the list, naming
   any difference (FR-018).
 - [ ] T012 [US1] Check each required setting of [contracts/engine-image.md](contracts/engine-image.md): start the host
-  with it empty and confirm the refusal names the setting; where one does not, add a startup check in the host that
+  with it empty and confirm it refuses to start as spec.md defines it (`/health/ready` never 200, the log
+  names the setting); where one does not, add a startup check in the host that
   names it. Cover each refusal in a test in `essentials/tests/Essentials/Tests/`. Update the contract's
   table to the confirmed list.
 - [ ] T013 [US1] Confirm that an added feature without a package refuses start and names the feature (scenario 4);

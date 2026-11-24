@@ -19,7 +19,8 @@
 
 ### Required settings
 
-The engine refuses to start, naming the setting, when one of these is empty:
+The engine refuses to start (shell activation fails, `/health/ready` never returns 200, the log names the setting)
+when one of these is empty:
 
 | Setting | Purpose |
 |---|---|
