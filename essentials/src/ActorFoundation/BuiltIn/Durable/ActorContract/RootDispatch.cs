@@ -28,9 +28,9 @@ internal sealed partial class ActorAdapter
             null, null, metadata.Header.TypeData, metadata.Header.Labels);
     }
 
-    private static bool IsRootSuspension(Durable.Message message) => message is
+    private static bool IsRootControl(Durable.Message message) => message is
     {
-        Kind: Durable.Kinds.Suspend or Durable.Kinds.Resume,
+        Kind: Durable.Kinds.Suspend or Durable.Kinds.Resume or Durable.Kinds.Terminate,
         InboxScope: Durable.InboxKey.FoundationOccurrenceScope, StorageId: not null, TargetCreation: 1, KeepUntil: not null,
         Operator: { Selection: null, DeleteTarget: null, RetentionDelete: false, RecoverMode: null, RecoverHandles: null },
         Start: null, Payload: null, ReplyTo: null, EventMatch: null, Sender: null, SenderCreation: 0, ActorAuthored: false, JobGeneration: 0
@@ -45,7 +45,7 @@ internal sealed partial class ActorAdapter
             rootJobHandle is null && row.Jobs is not null || row.Children is not null))
             return "RootDispatchUnavailable";
 
-        if (input.Row is not null && input.Taken is [var command] && command.Durable && IsRootSuspension(command.Message) &&
+        if (input.Row is not null && input.Taken is [var command] && command.Durable && IsRootControl(command.Message) &&
             command.Message.Target.Id == input.Actor) return null;
 
         if (rootJobHandle is not null && input.Row is { } bound && input.Taken is [var job] &&
@@ -77,15 +77,17 @@ internal sealed partial class ActorAdapter
         return null;
     }
 
-    private void RequireRootOutcome(Durable.TurnOutcome outcome, Durable.InstanceRow? previous)
+    private void RequireRootOutcome(Durable.TurnOutcome outcome, Durable.InstanceRow? previous, Durable.Message input)
     {
         var timedFault = outcome.Row is { Status: Durable.InstanceStatus.Faulted } && rootTimedJobSettlement &&
             previous is not null && !outcome.OpensPark &&
             outcome.Consumed is [{ Durable: true, Message: var result }] &&
             Durable.RootJobTicket.IsRecordedResult(result, previous) &&
             result.Read<Durable.JobFinished>() is { Error: "timeout", Result: null };
+        var terminated = input.Kind == Durable.Kinds.Terminate && IsRootControl(input) && previous is not null &&
+            outcome.Row is { Status: Durable.InstanceStatus.Cancelled };
         if (outcome.Row is not { } next ||
-            next.Status is not (Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished) && !timedFault ||
+            next.Status is not (Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished) && !timedFault && !terminated ||
             !((rootTimedJobIssuance || rootTimedJobSettlement) && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, next.Id, next.Model)) &&
                 outcome.Sent.Any(m => !SupportedSend(m, next)) ||
             outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||

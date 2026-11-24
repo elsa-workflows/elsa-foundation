@@ -8,7 +8,7 @@ public sealed partial class EfStore
 
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
         string State, string Header, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
-        bool? OperatorSuspension, RootJobState? JobState, RootJobCompletion? JobCompletion, bool TimedJob,
+        bool? OperatorSuspension, bool OperatorTermination, RootJobState? JobState, RootJobCompletion? JobCompletion, bool TimedJob,
         IReadOnlyList<FoundationValue>? Values) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
@@ -42,7 +42,8 @@ public sealed partial class EfStore
             if (overBudget && contentBytes > prior.ContentBytes)
                 throw new StoreException(Failure.Definite, RootContentFailure);
 
-            if (OperatorSuspension is not null && !db.UsesRootOperatorProtocol) return false;
+            if (OperatorSuspension is not null && !db.UsesRootOperatorProtocol || OperatorTermination && !db.UsesRootTermination)
+                return false;
             if (TimedJob)
             {
                 if (!await ConsumeRootTimedInputsAsync(db, Current.Actor, Inputs, JobCompletion, cancellationToken)) return false;
@@ -63,7 +64,7 @@ public sealed partial class EfStore
                         AND "Kind" = {RootSelfWire} AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
                     """, cancellationToken);
             }
-            var ended = Status is InstanceStatus.Finished or InstanceStatus.Faulted;
+            var ended = Status is InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled;
             var nextJobGeneration = JobState is null ? Current.NextJobGeneration : JobState.NextGeneration;
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
             // UnsubscribeAll here only when the exact root has no physical subscriptions.
@@ -100,7 +101,7 @@ public sealed partial class EfStore
             """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count).AsNoTracking().ToListAsync(cancellationToken);
         if (!db.UsesRootOperatorProtocol && rows.Any(row => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))))
             return false;
-        var messages = rows.Select(row => DecodeRootInput(row, reference, issue, replies: db.UsesRootReplyProtocol)).ToArray();
+        var messages = rows.Select(row => DecodeRootInput(row, reference, issue, replies: db.UsesRootReplyProtocol, terminations: db.UsesRootTermination)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(m => m.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
 
@@ -119,14 +120,14 @@ public sealed partial class EfStore
         return settled == ids.Length;
     }
 
-    private static Message DecodeRootInput(MessageEntity row, string reference, FoundationSelfIssuer? issue, bool jobs = false, bool timed = false, bool replies = false) =>
+    private static Message DecodeRootInput(MessageEntity row, string reference, FoundationSelfIssuer? issue, bool jobs = false, bool timed = false, bool replies = false, bool terminations = false) =>
         row.InboxScope switch
         {
             RootJobScope => jobs ? DecodeRootJob(row) : throw RootShape(),
             RootTimedJobScope => timed ? DecodeRootTimedRow(row) : throw RootShape(),
             RootSelfScope => DecodeRootSelf(row, issue),
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
-                ? PostgresRootAdmission.DecodeOperator(row, reference) : PostgresRootAdmission.DecodeDirect(row, reference, replies)
+                ? PostgresRootAdmission.DecodeOperator(row, reference, terminations) : PostgresRootAdmission.DecodeDirect(row, reference, replies)
         };
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,
@@ -137,12 +138,13 @@ public sealed partial class EfStore
     private PreparedRoot PrepareRootTurn(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,
         string typeData, IReadOnlyDictionary<string, string> labels, string? journal, string[]? recalls = null, bool? operatorSuspension = null,
-        RootJobState? jobState = null, RootJobCompletion? jobCompletion = null, bool timedJob = false, IReadOnlyList<FoundationValue>? values = null)
+        RootJobState? jobState = null, RootJobCompletion? jobCompletion = null, bool timedJob = false,
+        IReadOnlyList<FoundationValue>? values = null, bool operatorTermination = false)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
             new InstanceRef(current.Actor.Id).Partition != fence.Partition ||
-            status is not (InstanceStatus.Running or InstanceStatus.Finished) && !(timedJob && status == InstanceStatus.Faulted))
+            status is not (InstanceStatus.Running or InstanceStatus.Finished) && !(timedJob && status == InstanceStatus.Faulted) && !(operatorTermination && status == InstanceStatus.Cancelled))
             throw new ArgumentException("Invalid running root or target disposition.", nameof(current));
         if (status != InstanceStatus.Running && journal is null)
             throw new ArgumentException("A terminal public root requires its journal entry.", nameof(journal));
@@ -150,13 +152,14 @@ public sealed partial class EfStore
         if (accepted.Length == 0 || accepted.Any(message => !QualifiedInput(message) ||
             message.InboxKey.Match is not null || message.Target.Id != current.Actor.Id || message.TargetCreation != current.Actor.Creation) ||
             accepted.Select(message => message.InboxKey).Distinct().Count() != accepted.Length ||
-            operatorSuspension is null && accepted.Any(message => message.Operator is not null))
+            operatorSuspension is null && !operatorTermination && accepted.Any(message => message.Operator is not null) ||
+            operatorTermination && accepted is not [{ Kind: Kinds.Terminate, Operator: not null }])
             throw new ArgumentException("The turn requires distinct qualified inputs for its exact actor creation.", nameof(inputs));
         var (stored, header) = EncodeRootContent(current.Model, current.Definition, state, stateVersion, typeData, labels, journal);
         var image = new InstanceRow(current.Actor.Id, "", "", status, "null", checked(current.Revision + 1), null)
             .WithFoundationState(stored);
         var root = new RootTurnCheckpoint(tenant, reference, current, status, StoredState.Encode(image),
-            header, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, jobState, jobCompletion, timedJob, values);
+            header, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, operatorTermination, jobState, jobCompletion, timedJob, values);
         var turn = new TurnCommit(image.Id, null, null, [], [], [], [], [], journal);
         return new(turn, root);
 

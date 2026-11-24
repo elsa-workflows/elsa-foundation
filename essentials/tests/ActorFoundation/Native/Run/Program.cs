@@ -142,6 +142,8 @@ if (args is ["pg-core-preview", var replayPhase and ("restart" or "terminal" or 
 if (args is ["pg-flowchart-preview", "birth"]) return await PostgresPublicPreview.RunAsync("birth", flowchart: true);
 if (args is ["pg-flowchart-preview", "restart", var flowchartActor, var flowchartBookmark])
     return await PostgresPublicPreview.RunAsync("restart", flowchartActor, flowchartBookmark, flowchart: true);
+if (args is ["pg-root-terminate", var terminateWriter and ("owned" or "ef"), var fenceMode and ("in-batch" or "checked")])
+    return await PostgresRootTerminateChecks.RunAsync(terminateWriter == "owned", fenceMode == "in-batch");
 if (args is ["pg-root-worker", "budget-birth", var budgetMode] && budgetMode is Modes.Balanced or Modes.Durable)
     return await PostgresRootWorkerChecks.RunAsync("budget-birth", null, budgetMode);
 if (args is ["pg-root-worker", "budget-restart", var budgetReference])

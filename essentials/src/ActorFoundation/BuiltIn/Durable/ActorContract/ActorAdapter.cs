@@ -46,7 +46,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool SupportsFoundationOperator(Durable.InstanceRow? row) => roots is null && row?.Model == actor.Type;
     bool Durable.IActorType.AcceptsFoundationOperator(Durable.InstanceRow? row, Durable.Message message) =>
-        roots is null ? SupportsFoundationOperator(row) : row?.Model == actor.Type && IsRootSuspension(message);
+        roots is null ? SupportsFoundationOperator(row) : row?.Model == actor.Type && IsRootControl(message);
     bool Durable.IActorType.SupportsFoundationInlineStart(string type) => roots is null && type == actor.Type;
 
     bool Durable.IActorType.SupportsTrialWithdrawal => roots is null;
@@ -348,7 +348,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var outcome = turn.Seal();
         if (outcome.Sent.Count + outcome.Held.Count(outcome.ConvertsHeldJobResult) > Durable.FoundationMetadataLimits.MaxTurnSends)
             throw new InvalidOperationException($"A turn may send at most {Durable.FoundationMetadataLimits.MaxTurnSends:N0} messages.");
-        if (roots is not null) RequireRootOutcome(outcome, input.Row);
+        if (roots is not null) RequireRootOutcome(outcome, input.Row, delivery.Message);
         if (outcome.Row is { } nextRow)
         {
             var nextHeader = header with
@@ -363,7 +363,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
                 // Withholds can run before this turn has landed. Carry its own metadata in the owner's row.
                 outcome.Row = nextRow with
                 {
-                    Suspended = IsRootSuspension(delivery.Message) ? delivery.Message.Kind == Durable.Kinds.Suspend : nextRow.Suspended,
+                    Suspended = IsRootControl(delivery.Message) && delivery.Message.Kind != Durable.Kinds.Terminate
+                        ? delivery.Message.Kind == Durable.Kinds.Suspend : nextRow.Suspended,
                     FoundationDispatchHeader = new(nextHeader.Tenant, nextHeader.Ref.Id, new(nextHeader.TypeData, nextHeader.Labels))
                 };
             }
