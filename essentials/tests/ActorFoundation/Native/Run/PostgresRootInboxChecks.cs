@@ -154,6 +154,13 @@ internal static class PostgresRootInboxChecks
                 Check(applied is { Outcome: Contract.AdmissionOutcome.Accepted } && current.Next is not null &&
                     (await reopened.InboxAsync(blue, actor, current.Next, stop)).Items is [{ Id: "retire", Kind: Contract.Kinds.Terminate }],
                     "the inbox exposes the admitted operator id and kind without exposing its internal bound selection");
+                var deadline = current.AsOf + 15_000;
+                var padded = await admission.AdmitRootOperatorAsync(blue.Tenant, actor.Id, "padded", Kinds.Terminate, null,
+                    null, stop, selected.Selection, reply: new($"probe-edge| +00{deadline} |probe-registration", deadline));
+                var queuedOperator = await reopened.InboxAsync(blue, actor, current.Next, stop);
+                Check(padded is { Duplicate: false } && queuedOperator.Next is not null &&
+                    (await reopened.InboxAsync(blue, actor, queuedOperator.Next, stop)).Items is [{ Id: "padded", Kind: Contract.Kinds.Terminate }],
+                    "inspection accepts the provider's previously readable padded deadline grammar");
                 var futureRow = await db.Messages.AsNoTracking().SingleAsync(row => row.Target == image.Actor.Id && row.Due == future, stop);
                 await Drive(successor, async () => await reopened.GetAsync(blue, actor, stop) is null);
                 Check((await reopened.InboxAsync(blue, actor, cancellationToken: stop)).Items.Count == 0 &&

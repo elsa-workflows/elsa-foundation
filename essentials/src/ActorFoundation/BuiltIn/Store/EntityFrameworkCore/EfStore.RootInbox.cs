@@ -48,16 +48,20 @@ public sealed partial class EfStore
                             AND (m."Id" NOT LIKE 'operator/%' OR m."Payload" IS NULL)
                             AND (m."ReplyTo" IS NULL OR (
                                 (CASE WHEN right(m."ReplyTo", 6) = '|early' THEN left(m."ReplyTo", -6)
-                                    ELSE m."ReplyTo" END) ~ '^[^|]+[|][1-9][0-9]*[|].+$'
-                                AND (length(split_part(m."ReplyTo", '|', 2)) < 19 OR
-                                     length(split_part(m."ReplyTo", '|', 2)) = 19 AND
-                                     split_part(m."ReplyTo", '|', 2) COLLATE "C" <= '9223372036854775807')
+                                    ELSE m."ReplyTo" END) ~ '^[^|]+[|][^|]+[|].+$'
+                                AND reply.deadline ~ '^[+]?[0-9]+$' AND normalized.digits <> ''
+                                AND (length(normalized.digits) < 19 OR length(normalized.digits) = 19 AND
+                                     normalized.digits COLLATE "C" <= '9223372036854775807')
                                 AND (m."Id" NOT LIKE 'operator/%' OR right(m."ReplyTo", 6) <> '|early')
                             ))) AS "SupportedShape"
                     FROM "FoundationRootBirths" b JOIN "Instances" i
                         ON i."Id" = b."Actor" AND i."Partition" = b."Partition"
                         AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
                     JOIN "Messages" m ON m."Partition" = b."Partition" AND m."Target" COLLATE "C" = b."Actor"
+                    CROSS JOIN LATERAL (
+                        SELECT btrim(split_part(m."ReplyTo", '|', 2), ' ' || chr(9) || chr(10) || chr(11) || chr(12) || chr(13)) AS deadline
+                    ) reply
+                    CROSS JOIN LATERAL (SELECT ltrim(reply.deadline, '+0') AS digits) normalized
                     WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
                         AND m."InboxScope" = -4 AND m."EventMatch" IS NULL AND NOT m."Done"
                         AND (m."Seq", m."Id" COLLATE "C") > ({afterSeq}, {afterOccurrence})
