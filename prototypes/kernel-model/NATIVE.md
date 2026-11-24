@@ -615,8 +615,27 @@ bound descendant terminate with the final parent notice. The protected case retu
 `terminated and kept` and preserves the invocation receipt. TG-1(c1) sends a provisional
 notice when it parks. The later parent-bound terminate cascades while preserving the
 faulted checkpoint.
-The cases exercise the in-memory encoding. The physical-provider and state-version
-upgrade cases have separate acceptance requirements.
+The cases exercise the in-memory encoding. Physical-provider qualification stays at K4.
+
+### Termination before the first upgraded turn
+
+```bash
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --native-version-terminate-check
+```
+
+The old-writer fixture saves a canonical Native checkpoint stamped as v13 with an open
+invocation inbox, one queued receipt and a bound child. The v14 model loads it at the
+qualified terminate, before any ordinary turn, and closes the inbox with the retained
+terminal receipt. The canonical fixture has no v14 job recipes and its bytes are
+stable on upgrade. The state-growth projection also reserves any positive UTF-8
+serialization difference for a readable older checkpoint.
+
+A separate test model deliberately expands the v13 state by more than the terminal
+reserve. An owner explicitly composed with the workflow actor type and no model
+registered can terminate the existing row without rewriting its version or receipt.
+The bound child is cancelled and protected ThenDelete keeps the checkpoint. This is the
+existing unavailable-model path. Shipped deployment controls and physical-provider
+envelopes have separate qualification.
 
 
 ## 10. Private durable lexical-resource probe
