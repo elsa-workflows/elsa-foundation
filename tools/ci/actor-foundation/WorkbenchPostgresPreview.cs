@@ -74,6 +74,7 @@ internal static class WorkbenchPostgresPreview
         settings.Port = wire.LocalPort;
         if (phase == "disabled")
         {
+            if (completesTakeover) await CheckEntryBeforeListeningAsync();
             using var disabled = WorkbenchProcess.Start(executable!, settings.ConnectionString, enabled: false, profile, releaseFile);
             try
             {
@@ -213,6 +214,13 @@ internal static class WorkbenchPostgresPreview
                         cut = await ReadActiveJob(actor) ?? throw new InvalidOperationException("The entered job has no preserved ticket and deadline.");
                         Require(cut.Owner == waiting.Owner && cut.Epoch == waiting.Epoch && cut.Deadline > cut.Now,
                             "revision three contains the active job on the original epoch with time left");
+                        using var ticket = JsonDocument.Parse(cut.TicketPayload);
+                        var argumentsJson = ticket.RootElement.GetProperty("Arguments").GetString()
+                            ?? throw new InvalidOperationException("The active job has no invocation arguments.");
+                        var job = JsonSerializer.Deserialize<BackgroundArgs>(argumentsJson);
+                        Require(job is not null && job.EffectKey == originalEntry.EffectKey &&
+                            job.Inputs[nameof(DirectApprovalWorkflow.WaitForTakeover.ReleaseFile)]?.GetValue<string>() == releaseFile,
+                            "the entered callback and release signal match the durable job recipe");
                         await former.CrashAsync(token);
                         var interrupted = await ReadActiveJob(actor);
                         Require(interrupted is not null && (interrupted with { Now = cut.Now }) == cut && interrupted.Now < cut.Deadline,
@@ -298,7 +306,7 @@ internal static class WorkbenchPostgresPreview
                                 w."Generation" >= 0 AND w."Generation" < {jobCount} AND w."Due" = 0
                                 AND c."Revision" = 4 + 2 * w."Generation" AND c."Status" = 0
                                 AND c."Epoch" = {completion.Epoch} AND CASE WHEN {completesTakeover}
-                                    THEN c."At" < {cut?.Deadline ?? 0}
+                                    THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint < {cut?.Deadline ?? 0}
                                     ELSE c."At" >= {cut?.Deadline ?? 0} END
                                 AND (w."Payload"::jsonb ->> 'Error') IS NOT DISTINCT FROM {error}
                                 AND CASE WHEN {timesOut} THEN (w."Payload"::jsonb ->> 'Result') IS NULL
@@ -460,12 +468,44 @@ internal static class WorkbenchPostgresPreview
         }
     }
 
+    private static async Task CheckEntryBeforeListeningAsync()
+    {
+        var output = new WorkbenchOutput();
+        using var lines = new StringReader($"{DirectApprovalWorkflow.ActiveJobEntry}test-actor test-effect\ninfo: Now listening on: http://127.0.0.1:32100\n");
+        await output.ReadAsync(lines);
+        Require(output.Entry.Task.IsCompletedSuccessfully && output.Entry.Task.Result == new JobEntry("test-actor", "test-effect") &&
+            output.Listening.Task.IsCompletedSuccessfully && output.Listening.Task.Result == "http://127.0.0.1:32100",
+            "the Workbench output reader retains a callback entry before the listening banner");
+    }
+
+    private sealed class WorkbenchOutput
+    {
+        internal readonly TaskCompletionSource<JobEntry> Entry = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly TaskCompletionSource<string> Listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal async Task ReadAsync(TextReader reader)
+        {
+            while (await reader.ReadLineAsync() is { } line)
+            {
+                if (line.StartsWith(DirectApprovalWorkflow.ActiveJobEntry, StringComparison.Ordinal) &&
+                    line[DirectApprovalWorkflow.ActiveJobEntry.Length..].Split(' ', 2) is [var actor, var key])
+                    Entry.TrySetResult(new(actor, key));
+                const string listening = "Now listening on: ";
+                var offset = line.IndexOf(listening, StringComparison.Ordinal);
+                if (offset >= 0)
+                    Listening.TrySetResult(line[(offset + listening.Length)..]);
+            }
+        }
+    }
+
     private sealed class WorkbenchProcess(Process process, DirectoryInfo workspace, Task<string> log) : IDisposable
     {
-        private readonly TaskCompletionSource<JobEntry> jobEntry = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly WorkbenchOutput output = new();
+        private Task? stdout;
 
         internal int Id => process.Id;
-        internal Task<JobEntry> WaitForJobEntryAsync(CancellationToken token) => jobEntry.Task.WaitAsync(token);
+        internal Task<JobEntry> WaitForJobEntryAsync(CancellationToken token) =>
+            WaitForOutputAsync(output.Entry.Task, "entering the timed job", token);
 
         internal static WorkbenchProcess Start(string executable, string connection, bool enabled, string? profile, string? releaseFile)
         {
@@ -510,29 +550,20 @@ internal static class WorkbenchPostgresPreview
 
         internal async Task WaitReadyAsync(CancellationToken token)
         {
-            while (await process.StandardOutput.ReadLineAsync(token) is { } line)
-            {
-                // Kestrel emits this after hosted services have finished starting.
-                const string listening = "Now listening on: ";
-                var offset = line.IndexOf(listening, StringComparison.Ordinal);
-                if (offset < 0)
-                    continue;
-
-                _ = ReadRuntimeOutputAsync();
-                using var client = new HttpClient();
-                using var response = await client.GetAsync(line[(offset + listening.Length)..], token);
-                Require(response.IsSuccessStatusCode, "the normal Workbench root responds");
-                return;
-            }
-            throw new InvalidOperationException($"Workbench exited before listening. {await log.WaitAsync(token)}");
+            // Kestrel emits this after hosted services have finished starting. The owner can enter a recovered job first.
+            var address = await WaitForOutputAsync(output.Listening.Task, "listening", token);
+            using var client = new HttpClient();
+            using var response = await client.GetAsync(address, token);
+            Require(response.IsSuccessStatusCode, "the normal Workbench root responds");
         }
 
-        private async Task ReadRuntimeOutputAsync()
+        private async Task<T> WaitForOutputAsync<T>(Task<T> signal, string expected, CancellationToken token)
         {
-            while (await process.StandardOutput.ReadLineAsync() is { } line)
-                if (line.StartsWith(DirectApprovalWorkflow.ActiveJobEntry, StringComparison.Ordinal) &&
-                    line[DirectApprovalWorkflow.ActiveJobEntry.Length..].Split(' ', 2) is [var actor, var key])
-                    jobEntry.TrySetResult(new(actor, key));
+            var read = stdout ??= output.ReadAsync(process.StandardOutput);
+            await Task.WhenAny(signal, read).WaitAsync(token);
+            if (signal.IsCompletedSuccessfully) return signal.Result;
+            await read;
+            throw new InvalidOperationException($"Workbench exited before {expected}. {await log.WaitAsync(token)}");
         }
 
         internal async Task CrashAsync(CancellationToken token)
@@ -540,6 +571,7 @@ internal static class WorkbenchPostgresPreview
             Require(!process.HasExited, "the entered Workbench process is still running before abrupt exit");
             process.Kill();
             await process.WaitForExitAsync(token);
+            if (stdout is not null) await stdout.WaitAsync(token);
             Require(process.ExitCode != 0, "the entered owner exited abruptly");
         }
 
@@ -553,6 +585,7 @@ internal static class WorkbenchPostgresPreview
             }
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             await process.WaitForExitAsync(deadline.Token);
+            if (stdout is not null) await stdout.WaitAsync(deadline.Token);
             Require(process.ExitCode == 0, $"Workbench exited cleanly (exit {process.ExitCode})");
         }
 
