@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>Kernel.Native.Scopes.Run</AssemblyName>
+    <RootNamespace>Kernel.Native.Scopes.Run</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../../ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj" />
+  </ItemGroup>
+</Project>

@@ -3,6 +3,7 @@ import { StudioHttpError, useStudioWorkspaceTab } from "@elsa-workflows/studio-s
 import {
   activityExecutionSummaryFromInspection,
   findMatchingExecutionScope,
+  isKnownExecutionInScope,
   loadExecutionScope,
   resolveExecutionScopeAncestorId,
   resolveKnownExecutionScope,
@@ -1010,6 +1011,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const [boundaryCanvas, setBoundaryCanvas] = useState<{ context: string; layout: ActivityExecutionLayout } | null>(null);
   const requestedScope = useRef<{ execution: ActivityExecutionStateSummary; includeSelf: boolean; label?: string; moveOccurrence?: boolean } | null>(null);
   const rememberedExecutions = useRef(new Map<string, ActivityExecutionStateSummary>());
+  const confirmedSingletons = useRef(new Map<string, ActivityExecutionStateSummary>());
   const loadedBrowserContext = useRef<string | null>(null);
   const loadingBrowserContext = useRef<string | null>(null);
   const failedMetadataContext = useRef<string | null>(null);
@@ -1277,6 +1279,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
         combineActivityExecutions(details.activities, incidentActivityResult.activities),
         initialActivityExecutionId);
       if (loadedBrowserContext.current !== browserContext) {
+        confirmedSingletons.current.clear();
         setSelectedEvidenceId(initialEvidence);
         setFrames([]);
         loadedBrowserContext.current = browserContext;
@@ -1595,9 +1598,22 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     setBrowserEvidence(current => ({ context: browserContext, items: combineActivityExecutions(
       current.context === browserContext ? current.items : [], [execution]) }));
   }, [browserContext]);
-  const rememberObservedExecutions = useCallback((executions: ActivityExecutionStateSummary[]) => {
+  const rememberObservedExecutions = useCallback((
+    executions: ActivityExecutionStateSummary[],
+    scopeObservation?: { scopeId?: string; singletons: ActivityExecutionStateSummary[]; repeatedNodes: string[] }
+  ) => {
     if (loadedBrowserContext.current !== browserContext) return;
-    setBrowserEvidence(current => ({ context: browserContext, items: combineActivityExecutions(current.context === browserContext ? current.items : [], executions) }));
+    if (executions.length > 0) {
+      setBrowserEvidence(current => ({ context: browserContext, items: combineActivityExecutions(current.context === browserContext ? current.items : [], executions) }));
+    }
+    if (scopeObservation) {
+      for (const nodeId of scopeObservation.repeatedNodes) {
+        confirmedSingletons.current.delete(JSON.stringify([browserContext, scopeObservation.scopeId, nodeId]));
+      }
+      for (const singleton of scopeObservation.singletons) {
+        confirmedSingletons.current.set(JSON.stringify([browserContext, scopeObservation.scopeId, singleton.executableNodeId]), singleton);
+      }
+    }
   }, [browserContext]);
 
   const restoreExecutionContext = useCallback(async (execution: ActivityExecutionStateSummary, includeSelf: boolean, label?: string) => {
@@ -1709,7 +1725,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       ? currentExecutionScopes[matchingScope.index - 1]?.execution.activityExecutionId
       : resolveExecutionScopeAncestorId(currentExecutionScopes, rootActivity, data?.executableGraph, data?.activityCatalog, nodeId, undefined);
     const remembered = matchingScope?.entry.execution
-      ?? rememberedExecutions.current.get(JSON.stringify([browserContext, targetAncestorId, node?.executableNodeId]));
+      ?? rememberedExecutions.current.get(JSON.stringify([browserContext, targetAncestorId, node?.executableNodeId]))
+      ?? confirmedSingletons.current.get(JSON.stringify([browserContext, targetAncestorId, node?.executableNodeId]));
     if (currentExecutionScopes.length > 0 && rootActivity && findActivityNode(rootActivity, nodeId, data?.activityCatalog)) {
       const trimmed = trimExecutionScopesForTarget(currentExecutionScopes, rootActivity, data?.executableGraph, data?.activityCatalog, nodeId);
       if (trimmed.length !== currentExecutionScopes.length) {
@@ -2046,6 +2063,13 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const retainScope = scopeNavigation.context === browserContext && Boolean(scopeNavigation.retaining);
   const prepared = preparedScope?.context === browserContext && preparedScope.scopeId === executionScope?.activityExecutionId
     && preparedScope.nodeId === browserNodeIdentity?.executableNodeId ? preparedScope.prepared : undefined;
+  const knownConfirmedExecution = browserNodeIdentity && browserExactId && isKnownExecutionInScope(
+    workflowExecutionId,
+    browserNodeIdentity.executableNodeId,
+    selectedActivity,
+    browserAncestorId,
+    associationActivities
+  ) ? selectedActivity : undefined;
   const browserActivityContent = scopeBlocked && !retainScope ? <p className="wf-instance-note" role="status">{scopeNavigation.loading ? "Resolving execution scope…" : scopeNavigation.error}</p> : browserNodeIdentity && data ? <Suspense fallback={<p className="wf-instance-note" role="status">Loading execution browser…</p>}><ActivityExecutionInspectionPanel
     key={`${browserContext}:${browserNodeIdentity.executableNodeId}`}
     context={context} workflowExecutionId={workflowExecutionId} nodeId={browserNodeIdentity.executableNodeId}
@@ -2059,7 +2083,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     onIncident={openExecutionIssues}
     choiceFocus={occurrenceChoiceFocus} captureFocusOperation={captureFocusOperation}
     initialPage={!browserExactId || prepared?.execution?.activityExecutionId === browserExactId ? prepared?.page : undefined}
-    confirmedExecution={prepared?.execution}
+    confirmedExecution={prepared?.execution ?? knownConfirmedExecution}
     onUnavailable={() => setPreparedScope(current => current?.prepared === prepared ? null : current)}
     renderDetails={(execution, navigation, children) => <WorkflowActivityExecutionDetails context={context} activity={execution}
       historyRefreshKey={historyResourceRefreshKey} onSelectHistory={selectHistoryTarget} onFocusHistory={focusHistoryExecution}
@@ -2085,6 +2109,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
 
   const refreshWorkspace = () => {
     playback.pause(); historyTargetRequest.current?.abort();
+    confirmedSingletons.current.clear();
     loadGeneration.current++;
     scopeRequest.current?.abort(); incidentNavigationRequest.current++;
     latestIncidentActivityLookupById.current.clear(); setIncidentAssociationMessage(null);
@@ -2748,7 +2773,10 @@ function WorkflowInstanceCanvas({
   scopeLoading: boolean;
   executionBreadcrumb: ReactNode;
   onSelectExecutionSummary(execution: ActivityExecutionStateSummary): void;
-  onExecutionsObserved(executions: ActivityExecutionStateSummary[]): void;
+  onExecutionsObserved(
+    executions: ActivityExecutionStateSummary[],
+    scopeObservation?: { scopeId?: string; singletons: ActivityExecutionStateSummary[]; repeatedNodes: string[] }
+  ): void;
   definitionVersion: WorkflowDefinitionVersionDetails | null;
   definitionVersionError: string;
   activityCatalog: ActivityCatalogItem[];
@@ -2789,7 +2817,17 @@ function WorkflowInstanceCanvas({
     && item.workflowExecutionId === details.instance.workflowExecutionId);
   const shownActivities = scopeLoading ? [] : selectedExecution && !scoped.activities.some(item => item.activityExecutionId === selectedEvidenceId)
     ? [...scoped.activities, selectedExecution] : scoped.activities;
-  useEffect(() => { if (scoped.activities.length > 0) onExecutionsObserved(scoped.activities); }, [onExecutionsObserved, scoped.activities]);
+  useEffect(() => {
+    if (scoped.loading) return;
+    if (scoped.activities.length === 0 && scoped.repeatedNodes.length === 0) return;
+    const repeatedSet = new Set(scoped.repeatedNodes);
+    const singletons = scoped.activities.filter(item => !repeatedSet.has(item.executableNodeId));
+    onExecutionsObserved(scoped.activities, {
+      scopeId: executionScope?.activityExecutionId,
+      singletons,
+      repeatedNodes: scoped.repeatedNodes
+    });
+  }, [executionScope?.activityExecutionId, onExecutionsObserved, scoped.activities, scoped.loading, scoped.repeatedNodes]);
   const scopedIds = new Set(shownActivities.map(item => item.activityExecutionId));
   const shownIncidents = executionScope || scopeLoading ? (details.incidents ?? []).filter(item => {
     const id = readIncidentActivityExecutionId(item);

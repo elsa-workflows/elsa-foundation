@@ -100,6 +100,36 @@ export function sameExecutionScopes(
 }
 
 /**
+ * Returns whether an already-loaded execution belongs to the given run, node, and optional
+ * ancestor scope based on loaded ancestry metadata.
+ */
+export function isKnownExecutionInScope(
+  workflowExecutionId: string,
+  executableNodeId: string,
+  execution: ActivityExecutionStateSummary | null | undefined,
+  ancestorId: string | undefined,
+  knownActivities: readonly ActivityExecutionStateSummary[]
+): execution is ActivityExecutionStateSummary {
+  if (!execution) return false;
+  if (execution.workflowExecutionId !== workflowExecutionId) return false;
+  if (execution.executableNodeId !== executableNodeId) return false;
+  if (!ancestorId) return true;
+  const knownById = new Map<string, ActivityExecutionStateSummary>();
+  for (const item of knownActivities) {
+    if (item.workflowExecutionId === workflowExecutionId) knownById.set(item.activityExecutionId, item);
+  }
+  const visited = new Set<string>([execution.activityExecutionId]);
+  let parentId = execution.parentActivityExecutionId;
+  while (parentId) {
+    if (parentId === ancestorId) return true;
+    if (visited.has(parentId) || visited.size >= 256) return false;
+    visited.add(parentId);
+    parentId = knownById.get(parentId)?.parentActivityExecutionId;
+  }
+  return false;
+}
+
+/**
  * Synchronously resolves the execution-scope chain when the target sits in the outer graph and its
  * ancestry is already known from active scopes or loaded execution summaries (with no unlabelled
  * loop-iteration ancestors). Returns null when an asynchronous server lookup is still required.

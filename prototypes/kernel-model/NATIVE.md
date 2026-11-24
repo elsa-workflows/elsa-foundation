@@ -15,9 +15,9 @@ it. The simulation's check N6 is new. The seeds and costs below are the branch's
 **Round 4 (FINDINGS.md section 24).** The names are round 4's: an instance's step is a *turn* (`ITurn`), off-step
 work is a *background job* (`StartJob`, `IJob`, `job-finished`, the row's `jobs`), and the runtime's call into a
 partition is a *pass*. `src/Kernel` is now three projects: `src/Kernel.Runtime`, `src/Kernel.Durable` and
-`src/Kernel.Workflows`; a file named below without a path is in one of them. Seeds, counts and costs are unchanged.
+`../../essentials/tests/ActorFoundation/Legacy/Workflows`; a file named below without a path is in one of them. Seeds, counts and costs are unchanged.
 
-**Round 4, the graph engine (FINDINGS.md section 26).** The Flowchart runs on `models/Graph`, main's Flowchart engine
+**Round 4, the graph engine (FINDINGS.md section 26).** The Flowchart runs on [the Graph engine](../../essentials/src/Workflows/Runtime/Graph), main's Flowchart engine
 extracted as a library: paths, arrivals, dead paths and gateways (section 1); a Flowchart cost row (section 5); the
 graph invariants G1 to G5, the workflow `n-graph` and four graph flaws in the simulation (section 6). An All join
 after a decision fires now; it did not before (run, both ways).
@@ -26,22 +26,23 @@ Every claim says how it is known: **run** means a command below produced it; **r
 
 | Path | What |
 |---|---|
-| `models/Native` | The authoring surface, the activities (the Flowchart hosts the graph engine), the model (`NativeModel.cs`), the live channel and HTTP host (`Live.cs`) |
-| `models/Graph`, `models/Graph.Tests` | The graph engine (main's Flowchart engine) and main's conformance corpus against it (`dotnet test models/Graph.Tests -c Release`) |
-| `models/Native.Run` | Smoke tests of every activity and the HTTP cases, the cost measurement, the in-memory cost |
-| `sim/NativeWorkflows.cs`, `sim/NativeSim.cs` | Native instances in the simulation's mix, the native checks N1 to N7 and the graph checks G1 to G5, the model's and the engine's deliberate flaws |
+| [Native model](../../essentials/src/Workflows/Runtime/Native/Model) | The execution model and structural activities, including Flowchart |
+| [Native activities](../../essentials/src/Workflows/Runtime/Native/Activities) | Activity authoring contracts, bindings and built-in leaf activities |
+| [the Graph engine](../../essentials/src/Workflows/Runtime/Graph), `../../essentials/tests/Workflows/Runtime/Graph/Tests` | The graph engine (main's Flowchart engine) and main's conformance corpus against it (`dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release`) |
+| `../../essentials/tests/ActorFoundation/Native/Run` | Smoke tests, the live channel and HTTP host (`Live.cs`), and cost measurements |
+| `../../essentials/tests/ActorFoundation/Simulation/NativeWorkflows.cs`, `../../essentials/tests/ActorFoundation/Simulation/NativeSim.cs` | Native instances in the simulation's mix, the native checks N1 to N7 and the graph checks G1 to G5, the model's and the engine's deliberate flaws |
 
 ```
-dotnet build models/Native.Run -c Release
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll smoke
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll cost sqlite
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll cost postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel;Database=kernel_native"
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory 3000
-dotnet build sim -c Release
-dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 20000
-dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 5000 --from 500001 --actions 1000
-dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native-mutations --seeds 20000
-dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --native-flaw InFlightInMemory --seed 1     # replay one, shrunk
+dotnet build ../../essentials/tests/ActorFoundation/Native/Run -c Release
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll smoke
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll cost sqlite
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll cost postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel;Database=kernel_native"
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory 3000
+dotnet build ../../essentials/tests/ActorFoundation/Simulation -c Release
+dotnet ../../essentials/tests/ActorFoundation/Simulation/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 20000
+dotnet ../../essentials/tests/ActorFoundation/Simulation/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 5000 --from 500001 --actions 1000
+dotnet ../../essentials/tests/ActorFoundation/Simulation/bin/Release/net10.0/Kernel.Sim.dll --native-mutations --seeds 20000
+dotnet ../../essentials/tests/ActorFoundation/Simulation/bin/Release/net10.0/Kernel.Sim.dll --native --native-flaw InFlightInMemory --seed 1     # replay one, shrunk
 ```
 
 Without `--native` the simulation runs exactly as before; its seeds replay unchanged (run: 20,000 seeds pass).
@@ -65,14 +66,14 @@ Kept from Elsa 4 (see `docs/reports/elsa-4-activity-contract-parity-2026-07.md`)
 - `[Background]` is Elsa 4's background placement for a leaf; `[External]` is the side-effect profile External.
 
 Ported activities (run: `smoke` exercises each in Ephemeral, Balanced and Durable): WriteLine, SetVariable, Sequence,
-If, Flowchart (on the graph engine of `models/Graph`: gateways, implicit dead-path joins), Parallel (threshold join), ForEach (iteration scope with
+If, Flowchart (on the graph engine of [the Graph engine](../../essentials/src/Workflows/Runtime/Graph): gateways, implicit dead-path joins), Parallel (threshold join), ForEach (iteration scope with
 `CurrentItem`, `CurrentIndex`), While, Delay, Event, PublishEvent, DispatchWorkflow (with and without waiting),
 HttpEndpoint, WriteHttpResponse, CallService (slow external work, `[Background]`), SendNotification (`[External]`),
 and since round 5 C the two outbound activities that carry an effect key: SendHttpRequest (`[External]`; the key is the
 `Idempotency-Key` header) and SendEmail (`[External]`; the key is the local part of the `Message-ID`).
 
 **Effect keys (round 5 C).** `ActivityContext.EffectKey` is `EffectKey.For(instance, node, iterationPath, attempt)` of
-`src/Kernel.Workflows`: **`{instance origin}/{node}/{iteration path}/{attempt}`**, the owner's shape of 16 November,
+`../../essentials/tests/ActorFoundation/Legacy/Workflows`: **`{instance origin}/{node}/{iteration path}/{attempt}`**, the owner's shape of 16 November,
 from committed facts only. The instance origin is the instance id (fixed at creation; the key never reads partitions
 or positions) with its creation. The node is the activity's stable id in the definition, the one the model already
 uses. The **iteration path** (`ActivityContext.IterationPath`, `Burst.IterationPath`) says which activation of the
@@ -93,7 +94,7 @@ writes its ticket and committed with it.
 Why the frame number is not in the key (the owner's reason): in Balanced and Ephemeral the frame numbers are minted
 from the committed `Next` in agenda order, and a replay over a longer inbox (a timer that became due meanwhile) orders
 the agenda differently, so a frame number can land on another activity, or on another iteration of the same one
-(the alias case of `models/Native.Run/AliasChecks.cs`: a While body sending twice beside a sibling branch with Sets;
+(the alias case of `../../essentials/tests/ActorFoundation/Native/Run/AliasChecks.cs`: a While body sending twice beside a sibling branch with Sets;
 with the frame in the key, iteration 2 of the lost turn and iteration 1 of the replay shared one key). The iteration
 path is independent of agenda order: one logical activation keeps one key across the lost turn and its replay, on
 whichever owner, and two activations never share one. A renumbered frame therefore changes nothing: the key never named
@@ -156,7 +157,7 @@ What changed, and why:
 | A stateful activity's inputs are evaluated again on resume, not taken from a pinned snapshot | No snapshot to store. The activities that wait keep what they need in their state |
 | Sequence is stateless: the next child follows from the position of the one that completed | Smaller state |
 | `If` children fill named slots (Then, Else); its outcome is True or False either way | The same activity works inside a flowchart |
-| The Flowchart runs on the graph engine (`models/Graph`, main's Flowchart engine): paths, arrivals, dead paths. A node with several inbound connections is a join decided by the dead-path join (main's default); gateways (`Gateway`) are explicit; a first-wins loser is cancelled. A run starts at one node, main's: the pending start trigger when it is a child of the Flowchart, else the start node (the first child without inbound connections); other unconnected children do not start, and a trigger below one of them is not reached (main refuses that placement when a workflow is published; the prototype has no publish step). Unlike main, the trigger counts only while it is undelivered (a Flowchart run again by a loop starts at the start node), and no node carries main's trigger flag, so loop-closing connections are classified from the start node only | Before, without dead paths, an All join after a decision never fired and the flowchart completed without it (run: `smoke`, "an All join after a decision", then 'left no no', now 'left yes yes') |
+| The Flowchart runs on the graph engine ([the Graph engine](../../essentials/src/Workflows/Runtime/Graph), main's Flowchart engine): paths, arrivals, dead paths. A node with several inbound connections is a join decided by the dead-path join (main's default); gateways (`Gateway`) are explicit; a first-wins loser is cancelled. A run starts at one node, main's: the pending start trigger when it is a child of the Flowchart, else the start node (the first child without inbound connections); other unconnected children do not start, and a trigger below one of them is not reached (main refuses that placement when a workflow is published; the prototype has no publish step). Unlike main, the trigger counts only while it is undelivered (a Flowchart run again by a loop starts at the start node), and no node carries main's trigger flag, so loop-closing connections are classified from the start node only | Before, without dead paths, an All join after a decision never fired and the flowchart completed without it (run: `smoke`, "an All join after a decision", then 'left no no', now 'left yes yes') |
 | No DI, no services in activities. The host gates Background work and performs External effects | Enough for the spike; the activity map's DI would come back unchanged |
 | A tiny expression language (`Expression.cs`), compiled to closures once per text | Instead of JavaScript |
 | `Cancel` maps to completion with outcome Cancelled | There is no cancel callback on composites yet |
@@ -234,20 +235,114 @@ captured variables, so in state: 571 bytes for http-reference).
 From `prototypes/kernel-model`, run:
 
 ```bash
-dotnet run -c Release --project sim -- --public-http-edge-check
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --public-http-edge-check
 ```
 
 This check starts Kestrel on a dynamically assigned loopback port and runs actual HTTP requests against the
 public Actor Foundation with an in-memory Embedded owner. It starts a Native approval, pauses its first
 checkpoint to check that the response stays held, and resumes it with a JSON request. Public reads confirm
-the same actor at its first and second journal revisions. It also checks a 404
-with no publication, a 503 on owner reset, a 504 at the reply deadline, a 500 when a held response's turn parks,
-and completion after the client disconnects. Run with `--flaw EmitBeforeCommit` to make the held-response
+the same actor at its first and second journal revisions. An unmatched HTTP event with `KeepFor`
+returns 404 and leaves no publication, delivery or caller registration. Retrying the same event ID
+after the wait commits delivers the new payload. The check also covers 503 on owner reset, 504 at the
+reply deadline, 500 when a held response's turn parks, and completion after the client disconnects. Run with `--flaw EmitBeforeCommit` to make the held-response
 assertion fail before the checkpoint lands.
 
-This run covers the default commit-before-release route on one live receiving node. The local process kill
-between commit and release, remote-owner recovery before and after the reply deadline, provider-backed
-replies and cross-tenant routing still have their own K8 acceptance cases.
+The companion check keeps the HTTP receiver live while its remote logical owner is lost:
+
+```bash
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --public-http-remote-check
+```
+
+Two Worker identities share the in-memory store and deliver replies through an in-process transport. The
+receiver opens a real loopback HTTP connection. It verifies the persisted reply address, then takes the
+partition at a higher epoch with a second Worker. A loss before commit returns the successor's response
+through the same connection when the deadline is open and returns one 504 when the deadline has passed.
+A loss after the commit lands and before any reply crosses the transport returns one 504 at the deadline.
+Every schedule finishes the same approval at journal revision 2. The fixture disconnects the lost
+owner's reply link and keeps its Worker available to check the late commit. Independent process loss,
+PostgreSQL-backed HTTP and cross-tenant routing have separate K8 acceptance cases.
+
+### Held direct replies on PostgreSQL
+
+Use a fresh dedicated PostgreSQL database for each fence mode and set `KERNEL_PREVIEW_POSTGRES`. From
+`prototypes/kernel-model`, run:
+
+```sh
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Native/Run -- pg-root-held-direct checked
+```
+
+Use `in-batch` for the other owned fence. Append `after-deadline` to hold the emitted reply in the
+fixture link until PostgreSQL time reaches the registered deadline. The receiving edge then records a
+timeout while the workflow retains its committed revision.
+
+The fixture-private protocol 10 admits a bound live request to
+an already-checkpointed root and stores its reply address with the exact direct input. It rejects another
+tenant and an expired registration. A second Worker takes at a higher epoch and consumes that same
+input through a Native approval, with the receiver still waiting immediately before commit. The
+transport checks the committed checkpoint and settled input on another connection when the response
+is sent. The first reply carries the original registration and tenant. Its input settles without retaining the route, and replay
+with a new registration returns Duplicate. The ordinary owner, checkpoint reader and pending-input
+reader refuse the new format.
+
+Both owners run in one process, with an orderly handover and an in-process reply link.
+
+### PostgreSQL HTTP approval preview
+
+With `KERNEL_PREVIEW_POSTGRES` pointing to a fresh dedicated database, run from `prototypes/kernel-model`:
+
+```sh
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Native/Run -- pg-http-preview in-batch timely
+```
+
+The Native runner starts an actual loopback Kestrel host on a dynamic port and holds a real HTTP
+connection through the public `IIngress.RequestAsync` surface. A tenant-bound direct approval
+is stored against the exact actor. A second Worker takes at a higher epoch and commits one
+revision. The fixture checks the committed state on a separate connection as the reply is sent. The
+original HTTP connection receives `202 approved`. The other tenant's live reference returns 404 without
+adding input. An identical operation with a changed body never gets attached to the first
+registration and reaches its own 504 deadline. The approval's state and journal are unchanged.
+
+Use `checked` for the other owned fence mode. Use a fresh database for each run. Replace `timely` with
+`late` to hold the live reply through the deadline and observe HTTP 504 with the approval committed.
+Use `disconnect` to close the actual HTTP connection before the handover and see the admitted
+approval complete. Use `slow-body` to send the valid JSON across the route deadline, or `blocked` to hold
+the target row until the edge has returned 504. Both cases verify no input was added, then run a normal
+successful approval. Before listening, the loopback preview samples PostgreSQL time and retries any
+sample whose round trip exceeds 25 ms. The HTTP budget begins at handler entry and incoming replies are
+checked against current PostgreSQL time. The edge can return 504 while a canceled database call unwinds.
+Use `clock-delay` to discard a delayed startup sample, then delay admission. The fixture brackets the
+stored deadline against a separate PostgreSQL observation and still requires HTTP 202. Each run also verifies that public timeout replies include the
+committed Running or Finished status when the caller waits for that provider result.
+
+This preview uses fixture-private protocol 10 and two Workers with orderly handover in one process.
+It enables the public request contract for exact actor references inside the opt-in PostgreSQL
+preview.
+
+### PostgreSQL HTTP across abrupt owner loss
+
+Use the same setup with a fresh PostgreSQL database per run:
+
+```sh
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Native/Run -- pg-http-owner-loss in-batch before
+```
+
+A Kestrel receiver keeps the original connection open while a separate owner process waits with the
+Native approval staged. A standby process is refused while the first lease is live. The driver ends
+the original process, and PostgreSQL records ownership moving to the next epoch after the lease
+expires. The survivor consumes the exact stored approval, commits one revision and sends the response
+to the receiver through a private process pipe. The transport reads the finished checkpoint and the
+settled approval row before emitting the carrier. The caller receives `202 approved`.
+
+Use `before-late` to let the caller reach 504 first. The survivor still commits the approval. Use
+`after` to end the original owner after PostgreSQL commits and before it sends a response. The
+caller receives 504, and the standby takes ownership without executing the approval again. Both 504
+cases record when the client received its response against the stored deadline and lease expiry. The
+fixture watches the standby through shutdown for any trailing carrier. Use `checked` for the other
+fence mode.
+
+These cases run against the fixture-private exact-reference profile. The pipe carries live output
+between local processes. Cluster transport, HTTP-triggered starts and event requests remain separate
+K8 cases.
 
 ## 5. What it costs
 
@@ -298,7 +393,7 @@ seen (finding F3), and the turn that finishes. A direct resume needs no subscrip
 cannot know that it will come that way.
 
 Size and the model's own work, in memory (run: `memory 3000`, the in-memory store, one worker; the toy sequence of
-`sim/Models.cs` is the kernel without a model's work):
+`../../essentials/tests/ActorFoundation/Simulation/Models.cs` is the kernel without a model's work):
 
 | Run | Ephemeral: allocated, time per run | State bytes per commit, Balanced (Durable) |
 |---|---|---:|
@@ -335,7 +430,7 @@ Checks:
 | N5 | Final variables and outputs match a run without faults | Every finished native instance (children too) has the variables of the same definition and input run alone, without faults; everything started from outside finished or was cancelled by request |
 | N7 (round 5 C) | An outbound effect carries a stable effect key; one key, one logical activation; a key never leaves in two turns that both landed | Four halves. At the host's transport (`OnOutbound`): the HTTP request carries the key in `Idempotency-Key`, the email as `<key@domain>` in its `Message-ID`. At the same place, the lost-turn half: an activation is named by its node and the content it alone determines (the mix's rule: bodies name the iteration; `NativeWorkflows.ContentNamesActivation` lists the nodes, `hj` fires twice with one body and is out), and that name has one key in every sending, in a turn that lands or in one that is lost, so a lost turn that sent another activation's valid key is seen here and nowhere else. At the commit (`Wire.Commit`, `World.Landed`): the sendings of the turns a batch writes ride on it, and the store records them the moment the commit lands, whatever becomes of the answer on the wire (an answer that arrives late, after the owner's lease ran out and it took the partition again, gives nothing back to the pending list: the landing is recorded and the take discarded the memory the call came from; a stale refusal, from a call that outlived a take, leaves the new incarnation's pending sendings alone, since the take is the one place that discards them; `Kernel.Sim --landed-check` replays the three cases); a second sending of a key is a redelivery only while the first one's turn did not land (its commit lost, refused, or never made because its owner died), so a key that left in two turns that both landed, or twice in one, is two activations under one key, whatever the reference run says. At the end, against the fault-free reference run of the same definition and input (an oracle that takes no identity from the sending's own node, path or frame fields; it compares the key string stripped of its instance origin and attempt with the keys the reference minted on its own): the reference sends every key once, and every key an instance sent is one the reference sends. What N7 cannot see: a collision whose two sendings never both land and whose node is not in the content list (an instance that ends in memory without a write, a turn lost before its commit); a resend's content, which is not compared (the receiver keeps the first); a moved key that equals another activation's reference key when that activation never sends in the same run and its content does not name it; and nothing at all for a mix workflow whose key set depends on event order, which is a false red and is kept out of the mix. The sweep counts the same-key resends, the frame numbers a replay handed to another activation and the nodes sent from under a second iteration path; none of the counters is a gate. `n-out` (a While and a ForEach sending twice from one node beside a timer branch, and two event branches meeting at a merge that forks again to a join) puts those cases in the mix |
 
-The graph invariants of the design sketch (round 4, `sim/NativeSim.cs`: `NoteGraph`, `CheckGraphStates`). They read
+The graph invariants of the design sketch (round 4, `../../essentials/tests/ActorFoundation/Simulation/NativeSim.cs`: `NoteGraph`, `CheckGraphStates`). They read
 the native Flowchart's own journal entries, which ride in the turn's commit: `g|x` a path the step cancelled, `g|f` a
 node a join or continuation scheduled, with the sources of the arrivals it consumed, live and dead (taken from the
 engine's unpruned state, `FlowchartStep.Live`), `g|c` a completion with the paths still live. They also read the
@@ -381,7 +476,7 @@ The checks bite (run: `--native-mutations`, each flaw alone, first failing seed)
 | `FlatRetryGeneration` (round 5 C) | Every retry successor is generation 1, so the second retry of one activation shares the first's key | Not caught by the sweep: the mix has no retry, and the gate allows it (`--allow-uncaught FlatRetryGeneration`). `Native.Recovery.Run --effect-keys` shows it bite: `leaf=retry1` twice where the sound model gives `leaf=retry1`, `leaf=retry2` |
 | `FreshTurnSwapsLoopKeys` (round 5 C) | A turn that is not a redelivery swaps a While's first two iterations in the key; the replay after a lost first attempt derives the right keys, so the wrong, valid keys live only in turns that never landed | N7 (the lost-turn half), seed 269: `0/j17: h1 with '"i=1"' was sent under two keys, 0/j17/h1/loop=2/0 and 0/j17/h1/loop=1/0: a sending used another activation's key`; the first attempt was lost, its replay sent the right key, and no other half can see a key that lands once. Since K1 slice 7 it is first caught at seed 3589 (`2/j13`, the same check): the set worlds, with four partitions and one worker per node, make a lost first attempt of a While's early iterations rarer, so the PR gate runs the native mutations at 12,000 seeds, over three times that |
 
-The four graph flaws are the engine's (`FlowchartOptions.Flaws`, marked MUTATION in `models/Graph`), the four the
+The four graph flaws are the engine's (`FlowchartOptions.Flaws`, marked MUTATION in [the Graph engine](../../essentials/src/Workflows/Runtime/Graph)), the four the
 design sketch's plan names; the mutation check fails one that another check catches first. G4 has no mutation of its
 own: no flaw of the plan aims at it, so that it bites is not shown. The round-4 seeds are those of the mix with `n-graph` in it, which
 moves every seed; the five older flaws' first seeds and messages above are round 4's (`InFlightInMemory` is now caught first by N5, not N1).
@@ -489,7 +584,7 @@ Both detached children complete at revision 1. The attached child remains regist
 Run the check in Balanced and Durable from `prototypes/kernel-model`:
 
 ```bash
-dotnet run -c Release --project sim -- --native-detached-handles-check
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --native-detached-handles-check
 ```
 
 The terminal projection still counts every handle carried in a checkpoint. Older handles stay stored because the
@@ -499,9 +594,54 @@ against the same checkpoint can reach the bound again. An authorized operator ca
 all its retained inputs, or terminate the selected instance through the existing qualified command. Discard leaves
 the instance faulted. The provider-encoding and near-limit termination cases retain their own checks.
 
+### Termination at the checkpoint limit
+
+Run the authored Native envelope check from `prototypes/kernel-model`:
+
+```bash
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --native-terminal-envelope-check
+```
+
+In Balanced and Durable, the real model opens 3,500 invocation inboxes, attaches one
+waiting descendant and emits three sets of 500 detached creators. The stopped-owner
+fixture restores the old `CustomHandles` representation from those issued IDs while
+preserving the authored checkpoint. The successor runs all growth and termination through
+the built-in Worker and fenced in-memory store. Growth above the terminal budget parks.
+TG-1(c1) uses the current public header reserve to derive the no-handle bound. The
+historical 16,416,460-byte state predates that reserve. Adjacent controls reject one
+byte above the admitted limit, including the protected invocation shape. The exact-fit
+and protected ThenDelete cases keep all inbox identities, close them and commit one
+bound descendant terminate with the final parent notice. The protected case returns
+`terminated and kept` and preserves the invocation receipt. TG-1(c1) sends a provisional
+notice when it parks. The later parent-bound terminate cascades while preserving the
+faulted checkpoint.
+The cases exercise the in-memory encoding. Physical-provider qualification stays at K4.
+
+### Termination before the first upgraded turn
+
+```bash
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --native-version-terminate-check
+```
+
+The old-writer fixture saves a canonical Native checkpoint stamped as v13 with an open
+invocation inbox, one queued receipt and a bound child. The v14 model loads it at the
+qualified terminate, before any ordinary turn, and closes the inbox with the retained
+terminal receipt. The canonical fixture has no v14 job recipes and its bytes are
+stable on upgrade. The state-growth projection also reserves any positive UTF-8
+serialization difference when the model has terminal metadata to write. A state-only
+model's header-only Suspend retains its old checkpoint and normal model growth budget.
+
+A separate test model deliberately expands the v13 state by more than the terminal
+reserve. An owner explicitly composed with the workflow actor type and no model
+registered can terminate the existing row without rewriting its version or receipt.
+The bound child is cancelled and protected ThenDelete keeps the checkpoint. This is the
+existing unavailable-model path. Shipped deployment controls and physical-provider
+envelopes have separate qualification.
+
+
 ## 10. Private durable lexical-resource probe
 
-The [lexical runner](models/Native.Scopes.Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.
+The [lexical runner](../../essentials/tests/Workflows/Runtime/Native/Scopes/Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.
 
 Native model state version4 records this private capability. Older1–3 no-resource checkpoints, including genuine JSON-null checkpoints from an initial Park, keep their prior meanings. Unsupported/mixed/dangling/cyclic shapes are refused; reader fixtures do not qualify a historical writer, mixed-binary deployment or provider. Owner completion, cancellation and ordinary fault disposal release resources; an absorbing parent can continue its siblings. Forced kernel termination retires the new handles/resources while retaining other existing forensic state. A technical Park retains its previous checkpoint under the existing policy; this mechanism adds no incident retry or terminal resume.
 

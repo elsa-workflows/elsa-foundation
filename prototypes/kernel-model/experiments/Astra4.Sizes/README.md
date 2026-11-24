@@ -9,7 +9,7 @@ the proposed transitions.
 |---|---|---|
 | Event match | The real `EventMatch.Encode` (`src/Kernel.Durable/Store.cs`) for names at `N` = 1,024 WTF-8 bytes in the widest JSON escape, today's `evq:` delivery id, and, beside them, the proposed fixed digests and the length-prefixed delivery header, with its payload presence flag, and its strip (both written in this probe only) | R4-M1 |
 | Subscription write | The prototype's MongoDB subscription document shape (`mongo/Kernel.Mongo/MongoStore.cs` 648–654) with the proposed tenant, creation and keep fields, at the name limits, encoded by MongoDB.Bson 3.9.0 (the version the prototype's driver locks): the document, a bulk-write insert entry and today's replace-upsert entry | R4-M2 |
-| Placement | The real `InstanceRef.Spread` (`src/Kernel.Runtime/Addresses.cs`) over spellings that the pinned SQL Server and MySQL collation calls equal | R4-M6 |
+| Placement | The real `InstanceRef.Spread` (`../../essentials/src/ActorFoundation/BuiltIn/Runtime/Addresses.cs`) over spellings that the pinned SQL Server and MySQL collation calls equal | R4-M6 |
 | Native job arm | The real `NativeModel` through a `DispatchProxy` `ITurn` host: what `WaitEntry` and the ticket's `BackgroundArgs` hold after a background arm whose bound variable a sibling then changes, and what the real `ExecuteJobAsync` does with the arm-time arguments, fresh ones, none, and none without an effect key | R4-M3 |
 
 The `ITurn` host follows the reviewer's probe: it records sends and job starts and answers the calls Native makes in

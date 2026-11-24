@@ -315,3 +315,51 @@ export function mappingPreviewFieldTone(state: string): StudioStatusTone {
       return "neutral";
   }
 }
+
+export type FindingTone = "info" | "warning" | "danger";
+
+export function findingTone(finding: { code: string; message: string }): FindingTone {
+  const code = finding.code.toLowerCase();
+  const message = finding.message.toLowerCase();
+  if (
+    code.includes("inactive")
+    || code.includes("paused")
+    || code.includes("nofuturefiring")
+    || code.includes("advisory")
+    || code.includes("info")
+    || message.includes("cursor is inactive")
+    || message.includes("no future firing")
+  ) {
+    return "info";
+  }
+  if (
+    code.includes("conflict")
+    || code.includes("blocked")
+    || code.includes("invalid")
+    || code.includes("error")
+    || code.includes("failed")
+    || code.includes("refused")
+    || code.includes("revoked")
+    || code.includes("denied")
+    || code.includes("missing")
+    || code.includes("incompatible")
+    || code.includes("validation")
+  ) {
+    return "danger";
+  }
+  if (
+    code.includes("unavailable")
+    || code.includes("restricted")
+    || code.includes("pending")
+    || code.includes("overdue")
+    || code.includes("noeligible")
+    || code.includes("waiting")
+    || code.includes("unreserved")
+    || code.includes("unpublished")
+    || code.includes("retry")
+    || code.includes("warning")
+  ) {
+    return "warning";
+  }
+  return "info";
+}

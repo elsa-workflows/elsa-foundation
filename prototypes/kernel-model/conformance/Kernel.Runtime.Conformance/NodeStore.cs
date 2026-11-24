@@ -38,6 +38,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     public long? ReleaseBegan(int partition) => _releases.TryGetValue(partition, out var at) ? at : null;
 
     internal (int Partition, Task Completion)? HoldScalarPoll { get; set; }
+    internal Action? OnSetRelease { get; set; }
 
     public int SetReleases => Volatile.Read(ref _setReleases);
 
@@ -220,6 +221,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     }
     public ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default)
     {
+        OnSetRelease?.Invoke();
         Interlocked.Increment(ref _setReleases);
         var at = Environment.TickCount64;
         foreach (var fence in owned) _releases[fence.Partition] = at;

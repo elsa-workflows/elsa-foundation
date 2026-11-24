@@ -69,6 +69,7 @@ using Elsa.Tasks;
 using Elsa.Workbench;
 using Elsa.Workbench.Boot;
 using Elsa.Workbench.Composition;
+using Elsa.Workbench.CorePreview;
 using Elsa.Workbench.Readiness;
 using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Design.Api;
@@ -133,6 +134,7 @@ if (Environment.GetEnvironmentVariable("ELSA_WORKBENCH_STARTUP_ARTIFACT_PROBE") 
 }
 
 var configuration = startupArtifact?.Configuration ?? builder.Configuration;
+builder.Services.AddWorkbenchCorePreview(configuration);
 
 // OpenIddict's protocol behavior is composed by the shell feature, but its vendor EF store is host-owned. Bind the
 // default shell's persistence settings at the root so the host-level initializer and every copied shell service

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Main's Flowchart conformance corpus and join tests (Essentials/tests/Activities/Flowchart/Tests), run against
+       the graph engine through GraphHarness instead of Elsa's workflow execution harness. -->
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>Kernel.Graph.Tests</AssemblyName>
+    <RootNamespace>Kernel.Graph.Tests</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj" />
+  </ItemGroup>
+</Project>

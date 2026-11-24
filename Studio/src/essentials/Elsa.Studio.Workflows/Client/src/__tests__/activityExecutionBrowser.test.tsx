@@ -104,6 +104,7 @@ it("groups generic child executions and keeps retries distinct from iterations",
   const children = [entry(4), { ...entry(5), attempt: { attemptNumber: 2 } }].map(item => ({ ...item, execution: { ...item.execution, iterationId: `iteration-${item.position}` } }));
   vi.mocked(browseActivityExecutions).mockResolvedValue(page(children)); const enter = vi.fn();
   flushSync(() => root.render(<ChildExecutionBrowser context={context} execution={execution(1, "any-composite")} refreshKey={0} labelFor={() => "Pinned child"} onEnter={enter} onIncident={vi.fn()} />));
+  await vi.waitFor(() => expect(button("Child executions")).toBeTruthy());
   click("Child executions"); await vi.waitFor(() => expect(container.textContent).toContain("Iteration 4"));
   expect(container.textContent).toContain("Execution 5"); expect(container.textContent).toContain("Attempt 2"); click("Iteration 4");
   expect(enter).toHaveBeenCalledWith(expect.objectContaining({ position: 4 }));
@@ -543,4 +544,52 @@ it("keeps ExecutionScopeNavigator silent while loading and hidden for singletons
   releaseMulti({ items: [entry(1), entry(2)], totalCount: 2, previousCursor: null, nextCursor: null });
   await vi.waitFor(() => expect(container.textContent).toContain("Execution 2 of 2"));
   expect(button("Previous occurrence of Flowchart")).toBeTruthy();
+});
+
+it("keeps ChildExecutionBrowser hidden while loading and for leaf activities, and shows it once children are confirmed", async () => {
+  let releaseLeaf!: (value: ActivityExecutionBrowsePage) => void;
+  vi.mocked(browseActivityExecutions).mockImplementationOnce(() => new Promise(resolve => { releaseLeaf = resolve; }));
+  flushSync(() => root.render(<ChildExecutionBrowser key="leaf" context={context} execution={execution(1, "write-line")} refreshKey={0} labelFor={() => "Child"} onEnter={vi.fn()} onIncident={vi.fn()} />));
+  await vi.waitFor(() => expect(releaseLeaf).toBeTypeOf("function"));
+  expect(container.querySelector(".wf-execution-children")).toBeNull();
+
+  releaseLeaf({ items: [], totalCount: 0, previousCursor: null, nextCursor: null });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(container.querySelector(".wf-execution-children")).toBeNull();
+
+  let releaseComposite!: (value: ActivityExecutionBrowsePage) => void;
+  vi.mocked(browseActivityExecutions).mockImplementationOnce(() => new Promise(resolve => { releaseComposite = resolve; }));
+  flushSync(() => root.render(<ChildExecutionBrowser key="composite" context={context} execution={execution(2, "flowchart")} refreshKey={0} labelFor={() => "Child"} onEnter={vi.fn()} onIncident={vi.fn()} />));
+  await vi.waitFor(() => expect(releaseComposite).toBeTypeOf("function"));
+  expect(container.querySelector(".wf-execution-children")).toBeNull();
+
+  releaseComposite({ items: [entry(3)], totalCount: 1, previousCursor: null, nextCursor: null });
+  await vi.waitFor(() => expect(container.querySelector(".wf-execution-children button")?.textContent).toContain("Child executions1"));
+});
+
+it("retains a newly resolved singleton execution when exactId commits without flashing the loading browser", async () => {
+  const single = { ...entry(7), previousActivityExecutionId: null, nextActivityExecutionId: null };
+  let releaseAnchored!: (value: ActivityExecutionBrowsePage) => void;
+  vi.mocked(browseActivityExecutions).mockImplementation(async (_context, _run, request) => {
+    if (request?.anchorActivityExecutionId === "execution-7") {
+      return new Promise(resolve => { releaseAnchored = resolve; });
+    }
+    return { items: [single], totalCount: 1, previousCursor: null, nextCursor: null };
+  });
+  function Host() {
+    const [exactId, setExactId] = React.useState<string | undefined>(undefined);
+    return <ActivityExecutionInspectionPanel context={context} workflowExecutionId="run" nodeId="ordinary-node" nodeLabel="Write Line"
+      exactId={exactId} seed={null} refreshKey={0} requireExplicitSelection labelFor={() => "Write Line"}
+      onSelect={value => setExactId(value.activityExecutionId)} onEnter={vi.fn()} onIncident={vi.fn()}
+      renderDetails={(value, navigation) => <section data-details={value.activityExecutionId}>{navigation}</section>} />;
+  }
+  flushSync(() => root.render(<Host />));
+  await vi.waitFor(() => expect(container.querySelector("[data-details='execution-7']")).toBeTruthy());
+  await vi.waitFor(() => expect(releaseAnchored).toBeTypeOf("function"));
+  expect(container.querySelector("[data-details='execution-7']")).toBeTruthy();
+  expect(container.querySelector(".wf-execution-browser")).toBeNull();
+  releaseAnchored({ items: [single], totalCount: 1, previousCursor: null, nextCursor: null });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(container.querySelector("[data-details='execution-7']")).toBeTruthy();
+  expect(container.querySelector(".wf-execution-browser")).toBeNull();
 });
