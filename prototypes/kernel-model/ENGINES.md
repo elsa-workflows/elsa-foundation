@@ -86,8 +86,8 @@ coordinator confirms that session uses TLS and holds the partition row, then sto
 process. With `disconnect-check=on`, the worker sets PostgreSQL's `client_connection_check_interval`
 to 100 ms for that transaction. The fence must become available within three seconds while the
 competing transaction still holds its advisory lock. `disconnect-check=off` runs the control with
-the server setting disabled. The worker exits, but the fence remains held beyond the fixture's
-two-second lease. When the competing transaction ends, the old transaction rolls back and a later
+the server setting disabled. The fence remains held throughout the same three-second observation
+window and beyond the fixture's two-second lease. When the competing transaction ends, the old transaction rolls back and a later
 owner commits once at the unchanged journal position in either run. Both fence modes and writers
 use the same procedure.
 

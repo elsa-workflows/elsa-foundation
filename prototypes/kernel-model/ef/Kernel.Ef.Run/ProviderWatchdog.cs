@@ -12,6 +12,7 @@ static class ProviderWatchdog
     private const string ChildConnection = "KERNEL_WATCHDOG_TEST_CONNECTION";
     private const int Escalated = 71;
     private static readonly TimeSpan LeaseTime = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan ProcessExitBudget = TimeSpan.FromSeconds(3);
 
     public static async Task<int> RunAsync(Target target, string connection, string[] options)
     {
@@ -196,16 +197,16 @@ static class ProviderWatchdog
             if (detectDisconnect)
             {
                 using var clearance = CancellationTokenSource.CreateLinkedTokenSource(token);
-                clearance.CancelAfter(TimeSpan.FromSeconds(3));
+                clearance.CancelAfter(ProcessExitBudget);
                 while (!await FenceCanBeLockedAsync(target, clearance.Token))
                     await Task.Delay(25, clearance.Token);
-                Require(elapsed.Elapsed <= TimeSpan.FromSeconds(3),
+                Require(elapsed.Elapsed <= ProcessExitBudget,
                     $"PostgreSQL released the fence {elapsed.ElapsedMilliseconds} ms after the exit signal while the advisory blocker remained");
             }
             else
             {
-                // The stored lease started before the child opened its waiting transaction.
-                await Task.Delay(LeaseTime, token);
+                // Give the disconnected session the entire positive budget. The lease expires sooner.
+                await Task.Delay(ProcessExitBudget, token);
                 Require(!await FenceCanBeLockedAsync(target, token),
                     "without disconnect detection the exited owner's transaction still holds the fence past lease expiry");
             }
@@ -352,15 +353,16 @@ static class ProviderWatchdog
         var target = new Target(engine, connection, options);
         var lease = new Lease(long.Parse(options["epoch"], CultureInfo.InvariantCulture),
             long.Parse(options["position"], CultureInfo.InvariantCulture), 0);
-        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var token = limit.Token;
         if (target.Get("stage", "") == "owner-exit")
         {
             var waiter = target.Store(target.Workers(new PauseBeforeCommit(target.Get("disconnect-check", "on"))));
-            await waiter.CommitAsync(Flush(lease), token);
+            // The coordinator bounds this process's lifetime. This wait must have no independent cancellation.
+            await waiter.CommitAsync(Flush(lease), CancellationToken.None);
             throw new InvalidOperationException("The disposable worker returned before the owner-exit check.");
         }
 
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var token = limit.Token;
         long monotonic = 0;
         var watchdog = new Watchdog(LeaseTime, message =>
         {
