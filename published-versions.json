@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec",
+  "last_publish_commit": "215701244fda47f59bfe7e30bbc117a73da00fc1",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -143,14 +143,29 @@
       "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
     },
     {
+      "package_id": "Elsa.ActorFoundation.BuiltIn.Durable",
+      "version": "4.0.0-preview",
+      "commit": "215701244fda47f59bfe7e30bbc117a73da00fc1"
+    },
+    {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Hosting",
       "version": "4.0.1-preview",
       "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
     },
     {
+      "package_id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
+      "version": "4.0.0-preview",
+      "commit": "215701244fda47f59bfe7e30bbc117a73da00fc1"
+    },
+    {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Runtime",
       "version": "4.0.1-preview",
       "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+    },
+    {
+      "package_id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
+      "version": "4.0.0-preview",
+      "commit": "215701244fda47f59bfe7e30bbc117a73da00fc1"
     },
     {
       "package_id": "Elsa.ActorFoundation.Contracts",
@@ -1151,6 +1166,11 @@
       "package_id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
       "version": "4.0.29-preview",
       "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Graph",
+      "version": "4.0.0-preview",
+      "commit": "215701244fda47f59bfe7e30bbc117a73da00fc1"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Http",
