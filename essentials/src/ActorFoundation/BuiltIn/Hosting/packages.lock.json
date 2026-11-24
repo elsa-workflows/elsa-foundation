@@ -4,9 +4,6 @@
     "net10.0": {
       "elsa.actorfoundation.builtin.runtime": {
         "type": "Project"
-      },
-      "elsa.actorfoundation.contracts": {
-        "type": "Project"
       }
     }
   }

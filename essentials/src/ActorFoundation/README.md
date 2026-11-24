@@ -8,7 +8,7 @@ The hosting adapter uses `Elsa.ActorFoundation.Hosting` to bind one configured E
 ingress or read calls. The constructor of `BoundScope` is internal. The model package has no hosting dependency.
 
 The built-in implementation uses `Elsa.ActorFoundation.BuiltIn.Runtime` for placement and scope activation, and
-`Elsa.ActorFoundation.BuiltIn.Runtime.Hosting` for node scheduling and lifetime. The preview and runtime
+`Elsa.ActorFoundation.BuiltIn.Hosting` for node scheduling and lifetime. The preview and runtime
 conformance programs consume these same assemblies.
 
 See the [foundation contract](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/foundation-contract.md) for the complete behavior and

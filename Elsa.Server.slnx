@@ -244,7 +244,7 @@
   </Folder>
   <Folder Name="/essentials/src/ActorFoundation/BuiltIn/">
     <Project Path="essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj" />
-    <Project Path="essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Runtime.Hosting.csproj" />
+    <Project Path="essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
   </Folder>
   <Folder Name="/essentials/src/ActorFoundation/Model/">
     <Project Path="essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />

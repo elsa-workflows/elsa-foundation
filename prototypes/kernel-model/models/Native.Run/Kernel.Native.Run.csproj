@@ -15,7 +15,7 @@
     <Compile Include="../Statecharts.Run/OrderStatechart.cs" Link="OrderStatechart.cs" />
     <ProjectReference Include="../Statecharts.Native/Kernel.Statecharts.Native.csproj" />
     <ProjectReference Include="../Native.Legacy/Kernel.Native.Legacy.csproj" />
-    <ProjectReference Include="../../../../essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Runtime.Hosting.csproj" />
+    <ProjectReference Include="../../../../essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
     <ProjectReference Include="../../runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj" />
     <ProjectReference Include="../../src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
     <ProjectReference Include="../../src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />

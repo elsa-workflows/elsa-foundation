@@ -2,15 +2,14 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
-      "elsa.actorfoundation.builtin.runtime": {
-        "type": "Project"
-      },
-      "elsa.actorfoundation.builtin.runtime.hosting": {
+      "elsa.actorfoundation.builtin.hosting": {
         "type": "Project",
         "dependencies": {
-          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )"
         }
+      },
+      "elsa.actorfoundation.builtin.runtime": {
+        "type": "Project"
       },
       "elsa.actorfoundation.contracts": {
         "type": "Project"

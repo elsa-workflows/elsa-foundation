@@ -2,13 +2,12 @@
   <PropertyGroup>
     <RootNamespace>Kernel.Runtime.Hosting</RootNamespace>
     <AssemblyName>Kernel.Runtime.Hosting</AssemblyName>
-    <PackageId>Elsa.ActorFoundation.BuiltIn.Runtime.Hosting</PackageId>
+    <PackageId>Elsa.ActorFoundation.BuiltIn.Hosting</PackageId>
     <Description>Scheduling and lifetime for a built-in Actor Foundation node.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj" />
-    <ProjectReference Include="../../Contracts/Elsa.ActorFoundation.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="/" />
