@@ -638,6 +638,16 @@ The bound child is cancelled and protected ThenDelete keeps the checkpoint. This
 existing unavailable-model path. Shipped deployment controls and physical-provider
 envelopes have separate qualification.
 
+The PostgreSQL format-11 fixture checks both a readable upgrade and the explicit
+unavailable-model fallback. It stages the deliberately expanded terminal state against
+the real writer and verifies atomic refusal. A later owner scoped to that one creation
+runs the original Terminate and preserves the previous physical state and header. The
+adjacent actor resumes under the normal owner after the fallback owner releases the partition.
+Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database and run from the repository root.
+
+```bash
+dotnet run -c Release --project essentials/tests/ActorFoundation/Native/Run -- pg-root-terminate owned checked fallback
+```
 
 ## 10. Private durable lexical-resource probe
 
