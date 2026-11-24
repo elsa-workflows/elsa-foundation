@@ -24,9 +24,12 @@ internal static class HttpRouteChecks
             .Add(Wf.Workflow("flowchart-loop", Wf.Flowchart("flow",
                 [Wf.HttpEndpoint("in", "flowchart-loop"), Wf.Respond("out", "ok")],
                 [new Connection("in", "out"), new Connection("out", "in")])))
+            .Add(Wf.Workflow("flowchart-entries", Wf.Flowchart("flow",
+                [Wf.WriteLine("stray", "left over"), Wf.HttpEndpoint("in-a", "entry-a", "GET"), Wf.HttpEndpoint("in-b", "entry-b"), Wf.Respond("out", "ok")],
+                [new Connection("in-a", "out"), new Connection("in-b", "out")])))
             .Add(Wf.Workflow("flowchart-expression", Wf.Flowchart("flow",
-                [Wf.HttpEndpoint("in", Binding.Expr("'computed'")), Wf.Respond("out", "ok")],
-                [new Connection("in", "out")])))
+                [Wf.HttpEndpoint("in", Binding.Expr("'computed'")), Wf.HttpEndpoint("literal", "expression-sibling"), Wf.Respond("out", "ok")],
+                [new Connection("in", "out"), new Connection("literal", "out")])))
             .Add(Wf.Workflow("flowchart-broken", Wf.Flowchart("flow",
                 [Wf.HttpEndpoint("in", "flowchart-broken")],
                 [new Connection("in", "missing")]))));
@@ -37,18 +40,25 @@ internal static class HttpRouteChecks
             "a root Flowchart whose start node is an HttpEndpoint starts on that endpoint's method and path, wherever the node is listed");
         check(!routes.TryStart("POST", "flowchart-mid", out _),
             "an HttpEndpoint behind the Flowchart's start node is a wait in the middle, not a start route");
-        check(routes.TryStart("POST", "flowchart-loop", out var loop) && loop == ("flowchart-loop", "in"),
-            "when every node has an inbound connection, the Flowchart's first node is its start node, as the graph engine picks it");
-        check(!routes.TryStart("POST", "computed", out _) && !routes.TryStart("POST", "flowchart-broken", out _),
+        check(routes.TryStart("GET", "entry-a", out var a) && a == ("flowchart-entries", "in-a") &&
+              routes.TryStart("POST", "entry-b", out var b) && b == ("flowchart-entries", "in-b"),
+            "every HttpEndpoint of a root Flowchart that no connection leads to is a start route, also behind a stray node listed first");
+        check(!routes.TryStart("POST", "flowchart-loop", out _),
+            "an HttpEndpoint a loop leads back to is a wait, not a start route, even when the engine falls back to it as the start node");
+        check(routes.TryStart("POST", "expression-sibling", out var sibling) && sibling == ("flowchart-expression", "literal") &&
+              !routes.TryStart("POST", "computed", out _) && !routes.TryStart("POST", "'computed'", out _) && !routes.TryStart("POST", "flowchart-broken", out _),
             "a start endpoint needs a literal path, and a Flowchart the graph engine refuses registers no route");
     }
 
     private static async Task FlowchartStartAsync(Action<bool, string> check)
     {
         var registry = new WorkflowRegistry().Add(Wf.Workflow("designed", Wf.Flowchart("flow",
-            [Wf.HttpEndpoint("in", "designed").Capture("order", "Body"), Wf.If("check", Binding.Expr("order.id > 0")),
-                Wf.Respond("accepted", Binding.Expr("'accepted ' + order.id"), status: 201), Wf.Respond("refused", "no id", status: 400)],
-            [new Connection("in", "check"), new Connection("check", "accepted", "True"), new Connection("check", "refused", "False")]),
+            [Wf.WriteLine("note", "a stray node listed first"), Wf.HttpEndpoint("in", "designed").Capture("order", "Body"),
+                Wf.HttpEndpoint("lookup", "designed/lookup", "GET"), Wf.If("check", Binding.Expr("order.id > 0")),
+                Wf.Respond("accepted", Binding.Expr("'accepted ' + order.id"), status: 201), Wf.Respond("refused", "no id", status: 400),
+                Wf.Respond("found", Binding.Expr("'found ' + $lookup.Query.id"))],
+            [new Connection("in", "check"), new Connection("check", "accepted", "True"), new Connection("check", "refused", "False"),
+                new Connection("lookup", "found")]),
             ("order", null)));
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
         {
@@ -57,8 +67,11 @@ internal static class HttpRouteChecks
             await owner.StartAsync();
             var accepted = await owner.Http.SendAsync(new HttpRequest("POST", "designed", Wf.Object(("id", 7))), worker, mode, () => owner.PumpAsync());
             var refused = await owner.Http.SendAsync(new HttpRequest("POST", "designed", Wf.Object(("id", 0))), worker, mode, () => owner.PumpAsync());
-            check(accepted is { StatusCode: 201 } && accepted.Body?.GetValue<string>() == "accepted 7" && refused is { StatusCode: 400 },
-                $"{mode}: a request starts a designer-shaped Flowchart at its HttpEndpoint and the branch it takes answers ({accepted.StatusCode}, {refused.StatusCode})");
+            var found = await owner.Http.SendAsync(new HttpRequest("GET", "designed/lookup") { Query = new Dictionary<string, string> { ["id"] = "9" } },
+                worker, mode, () => owner.PumpAsync());
+            check(accepted is { StatusCode: 201 } && accepted.Body?.GetValue<string>() == "accepted 7" && refused is { StatusCode: 400 } &&
+                  found is { StatusCode: 200 } && found.Body?.GetValue<string>() == "found 9",
+                $"{mode}: each entry HttpEndpoint of a designer-shaped Flowchart starts it there, and the branch it takes answers ({accepted.StatusCode}, {refused.StatusCode}, {found.StatusCode})");
         }
     }
 }

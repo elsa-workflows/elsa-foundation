@@ -19,26 +19,28 @@ public sealed class HttpRoutes
             foreach (var node in workflow.Nodes.Values.Where(n => n.Type == typeof(HttpEndpoint)))
                 if (node.Inputs.GetValueOrDefault("Path") is LiteralBinding { Value: { } p } && node.Inputs.GetValueOrDefault("RespondBeforeCommit") is LiteralBinding { Value: { } early } && early.GetValue<bool>())
                     _early.Add(Key(Method(node), p.GetValue<string>()));
-            // A start trigger is an HttpEndpoint with a literal path at the root, first in a root Sequence, or the start
-            // node of a root Flowchart (the designer's shape).
-            var first = StartOf(workflow.Root);
-            if (first.Type != typeof(HttpEndpoint) || first.Inputs.GetValueOrDefault("Path") is not LiteralBinding { Value: { } path }) continue;
-            _starts[Key(Method(first), path.GetValue<string>())] = (workflow.Id, first.Id);
+            // A start trigger is an HttpEndpoint with a literal path at the root, first in a root Sequence, or a child of a
+            // root Flowchart (the designer's shape) that no connection leads to.
+            foreach (var start in StartsOf(workflow.Root))
+                if (start.Type == typeof(HttpEndpoint) && start.Inputs.GetValueOrDefault("Path") is LiteralBinding { Value: { } path })
+                    _starts[Key(Method(start), path.GetValue<string>())] = (workflow.Id, start.Id);
         }
     }
 
-    // The node a run of the root begins at. A Flowchart's is the graph engine's start node (the first child without an
-    // inbound connection, else the first child); a graph the engine refuses has none, and its run faults on its own.
-    private static Node StartOf(Node root)
+    // The nodes a run of the root can begin at. In a Flowchart, a run triggered at a child begins there (the graph
+    // engine's SelectEntryNode), so every child without an inbound connection is an entry, as the old core's start-path
+    // rule has it. A child a connection leads to is not one, even when the engine falls back to it as the start node: a
+    // loop that comes back to it would wait there on the start route's own key, and no request could reach that wait.
+    // A graph the engine refuses has no entry; its run faults on its own.
+    private static IEnumerable<Node> StartsOf(Node root)
     {
-        if (root.Children.Count == 0) return root;
-        if (root.Type == typeof(Sequence)) return root.Children[0];
-        if (root.Type != typeof(Flowchart)) return root;
-        try
-        {
-            return Flowchart.GraphOf(root).SelectStartNode() is { } start ? root.Children.First(child => child.Id == start.NodeId) : root;
-        }
-        catch (FlowchartExecutionException) { return root; }
+        if (root.Children.Count == 0) return [root];
+        if (root.Type == typeof(Sequence)) return [root.Children[0]];
+        if (root.Type != typeof(Flowchart)) return [root];
+        try { _ = Flowchart.GraphOf(root); }
+        catch (Exception refused) when (refused is FlowchartExecutionException or ArgumentException) { return []; }
+        var targets = root.Connections.Select(connection => connection.Target).ToHashSet(StringComparer.Ordinal);
+        return root.Children.Where(child => !targets.Contains(child.Id));
     }
 
     private static string Method(Node node) => node.Inputs.GetValueOrDefault("Method") is LiteralBinding { Value: { } m } ? m.GetValue<string>() : "POST";
