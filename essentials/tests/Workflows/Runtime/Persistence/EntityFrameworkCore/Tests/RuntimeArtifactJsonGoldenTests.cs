@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -27,23 +29,23 @@ public sealed class RuntimeArtifactJsonGoldenTests
     private const string PreviousRow = RowStart + PreviousData + RowEnd;
     private const string CurrentRow = RowStart + Data + RowEnd;
 
-    private static readonly JsonSerializerOptions PreviousReader = new(JsonSerializerDefaults.Web);
+    private static readonly DateTimeOffset CapturedAt = new(2026, 10, 28, 9, 15, 0, TimeSpan.FromHours(5));
 
     private static DurableValueState Expected() => new("value-1", "workflow-1", "René", new("json", null, null),
         DurableValueLifecycle.Instance, DurableValueStorage.Inline, JsonSerializer.Deserialize<JsonElement>(Data),
-        null, null, new DateTimeOffset(2026, 10, 28, 9, 15, 0, TimeSpan.FromHours(5)), new Dictionary<string, string> { ["source"] = "golden" });
+        null, null, CapturedAt, new Dictionary<string, string> { ["source"] = "golden" });
 
     [Fact]
     public void The_current_writer_produces_the_golden_row_byte_for_byte() =>
         Assert.Equal(CurrentRow, RuntimeArtifactJson.Serialize(Expected()));
 
     [Fact]
-    public void The_previous_writer_differs_only_by_re_emitting_the_carried_data()
+    public void The_previous_writer_produced_the_previous_golden_row_byte_for_byte()
     {
-        Assert.Equal(PreviousData, JsonSerializer.Serialize(JsonSerializer.Deserialize<JsonElement>(Data), PreviousReader));
-        using var previous = JsonDocument.Parse(PreviousRow);
-        using var current = JsonDocument.Parse(CurrentRow);
-        Assert.True(JsonCanonicalForm.Equals(previous.RootElement, current.RootElement));
+        var expected = Expected();
+        var previous = new PreviousDurableValue(expected.DurableValueId, expected.WorkflowExecutionId, expected.ValueId, expected.Type,
+            expected.Lifecycle, expected.Storage, expected.InlineValue, null, null, CapturedAt, expected.Metadata);
+        Assert.Equal(PreviousRow, JsonSerializer.Serialize(previous, PreviousRuntimeJson.Options));
     }
 
     [Theory]
@@ -59,23 +61,28 @@ public sealed class RuntimeArtifactJsonGoldenTests
         Assert.Equal(expected.Type, read.Type);
         Assert.Equal(expected.Lifecycle, read.Lifecycle);
         Assert.Equal(expected.Storage, read.Storage);
-        Assert.Equal(expected.CapturedAt, read.CapturedAt);
-        Assert.Equal(expected.CapturedAt.Offset, read.CapturedAt.Offset);
-        Assert.Equal("golden", read.Metadata["source"]);
+        Assert.Equal(CapturedAt, read.CapturedAt);
+        Assert.Equal(CapturedAt.Offset, read.CapturedAt.Offset);
+        Assert.Equal("golden", Assert.Single(read.Metadata).Value);
         Assert.Equal(data, read.InlineValue!.Value.GetRawText());
         Assert.True(JsonCanonicalForm.Equals(expected.InlineValue!.Value, read.InlineValue!.Value));
     }
 
     [Fact]
-    public void The_previous_reader_options_read_the_current_row_with_the_same_meaning()
+    public void The_previous_reader_reads_the_current_row_with_the_same_meaning()
     {
-        using var current = JsonDocument.Parse(CurrentRow);
-        var root = current.RootElement;
-        Assert.Equal("Inline", root.GetProperty("storage").Deserialize<string>(PreviousReader));
-        Assert.Equal(Expected().CapturedAt, root.GetProperty("capturedAt").Deserialize<DateTimeOffset>(PreviousReader));
-        Assert.Equal(TimeSpan.FromHours(5), root.GetProperty("capturedAt").Deserialize<DateTimeOffset>(PreviousReader).Offset);
-        var data = root.GetProperty("inlineValue").Deserialize<JsonElement>(PreviousReader);
-        Assert.True(JsonCanonicalForm.Equals(JsonSerializer.Deserialize<JsonElement>(Data), data));
+        var read = JsonSerializer.Deserialize<PreviousDurableValue>(CurrentRow, PreviousRuntimeJson.Options)!;
+        var expected = Expected();
+        Assert.Equal(expected.DurableValueId, read.DurableValueId);
+        Assert.Equal(expected.WorkflowExecutionId, read.WorkflowExecutionId);
+        Assert.Equal(expected.ValueId, read.ValueId);
+        Assert.Equal(expected.Type, read.Type);
+        Assert.Equal(expected.Lifecycle, read.Lifecycle);
+        Assert.Equal(expected.Storage, read.Storage);
+        Assert.Equal(CapturedAt, read.CapturedAt);
+        Assert.Equal(CapturedAt.Offset, read.CapturedAt.Offset);
+        Assert.Equal("golden", read.Metadata["source"]);
+        Assert.True(JsonCanonicalForm.Equals(expected.InlineValue!.Value, read.InlineValue!.Value));
     }
 
     [Fact]
@@ -85,5 +92,34 @@ public sealed class RuntimeArtifactJsonGoldenTests
         Assert.Equal("\"2026-10-28T09:15:00\"", stored.GetRawText());
         Assert.ThrowsAny<Exception>(() => JsonConversionContract.For(typeof(DateTime)).Read(stored, typeof(DateTime)));
         Assert.ThrowsAny<Exception>(() => JsonConversionContract.For(typeof(DateTimeOffset)).Read(stored, typeof(DateTimeOffset)));
+    }
+
+    // The durable-value body shape the store reads and writes (RuntimeArtifactJson.DurableValueStateData).
+    private sealed record PreviousDurableValue(string DurableValueId, string WorkflowExecutionId, string ValueId,
+        RuntimeValueTypeDescriptor Type, DurableValueLifecycle Lifecycle, DurableValueStorage Storage, JsonElement? InlineValue,
+        DurableValueExternalReference? ExternalReference, string? SourceActivityExecutionId, DateTimeOffset CapturedAt,
+        IReadOnlyDictionary<string, string> Metadata);
+
+    // Copy of the runtime store options before S-9 (merge base 2db2d8a899): Web defaults, enum names and framed
+    // UTF-16 identity strings. Kept as a fixed copy so the previous format stays pinned when the store changes.
+    private static class PreviousRuntimeJson
+    {
+        internal static readonly JsonSerializerOptions Options = Create();
+
+        private static JsonSerializerOptions Create()
+        {
+            var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            options.Converters.Add(new JsonStringEnumConverter());
+            options.Converters.Add(new LosslessUtf16StringConverter());
+            return options;
+        }
+
+        private sealed class LosslessUtf16StringConverter : JsonConverter<string>
+        {
+            public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => EfRelationalIdentity.Decode(reader.GetString()!);
+            public override string ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => EfRelationalIdentity.Decode(reader.GetString()!);
+            public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) => writer.WriteStringValue(EfRelationalIdentity.Encode(value));
+            public override void WriteAsPropertyName(Utf8JsonWriter writer, string value, JsonSerializerOptions options) => writer.WritePropertyName(EfRelationalIdentity.Encode(value));
+        }
     }
 }

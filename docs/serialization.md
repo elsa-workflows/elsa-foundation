@@ -121,13 +121,14 @@ for Elsa-owned contracts only. Workflow-data conversions never enter that list.
 
 The guards that read this table and the C# hash review register load and SDK-evaluate every shipping project, which
 takes over an hour, so CI skips them. Run them on demand when JSON option sets, hash owners or their source closures
-change, and record the result as PR evidence: set `ELSA_SHIPPING_CENSUS=1`, build the Architecture tests, and filter
-`dotnet test` to the tests marked `[ShippingCensusFact]`.
+change, and record the result as PR evidence: set `ELSA_SHIPPING_CENSUS=1`, build the Architecture tests, and run
+`dotnet test` with the `[ShippingCensusFact]` tests as filter:
+`FullyQualifiedName~JsonHashRecipeShippingTests|FullyQualifiedName~JsonHashOwnerGoldenTests.Shipping_hash_owners|FullyQualifiedName~Every_production_root_uses_the_baseline|FullyQualifiedName~Every_shipping_CSharp_assembly_can_be_inspected`.
 
 | File | Setting | Reason | Approved by |
 |---|---|---|---|
 | `essentials/src/Activities/Graph/Runtime/Services/GraphActivityScope.cs` | `construction@2abf2f2308f2` | Reads Elsa's own value TypeReference metadata of a graph variable to apply the S-2 null policy; its producers are not all camelCase, so the read stays case-insensitive. Carries no workflow data. | ADR 0091 decision 7; spec 1207 |
-| `essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/RuntimeOutputCaptureProjector.cs` | `construction@b106e4418c78` | Reads Elsa's own capture-schema TypeReference metadata to apply the S-2 null policy; the schema is written with PascalCase members, so the read stays case-insensitive. Carries no workflow data. | ADR 0091 decision 7; spec 1207 |
+| `essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/RuntimeOutputCaptureProjector.cs` | `construction@b106e4418c78` | Reads Elsa's own capture-schema TypeReference metadata to apply the S-2 null policy; its producers write both PascalCase (the compiler's own descriptor) and authored camelCase members, so the read stays case-insensitive. Carries no workflow data. | ADR 0091 decision 7; spec 1207 |
 | `essentials/src/Workflows/Runtime/Core/Models/StepWorkflowStateEffects.cs` | `PropertyNamingPolicy@82d276b473ec` | The closed, value-free retained receipt protocol keeps its PascalCase field names. Bidirectional original/current reader and writer controls and append controls cover null attribution, escaped text and explicit offsets; API contexts retain camelCase. | ADR 0091 decision 7; spec 1207 FR-023 |
 | `essentials/src/Activities/Bpmn/Core/Internal/BpmnEmbeddingJson.cs` | `UnmappedMemberHandling@a4fc9453ddd9, converter:TextConverter@30ec2f1086d9` | The closed BPMN embedding union retains its text converter and refuses unknown structural fields; embedded data values remain raw JSON. | ADR 0091 decision 7; spec 1207 |
 | `essentials/src/Activities/Bpmn/Design/Internal/BpmnStructureHandler.cs` | `converter:JsonStringEnumConverter@aca668889826` | The BpmnStructureHandler owner retains its established enum vocabulary for matching typed readers; raw JsonElement members and dictionary keys retain the baseline behavior. | ADR 0091 decision 7; spec 1207 |
