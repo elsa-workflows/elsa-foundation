@@ -4,8 +4,7 @@
 **Decided by the owner on 24 November 2026:** card 1 option A, card 2 option A, card 3 option B. Each card ends with its
 decision. Read from the source only; nothing was run and no code changes.
 
-The GA test drive's gap map (`core-preview-map.md` in this folder, landing with
-[#5701](https://github.com/elsa-workflows/elsa-foundation/pull/5701)) found that no designer-built
+The GA test drive's [gap map](core-preview-map.md) found that no designer-built
 HTTP workflow runs on the Core Preview yet. A parallel session is adding query strings, headers, Flowchart start routes
 and duplicate-route refusal to the Native model. Three gaps need an owner decision first, because they touch the
 foundation contract or the side-effect rules:
