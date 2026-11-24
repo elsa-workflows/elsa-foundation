@@ -64,14 +64,29 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             AND marker.relnamespace = i.relnamespace AND marker.relkind = 'r'
         """;
 
+    // Reads pin the issuer to the marker's schema. A checkpoint relation that resolves must share it,
+    // but a renamed source is allowed: projections such as workflow history keep serving without it.
+    private const string RootReadIssuerSource = """
+        FROM "FoundationRootIssuer" issuer
+        JOIN pg_catalog.pg_class i ON i.oid = issuer.tableoid AND i.relkind = 'r'
+        JOIN pg_catalog.pg_class marker ON marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
+            AND marker.relnamespace = i.relnamespace AND marker.relkind = 'r'
+        WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_class source
+            WHERE source.oid = pg_catalog.to_regclass('"Instances"')
+                AND (source.relnamespace <> i.relnamespace OR source.relkind <> 'r'))
+        """;
+
     private static async Task<FoundationReadCursor> ReadJournalCursorAsync(KernelDb db, CancellationToken cancellationToken)
     {
-        var issuerKey = await ReadRootIssuerKeyAsync(db, cancellationToken);
+        var issuerKey = await ReadIssuerKeyAsync(db, RootReadIssuerSource, cancellationToken);
         return new(HMACSHA256.HashData(issuerKey, "elsa-preview/journal-cursor/1"u8));
     }
 
-    internal static async Task<byte[]> ReadRootIssuerKeyAsync(KernelDb db, CancellationToken cancellationToken) =>
-        await db.Database.SqlQueryRaw<byte[]>("""SELECT issuer."Key" AS "Value" """ + RootIssuerSource)
+    internal static Task<byte[]> ReadRootIssuerKeyAsync(KernelDb db, CancellationToken cancellationToken) =>
+        ReadIssuerKeyAsync(db, RootIssuerSource, cancellationToken);
+
+    private static async Task<byte[]> ReadIssuerKeyAsync(KernelDb db, string source, CancellationToken cancellationToken) =>
+        await db.Database.SqlQueryRaw<byte[]>("""SELECT issuer."Key" AS "Value" """ + source)
             .SingleOrDefaultAsync(cancellationToken)
         ?? throw new StoreFormatException("The root issuer is missing from the checkpoint's store schema.");
 

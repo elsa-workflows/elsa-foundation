@@ -68,6 +68,7 @@ internal static class PostgresWorkflowHistoryChecks
             try { await api.TailAsync(scope, first.Items[0].Ref, saved, ct); throw new InvalidOperationException("Accepted a history bookmark on the journal."); }
             catch (ArgumentException error) when (error.ParamName == "from") { }
             Check(true, "history bookmarks bind filters and read kind");
+            await CheckRenamedSourcePin();
             return 0;
         }
 
@@ -341,6 +342,30 @@ internal static class PostgresWorkflowHistoryChecks
             Check((await runs.ListAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
                 "a complete trigger chain in another schema cannot certify the renamed history source");
             await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FixtureArchivedOwner" RENAME TO "Instances" """, ct);
+        }
+        async Task CheckRenamedSourcePin()
+        {
+            var schema = await db.Database.SqlQueryRaw<string>("SELECT current_schema() AS \"Value\"").SingleAsync(ct);
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE SCHEMA fixture_history_source;
+                CREATE TABLE fixture_history_source."Instances" (id integer);
+                """, ct);
+            try
+            {
+                using var identifiers = new NpgsqlCommandBuilder();
+                var shadow = new NpgsqlConnectionStringBuilder(connection)
+                {
+                    SearchPath = "fixture_history_source," + identifiers.QuoteIdentifier(schema)
+                }.ConnectionString;
+                var shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(shadow).Options;
+                await RequireFormatRefusal(() => new PostgresRootAdmission(() => new KernelDb(shadowOptions), TimeSpan.FromHours(1))
+                    .OpenJournalCursorAsync(ct));
+                Check(true, "with the source renamed, a checkpoint relation from another schema still refuses the read issuer");
+            }
+            finally
+            {
+                await db.Database.ExecuteSqlRawAsync("DROP SCHEMA fixture_history_source CASCADE", CancellationToken.None);
+            }
         }
         async Task RequireSourceRefusal()
         {

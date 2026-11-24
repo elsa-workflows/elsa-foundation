@@ -470,7 +470,8 @@ On a fresh disposable PostgreSQL database, run `pg-root-workflow-history <owned|
 with the Native runner. Birth checks that a run finishing at revision 1 shares its terminal time and database
 transaction with the journal and both projections. Then it renames the checkpoint and journal tables so
 `restart <projection-bookmark>` and `tenant <projection-bookmark> <tenant-reference>` exercise both projections
-from separate processes. Use the bookmark and reference printed by birth.
+from separate processes. Use the bookmark and reference printed by birth. The nightly CI job
+`Kernel prototype nightly, PostgreSQL workflow history` runs this chain in all four writer and fence lanes.
 
 On a fresh PostgreSQL database, `pg-root-history <owned|ef> <checked|in-batch>` on the same runner
 exercises two ordinary turns with no journal entries. The Minimal workflow saves its first approval. The Full
