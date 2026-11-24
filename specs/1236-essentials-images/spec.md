@@ -146,9 +146,9 @@ merged.
   define, document or test that case (see Q5).
 - A converted definition fails to publish at startup: the engine logs the definition and the reason, keeps running and
   serves the other definitions, as JSON workflow reconciliation does today.
-- A file in the workflows folder cannot be imported (malformed JSON, a store error): the reconcile pass fails as a
-  whole, nothing from the folder is published, and the log names the file and the reason, as JSON workflow
-  reconciliation does today. The migration CLI writes only definitions that converted (refused ones stay in its
+- A file in the workflows folder cannot be imported (malformed JSON, a store error), or a mounted `migrated/` has no
+  activities file: the reconcile startup task fails, shell activation fails, the engine never reports ready and the
+  log names the file and the reason, as the reconciliation startup tasks do today. The migration CLI writes only definitions that converted (refused ones stay in its
   report), so this case means a hand-edited or foreign file; this specification builds no per-file isolation for it.
 - A converted definition uses a reusable workflow defined in another file of the folder: it is published only if the
   engine accepts that order (see FR-010).
@@ -187,7 +187,8 @@ merged.
   it.
 - **FR-008**: Secrets the composed features require (today: the seeded administrator password, the token signing key,
   the recovery and hierarchy cursor signing keys, the workflow alteration payload protection key) MUST have no baked
-  value, and the identity features MUST NOT run in development or demo mode. When one is missing, the engine
+  value, and the essentials list and the example settings MUST keep the identity features out of development or demo
+  mode (a user may still change that setting, as any other, FR-005). When one is missing, the engine
   MUST refuse to start and name the setting. A documented example `appsettings.json` MUST list every required setting.
 
 **Workflows and reusable activities**

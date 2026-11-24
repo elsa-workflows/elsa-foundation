@@ -9,7 +9,11 @@
 | `/app/migrated` | folder, read-only | The migration CLI's output: `workflows/` (Elsa 4 workflow definitions, imported and published at startup) and `activities/activities.json` (composite activities, imported at startup). The image holds an empty `workflows/` and an `activities.json` of `[]`. |
 | `/app/data` | volume | SQLite databases and the Data Protection key ring. |
 
-- Port 8080; the root path returns the health JSON, as the Workbench image does.
+- Port 8080. `GET /health/ready` returns 200 only after shell activation, which includes reconciling and publishing
+  `/app/migrated`; it is the readiness gate for users, the image health check and the acceptance run. The root path
+  returns a health JSON at once and is not a gate.
+- The image keeps Nuplane directory feeds (`Nuplane.Sources.Directory`) in its closure: `/app/packages` is one, and
+  the Elsa 3 migration image's worker uses the same source for its own packages.
 - Environment: `Production`. Environment variables override the user file.
 - Tags: `latest`, `4.0.0-preview.<run>`, `sha-<short>`, as the Workbench image.
 
@@ -25,7 +29,8 @@ The engine refuses to start, naming the setting, when one of these is empty:
 | `CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey` | HMAC key, at least 32 bytes. |
 | `CShells:Shells:default:Features:WorkflowsRuntimeApi:WorkflowAlterationPayloadProtectionKeys` and `WorkflowAlterationPayloadProtectionActiveKeyId` | Protects workflow alteration payloads. |
 
-The final list is whatever the composed features require; the implementation checks it against the refusals and
+This table is the authority for every setting the engine requires; the migration CLI generates run-only values for
+exactly these in its in-memory run. The final list is whatever the composed features require; the implementation checks it against the refusals and
 updates this table and `appsettings.example.json` together.
 
 ### Studio settings

@@ -82,7 +82,7 @@ publishes `/app/migrated/workflows`.
   `docker/compose/essentials/migrated/workflows/hello.json`, an Elsa 4
   JSON workflow reconciliation catalog with one HTTP-triggered workflow writing a fixed response (FR-022).
 - [ ] T015 [US1] Write `apps/Elsa.Essentials.Server/Dockerfile` from the Workbench Dockerfile (locked restore,
-  ReadyToRun, computed versions, non-root user, health check), creating `/app/config`, the `/app/migrated` skeleton (empty `workflows/`, `activities/activities.json` of `[]`),
+  ReadyToRun, computed versions, non-root user, health check), with the health check on `/health/ready`, creating `/app/config`, the `/app/migrated` skeleton (empty `workflows/`, `activities/activities.json` of `[]`),
   `/app/packages` and `/app/data` owned by the runtime user; build it locally.
 - [ ] T016 [US1] Check FR-003 and SC-004: list every assembly in the built image's `/app` and confirm none is an Elsa 3 assembly and every Elsa assembly belongs to a listed feature or to hosting and
   package loading;
@@ -92,7 +92,8 @@ publishes `/app/migrated/workflows`.
   locally packed Liquid feature package for scenario 2 with a definition that uses a Liquid expression, a changed baked
   setting for scenario 3 (`PublishOnReconcile: false`, checking `hello.json` is imported but not published, FR-009), a missing package, a missing secret, no `migrated/` mount, a mounted `migrated/` without an
   activities file, and for scenario 7 a composite in `activities.json` used by a workflow), plus the import-failure
-  edge case (a malformed file next to `hello.json`: the pass fails and the log names the file); record each
+  edge case (a malformed file next to `hello.json`, and a mounted `migrated/` without an activities file: shell activation
+  fails, `/health/ready` never returns 200, the log names the file); record each
   result in the PR evidence.
 
 **Checkpoint**: the engine image runs a user's workflow with only a settings file (SC-002 for the engine).
@@ -108,7 +109,7 @@ publishes `/app/migrated/workflows`.
 
 - [ ] T018 [US2] Write the essentials run section of `extensions/Elsa3/tests/JTest/README.md`: build the image, run
   the CLI's `inventory` over the acceptance definitions (adjusted copies in place of originals), start the container
-  with `migrated/` at `/app/migrated` and a run settings file, set capture, run the S-15 Elsa 4 command with the
+  with `migrated/` at `/app/migrated` and a run settings file, wait for `/health/ready` = 200, set capture, run the S-15 Elsa 4 command with the
   container's base URL and credentials.
 - [ ] T019 [US2] Run it on the initiative head; record the run in `extensions/Elsa3/tests/JTest/ledger/runs.md` with
   engine `essentials` (data model, *Acceptance run record*).
