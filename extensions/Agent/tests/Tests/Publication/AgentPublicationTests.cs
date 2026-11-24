@@ -359,6 +359,12 @@ public sealed partial class AgentPublicationTests
             await publishing.DisposeAsync();
             await runtime.DisposeAsync();
             await design.DisposeAsync();
+            // Pooled connections keep the files open on Windows; clear only this fixture's pools (#2185).
+            foreach (var file in new[] { "design.db", "runtime.db", "publishing.db" })
+            {
+                using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + Path.Combine(directory, file));
+                Microsoft.Data.Sqlite.SqliteConnection.ClearPool(connection);
+            }
             Directory.Delete(directory, true);
         }
     }
