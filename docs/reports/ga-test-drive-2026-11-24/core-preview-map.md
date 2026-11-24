@@ -47,7 +47,9 @@ release 1 milestone on [#4229](https://github.com/elsa-workflows/elsa-foundation
      K8 covered delivery, the reply transport and timeouts, and none of these authoring features.
 
 Without these cases, K13 could pass with every gate green while a designer user still cannot build W1. The
-program plan now carries one case for each gap: gap 2 in the K6 row, gap 3 in the K8 row and gap 1 in the K10 row.
+program plan now carries one case for each gap: gap 2 in the K6 row, gap 1 in the K10 row, and gap 3's routing,
+request and response points in the K8 row. The `SendHttpRequest` point of gap 3 gets its case with the owner's card 2,
+through [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702).
 Route templates carry over from the old core, which matches `orders/{id}`. Later the same day the owner decided the
 three open design cards ([#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7145147047),
 design in [#5702](https://github.com/elsa-workflows/elsa-foundation/pull/5702)): route templates by resolved waits,
