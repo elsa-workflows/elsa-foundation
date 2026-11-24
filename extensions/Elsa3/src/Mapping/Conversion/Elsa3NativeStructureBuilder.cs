@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.Mappings;
@@ -24,19 +23,21 @@ internal static class Elsa3NativeStructureBuilder
         if (structure is null)
             return null;
 
-        var payload = new JsonObject();
+        // Keep authored objects until the final baseline write. A JsonNode intermediate
+        // rewrites carried JsonElement tokens when its containing object is emitted.
+        var payload = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var (key, value) in structure.Payload.InitialPayload)
-            payload[key] = value is null ? null : JsonSerializer.SerializeToNode(value, PayloadJsonOptions);
+            payload[key] = value;
 
         foreach (var slot in structure.Payload.Slots)
         {
             var children = plan.Slots.Where(child => StringComparer.Ordinal.Equals(child.SlotName, slot.Name)).ToArray();
             if (slot.CollectionProperty is { } collection)
             {
-                var items = new JsonArray();
+                var items = new List<Dictionary<string, object?>>();
                 foreach (var child in children)
                 {
-                    var item = new JsonObject
+                    var item = new Dictionary<string, object?>(StringComparer.Ordinal)
                     {
                         [slot.LabelProperty ?? "name"] = child.Label,
                         [slot.ChildProperty ?? "activity"] = Node(child.Child, mapped)
@@ -49,14 +50,14 @@ internal static class Elsa3NativeStructureBuilder
                         child.ConditionProperty is { } property &&
                         plan.Node.AdditionalProperties.TryGetValue(property, out var condition) &&
                         Elsa3ActivityToState.TryGetArgument(property, condition, out var argument))
-                        item[conditionProperty] = JsonSerializer.SerializeToNode(argument, PayloadJsonOptions);
+                        item[conditionProperty] = argument;
                     items.Add(item);
                 }
                 payload[collection] = items;
             }
             else if (string.Equals(slot.Cardinality, "Many", StringComparison.OrdinalIgnoreCase))
             {
-                payload[slot.Property] = new JsonArray(children.Select(child => Node(child.Child, mapped)).OfType<JsonNode>().ToArray());
+                payload[slot.Property] = children.Select(child => Node(child.Child, mapped)).OfType<ActivityNode>().ToArray();
             }
             else
             {
@@ -65,17 +66,17 @@ internal static class Elsa3NativeStructureBuilder
         }
 
         if (structure.Payload.SupportsScopedVariables)
-            payload["variables"] = JsonSerializer.SerializeToNode(plan.Variables, PayloadJsonOptions);
+            payload["variables"] = plan.Variables;
 
         foreach (var (key, value) in plan.StructureFields)
-            payload[key] = value is null ? null : JsonSerializer.SerializeToNode(value, PayloadJsonOptions);
+            payload[key] = value;
 
         return new ActivityNodeStructure(structure.Kind, structure.SchemaVersion, JsonSerializer.SerializeToElement(payload, PayloadJsonOptions));
     }
 
-    private static JsonNode? Node(Elsa3Activity? child, IReadOnlyDictionary<Elsa3Activity, ActivityNode> mapped) =>
+    private static ActivityNode? Node(Elsa3Activity? child, IReadOnlyDictionary<Elsa3Activity, ActivityNode> mapped) =>
         child is not null && mapped.TryGetValue(child, out var node)
-            ? JsonSerializer.SerializeToNode(node, PayloadJsonOptions)
+            ? node
             : null;
 
     private static JsonSerializerOptions CreatePayloadJsonOptions()
