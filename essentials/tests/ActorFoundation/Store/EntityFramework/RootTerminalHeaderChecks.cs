@@ -65,7 +65,7 @@ internal static class RootTerminalHeaderChecks
         var legacy = await Admit("legacy");
         Check((await Birth(legacy, fit)).Landed, "the legacy fixture starts from a real qualified checkpoint");
         Advance();
-        // Import an older formatted row that occupied the extra byte of reserved headroom.
+        // Import an older formatted row that occupied two extra bytes of reserved headroom.
         // Insert before the closing quote of this fixture's escaped string.
         var legacyId = legacy.Creator.Target.Id;
         await using (var db = create())
@@ -77,7 +77,7 @@ internal static class RootTerminalHeaderChecks
                 VALUES (0, {position}, {legacyId}, 2, '["previous format-11 checkpoint"]')
                 """);
             Check(await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Instances" SET "State" = left("State", -1) || 'x"', "Revision" = 2, "FoundationWriteRevision" = 2
+                UPDATE "Instances" SET "State" = left("State", -1) || 'xx"', "Revision" = 2, "FoundationWriteRevision" = 2
                 WHERE "Id" = {legacyId} AND "Revision" = 1
                 """) == 1 && await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Partitions" SET "Position" = {position} WHERE "Id" = 0 AND "Position" = {fence.Position}
@@ -87,15 +87,25 @@ internal static class RootTerminalHeaderChecks
         Advance();
         var legacyInput = await Add(legacy, "settle");
         var previous = await Bytes(legacy);
-        await Reject(() => Write(legacy, legacyInput, overflow + "x", ended: false));
-        Check(await Bytes(legacy) == previous && await Position() == fence.Position,
-            "a prior row with less reserve cannot grow further");
-        Check((await Write(legacy, legacyInput, overflow, ended: false)).Landed,
+        var previousState = overflow + "x";
+        Check((await cold.ReadFirstRootAsync(tenant, legacy.Reference))?.State == previousState,
+            "the old row has the intended two extra bytes");
+        await Reject(() => Write(legacy, legacyInput, previousState + "x", ended: false));
+        await Reject(() => Write(legacy, legacyInput, previousState, ended: false, typeData: maximalType));
+        Check(await Bytes(legacy) == previous && await Position() == fence.Position &&
+            (await ingress.ReadPendingDirectAsync(tenant, legacy.Reference)).Single() == legacyInput,
+            "the projected and physical caps independently refuse growth on the predecessor row");
+        Check((await Write(legacy, legacyInput, previousState, ended: false)).Landed,
             "a non-growing write on the exact prior row still settles");
+        Advance();
+        var legacyHeader = await Add(legacy, "header");
+        Check((await Write(legacy, legacyHeader, previousState, ended: false, typeData: "a" + maximalType[1..])).Landed &&
+            (await Bytes(legacy)).Count == contentBudget - 4,
+            "at the same projection the older row may grow its header within the physical cap");
         Advance();
         var legacyEnd = await Add(legacy, "finish");
         Check((await Write(legacy, legacyEnd, overflow, ended: true)).Landed && (await Bytes(legacy)).Count == contentBudget,
-            "the predecessor-sized row can finish at the exact physical cap");
+            "freeing one byte of old state lets the full terminal header fit at the physical cap");
 
 
         async Task<(string Reference, Message Creator)> Admit(string operation)
@@ -113,12 +123,12 @@ internal static class RootTerminalHeaderChecks
         ValueTask<Committed> Birth((string Reference, Message Creator) root, string state) =>
             store.CommitFirstRootAsync(tenant, root.Reference, root.Creator, fence, lease, state, 1, "", liveLabels, """["birth"]""");
 
-        async ValueTask<Committed> Write((string Reference, Message Creator) root, Message input, string state, bool ended)
+        async ValueTask<Committed> Write((string Reference, Message Creator) root, Message input, string state, bool ended, string? typeData = null)
         {
             var current = (await cold.ReadFirstRootAsync(tenant, root.Reference))!;
             return await store.CommitRootTurnAsync(tenant, root.Reference, current, [input], fence, lease,
                 ended ? InstanceStatus.Finished : InstanceStatus.Running, state, 1,
-                ended ? maximalType : "", ended ? maximalLabels : liveLabels, ended ? """["end"]""" : """["update"]""");
+                typeData ?? (ended ? maximalType : ""), typeData is not null || ended ? maximalLabels : liveLabels, ended ? """["end"]""" : """["update"]""");
         }
 
         async Task<Content> Bytes((string Reference, Message Creator) root)

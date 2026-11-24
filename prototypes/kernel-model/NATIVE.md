@@ -649,8 +649,9 @@ Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database and run from the rep
 dotnet run -c Release --project essentials/tests/ActorFoundation/Native/Run -- pg-root-terminate owned checked fallback
 ```
 
-The format-11 writer also reserves the fully encoded terminal header on live writes.
-The provider fixture proves the boundary with an escaped state, 16 KiB of `TypeData`
+New live format-11 checkpoints reserve space for the fully encoded terminal header.
+An older checkpoint above the projected cap may settle without increasing its projection.
+It can use as much of the header as the physical cap allows. The provider fixture proves the boundary with an escaped state, 16 KiB of `TypeData`
 and four labels whose keys and values each use their full limit. Run the EF store
 conformance command `postgres <connection> root-checkpoint-limit --terminal-header`
 on a disposable PostgreSQL server.
