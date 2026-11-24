@@ -72,8 +72,9 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             AND marker.relnamespace = i.relnamespace AND marker.relkind = 'r'
         """;
 
-    // Reads pin the issuer to the schema of the marker and the actor list, which every generated-root store
-    // installs and every preview read uses. A checkpoint relation that resolves must share that schema, but a
+    // Reads pin the issuer to the schema of the marker and the actor list, which every generated-root install
+    // creates. Journal and inbox tails do not read the list, so a store installed before it existed is refused here
+    // until the installer runs again. A checkpoint relation that resolves must share that schema, but a
     // renamed source is allowed: projections such as workflow history keep serving without it. A schema earlier
     // on the search path that holds all three relations is treated as the store; that is out of scope here.
     private const string RootReadIssuerSource = """

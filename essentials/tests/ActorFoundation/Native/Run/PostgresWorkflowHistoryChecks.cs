@@ -354,6 +354,15 @@ internal static class PostgresWorkflowHistoryChecks
             try { await RequireFormatRefusal(() => admission.OpenJournalCursorAsync(ct)); }
             finally { await db.Database.ExecuteSqlRawAsync("""DROP VIEW "Instances" """, CancellationToken.None); }
             Check(true, "with the source renamed, a view named as the source in the store schema refuses the read issuer");
+            // The actor list anchors the read issuer: a store without it is refused at open until the installer runs again.
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationActorList" RENAME TO "FixtureActorList" """, ct);
+            try { await RequireFormatRefusal(() => admission.OpenJournalCursorAsync(ct)); }
+            finally
+            {
+                await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FixtureActorList" RENAME TO "FoundationActorList" """,
+                    CancellationToken.None);
+            }
+            Check(true, "a store without its actor list refuses the read issuer until the installer runs again");
             await RequireShadowRefusal("""CREATE TABLE fixture_history_source."Instances" (id integer);""",
                 "with the source renamed, a checkpoint relation from another schema still refuses the read issuer");
             await RequireShadowRefusal($"""
