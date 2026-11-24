@@ -4,7 +4,9 @@
 
 **Created**: 2026-11-03
 
-**Status**: Approved
+**Status**: Implemented
+
+**Implementation PR**: [#5549](https://github.com/elsa-workflows/elsa-foundation/pull/5549); actual initiative integration remains pending review and coordinator merge.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-2**.
 

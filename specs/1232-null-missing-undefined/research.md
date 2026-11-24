@@ -149,6 +149,26 @@ spec approval or implementation.
 - **Rationale**: one rule at every entry point; the hydrator stays a pure contract check.
 - **Alternatives**: substitute in the hydrator (rejected: the invocation record would not show the substitution).
 
+### R-6 implementation baseline and route recheck
+
+The implementation is based on the actual merged initiative tree `79ada540ac7fcc80db354ef3bef7fe6c0c7e17a2`.
+It retains the main-sync input contract's `IsNullable` and `HasExplicitNullDefault`, S-1's evaluation/date helpers,
+S-4's computed-miss diagnostics and S-8's bridge. The following are the current entry points checked by the
+implementation and its regression suites; names below replace the earlier research tree's path assumptions.
+
+| Boundary | Current implementation entry points |
+|---|---|
+| Publication and omitted activity inputs | `RuntimeInputBindingCompiler`, `WorkflowExecutableCompiler`, `ExecutableNodeCompiler`; `ActivityTemplatePlacer` completes omitted activity-test root bindings through the same canonical compiler |
+| Complete/known workflow admission | `WorkflowExecutableInputValidator`; dispatcher, test-run and child dispatch callers; trigger mapper, target discovery/admission and `SavedStimulusStartSeal`; `BpmnInputSupport` and `BpmnDirectExecutionDriver.Inputs` retain the exact native worker's policies |
+| Activity and graph inputs | `RuntimeActivityInputMaterializer`, `RuntimeActivityInputSnapshotMaterializer`, `GraphActivity` |
+| Intrinsic and step writes | `WorkflowIntrinsicExecutor`, `StepVariableSession`; graph entry scheduling retains invocation warnings |
+| Captures and durable state | `RuntimeOutputCaptureProjector` frame and graph-row paths, `DurableValuePolicies`, `RuntimeInputBindingStateProjection` |
+| Author/operator values | Variable declaration compilation and `ModifyVariableAlterationHandler` refuse invalid null without policy substitution |
+| Reads and JavaScript results | `RuntimeVariableReadFallback`, direct/ambient variable reads, `CopyComparePatchValueBridge`, evaluator and consumed-body-result validation |
+
+Store qualification covers InMemory, SQLite, PostgreSQL, MySQL and SQL Server without changing the serialization
+baseline. S-9 retains ownership of serializer options and null-preserving baseline conversion.
+
 ## R-7 Boundary diagnostics and undefined-as-null in S-8's value bridge
 
 - **Decision**: build in the writer of S-8's script value bridge (`CopyComparePatchValueBridge`), the one place every
