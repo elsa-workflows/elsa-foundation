@@ -41,7 +41,7 @@ public static class Wf
         if (body is not null) node.Inputs["Body"] = body;
         if (headers is not null) node.Inputs["Headers"] = headers;
         if (expectedStatusCodes is not null) node.Inputs["ExpectedStatusCodes"] = Binding.Literal(expectedStatusCodes);
-        if (timeout is { } t) node.Inputs["Timeout"] = Binding.Literal(t);
+        if (timeout is { } t) node.Inputs["Timeout"] = Binding.Literal(t.TotalMilliseconds);
         if (connection is not null) node.Inputs["Connection"] = connection;
         return node;
     }

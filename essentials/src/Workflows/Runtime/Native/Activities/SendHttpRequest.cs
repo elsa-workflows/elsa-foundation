@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -21,10 +23,13 @@ public sealed record HttpResponseResult(int StatusCode, IReadOnlyDictionary<stri
 /// <see cref="NativeHttpOptions.MaxResponseBytes"/> is <c>ResponseTooLarge</c>, with the status and headers and no body.</item>
 /// <item>A bad URL or method, a header the rules refuse, or no client faults the activity.</item>
 /// <item>Credentials come only through a <see cref="Connection"/> the host resolves when the job runs: the job's
-/// arguments are stored, so an authored <c>Authorization</c>, <c>Proxy-Authorization</c> or <c>Cookie</c> header is refused.</item>
+/// arguments are stored, so an authored <c>Authorization</c>, <c>Proxy-Authorization</c>, <c>Cookie</c> or <c>X-Api-Key</c>
+/// header is refused, and the result leaves out the <c>Set-Cookie</c> and credential headers a partner sends back.</item>
+/// <item>The host's client must not follow redirects or keep cookies (<see cref="NativeHttpOptions"/>): a 3xx is a status
+/// like any other, so a Connection's credentials never go to a host the partner names.</item>
 /// </list>
 /// </summary>
-[Background(TimeoutInput = nameof(Timeout), DefaultTimeoutMilliseconds = 60_000, TimeoutOutcome = TimeoutOutcome)]
+[Background(TimeoutInput = nameof(Timeout), DefaultTimeoutMilliseconds = DefaultTimeoutMilliseconds, TimeoutOutcome = TimeoutOutcome)]
 public sealed class SendHttpRequest : Activity<HttpResponseResult?>
 {
     public const string IdempotencyKeyHeader = "Idempotency-Key";
@@ -34,28 +39,44 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
     public const string UnmatchedOutcome = "Unmatched status code";
     public const string TooLargeOutcome = "ResponseTooLarge";
 
-    /// <summary>The timeout when <see cref="Timeout"/> is unbound or not positive, as the old core's default.</summary>
-    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(60);
+    /// <summary>The timeout when <see cref="Timeout"/> is unbound, as the old core's default: 60 seconds.</summary>
+    public const long DefaultTimeoutMilliseconds = 60_000;
 
-    private static readonly HashSet<string> Credentials = new(["authorization", "proxy-authorization", "cookie"], StringComparer.OrdinalIgnoreCase);
+    /// <summary>The longest <see cref="Timeout"/>: one day.</summary>
+    public static readonly TimeSpan MaxTimeout = ActivityTimeouts.MaxTimeout;
+
+    private static readonly HashSet<string> Credentials =
+        new(["authorization", "proxy-authorization", "cookie", "x-api-key"], StringComparer.OrdinalIgnoreCase);
+
+    // Response headers the result leaves out: what a partner hands back as credentials.
+    private static readonly HashSet<string> ReturnedCredentials =
+        new(["set-cookie", "set-cookie2", "authorization", "proxy-authorization", "x-api-key"], StringComparer.OrdinalIgnoreCase);
 
     [Input] public string Url { get; set; } = "";
     [Input] public string Method { get; set; } = "POST";
     /// <summary>The body: a JSON value sent as application/json, or a string sent as <see cref="ContentType"/> text.</summary>
     [Input] public JsonNode? Body { get; set; }
+    /// <summary>The body's media type, parameters allowed (<c>text/plain; charset=utf-8</c>).</summary>
     [Input] public string? ContentType { get; set; }
-    /// <summary>Request headers: an object of strings, numbers or booleans, without credentials.</summary>
+    /// <summary>Request headers: an object of strings, numbers or booleans, without credentials or a content type.</summary>
     [Input] public JsonObject? Headers { get; set; }
-    /// <summary>The status codes that each have an outcome of their own.</summary>
-    [Input] public int[]? ExpectedStatusCodes { get; set; }
-    /// <summary>The HTTP client's timeout and the job's deadline; <see cref="DefaultTimeout"/> when unbound.</summary>
-    [Input] public TimeSpan? Timeout { get; set; }
+    /// <summary>The status codes that each have an outcome of their own: numbers or numeric strings, one or a list.</summary>
+    [Input] public JsonNode? ExpectedStatusCodes { get; set; }
+    /// <summary>
+    /// The HTTP client's timeout and the job's deadline: milliseconds as a number, or a time span (<c>00:00:30</c>,
+    /// <c>PT30S</c>); at most <see cref="MaxTimeout"/>, 60 seconds when unbound.
+    /// </summary>
+    [Input] public JsonNode? Timeout { get; set; }
     /// <summary>The name of the Connection whose credentials the host adds when the job runs.</summary>
     [Input] public string? Connection { get; set; }
 
     protected override async ValueTask<Transition> ExecuteAsync(ActivityContext context)
     {
         if (context.Http?.Client is not { } client) return Fault("http.sender.unavailable", "The host composes no HTTP client for SendHttpRequest.");
+        if (!ActivityTimeouts.TryParse(Timeout, MaxTimeout, out var timeout))
+            return Fault("http.request.invalid", $"The timeout '{Timeout?.ToJsonString()}' is not milliseconds or a time span of at most a day.");
+        if (!TryStatusCodes(ExpectedStatusCodes, out var expected))
+            return Fault("http.request.invalid", $"The expected status codes '{ExpectedStatusCodes?.ToJsonString()}' are not status codes.");
         using var request = Request(context, out var refused);
         if (request is null) return Fault("http.request.invalid", refused!);
         if (Connection is { Length: > 0 } connection)
@@ -64,31 +85,52 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             foreach (var (name, value) in await resolve(connection, context.CancellationToken))
                 if (!request.Headers.TryAddWithoutValidation(name, value)) request.Content?.Headers.TryAddWithoutValidation(name, value);
         }
-        var timeout = Timeout is { } t && t > TimeSpan.Zero ? t : DefaultTimeout;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
-        deadline.CancelAfter(timeout);
+        deadline.CancelAfter(timeout ?? TimeSpan.FromMilliseconds(DefaultTimeoutMilliseconds));
         try
         {
-            using var response = await client.SendAsync(request, deadline.Token);
+            // Headers first, so that the body is read only as far as the cap: an HttpClient would buffer all of it.
+            using var response = client is HttpClient http
+                ? await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token)
+                : await client.SendAsync(request, deadline.Token);
             var headers = ResponseHeaders(response);
             var status = (int)response.StatusCode;
             var (body, tooLarge) = await ReadAsync(response, context.Http.MaxResponseBytes, deadline.Token);
             return tooLarge
                 ? Complete(new HttpResponseResult(status, headers, null), TooLargeOutcome)
-                : Complete(new HttpResponseResult(status, headers, body), OutcomeOf(status));
+                : Complete(new HttpResponseResult(status, headers, body), OutcomeOf(status, expected));
         }
         catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
         {
             return Complete(null, TimeoutOutcome);
         }
-        catch (HttpRequestException)
+        catch (Exception transport) when (transport is HttpRequestException or IOException or InvalidDataException && !context.CancellationToken.IsCancellationRequested)
         {
-            return Complete(null, FailedOutcome);
+            return Complete(null, FailedOutcome);     // a refused connection, a reset mid-body, a broken encoding
         }
     }
 
-    private string OutcomeOf(int status) => ExpectedStatusCodes is { Length: > 0 } expected
-        ? expected.Contains(status) ? status.ToString(System.Globalization.CultureInfo.InvariantCulture) : UnmatchedOutcome
+    private static bool TryStatusCodes(JsonNode? value, out int[] codes)
+    {
+        codes = [];
+        var list = value switch { null => [], JsonArray array => array.ToArray(), _ => [value] };
+        var parsed = new List<int>(list.Length);
+        foreach (var item in list)
+        {
+            if (item is not JsonValue scalar) return false;
+            if (scalar.TryGetValue<int>(out var number) || scalar.TryGetValue<string>(out var text) && int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out number))
+            {
+                if (number is < 100 or > 599) return false;
+                parsed.Add(number);
+            }
+            else return false;
+        }
+        codes = [.. parsed];
+        return true;
+    }
+
+    private static string OutcomeOf(int status, int[] expected) => expected.Length > 0
+        ? expected.Contains(status) ? status.ToString(CultureInfo.InvariantCulture) : UnmatchedOutcome
         : status is >= 200 and < 300 ? DoneOutcome : FailedOutcome;
 
     private HttpRequestMessage? Request(ActivityContext context, out string? refused)
@@ -102,13 +144,28 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
         HttpRequestMessage request;
         try { request = new HttpRequestMessage(new HttpMethod(Method), url); }
         catch (FormatException) { refused = $"'{Method}' is not an HTTP method."; return null; }
+        MediaTypeHeaderValue? mediaType = null;
+        if (ContentType is { } type && !MediaTypeHeaderValue.TryParse(type, out mediaType))
+        {
+            refused = $"'{type}' is not a media type.";
+            request.Dispose();
+            return null;
+        }
         if (Body is not null)
-            request.Content = Body is JsonValue text && text.GetValueKind() == JsonValueKind.String && ContentType is { } type && !type.Contains("json", StringComparison.OrdinalIgnoreCase)
-                ? new StringContent(text.GetValue<string>(), Encoding.UTF8, type)
-                : new StringContent(Body.ToJsonString(), Encoding.UTF8, ContentType ?? "application/json");
+        {
+            var json = mediaType?.MediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) != false;
+            request.Content = new StringContent(!json && Body is JsonValue text && text.TryGetValue<string>(out var plain) ? plain : Body.ToJsonString(), Encoding.UTF8);
+            request.Content.Headers.ContentType = mediaType ?? new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+        }
         var keyed = false;
         foreach (var (name, value) in Headers ?? [])
         {
+            if (string.Equals(name, "Content-Type", StringComparison.OrdinalIgnoreCase))
+            {
+                refused = "The body's media type is the ContentType input, not a header.";
+                request.Dispose();
+                return null;
+            }
             if (Credentials.Contains(name))
             {
                 refused = $"The header '{name}' carries credentials; they come through a Connection, which the host resolves when the job runs.";
@@ -138,7 +195,8 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
     {
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, values) in response.Headers.Concat(response.Content.Headers))
-            headers[name.ToLowerInvariant()] = headers.TryGetValue(name, out var earlier) ? earlier + ", " + string.Join(", ", values) : string.Join(", ", values);
+            if (!ReturnedCredentials.Contains(name))
+                headers[name.ToLowerInvariant()] = headers.TryGetValue(name, out var earlier) ? earlier + ", " + string.Join(", ", values) : string.Join(", ", values);
         return headers;
     }
 
@@ -156,7 +214,11 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             buffer.Write(chunk, 0, read);
         }
         if (buffer.Length == 0) return (null, false);
-        var text = Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+        var encoding = Encoding.UTF8;
+        if (response.Content.Headers.ContentType?.CharSet is { Length: > 0 } charset)
+            try { encoding = Encoding.GetEncoding(charset.Trim('"')); }
+            catch (ArgumentException) { }
+        var text = encoding.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
         if (response.Content.Headers.ContentType?.MediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
             try { return (JsonNode.Parse(text), false); }
             catch (JsonException) { }

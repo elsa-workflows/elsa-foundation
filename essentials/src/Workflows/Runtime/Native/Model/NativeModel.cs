@@ -572,10 +572,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     private static TimeSpan? TimeoutInput(Node node, JsonObject inputs)
     {
         if (node.Type.GetCustomAttributes(typeof(BackgroundAttribute), false) is not [BackgroundAttribute { TimeoutInput: { } input } background]) return null;
-        TimeSpan? bound = null;
-        try { bound = inputs[input] is { } value ? Values.To<TimeSpan?>(value) : null; }
-        catch (System.Text.Json.JsonException) { }
-        return bound is { } given && given > TimeSpan.Zero ? given
+        // One rule with the activity: milliseconds or a time span, at most a day; an unbound or refused one takes the default
+        // (the activity faults on a refused one when its job runs).
+        return ActivityTimeouts.TryParse(inputs[input], ActivityTimeouts.MaxTimeout, out var bound) && bound is { } given ? given
             : background.DefaultTimeoutMilliseconds > 0 ? TimeSpan.FromMilliseconds(background.DefaultTimeoutMilliseconds) : null;
     }
 

@@ -22,6 +22,38 @@ public sealed class BackgroundAttribute : Attribute
     public string? TimeoutOutcome { get; init; }
 }
 
+/// <summary>How a background activity's timeout input reads: one rule for the activity and for its job's deadline.</summary>
+public static class ActivityTimeouts
+{
+    /// <summary>The longest timeout an input may give: one day.</summary>
+    public static readonly TimeSpan MaxTimeout = TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// A timeout as a number of milliseconds or a time span (<c>c</c> format, as <c>00:00:30</c>, or ISO 8601, as
+    /// <c>PT30S</c>), positive and at most <paramref name="max"/>; null for an unbound one. False for anything else.
+    /// </summary>
+    public static bool TryParse(JsonNode? value, TimeSpan max, out TimeSpan? timeout)
+    {
+        timeout = null;
+        if (value is null) return true;
+        if (value is not JsonValue scalar) return false;
+        TimeSpan span;
+        if (scalar.TryGetValue<double>(out var milliseconds) && double.IsFinite(milliseconds) && milliseconds <= max.TotalMilliseconds) span = TimeSpan.FromMilliseconds(milliseconds);
+        else if (scalar.TryGetValue<string>(out var text) &&
+                 (TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out span) || TryIso(text, out span))) { }
+        else return false;
+        if (span <= TimeSpan.Zero || span > max) return false;
+        timeout = span;
+        return true;
+
+        static bool TryIso(string text, out TimeSpan span)
+        {
+            try { span = System.Xml.XmlConvert.ToTimeSpan(text); return true; }
+            catch (FormatException) { span = default; return false; }
+        }
+    }
+}
+
 /// <summary>Elsa 4's side-effect profile External: an attempt is not safe to replay. In Durable mode it is committed before it runs.</summary>
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class ExternalAttribute : Attribute;
@@ -119,6 +151,9 @@ public class ActivityContext
 /// <summary>
 /// The host's outbound HTTP for <see cref="SendHttpRequest"/>'s job: the client it sends with, the most response bytes it
 /// keeps, and how it turns a Connection name into credential headers, which never sit in the job's stored arguments.
+/// The client must not follow redirects or keep cookies (for a <see cref="SocketsHttpHandler"/>: <c>AllowAutoRedirect</c>
+/// and <c>UseCookies</c> false): a redirect would carry a Connection's headers to a host the partner names, and a cookie
+/// one workflow's partner set would go out with another workflow's request.
 /// </summary>
 public sealed class NativeHttpOptions
 {

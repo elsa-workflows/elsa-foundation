@@ -55,7 +55,15 @@ internal static partial class NativeHttpEdgeChecks
             .Add(Sends("too-large", Wf.Http("send", "https://partner.example/large")))
             .Add(Sends("keyed", Wf.Http("send", "https://partner.example/ok", headers: Binding.Literal(new JsonObject { ["Idempotency-Key"] = "mine", ["X-Order"] = 7 }))))
             .Add(Sends("connection", Wf.Http("send", "https://partner.example/ok", connection: "partner")))
-            .Add(Sends("credential", Wf.Http("send", "https://partner.example/ok", headers: Binding.Literal(new JsonObject { ["Authorization"] = "Bearer secret" }))));
+            .Add(Sends("credential", Wf.Http("send", "https://partner.example/ok", headers: Binding.Literal(new JsonObject { ["Authorization"] = "Bearer secret" }))))
+            .Add(Sends("charset", Input(Wf.Http("send", "https://partner.example/ok", "plain words"), "ContentType", "text/plain; charset=utf-8")))
+            .Add(Sends("streamed", Wf.Http("send", "https://partner.example/stream")))
+            .Add(Sends("reset", Wf.Http("send", "https://partner.example/reset")))
+            .Add(Sends("iso-timeout", Input(Wf.Http("send", "https://partner.example/slow"), "Timeout", "PT0.2S")))
+            .Add(Sends("bad-timeout", Input(Wf.Http("send", "https://partner.example/ok"), "Timeout", "5000")))
+            .Add(Sends("string-codes", Input(Wf.Http("send", "https://partner.example/ok"), "ExpectedStatusCodes", Binding.Literal(new JsonArray("200")))))
+            .Add(Sends("content-type-header", Wf.Http("send", "https://partner.example/ok", headers: Binding.Literal(new JsonObject { ["Content-Type"] = "text/plain" }))))
+            .Add(Sends("long-job", WithJobTimeout(Wf.Http("send", "https://partner.example/slow", timeout: TimeSpan.FromMilliseconds(200)), TimeSpan.FromSeconds(30))));
         using var stopping = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var token = stopping.Token;
         var failures = 0;
@@ -99,7 +107,31 @@ internal static partial class NativeHttpEdgeChecks
                       !host.Stored().Contains("from-connection", StringComparison.Ordinal),
                     $"{mode}: a Connection's credentials are resolved when the job runs and never sit in stored messages or state");
                 var credential = await host.RunAsync("credential", mode);
-                Check(credential.Faulted, $"{mode}: an authored Authorization header faults the activity; credentials come through a Connection");
+                var contentTypeHeader = await host.RunAsync("content-type-header", mode);
+                Check(credential.Faulted && contentTypeHeader.Faulted, $"{mode}: an authored Authorization or Content-Type header faults the activity; credentials come through a Connection, the media type through ContentType");
+                Check(ok.Response?["Headers"]?["set-cookie"] is null && ok.Response?["Headers"]?["x-trace"] is not null,
+                    $"{mode}: the result leaves out the Set-Cookie a partner sends back");
+                var charset = await host.RunAsync("charset", mode);
+                var plain = handler.Sent.Last();
+                Check(charset.Outcome == SendHttpRequest.DoneOutcome && plain.Body == "plain words" &&
+                      plain.Headers.GetValueOrDefault("Content-Type")?.Contains("charset=utf-8", StringComparison.OrdinalIgnoreCase) == true,
+                    $"{mode}: a ContentType with parameters sends a text body as that type ({charset.Outcome})");
+                Volatile.Write(ref _pulled, 0);
+                var streamed = await host.RunAsync("streamed", mode);
+                Check(streamed.Outcome == SendHttpRequest.TooLargeOutcome && Volatile.Read(ref _pulled) < 64 * 1_024,
+                    $"{mode}: a streamed body with no length past the cap is read only that far ({Volatile.Read(ref _pulled)} bytes pulled) and completes on ResponseTooLarge");
+                var reset = await host.RunAsync("reset", mode);
+                Check(reset.Outcome == SendHttpRequest.FailedOutcome, $"{mode}: a connection reset in the middle of the body completes on Failed ({reset.Outcome})");
+                var iso = await host.RunAsync("iso-timeout", mode);
+                var badTimeout = await host.RunAsync("bad-timeout", mode);
+                var codes = await host.RunAsync("string-codes", mode);
+                Check(iso.Outcome == SendHttpRequest.TimeoutOutcome && badTimeout.Faulted && codes.Outcome == "200",
+                    $"{mode}: a timeout reads as milliseconds or a time span (PT0.2S) and anything else faults; status codes may be numeric strings ({iso.Outcome}, {codes.Outcome})");
+                var started = Environment.TickCount64;
+                var longJob = await host.RunAsync("long-job", mode);
+                var elapsed = Environment.TickCount64 - started;
+                Check(longJob.Outcome == SendHttpRequest.TimeoutOutcome && elapsed < 10_000,
+                    $"{mode}: with a longer job deadline, the HTTP client's own timeout completes the activity on Timeout ({longJob.Outcome} in {elapsed} ms)");
             }
 
         await using (var bare = await SendHost.StartAsync(new WorkflowRegistry().Add(Sends("unhosted", Wf.Http("send", "https://partner.example/ok"))), null, token))
@@ -114,6 +146,57 @@ internal static partial class NativeHttpEdgeChecks
             headers: Binding.Literal(new JsonObject { ["X-Outcome"] = outcome })))],
         [.. SendOutcomes.Select(outcome => new Connection(send.Id, $"on-{outcome}", outcome))]));
 
+    private static long _pulled;
+
+    private static Node Input(Node node, string name, Binding value)
+    {
+        node.Inputs[name] = value;
+        return node;
+    }
+
+    private static Node WithJobTimeout(Node node, TimeSpan jobTimeout)
+    {
+        var timed = new Node(node.Id, node.Type) { JobTimeout = jobTimeout };
+        foreach (var (name, binding) in node.Inputs) timed.Inputs[name] = binding;
+        return timed;
+    }
+
+    // A body that never ends, counting what the reader pulls from it.
+    private sealed class EndlessStream : ReadOnlyStream
+    {
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            Array.Fill(buffer, (byte)'x', offset, count);
+            Interlocked.Add(ref _pulled, count);
+            return count;
+        }
+    }
+
+    // A body that breaks off after a byte, as a reset connection does.
+    private sealed class ResetStream : ReadOnlyStream
+    {
+        private int _reads;
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_reads++ > 0) throw new IOException("The connection was reset.");
+            buffer[offset] = (byte)'x';
+            return 1;
+        }
+    }
+
+    private abstract class ReadOnlyStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
     private static async Task<HttpResponseMessage> PartnerAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var path = request.RequestUri!.AbsolutePath;
@@ -122,7 +205,12 @@ internal static partial class NativeHttpEdgeChecks
             case "/ok":
                 var ok = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"ok":true}""", Encoding.UTF8, "application/json") };
                 ok.Headers.Add("X-Trace", "t-1");
+                ok.Headers.Add("Set-Cookie", "session=partner-secret");
                 return ok;
+            case "/stream":
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new EndlessStream()) };
+            case "/reset":
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new ResetStream()) };
             case "/down":
                 throw new HttpRequestException("connection refused");
             case "/slow":
