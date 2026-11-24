@@ -28,6 +28,20 @@ public sealed partial class ScriptValueAdapterTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Large_depth_options_preserve_entered_values(bool inputDepth)
+    {
+        var value = await ExpressionAsync("variables.order", configure: services =>
+            services.Configure<Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions>(options =>
+            {
+                if (inputDepth) options.MaxInputDepth = int.MaxValue;
+                else options.MaxResultDepth = int.MaxValue;
+            }));
+        Assert.Equal(Order, value.GetRawText());
+    }
+
+    [Theory]
     [InlineData("Object.defineProperty(Array.prototype, '0', {get(){throw new Error('inherited hole');}, configurable:true});")]
     [InlineData("Array.prototype[0] = {toJSON(){throw new Error('inherited toJSON');}};")]
     [InlineData("Object.defineProperty(Object.prototype, 'getOwnPropertyDescriptor', {get(){throw new Error('handler prototype');}, configurable:true}); Object.defineProperty(Array.prototype, '0', {get(){throw new Error('inherited hole');}, configurable:true});")]

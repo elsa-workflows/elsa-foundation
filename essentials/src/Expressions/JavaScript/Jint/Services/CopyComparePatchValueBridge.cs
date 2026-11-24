@@ -476,7 +476,7 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             else
             {
                 using var hostWork = EvaluationLimits.ExcludeHostWork(_engine);
-                using var document = JsonDocument.Parse(text, new JsonDocumentOptions { MaxDepth = Math.Max(_options.MaxResultDepth, _options.MaxInputDepth) + 1 });
+                using var document = JsonDocument.Parse(text, new JsonDocumentOptions { MaxDepth = JintResultMaterializer.DepthWithHeadroom(Math.Max(_options.MaxResultDepth, _options.MaxInputDepth)) });
                 unchanged = SameJavaScriptValue(origin, document.RootElement, null);
             }
 

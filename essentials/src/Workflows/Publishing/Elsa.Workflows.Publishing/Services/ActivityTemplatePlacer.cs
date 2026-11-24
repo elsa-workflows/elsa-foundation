@@ -477,7 +477,7 @@ public sealed class ActivityTemplatePlacer(
             }
 
             var inputBindings = isBoundary && stackIsRoot(frame)
-                ? rootRequest.BoundaryInputBindings
+                ? CompileRootInputs(current.Node, frame, rootRequest.BoundaryInputBindings)
                 : isBoundary && frame.OccurrenceOverlay is not null
                     ? CompileOccurrenceInputs(current.Node, frame)
                     : current.Node.InputBindings;
@@ -830,6 +830,31 @@ public sealed class ActivityTemplatePlacer(
         node.ActivityContract,
         node.IntrinsicKind,
         node.IntrinsicVariable);
+
+    private IReadOnlyDictionary<string, RuntimeInputBinding> CompileRootInputs(
+        ExecutableNode templateRoot,
+        PlacementFrame frame,
+        IReadOnlyDictionary<string, RuntimeInputBinding> supplied)
+    {
+        var missing = frame.Publication.Contract.Inputs.Where(input => !supplied.ContainsKey(input.ReferenceKey)).ToArray();
+        if (missing.Length == 0) return supplied;
+        var completed = new Dictionary<string, RuntimeInputBinding>(supplied, StringComparer.Ordinal);
+        if (templateRoot.Descriptor.ConsumerKey == WellKnownRuntimeActivityConsumers.ClrActivity)
+        {
+            var pinned = templateRoot.ActivityContract
+                ?? throw new InvalidOperationException("A CLR template root requires its pinned input contract.");
+            var contracts = missing.Select(input => pinned.Inputs.TryGetValue(input.ReferenceKey, out var contract)
+                ? contract : throw new InvalidOperationException("The public CLR input has no pinned input contract."));
+            foreach (var binding in inputBindingCompiler.CompileAll(templateRoot.AuthoredActivityId, contracts, []))
+                completed.Add(binding.Key, binding.Value);
+        }
+        else
+        {
+            foreach (var input in missing)
+                completed.Add(input.ReferenceKey, inputBindingCompiler.CompileUnboundPublishedBoundaryInput(templateRoot.AuthoredActivityId, input));
+        }
+        return completed;
+    }
 
     private IReadOnlyDictionary<string, RuntimeInputBinding> CompileOccurrenceInputs(
         ExecutableNode templateRoot,

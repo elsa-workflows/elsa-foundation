@@ -62,7 +62,7 @@ internal static class JintResultMaterializer
         try
         {
             // Interim bridge markers need one level of headroom; byte/node limits apply to the normalized result.
-            var depth = intermediate && options.MaxResultDepth < int.MaxValue ? options.MaxResultDepth + 1 : options.MaxResultDepth;
+            var depth = intermediate ? DepthWithHeadroom(options.MaxResultDepth) : options.MaxResultDepth;
             document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = depth });
         }
         catch (JsonException exception)
@@ -80,6 +80,8 @@ internal static class JintResultMaterializer
             return document.RootElement.Clone();
         }
     }
+
+    internal static int DepthWithHeadroom(int depth) => depth < int.MaxValue ? depth + 1 : depth;
 
     private static int ValidateTree(JsonElement element, FeatureOptions options, int depth, int nodeCount)
     {
