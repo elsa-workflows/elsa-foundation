@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Kernel.Foundation.Contracts;
 using Kernel.Model.Contracts;
@@ -107,7 +108,14 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         var workflow = ReadHeader(header);
         // Termination preserves the stored state while this version cannot enter the model.
         if (!_models.TryGetValue(workflow.Model, out var model) || workflow.Version > model.StateVersion) return 0;
-        return model.TerminalGrowth(Instance(header, workflow), ReadState(model, workflow, state, []));
+        var restored = ReadState(model, workflow, state, []);
+        var growth = model.TerminalGrowth(Instance(header, workflow), restored);
+        if (workflow.Version == model.StateVersion || growth < 0 || model is not IModelMetadata) return growth;
+
+        // The foundation counts the stored bytes. A readable older state may expand when termination writes it back.
+        var encoded = JsonSerializer.SerializeToUtf8Bytes(restored, model.StateType);
+        var upgradeGrowth = Math.Max(0, encoded.Length - Encoding.UTF8.GetByteCount(state));
+        return growth > long.MaxValue - upgradeGrowth ? long.MaxValue : growth + upgradeGrowth;
     }
 
     public bool ProtectsDeletion(ActorHeader header, string state, long now)

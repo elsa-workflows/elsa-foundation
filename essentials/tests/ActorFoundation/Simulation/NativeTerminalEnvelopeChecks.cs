@@ -13,7 +13,7 @@ internal static class NativeTerminalEnvelopeChecks
 {
     private const int InboxCount = 3_500;
     private const int CreatorBatch = 500;
-    private const long Envelope = 16_457_728;
+    internal const long Envelope = 16_457_728;
 
     internal static async Task Run(Action<bool, string> check)
     {
@@ -235,7 +235,7 @@ internal static class NativeTerminalEnvelopeChecks
     private static IReadOnlyList<string> Handles(InstanceRow row) => row.CustomHandles is { } encoded ? DurableKeyJson.ReadKeys(encoded) : [];
     private static int Bytes(string? text) => text is null ? 0 : Encoding.UTF8.GetByteCount(text);
 
-    private static long RowBytes(InstanceRow row, int variableHeader) =>
+    internal static long RowBytes(InstanceRow row, int variableHeader) =>
         16_384L + variableHeader
         + Math.Max(Bytes(row.Children), 384L * ChildRegistry.Read(row.Children).Count)
         + Math.Max(Bytes(row.Jobs), 12_416L * JobRegistry.Read(row.Jobs).Count)
@@ -267,7 +267,7 @@ internal static class NativeTerminalEnvelopeChecks
         public void Send(string node, Reply reply) => requests.Receive(reply);
     }
 
-    private sealed class OpenInbox : CompositeActivity
+    internal sealed class OpenInbox : CompositeActivity
     {
         [Input] public bool Protected { get; set; }
         protected override void Execute(CompositeContext context) =>
@@ -276,7 +276,7 @@ internal static class NativeTerminalEnvelopeChecks
             throw new InvalidOperationException("An invocation inbox has no authored children.");
     }
 
-    private sealed class Padding : CompositeActivity, ISignalledComposite
+    internal sealed class Padding : CompositeActivity, ISignalledComposite
     {
         protected override void Execute(CompositeContext context) => context.SetState("");
         public bool CanAccept(CompositeContext context) => true;
