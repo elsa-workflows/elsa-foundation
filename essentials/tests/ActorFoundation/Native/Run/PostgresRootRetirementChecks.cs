@@ -61,6 +61,12 @@ internal static class PostgresRootRetirementChecks
             untouched = await Drive(owner, neighbor, InstanceStatus.Finished);
             var active = await Drive(owner, protectedActor, InstanceStatus.Running);
             var chosen = (await reads.GetAsync(tenant, protectedActor, stop))!;
+            allowDelete = true;
+            Check((await runtime.TerminateThenDeleteAsync(tenant, "old-format-then-delete", chosen, stop)).Outcome ==
+                Contract.AdmissionOutcome.Refused &&
+                await admission.ReadDueRootOperatorAsync(tenant.Tenant, protectedActor.Id, stop) is null,
+                "format 14 refuses ThenDelete even when the host authorizes both operations");
+            allowDelete = false;
             Check((await runtime.TerminateAsync(tenant, "stop-protected", chosen, cancellationToken: stop)).Outcome ==
                 Contract.AdmissionOutcome.Accepted, "a protected model can reach an ordinary ended checkpoint");
             protectedBefore = await Drive(owner, protectedActor, InstanceStatus.Cancelled);

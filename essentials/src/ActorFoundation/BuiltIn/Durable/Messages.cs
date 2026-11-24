@@ -58,6 +58,7 @@ internal sealed record FoundationOperatorCommand(string? Selection)
     internal string? DeleteTarget { get; init; }
     internal bool RetentionDelete { get; init; }
     internal FoundationTerminalStamp? QualifiedTerminal { get; init; }
+    internal bool RootThenDelete { get; init; }
     internal ParkRecoveryMode? RecoverMode { get; init; }
     internal IReadOnlyList<string>? RecoverHandles { get; init; }
 }

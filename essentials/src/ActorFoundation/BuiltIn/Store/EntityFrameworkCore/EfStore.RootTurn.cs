@@ -110,7 +110,7 @@ public sealed partial class EfStore
             """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count).AsNoTracking().ToListAsync(cancellationToken);
         if (!db.UsesRootOperatorProtocol && rows.Any(row => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))))
             return false;
-        var messages = rows.Select(row => DecodeRootInput(row, reference, issue, replies: db.UsesRootReplyProtocol, terminations: db.UsesRootTermination, retirements: db.UsesRootRetirement)).ToArray();
+        var messages = rows.Select(row => DecodeRootInput(row, reference, issue, replies: db.UsesRootReplyProtocol, terminations: db.UsesRootTermination, retirements: db.UsesRootRetirement, terminateThenDelete: db.UsesRootTerminateThenDelete)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(m => m.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
 
@@ -129,14 +129,14 @@ public sealed partial class EfStore
         return settled == ids.Length;
     }
 
-    private static Message DecodeRootInput(MessageEntity row, string reference, FoundationSelfIssuer? issue, bool jobs = false, bool timed = false, bool replies = false, bool terminations = false, bool retirements = false) =>
+    private static Message DecodeRootInput(MessageEntity row, string reference, FoundationSelfIssuer? issue, bool jobs = false, bool timed = false, bool replies = false, bool terminations = false, bool retirements = false, bool terminateThenDelete = false) =>
         row.InboxScope switch
         {
             RootJobScope => jobs ? DecodeRootJob(row) : throw RootShape(),
             RootTimedJobScope => timed ? DecodeRootTimedRow(row) : throw RootShape(),
             RootSelfScope => DecodeRootSelf(row, issue),
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
-                ? PostgresRootAdmission.DecodeOperator(row, reference, terminations, retirements) : PostgresRootAdmission.DecodeDirect(row, reference, replies)
+                ? PostgresRootAdmission.DecodeOperator(row, reference, terminations, retirements, terminateThenDelete) : PostgresRootAdmission.DecodeDirect(row, reference, replies)
         };
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,

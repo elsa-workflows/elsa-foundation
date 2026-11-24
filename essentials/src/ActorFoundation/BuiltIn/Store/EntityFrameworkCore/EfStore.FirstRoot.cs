@@ -138,10 +138,13 @@ public sealed partial class EfStore
                     AND NEW."FoundationReference" = OLD."FoundationReference" AND NEW."FoundationTenant" = OLD."FoundationTenant"
                     AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired"
                     AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR
-                        (/*root-retirement*/ AND NEW."Retired" AND OLD."Status" <> 0 AND NEW."Status" = OLD."Status"
-                            AND NEW."State" = 'null' AND NEW."FoundationHeader" IS NULL
-                            AND NEW."FoundationTerminalRevision" = OLD."FoundationTerminalRevision"
-                            AND NEW."FoundationTerminalAt" = OLD."FoundationTerminalAt"))
+                        (/*root-retirement*/ AND NEW."Retired" AND NEW."State" = 'null' AND NEW."FoundationHeader" IS NULL /*root-retirement-wire*/
+                            AND ((OLD."Status" <> 0 AND NEW."Status" = OLD."Status"
+                                AND NEW."FoundationTerminalRevision" = OLD."FoundationTerminalRevision"
+                                AND NEW."FoundationTerminalAt" = OLD."FoundationTerminalAt")
+                            OR (/*root-atomic-retirement*/ AND OLD."Status" = 0 AND NEW."Status" = /*cancelled*/
+                                AND OLD."FoundationTerminalRevision" IS NULL AND OLD."FoundationTerminalAt" IS NULL
+                                AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL))))
                 THEN RETURN NEW; END IF;
                 RAISE EXCEPTION 'Qualified actor checkpoint requires a qualified update' USING ERRCODE = '23514';
             END
@@ -161,7 +164,10 @@ public sealed partial class EfStore
             $fn$;
             CREATE OR REPLACE TRIGGER kernel_require_root_journal_revision BEFORE INSERT ON "Journal"
             FOR EACH ROW EXECUTE FUNCTION kernel_require_root_journal_revision();
-            """.Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal), cancellationToken);
+            """.Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
+            .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
+            .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
+            .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal), cancellationToken);
 
     /// <summary>The manual first Running checkpoint of a generated root, with its creator as the sole input.
     /// The Worker qualifies immediate completion through its regular turn path.</summary>

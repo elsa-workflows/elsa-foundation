@@ -29,7 +29,7 @@ internal static class PhysicalRetirement
             _ when postgres => """
                 CREATE OR REPLACE FUNCTION kernel_physical_retirement_guard() RETURNS trigger LANGUAGE plpgsql AS $$
                 BEGIN
-                    IF OLD."Retired" OR NEW."Retired" AND (OLD."Status"=0 OR NEW."Status"<>OLD."Status") THEN
+                    IF OLD."Retired" OR NEW."Retired" AND (OLD."Status"=0 OR NEW."Status"<>OLD."Status") /*root-atomic-retirement*/ THEN
                         RAISE EXCEPTION 'Physical retirement is irreversible and requires an ended run.';
                     END IF;
                     RETURN NEW;
@@ -43,6 +43,13 @@ internal static class PhysicalRetirement
                 BEGIN SELECT RAISE(ABORT,'Physical retirement is irreversible and requires an ended run.'); END;
                 """
         };
+        if (postgres && engine is null)
+            sql = sql.Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? FormattableString.Invariant($"""
+                AND NOT ((OLD."Status" = 0 AND NEW."Status" = {(int)InstanceStatus.Cancelled}
+                    AND OLD."FoundationReference" IS NOT NULL AND NEW."FoundationReference" = OLD."FoundationReference"
+                    AND NEW."FoundationWriteRevision" = OLD."Revision" + 1 AND NEW."Revision" = NEW."FoundationWriteRevision"
+                    AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL) IS TRUE)
+                """) : "", StringComparison.Ordinal);
         return db.Database.ExecuteSqlRawAsync(sql);
     }
 }

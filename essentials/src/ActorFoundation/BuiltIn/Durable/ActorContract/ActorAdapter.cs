@@ -105,7 +105,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
         SettlesEndedChildNotice(row, delivery.Message) ||
-        roots is not null && delivery.Message.Operator?.QualifiedTerminal is not null ||
+        roots is not null && delivery.Message.Operator is { QualifiedTerminal: not null } or { RootThenDelete: true } ||
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||
             delivery.IsWorkerJobCompletion && (rootJobHandle is not null || delivery.JobDeadline is not null || IsParked(row)));
 
@@ -403,7 +403,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     {
         outcome.ReplyTo(delivery, "deleted");
         outcome.Row = Durable.CreationProtocol.Retire(outcome.Row! with { Revision = prior.Revision });
-        outcome.Journal = Durable.Json.Write(new { Outcome = "deleted", Operation = delivery.Message.Id });
+        outcome.Journal = delivery.Message.Operator?.RootThenDelete == true
+            ? """["delete"]""" : Durable.Json.Write(new { Outcome = "deleted", Operation = delivery.Message.Id });
         outcome.FoundationHeader = null;
         outcome.Delete = outcome.Unsubscribe = true;
         return outcome;
