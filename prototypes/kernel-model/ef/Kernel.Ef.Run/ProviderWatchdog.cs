@@ -1,6 +1,9 @@
+using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 
 static class ProviderWatchdog
@@ -12,6 +15,14 @@ static class ProviderWatchdog
 
     public static async Task<int> RunAsync(Target target, string connection, string[] options)
     {
+        var stage = target.Get("stage", "before-fence");
+        if (stage == "owned-fence") return await RunPostgresOwnedFenceAsync(target, connection);
+        if (stage != "before-fence")
+        {
+            Console.Error.WriteLine("Choose stage=before-fence or stage=owned-fence.");
+            return 2;
+        }
+
         var waiting = target.Engine switch
         {
             "postgres" => """
@@ -71,6 +82,121 @@ static class ProviderWatchdog
             }
         }
 
+        await VerifySuccessorAsync(store, first, token);
+        Console.WriteLine($"{target.Engine} {target.CommitWriter} {(target.FenceInBatch ? "in-batch" : "checked")} watchdog {result} under lock; one successor commit");
+        return 0;
+
+        async Task WaitForLockAsync(Func<bool> ended)
+        {
+            await using var admin = target.Admins()();
+            while (await Target.Text(admin, waiting) != "1")
+            {
+                if (ended()) throw new InvalidOperationException("The worker stopped before the database reported a lock wait.");
+                await Task.Delay(25, token);
+            }
+        }
+    }
+
+    private static async Task<int> RunPostgresOwnedFenceAsync(Target target, string connection)
+    {
+        if (target.Engine != "postgres" || new NpgsqlConnectionStringBuilder(connection).SslMode != SslMode.VerifyFull)
+        {
+            Console.Error.WriteLine("The held-fence stage requires PostgreSQL and SSL Mode=VerifyFull.");
+            return 2;
+        }
+
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var token = limit.Token;
+        await using (var probe = target.Admins()())
+            Require(await probe.Database.SqlQueryRaw<bool>("""
+                SELECT ssl AS "Value" FROM pg_stat_ssl WHERE pid = pg_backend_pid()
+                """).SingleAsync(token), "the preflight used a verified TLS session before resetting the disposable database");
+
+        await target.ResetAsync(1);
+        var store = target.Store(target.Workers());
+        var first = await store.TakeAsync(0, "watchdog-old", LeaseTime, token)
+            ?? throw new InvalidOperationException("The old owner did not take the partition.");
+        string interrupted;
+        await using (var blocker = target.Admins()())
+        await using (var hold = await blocker.Database.BeginTransactionAsync(token))
+        {
+            var blockerPid = await blocker.Database.SqlQueryRaw<int>("""SELECT pg_backend_pid() AS "Value" """).SingleAsync(token);
+            await blocker.Database.ExecuteSqlRawAsync(AwaitAdvisoryLock, token);
+            var owner = target.Store(target.Workers(new PauseBeforeCommit()));
+            long monotonic = 0;
+            List<string> escalated = [];
+            var watchdog = new Watchdog(LeaseTime, escalated.Add, () => monotonic);
+            using var attempt = CancellationTokenSource.CreateLinkedTokenSource(token);
+            var blocked = watchdog.Watch(owner).CommitAsync(Flush(first), attempt.Token).AsTask();
+            try
+            {
+                await using var observer = target.Admins()();
+                while (!await observer.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (
+                        SELECT 1 FROM pg_stat_activity activity JOIN pg_stat_ssl ssl ON ssl.pid = activity.pid
+                        WHERE activity.datname = current_database() AND activity.application_name = 'kernel-worker'
+                            AND ssl.ssl AND {blockerPid} = ANY(pg_blocking_pids(activity.pid))
+                    ) AS "Value"
+                    """).SingleAsync(token))
+                {
+                    if (blocked.IsCompleted)
+                        throw new InvalidOperationException("The owner stopped before its TLS session reached the advisory lock.");
+                    await Task.Delay(25, token);
+                }
+                Require(!await FenceCanBeLockedAsync(target, token), "the waiting TLS worker owns the physical partition row lock");
+                Require(!blocked.IsCompleted && watchdog.Check() == 0, "the transaction is still open before the watchdog threshold");
+
+                monotonic = (long)(LeaseTime.TotalMilliseconds * 2);
+                Require(watchdog.Check() == 1, "the watchdog requests cancellation of the open transaction");
+                interrupted = await AwaitInterruptedAsync(blocked, LeaseTime / 3, token);
+                monotonic += (long)(LeaseTime.TotalMilliseconds / 3);
+                Require(watchdog.Check() == 0 && escalated.Count == 0, "the provider returned before process escalation");
+                Require(await FenceCanBeLockedAsync(target, token), "the fence lock cleared while the advisory blocker was still held");
+            }
+            finally
+            {
+                await attempt.CancelAsync();
+                await ((Task)blocked).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            }
+        }
+
+        await VerifySuccessorAsync(store, first, token);
+        Console.WriteLine($"PostgreSQL {target.CommitWriter} {(target.FenceInBatch ? "in-batch" : "checked")} watchdog {interrupted} under TLS with a held fence");
+        return 0;
+    }
+
+    private const string AwaitAdvisoryLock = "SELECT pg_advisory_xact_lock(4229, 5)";
+
+    private sealed class PauseBeforeCommit : DbTransactionInterceptor
+    {
+        public override async ValueTask<InterceptionResult> TransactionCommittingAsync(DbTransaction transaction,
+            TransactionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
+        {
+            await using var command = transaction.Connection!.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = AwaitAdvisoryLock;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            return result;
+        }
+    }
+
+    private static async Task<bool> FenceCanBeLockedAsync(Target target, CancellationToken token)
+    {
+        await using var db = target.Admins()();
+        await using var transaction = await db.Database.BeginTransactionAsync(token);
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync("""SELECT 1 FROM "Partitions" WHERE "Id" = 0 FOR UPDATE NOWAIT""", token);
+            return true;
+        }
+        catch (PostgresException error) when (error.SqlState == PostgresErrorCodes.LockNotAvailable)
+        {
+            return false;
+        }
+    }
+
+    private static async Task VerifySuccessorAsync(IKernelStore store, Lease first, CancellationToken token)
+    {
         var before = await store.ReadJournalAsync(0, 0, 10, token);
         Require(before.Count == 0 && (await store.LoadAsync([Actor], token)).Count == 0,
             "The interrupted transaction left no checkpoint or journal row.");
@@ -84,18 +210,6 @@ static class ProviderWatchdog
         var after = await store.ReadJournalAsync(0, 0, 10, token);
         Require(after is [{ Instance: Actor, Revision: 1, Position: 1 }] &&
             (await store.LoadAsync([Actor], token)) is [{ Revision: 1 }], "Only the successor's checkpoint and journal row are stored.");
-        Console.WriteLine($"{target.Engine} {target.CommitWriter} {(target.FenceInBatch ? "in-batch" : "checked")} watchdog {result} under lock; one successor commit");
-        return 0;
-
-        async Task WaitForLockAsync(Func<bool> ended)
-        {
-            await using var admin = target.Admins()();
-            while (await Target.Text(admin, waiting) != "1")
-            {
-                if (ended()) throw new InvalidOperationException("The worker stopped before the database reported a lock wait.");
-                await Task.Delay(25, token);
-            }
-        }
     }
 
     private static async Task<string> IsolatedWorkerAsync(Target target, string connection, string[] options, Lease lease,
