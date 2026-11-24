@@ -64,7 +64,9 @@ public sealed partial class EfStore
                     ) reply
                     CROSS JOIN LATERAL (SELECT ltrim(reply.deadline, '+0') AS digits) normalized
                     WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
-                        AND m."InboxScope" = -4 AND m."EventMatch" IS NULL AND (NOT m."Done" OR /*kept*/)
+                        AND m."InboxScope" = -4 AND m."EventMatch" IS NULL
+                        AND (NOT m."Done" OR /*kept*/)
+                        AND (NOT m."Done" OR /*root-parked*/)
                         AND (m."Seq", m."Id" COLLATE "C") > ({afterSeq}, {afterOccurrence})
                         AND (SELECT "SourceReady" FROM source)
                         AND EXISTS (SELECT 1 FROM marker WHERE "StoreSchema" = {expected.StoreSchema}
@@ -78,10 +80,12 @@ public sealed partial class EfStore
                 ORDER BY page."Seq", page."Occurrence" COLLATE "C"
                 """;
             var kept = db.UsesRootParkInspection
-                ? """(m."Done" AND i."FoundationParkAt" IS NOT NULL AND m."FoundationKeptBy" = 0)"""
-                : "false";
-            sampled = await db.Database.SqlQuery<InboxProjection>(FormattableStringFactory.Create(
-                query.Format.Replace("/*kept*/", kept, StringComparison.Ordinal), query.GetArguments())).ToListAsync(cancellationToken);
+                ? """m."FoundationKeptBy" = 0""" : "false";
+            var rootParked = db.UsesRootParkInspection ? """i."FoundationParkAt" IS NOT NULL""" : "false";
+            var sql = query.Format.Replace("/*kept*/", kept, StringComparison.Ordinal)
+                .Replace("/*root-parked*/", rootParked, StringComparison.Ordinal);
+            sampled = await db.Database.SqlQuery<InboxProjection>(FormattableStringFactory.Create(sql, query.GetArguments()))
+                .ToListAsync(cancellationToken);
         }
         catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
         {

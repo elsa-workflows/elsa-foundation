@@ -156,12 +156,13 @@ public sealed partial class EfStore
     {
         var terminalSelections = db.UsesRootTerminalSelection;
         var parks = db.UsesRootParkInspection;
+        var encodeFilterLocally = terminalSelections || parks;
         var sql = query.Format
             .Replace("/*terminal-mark*/", terminalSelections ? """l."TerminalRevision" """ : "NULL::bigint", StringComparison.Ordinal)
             .Replace("/*park-at*/", parks ? """l."ParkAt" """ : "NULL::bigint", StringComparison.Ordinal)
             .Replace("/*park-fault*/", parks ? """l."ParkFault" """ : "NULL::text", StringComparison.Ordinal)
-            .Replace("/*filter*/", terminalSelections ? "" : "kernel_actor_list_filter", StringComparison.Ordinal)
-            .Replace("/*filter-cast*/", terminalSelections ? "::jsonb" : "", StringComparison.Ordinal);
+            .Replace("/*filter*/", encodeFilterLocally ? "" : "kernel_actor_list_filter", StringComparison.Ordinal)
+            .Replace("/*filter-cast*/", encodeFilterLocally ? "::jsonb" : "", StringComparison.Ordinal);
         return FormattableStringFactory.Create(sql, query.GetArguments());
     }
 
@@ -235,7 +236,7 @@ public sealed partial class EfStore
             : db.UsesRootTerminalSelection ? RootListWithMarkTriggers : RootListSourceTriggers;
         var encodedType = type is null ? null : DurableKeyJson.Write(type);
         var encodedLabels = DurableKeyJson.Write(labels);
-        if (db.UsesRootTerminalSelection)
+        if (db.UsesRootTerminalSelection || db.UsesRootParkInspection)
         {
             encodedType = encodedType is null ? null : EncodeListFilter(encodedType);
             encodedLabels = EncodeListFilter(encodedLabels);
