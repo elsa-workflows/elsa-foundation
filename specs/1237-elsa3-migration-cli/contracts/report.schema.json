@@ -8,6 +8,8 @@
     "schemaVersion",
     "tool",
     "command",
+    "exitCode",
+    "redacted",
     "options",
     "summary",
     "components",
@@ -42,6 +44,15 @@
         "inventory",
         "assess"
       ]
+    },
+    "exitCode": {
+      "enum": [
+        0,
+        1
+      ]
+    },
+    "redacted": {
+      "const": true
     },
     "options": {
       "type": "object",

@@ -40,6 +40,13 @@ outcome per workflow, and the publish failure's diagnostics. The startup task ke
 result. The CLI entry point calls the same service (FR-013). The reconciliation project grants the tooling assembly
 `InternalsVisibleTo`, so no public surface is added (ADR 0080).
 
+The run's collaborators (`Elsa3ImportSelection`, `ImportedWorkflowPublisher`, `Elsa3StartupPublishingGrant` and the
+`Elsa3StartupPublishingAuthorization` decoration) are registered today only by `Elsa3JsonReconciliationFeature`
+(`Reconciliation/Elsa3JsonReconciliationFeature.cs`). That feature throws without `SourceId` and a path, and it
+registers `Elsa3FolderImportTask`. The extraction therefore also moves their registration into one internal helper,
+`Elsa3ImportRunRegistration.Add(IServiceCollection)`. The feature calls it, and the tooling composition calls it
+without enabling the feature.
+
 **Rejected**: running the startup task itself in the CLI. It reads only `FilePath`/`FolderPath` options, logs instead of
 returning, and would have to run as a startup task, which FR-008 rules out.
 
@@ -57,11 +64,16 @@ returning, and would have to run as a startup task, which FR-008 rules out.
 - Publish refusals come from Elsa 4 (`ExpressionPublicationValidationException`, `WorkflowExecutableCompilationException`,
   `PublicationActivationException`). Their diagnostics use Elsa 4 codes.
 
-**Decision**: add one code table, `Elsa3MigrationCodeTable`, in `extensions/Elsa3/src/Models/`, next to the
-constants. It maps every Elsa 3 code to its remedy (`patch-definition`, `build-component`, `none`), and component codes
-to a component kind. A reflection test enumerates every code constant and fails when one has no entry (FR-016). Elsa 4
+**Decision**: add one code table, `Elsa3MigrationCodeTable`, in the tooling project. Only that project references
+every project that holds code constants: Models, Mapping (`VF-IMP-*`, `ELS3-UNTYPED-RESULT`, `ELS3-SCRIPT-OUTCOME-*`)
+and Reconciliation (`ELS3-RECONCILE-*`). It maps every Elsa 3 code to its remedy (`patch-definition`, `build-component`, `none`), and component codes
+to a component kind. A reflection test in the migration test project enumerates every code constant and fails when one has no entry
+(FR-016). Elsa 4
 publish diagnostics get remedy `patch-definition` by default, because a published Elsa 3 definition that Elsa 4 refuses
-must be changed or reported as a converter gap. Messages that embed input text are changed at the converter so that
+must be changed or reported as a converter gap. Their messages are not copied. Elsa 4 messages quote script source:
+`JavaScriptDotNetUsageAnalyzer` puts the call into its message, and `JavaScriptExpressionToolingProvider` passes the
+parser message through. The report therefore takes the text for a code the converter does not own from the code
+table's fixed text, and the code table carries a default text for unknown Elsa 4 codes (FR-019). Messages that embed input text are changed at the converter so that
 they name the cause without the text (FR-019). The sentinel test finds every such message.
 
 ## R-4 In-memory SQLite across modules
@@ -84,10 +96,20 @@ composition until disposal (FR-009). The guid never reaches the report (FR-022).
 - `EfToolingConfigurationContext` already layers `appsettings.json`, `shells.json` and their environment variants for
   the persistence tooling.
 
-**Decision**: the entry point builds a generic host without starting it. It composes one shell from the image's
-composition and the merged settings, as specification 1236 defines the merge, and resolves services from that shell's
-provider. No `IHostedService` or startup task runs. Feature `ConfigureServices` and the EF migrations run, because
-publish needs the schema.
+Facts that shape the run:
+
+- EF migrations run through `EfModuleMigrator<TContext>`, which is both an `IHostedService` and an `IShellInitializer`
+  (`essentials/src/Persistence/EntityFramework/EfModuleMigrator.cs`).
+- The activity catalog is filled by startup tasks: `ActivityVersionReconcilerStartupTask` and
+  `RegisterActivityTypesStartupTask`.
+- The converter resolves Elsa 3 types against that catalog (`Elsa3ActivityResolver`).
+
+**Decision**: the entry point builds a generic host that is never started. It composes one shell from the image's
+composition and the merged settings, as specification 1236 defines the merge. It runs the shell's initializers and
+startup tasks as engine start does, and resolves services from the shell's provider. Background hosted services are
+not started, so there is no trigger runtime, scheduler or recurring work. The Elsa 3 folder import feature is not
+composed. The engine image refuses to start without some secret settings (specification 1236, *Required settings*).
+For each one that `--settings` leaves empty, the run generates a value that lives only in memory (FR-008a).
 
 ## R-6 User packages
 
@@ -95,32 +117,35 @@ publish needs the schema.
   `Worker/NuplaneDirectoryFeeds.cs` and `NuplaneRestoreRunner.cs` already reconcile from directory feeds for
   `--restore`.
 
-**Decision**: on every run, the worker reconciles the image's Elsa 3 addition folder (R-7), plus the `--packages`
-folder for `assess`, as directory feeds into one run-scoped temporary install root. Package resolution is restricted to that feed and the image's closure. It then loads that root through
+**Decision**: on every run, the worker reconciles `/app/composition/packages/` (R-7), plus the `--packages` folder for
+`assess`, as directory feeds into one run-scoped temporary install root. The persistence group's `--packages` is a
+different thing, an install root of extracted packages. The two groups never share the option. Package resolution is restricted to that feed and the image's closure. It then loads that root through
 `NuplanePackageSet`, and deletes the root at the end. A dependency that cannot be resolved is a refusal (FR-004,
 spec Q9).
 
 ## R-7 The Elsa 3 migration image
 
-The CLI runs inside an image built `FROM` the essentials engine image at the same version (spec Q3). The engine image
-is specification 1236's. Two of its properties matter here: its host build output, with the `.runtimeconfig.json` and
-`.deps.json` that the worker needs (D1), and the way it adds feature packages on top of the baked composition.
+The CLI runs inside an image built `FROM` the essentials engine image at the same version (spec Q3). Specification
+1236 defines the engine image's extension contract:
 
-**Decision**: the migration image adds three things:
+- the engine reads `/app/composition/essentials.features.json` first, then every other `*.features.json` in that
+  folder, in ordinal file-name order;
+- `/app/composition/packages/` is a second Nuplane feed, loaded like `/app/packages`;
+- a derived image uses its base's version tag.
 
-- **The Elsa 3 addition list**, `extensions/Elsa3/docker/elsa3-additions.json`: the converter (`Elsa3Mapping`), the
-  collection import for reusables, the import's EF ledger, the publishing bridge, and the tooling assembly. The
-  projects are packed as Nuplane packages, as the existing pack workflow already packs `extensions/` projects. They are
-  baked into an image-owned package folder that the image loads exactly as it loads a user's custom feature packages.
-  The worker therefore resolves the frozen entry point in the image's own closure.
-- **The `dotnet-elsa` tool**, installed at the image's version.
-- **The entry point** `dotnet-elsa elsa3-migration`, with the worker pointed at the engine host's build output in the
-  image. No web host starts.
+**Decision**: the migration image uses that contract and rebuilds nothing.
 
-The Dockerfile lives at `extensions/Elsa3/docker/Dockerfile`, and the image is published beside the essentials images,
-at their version. If specification 1236 bakes features into the host build output instead of loading them as packages,
-the addition list follows whatever mechanism that specification provides for adding features to the engine image.
-The list stays the same.
+- `extensions/Elsa3/docker/elsa3.features.json` is the Elsa 3 addition list: the converter (`Elsa3Mapping`), the
+  collection import for reusables, the import's EF ledger and the publishing bridge. It is copied to
+  `/app/composition/elsa3.features.json`.
+- The packages of those features and of the `Elsa3.Migration.Tooling` assembly go into `/app/composition/packages/`.
+  The existing pack workflow already packs the `extensions/` projects.
+- `dotnet-elsa` is installed at the image's version. The entry point is `dotnet-elsa elsa3-migration`, with the worker
+  pointed at the engine host's build output in `/app`. No web host starts.
+- The image is published with the essentials images and carries their version tag, which is also the version of the
+  `dotnet-elsa` inside it.
+- Mount points follow the engine's: `/app/config/appsettings.json` and `/app/packages` hold the user's settings and
+  packages, as on the engine. `/app/export` (read-only) holds the export, and `/app/out` holds the output.
 
 **Rejected**: a NuGet reference host restored on first use, and a host bundled in the tool. Both would ship a second
 Elsa 4 closure that can drift from the engine the user goes live on.
@@ -145,7 +170,9 @@ in dependency order. Spec Q2 covers the engine refusal.
 ## R-9 Report rendering
 
 **Decision**: `report.html` is one static template, embedded in the tooling assembly, with inline CSS and script. The
-report JSON is embedded as a `<script type="application/json">` block, HTML-escaped, and the script renders it. No
+report JSON is embedded as a `<script type="application/json">` block, and the script renders it. Script content is raw text, so the JSON is
+written with `<`, `>` and `&` as `\u003c`-style JSON escapes (the System.Text.Json default encoder), never as HTML
+entities. No
 other data is written into the page (FR-021).
 
 ## R-10 Sanctioned patterns (framework §2.24.2)

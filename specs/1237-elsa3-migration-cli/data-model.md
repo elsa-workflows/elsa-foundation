@@ -10,6 +10,8 @@ This page explains the entities and their rules.
 | `schemaVersion` | Integer, `1`. FR-020 says when it changes. |
 | `tool` | `{ name, version }` of `dotnet-elsa`. |
 | `command` | `inventory` or `assess`. |
+| `exitCode` | `0` or `1`, the exit code the run returns (FR-004). A refused run writes no report. |
+| `redacted` | Always `true` (FR-019). It lets a consumer check the privacy promise without trusting the version alone. |
 | `options` | `{ allVersions }`. |
 | `summary` | The counts below. |
 | `components` | Custom-component inventory. |
@@ -19,7 +21,7 @@ This page explains the entities and their rules.
 | `inputFindings` | Findings that belong to no definition, such as an unreadable file or duplicate input. |
 | `run` | The settings and composition section (FR-018 item 4). |
 
-No field holds a timestamp, an absolute path, a machine name or a run id (FR-022). Input file paths are relative to the
+No field holds a timestamp, an absolute path, a machine name or a run id (FR-022). All paths in the report are relative: `exportedTo` to `--out`, and input file paths to the
 export root, use `/` separators, and are ordinal-sorted. A zip entry path is used as it is.
 
 ## Summary
@@ -41,7 +43,7 @@ export root, use `/` separators, and are ordinal-sorted. A zip entry path is use
 | `stage` | `input`, `conversion`, `import` or `publish`. |
 | `path` | JSON path into the Elsa 3 definition, or `null` for publish findings that have none. |
 | `nodeId` | Activity node id, when known. |
-| `message` | Redacted message text (FR-019). |
+| `message` | Redacted message text (FR-019). For a code the converter does not own, the code table's fixed text. |
 | `guidance` | Redacted guidance text. |
 | `publishStoppedHere` | `true` on the publish finding at which publish stopped (FR-014). |
 
@@ -49,9 +51,11 @@ Findings within a definition are ordered by stage, then path, then code, all ord
 
 ## Definition result
 
-`definitionId`, `name`, `version`, `sourceVersionId`, `isReusable`, `bucket`, `blockedBy` (a list of source version ids,
-empty when not blocked), `published` (boolean), `exportedTo` (a path relative to `--out`, or `null`), `findings`, and
-`needsCompositeSourceSupport` (true for an exported reusable that has activity dependencies, spec Q2).
+`definitionId`, `name`, `version`, `sourceVersionId`, `isReusable`, `bucket`, `blockedBy` (the source version ids of
+the **root** refused definitions, the ones refused for a finding of their own, reached through any chain of
+dependencies; empty when not blocked), `published` (boolean), `exportedTo` (a path relative to `--out`, or `null`), `findings`, and
+`needsCompositeSourceSupport` (true for every exported reusable, and for every exported workflow that uses one,
+spec Q2).
 
 **Bucket rule** (FR-017): `incompatible` if any finding has remedy `none`. Otherwise `convert-as-is` if there is no
 `mustFix` and no `reconsider` finding. Otherwise `convert-with-adjustments`. A blocked definition has no own error
@@ -93,5 +97,6 @@ That keeps a blocked definition out of `incompatible`.
     └── activities/activities.json      # JSON activity reconciliation array, dependencies first (absent if none)
 ```
 
-The run replaces `report.json`, `report.html` and `migrated/` as a whole. It writes them to a staging folder beside
-them and swaps them in last, so a failed run leaves the previous output intact.
+The run replaces `report.json`, `report.html` and `migrated/` as a whole. It writes them to a hidden staging folder
+`.staging-<guid>` inside `--out` and renames them into place last. That keeps every rename on the same mount, so a
+bind-mounted `--out` works. A failed run removes its staging folder and leaves the previous output intact.

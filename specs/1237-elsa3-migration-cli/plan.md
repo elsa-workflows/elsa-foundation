@@ -40,7 +40,7 @@ essentials engine image (specification 1236).
 
 **Project Type**: CLI command group, a tooling library and a container image.
 
-**Performance Goals**: The 34-definition S-15 acceptance set completes in under two minutes on a developer machine.
+**Performance Goals**: The 34-definition specification 1235 acceptance set completes in under two minutes on a developer machine.
 
 **Constraints**:
 
@@ -51,7 +51,7 @@ essentials engine image (specification 1236).
   point only by name.
 - The essentials engine image carries no Elsa 3 code.
 
-**Scale/Scope**: Exports of hundreds of definitions. The fixture export has about 15 definitions, and the S-15 corpus 34.
+**Scale/Scope**: Exports of hundreds of definitions. The fixture export has about 15 definitions, and the specification 1235 acceptance set 34.
 
 ## Constitution Check
 
@@ -79,14 +79,14 @@ essentials engine image (specification 1236).
 | P-1 | Command group | R-1: added to `ElsaCli.cs`. The front end maps exit codes per group (FR-004). |
 | P-2 | Entry point | R-1 and [contracts/worker-entry-point.md](contracts/worker-entry-point.md). |
 | P-3 | Shared pipeline | R-2: `Elsa3ImportRun`, extracted from `Elsa3FolderImportTask`. |
-| P-4 | Code table | R-3: `Elsa3MigrationCodeTable` beside the code constants, with a completeness test. |
+| P-4 | Code table | R-3: `Elsa3MigrationCodeTable` in the tooling project, which references every project that holds code constants, with a completeness test in the migration tests. It also holds the fixed texts for codes the converter does not own. |
 | P-5 | Database | R-4: one named in-memory shared-cache database, held open for the run. |
-| P-6 | Composition | R-5: a generic host that is never started, with one shell, the merged settings and no hosted services. |
+| P-6 | Composition | R-5: a generic host that is never started, with one shell and the merged settings. Shell initializers and startup tasks run, background hosted services do not, and required secret settings get run-only generated values. |
 | P-7 | Packages | R-6: the image's addition folder and the user's folder are read as directory feeds into a run-scoped install root. A missing dependency refuses the run. |
-| P-8 | Image | R-7: `extensions/Elsa3/docker/Dockerfile`, `FROM` the essentials engine image at the same version, plus the addition list, the tool and the entry point. |
+| P-8 | Image | R-7: `extensions/Elsa3/docker/Dockerfile`, `FROM` the essentials engine image at the same version. It adds `/app/composition/elsa3.features.json`, the addition packages in `/app/composition/packages/`, the tool and the entry point, through specification 1236's extension contract. |
 | P-9 | Migrated export | R-8: writers next to the readers, reading back from the design stores. |
 | P-10 | HTML | R-9: an embedded template with the JSON inline. |
-| P-11 | Output swap | data-model: a staging folder, swapped in last. |
+| P-11 | Output swap | data-model: a hidden staging folder inside `--out`, renamed into place last. |
 
 ## Project Structure
 
@@ -127,15 +127,14 @@ essentials/src/Activities/Design/Reconciliation/Json/
 ├── Contracts/IJsonActivityCatalogWriter.cs     # + writer contract
 └── Services/JsonActivityCatalogWriter.cs       # + writer
 
-extensions/Elsa3/src/Models/
-└── Elsa3MigrationCodeTable.cs                  # + code → remedy, component kind
-
 extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Services/
 ├── Elsa3ImportRun.cs                           # + shared sequence (extracted)
+├── Elsa3ImportRunRegistration.cs               # + shared service registration (extracted)
 └── Elsa3FolderImportTask.cs                    # now calls Elsa3ImportRun
 
 extensions/Elsa3/src/Migration/Tooling/         # Elsa3.Migration.Tooling
 ├── Elsa3MigrationToolingHost.cs                # frozen entry point
+├── Elsa3MigrationCodeTable.cs                  # code → remedy, component kind, fixed text
 ├── MigrationComposition.cs
 ├── ExportInputReader.cs
 ├── VersionSelection.cs
@@ -146,7 +145,7 @@ extensions/Elsa3/src/Migration/Tooling/         # Elsa3.Migration.Tooling
 
 extensions/Elsa3/docker/
 ├── Dockerfile                                  # FROM essentials engine image; + additions, tool, entry point
-└── elsa3-additions.json                        # the Elsa 3 addition list
+└── elsa3.features.json                         # the Elsa 3 addition list
 
 extensions/Elsa3/tests/Migration/
 ├── Tests/                                      # unit + in-process integration

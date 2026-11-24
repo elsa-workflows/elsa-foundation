@@ -19,10 +19,10 @@ that names the type and the minimum `Elsa3.Migration.Tooling` version (ADR 0076 
 {
   "contractVersion": 1,
   "command": "inventory",
-  "exportPath": "/work/export",
-  "outPath": "/work/out",
+  "exportPath": "/app/export",
+  "outPath": "/app/out",
   "allVersions": false,
-  "settingsPath": "/work/appsettings.json",
+  "settingsPath": "/app/config/appsettings.json",
   "packages": [{ "id": "Acme.Elsa.Invoicing", "version": "1.0.0" }]
 }
 ```
@@ -33,7 +33,7 @@ that names the type and the minimum `Elsa3.Migration.Tooling` version (ADR 0076 
 ## Response (UTF-8 JSON on `response`)
 
 ```json
-{ "contractVersion": 1, "exitCode": 1, "outPath": "/work/out", "refusal": null }
+{ "contractVersion": 1, "exitCode": 1, "outPath": "/app/out", "refusal": null }
 ```
 
 `refusal` is `{ "reason": "<reason code>", "message": "..." }` when `exitCode` is 2. The method's return value equals
@@ -41,7 +41,8 @@ that names the type and the minimum `Elsa3.Migration.Tooling` version (ADR 0076 
 
 ## Rules
 
-- The entry point writes the report and `migrated/` itself, through a staging folder that it swaps in last.
+- The entry point writes the report and `migrated/` itself, through a hidden staging folder inside `outPath` that it
+  renames into place last.
 - Nothing is written to standard output. The worker already moves stray output to standard error.
 - The contract is additive. A new request field has a default that keeps today's behaviour, and removing a field
   increments `contractVersion`.

@@ -64,14 +64,14 @@ Check the exit code, the report sections, every finding's code, path, category a
 
 1. **Given** an export folder (searched recursively) or a zip, **When** `inventory <export>` runs, **Then** it converts,
    imports and publishes each selected definition on the image's composition. It writes `report.json`, `report.html`
-   and `migrated/` to `--out` (default `./elsa3-migration`), prints that path, and exits 0 when no finding is Must fix
+   and `migrated/` to `--out` (default `/app/out`, the documented output mount), prints that path, and exits 0 when no finding is Must fix
    or Reconsider and 1 otherwise.
 2. **Given** definitions that use custom components, **When** the report is written, **Then** its custom-component
    inventory lists each component once, with its kind (activity, JavaScript function, variable type, storage driver),
    its Elsa 3 name, the definitions that use it and its usage count. A component no definition uses does not appear.
 3. **Given** a definition refused only because a reusable definition it uses was refused, **When** the report is
-   written, **Then** that definition is marked *blocked by dependency* and names the refused dependency, so the root
-   cause is fixed first.
+   written, **Then** that definition is marked *blocked by dependency* and names the root refused definitions, so the
+   root cause is fixed first.
 4. **Given** the same export and the same image, **When** `inventory` runs twice, **Then** `report.json` and every file
    in `migrated/` are byte-identical between the runs.
 
@@ -181,9 +181,10 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - A script refers to a declared JavaScript global without calling it (assigns it, passes it as a callback). The
   converter rewrites only direct calls, so it reports such a reference with a diagnostic of its own (see
   *Dependencies and boundaries*). The CLI scans no scripts itself.
-- A converted reusable activity depends on other activity versions. The engine's source reconciliation cannot publish
-  such content yet, so the report flags the affected `migrated/` items as Take into account until the engine supports
-  it (see *Dependencies and boundaries*).
+- A converted reusable activity always depends on other activity versions, because its body is made of catalog
+  activities. The engine's source reconciliation cannot publish such content yet, so the report flags every reusable,
+  and every workflow that uses one, as Take into account until the engine supports it (see *Dependencies and
+  boundaries*).
 
 ## Requirements *(mandatory)*
 
@@ -211,19 +212,26 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 
 **The migration image**
 
-- **FR-006**: The Elsa 3 migration image MUST be built `FROM` the essentials engine image at the same version. Its
-  Dockerfile and its Elsa 3 addition list are maintained under `extensions/Elsa3/`. Its composition is the essentials
-  feature list plus that addition list: the converter (`Elsa3Mapping`), the collection import for reusables, the
+- **FR-006**: The Elsa 3 migration image MUST be built `FROM` the essentials engine image at the same version, through
+  the engine image's extension contract. The addition list is baked as `/app/composition/elsa3.features.json` and its
+  packages into `/app/composition/packages/`, with no host rebuild. The Dockerfile and the addition list are
+  maintained under `extensions/Elsa3/`. The image's composition is the essentials feature list plus that addition list: the converter (`Elsa3Mapping`), the collection import for reusables, the
   import's EF ledger and the publishing bridge, with their dependencies. Neither the user nor the skill configures
   them.
 - **FR-007**: The image MUST contain the `dotnet-elsa` CLI, and its entry point MUST be the `elsa3-migration` command
-  group. It starts no web host. It is published with the essentials images, at their version.
+  group. It starts no web host. It is published with the essentials images and tagged with their version, which is also the
+  version of the `dotnet-elsa` it contains, so a consumer pulls the migration image tagged with its CLI version.
 
 **Composition and persistence**
 
 - **FR-008**: Features MUST be composed as a shell composes them, from the image's composition plus `--settings`,
-  merged as the essentials engine image merges `appsettings.json`. No web host, CShells runtime, HTTP endpoint, hosted
-  service, startup task, trigger runtime or scheduler is started.
+  merged as the essentials engine image merges `appsettings.json`. The shell's initializers and startup tasks run as they
+  do at engine start, so the EF schema and the activity catalog exist. No web host, HTTP endpoint or background hosted
+  service starts: no trigger runtime, scheduler, recurring task or workflow execution. The Elsa 3 folder import is not
+  composed.
+- **FR-008a**: When the engine requires a setting before it starts (such as a signing key or the seeded admin
+  password) and `--settings` does not set it, the run MUST generate a value for that run only. Generated values never
+  reach the report or the output.
 - **FR-009**: Every EF module MUST use the same in-memory SQLite database, named uniquely per run. The run holds that
   database open for its whole duration and disposes it at the end, so every module sees the same data and the
   shared-transaction single-target rule holds. A persistence connection string in `--settings` MUST be replaced for
@@ -263,13 +271,14 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 
   The remedy, and the component kind for component codes, comes from one code table maintained with the converter's
   diagnostic codes. A test fails when a code the converter can emit has no entry.
-- **FR-017**: Every definition MUST carry exactly one bucket:
+- **FR-017**: Every definition MUST carry exactly one bucket. The bucket names come from the specification 1235
+  acceptance, but the rule here is this specification's own: it is automatic, and no coordinator approval is involved.
   - `incompatible`: any Must fix finding has remedy `none`;
   - `convert-as-is`: no Must fix and no Reconsider finding;
   - `convert-with-adjustments`: everything else.
 
-  A definition refused only because a dependency was refused is also marked *blocked by dependency*, which names that
-  dependency.
+  A definition refused only because a dependency was refused is also marked *blocked by dependency*, which names the
+  root refused definitions: those refused for a finding of their own, through any chain of dependencies.
 - **FR-018**: The report MUST have these sections:
   1. Summary counts per category and bucket.
   2. The custom-component inventory, with usage counts.
@@ -279,10 +288,12 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   5. Dispatched-workflow targets missing from the export, as Take into account.
 
   It also lists the versions not converted, and the `migrated/` items that need the engine's source reconciliation of
-  composites with dependencies.
+  composites with dependencies: every reusable, and every workflow that uses one.
 - **FR-019**: The report MUST NOT contain a literal value, an expression or script body, a variable default or a
   setting value from the input. Diagnostic messages and guidance the converter emits for the report MUST meet this
-  rule. A converter message that embeds such text is changed at the converter. Redaction is the only mode.
+  rule. A converter message that embeds such text is changed at the converter. For a code the converter does not own
+  (an Elsa 4 publication or compilation code), the report carries the code, its path and a fixed text from the code
+  table, never the Elsa 4 message, which may quote script source. Redaction is the only mode.
 - **FR-020**: `report.json` MUST carry an integer `schemaVersion`, starting at 1, and conform to the schema this
   specification publishes. Removing a field, or changing its meaning, increments the version. Adding a field does not.
 - **FR-021**: `report.html` MUST be a single self-contained file that renders exactly the data in `report.json`, with
@@ -324,7 +335,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 | ID | Question | Decision |
 |---|---|---|
 | Q1 | Where does the migrated content come from? | It is exported from the run's own Elsa 4 store after publish, not written from the converter's output. The folder is `migrated/`. Workflows use the workflow format, and reusables use the activity format. |
-| Q2 | Converted reusables depend on other activity versions, and the engine's source reconciliation refuses such content today. | The engine gap is fixed in its own issue, outside this specification. The CLI exports reusables anyway, and the report flags them. Only SC-004's composite case waits on that fix. |
+| Q2 | Converted reusables depend on other activity versions, and the engine's source reconciliation refuses such content today. | The engine gap is fixed in its own issue, outside this specification. The CLI exports reusables anyway, and the report flags every reusable and every workflow that uses one. Only that part of SC-004 waits on the fix. |
 | Q3 | Where does the CLI's Elsa 4 closure come from? | The Elsa 3 migration image, built `FROM` the essentials engine at the same version, with the Elsa 3 additions baked in. The CLI ships no closure, and Docker is a prerequisite. |
 | Q4 | Does using the ADR 0076 worker for this group need an ADR change? | Yes. A small ADR 0076 amendment lets the worker reach further named frozen entry points, one per command group. This specification is provisional on it. |
 | Q5 | How is the run kept to one database when the shared transaction refuses a supplied connection? | Every module gets the same connection string, for a uniquely named in-memory shared-cache database that is kept alive for the run. |
@@ -333,7 +344,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 | Q8 | Does a Must fix finding mean patching the definition or building a component? | Each code's remedy comes from one code table, kept with the diagnostic codes and enforced by a completeness test. |
 | Q9 | How do the user's packages load without the network? | From the mounted `--packages` folder, read as a directory feed into a run-scoped install root. A missing dependency refuses the run. |
 | Q10 | What about a user with their own Elsa 4 host? | No `--host` option. They bring their features as packages, as everyone else does. |
-| Q11 | Who finds a declared JavaScript global that is referenced but not called? | The converter, with a diagnostic of its own. The CLI only reports codes. |
+| Q11 | Who finds a declared JavaScript global that is referenced but not called? | The converter, with a diagnostic of its own that names the global at the reference's JSON path. The CLI only reports codes, so the finding reaches the report as a `javascript-function` component finding. |
+| Q12 | What does a run need that the engine refuses to start without? | Generated, run-only values for the engine's required secret settings (FR-008a). Where the user's settings set them, the user's values win. |
 
 ## Success Criteria *(mandatory)*
 
@@ -342,14 +354,15 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **SC-001 - Complete inventory**: On the fixture export, every custom component a definition uses appears in the
   inventory with the right kind and count. No unused component appears. Every finding has a category, and every Must
   fix finding has a remedy.
-- **SC-002 - Corpus run**: Over the 34 definitions in the S-15 JTest acceptance set, `inventory` in the migration image
-  completes. Every definition gets exactly one bucket. Every definition that startup reconciliation publishes on the
-  same composition is also published by the run and present in `migrated/`.
+- **SC-002 - Corpus run**: Over the 34 definitions in the specification 1235 acceptance set, `inventory --all-versions`
+  in the migration image completes. Every definition gets exactly one bucket. Every definition version that startup
+  reconciliation publishes from the same input, on the same composition, is also published by the run and present in
+  `migrated/`.
 - **SC-003 - Nothing persists**: After a run, including a run that fails part-way, nothing remains outside the output
   folder: the container is removed, and no database or install root survives.
 - **SC-004 - Loadable output**: The essentials engine image, with JSON workflow and activity reconciliation over a run's
-  `migrated/`, loads every workflow in it. A reusable with activity dependencies loads once the engine gap of Q2 is
-  fixed.
+  `migrated/`, loads every workflow in it that uses no reusable. Reusables, and the workflows that use them, load once
+  the engine gap of Q2 is fixed.
 - **SC-005 - Redaction**: The sentinel test finds no sentinel in `report.json` or `report.html`.
 - **SC-006 - Determinism**: Two runs over the same input produce byte-identical `report.json` and `migrated/`.
 - **SC-007 - Assess resolves**: With the fixture feature package, `assess` clears exactly the findings that the
@@ -361,7 +374,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 
 - **Essentials engine image and feature list** (specification 1236). The migration image is built `FROM` the engine
   image, and its composition starts from the feature list. The `appsettings.json` merge comes from that specification
-  too. The engine must also include JSON activity reconciliation, so that `migrated/activities/` loads.
+  too. The engine must also include JSON activity reconciliation, so that `migrated/activities/` loads, and it must
+  carry `Nuplane.Sources.Directory`, so that directory feeds load.
 - **Converter diagnostics in progress.** The converter maps declared Elsa 3 JavaScript globals to prefixed host
   functions (direct calls only), and diagnoses unregistered variable types and unmapped storage drivers. These supply
   the codes from which the custom-component inventory is built, and this specification adds their entries to the code

@@ -9,22 +9,23 @@ dotnet elsa elsa3-migration workflows inventory <export> [--out <dir>] [--all-ve
 dotnet elsa elsa3-migration workflows assess <export> --packages <dir> --settings <file> [--out <dir>] [--all-versions]
 ```
 
-A typical start, with the paths mounted into the container:
+A typical start, with the paths mounted at the engine image's own mount points plus `/app/export` and `/app/out`.
+The image is tagged with the essentials version, which is also the version of the `dotnet-elsa` inside it:
 
 ```text
 docker run --rm --network none \
-  -v "$PWD/export:/work/export:ro" -v "$PWD/nupkgs:/work/packages:ro" \
-  -v "$PWD/appsettings.json:/work/appsettings.json:ro" -v "$PWD/migration:/work/out" \
-  <migration image>:<version> workflows assess /work/export --packages /work/packages \
-  --settings /work/appsettings.json --out /work/out
+  -v "$PWD/export:/app/export:ro" -v "$PWD/nupkgs:/app/packages:ro" \
+  -v "$PWD/appsettings.json:/app/config/appsettings.json:ro" -v "$PWD/migration:/app/out" \
+  <migration image>:<version> workflows assess /app/export --packages /app/packages \
+  --settings /app/config/appsettings.json
 ```
 
 | Argument | Rule |
 |---|---|
 | `<export>` | A folder (searched recursively for `*.json`) or a `.zip`. Anything else exits 2. |
-| `--out` | Default `./elsa3-migration`, created if it is missing. Only `report.json`, `report.html` and `migrated/` are replaced. |
+| `--out` | Default `/app/out`, the documented output mount, created if it is missing. Only `report.json`, `report.html` and `migrated/` are replaced. |
 | `--all-versions` | Converts every version instead of the FR-012 selection. |
-| `--packages` | A folder of `.nupkg` files, read as a directory feed. Required for `assess`. |
+| `--packages` | A folder of `.nupkg` files, read as a directory feed. Required for `assess`. Unlike the persistence group's `--packages` (an install root of extracted packages), it never names an install root. |
 | `--settings` | An `appsettings.json`, merged as the essentials engine image merges it. Required for `assess`. |
 
 ## Exit codes

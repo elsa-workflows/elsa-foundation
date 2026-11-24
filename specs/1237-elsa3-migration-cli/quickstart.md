@@ -7,8 +7,8 @@ the Elsa 3 migration image at the version of the essentials images you will go l
 
 ```bash
 docker run --rm --network none \
-  -v "$PWD/my-elsa3-export:/work/export:ro" -v "$PWD/migration:/work/out" \
-  <migration image>:<version> workflows inventory /work/export --out /work/out
+  -v "$PWD/my-elsa3-export:/app/export:ro" -v "$PWD/migration:/app/out" \
+  <migration image>:<version> workflows inventory /app/export
 ```
 
 The last line printed is the output path. Open `./migration/report.html`, or read `./migration/report.json`.
@@ -21,10 +21,10 @@ The last line printed is the output path. Open `./migration/report.html`, or rea
 
 ```bash
 docker run --rm --network none \
-  -v "$PWD/my-elsa3-export:/work/export:ro" -v "$PWD/nupkgs:/work/packages:ro" \
-  -v "$PWD/appsettings.json:/work/appsettings.json:ro" -v "$PWD/migration:/work/out" \
-  <migration image>:<version> workflows assess /work/export \
-  --packages /work/packages --settings /work/appsettings.json --out /work/out
+  -v "$PWD/my-elsa3-export:/app/export:ro" -v "$PWD/nupkgs:/app/packages:ro" \
+  -v "$PWD/appsettings.json:/app/config/appsettings.json:ro" -v "$PWD/migration:/app/out" \
+  <migration image>:<version> workflows assess /app/export \
+  --packages /app/packages --settings /app/config/appsettings.json
 ```
 
 `./nupkgs` holds your Elsa 4 feature packages. `appsettings.json` enables them, exactly as you would configure the
@@ -43,9 +43,9 @@ supports source-owned composites with dependencies.
    byte-identical.
 2. Sentinel fixture: no sentinel appears in `report.json` or `report.html`.
 3. Fixture feature package → `assess` clears exactly its findings.
-4. S-15 acceptance set → `inventory` in the image: every definition gets a bucket, and the published set equals
+4. Specification 1235 acceptance set → `inventory --all-versions` in the image: every definition gets a bucket, and the published set equals
    startup reconciliation's.
-5. The essentials feature list, with JSON reconciliation, loads `migrated/workflows/`.
+5. The essentials engine, with JSON reconciliation, loads every workflow in `migrated/workflows/` that uses no reusable.
 6. A fixture feature that throws during composition makes the run fail part-way. No database or temporary install root
    remains, and the previous `--out` is intact.
 7. `docker run --network none` gives the same output as the in-process run.
