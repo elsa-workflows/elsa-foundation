@@ -14,13 +14,26 @@ git -C "$repo" -c core.fsmonitor=false archive "$revision" | tar -xf - -C "$scra
 cd "$scratch/source"
 echo "Workbench preview source $revision"
 python3 - <<'PY'
+import json
 from pathlib import Path
-app=Path('apps/Elsa.Workbench')
+import xml.etree.ElementTree as ET
+
+app = Path('apps/Elsa.Workbench')
+locked = json.loads((app / 'packages.lock.json').read_text())['dependencies']['net10.0']
+provider = Path('prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj')
+xml = ET.parse(provider)
+for reference in xml.findall('.//PackageReference'):
+    package = reference.attrib['Include']
+    version = locked[package]['resolved']
+    reference.set('Version', version)
+    print(f'Compile kernel provider with Workbench {package} {version}')
+xml.write(provider, encoding='unicode')
 project=app/'Elsa.Workbench.csproj'
 text=project.read_text()
 assert text.count('</Project>')==1
 project.write_text(text.replace('</Project>', '''
   <ItemGroup>
+    <ProjectReference Include="../../essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
     <ProjectReference Include="../../prototypes/kernel-model/runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj" />
     <ProjectReference Include="../../prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
     <ProjectReference Include="../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
