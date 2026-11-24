@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -8,11 +9,11 @@ public sealed partial class EfStore
     // This reserve covers the escaped, name-limited direct and operator headers.
     private const int MaxRootInboxHeaderBytes = 24 * 1024;
 
-    internal sealed record RootInboxEntry(long Seq, string Occurrence, string Id, string Kind, long? Due, int Attempts, long Size);
+    internal sealed record RootInboxEntry(long Seq, string Occurrence, string Id, string Kind, long? Due, int Attempts, long Size, bool Kept);
     internal sealed record RootInboxPage(IReadOnlyList<RootInboxEntry> Rows, long AsOf);
     private sealed record InboxProjection(long AsOf, int? StoreSchema, int? MessageProtocol, int? JournalCodec, bool SourceReady,
         long? Seq, string? Occurrence, string? Kind, string? Header, long? Due, int? Attempts, long? Size, bool? HasReply,
-        bool? SupportedShape);
+        bool? SupportedShape, bool? Kept);
 
     internal async Task<RootInboxPage> ReadRootInboxAsync(string tenant, string reference, long afterSeq, string afterOccurrence,
         int limit, CancellationToken cancellationToken)
@@ -25,7 +26,7 @@ public sealed partial class EfStore
         List<InboxProjection> sampled;
         try
         {
-            sampled = await db.Database.SqlQuery<InboxProjection>($"""
+            FormattableString query = $"""
                 WITH marker AS (
                     SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", c.relnamespace
                     FROM "KernelStoreVersions" v JOIN pg_catalog.pg_class c ON c.oid = v.tableoid
@@ -40,7 +41,7 @@ public sealed partial class EfStore
                 ), page AS (
                     SELECT m."Seq", m."Id" AS "Occurrence", m."Kind",
                         CASE WHEN octet_length(m."Start") <= {MaxRootInboxHeaderBytes} THEN m."Start" END AS "Header",
-                        m."Due", m."Attempts",
+                        m."Due", m."Attempts", /*kept*/ AS "Kept",
                         (octet_length(m."Id")::bigint + octet_length(m."Kind") + coalesce(octet_length(m."Start"), 0)
                             + coalesce(octet_length(m."Payload"), 0)) AS "Size",
                         m."ReplyTo" IS NOT NULL AS "HasReply",
@@ -63,7 +64,7 @@ public sealed partial class EfStore
                     ) reply
                     CROSS JOIN LATERAL (SELECT ltrim(reply.deadline, '+0') AS digits) normalized
                     WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1 AND NOT i."Retired"
-                        AND m."InboxScope" = -4 AND m."EventMatch" IS NULL AND NOT m."Done"
+                        AND m."InboxScope" = -4 AND m."EventMatch" IS NULL AND (NOT m."Done" OR /*kept*/)
                         AND (m."Seq", m."Id" COLLATE "C") > ({afterSeq}, {afterOccurrence})
                         AND (SELECT "SourceReady" FROM source)
                         AND EXISTS (SELECT 1 FROM marker WHERE "StoreSchema" = {expected.StoreSchema}
@@ -75,7 +76,12 @@ public sealed partial class EfStore
                     (SELECT "SourceReady" FROM source) AS "SourceReady", page.*
                 FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN marker ON true
                 ORDER BY page."Seq", page."Occurrence" COLLATE "C"
-                """).ToListAsync(cancellationToken);
+                """;
+            var kept = db.UsesRootParkInspection
+                ? """(m."Done" AND i."FoundationParkAt" IS NOT NULL AND m."FoundationKeptBy" = 0)"""
+                : "false";
+            sampled = await db.Database.SqlQuery<InboxProjection>(FormattableStringFactory.Create(
+                query.Format.Replace("/*kept*/", kept, StringComparison.Ordinal), query.GetArguments())).ToListAsync(cancellationToken);
         }
         catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
         {
@@ -102,7 +108,7 @@ public sealed partial class EfStore
             var (id, publicKind, publicDue) = occurrence.StartsWith(PostgresRootAdmission.OperatorOccurrencePrefix, StringComparison.Ordinal)
                 ? PostgresRootAdmission.InspectOperatorHeader(db, header, reference, occurrence, kind, due, hasReply)
                 : PostgresRootAdmission.InspectDirectHeader(db, header, reference, occurrence, kind, due, hasReply);
-            return new(row.Seq.Value, occurrence, id, publicKind, publicDue, attempts, size);
+            return new(row.Seq.Value, occurrence, id, publicKind, publicDue, attempts, size, row.Kept == true);
         }
     }
 }

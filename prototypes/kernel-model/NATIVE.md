@@ -806,6 +806,22 @@ direct input. The next provider increments cover fresh arrivals while
 parked, public inspection and recovery controls, and composition with the
 Workbench preview.
 
+### PostgreSQL Park inspection
+
+Protocol 20 adds Park time and fault to the projected actor header in the
+same transaction as an opening. The public point and list reads show Park
+while the authoritative owner body and header are unavailable. The list
+can filter parked and unparked actors. Inbox pages distinguish a kept
+occurrence from pending input and retain the ordinary tenant-bound cursor.
+They expose the delivery metadata and size while the full payload stays in
+the provider.
+
+Run `pg-root-park-inspection owned checked` from Native.Run against a fresh
+PostgreSQL database. The fixture drives a real opening first, refuses an
+opening with its projection trigger disabled, and reads the result after
+a new owner takes over. Recovery controls and authentication of Park
+selections have their own increments.
+
 ## 10. Private durable lexical-resource probe
 
 The [lexical runner](../../essentials/tests/Workflows/Runtime/Native/Scopes/Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.
