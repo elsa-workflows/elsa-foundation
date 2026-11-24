@@ -104,7 +104,10 @@ public sealed partial class EfStore
         var operatorOnly = suspended ? """AND "Id" LIKE 'operator/%'""" : "";
         // The settled prefix follows the poll's order, which puts a pending released cohort first.
         var cohort = db.UsesRootParkRecovery
-            ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter})""" : "";
+            ? $"""
+                AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter}
+                    {(db.UsesRootParkDrain ? RootDrainFilter : "")})
+                """ : "";
         var rows = await db.Messages.FromSqlRaw($$"""
             SELECT * FROM {{source}} m WHERE "Target" = {0} AND "Partition" = {1}
                 AND "InboxScope" IN ({2}, {3}) AND "EventMatch" IS NULL

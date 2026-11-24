@@ -3456,11 +3456,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var item in retired.Inbox.ToArray()) Forget(item);
             if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
         }
-        if (unit.Slot is { CurrentRow.Status: InstanceStatus.Faulted } restored && unit.Row is { Status: InstanceStatus.Running } &&
-            unit.Consumed is [{ Message.Operator.RootParkMark: not null }])
+        if (unit.Slot is { CurrentRow.Status: InstanceStatus.Faulted or InstanceStatus.Running } restored &&
+            unit.Row is { Status: InstanceStatus.Running } && unit.Consumed is [{ Message.Operator.RootParkMark: not null }])
         {
-            // A qualified root's recover puts its released rows ahead of every input read before it. The next poll reads
-            // the inputs held here again, in that order, so no ordinary turn runs ahead of the cohort.
+            // A qualified root's recover, and each page of its drain, puts its released rows ahead of every input read before
+            // it. The next poll reads the inputs held here again, in that order, so no ordinary turn runs ahead of the cohort.
             foreach (var item in restored.Inbox.Where(item => item.Durable && !item.Taken).ToArray()) Forget(item);
             if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
             _caughtUp = false;
