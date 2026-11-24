@@ -1,0 +1,93 @@
+# Data model: Final JTest acceptance
+
+Everything here is a file in `extensions/Elsa3/tests/JTest/`. The ledger is Markdown so a reviewer reads it in the
+PR diff; no tooling parses it.
+
+## Corpus copy
+
+| Field | Rule |
+|---|---|
+| Source | JTest-Nexxbiz repository, commit `b1cde13` |
+| Copied | `workflow-definitions/`, `tests/`, `templates/`, `environments/`, `test-files/`, `global-configuration.json`, `import-and-publish-workflows.json` |
+| Not copied | `pipelines/` and the repository README (Nexxbiz delivery files, not test content) |
+| Renamed after the copy | `templates/` → `templates-elsa3/`, `environments/dev.json` → `environments/elsa3.json`, `global-configuration.json` → `global-configuration.elsa3.json`, so both engines' files carry their engine in the name |
+| Change rule | Every change after the copy commit is a separate, reviewed diff with its reason in the ledger |
+
+## Suite (`ledger/suites.md`, one row per suite file)
+
+| Field | Values |
+|---|---|
+| Suite | path under `tests/` |
+| Definitions | definition files it exercises |
+| Elsa 3 result | `excluded` (spec Q13), `not run`, `pass`, `fail`, `blocked: 3.6.3 defect <defect>` |
+| Elsa 4 result | `excluded` (spec Q13), `pass`, `fail`, `not run`, `blocked: JOIN`, `blocked: value capture`, `blocked: <issue>`, `blocked: <prerequisite>`, `blocked: 3.6.3 defect <defect>` (carried from the Elsa 3 result; not run on Elsa 4), `incompatible` |
+| Last run | run id |
+
+State flow per engine: `not run` → `fail` or `pass`; `fail` → `pass` after a recorded fix, or → `blocked`/`incompatible`
+with its reason; `blocked` → `pass` once the cause is fixed and the suite reruns, or → `incompatible`. A row never
+returns to `not run`.
+
+## Baseline failure (`ledger/baseline-failures.md`, one row per failing assertion on 3.6.3)
+
+| Field | Values |
+|---|---|
+| Suite and assertion | suite path, test name, dataset, step, assertion |
+| Observed vs expected | the values `jtest` reported |
+| Class | `suite defect`, `corrected behaviour`, `3.6.3 defect` |
+| Evidence | why: suite description, Elsa 3 source or release notes, a reproduction |
+| Fix | the exact change, or `none (blocked)` |
+| Approved | the list as a whole is approved by the coordinator before fixes land (FR-007) |
+
+## Suite change (`ledger/suite-changes.md`, one row per changed assertion or step after the engine-neutral refactor)
+
+| Field | Values |
+|---|---|
+| Suite and step | location |
+| Change | before and after |
+| Reason | why it is needed, which engine needs it |
+| Approved | coordinator approval (FR-012) |
+
+Also recorded here, with the engine set they change: any change to the Elsa 3 `templates-elsa3/` folder after the refactor,
+and a timing change (a raised wait) in either set. Writing and fixing the Elsa 4 templates otherwise needs no row: they
+are checked by the suites they serve.
+
+The engine-neutral refactor itself is one reviewed diff; its rule (values move, expectations stay) is checked by the
+reviewer and by a green Elsa 3 rerun, not row by row. Its scope list lives in `ledger/refactor-scope.md`: one row per
+suite location, the Elsa 3-specific value, and where it moves.
+
+## Notes
+
+Each ledger file may end with a *Notes* section for findings that are not rows, such as an activity no suite covers.
+
+## Definition disposition (`ledger/dispositions.md`, one row per definition)
+
+| Field | Values |
+|---|---|
+| Definition | file, Elsa 3 definition id and version |
+| Bucket | `excluded` (spec Q13, no bucket), `convert-as-is`, `convert-with-adjustments`, `incompatible`, or `unclassified` until decided |
+| Reconciliation | `published`, `refused: <code>`, `skipped: <cause>` from the receipt |
+| Adjusted copy | path under `adjusted/`, the change and reason, coordinator approval |
+| Incompatibility | diagnostic, guidance, inherent or not yet implemented, condition to reconsider, coordinator approval |
+| Suites affected | every suite using the definition |
+| JOIN | `none`, `contains join, not blocking`, `blocked` with construct and failure |
+
+## Adjusted definition (`adjusted/`)
+
+An adjusted copy keeps the original file name. The Elsa 4 run's definition set is the originals with each adjusted
+copy taking the place of its original, passed to the reconciliation as an explicit `Files` list of the 34 definitions in the acceptance set (spec Q13). The
+original stays in `workflow-definitions/` unchanged, apart from the approved version patch of spec Q14.
+
+## Run record (`ledger/runs.md`, one row per run, newest last)
+
+| Field | Values |
+|---|---|
+| Run id | sequential |
+| Engine | Elsa 3 or Elsa 4 |
+| Commit | this repository's commit (the suite files differ between phases) |
+| Source | for Elsa 3 the build command and image digest; for Elsa 4 whether spec 1207 is implemented on the commit |
+| Environment file | the file used, without secret values |
+| jtest | version |
+| Scope | suites run |
+| Result | per-suite pass/fail counts; failures by suite |
+| Receipt | Elsa 4 reconciliation summary |
+| Notes | anything unexpected; a failed run is never removed |
