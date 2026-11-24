@@ -406,7 +406,7 @@ public sealed class BpmnDocumentStructureHandlerTests
     private static VariableDefinition Variable(string key) => new(key, key, new TypeReference("String"), null,
         new ArgumentValue(JsonSerializer.SerializeToElement("body"), "Literal"));
 
-    private static ArgumentState Reference(string key, string scope) => new(key, new ArgumentValue(new VariableReference("value", scope), "Variable"), null, null, null, null);
+    private static ArgumentState Reference(string key, string scope) => new(key, ArgumentValue.FromClr(new VariableReference("value", scope), "Variable"), null, null, null, null);
     private static ArgumentState Literal(string key, object value) => new(key, new ArgumentValue(JsonSerializer.SerializeToElement(value, Web), "Literal"), null, null, null, null);
 
     private static void AssertReference(ArgumentState state, string scope)

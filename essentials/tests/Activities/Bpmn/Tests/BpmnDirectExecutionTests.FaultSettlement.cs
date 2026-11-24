@@ -18,34 +18,49 @@ public sealed partial class BpmnDirectExecutionTests
     [InlineData(true)]
     public async Task A_concurrent_service_fault_settles_every_original_start_without_another_semantic_decision(bool admitBoth)
     {
-        await using var host = await OpenAsync(activityIds: Enumerable.Range(1, 32).Select(i => "fault-settlement-" + i).ToArray());
-        var worker = new WorkflowExecutable(WorkflowExecutionHarness.Identity, WorkflowExecutionHarness.NewFaultingNode("fault-worker", "Expected failure"),
-            new Dictionary<string, WorkflowExecutableResumeTarget>(), WorkflowExecutionHarness.Timestamp, new Dictionary<string, string>(),
-            inputContract: new(1, []), dependencies: null, incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
-        _ = await host.PublishAsync(worker, "concurrent-fault-worker");
-        await using var scope = await ScopeAsync(host);
-        var runtime = scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
-        var caller = new BpmnModelCaller("operator", null);
-        var process = new BpmnProcessDefinition("concurrent-fault", Elements:
-            [new("start", BpmnElementTypes.StartEvent), new("work", BpmnElementTypes.ServiceTask, bindingRef: "worker"), new("end", BpmnElementTypes.EndEvent)],
-            SequenceFlows: [new("first", "start", "work"), new("second", "start", "work"), new("finish", "work", "end")]);
-        var publication = await runtime.PublishAsync(new(2, JsonSerializer.SerializeToElement(process, Web), [], [new("worker", worker.Identity, "test.error")]),
-            "concurrent-fault-model", caller);
-        var started = await runtime.StartAsync(publication.SourceReferenceId, "concurrent-fault-start", null, caller);
-        var original = (await runtime.FindExecutionAsync(started.ExecutionId, caller))!;
-        var starts = BpmnDirectExecutionDriver.Read(original).Work.Select(w => w.NativeWork!).ToArray();
-        Assert.Equal(2, starts.Length);
-        var processor = scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
-        await processor.ProcessAsync(new(workflowExecutionId: original.ExecutionId, intentKind: BpmnNativeWorkBoundary.StartKind, limit: admitBoth ? 2 : 1));
-        await processor.ProcessAsync(new(intentKind: BpmnNativeWorkBoundary.ResultKind, limit: 1));
-        await DrainModelAsync(host, original.ExecutionId);
-        var fault = (await runtime.FindExecutionAsync(original.ExecutionId, caller))!;
-        Assert.Equal("Faulted", fault.TerminalResult!.Value.GetProperty("status").GetString());
-        Assert.Equal(RuntimeModelLifecycle.TerminalPendingSettlement, fault.Lifecycle);
-        var responsibility = Assert.Single(BpmnDirectExecutionDriver.Read(fault).Cancellations!);
-        Assert.False(responsibility.Settled);
-        Assert.Empty(BpmnDirectExecutionDriver.Read(fault).Work);
-        await SettleFaultAsync(host, scope.ServiceProvider, original.ExecutionId, starts, admitBoth ? 2 : 1);
+        RuntimeModelNativeWorkOrigin[] starts;
+        string executionId;
+        string retainedFault;
+        await using (var host = await OpenAsync(activityIds: Enumerable.Range(1, 32).Select(i => "fault-settlement-" + i).ToArray()))
+        {
+            var worker = new WorkflowExecutable(WorkflowExecutionHarness.Identity, WorkflowExecutionHarness.NewFaultingNode("fault-worker", "Expected failure"),
+                new Dictionary<string, WorkflowExecutableResumeTarget>(), WorkflowExecutionHarness.Timestamp, new Dictionary<string, string>(),
+                inputContract: new(1, []), dependencies: null, incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
+            _ = await host.PublishAsync(worker, "concurrent-fault-worker");
+            await using var scope = await ScopeAsync(host);
+            var runtime = scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
+            var caller = new BpmnModelCaller("operator", null);
+            var process = new BpmnProcessDefinition("concurrent-fault", Elements:
+                [new("start", BpmnElementTypes.StartEvent), new("work", BpmnElementTypes.ServiceTask, bindingRef: "worker"), new("end", BpmnElementTypes.EndEvent)],
+                SequenceFlows: [new("first", "start", "work"), new("second", "start", "work"), new("finish", "work", "end")]);
+            var publication = await runtime.PublishAsync(new(2, JsonSerializer.SerializeToElement(process, Web), [], [new("worker", worker.Identity, "test.error")]),
+                "concurrent-fault-model", caller);
+            var started = await runtime.StartAsync(publication.SourceReferenceId, "concurrent-fault-start", null, caller);
+            var original = (await runtime.FindExecutionAsync(started.ExecutionId, caller))!;
+            executionId = original.ExecutionId;
+            starts = BpmnDirectExecutionDriver.Read(original).Work.Select(w => w.NativeWork!).ToArray();
+            Assert.Equal(2, starts.Length);
+            await CaptureCurrentFixtureAsync("concurrent-" + (admitBoth ? "admitted" : "unadmitted"), "initial-requested", scope.ServiceProvider, original.ExecutionId);
+            var processor = scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+            await processor.ProcessAsync(new(workflowExecutionId: original.ExecutionId, intentKind: BpmnNativeWorkBoundary.StartKind, limit: admitBoth ? 2 : 1));
+            await processor.ProcessAsync(new(intentKind: BpmnNativeWorkBoundary.ResultKind, limit: 1));
+            await DrainModelAsync(host, original.ExecutionId);
+            var fault = (await runtime.FindExecutionAsync(original.ExecutionId, caller))!;
+            Assert.Equal("Faulted", fault.TerminalResult!.Value.GetProperty("status").GetString());
+            Assert.Equal(RuntimeModelLifecycle.TerminalPendingSettlement, fault.Lifecycle);
+            var responsibility = Assert.Single(BpmnDirectExecutionDriver.Read(fault).Cancellations!);
+            Assert.False(responsibility.Settled);
+            Assert.Empty(BpmnDirectExecutionDriver.Read(fault).Work);
+            retainedFault = JsonSerializer.Serialize(fault, Web);
+            await CaptureCurrentFixtureAsync("concurrent-" + (admitBoth ? "admitted" : "unadmitted"), "pending-settlement", scope.ServiceProvider, original.ExecutionId);
+        }
+        await using var restarted = await OpenAsync(admitNewExecutions: false,
+            activityIds: Enumerable.Range(1, 32).Select(i => "fault-restart-" + i).ToArray());
+        await using var recovery = await ScopeAsync(restarted);
+        var reopened = await recovery.ServiceProvider.GetRequiredService<IBpmnModelRuntime>().InspectAsync(executionId, new("operator", null));
+        Assert.Equal(retainedFault, JsonSerializer.Serialize(reopened.State, Web));
+        await SettleFaultAsync(restarted, recovery.ServiceProvider, executionId, starts, admitBoth ? 2 : 1);
+        await CaptureCurrentFixtureAsync("concurrent-" + (admitBoth ? "admitted" : "unadmitted"), "settled-after-restart", recovery.ServiceProvider, executionId);
     }
 
     [Theory]
