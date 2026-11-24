@@ -59,7 +59,23 @@ internal static partial class NativeHttpEdgeChecks
             .Add(Wf.Workflow("fault", Wf.Sequence("main",
                 Wf.HttpEndpoint("start", "fault"),
                 Wf.Respond("held-response", "should not reach the caller", 201),
-                Wf.Node<Fails>("fail"))));
+                Wf.Node<Fails>("fail"))))
+            .Add(Wf.Workflow("hello", Wf.Sequence("main",
+                Wf.HttpEndpoint("start", "hello", "GET"),
+                Wf.Respond("greeting", Binding.Expr("'hello ' + $start.Query.name"), headers: Binding.Literal(new JsonObject
+                    { ["X-Greeting"] = "hi", ["Cache-Control"] = "no-store", ["Retry-After"] = 120 })))))
+            .Add(Wf.Workflow("echo-headers", Wf.Sequence("main",
+                Wf.HttpEndpoint("start", "echo-headers"),
+                Wf.Respond("echo", Binding.Result("start", "Headers"), contentType: "application/json"))))
+            .Add(Wf.Workflow("greet-later", Wf.Sequence("main",
+                Wf.HttpEndpoint("start", "greet-later"),
+                Wf.Respond("waiting", "waiting"),
+                Wf.HttpEndpoint("resume", "greet-later/resume", "GET"),
+                Wf.Respond("greeting", Binding.Expr("$resume.Query.name + '@' + $resume.Headers['x-tenant']"),
+                    headers: Binding.Literal(new JsonObject { ["X-Resumed"] = "yes" })))))
+            .Add(Wf.Workflow("bad-headers", Wf.Sequence("main",
+                Wf.HttpEndpoint("start", "bad-headers"),
+                Wf.Respond("refused", "never sent", headers: Binding.Literal(new JsonObject { ["Content-Type"] = "text/html" })))));
         var routes = new HttpRoutes(registry);
         var worker = new Worker(node, 0, wire, new ActorAdapter(store, new PublicWorkflow([new NativeExecutionModel(registry)]), (requests, node)),
             new WorkerOptions { Lease = TimeSpan.FromMinutes(2), Monotonic = () => Now() - initial, Transport = transport, Flaws = flaws });
@@ -68,9 +84,15 @@ internal static partial class NativeHttpEdgeChecks
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
         builder.Configuration.Sources.Clear();
-        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
+        builder.WebHost.ConfigureKestrel(options =>
+        {
+            options.Listen(IPAddress.Loopback, 0);
+            // Kestrel's own limits sit below the model's; raised here so the model's bound is the one that refuses.
+            options.Limits.MaxRequestHeaderCount = 2 * HttpFields.MaxFields;
+            options.Limits.MaxRequestHeadersTotalSize = 4 * HttpFields.MaxBytes;
+        });
         await using var app = builder.Build();
-        app.MapPost("/{**route}", (Delegate)HandleAsync);
+        app.MapMethods("/{**route}", ["GET", "POST"], (Delegate)HandleAsync);
         await app.StartAsync(token);
         var pump = RunOwnerAsync(worker, token);
         using var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
@@ -169,6 +191,57 @@ internal static partial class NativeHttpEdgeChecks
                     abandoned is { Responses: 0, Ends: 1, Error: "disconnected" },
                 "The start registration accepted one response. Timed-out and disconnected registrations kept their original outcome.");
             Require(transport.WrongDestination is null, "Every transport reply targeted the receiving node.");
+
+            using (var hello = await client.GetAsync("hello?name=Ada&Name=Other&name=Lin&=nameless", token))
+            {
+                var greeting = await hello.Content.ReadAsStringAsync(token);
+                Require(hello.StatusCode == HttpStatusCode.OK && greeting == "hello Ada,Lin" &&
+                        hello.Headers.TryGetValues("x-greeting", out var said) && said.Single() == "hi" &&
+                        hello.Headers.CacheControl?.NoStore == true && hello.Headers.RetryAfter?.Delta == TimeSpan.FromSeconds(120) &&
+                        hello.Content.Headers.ContentType?.MediaType == "text/plain",
+                    $"A GET start reads its repeated query parameter under the name as sent, a nameless pair left out, and the response carries its authored headers. Observed {(int)hello.StatusCode} '{greeting}'.");
+            }
+            var rawEcho = await RawPostAsync("echo-headers", "X-Tenant: acme", "x-tenant: beta");
+            Require(rawEcho.Status == 200 && JsonNode.Parse(rawEcho.Body)?["x-tenant"]?.GetValue<string>() == "acme, beta",
+                $"A header sent on two lines reaches the workflow once, its values joined with ', '. Observed {rawEcho.Status} {rawEcho.Body}.");
+            using (var parked = await PostAsync("greet-later"))
+                Require(parked.StatusCode == HttpStatusCode.OK, "A workflow waits at a GET endpoint in the middle.");
+            using (var resume = new HttpRequestMessage(HttpMethod.Get, "greet-later/resume?name=Ada"))
+            {
+                resume.Headers.Add("X-Tenant", "acme");
+                resume.Headers.Add("Authorization", "Bearer secret");
+                resume.Headers.Add(retryHeader, "true");       // kept for a minute, so its publication can be read back
+                using var resumed = await client.SendAsync(resume, token);
+                var said = await resumed.Content.ReadAsStringAsync(token);
+                Require(resumed.StatusCode == HttpStatusCode.OK && said == "Ada@acme" &&
+                        resumed.Headers.TryGetValues("x-resumed", out var resumedHeader) && resumedHeader.Single() == "yes",
+                    $"A request that resumes a wait as an event carries its query and headers, and its answer carries its headers. Observed {(int)resumed.StatusCode} '{said}'.");
+                var resumeKey = HttpRoutes.Key("GET", "greet-later/resume");
+                var kept = store.FoundationEvents.Where(e => e.Key.Key.EndsWith(resumeKey, StringComparison.Ordinal)).Select(e => e.Value.Payload).ToArray();
+                Require(kept is [{ } payload] && payload.Contains("acme", StringComparison.Ordinal) && !payload.Contains("secret", StringComparison.Ordinal),
+                    $"The resuming request's retained publication keeps its other headers and none of its credentials. Observed {kept.Length} publication(s).");
+            }
+            using (var echoed = await SendWithHeadersAsync("echo-headers", ("X-Tenant", "acme"), ("x-tenant", "beta"), ("Authorization", "Bearer secret"),
+                       ("Cookie", "session=secret"), ("X-Api-Key", "secret")))
+            {
+                var json = await echoed.Content.ReadAsStringAsync(token);
+                var seen = JsonNode.Parse(json)?.AsObject();
+                Require(echoed.StatusCode == HttpStatusCode.OK && seen?["x-tenant"]?.GetValue<string>() == "acme, beta" &&
+                        seen.Select(field => field.Key).All(name => name == name.ToLowerInvariant()) && !json.Contains("secret", StringComparison.Ordinal),
+                    $"Request headers arrive under lower-case names with repeats joined, and credentials do not reach the workflow. Observed {json}.");
+            }
+            using (var tooMany = await SendWithHeadersAsync("echo-headers",
+                       [.. Enumerable.Range(0, HttpFields.MaxFields + 1).Select(i => ($"X-Field-{i}", "v"))]))
+                Require(tooMany.StatusCode == HttpStatusCode.RequestHeaderFieldsTooLarge &&
+                        (await tooMany.Content.ReadAsStringAsync(token)).Contains($"at most {HttpFields.MaxFields}", StringComparison.Ordinal),
+                    $"A request over the model's header bound is refused with 431 before it reaches a workflow. Observed {(int)tooMany.StatusCode}.");
+            var control = await RawPostAsync("echo-headers", "X-Bad: a\u0001b");
+            Require(control.Status == 400,
+                $"A request header the model's rules refuse, here a control character Kestrel lets through, is answered 400. Observed {control.Status}.");
+            using (var refused = await PostAsync("bad-headers"))
+                Require(refused.StatusCode == HttpStatusCode.InternalServerError &&
+                        await refused.Content.ReadAsStringAsync(token) == "the workflow faulted",
+                    "A response that sets a header the edge owns faults its workflow, and the caller gets 500.");
             return 0;
         }
         finally
@@ -184,6 +257,30 @@ internal static partial class NativeHttpEdgeChecks
                 retryId, new(KeepFor: retention))
             : DispatchAsync(context, scope, routes, ingress, Now() + requestTime, token);
         Task<HttpResponseMessage> PostAsync(string path) => client.PostAsync(path, null, token);
+
+        async Task<HttpResponseMessage> SendWithHeadersAsync(string path, params (string Name, string Value)[] headers)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, path);
+            foreach (var (name, value) in headers) request.Headers.TryAddWithoutValidation(name, value);
+            return await client.SendAsync(request, token);
+        }
+
+        // HttpClient folds repeated headers into one line; a raw request sends each line as given.
+        async Task<(int Status, string Body)> RawPostAsync(string path, params string[] headerLines)
+        {
+            var address = new Uri(app.Urls.Single());
+            using var socket = new System.Net.Sockets.TcpClient();
+            await socket.ConnectAsync(address.Host, address.Port, token);
+            await using var stream = socket.GetStream();
+            var head = $"POST /{path} HTTP/1.1\r\nHost: {address.Authority}\r\n{string.Concat(headerLines.Select(line => line + "\r\n"))}Content-Length: 0\r\nConnection: close\r\n\r\n";
+            await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(head), token);
+            using var reader = new StreamReader(stream);
+            var text = await reader.ReadToEndAsync(token);
+            var status = int.Parse(text.Split(' ', 3)[1]);
+            var payload = text[(text.IndexOf("\r\n\r\n", StringComparison.Ordinal) + 4)..];
+            var body = payload.IndexOf('{') is >= 0 and var from ? payload[from..(payload.LastIndexOf('}') + 1)] : payload;     // past any chunk framing
+            return (status, body);
+        }
 
         async Task<HttpResponseMessage> PostApprovalRetryAsync(string name)
         {
@@ -213,7 +310,14 @@ internal static partial class NativeHttpEdgeChecks
         var request = context.Request;
         var body = context.Features.Get<IHttpRequestBodyDetectionFeature>()?.CanHaveBody == true
             ? await JsonNode.ParseAsync(request.Body, cancellationToken: token) : null;
-        var message = new Kernel.Native.HttpRequest(request.Method, request.Path, body);
+        IReadOnlyDictionary<string, string> query, headers;
+        // Each pair goes in raw and in order, so the model's rules join the repeats and keep each name as sent
+        // (Request.Query would have merged names that differ only in case).
+        try { query = HttpFields.Query(QueryPairs(request.QueryString.Value)); }
+        catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: refused.OverBound ? StatusCodes.Status414UriTooLong : 400); }
+        try { headers = HttpFields.RequestHeaders(request.Headers.SelectMany(field => field.Value.Select(value => KeyValuePair.Create(field.Key, value ?? "")))); }
+        catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: refused.OverBound ? StatusCodes.Status431RequestHeaderFieldsTooLarge : 400); }
+        var message = new Kernel.Native.HttpRequest(request.Method, request.Path, body) { Query = query, Headers = headers };
         var id = Guid.NewGuid().ToString("N");
         var options = new Contract.RequestOptions(null, deadline, routes.BeforeCommit(message.Method, message.Path));
         var reply = routes.TryStart(message.Method, message.Path, out var route)
@@ -230,11 +334,26 @@ internal static partial class NativeHttpEdgeChecks
             { Error: "lost" } => Results.Text("the workflow's owner was lost", statusCode: 503),
             { Status: Contract.ActorStatus.Faulted } => Results.Text("the workflow faulted", statusCode: 500),
             { Error: null, Channel: "response", Item: JsonNode response } when Values.To<Kernel.Native.HttpResponse>(response) is { } answer =>
-                Results.Text(answer.Body is JsonValue scalar && answer.ContentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase) &&
-                    scalar.TryGetValue<string>(out var text) ? text : answer.Body?.ToJsonString(), answer.ContentType, statusCode: answer.StatusCode),
+                Answer(context.Response, answer),
             { Error: null, Item: null } => Results.NoContent(),
             _ => Results.StatusCode(500)
         };
+    }
+
+    private static List<KeyValuePair<string, string>> QueryPairs(string? queryString)
+    {
+        var pairs = new List<KeyValuePair<string, string>>();
+        foreach (var pair in new Microsoft.AspNetCore.WebUtilities.QueryStringEnumerable(queryString))
+            pairs.Add(KeyValuePair.Create(pair.DecodeName().ToString(), pair.DecodeValue().ToString()));
+        return pairs;
+    }
+
+    // The response's own headers go out with it; the content type is the response's field (HttpFields.Reserved).
+    private static IResult Answer(Microsoft.AspNetCore.Http.HttpResponse response, Kernel.Native.HttpResponse answer)
+    {
+        foreach (var (name, value) in answer.Headers) response.Headers[name] = value;
+        return Results.Text(answer.Body is JsonValue scalar && answer.ContentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase) &&
+            scalar.TryGetValue<string>(out var text) ? text : answer.Body?.ToJsonString(), answer.ContentType, statusCode: answer.StatusCode);
     }
 
     private static async Task RunOwnerAsync(Worker owner, CancellationToken token)
