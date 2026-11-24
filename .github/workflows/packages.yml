@@ -83,6 +83,7 @@ jobs:
     outputs:
       mode: ${{ steps.plan.outputs.mode }}
       affected: ${{ steps.plan.outputs.affected }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -154,7 +155,22 @@ jobs:
           -p:CustomBeforeDirectoryBuildProps="$RUNNER_TEMP/versions/package-versions.props" -p:WarningsNotAsErrors=NU1603
           -p:PackageOutputPath="$RUNNER_TEMP/versions/nuget"
 
+      - name: Install inventory tools
+        if: ${{ steps.plan.outputs.affected != '0' }}
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Generate and validate affected package SBOMs
+        if: ${{ steps.plan.outputs.affected != '0' }}
+        run: |
+          npm ci --prefix tools/versioning/package-evidence --ignore-scripts --no-audit --no-fund
+          node --test tools/versioning/package-evidence/test-generation.mjs
+          python3 tools/versioning/package-evidence/collect.py "$GITHUB_WORKSPACE" "$RUNNER_TEMP/versions" --run "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
+          node tools/versioning/package-evidence/attest.mjs "$RUNNER_TEMP/versions" validate
+
       - name: Upload artifact
+        id: upload
         # The packages under nuget/, with the plan and computation the publish job checks them against.
         uses: actions/upload-artifact@v4
         with:
@@ -162,8 +178,8 @@ jobs:
           path: ${{ runner.temp }}/versions
           if-no-files-found: error
 
-  publish:
-    name: Publish to feedz.io
+  attest:
+    name: Attest affected packages
     needs: pack
     # Only a build of main that planned a publish or the bootstrap gets here; the publisher refuses anything else again.
     if: >-
@@ -172,12 +188,53 @@ jobs:
       && (needs.pack.outputs.mode == 'publish' || needs.pack.outputs.mode == 'bootstrap')
       && needs.pack.outputs.affected != '0' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
+    outputs:
+      subjects_digest: ${{ steps.sign.outputs.subjects_digest }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ needs.pack.outputs.artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/versions
+      - name: Store build provenance and signed per-package inventories
+        id: sign
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          npm ci --prefix tools/versioning/package-evidence --ignore-scripts --no-audit --no-fund
+          node tools/versioning/package-evidence/attest.mjs "$RUNNER_TEMP/versions" sign
+
+  publish:
+    name: Publish to feedz.io
+    needs: [pack, attest]
+    # Only a build of main that planned a publish or the bootstrap gets here; the publisher refuses anything else again.
+    if: >-
+      ${{ github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && (needs.pack.outputs.mode == 'publish' || needs.pack.outputs.mode == 'bootstrap')
+      && needs.pack.outputs.affected != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       # FR-017: the write-back to publish-state is pushed with this job's GITHUB_TOKEN, which actions/checkout persists
       # for origin. Pushes made with it start no workflow run.
       contents: write
+      attestations: read
     steps:
+      - name: Reserve time for publish-state write-back
+        id: budget
+        run: echo "deadline=$(date -u -d '+45 minutes' +%s)" >> "$GITHUB_OUTPUT"
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -194,8 +251,14 @@ jobs:
       - name: Download packages
         uses: actions/download-artifact@v4
         with:
-          name: elsa-foundation-nuget-packages
+          artifact-ids: ${{ needs.pack.outputs.artifact_id }}
+          merge-multiple: true
           path: ${{ runner.temp }}/versions
+
+      - name: Check all package bytes against the signed subjects before pushing
+        env:
+          SUBJECTS_SHA256: ${{ needs.attest.outputs.subjects_digest }}
+        run: python3 tools/versioning/package-evidence/verify.py "$RUNNER_TEMP/versions" --manifest-digest "$SUBJECTS_SHA256"
 
       - name: Publish
         # Refuses unless publish-state is where the plan found it (or, for the bootstrap, absent) and the versions
@@ -203,10 +266,12 @@ jobs:
         # whatever landed.
         env:
           FEEDZ_API_KEY: ${{ secrets.FEEDZ_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          EVIDENCE_DEADLINE: ${{ steps.budget.outputs.deadline }}
         run: >-
           dotnet run --project tools/versioning/Elsa.Versioning.Publisher -c Release --no-build --
           publish --ref "$GITHUB_REF" --commit "$GITHUB_SHA" --plan-dir "$RUNNER_TEMP/versions"
-          --feed "$feedz_feed_source" --api-key-env FEEDZ_API_KEY --summary "$GITHUB_STEP_SUMMARY"
+          --verify-evidence true --evidence-deadline "$EVIDENCE_DEADLINE" --feed "$feedz_feed_source" --api-key-env FEEDZ_API_KEY --summary "$GITHUB_STEP_SUMMARY"
 
   release:
     name: Release packages

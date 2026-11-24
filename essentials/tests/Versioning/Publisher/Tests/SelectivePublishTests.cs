@@ -43,6 +43,82 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
         Assert.Equal((commit, commit), (GitProcess.Run(OriginPath, ["rev-parse", "main"]).Text, Repo.Head));
     }
 
+    [Fact]
+    public async Task Failed_readback_records_only_verified_predecessors_then_recovers_the_existing_bytes()
+    {
+        Edit("src/Http/Http.cs");
+        Edit("src/Tasks/Scheduler.cs");
+        CommitAndPush();
+        var run = PlanAndPack();
+        var input = new DirectoryInfo(AppContext.BaseDirectory);
+        while (input is not null && !File.Exists(Path.Join(input.FullName, "Elsa.Server.slnx")))
+            input = input.Parent;
+        const string verifier = "tools/versioning/package-evidence/verify.py";
+        Repo.Write(verifier, File.ReadAllText(Path.Join(input!.FullName, verifier)));
+        var feedDirectory = Path.Join(Repo.Root, ".git", "public-content");
+        Directory.CreateDirectory(feedDirectory);
+        var index = Path.Join(feedDirectory, "index.json");
+        var address = new Uri(feedDirectory + Path.DirectorySeparatorChar).AbsoluteUri;
+        File.WriteAllText(index, $$"""{"resources":[{"@type":"PackageBaseAddress/3.0.0","@id":"{{address}}"}]}""");
+
+        string Stage(WorkflowRun planned, bool retain)
+        {
+            string last = "";
+            foreach (var path in Directory.GetFiles(Path.Join(planned.Directory, PlanFiles.Packages), "*.nupkg"))
+            {
+                var package = PackedPackage.Read(path);
+                var id = package.PackageId.ToLowerInvariant();
+                var version = package.Version.ToLowerInvariant();
+                var directory = Path.Join(feedDirectory, id, version);
+                Directory.CreateDirectory(directory);
+                var remote = Path.Join(directory, $"{id}.{version}.nupkg");
+                if (retain && Feed.Package(package.PackageId, package.Version) is { } earlier)
+                    File.WriteAllBytes(path, earlier);
+                File.Copy(path, remote, overwrite: true);
+                if (id == "elsa.tasks")
+                    last = remote;
+            }
+            return last;
+        }
+
+        using var log = new StringWriter();
+        Task<PublishReport> PublishWithReadback(WorkflowRun planned) => PublishCommand.RunAsync(
+            new PublishOptions(Path.Join(Repo.Root, "src"), PublishPlan.MainRef, planned.Plan.Commit, planned.Directory, null, new Uri(index).AbsoluteUri),
+            Feed, State, log);
+
+        var lagging = Stage(run, retain: false);
+        using (var bytes = File.Open(lagging, FileMode.Append))
+            bytes.WriteByte(1); // Valid ZIP, wrong public digest.
+        var partial = await PublishWithReadback(run);
+        Assert.False(partial.Succeeded);
+        Assert.Equal("4.0.1-preview", RecordedVersions["Elsa.Http"]);
+        Assert.Equal("4.0.0-preview", RecordedVersions["Elsa.Tasks"]);
+
+        var retry = PlanAndPack();
+        Stage(retry, retain: true);
+        var recovered = await PublishWithReadback(retry);
+        Assert.True(recovered.Succeeded, recovered.Failure);
+        Assert.Contains(recovered.Packages, outcome => outcome is { PackageId: "Elsa.Tasks", Kind: PackageOutcomeKind.AlreadyPublished });
+        Assert.Contains("Verified recovered public package Elsa.Tasks 4.0.1-preview sha256:", log.ToString(), StringComparison.Ordinal);
+        Assert.Equal("4.0.1-preview", RecordedVersions["Elsa.Tasks"]);
+    }
+
+    [Fact]
+    public async Task Expired_job_budget_stops_before_a_feed_write()
+    {
+        Edit("src/Tasks/Scheduler.cs");
+        CommitAndPush();
+        var run = PlanAndPack();
+        var pushes = Feed.Pushes.Count;
+        var record = OriginStateTip;
+        var publisher = new PackagePublisher(Feed, State, TextWriter.Null, deadline: DateTimeOffset.UtcNow.AddSeconds(-1));
+        var report = await publisher.PublishAsync(run.Plan, run.Computation, OriginRecord!, Path.Join(run.Directory, PlanFiles.Packages));
+        Assert.False(report.Succeeded);
+        Assert.All(report.Packages, outcome => Assert.Equal(PackageOutcomeKind.NotAttempted, outcome.Kind));
+        Assert.Equal(pushes, Feed.Pushes.Count);
+        Assert.Equal(record, OriginStateTip);
+    }
+
     /// <summary>A commit that changes no package pushes nothing and writes no record revision.</summary>
     [Fact]
     public async Task A_commit_that_changes_no_package_publishes_nothing()
@@ -238,6 +314,7 @@ public sealed class SelectivePublishTests : PublishingHistory, IAsyncLifetime
         Assert.False(run.Report!.Succeeded);
         Assert.Equal(PackageOutcomeKind.Pushed, run.Report.Packages.Single().Kind);
         Assert.Contains("write-back failed", run.Report.Failure, StringComparison.Ordinal);
+        Assert.Contains("Write-back unconfirmed", JobSummary.Publish(run.Report), StringComparison.Ordinal);
         Assert.Equal("4.0.0-preview", RecordedVersions["Elsa.Tasks"]);
 
         var next = await RunAsync();

@@ -86,6 +86,7 @@ jobs:
       heavy: ${{ steps.scope.outputs.heavy }}
       published-images: ${{ steps.scope.outputs.published-images }}
       studio-order: ${{ steps.scope.outputs.studio-order }}
+      package-evidence: ${{ steps.scope.outputs.package-evidence }}
       backend-source: ${{ steps.scope.outputs.backend-source }}
       kernel: ${{ steps.kernel.outputs.kernel }}
     steps:
@@ -191,6 +192,9 @@ jobs:
       # documentation-only PR can still break (by moving or deleting a doc a catalog or module README links to).
       - name: Check catalog and module README links
         run: python3 tools/maps/check-catalog-links.py
+
+      - name: Verify package evidence reader and recovery
+        run: python3 -m unittest discover -s tools/versioning/package-evidence -p 'test_*.py'
 
       - name: Exercise the tier tooling
         run: |
@@ -617,7 +621,7 @@ jobs:
   # measurement (#1668).
   architecture-guards:
     name: Architecture guards
-    needs: plan-tiers
+    needs: [plan-tiers, plan-scope]
     if: needs.plan-tiers.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -660,6 +664,20 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Install the inventory toolchain
+        if: needs.plan-scope.outputs.package-evidence == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Rehearse source and binary inventory boundaries
+        if: needs.plan-scope.outputs.package-evidence == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          npm ci --prefix tools/versioning/package-evidence --ignore-scripts --no-audit --no-fund
+          node --test tools/versioning/package-evidence/test-generation.mjs
+          python3 tools/versioning/package-evidence/rehearse.py
+
+
   # Issue #1815 separates required modules from optional ones. This leg is what makes that
   # separation mean something: it builds and tests ONLY the core, so a dependency from core into
   # an optional module fails here even when the full solution is perfectly happy.
@@ -673,6 +691,7 @@ jobs:
   # because it lives under tests/ and references no Testcontainers, so it is already covered by a
   # required check. This job adds the thing that guard cannot prove on its own: that the core
   # actually compiles and passes its tests with every optional module absent.
+
   core-only:
     name: Core-only build & test
     needs: plan-tiers
