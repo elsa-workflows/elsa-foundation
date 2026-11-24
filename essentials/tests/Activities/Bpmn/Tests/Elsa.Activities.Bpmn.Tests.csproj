@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="../../../../../specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/current-prior-cancellation/**/*" Link="Fixtures/CurrentPriorCancellation/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../../../../specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/current-native/**/*" Link="Fixtures/CurrentNative/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <EmbeddedResource Include="Fixtures/LegacyCompensationState.json" LogicalName="Bpmn.LegacyCompensationState.json" />

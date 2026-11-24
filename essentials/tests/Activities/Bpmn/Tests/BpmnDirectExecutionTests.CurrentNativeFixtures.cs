@@ -50,6 +50,7 @@ public sealed partial class BpmnDirectExecutionTests
     [Theory]
     [InlineData("ActualNativeStartRetirement.sqlite.gz", "bd5e9a8d447bb63a85affd1402fa5b1cfe98dbf58b344cd1ed2bb733d859160d")]
     [InlineData("ActualIndependentNativeCancellation.sqlite.gz", "1380bc749db55812d0e2f6aaff2428bc4bdc06aa962ffca7ed7f52ef79595dc1")]
+    [InlineData("ActualPriorScopeCancellation.sqlite.gz", "f19abce8444b42284483f511018039a48e39dd4d9cd6a53ab348a55191f4ecb4")]
     public async Task Archived_native_material_is_refused_without_rewriting_its_original_payloads(string fixture, string expectedHash)
     {
         await using (var input = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture)))
@@ -61,7 +62,8 @@ public sealed partial class BpmnDirectExecutionTests
         await using (var scope = await ScopeAsync(host))
         {
             var before = await FaultFixtureRowsAsync();
-            var state = Assert.Single((await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().ListPageAsync(new())).Items);
+            var state = Assert.Single((await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().ListPageAsync(new())).Items,
+                item => item.ExecutionId.StartsWith("bpmn:", StringComparison.Ordinal));
             var error = await Assert.ThrowsAsync<InvalidDataException>(async () =>
                 await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindMaterialAsync(state.Executable.ArtifactId));
             Assert.Equal("The persisted model material payload is corrupt.", error.Message);

@@ -1,0 +1,5 @@
+These complete SQLite stores were written by clean source `e79d6dd41d17ad69222564eea4bbf4e496a74283`, using fourteen captured executing writers. They retain the original outer result before restart, its deferred positive claim after restart, and settlement after the real one-minute claim expires.
+
+The producer uses the supported SDK/store path and an actual suspended Delay descendant. This is not the historical ETL Workbench process-loss witness. The original round-nine archive remains unchanged and is separately tested for precise pre-stable material-hash refusal without rewriting retained payloads.
+
+Each stage includes the original capture report, a deterministic gzip of the full closed store, and a receipt binding writer binaries, physical row counts, original historical digest and exact packaging/verifier source. The packager validates SQLite integrity, authority/pins, original result/debt identity, physical claim custody and settlement order. The binding tests include freshly rehashed negative controls.
