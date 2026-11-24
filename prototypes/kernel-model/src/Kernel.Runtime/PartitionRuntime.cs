@@ -70,7 +70,8 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             var held = Enumerable.Range(0, partitions).Select(Activation).OfType<IScopeActivation>().ToArray();
             if (held.Length > 1)
             {
-                await ReleaseSetAsync(setHost, held, cancellationToken);
+                try { await ReleaseSetAsync(setHost, held, cancellationToken); }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
                 return;
             }
         }
@@ -106,9 +107,11 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// <summary>Give the scope up. Whoever takes it next finds no death.</summary>
     public async Task DeactivateAsync(int scope, CancellationToken cancellationToken = default)
     {
-        if (Activation(scope) is not { } activation) return;
+        if (_releasing[scope] || Activation(scope) is not { } activation) return;
+        _releasing[scope] = true;
         _active[scope] = null;
-        await activation.DisposeAsync();
+        try { await activation.DisposeAsync(); }
+        finally { _releasing[scope] = false; }
     }
 
     /// <summary>
@@ -143,7 +146,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         var (release, take) = Balancer.Plan(partitions, cluster, scopes.Where(Owns).ToList(), scopes.Where(Activating).ToList(), flaws);
         if (release.Count > 1 && _host is IScopeSetRelease { SupportsSetRelease: true } setHost)
         {
-            if (release.Any(scope => _passing[scope] || _activating[scope])) return;     // hand the set over when every surplus scope is idle
+            if (release.Any(scope => _passing[scope] || _activating[scope] || _releasing[scope])) return;     // hand the set over when every surplus scope is idle
             cancellationToken.ThrowIfCancellationRequested();     // a process that goes away mid-round gives nothing more up
             var activations = release.Select(Activation).OfType<IScopeActivation>().ToArray();
             if (activations.Length > 0) await ReleaseSetAsync(setHost, activations, cancellationToken);
@@ -155,15 +158,13 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
                 cancellationToken.ThrowIfCancellationRequested();
                 // Earlier give-ups may have awaited the store while a pass started on this worker.
                 if (_passing[surplus] || _activating[surplus] || !Owns(surplus)) continue;
-                _releasing[surplus] = true;
-                try { await DeactivateAsync(surplus, cancellationToken); }
-                finally { _releasing[surplus] = false; }
+                await DeactivateAsync(surplus, cancellationToken);
             }
         }
         if (take.Count > 1 && _host is IScopeSetGain { SupportsSetGain: true } gains)
         {
             // A release may have yielded since the plan was made.
-            var requested = take.Where(scope => !Owns(scope) && !_activating[scope]).ToArray();
+            var requested = take.Where(scope => !Owns(scope) && !_activating[scope] && !_releasing[scope]).ToArray();
             if (requested.Length == 0) return;
             foreach (var scope in requested) _activating[scope] = true;
             IReadOnlyList<IScopeActivation> gained;

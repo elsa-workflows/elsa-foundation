@@ -541,6 +541,12 @@ The meter reports each process's provider traffic, including connection setup, o
 shutdown. Schema setup and direct diagnostic reads are outside that meter. The separate warm
 public preview budget has its own command.
 
+Orderly shutdown of an idle set host releases the owned fences together. The runtime conformance runner's
+`set-release` case covers a cancelled drain, overlapping stop calls and the fixed-host path. To check the full
+1,024-row release and a stale epoch on SQLite, run `dotnet run -c Release --project ef/Kernel.Ef.Conformance --
+sqlite release-set --owned-commit --fence-in-batch` from `prototypes/kernel-model`. The same check accepts
+`--checked-fence`.
+
 ### PostgreSQL public-start round-trip budget
 
 The public PostgreSQL writer can finish a Balanced Native root in its first fenced checkpoint. The creator,

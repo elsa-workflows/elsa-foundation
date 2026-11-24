@@ -1040,8 +1040,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>Stand down: drop what is in memory and give the partition up. Whoever takes it next finds no death.</summary>
     internal async Task ReleaseAsync(CancellationToken cancellationToken = default)
     {
+        if (cancellationToken.IsCancellationRequested) return;
         await ReleaseHeldAsync(cancellationToken);
-        await ReleasePendingAsync(cancellationToken);
+        if (!cancellationToken.IsCancellationRequested) await ReleasePendingAsync(cancellationToken);
     }
 
     // K1b, the coordinator's rule for a host's give-up of a pending partition (19-20 November): a pending partition moves
@@ -1082,7 +1083,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (generation != _generation) return;
                 WriteUnwritten(_ => true);
             }
-            while (generation == _generation && _queue.Count > 0 && LeaseUsable())
+            while (generation == _generation && _queue.Count > 0 && !cancellationToken.IsCancellationRequested && LeaseUsable())
                 await FlushAsync(cancellationToken);
             if (generation != _generation || !Owns)
             {
@@ -1091,7 +1092,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 // makes this a no-op for a partition that moved or was taken again since, and nothing here resets.
                 // K1b: a guard expiry during the drain made them pending: they move only through their counting retake.
                 lock (_turnSync) held = [.. held.Where(f => !_pending.ContainsKey(f.Partition))];
-                if (held.Count > 1)
+                if (held.Count > 1 && !cancellationToken.IsCancellationRequested)
                     try { await _store.ReleaseAsync(held, cancellationToken); }
                     catch (Exception) { /* then the leases run out instead */ }
                 return;
@@ -1102,6 +1103,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (generation != _generation) return;
             Reset();
         }
+        if (cancellationToken.IsCancellationRequested) return;
         try
         {
             if (held.Count == 1) await _store.ReleaseAsync(held[0].Partition, held[0].Epoch, cancellationToken);
@@ -1267,6 +1269,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var captured = Fences.Where(f => partitions.Contains(f.Partition)).ToList();
         ReceiveJobPublications(cancellationToken);
         await DrainAsync(HandedOver, cancellationToken);
+        if (cancellationToken.IsCancellationRequested) return;
         LeaseUsable();
         List<PartitionFence> leaving, kept = [];
         var quiet = false;
@@ -1285,6 +1288,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             // The fallback resets everything, so what the kept partitions hold in memory only is written first too, as a
             // stand-down writes it.
             await DrainAsync(_ => true, cancellationToken);
+            if (cancellationToken.IsCancellationRequested) return;
             LeaseUsable();
             lock (_turnSync)
             {
@@ -1318,7 +1322,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (!_flushing && !Has(Flaw.ForgetShortWaits))
             lock (_turnSync) WriteUnwritten(handedOver);
-        while (_queue.Count > 0 && !_flushing && LeaseUsable()) await FlushAsync(cancellationToken);
+        while (_queue.Count > 0 && !_flushing && !cancellationToken.IsCancellationRequested && LeaseUsable())
+            await FlushAsync(cancellationToken);
     }
 
     // Nothing of the partitions handed over is in flight: no read, commit or turn, no running job, no trial. A job result

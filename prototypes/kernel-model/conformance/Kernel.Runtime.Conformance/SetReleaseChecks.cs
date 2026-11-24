@@ -11,6 +11,8 @@ public static class SetReleaseChecks
     {
         var owned = await CheckAsync(ownedSets: true);
         var fixedWorkers = await CheckAsync(ownedSets: false);
+        var killedStop = await StopDuringDrainAsync(cancel: true);
+        var overlappingStop = await StopDuringDrainAsync(cancel: false);
         var expired = await ExpiredAsync();
         var cancelled = await CancelledAsync();
         var busy = await BusySurplusAsync();
@@ -18,7 +20,7 @@ public static class SetReleaseChecks
         var activatingRetained = await ReactivatingAsync(1);
         var fixedBusy = await FixedBusySurplusAsync(passStartsDuringRelease: false);
         var fixedInterleaved = await FixedBusySurplusAsync(passStartsDuringRelease: true);
-        return owned && fixedWorkers && expired && cancelled && busy && activatingSurplus && activatingRetained && fixedBusy && fixedInterleaved ? 0 : 1;
+        return owned && fixedWorkers && killedStop && overlappingStop && expired && cancelled && busy && activatingSurplus && activatingRetained && fixedBusy && fixedInterleaved ? 0 : 1;
     }
 
     private static async Task<bool> CheckAsync(bool ownedSets)
@@ -49,6 +51,36 @@ public static class SetReleaseChecks
         Console.WriteLine($"{(stopped ? "ok" : "FAIL")} {(ownedSets ? "set" : "fixed")} stop released its remaining scopes " +
             $"at the same epochs, made {stopCalls} set release call(s)");
         return expected && stopped;
+    }
+
+    private static async Task<bool> StopDuringDrainAsync(bool cancel)
+    {
+        var (store, wire, host, runtime) = await ReadyToReleaseAsync(ownedSets: true, () => 1_000L);
+        var worker = host.NodeWorker!;
+        var actor = InstanceRef.In(0, "stop-watch");
+        worker.Post(new("arm", actor, Kinds.Start, Start: Http.Spec(Http.Timer, ephemeral: true)), fresh: true);
+        worker.RunTurn(actor.Id);
+        await worker.FlushAsync();
+        var wasVolatile = worker.Unwritten.Contains(actor.Id) && !store.Instances.ContainsKey(actor.Id);
+        var epochs = store.Partitions.Select(partition => partition.Epoch).ToArray();
+        wire.StallNextCommit(Timeout.InfiniteTimeSpan, actor.Partition);
+        using var cancellation = new CancellationTokenSource();
+        var stopping = runtime.StopAsync(cancellation.Token).AsTask();
+        var held = wire.Stalls == 1 && !stopping.IsCompleted && wire.SetReleases == 0;
+        var secondStop = runtime.StopAsync().AsTask();
+        var deactivating = runtime.DeactivateAsync(actor.Partition);
+        var balancing = runtime.BalanceAsync();
+        var noOverlap = secondStop.IsCompletedSuccessfully && deactivating.IsCompletedSuccessfully && balancing.IsCompletedSuccessfully;
+        if (cancel) cancellation.Cancel();
+        wire.Resume();
+        await Task.WhenAll(stopping, secondStop, deactivating, balancing).WaitAsync(TimeSpan.FromSeconds(5));
+        var release = cancel ? 0 : 1;
+        var expected = wasVolatile && held && noOverlap && wire.Held.IsCompletedSuccessfully && wire.SetReleases == release &&
+            store.Partitions.All(partition => partition.Owner == (cancel ? "first" : null)) &&
+            store.Partitions.Select(partition => partition.Epoch).SequenceEqual(epochs);
+        Console.WriteLine($"{(expected ? "ok" : "FAIL")} {(cancel ? "cancel during" : "overlap during")} the shutdown flush, " +
+            $"volatile {wasVolatile}, entered {held}, no overlapping release {noOverlap}, made {wire.SetReleases} set release call(s)");
+        return expected;
     }
 
     private static async Task<bool> ExpiredAsync()
@@ -237,7 +269,7 @@ public static class SetReleaseChecks
     {
         var store = new InMemoryStore(Count, clock);
         var wire = new NodeStore(store) { WithoutOwnedSets = !ownedSets };
-        var host = DurableHost.ForNode("first", wire, new WorkflowInstance(Stress.Models()), Count,
+        var host = DurableHost.ForNode("first", wire, new WorkflowInstance([.. Stress.Models(), new Http(0, (_, _) => throw new InvalidOperationException("No job expected."))]), Count,
             new WorkerOptions { Partitions = Count, Lease = Lease, Monotonic = clock });
         var runtime = new PartitionRuntime("first", wire, Count, Lease);
         await runtime.StartAsync(watcher?.Wrap("first", host) ?? host);

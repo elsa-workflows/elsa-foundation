@@ -33,6 +33,9 @@ switch (args)
         Console.WriteLine(await store.UpgradeJobGenerationFormatAsync() ? "advanced" : "already current");
         return 0;
     }
+    case ["sqlite", "release-set", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckFullReleaseSetAsync();
+        return 0;
     case ["sqlite", "job-generation-format", .. var options]:
         await new EfProvider("sqlite", null, options).CheckJobGenerationFormatAsync();
         return 0;
@@ -110,6 +113,36 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     private bool CaseEquivalentTopic => engine is "mysql" or "sqlserver";
     private bool Pg => engine == "postgres";
     private string Engine => engine;
+
+    internal async Task CheckFullReleaseSetAsync()
+    {
+        const int count = Defaults.SqlitePartitions;
+        await using var fixture = (Provided)await CreateAsync(count, new StoreSetup());
+        var store = fixture.Store;
+        var host = DurableHost.ForNode("release-check", store, new WorkflowInstance(Stress.Models()), count);
+        var runtime = new PartitionRuntime("release-check", (EfStore)store, count, TimeSpan.FromSeconds(3));
+        await runtime.StartAsync(host);
+        await runtime.HeartbeatAsync();
+        await runtime.BalanceAsync();
+        var scopes = Enumerable.Range(0, count).ToArray();
+        if (!scopes.All(runtime.Owns)) throw new InvalidOperationException("The shutdown must hold the entire SQLite set.");
+        var fences = host.NodeWorker!.Fences.ToArray();
+        await runtime.StopAsync();
+        await using var db = fixture.CreateContext();
+        var stopped = await db.Partitions.AsNoTracking().OrderBy(partition => partition.Id).ToArrayAsync();
+        if (stopped.Length != count || stopped.Any(partition => partition.Owner is not null) ||
+            !stopped.Select(partition => partition.Epoch).SequenceEqual(fences.Select(fence => fence.Epoch)))
+            throw new InvalidOperationException("The SQLite shutdown must release every owner at its original epoch.");
+        var taken = await store.TakeAsync(scopes, "successor", Defaults.Lease);
+        var stale = taken.Taken[0];
+        var current = await store.RetakeAsync(stale.Partition, "successor", stale.Epoch, Defaults.Lease)
+            ?? throw new InvalidOperationException("The new epoch is required for the stale release control.");
+        await store.ReleaseAsync(taken.Taken);
+        var remaining = await db.Partitions.AsNoTracking().Where(partition => partition.Owner != null).SingleAsync();
+        if (remaining.Id != stale.Partition || remaining.Owner != "successor" || remaining.Epoch != current.Epoch)
+            throw new InvalidOperationException("A stale set release cleared a later owner epoch.");
+        Console.WriteLine($"ok SQLite released {count} scopes together and retained the newer epoch in a stale set");
+    }
 
     internal async Task CheckRootSetAsync()
     {
