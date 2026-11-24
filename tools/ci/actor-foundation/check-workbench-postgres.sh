@@ -45,16 +45,21 @@ project=app/'Elsa.Workbench.csproj'
 text=project.read_text()
 if text.count('</Project>') != 1:
     raise SystemExit('Cannot find the Workbench project insertion point.')
-project.write_text(text.replace('</Project>', '''
+native_runner = Path('essentials/tests/ActorFoundation/Native/Run')
+if not native_runner.is_dir():
+    native_runner = Path('prototypes/kernel-model/models/Native.Run')
+if not all((native_runner / name).is_file() for name in ('DirectApprovalWorkflow.cs', 'PostgresFixtureDatabase.cs')):
+    raise SystemExit('Cannot find Native workflow fixtures in the selected source revision.')
+project.write_text(text.replace('</Project>', f'''
   <ItemGroup>
     <ProjectReference Include="../../essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
     <ProjectReference Include="../../prototypes/kernel-model/runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj" />
     <ProjectReference Include="../../prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
     <ProjectReference Include="../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
     <Compile Include="../../tools/ci/actor-foundation/WorkbenchPostgresPreview.cs" Link="Qualification/WorkbenchPostgresPreview.cs" />
-    <Compile Include="../../essentials/tests/ActorFoundation/Native/Run/DirectApprovalWorkflow.cs" Link="Qualification/DirectApprovalWorkflow.cs" />
+    <Compile Include="../../{native_runner}/DirectApprovalWorkflow.cs" Link="Qualification/DirectApprovalWorkflow.cs" />
     <Compile Include="../../prototypes/kernel-model/ef/Kernel.Ef.Run/Wire.cs" Link="Qualification/Wire.cs" />
-    <Compile Include="../../essentials/tests/ActorFoundation/Native/Run/PostgresFixtureDatabase.cs" Link="Qualification/PostgresFixtureDatabase.cs" />
+    <Compile Include="../../{native_runner}/PostgresFixtureDatabase.cs" Link="Qualification/PostgresFixtureDatabase.cs" />
   </ItemGroup>
 </Project>'''))
 program=app/'Program.cs'
