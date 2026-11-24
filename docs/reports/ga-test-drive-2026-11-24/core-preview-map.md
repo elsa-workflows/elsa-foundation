@@ -28,10 +28,11 @@ release 1 milestone on [#4229](https://github.com/elsa-workflows/elsa-foundation
      nothing does this; `Wf` in `Build.cs` is "Definitions in code: what a designer would produce, without the
      designer."
   2. **The activity library through the adapted context.** The designer's toolbox has Switch, For, Fault, Complete
-     and RunJavaScript, which the Native model lacks (NATIVE.md lists Switch, For and Do as not done). ADR 0099 plans
-     to carry the existing activities over through K6's adapted context, without a Native rewrite of each. No K6 case names which designer
-     activities must run on the kernel. Compensation is out of release 1 by owner decision (StateMachine page,
-     decision 4), so the designer has to hide CompensationScope and Compensate on a kernel host. JavaScript carries
+     and RunJavaScript, which the Native model lacks (NATIVE.md lists Switch, For and Do as not done). ADR 0099 says
+     the activity library carries over with an adapted activity context, which K6 delivers, so each activity needs
+     no separate Native version. No K6 case names which designer activities must run on the kernel. Compensation is
+     out of release 1 by owner decision (StateMachine page, decision 4), so CompensationScope and Compensate will not
+     run on a kernel host; whether the toolbox hides them is an owner decision. JavaScript carries
      over under K12 item 3.
   3. **The HTTP surface of the Native activities.**
      - The request is `(Method, Path, Body)`: no query string, headers or route values. The response is
@@ -71,7 +72,7 @@ make the release 1 list, and whether Studio's toolbox hides the rest on a kernel
 |---|---|---|---|---|
 | All | Designed in Studio, published, runs | ❌ | Publications to the kernel, with their routes | K10 |
 | All | HTTP request reaches the kernel in Workbench | 🟡 test-only Kestrel edge | A shipped route host in the Workbench | K8 |
-| All | Flowchart root starts from its HttpEndpoint | ❌ only a root or first-in-Sequence endpoint registers | Start routes found inside a Flowchart | K8 |
+| All | Flowchart root starts from its HttpEndpoint (built in code until K10) | ❌ only a root or first-in-Sequence endpoint registers | Start routes found inside a Flowchart | K8 |
 | W1 `GET /hello?name=` | Read a query parameter | ❌ | Query string on `HttpRequest` | K8 |
 | W1 | Expression builds the greeting | 🟡 built-in language | JavaScript, as the designer offers it | K12 item 3 |
 | W2 `POST /orders` | Read the JSON body | ✅ | | |
@@ -85,7 +86,7 @@ make the release 1 list, and whether Studio's toolbox hides the rest on a kernel
 | W4 `/orders/{id}/ship` | Respond 202, then continue | ✅ WriteHttpResponse does not end the workflow | | K8 |
 | W4 | `Delay` 2 min, survive restart | ✅ timer as message to self; restart proven for an approval wait | Proof on a designed workflow | K5, K6 |
 | W4 | Child via `DispatchWorkflow` | ✅ | Parked-child registry | K6 |
-| W5 `/orders/{id}/cancel` | Resume the waiting W4 | 🟡 Event and mid-flow HttpEndpoint exist; no correlation input, so an event name per order is the workaround | Route values or a correlation key | K8 |
+| W5 `/orders/{id}/cancel` | Resume the waiting W4 | 🟡 Event and mid-flow HttpEndpoint exist; no correlation input, so an event name per order is the workaround | Route values or a correlation key | K8 for route values; **No case** for resuming a wait on a template route |
 | W6 `POST /batch` | ForEach over 1,000 items into children | ✅ ForEach, DispatchWorkflow | Fan-out limits on a provider | K6 (large fan-out decision 5), K12 |
 | W7 payment | `Fault` raises an incident | 🟡 thrown errors and leaf faults become incidents | A Fault activity in the toolbox | K6, if the owner puts it on the release 1 list |
 | W7 | Compensation | ❌ | | **Out** (release 1 has no compensation port) |
@@ -103,12 +104,12 @@ make the release 1 list, and whether Studio's toolbox hides the rest on a kernel
 
 | Check | Core Preview | Milestone |
 |---|---|---|
-| Publish v2 while v1 instances wait | ❌ blocked by gap 1; the kernel keeps a model state version per instance | K10 |
+| Publish v2 while v1 instances wait | ❌ blocked by gap 1; the kernel keeps a model state version per instance | **No case** |
 | Migrate an instance to v2 | 🟡 migration plans in `WorkflowActor` | **Out** (moves with the plan runner) |
 | Instance list with filters | 🟡 `GET /runtime/core-preview/workflows/instances`, filters on definition and status | K9, K10 |
 | Timeline and journal view | ❌ in Studio | K10 (tail read, catch-up) |
 | Incident view and retry | 🟡 incidents and retry in the model | K11 (inspection and the one-page recover), K10; Park retry selection and discard are **Out** |
-| Cancel or terminate | 🟡 terminate exists in the kernel; terminate of a parked root comes later in critical-path step 1 | K11 |
+| Cancel or terminate | 🟡 terminate exists in the kernel; terminate of a parked root comes later in critical-path step 1 | Composition slice S5, by Claude's reading of the trimmed scope |
 | Delete and retention | 🟡 retention pass in code | K11 |
 | Export, import, copy, rename definitions | Core-independent, but what is exported cannot run on the kernel | K6/K10 (**No case**) |
 
@@ -121,8 +122,8 @@ make the release 1 list, and whether Studio's toolbox hides the rest on a kernel
 | About 200 requests a second on W1 | ❌ no admission or route host | K11 (admission), K12 (budgets) |
 | Duplicate POST | 🟡 replay dedup by event id proven; HTTP start dedup needs a caller key | K8 |
 | Large request body | ❌ bodies sit in state, under the checkpoint cap | **Out** (values by reference) |
-| Two workflows on one route | ❌ the later one silently wins | K8 |
-| 404 and 405 | 🟡 an unmatched event returns 404 in the edge check; no 405 | K8 |
+| Two workflows on one route | ❌ the later one silently wins | K8 (refused at publishing) |
+| 404 and 405 | 🟡 an unmatched event returns 404 in the edge check; no 405 | K8 for 404; **No case** for 405 |
 | Suspends before responding | ✅ 500 when a held response's turn parks; 504 at the reply deadline | K8 |
 | SQLite Embedded, then PostgreSQL with two nodes | 🟡 PostgreSQL only in the preview; Cluster demo exists separately | K4, K5; SQL Server and MySQL are **Out** |
 
