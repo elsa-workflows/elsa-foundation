@@ -628,7 +628,8 @@ invocation inbox, one queued receipt and a bound child. The v14 model loads it a
 qualified terminate, before any ordinary turn, and closes the inbox with the retained
 terminal receipt. The canonical fixture has no v14 job recipes and its bytes are
 stable on upgrade. The state-growth projection also reserves any positive UTF-8
-serialization difference for a readable older checkpoint.
+serialization difference when the model has terminal metadata to write. A state-only
+model's header-only Suspend retains its old checkpoint and normal model growth budget.
 
 A separate test model deliberately expands the v13 state by more than the terminal
 reserve. An owner explicitly composed with the workflow actor type and no model

@@ -15,33 +15,40 @@ internal static class NativeVersionTerminateChecks
 {
     internal static async Task Run(Action<bool, string> check)
     {
-        await RunCase(expand: false, check);
-        await RunCase(expand: true, check);
+        await RunCase(Kind.NativeUpgrade, check);
+        await RunCase(Kind.ExplicitFallback, check);
+        await RunCase(Kind.WithoutMetadata, check);
     }
 
-    private static async Task RunCase(bool expand, Action<bool, string> check)
+    private enum Kind { NativeUpgrade, ExplicitFallback, WithoutMetadata }
+
+    private static async Task RunCase(Kind kind, Action<bool, string> check)
     {
         const long now = 1_702_312_000_000;
         const string receiptId = "pending-receipt";
         const int publicHeaderReserve = 16_384 + 8_192;
-        var title = expand ? "C1 explicit fallback" : "C1 Native v13 to v14";
+        var title = $"C1 {kind}";
+        var fallback = kind == Kind.ExplicitFallback;
+        var withoutMetadata = kind == Kind.WithoutMetadata;
+        var expands = kind != Kind.NativeUpgrade;
         var store = new InMemoryStore(1, () => now);
         var bound = ContractScopes.Bind("native-version-terminate");
-        var ingress = new InMemoryIngress(store, new Requests("version-terminate"), "version-terminate",
-            (_, kind) => kind is Contract.Kinds.Terminate or Contract.Kinds.Delete);
+        var requests = new Requests("version-terminate");
+        var ingress = new InMemoryIngress(store, requests, "successor",
+            (_, command) => command is Contract.Kinds.Terminate or Contract.Kinds.Delete or Contract.Kinds.Suspend);
         var reads = new ActorList(store, 16);
         var registry = new WorkflowRegistry()
             .Add(Wf.Workflow("root", Wf.Parallel("parallel", null,
                 Wf.Node<NativeTerminalEnvelopeChecks.OpenInbox>("receipt", (nameof(NativeTerminalEnvelopeChecks.OpenInbox.Protected), true)),
                 Wf.Node<NativeTerminalEnvelopeChecks.Padding>("padding"),
                 Wf.Dispatch("child", "descendant", wait: true))))
-            .Add(Wf.Workflow("descendant", Wf.Delay("wait", 100_000)));
+            .Add(Wf.Workflow("descendant", Wf.Event("wait", "never-delivered")));
         var native = new NativeExecutionModel(registry);
         // The fixture's v13 writer uses the shared canonical Native shape without the v14 background job recipe.
         var writer = new ObservedNative(native, 13);
-        var reader = new ObservedNative(native, 14, expand ? 65_536 : 0);
+        var reader = new ObservedNative(native, 14, expands ? 65_536 : 0);
         var firstActor = new Workflow([writer]);
-        var nextActor = new Workflow([reader]);
+        var nextActor = new Workflow(withoutMetadata ? [new StateOnlyNative(reader)] : [reader]);
         var opened = await new WorkflowRuntime(ingress, reads).StartAsync(bound, "start", NativeExecutionModel.Start("root"));
         var reference = opened.Actor ?? throw new InvalidOperationException("The workflow start was refused.");
         var target = new Contract.Target.Ref(reference);
@@ -81,7 +88,7 @@ internal static class NativeVersionTerminateChecks
             savedHeader = (await reads.GetAsync(bound, reference))!.Header;
             Console.WriteLine($"{title} v{savedHeader.Labels.GetValueOrDefault("version")} revision {saved.Revision}, " +
                 $"status {saved.Status}, state {Encoding.UTF8.GetByteCount(saved.State)}, terminal growth {originalGrowth}");
-            Verify(saved.Status == InstanceStatus.Running && savedHeader.Labels.GetValueOrDefault("version") == "13" &&
+            Verify(saved.Status == InstanceStatus.Running && HasNativeHeader(savedHeader, 13) &&
                 State(saved).Inboxes?[frame].Receipts[receiptId] is { Status: "Queued", Retention: 3_600_000 } &&
                 originalGrowth == 30 && NativeTerminalEnvelopeChecks.RowBytes(saved, publicHeaderReserve) + originalGrowth ==
                     NativeTerminalEnvelopeChecks.Envelope,
@@ -91,10 +98,13 @@ internal static class NativeVersionTerminateChecks
         var upgraded = reader.UpgradeState(saved.State, 13);
         var upgradedJson = JsonSerializer.Serialize(upgraded, native.StateType);
         var delta = Encoding.UTF8.GetByteCount(upgradedJson) - Encoding.UTF8.GetByteCount(saved.State);
-        Verify((expand ? delta >= 65_536 : upgradedJson == saved.State) &&
-            nextActor.TerminalGrowth(savedHeader, saved.State) == originalGrowth + delta,
-            "the projection reserves the actual UTF-8 difference plus terminal growth after upgrade");
-        if (expand)
+        var terminalGrowth = expands ? 37 : 30;
+        var projected = nextActor.TerminalGrowth(savedHeader, saved.State);
+        Verify((expands ? delta >= 65_536 : upgradedJson == saved.State) &&
+            projected == (withoutMetadata ? 0 : terminalGrowth + delta),
+            withoutMetadata ? "the projection preserves model growth when termination does not rewrite state"
+                : "the projection reserves the UTF-8 difference plus the post-upgrade metadata growth");
+        if (fallback)
         {
             reader.TerminateMetadata(upgraded);
             var expandedTerminal = saved with { State = JsonSerializer.Serialize(upgraded, native.StateType), Children = null };
@@ -104,14 +114,16 @@ internal static class NativeVersionTerminateChecks
         reader.ResetObservations();
 
         // Select the existing version-unavailable route explicitly before taking ownership of an incompatible row.
-        var successorActor = expand ? new Workflow([]) : nextActor;
+        var successorActor = fallback ? new Workflow([]) : nextActor;
         var priorRevision = saved.Revision;
-        if (expand)
+        var retainedHeader = savedHeader;
+        Task<Contract.Reply>? terminationReply = null;
+        if (fallback)
             await Send("ordinary", "before-terminate", "pending");
-        else
+        if (kind == Kind.NativeUpgrade)
             await Terminate();
         await using var successor = await Own("successor", successorActor);
-        if (expand)
+        if (fallback)
         {
             await successor.WokenAsync(null);
             await successor.RunAsync();
@@ -123,7 +135,24 @@ internal static class NativeVersionTerminateChecks
             priorRevision = checkpoint.Revision;
             await Terminate();
         }
+        if (withoutMetadata)
+        {
+            var selected = (await reads.GetAsync(bound, reference))!.Selection;
+            await Send("suspend", Contract.Kinds.Suspend, new Contract.OperatorCommand(selected));
+            await DriveUntil(successor, () => Row(root)!.Revision > saved.Revision);
+            var suspended = Row(root)!;
+            retainedHeader = (await reads.GetAsync(bound, reference))!.Header;
+            Verify(suspended.Status == InstanceStatus.Running && suspended.State == saved.State &&
+                HasNativeHeader(retainedHeader, 13, suspended: true) && reader.UpgradeVersions.Count > 0,
+                "a header-only Suspend commits on the expanding older checkpoint when the model has no metadata hook");
+            priorRevision = suspended.Revision;
+            reader.ResetObservations();
+            await Terminate();
+        }
         await DriveUntil(successor, () => Row(child)?.Status == InstanceStatus.Cancelled);
+        if (terminationReply is not null)
+            Verify((await terminationReply.WaitAsync(TimeSpan.FromSeconds(5))) is { Error: null, Item: "terminated and kept" },
+                "the committed operator reply confirms protected ThenDelete");
 
         var ended = Row(root)!;
         var final = (await reads.GetAsync(bound, reference))!.Header;
@@ -139,16 +168,16 @@ internal static class NativeVersionTerminateChecks
 
         var originalReceipt = State(saved).Inboxes![frame].Receipts[receiptId];
         var result = State(ended).Inboxes![frame];
-        if (expand)
+        if (expands)
             Verify(reader.UpgradeVersions.Count == 0 && reader.MetadataTerminations == 0 &&
-                ended.State == saved.State && final.TypeData == savedHeader.TypeData &&
-                final.Labels.GetValueOrDefault("version") == "13" &&
+                ended.State == saved.State && final.TypeData == retainedHeader.TypeData &&
+                HasNativeHeader(final, 13, suspended: withoutMetadata) &&
                 result.Closed is null && result.Receipts[receiptId] == originalReceipt,
-                "the unavailable-model route preserves v13, the original bytes and the protected receipt");
+                "termination preserves the opaque state, v13 header and original receipt");
         else
             Verify(reader.UpgradeVersions.Count > 0 && reader.UpgradeVersions.All(version => version == 13) &&
                 reader.MetadataTerminations == 1 && reader.TerminatedAnUpgradedState &&
-                final.Labels.GetValueOrDefault("version") == "14" && result.Closed == "cancelled" && result.Pending.Count == 0 &&
+                HasNativeHeader(final, 14) && result.Closed == "cancelled" && result.Pending.Count == 0 &&
                 result.Receipts[receiptId] == (originalReceipt with { Status = "NotProcessed", Outcome = "cancelled", Clock = "workflow:end" }),
                 "real Native v14 termination upgrades v13 and closes the protected invocation with its terminal clock");
 
@@ -161,8 +190,12 @@ internal static class NativeVersionTerminateChecks
         async Task Terminate()
         {
             var selected = (await reads.GetAsync(bound, reference))!.Selection;
-            await Send("terminate", Contract.Kinds.Terminate,
-                new Contract.OperatorCommand(selected, ThenDelete: true, ExpectedTarget: reference));
+            if (withoutMetadata)
+                await Send("terminate", Contract.Kinds.Terminate, new Contract.OperatorCommand(selected));
+            else
+                terminationReply = ingress.RequestAsync(bound, target, "terminate", Contract.Kinds.Terminate,
+                    JsonSerializer.Serialize(new Contract.OperatorCommand(selected, ThenDelete: true, ExpectedTarget: reference)),
+                    null, new Contract.RequestOptions(null, now + 1_000)).AsTask();
         }
         async Task Send(string id, string kind, object payload)
         {
@@ -171,8 +204,8 @@ internal static class NativeVersionTerminateChecks
                 throw new InvalidOperationException($"The fixture delivery '{id}' was refused: {result.Reason}.");
         }
         async Task<IScopeActivation> Own(string node, Workflow actor) =>
-            await new DurableHost([new Worker(node, 0, wire, new ActorAdapter(store, actor),
-                new WorkerOptions { Monotonic = () => 0 })]).ActivateAsync(0)
+            await new DurableHost([new Worker(node, 0, wire, new ActorAdapter(store, actor, (requests, node)),
+                new WorkerOptions { Monotonic = () => 0, Transport = new Replies(requests) })]).ActivateAsync(0)
             ?? throw new InvalidOperationException("The fixture owner failed to acquire its partition.");
     }
 
@@ -183,8 +216,35 @@ internal static class NativeVersionTerminateChecks
     }
 
     private static NativeState State(InstanceRow row) => JsonSerializer.Deserialize<NativeState>(row.State)!;
+    private static bool HasNativeHeader(Contract.ActorHeader header, int version, bool suspended = false)
+    {
+        using var document = JsonDocument.Parse(header.TypeData);
+        var value = document.RootElement;
+        return value.GetProperty("Model").GetString() == "native" && value.GetProperty("Definition").GetString() == "root" &&
+            value.GetProperty("Version").GetInt32() == version && value.GetProperty("Suspended").GetBoolean() == suspended &&
+            header.Labels.GetValueOrDefault("version") == version.ToString(CultureInfo.InvariantCulture);
+    }
+
     private static int HeaderBytes(Contract.ActorHeader header) => Encoding.UTF8.GetByteCount(header.TypeData) +
         header.Labels.Sum(pair => Encoding.UTF8.GetByteCount(pair.Key) + Encoding.UTF8.GetByteCount(pair.Value));
+
+    private sealed class Replies(Requests requests) : IReplyTransport
+    {
+        public void Send(string node, Reply reply) => requests.Receive(reply);
+    }
+
+    private sealed class StateOnlyNative(ObservedNative model) : PublicModel.IExecutionModel
+    {
+        public string Key => model.Key;
+        public int StateVersion => model.StateVersion;
+        public Type StateType => model.StateType;
+        public object CreateState(PublicModel.WorkflowStart start) => model.CreateState(start);
+        public object UpgradeState(string state, int fromVersion) => model.UpgradeState(state, fromVersion);
+        public ValueTask TurnAsync(PublicModel.ITurn turn, CancellationToken token) => model.TurnAsync(turn, token);
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token) => model.ExecuteJobAsync(job, token);
+        public Contract.RestorePlan RestoreWaits(PublicModel.InstanceInfo instance, object state) => model.RestoreWaits(instance, state);
+        public long TerminalGrowth(PublicModel.InstanceInfo instance, object state) => 0;
+    }
 
     private sealed class ObservedNative(NativeExecutionModel model, int version, int padding = 0) : PublicModel.IExecutionModel, PublicModel.IModelMetadata
     {
@@ -201,7 +261,13 @@ internal static class NativeVersionTerminateChecks
         {
             UpgradeVersions.Add(fromVersion);
             var upgraded = (NativeState)model.UpgradeState(state, fromVersion);
-            if (padding != 0) upgraded.Variables.Add("expanded-shape-probe", JsonValue.Create(new string('x', padding)));
+            if (padding != 0)
+            {
+                const string addedFrame = "expanded-shape-probe";
+                upgraded.Variables.Add(addedFrame, JsonValue.Create(new string('x', padding)));
+                upgraded.Frames.Add(addedFrame, new Frame { Id = addedFrame, Node = "receipt" });
+                upgraded.Inboxes!.Add(addedFrame, new InvocationInbox { Capacity = 1, ReceiptCapacity = 1 });
+            }
             _upgraded.Add(upgraded);
             return upgraded;
         }

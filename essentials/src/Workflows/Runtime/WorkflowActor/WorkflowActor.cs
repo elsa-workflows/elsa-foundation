@@ -110,7 +110,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         if (!_models.TryGetValue(workflow.Model, out var model) || workflow.Version > model.StateVersion) return 0;
         var restored = ReadState(model, workflow, state, []);
         var growth = model.TerminalGrowth(Instance(header, workflow), restored);
-        if (workflow.Version == model.StateVersion || growth < 0) return growth;
+        if (workflow.Version == model.StateVersion || growth < 0 || model is not IModelMetadata) return growth;
 
         // The foundation counts the stored bytes. A readable older state may expand when termination writes it back.
         var encoded = JsonSerializer.SerializeToUtf8Bytes(restored, model.StateType);
