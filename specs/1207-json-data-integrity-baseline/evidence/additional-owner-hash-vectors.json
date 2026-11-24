@@ -738,6 +738,263 @@
     "frameHex": "060000006e6f64652d41040000006e756c6c060000006e6f64652d42410000007b224f776e65724b6579223a2252656e5c7530304539222c226e223a3930303731393932353437343039393265302c22726f7773223a5b3165302c6e756c6c5d7d"
   },
   {
+    "name": "presentation/base",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "json": [
+          {
+            "nodeId": "node-A",
+            "displayName": "  Approve order  ",
+            "description": " \nReview it.\n "
+          },
+          {
+            "nodeId": "node-B",
+            "displayName": null,
+            "description": "Second-\u00e9\nline"
+          }
+        ]
+      }
+    ],
+    "canonical": "[{\"data\":{\"description\":\"Review it.\",\"displayName\":\"Approve order\"},\"nodeId\":\"node-A\"},{\"data\":{\"description\":\"Second-\\u00E9\\nline\",\"displayName\":null},\"nodeId\":\"node-B\"}]",
+    "expected": "sha256-2c498ff457c34f977390be348eef45c574ce3603d711eeb1004163194926a0a2",
+    "frameHex": "060000006e6f64652d413a0000007b226465736372697074696f6e223a225265766965772069742e222c22646973706c61794e616d65223a22417070726f7665206f72646572227d060000006e6f64652d42380000007b226465736372697074696f6e223a225365636f6e642d5c75303045395c6e6c696e65222c22646973706c61794e616d65223a6e756c6c7d"
+  },
+  {
+    "name": "presentation/normalized",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "json": [
+          {
+            "nodeId": "node-A",
+            "displayName": "Approve order",
+            "description": "Review it."
+          },
+          {
+            "nodeId": "node-B",
+            "displayName": null,
+            "description": "Second-\u00e9\nline"
+          }
+        ]
+      }
+    ],
+    "canonical": "[{\"data\":{\"description\":\"Review it.\",\"displayName\":\"Approve order\"},\"nodeId\":\"node-A\"},{\"data\":{\"description\":\"Second-\\u00E9\\nline\",\"displayName\":null},\"nodeId\":\"node-B\"}]",
+    "expected": "sha256-2c498ff457c34f977390be348eef45c574ce3603d711eeb1004163194926a0a2",
+    "frameHex": "060000006e6f64652d413a0000007b226465736372697074696f6e223a225265766965772069742e222c22646973706c61794e616d65223a22417070726f7665206f72646572227d060000006e6f64652d42380000007b226465736372697074696f6e223a225365636f6e642d5c75303045395c6e6c696e65222c22646973706c61794e616d65223a6e756c6c7d"
+  },
+  {
+    "name": "presentation/reordered",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "json": [
+          {
+            "nodeId": "node-B",
+            "displayName": null,
+            "description": "Second-\u00e9\nline"
+          },
+          {
+            "nodeId": "node-A",
+            "displayName": "  Approve order  ",
+            "description": " \nReview it.\n "
+          }
+        ]
+      }
+    ],
+    "canonical": "[{\"data\":{\"description\":\"Review it.\",\"displayName\":\"Approve order\"},\"nodeId\":\"node-A\"},{\"data\":{\"description\":\"Second-\\u00E9\\nline\",\"displayName\":null},\"nodeId\":\"node-B\"}]",
+    "expected": "sha256-2c498ff457c34f977390be348eef45c574ce3603d711eeb1004163194926a0a2",
+    "frameHex": "060000006e6f64652d413a0000007b226465736372697074696f6e223a225265766965772069742e222c22646973706c61794e616d65223a22417070726f7665206f72646572227d060000006e6f64652d42380000007b226465736372697074696f6e223a225365636f6e642d5c75303045395c6e6c696e65222c22646973706c61794e616d65223a6e756c6c7d"
+  },
+  {
+    "name": "presentation/display-name",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "json": [
+          {
+            "nodeId": "node-A",
+            "displayName": "Changed",
+            "description": "Review it."
+          },
+          {
+            "nodeId": "node-B",
+            "displayName": null,
+            "description": "Second-\u00e9\nline"
+          }
+        ]
+      }
+    ],
+    "canonical": "[{\"data\":{\"description\":\"Review it.\",\"displayName\":\"Changed\"},\"nodeId\":\"node-A\"},{\"data\":{\"description\":\"Second-\\u00E9\\nline\",\"displayName\":null},\"nodeId\":\"node-B\"}]",
+    "expected": "sha256-4092b6803db16f308d26ffbeed31ced5785b3f83a1a2b4766f730842ecf5c65e",
+    "frameHex": "060000006e6f64652d41340000007b226465736372697074696f6e223a225265766965772069742e222c22646973706c61794e616d65223a224368616e676564227d060000006e6f64652d42380000007b226465736372697074696f6e223a225365636f6e642d5c75303045395c6e6c696e65222c22646973706c61794e616d65223a6e756c6c7d"
+  },
+  {
+    "name": "presentation/description",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "json": [
+          {
+            "nodeId": "node-A",
+            "displayName": "Approve order",
+            "description": "Review it."
+          },
+          {
+            "nodeId": "node-B",
+            "displayName": null,
+            "description": "Changed"
+          }
+        ]
+      }
+    ],
+    "canonical": "[{\"data\":{\"description\":\"Review it.\",\"displayName\":\"Approve order\"},\"nodeId\":\"node-A\"},{\"data\":{\"description\":\"Changed\",\"displayName\":null},\"nodeId\":\"node-B\"}]",
+    "expected": "sha256-502c6bce718826be7fd220aa7fa8bf295334c0bf916f36c8c8c406657fd1f458",
+    "frameHex": "060000006e6f64652d413a0000007b226465736372697074696f6e223a225265766965772069742e222c22646973706c61794e616d65223a22417070726f7665206f72646572227d060000006e6f64652d422c0000007b226465736372697074696f6e223a224368616e676564222c22646973706c61794e616d65223a6e756c6c7d"
+  },
+  {
+    "name": "presentation/opaque-node",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "json": [
+          {
+            "nodeId": " node-A ",
+            "displayName": "Approve order",
+            "description": "Review it."
+          },
+          {
+            "nodeId": "node-B",
+            "displayName": null,
+            "description": "Second-\u00e9\nline"
+          }
+        ]
+      }
+    ],
+    "canonical": "[{\"data\":{\"description\":\"Review it.\",\"displayName\":\"Approve order\"},\"nodeId\":\" node-A \"},{\"data\":{\"description\":\"Second-\\u00E9\\nline\",\"displayName\":null},\"nodeId\":\"node-B\"}]",
+    "expected": "sha256-7ec988afb8c0107071574e45a68b2fc89ad0ad44966c022b363e90ddf8ebd230",
+    "frameHex": "08000000206e6f64652d41203a0000007b226465736372697074696f6e223a225265766965772069742e222c22646973706c61794e616d65223a22417070726f7665206f72646572227d060000006e6f64652d42380000007b226465736372697074696f6e223a225365636f6e642d5c75303045395c6e6c696e65222c22646973706c61794e616d65223a6e756c6c7d"
+  },
+  {
+    "name": "presentation/unicode",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "json": [
+          {
+            "nodeId": "node-\ud83d\ude80",
+            "displayName": "Ren\u00e9",
+            "description": "Line \ud83d\ude80"
+          }
+        ]
+      }
+    ],
+    "canonical": "[{\"data\":{\"description\":\"Line \\uD83D\\uDE80\",\"displayName\":\"Ren\\u00E9\"},\"nodeId\":\"node-\\uD83D\\uDE80\"}]",
+    "expected": "sha256-fc394e88b3082a9fe0cbc96b52e1b2a2e4d8acbdd8d5ebb7b03e1153f0604e87",
+    "frameHex": "090000006e6f64652df09f9a803d0000007b226465736372697074696f6e223a224c696e65205c75443833445c7544453830222c22646973706c61794e616d65223a2252656e5c7530304539227d"
+  },
+  {
+    "name": "presentation/null-collection",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "clrNull": true
+      }
+    ],
+    "canonical": "[]",
+    "expected": "sha256-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "frameHex": ""
+  },
+  {
+    "name": "presentation/empty-collection",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "json": []
+      }
+    ],
+    "canonical": "[]",
+    "expected": "sha256-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "frameHex": ""
+  },
+  {
+    "name": "presentation/empty-record",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "json": [
+          {
+            "nodeId": "empty",
+            "displayName": "  ",
+            "description": "\n\t"
+          }
+        ]
+      }
+    ],
+    "canonical": "[]",
+    "expected": "sha256-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "frameHex": ""
+  },
+  {
+    "name": "presentation/duplicate-node",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "json": [
+          {
+            "nodeId": "node-A",
+            "displayName": "Approve order",
+            "description": "Review it."
+          },
+          {
+            "nodeId": "node-A",
+            "displayName": "Approve order",
+            "description": "Review it."
+          }
+        ]
+      }
+    ],
+    "expected": null,
+    "expectedException": "System.ArgumentException"
+  },
+  {
+    "name": "presentation/null-record",
+    "assembly": "Elsa.Activities.Design.Core",
+    "type": "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher",
+    "method": "Compute",
+    "arguments": [
+      {
+        "json": [
+          null
+        ]
+      }
+    ],
+    "expected": null,
+    "expectedException": "System.ArgumentNullException"
+  },
+  {
     "name": "processing-group/ordered-fields",
     "assembly": "Acme.Processing",
     "type": "Acme.Processing.ProcessingDashboardSource",

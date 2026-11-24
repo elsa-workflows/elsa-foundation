@@ -18,7 +18,8 @@ public sealed class PublicationSnapshotReviewServiceTests
     public void Empty_candidate_has_a_fixed_first_stable_hash()
     {
         // SHA-256 independently pinned from the canonical empty layout/state JSON projection.
-        Assert.Equal("sha256:eb53c973042b5f07e7fb6a0d30beec54afb06efbd225a90ded92a95a73c85c12", _service.ComputeCandidateHash(_state, []));
+        Assert.True("sha256:eb53c973042b5f07e7fb6a0d30beec54afb06efbd225a90ded92a95a73c85c12" == _service.ComputeCandidateHash(_state, []),
+            "PublicationSnapshotReviewService empty candidate: first-stable hash freeze; changes require an explicit identity/migration decision.");
     }
 
     [Fact]

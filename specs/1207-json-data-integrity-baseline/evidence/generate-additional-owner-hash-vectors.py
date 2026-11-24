@@ -70,6 +70,47 @@ def generate():
         add("layout/" + name, core, "Elsa.Activities.Design.Core.Services.ActivityLayoutHasher", "Compute", [{"typedJson": inputs}],
             [dict(nodeId="node-A", data=None), dict(nodeId="node-B", data=data)], "sha256-", frame=frame, frameHex=frame.hex())
 
+    # Presentation is a producer of layout material, not merely a raw-layout alias. The expected
+    # normalized records below are literal owner preimages, independently declared from its input.
+    presentation_base = [dict(nodeId="node-A", displayName="  Approve order  ", description=" \nReview it.\n "),
+                         dict(nodeId="node-B", displayName=None, description="Second-é\nline")]
+    presentation_normal = [dict(nodeId="node-A", displayName="Approve order", description="Review it."),
+                           dict(nodeId="node-B", displayName=None, description="Second-é\nline")]
+    presentation_cases = [
+        ("base", presentation_base, presentation_normal),
+        ("normalized", presentation_normal, presentation_normal),
+        ("reordered", list(reversed(presentation_base)), presentation_normal),
+        ("display-name", [dict(nodeId="node-A", displayName="Changed", description="Review it."), presentation_normal[1]],
+                         [dict(nodeId="node-A", displayName="Changed", description="Review it."), presentation_normal[1]]),
+        ("description", [presentation_normal[0], dict(nodeId="node-B", displayName=None, description="Changed")],
+                        [presentation_normal[0], dict(nodeId="node-B", displayName=None, description="Changed")]),
+        ("opaque-node", [dict(nodeId=" node-A ", displayName="Approve order", description="Review it."), presentation_normal[1]],
+                        [dict(nodeId=" node-A ", displayName="Approve order", description="Review it."), presentation_normal[1]]),
+        ("unicode", [dict(nodeId="node-🚀", displayName="René", description="Line 🚀")],
+                    [dict(nodeId="node-🚀", displayName="René", description="Line 🚀")]),
+        ("null-collection", None, []),
+        ("empty-collection", [], []),
+        ("empty-record", [dict(nodeId="empty", displayName="  ", description="\n\t")], []),
+    ]
+    for label, inputs, normalized in presentation_cases:
+        frame = b""
+        material = []
+        for record in normalized:
+            data = dict(displayName=record["displayName"], description=record["description"])
+            material.append(dict(nodeId=record["nodeId"], data=data))
+            for part in [record["nodeId"], canonical(data)]:
+                encoded = part.encode("utf-8")
+                frame += struct.pack("<i", len(encoded)) + encoded
+        add("presentation/" + label, core, "Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher", "Compute",
+            [dict(clrNull=True) if inputs is None else dict(json=inputs)], material, "sha256-", frame=frame, frameHex=frame.hex())
+    for label, inputs, exception in [
+        ("duplicate-node", [presentation_normal[0], presentation_normal[0]], "System.ArgumentException"),
+        ("null-record", [None], "System.ArgumentNullException"),
+    ]:
+        rows.append(dict(name="presentation/" + label, assembly=core,
+            type="Elsa.Activities.Design.Core.Services.ActivityNodePresentationHasher", method="Compute",
+            arguments=[dict(json=inputs)], expected=None, expectedException=exception))
+
     values = {"OwnerKey": dict(type="string", literal="René"), "Count": dict(type="integer", literal="1")}
     add("processing-group/ordered-fields", "Acme.Processing", "Acme.Processing.ProcessingDashboardSource", "GroupKey",
         [{"json": ["OwnerKey", "Count"]}, {"json": values}], [dict(key=key, type=values[key]["type"], literal=values[key]["literal"]) for key in ["OwnerKey", "Count"]])
