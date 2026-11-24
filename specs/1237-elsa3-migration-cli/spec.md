@@ -182,8 +182,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   converter rewrites only direct calls, so it reports such a reference with a diagnostic of its own (see
   *Dependencies and boundaries*). The CLI scans no scripts itself.
 - A converted reusable activity always depends on other activity versions, because its body is made of catalog
-  activities. While the engine's source reconciliation refuses such content, the report flags every reusable,
-  and every workflow that uses one, as Take into account until the engine supports it (see *Dependencies and
+  activities. While the engine's source reconciliation refuses such content, the report marks every reusable, every
+  reusable's wrapper workflow and every workflow that uses one with `needsCompositeSourceSupport` (see *Dependencies and
   boundaries*).
 
 ## Requirements *(mandatory)*
@@ -299,7 +299,9 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   setting value from the input. Diagnostic messages and guidance the converter emits for the report MUST meet this
   rule. A converter message that embeds such text is changed at the converter. For a code the converter does not own
   (an Elsa 4 publication or compilation code), the report carries the code, its path and a fixed text from the code
-  table, never the Elsa 4 message, which may quote script source. Redaction is the only mode.
+  table, never the Elsa 4 message, which may quote script source. Identities are allowed: definition ids and names,
+  including the id of a referenced definition such as a dispatch target, type names, function names and setting keys.
+  Redaction is the only mode.
 - **FR-020**: `report.json` MUST carry an integer `schemaVersion`, starting at 1, and conform to the schema this
   specification publishes. Removing a field, or changing its meaning, increments the version. Adding a field does not.
 - **FR-021**: `report.html` MUST be a single self-contained file that renders exactly the data in `report.json`, with
@@ -312,7 +314,9 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **FR-023**: `migrated/` MUST be exported from the run's Elsa 4 store after publish:
   - workflows in the JSON workflow reconciliation format, one file per definition under `migrated/workflows/`;
   - reusable activities in the JSON activity reconciliation format, in `migrated/activities/activities.json`,
-    dependencies first.
+    dependencies first;
+  - the wrapper workflow that the import publishes for each reusable, under the reusable's definition id, as a workflow
+    file like any other. The reusable's result names both files.
 
   Both always exist: an empty `workflows/` folder, and an `activities.json` holding `[]`, when there is nothing to
   export, because the engine mounts the folder at `/app/migrated` and its readers need both.
@@ -354,6 +358,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 | Q9 | How do the user's packages load without the network? | From the mounted `--packages` folder, read as a directory feed into a run-scoped install root. A missing dependency refuses the run. |
 | Q10 | What about a user with their own Elsa 4 host? | No `--host` option. They bring their features as packages, as everyone else does. |
 | Q11 | Who finds a declared JavaScript global that is referenced but not called? | The converter, with a diagnostic of its own that names the global at the reference's JSON path. The CLI only reports codes, so the finding reaches the report as a `javascript-function` component finding. |
+| Q13 | What do the CLI's own findings (unreadable input file, no published version) use as codes? | Codes of the tooling's own, `ELS3-MIGRATION-*`, in the same code table. An existing code such as `ELS3-MIGRATION-UNSUPPORTED-INPUT` is reused where it fits. |
 | Q12 | What does a run need that the engine refuses to start without? | Generated, run-only values for the engine's required secret settings (FR-008a). Where the user's settings set them, the user's values win. |
 
 ## Success Criteria *(mandatory)*
@@ -390,8 +395,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   the codes from which the custom-component inventory is built, and this specification adds their entries to the code
   table.
 - **Converter diagnostic for non-call references.** A declared global that a script references without calling it is
-  not rewritten and fails at run time. The converter must report it with its own code (Q11). That is a converter
-  change outside this specification, and this specification adds its entry to the code table.
+  not rewritten, and it fails at run time. The converter refuses it as `ELS3-REPLACED-FUNCTION-REFERENCE` (Q11). That
+  is a converter change outside this specification, and this specification adds its entry to the code table.
 - **ADR 0076 amendment**: the worker may reach one further named frozen entry point per command group, each a
   compatibility surface. Until the amendment is agreed, this specification stays provisional.
 - **Engine gap**: the engine's JSON activity reconciliation refuses source-owned activity content that depends on other

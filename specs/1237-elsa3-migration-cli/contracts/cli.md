@@ -28,6 +28,10 @@ docker run --rm --network none \
 | `--packages` | A folder of `.nupkg` files, read as a directory feed. Required for `assess`. Unlike the persistence group's `--packages` (an install root of extracted packages), it never names an install root. |
 | `--settings` | An `appsettings.json`, merged as the essentials engine image merges it. Required for `assess`. |
 
+The image sets `ELSA3_MIGRATION_HOST=/app/Elsa.Essentials.Server`. The front end reads it as the host the worker runs
+in. When it is unset or does not point at a host with `.runtimeconfig.json` and `.deps.json`, the run is refused with
+`entry-point-missing`.
+
 ## Exit codes
 
 | Code | Meaning |

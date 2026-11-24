@@ -24,11 +24,13 @@ finds `Elsa3.Migration.Tooling` among the loaded package set's assemblies, then 
   "outPath": "/app/out",
   "allVersions": false,
   "settingsPath": "/app/config/appsettings.json",
+  "compositionRoot": "/app",
   "packages": [{ "id": "Acme.Elsa.Invoicing", "version": "1.0.0" }]
 }
 ```
 
-`settingsPath` is `null` for `inventory`. `packages` lists the user packages the worker loaded. The worker owns package loading
+`settingsPath` is `null` for `inventory`. `compositionRoot` defaults to `/app`; tests point it at a laid-out
+temporary root. `packages` lists the user packages the worker loaded. The worker owns package loading
 (R-6), so the entry point only records the list.
 
 ## Response (UTF-8 JSON on `response`)

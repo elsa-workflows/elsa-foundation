@@ -54,9 +54,10 @@ Findings within a definition are ordered by stage, then path, then code, all ord
 
 `definitionId`, `name`, `version`, `sourceVersionId`, `isReusable`, `bucket`, `blockedBy` (the source version ids of
 the **root** refused definitions, the ones refused for a finding of their own, reached through any chain of
-dependencies; empty when not blocked), `published` (boolean), `exportedTo` (a path relative to `--out`, or `null`), `findings`, and
-`needsCompositeSourceSupport` (true for every exported reusable, and for every exported workflow that uses one,
-spec Q2).
+dependencies; empty when not blocked), `published` (boolean), `exportedTo` (a path relative to `--out`, or `null`; for a reusable, the activities file), `wrapperExportedTo` (for a
+reusable, the path of its wrapper workflow file, or `null`), `findings`, and
+`needsCompositeSourceSupport` (true for every exported reusable, its wrapper, and every exported workflow that uses
+one, spec Q2). It is a flag, not a finding, so it adds nothing to the category counts.
 
 **Bucket rule** (FR-017): `incompatible` if any finding has remedy `none`. Otherwise `convert-as-is` if there is no
 `mustFix` and no `reconsider` finding. Otherwise `convert-with-adjustments`. A blocked definition has no own error
@@ -75,17 +76,22 @@ only from findings whose code has a component kind (spec FR-018 item 2), so an u
 
 ## Run section
 
-`imageVersion` (the migration image's version, which equals the essentials engine version), `packages [{ id, version }]`
+`imageVersion` (the informational version of `Elsa.Essentials.Composition` in the image, which is the essentials
+engine version), `packages [{ id, version }]`
 (the user's packages only), `features [name]`,
 `settingKeys [key]` (sorted, values never written), `persistenceOverridden` (boolean, FR-009).
 
 ## Code table
 
-`Elsa3MigrationCodeTable`: a code maps to `{ remedy?, componentKind?, routine, fixedText? }`. `fixedText` is the
+`Elsa3MigrationCodeTable`: a code maps to `{ remedy, componentKind?, routine, fixedText? }`. Every Elsa 3 entry has a
+remedy, used whenever the code is emitted at Error, because constants carry no severity. The table covers the
+converter's, the import's and reconciliation's codes, and the tooling's own `ELS3-MIGRATION-*` codes:
+`ELS3-MIGRATION-INPUT-UNREADABLE` (a file that is not valid JSON; remedy `patch-definition`),
+`ELS3-MIGRATION-UNSUPPORTED-INPUT` (an existing code, for valid JSON that holds no Elsa 3 definition) and
+`ELS3-MIGRATION-NO-PUBLISHED-VERSION` (Info). `fixedText` is the
 report text for a code the converter does not own. Every Elsa 3 code needs an entry, whatever its severity. An Elsa 4
 code with no entry gets `patch-definition` and a default fixed text. Every skip is reported as an `error` finding. Codes with an `ELS3-BEHAVIOUR-` prefix are
-`reconsider` by severity rule and need no remedy. Every Error-severity code needs a remedy, and every component code
-needs a kind. The completeness test enforces both. `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY` has remedy
+`reconsider` by severity rule and need no remedy. Every component code needs a kind. The completeness test enforces both rules. `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY` has remedy
 `patch-definition`: the blocked definition is fixed by fixing its root, whose own finding carries the real remedy.
 That keeps a blocked definition out of `incompatible`.
 

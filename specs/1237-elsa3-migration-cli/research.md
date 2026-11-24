@@ -98,6 +98,10 @@ they name the cause without the text (FR-019). The sentinel test finds every suc
 enabled EF feature. The host-wide migrate policy is set to apply migrations, and one connection stays open from
 composition until disposal (FR-009). The guid never reaches the report (FR-022).
 
+The baked settings also keep the OpenIddict store and the Data Protection key ring under `/app/data` (specification
+1236). The run points the OpenIddict store at the same in-memory database, and gives Data Protection an ephemeral key
+ring, so nothing reaches a disk (FR-010).
+
 ## R-5 Composition without a web host
 
 - Non-web compositions exist: `essentials/tests/Modularity/Tests/NuplaneHostTestComposition.cs`
@@ -123,10 +127,17 @@ Facts that shape the run:
 
 **Decision**: the entry point builds a generic host that is never started. It composes one shell from the image's
 composition and the merged settings, as specification 1236 defines the merge. It reads the lists with
-`EssentialsFeatureList.Read("/app/composition")` and merges settings with `AddEssentialsConfiguration` (the
+`EssentialsFeatureList.Read(<root>/composition)` and merges settings with `AddEssentialsConfiguration` (the
 image's baked `appsettings.json`, then the `--settings` file). It runs every shell initializer except
 `RunShellTasksInitializer`, and runs the startup tasks alone, in their dependency order, through a new startup-only
-member on `ITaskManager`. That is a small essentials change. It resolves services from the shell's provider. Background
+member on `ITaskManager`. That is a small essentials change. It makes the features of the run-scoped package set discoverable through CShells' Nuplane feature discovery
+(`AddCShells().WithNuplaneFeatureDiscovery()`, as `essentials/tests/Modularity/Tests/NuplaneHostTestComposition.cs`
+does), because `EssentialsFeatureAssemblies.All` lists only the essentials features' assemblies, and the Elsa 3
+additions and a user's packages arrive as Nuplane packages. It resolves services from the shell's provider.
+
+`<root>` is a request field, `compositionRoot`, which defaults to `/app`. Tests lay out a composition folder, baked
+settings and an empty `migrated/` skeleton under a temporary root, because the essentials list composes JSON workflow
+reconciliation over `<root>/migrated/workflows`, which must exist. Background
 hosted services, background tasks and recurring tasks never start, so there is no trigger runtime, scheduler or
 recurring work. The Elsa 3 folder import feature is not
 composed. The engine image refuses to start without some secret settings (specification 1236, *Required settings*).
@@ -165,8 +176,18 @@ The CLI runs inside an image built `FROM` the essentials engine image at the sam
 - The packages of those features, and the `Elsa3.Migration.Tooling` package, go into `/app/elsa3/packages/`. That folder
   belongs to this specification, not to the engine contract, and the worker reconciles it (R-6). The existing pack
   workflow already packs the `extensions/` projects.
-- The worker's Nuplane setup declares `Elsa.Essentials.Composition` a shared assembly, so the tooling package binds to
-  the copy in `/app`. Specification 1236 leaves that declaration to this specification.
+- The worker loads packages with `HostIntegratedLoadOptions` built from the engine image's baked
+  `Nuplane:Loading:SharedAssemblies` and `Nuplane:HostProvidedPackages`, plus `Elsa.Essentials.Composition`. Today
+  `NuplaneLoader` passes no options (`essentials/src/Cli/Worker/NuplaneLoader.cs`), and then a feed-loaded EF module
+  such as the import's EF ledger would bind its own copy of `Elsa.Persistence.EntityFramework`, where ADR 0076 requires
+  the host's. Specification 1236 leaves the shared-assembly declaration for its composition library to this
+  specification.
+- The tooling project references `Elsa.Essentials.Composition` with `Private=false` and `PrivateAssets="all"`, so the
+  packed tooling package neither carries the library nor depends on it. The library is not packed.
+- The Dockerfile sets `ELSA3_MIGRATION_HOST=/app/Elsa.Essentials.Server`, which the front end reads as the host
+  directory and name (the worker's `HostDirectory`, `HostName` and deps file), as the persistence group reads them from
+  `--host`.
+- `run.imageVersion` is the informational version of `Elsa.Essentials.Composition` in `/app`, the engine's version.
 - `dotnet-elsa` is installed at the image's version. The entry point is `dotnet-elsa elsa3-migration`, with the worker
   pointed at the engine host's build output in `/app`. No web host starts.
 - The image is published with the essentials images and carries their version tag, which is also the version of the

@@ -446,6 +446,12 @@
           "items": {
             "$ref": "#/$defs/finding"
           }
+        },
+        "wrapperExportedTo": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },
