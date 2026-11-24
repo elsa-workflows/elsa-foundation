@@ -86,18 +86,16 @@ manifest = Path('apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.deps.jso
 compile_assets = Path('prototypes/kernel-model/ef/Kernel.EntityFramework/obj/project.assets.json')
 actual = dict(key.rsplit('/', 1) for key in json.loads(manifest.read_text())['libraries'])
 compile_entries = json.loads(compile_assets.read_text())['targets']['net10.0']
-compiled = {name: (version, compile_entries[key])
-            for key in compile_entries for name, version in [key.rsplit('/', 1)]}
+compiled = dict(key.rsplit('/', 1) for key in compile_entries)
 runtime_required = {'Microsoft.EntityFrameworkCore', 'Microsoft.EntityFrameworkCore.Relational',
                     'Npgsql.EntityFrameworkCore.PostgreSQL', 'Npgsql'}
 if runtime_required - expected.keys():
     raise SystemExit('Workbench and the provider must lock the PostgreSQL runtime dependencies.')
 for package in sorted(expected):
     version = expected[package]
-    compile_version, assets = compiled.get(package, (None, {}))
-    has_runtime_assets = any(path.rsplit('/', 1)[-1] != '_._' for group in ('runtime', 'native', 'runtimeTargets')
-                             for path in assets.get(group, {}))
-    requires_runtime = has_runtime_assets or package in runtime_required or package in actual
+    compile_version = compiled.get(package)
+    # Shared-framework assemblies and metapackages can be absent from the app manifest.
+    requires_runtime = package in runtime_required or package in actual
     if compile_version != version or (requires_runtime and actual.get(package) != version):
         raise SystemExit(f'Provider version mismatch for {package}: Workbench locked {version}, '
                          f'compile {compile_version}, host runtime {actual.get(package)}')
@@ -145,7 +143,9 @@ PYRECEIPT
     echo "ok invalid $field refused without registering an owner or writing new input"
   }
   expect_rejected_receipt StateHash 'the receipt matches the stopped waiting actor before owner startup'
-  expect_rejected_receipt Frame 'the receipt matches the frame, journal and bookmark before owner startup'
+  expect_rejected_receipt Frame 'the receipt matches the frame and journal before owner startup'
+  expect_rejected_receipt JournalHash 'the receipt matches the frame and journal before owner startup'
+  expect_rejected_receipt Bookmark 'The continuation does not match this actor journal'
   dotnet "$workbench" --qualify-workbench-postgres restart "$receipt"
   docker stop --time 3 "$container" >/dev/null
   container=

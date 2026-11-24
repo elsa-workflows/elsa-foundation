@@ -64,9 +64,10 @@ internal static class WorkbenchPostgresPreview
             var observer = await observation.OpenPreviewRootReadsAsync(64, token);
             var stoppedActor = new Contract.ActorRef(previous.Actor);
             var prefix = await observer.TailAsync(scope, stoppedActor, cancellationToken: token);
-            Require(prefix.Next?.Value == previous.Bookmark && JournalHash(prefix) == previous.JournalHash &&
-                WaitFrame(prefix) == previous.Frame,
-                "the receipt matches the frame, journal and bookmark before owner startup");
+            Require(JournalHash(prefix) == previous.JournalHash && WaitFrame(prefix) == previous.Frame,
+                "the receipt matches the frame and journal before owner startup");
+            var suffix = await observer.TailAsync(scope, stoppedActor, new Contract.PageToken(previous.Bookmark), token);
+            Require(suffix.Items.Count == 0, "the receipt bookmark is caught up before owner startup");
         }
 
         var wire = Wire.Start("postgres", $"Host={settings.Host};Port={settings.Port}");
