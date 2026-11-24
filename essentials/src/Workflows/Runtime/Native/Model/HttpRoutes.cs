@@ -2,7 +2,12 @@ using Kernel.Graph.Exceptions;
 
 namespace Kernel.Native;
 
-/// <summary>The in-memory route table, built from the published definitions: routing reads nothing.</summary>
+/// <summary>
+/// The in-memory route table, built from the published definitions: routing reads nothing. One method and path starts
+/// one workflow: a second claim on it is refused with <see cref="HttpRouteConflictException"/> when the table is built,
+/// as the old core refuses it at publish. A definition published again replaces its own routes (the registry keeps one
+/// workflow per id), and one path may start different workflows on different methods.
+/// </summary>
 public sealed class HttpRoutes
 {
     private readonly Dictionary<string, (string Workflow, string Node)> _starts = new(StringComparer.Ordinal);
@@ -23,7 +28,11 @@ public sealed class HttpRoutes
             // root Flowchart (the designer's shape) that no connection leads to.
             foreach (var start in StartsOf(workflow.Root))
                 if (start.Type == typeof(HttpEndpoint) && start.Inputs.GetValueOrDefault("Path") is LiteralBinding { Value: { } path })
-                    _starts[Key(Method(start), path.GetValue<string>())] = (workflow.Id, start.Id);
+                {
+                    var (method, route) = (Method(start).ToUpperInvariant(), path.GetValue<string>().Trim('/'));
+                    if (!_starts.TryAdd(Key(method, route), (workflow.Id, start.Id)))
+                        throw new HttpRouteConflictException(method, route, _starts[Key(method, route)], (workflow.Id, start.Id));
+                }
         }
     }
 
@@ -48,4 +57,26 @@ public sealed class HttpRoutes
 
     /// <summary>The route's caller is answered when the turn ends, not after its commit.</summary>
     public bool BeforeCommit(string method, string path) => _early.Contains(Key(method, path));
+}
+
+/// <summary>Two start endpoints claim one method and path: a route starts one workflow, so the route table refuses the second.</summary>
+public sealed class HttpRouteConflictException(string method, string path, (string Workflow, string Node) first, (string Workflow, string Node) second)
+    : InvalidOperationException(Describe(method, path, first, second))
+{
+    /// <summary>The method both claim, in upper case.</summary>
+    public string Method { get; } = method;
+
+    /// <summary>The path both claim, without its leading and trailing slashes.</summary>
+    public string Path { get; } = path;
+
+    /// <summary>The workflow and endpoint that claimed the route first.</summary>
+    public (string Workflow, string Node) First { get; } = first;
+
+    /// <summary>The workflow and endpoint whose claim was refused.</summary>
+    public (string Workflow, string Node) Second { get; } = second;
+
+    private static string Describe(string method, string path, (string Workflow, string Node) first, (string Workflow, string Node) second) =>
+        first.Workflow == second.Workflow
+            ? $"Workflow '{first.Workflow}' starts on {method} /{path} at two endpoints, '{first.Node}' and '{second.Node}'; a route starts one workflow at one endpoint."
+            : $"Workflows '{first.Workflow}' and '{second.Workflow}' both start on {method} /{path}; a route starts one workflow. Change the method or path of one of them.";
 }

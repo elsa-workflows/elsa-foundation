@@ -7,6 +7,7 @@ internal static class HttpRouteChecks
     {
         Console.WriteLine("http routes");
         Table(check);
+        Conflicts(check);
         await FlowchartStartAsync(check);
     }
 
@@ -48,6 +49,48 @@ internal static class HttpRouteChecks
         check(routes.TryStart("POST", "expression-sibling", out var sibling) && sibling == ("flowchart-expression", "literal") &&
               !routes.TryStart("POST", "computed", out _) && !routes.TryStart("POST", "'computed'", out _) && !routes.TryStart("POST", "flowchart-broken", out _),
             "a start endpoint needs a literal path, and a Flowchart the graph engine refuses registers no route");
+    }
+
+    private static void Conflicts(Action<bool, string> check)
+    {
+        static Workflow Starts(string id, string node, string path, string method = "POST") =>
+            Wf.Workflow(id, Wf.Sequence("main", Wf.HttpEndpoint(node, path, method), Wf.Respond($"{node}-out", id)));
+
+        var twice = Refused(new WorkflowRegistry().Add(Starts("orders", "in", "orders")).Add(Starts("orders-copy", "in", "orders")));
+        check(twice is { Method: "POST", Path: "orders", First: ("orders", "in"), Second: ("orders-copy", "in") } &&
+              twice.Message.Contains("'orders'", StringComparison.Ordinal) && twice.Message.Contains("'orders-copy'", StringComparison.Ordinal) &&
+              twice.Message.Contains("POST /orders", StringComparison.Ordinal),
+            $"two definitions that start on one method and path are refused, naming both ({twice?.Message})");
+
+        var spelled = Refused(new WorkflowRegistry().Add(Starts("a", "in", "/Orders/", "post")).Add(Wf.Workflow("b", Wf.Flowchart("flow",
+            [Wf.Respond("out", "b"), Wf.HttpEndpoint("entry", "Orders", "POST")], [new Connection("entry", "out")]))));
+        check(spelled is { Method: "POST", Path: "Orders", First: ("a", "in"), Second: ("b", "entry") },
+            "the method's case and the path's slashes do not make two routes, and a Flowchart entry claims a route as a Sequence start does");
+
+        var republished = new WorkflowRegistry().Add(Starts("orders", "in-v1", "orders")).Add(Starts("orders", "in-v2", "orders"));
+        check(Refused(republished) is null && new HttpRoutes(republished).TryStart("POST", "orders", out var latest) && latest == ("orders", "in-v2"),
+            "a definition published again replaces its own route");
+
+        var methods = new WorkflowRegistry().Add(Starts("read", "in", "orders", "GET")).Add(Starts("write", "in", "orders", "POST"));
+        check(Refused(methods) is null && new HttpRoutes(methods).TryStart("GET", "orders", out var read) && read.Workflow == "read" &&
+              new HttpRoutes(methods).TryStart("POST", "orders", out var write) && write.Workflow == "write",
+            "one path starts different definitions on different methods");
+
+        var inOne = Refused(new WorkflowRegistry().Add(Wf.Workflow("both", Wf.Flowchart("flow",
+            [Wf.HttpEndpoint("first", "same"), Wf.HttpEndpoint("second", "same"), Wf.Respond("out", "x")],
+            [new Connection("first", "out"), new Connection("second", "out")]))));
+        check(inOne is { First: ("both", "first"), Second: ("both", "second") } && inOne.Message.Contains("two endpoints", StringComparison.Ordinal),
+            "one definition with two entries on one method and path is refused, naming both endpoints");
+
+        var waitBeside = new WorkflowRegistry().Add(Starts("starter", "in", "approve"))
+            .Add(Wf.Workflow("waiter", Wf.Sequence("main", Wf.HttpEndpoint("in", "begin"), Wf.HttpEndpoint("wait", "approve"))));
+        check(Refused(waitBeside) is null, "a wait in the middle of another workflow claims no start route, so it does not conflict");
+    }
+
+    private static HttpRouteConflictException? Refused(WorkflowRegistry registry)
+    {
+        try { _ = new HttpRoutes(registry); return null; }
+        catch (HttpRouteConflictException conflict) { return conflict; }
     }
 
     private static async Task FlowchartStartAsync(Action<bool, string> check)
