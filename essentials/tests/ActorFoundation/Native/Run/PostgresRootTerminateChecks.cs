@@ -17,6 +17,7 @@ internal static class PostgresRootTerminateChecks
         const string operation = "terminate-copy";
         const string definition = "before-upgraded-turn";
         const int payloadLength = 16_405_000;
+        const string neighborApproval = "held for the normal owner";
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
@@ -83,10 +84,15 @@ internal static class PostgresRootTerminateChecks
                 neighborBefore = await Drive(owner, image => image is { Revision: 1 }, other);
                 var otherFrame = Json.Read<NativeState>(neighborBefore.State!).Frames.Values.Single(item => item.Node == "approval").Id;
                 Check((await basic.SendAsync(tenant, new Contract.Target.Ref(other), "neighbor-input", CompositeSignal.Kind,
-                    Json.Write(new CompositeSignal(otherFrame, "approve", "held for the normal owner")), cancellationToken: stop)).Outcome ==
+                    Json.Write(new CompositeSignal(otherFrame, "approve", neighborApproval)), cancellationToken: stop)).Outcome ==
                     Contract.AdmissionOutcome.Accepted, "the neighboring actor has its own pending input");
             }
         }
+
+        var adjacentInput = neighbor is { } adjacent
+            ? (await admission.ReadPendingDirectAsync(tenant.Tenant, adjacent.Id, stop)).Single()
+            : null;
+        var adjacentWire = adjacentInput is null ? null : Json.Write(await HeldRow(adjacentInput.InboxKey));
 
         await using (var older = KernelDb.ForPostgresRootOperators(options))
         {
@@ -150,12 +156,12 @@ internal static class PostgresRootTerminateChecks
             Check(history.Last() is { Revision: 4, Entries: """["end"]""" } && history.Count(row => row.Revision == 4) == 1 &&
                 entries.Count(entry => entry == "approved:first") == 1 && !entries.Contains("approved:later"),
                 "the journal records the original approval once and the exact ending entry");
-            if (neighbor is { } other && neighborBefore is { } neighborImage)
+            if (neighbor is { } other && neighborBefore is { } neighborImage && adjacentInput is { } originalInput)
             {
                 var unchanged = (await cold.ReadFirstRootAsync(tenant.Tenant, other.Id, stop))!;
                 Check(unchanged.Status == neighborImage.Status && unchanged.Revision == neighborImage.Revision &&
                     unchanged.TypeData == neighborImage.TypeData && unchanged.State == neighborImage.State &&
-                    (await admission.ReadPendingDirectAsync(tenant.Tenant, other.Id, stop)).Single().Id == "neighbor-input" &&
+                    Json.Write(await HeldRow(originalInput.InboxKey)) == adjacentWire &&
                     recoveryTargets.SetEquals([prior.Actor.Id]),
                     "the selected fallback owner leaves the adjacent actor and its input untouched");
             }
@@ -174,7 +180,9 @@ internal static class PostgresRootTerminateChecks
         {
             await using var normal = await Own("normal-owner", new PublicActor([new ObservedNative(native, native.StateVersion)]));
             var advanced = await Drive(normal, image => image is { Revision: 2 }, remaining);
-            Check(advanced.Status == InstanceStatus.Running &&
+            var values = Json.Read<NativeState>(advanced.State!).Frames.Values.Single(item => item.Node == "approval").State!.AsArray();
+            Check(advanced.Status == InstanceStatus.Running && values.Count == 1 &&
+                values[0]!.GetValue<string>() == neighborApproval &&
                 (await admission.ReadPendingDirectAsync(tenant.Tenant, remaining.Id, stop)).Count == 0 &&
                 (await cold.ReadJournalOfAsync(0, advanced.Actor.Id, 0, stop)).SelectMany(row => Json.Read<string[]>(row.Entries))
                     .Count(entry => entry == "approved:neighbor-input") == 1,
@@ -207,6 +215,9 @@ internal static class PostgresRootTerminateChecks
             };
             TurnCommit candidate = new(stored.Id, expanded, stored.Revision, [], [command.InboxKey], [], [], [], """["end"]""", Unsubscribe: true)
                 { FoundationRootOperator = command, FoundationHeader = change };
+            var commandWire = Json.Write(await HeldRow(command.InboxKey));
+            var heldWire = Json.Write(await HeldRow(held.InboxKey));
+            var journal = await cold.ReadJournalOfAsync(fence.Partition, stored.Id, 0, stop);
             try
             {
                 await probe.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [candidate], [], []), stop);
@@ -221,8 +232,8 @@ internal static class PostgresRootTerminateChecks
             await using var db = Open();
             Check(checkpoint.Revision == prior.Revision && checkpoint.Status == prior.Status && checkpoint.Suspended &&
                 checkpoint.State == prior.State && checkpoint.TypeData == prior.TypeData && await ReadEncodedContent(stored.Id) == before &&
-                !(await HeldRow(command.InboxKey)).Done && !(await HeldRow(held.InboxKey)).Done &&
-                (await cold.ReadJournalOfAsync(fence.Partition, stored.Id, 0, stop)).All(entry => entry.Revision < expanded.Revision) &&
+                Json.Write(await HeldRow(command.InboxKey)) == commandWire && Json.Write(await HeldRow(held.InboxKey)) == heldWire &&
+                (await cold.ReadJournalOfAsync(fence.Partition, stored.Id, 0, stop)).SequenceEqual(journal) &&
                 await db.Partitions.Where(partition => partition.Id == fence.Partition).Select(partition => partition.Position).SingleAsync(stop) ==
                     fence.Position,
                 "the refusal preserves the checkpoint, both inputs, journal and fence position");
