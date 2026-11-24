@@ -539,7 +539,7 @@ public sealed class JsonBaselineArchitectureTests
         var configuration = typeof(JsonBaselineArchitectureTests).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyConfigurationAttribute), false)
             .Cast<System.Reflection.AssemblyConfigurationAttribute>().Single().Configuration;
         using var shipping = ShippingHashAssemblies.Load(RepoPaths.RepoRoot, configuration);
-        Assert.Empty(shipping.Errors);
+        Assert.True(shipping.Errors.Count == 0, string.Join('\n', shipping.Errors));
         var projects = shipping.Projects;
         var storageRoots = JsonBaselineConstructionContexts.ReadSources(RepoPaths.RepoRoot, projects);
         var paths = storageRoots.Select(root => root.SyntaxTree.FilePath).ToArray();
