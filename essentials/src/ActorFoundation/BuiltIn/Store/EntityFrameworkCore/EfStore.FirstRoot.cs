@@ -7,10 +7,8 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    // The generic load treats this as an unknown state family and leaves its bytes intact.
+    // The generic load treats every root state family as unknown and leaves its bytes intact.
     private const string StableBodyMarker = "wire";
-    private const string StableBodyFamily = StoredState.Family + "12:public-root-stable-body:";
-    internal static string RootTerminationStateFamily(KernelDb db) => db.UsesRootStableBody ? StableBodyFamily : TerminationRootStateFamily;
     private bool? _rootStableBody;
     private bool RootStableBody => _rootStableBody ??= ReadRootStableBody();
 
@@ -22,17 +20,8 @@ public sealed partial class EfStore
 
     private const int RootContentBytes = 16 * 1024 * 1024 - 24 * 1024;
 
-    private const string PublicRootState = StoredState.Family + "4:public-root:";
-    internal const string TerminationRootStateFamily = StoredState.Family + "11:public-root-termination:";
-    internal const string TimedRootStateFamily = StoredState.Family + "6:public-root-timed-jobs:";
-    private static string RootStateFamily(KernelDb db) => db switch
-    {
-        { UsesRootValueProtocol: true } => StoredState.Family + "5:public-root-values:",
-        { UsesRootTimedJobSettlement: true } => TimedRootStateFamily,
-        { UsesRootTermination: true } => RootTerminationStateFamily(db),
-        { UsesRootReplyProtocol: true } => StoredState.Family + "7:public-root-replies:",
-        _ => PublicRootState
-    };
+    // The capability set chooses the one prefix (RootStateFamily.Of).
+    private static string RootStatePrefix(KernelDb db) => db.RootStateFamily.Prefix;
 
     internal sealed record RootImage(CreationAddress Actor, string Model, string Definition, string TypeData,
         IReadOnlyDictionary<string, string> Labels, string? State, int StateVersion, long Revision)
@@ -78,8 +67,8 @@ public sealed partial class EfStore
                 ? RootTerminalHeaderBytes(Creator.Start!.Model, Creator.Start.Definition) : 0;
             var reserve = Math.Max(0, terminalHeader - Encoding.UTF8.GetByteCount(Header));
             var bytes = db.UsesRootStableBody
-                ? StableContentBytes(state, Header, Wire, reserve, Row.Status == InstanceStatus.Running ? Growth : 0)
-                : await MeasureRootContentAsync(db, RootStateFamily(db).Length + escape.Length + reserve, state, Header,
+                ? StableContentBytes(RootStatePrefix(db), state, Header, Wire, reserve, Row.Status == InstanceStatus.Running ? Growth : 0)
+                : await MeasureRootContentAsync(db, RootStatePrefix(db).Length + escape.Length + reserve, state, Header,
                     Row.Jobs, cancellationToken);
             if (bytes > RootContentBytes) throw new StoreException(Failure.Definite, RootContentFailure);
         }
@@ -88,7 +77,7 @@ public sealed partial class EfStore
         {
             // The existing transaction owns the fence. Return the exact deleted envelope for application-side
             // comparison. A missing bind or changed envelope returns false and rolls back all effects.
-            var family = RootStateFamily(db);
+            var family = RootStatePrefix(db);
             var fingerprint = CreationProtocol.Fingerprint(Creator.Start, Creator.Kind, Creator.Payload);
             var finished = Row.Status == InstanceStatus.Finished;
             var candidates = await db.Messages.FromSqlInterpolated(AddRootWire(db, $"""
@@ -315,10 +304,10 @@ public sealed partial class EfStore
             sql.Format.Replace("/*root-wire*/", $$""" "FoundationStateWire" = {{{sql.ArgumentCount}}}, """, StringComparison.Ordinal),
             [.. sql.GetArguments(), wire]) : sql;
 
-    private static long StableContentBytes(string stored, string header, byte[]? wire, int reserve, long growth)
+    private static long StableContentBytes(string family, string stored, string header, byte[]? wire, int reserve, long growth)
     {
         if (growth < 0 || growth > RootContentBytes) return (long)RootContentBytes + 1;
-        return (long)StableBodyFamily.Length + stored.Length + Encoding.UTF8.GetByteCount(header) +
+        return (long)family.Length + stored.Length + Encoding.UTF8.GetByteCount(header) +
             (wire?.Length ?? 0) + reserve + growth;
     }
 
@@ -331,7 +320,7 @@ public sealed partial class EfStore
         await using var db = create();
         // The model's protection decision must see the same physical checkpoint as retirement.
         await using var transaction = await BeginPinnedRootOperationAsync(db, cancellationToken);
-        var family = RootStateFamily(db);
+        var family = RootStatePrefix(db);
         if (transaction is null && (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol || db.UsesRootStableBody))
             await RequireStoreVersionsAsync(db, cancellationToken);
         FormattableString query = $"""

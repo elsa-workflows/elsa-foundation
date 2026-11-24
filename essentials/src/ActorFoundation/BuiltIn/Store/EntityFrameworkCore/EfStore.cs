@@ -124,6 +124,7 @@ public class KernelDb : DbContext
     {
         RequiredFormat = format;
         Capabilities = capabilities;
+        RootStateFamily = RootStateFamily.Of(capabilities);
     }
 
     private static KernelDb Profile(DbContextOptions<KernelDb> options, StoreFormat format) =>
@@ -138,6 +139,8 @@ public class KernelDb : DbContext
 
     internal StoreFormat RequiredFormat { get; }
     internal RootCapabilities Capabilities { get; }
+    // The one state family this set writes and reads, with its terminal statuses.
+    internal RootStateFamily RootStateFamily { get; }
     private bool Has(RootCapabilities capability) => (Capabilities & capability) != 0;
     internal bool UsesRootSelfProtocol => Has(RootCapabilities.SelfProtocol);
     internal bool UsesRootTimers => Has(RootCapabilities.Timers);

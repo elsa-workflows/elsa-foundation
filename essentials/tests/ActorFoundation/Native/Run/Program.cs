@@ -163,6 +163,8 @@ if (args is ["pg-root-park-inspection", var parkReadWriter and ("owned" or "ef")
     return await PostgresRootParkOpeningChecks.RunAsync(parkReadWriter == "owned", parkReadFence == "in-batch", inspection: true);
 if (args is ["pg-root-composition", var compositionWriter and ("owned" or "ef"), var compositionFence and ("checked" or "in-batch")])
     return await PostgresRootCompositionChecks.RunAsync(compositionWriter == "owned", compositionFence == "in-batch");
+if (args is ["pg-root-state-family", var familyWriter and ("owned" or "ef"), var familyFence and ("checked" or "in-batch")])
+    return await PostgresRootStateFamilyChecks.RunAsync(familyWriter == "owned", familyFence == "in-batch");
 if (args is ["pg-root-retention", var policyWriter and ("owned" or "ef"), var policyFence and ("in-batch" or "checked")])
     return await PostgresRootRetentionChecks.RunAsync(policyWriter == "owned", policyFence == "in-batch");
 if (args is ["pg-root-plan-selection", var planWriter and ("owned" or "ef"), var planFence and ("in-batch" or "checked")])

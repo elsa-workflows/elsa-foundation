@@ -13,12 +13,12 @@ public sealed partial class EfStore
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
-            var family = RootStateFamily(db);
+            var family = RootStatePrefix(db);
             var jobs = JobState is null ? Current.Jobs : JobState.Jobs;
             var terminalHeader = db.UsesRootTermination && Status == InstanceStatus.Running
                 ? RootTerminalHeaderBytes(Current.Model, Current.Definition) : 0;
             var reserve = Math.Max(0, terminalHeader - System.Text.Encoding.UTF8.GetByteCount(Header));
-            var projectedBytes = db.UsesRootStableBody ? StableContentBytes(State, Header, Wire, reserve, Status == InstanceStatus.Running ? Growth : 0)
+            var projectedBytes = db.UsesRootStableBody ? StableContentBytes(family, State, Header, Wire, reserve, Status == InstanceStatus.Running ? Growth : 0)
                 : await MeasureRootContentAsync(db, family.Length + reserve, State, Header, jobs, cancellationToken,
                     comparePriorSize: true);
             var overBudget = projectedBytes > RootContentBytes;

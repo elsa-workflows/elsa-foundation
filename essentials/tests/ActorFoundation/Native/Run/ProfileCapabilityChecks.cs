@@ -87,6 +87,32 @@ internal static class ProfileCapabilityChecks
             ["root-park-arrivals"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening"],
             ["root-park-recovery"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootOperatorProtocol", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening", "UsesRootParkRecovery"],
         };
+        // S3: each profile's root state family, the prefix bytes written before S3 and the statuses besides Finished that end it.
+        const string family = "!kernel-state/";
+        var families = new Dictionary<string, (string Prefix, bool Cancelled, bool Faulted)>(StringComparer.Ordinal)
+        {
+            ["ordinary"] = (family + "4:public-root:", false, false),
+            ["root-self"] = (family + "4:public-root:", false, false),
+            ["root-timers"] = (family + "4:public-root:", false, false),
+            ["root-operators"] = (family + "4:public-root:", false, false),
+            ["root-jobs"] = (family + "4:public-root:", false, false),
+            ["root-timed-job-issuance"] = (family + "4:public-root:", false, false),
+            ["root-values"] = (family + "5:public-root-values:", false, false),
+            ["root-timed-job-settlement"] = (family + "6:public-root-timed-jobs:", false, true),
+            ["root-replies"] = (family + "7:public-root-replies:", false, false),
+            ["root-terminations"] = (family + "11:public-root-termination:", true, false),
+            ["root-stable-body"] = (family + "12:public-root-stable-body:", true, false),
+            ["root-terminal-selection"] = (family + "12:public-root-stable-body:", true, false),
+            ["root-retirement"] = (family + "12:public-root-stable-body:", true, false),
+            ["root-terminate-then-delete"] = (family + "12:public-root-stable-body:", true, false),
+            ["root-retention"] = (family + "12:public-root-stable-body:", true, false),
+            ["root-operator-replies"] = (family + "12:public-root-stable-body:", true, false),
+            ["root-timed-job-preview"] = (family + "6:public-root-timed-jobs:", false, true),
+            ["root-park-opening"] = (family + "4:public-root:", false, false),
+            ["root-park-inspection"] = (family + "4:public-root:", false, false),
+            ["root-park-arrivals"] = (family + "4:public-root:", false, false),
+            ["root-park-recovery"] = (family + "4:public-root:", false, false),
+        };
         var flags = typeof(KernelDb).GetProperties(BindingFlags.Instance | BindingFlags.NonPublic)
             .Where(p => p.PropertyType == typeof(bool) && (p.Name.StartsWith("Uses", StringComparison.Ordinal) ||
                 p.Name.StartsWith("Supports", StringComparison.Ordinal) || p.Name.StartsWith("Requires", StringComparison.Ordinal)))
@@ -113,6 +139,9 @@ internal static class ProfileCapabilityChecks
             Check(Equals(marker, format.MessageProtocol), $"{name} model seeds marker protocol {format.MessageProtocol}");
             Check(db.UsesRootTimers == (format == StoreFormat.RootTimers), $"{name} timer selection matches its format");
             Check(set.SequenceEqual(accessors[name]), $"{name} turns on exactly [{string.Join(",", accessors[name])}]");
+            var (prefix, cancelled, faulted) = families[name];
+            Check(db.RootStateFamily == new RootStateFamily(prefix, cancelled, faulted),
+                $"{name} keeps state family {prefix} (Cancelled ends={cancelled}, Faulted ends={faulted})");
             var factory = db.GetService<IModelCacheKeyFactory>();
             Check(factory is KernelModelCacheKeyFactory, $"{name} resolves the kernel model cache key factory");
             var key = factory.Create(db, designTime: false);
@@ -122,6 +151,7 @@ internal static class ProfileCapabilityChecks
         }
         Check(RootProfiles.Formats.Count == profiles.Length, $"the mapping has {profiles.Length} formats, one per factory");
         Check(accessors.Count == profiles.Length, $"every profile has its expected accessors");
+        Check(families.Count == profiles.Length, "every profile has its expected state family");
         var mapped = RootProfiles.Formats.Values.Aggregate(RootCapabilities.None, (all, next) => all | next);
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
