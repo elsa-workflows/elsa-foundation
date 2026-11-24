@@ -507,12 +507,16 @@ def generate():
         root=dict(nodeId='root-é',activityVersionId='',inputs=[argument],outputs=[],structure=None,intrinsic=dict(kind='return',valueType=data_type,variable=None))
         projected=dict(variables=[variable],rootActivity=root,inputs=[input_definition],outputs=[output_definition],
             strategyOptions=dict(activationStrategyType='default',incidentStrategy=dict(alias='fault',version='1.0.0'),persistenceMode='Balanced'))
-        wire_text=json.dumps(projected,ensure_ascii=True,separators=(',',':')).replace(json.dumps(marker),raw)
-        expected_wire=helper.load_json(wire_text)
         actual=json.loads(json.dumps(projected));actual['rootActivity']['intrinsic']['kind']=3
         input_text=json.dumps(actual,ensure_ascii=True,separators=(',',':')).replace(json.dumps(marker),raw)
+        # S2 derives workflow member nullability from the type and omits the CLR catalog flag from both authored wires.
+        for member in [*projected['inputs'],*projected['outputs']]:member.pop('isNullable')
+        wire_text=json.dumps(projected,ensure_ascii=True,separators=(',',':')).replace(json.dumps(marker),raw)
+        expected_wire=helper.load_json(wire_text)
+        for member in [*actual['inputs'],*actual['outputs']]:member.pop('isNullable')
+        reconstructed_text=json.dumps(actual,ensure_ascii=True,separators=(',',':')).replace(json.dumps(marker),raw)
         add('authoring-snapshot-rich/' + label,'Elsa.Workflows.Design.Api','Elsa.Workflows.Design.Api.Services.WorkflowAuthoringRevision','Snapshot',
-            [dict(typedJson=input_text)],expected_wire,returnField='Item2',returnFieldsJson=dict(Item1=input_text),returnRawPaths={
+            [dict(typedJson=input_text)],expected_wire,returnField='Item2',returnFieldsJson=dict(Item1=reconstructed_text),returnRawPaths={
                 path:raw.strip(' \t\r\n') for path in ['Item1.Variables[0].Default.Value','Item1.RootActivity.Inputs[0].Value.Value',
                     'Item1.Inputs[0].PropertyInfo','Item1.Inputs[0].UISpecifications','Item1.Inputs[0].DefaultValue',
                     'Item1.Outputs[0].PropertyInfo','Item1.Outputs[0].UISpecifications']})
@@ -721,10 +725,16 @@ def generate():
         result=copy.deepcopy(value);result['inputs']=helper.load_json(raw)
         if delivery:result['identity']['activityExecutionId']=''
         return result
+    def agent_argument(value,raw):
+        # Baseline CLR admission uses numeric ActivityValueLifecycle.Instance/ActivityValueStorage.Inline (both zero).
+        # The hash owner's independent fixed profile still emits their names in the expected projection.
+        argument=copy.deepcopy(value)
+        argument['contract']['result']['policy'].update(lifecycle=0,storage=0)
+        return typed_raw(argument,raw)
     for label,raw in variants:
         for mode,delivery in [('legacy',False),('delivery',True)]:
             add('agent-request/' + mode + '-' + label,'Elsa.Agent','Elsa.Agent.Journal.AgentTurnJournal','RequestHash',
-                [typed_raw(agent_request,raw),dict(text='elsa.agent.turn/request/' + ('2' if delivery else '1'))],agent_projection(agent_request,raw,delivery))
+                [agent_argument(agent_request,raw),dict(text='elsa.agent.turn/request/' + ('2' if delivery else '1'))],agent_projection(agent_request,raw,delivery))
     for label in ['other-activity','workspace','effective-limits','prepared-session','session-target','continuation','binding','descriptor-settings']:
         value=copy.deepcopy(agent_request)
         if label=='other-activity':value['identity']['activityExecutionId']='other-activity-é'
@@ -737,7 +747,7 @@ def generate():
         if label=='descriptor-settings':value['descriptor']['settings']=dict(temperature=0.25)
         for mode,delivery in [('legacy',False),('delivery',True)]:
             add('agent-request/' + mode + '-' + label,'Elsa.Agent','Elsa.Agent.Journal.AgentTurnJournal','RequestHash',
-                [typed_raw(value,variants[0][1]),dict(text='elsa.agent.turn/request/' + ('2' if delivery else '1'))],agent_projection(value,variants[0][1],delivery))
+                [agent_argument(value,variants[0][1]),dict(text='elsa.agent.turn/request/' + ('2' if delivery else '1'))],agent_projection(value,variants[0][1],delivery))
     # Actual binding constructors/resolvers: file identities are opaque; HTTP and SQL are ordinary owner JSON.
     binding_scope=dict(tenantId='tenant-é',persistencePartition='partition-é')
     scope_identity=hashlib.sha256(etl_frame(['etl-scope-v1','tenant-é','partition-é'])).hexdigest()
@@ -786,7 +796,8 @@ def generate():
     evidence='Elsa.Workflows.ExecutionEvidence'
     for label,raw in variants:
         for mode in ['Captured','Sensitive','Truncated']:
-            policy=dict(lifecycle='Instance',storage='Inline',isSensitive=mode=='Sensitive',requiresEncryption=False,redactionMode=None,retentionPolicy=None,metadata={})
+            # DurableValueLifecycle.Instance and DurableValueStorage.Inline are one in the baseline CLR argument profile.
+            policy=dict(lifecycle=1,storage=1,isSensitive=mode=='Sensitive',requiresEncryption=False,redactionMode=None,retentionPolicy=None,metadata={})
             envelope=dict(constructorArguments=dict(type=dict(json=dict(alias='Any',collectionKind='Single',schema=None,schemaVersion=None)),presence=dict(json=2),
                 inlineValue=dict(rawJson=raw),externalReference=dict(json=None),policy=dict(json=policy),withheldValue=dict(json=None)))
             instance=dict(constructorArguments=dict(store=dict(clrType='Elsa.Workflows.ExecutionEvidence.Services.InMemoryExecutionEvidenceStore',clrAssembly=evidence,
