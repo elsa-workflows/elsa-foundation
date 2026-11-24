@@ -283,7 +283,8 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // (as ConnectionType before it), and AccessesUndeclaredVariables, an additive body init property on
         // ActivityAuthoringDescriptorView: an input's variable-reference direction and the free-name marker.
         // Archived-only listing adds the optional trailing Boolean parameter while retaining the S7 descriptor fields.
-        Assert.Equal("7ed284560b461ef33701e230535ec4033d56c289b5688d4a113cdeeef288d800", PublicShapeHash(ContractTypes));
+        // Spec 1232 adds TYPE SupportsNull to the read-only type projection; authored nullable flags leave the wire.
+        Assert.Equal("db784d318ad2f2230edd79c43638d961a37b2ae9b98cc1b654d51b6cb173e76e", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

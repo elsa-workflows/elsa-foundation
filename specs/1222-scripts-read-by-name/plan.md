@@ -16,7 +16,7 @@ Scripts read workflow variables by name in JavaScript and Liquid. A **literal** 
 (`variables[expr]`, `getVariable(expr)`) or an opaque host-function read falls back to a **run-time lookup**: publish
 reports which variables it could read, and each actual read is recorded, protection-checked and added to the step's
 input snapshot; a name that matches nothing reads `undefined` (nil in Liquid) with a warning and the read marked absent
-(spec 1216 FR-025–FR-027). The fallback extends today's ambient visible-variable projection (adding each candidate's
+(spec 1232 FR-025–FR-027). The fallback extends today's ambient visible-variable projection (adding each candidate's
 declaring scope and a transient marker), confined to expressions that
 need it. The Elsa 3 converter emits `variables.X` for literal reads, keeps computed `getVariable(expr)` (served by the
 fallback) instead of refusing it, drops the `args` rewrite for variable reads (fixing #3296), and emits unwrapped
@@ -34,7 +34,7 @@ binding); ADR 0090 / ADR 0092 variable session; Studio `ScopedVariableResolver`;
 
 **Dependencies on other specs**: S-10 (spec 1221, PR #4316) provides the read-set types (`InputReadSet`,
 `SessionReads`); S-7 (ADR 0090) builds the variable session, its read path, its session reads and its writes, which
-FR-033–FR-035 need (spec 1221 T015 and T016 moved to S-7 on 2026-11-17); spec 1216 (S-2) FR-025–FR-027 is not yet on the initiative branch.
+FR-033–FR-035 need (spec 1221 T015 and T016 moved to S-7 on 2026-11-17); spec 1232 (S-2) FR-025–FR-027 is not yet on the initiative branch.
 
 **Storage**: N/A for reads (values come from the pinned input snapshot / external payload store as today).
 

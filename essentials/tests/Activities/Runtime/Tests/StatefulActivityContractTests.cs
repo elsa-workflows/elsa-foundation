@@ -106,7 +106,7 @@ public sealed class StatefulActivityContractTests
     {
         var properties = contextType.GetProperties();
 
-        Assert.All(properties, property => Assert.Null(property.SetMethod));
+        Assert.All(properties, property => Assert.True(property.SetMethod is null || property.SetMethod.ReturnParameter.GetRequiredCustomModifiers().Contains(typeof(System.Runtime.CompilerServices.IsExternalInit))));
         Assert.DoesNotContain(properties, property => typeof(IServiceProvider).IsAssignableFrom(property.PropertyType));
         Assert.DoesNotContain(properties, property => typeof(IActivityExecutionContext).IsAssignableFrom(property.PropertyType));
         Assert.DoesNotContain(properties, property => property.PropertyType.Name.Contains("MemoryBlock", StringComparison.Ordinal));

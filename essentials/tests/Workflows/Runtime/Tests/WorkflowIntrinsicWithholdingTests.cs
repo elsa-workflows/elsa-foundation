@@ -41,6 +41,59 @@ public sealed class WorkflowIntrinsicWithholdingTests
             new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore()),
             new FakeTimeProvider(Now));
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task A_protected_null_is_checked_before_substitution_and_withholding(bool policy, bool output)
+    {
+        var type = new ValueTypeDescriptor("Int32");
+        var protection = EncryptionRequired(DurableValueStorage.Inline);
+        var bindings = new Dictionary<string, RuntimeInputBinding>
+        {
+            ["value"] = new("value", type, protection, RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Null(type, protection))
+        };
+        if (output) bindings["name"] = Literal("name", "result", ValueProtectionPolicy.InstanceInline);
+        var node = new ExecutableNode("node-null", "node-null", "test.null", "1", "intrinsic", JsonSerializer.SerializeToElement(new { }),
+            bindings, new Dictionary<string, string>(), intrinsicKind: output ? WorkflowIntrinsicKind.SetOutput : WorkflowIntrinsicKind.Set,
+            intrinsicVariable: output ? null : new("greeting", VariableReference.WorkflowScopeId));
+        if (!policy)
+        {
+            Assert.Contains("VF-ACT-004", (await Assert.ThrowsAnyAsync<InvalidOperationException>(() => ExecuteAsync(node, new(false, false), type).AsTask())).Message);
+        }
+        else if (output)
+            await Assert.ThrowsAsync<WithheldValueException>(() => ExecuteAsync(node, new(true, false), type).AsTask());
+        else
+        {
+            var commit = await ExecuteAsync(node, new(true, false), type);
+            AssertWithheldForEncryption(commit.StateChanges.WorkflowExecution!.State.RootVariableFrame!.Values["greeting"]);
+            Assert.Contains(Assert.Single(commit.StateChanges.ActivityExecutions).State!.Warnings!, warning => warning.Code == "VF-NULL-001");
+        }
+    }
+
+    [Theory]
+    [InlineData(DurableValueStorage.Inline)]
+    [InlineData(DurableValueStorage.External)]
+    [InlineData(DurableValueStorage.Custom)]
+    public async Task SetOutput_persists_explicit_JSON_null_in_every_storage_kind(DurableValueStorage storage)
+    {
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, storage);
+        var value = new RuntimeInputBinding("value", StringType, policy, RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Null(StringType, policy));
+        var node = new ExecutableNode("null-output", "null-output", "test", "1", "intrinsic", JsonSerializer.SerializeToElement(new { }),
+            new Dictionary<string, RuntimeInputBinding> { ["value"] = value, ["name"] = Literal("name", "result", ValueProtectionPolicy.InstanceInline) },
+            new Dictionary<string, string>(), intrinsicKind: WorkflowIntrinsicKind.SetOutput);
+        var commit = await ExecuteAsync(node);
+        var output = Assert.Single(commit.StateChanges.DurableValues).State!;
+        Assert.Equal(DurableValueStorage.Inline, output.Storage);
+        // Both ordinary serialization and the reader must retain presence and the original minimum policy.
+        var reloaded = JsonSerializer.Deserialize<DurableValueState>(JsonSerializer.Serialize(output))!;
+        var envelope = RuntimeInputBindingStateProjection.ProjectEnvelopesByMetadataKey([reloaded], Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.OutputName)["result"];
+        Assert.Equal(ValuePresence.ExplicitNull, envelope.Presence);
+        Assert.Equal(storage, envelope.Policy.Storage);
+        Assert.Equal(JsonValueKind.Null, output.InlineValue!.Value.ValueKind);
+    }
+
     [Fact]
     public async Task Set_writes_the_variable_as_a_withheld_marker_that_holds_no_value()
     {
@@ -125,16 +178,20 @@ public sealed class WorkflowIntrinsicWithholdingTests
         Assert.True(value.Policy.RequiresEncryption);
     }
 
-    private async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(ExecutableNode node)
+    private async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(ExecutableNode node, WorkflowValuePolicies? policies = null, ValueTypeDescriptor? variableType = null)
     {
         var scheduled = ActivityState(IntrinsicExecutionId, node.ExecutableNodeId, ActivityExecutionStatus.Scheduled) with { Attempts = [] };
-        await _workflowStore.SaveAsync(WorkflowState());
+        var workflow = WorkflowState();
+        if (variableType is not null)
+            workflow = workflow with { RootVariableFrame = new VariableFrameFactory().CreateRoot(WorkflowExecutionId, VariableReference.WorkflowScopeId,
+                new Dictionary<string, ValueEnvelope> { ["greeting"] = ValueEnvelope.Inline(variableType, JsonSerializer.SerializeToElement(0), ValueProtectionPolicy.InstanceInline) }) };
+        await _workflowStore.SaveAsync(workflow);
         await _activityStore.SaveAsync(scheduled);
         var payload = new RuntimeStartActivityCommandPayload(Identity, node.ExecutableNodeId, IntrinsicExecutionId, RuntimeStartActivityCommandPayload.ScheduledActivityReason);
         var executable = new WorkflowExecutable(
             Identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(),
             inputContract: null, dependencies: null, runtimeRequirements: null, storageDriverRequirements: null,
-            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference, persistenceMode: null, workflowVariables: null, valuePolicies: policies);
         var workItem = new RuntimeSchedulerWorkItem(
             "start-intrinsic",
             WorkflowExecutionId,

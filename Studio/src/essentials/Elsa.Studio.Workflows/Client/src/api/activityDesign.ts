@@ -1,3 +1,4 @@
+import { canonicalizeAuthoredContract } from "../activityContractAuthoring";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
@@ -289,7 +290,7 @@ export async function createActivityDefinitionDraft(
   request: CreateActivityDefinitionDraftRequest
 ) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition-drafts", { definitionId });
-  return context.http.postJson<ActivityDefinitionDraftView>(path, request);
+  return context.http.postJson<ActivityDefinitionDraftView>(path, "contract" in request && request.contract ? { ...request, contract: canonicalizeAuthoredContract(request.contract) } : request);
 }
 
 export async function migrateActivityDefinitionDraft(
@@ -370,7 +371,7 @@ export async function replaceActivityDefinitionDraft(
   request: ReplaceActivityDefinitionDraftRequest
 ) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition-draft", { draftId });
-  return context.http.putJson<ActivityDefinitionDraftView>(path, request);
+  return context.http.putJson<ActivityDefinitionDraftView>(path, { ...request, contract: canonicalizeAuthoredContract(request.contract) });
 }
 
 export async function createActivityDefinitionConflictCopy(
@@ -379,7 +380,7 @@ export async function createActivityDefinitionConflictCopy(
   request: Omit<ReplaceActivityDefinitionDraftRequest, "expectedRevision"> & { expectedSourceRevision: number }
 ) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-draft-conflict-copies", { draftId });
-  return context.http.postJson<ActivityDefinitionDraftView>(path, request);
+  return context.http.postJson<ActivityDefinitionDraftView>(path, "contract" in request && request.contract ? { ...request, contract: canonicalizeAuthoredContract(request.contract) } : request);
 }
 
 export async function validateActivityDefinitionDraft(

@@ -1167,6 +1167,11 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
 
     private sealed class RejectingInputValidator : IWorkflowExecutableInputValidator
     {
+        public WorkflowExecutableInputValidation Validate(WorkflowExecutableInputContract contract,
+            IEnumerable<KeyValuePair<string, JsonElement>> inputs, WorkflowValuePolicies policies) => Validate(contract, inputs);
+        public WorkflowExecutableInputValidation ValidateKnownInputs(WorkflowExecutableInputContract contract,
+            IEnumerable<KeyValuePair<string, JsonElement>> inputs, WorkflowValuePolicies policies) => ValidateKnownInputs(contract, inputs);
+
         public WorkflowExecutableInputValidation Validate(
             WorkflowExecutableInputContract contract,
             IEnumerable<KeyValuePair<string, JsonElement>> inputs) =>

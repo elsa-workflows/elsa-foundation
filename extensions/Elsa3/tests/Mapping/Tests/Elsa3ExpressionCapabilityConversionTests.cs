@@ -382,7 +382,7 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [Fact]
     public async Task A_date_typed_variable_is_read_as_a_date_of_the_same_instant()
     {
-        var due = new Elsa3Variable { Id = "due", Name = "due", TypeName = "DateTime" };
+        var due = new Elsa3Variable { Id = "due", Name = "due", TypeName = "DateTime", Value = "2026-10-28T08:15:00Z" };
 
         var result = await ConvertAsync("getVariable('due').getTime()", due);
 
@@ -407,7 +407,7 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     [Fact]
     public async Task Local_use_of_a_date_typed_variable_follows_the_date_interpretation()
     {
-        var due = new Elsa3Variable { Id = "due", Name = "due", TypeName = "DateTime" };
+        var due = new Elsa3Variable { Id = "due", Name = "due", TypeName = "DateTime", Value = "2026-10-28T08:15:00Z" };
 
         var text = await ConvertAsync("getVariable('due').toString()", due);
         Assert.False(text.Succeeded, Describe(text.Diagnostics));
@@ -488,7 +488,7 @@ public sealed class Elsa3ExpressionCapabilityConversionTests
     {
         var result = await ConvertAsync(expression,
             new Elsa3Variable { Id = "items", Name = "items", TypeName = "String", IsArray = true },
-            new Elsa3Variable { Id = "id", Name = "id", TypeName = "Guid" });
+            new Elsa3Variable { Id = "id", Name = "id", TypeName = "Guid", Value = "81d9408c-91e4-4d8d-8391-1049b5617d0f" });
 
         Assert.Equal(converts, result.Succeeded);
         if (!converts)

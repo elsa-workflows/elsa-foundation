@@ -29,7 +29,7 @@ internal sealed class NativeStandaloneTriggerRuntimeTarget(IWorkflowExecutableSt
         if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(executable.Identity, recipient.Material) || executable.InputContract is not { } contract ||
             RuntimeIngressAdmission.ComputeInputContractFingerprint(contract) != recipient.InputContractFingerprint)
             throw new TriggerOperationException("conflict", "The native material or declared-input contract differs from its accepted capture.");
-        var validated = inputs.Validate(contract, recipient.Inputs);
+        var validated = inputs.Validate(contract, recipient.Inputs, executable.ValuePolicies);
         if (!validated.IsValid || !NativeIngressTargetEvidence.Equal(validated.NormalizedInputs, recipient.Inputs))
             throw new TriggerOperationException("validation", "The accepted native input bag is invalid.");
         await CheckPolicyAsync(recipient, cancellationToken);

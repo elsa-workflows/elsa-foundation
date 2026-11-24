@@ -16,7 +16,7 @@ namespace Elsa.Activities.Design.Tests;
 public sealed class ActivityContractAuthoringCapabilityTests
 {
     [Fact]
-    public void Mutable_contract_validation_rejects_alias_collection_driver_and_explicit_nullability_outside_the_catalog()
+    public void Mutable_contract_validation_uses_type_nullability_and_rejects_unavailable_types_collection_kinds_and_drivers()
     {
         var validator = new ActivityContractAuthoringValidator(new Catalog([
             new(
@@ -46,7 +46,7 @@ public sealed class ActivityContractAuthoringCapabilityTests
                 Input("list", "String", CollectionKind.List, "elsa.json"),
                 Input("driver", "String", CollectionKind.Single, "custom.driver"),
                 Input("nullable", "Int32", CollectionKind.Single, "elsa.json", isNullable: true),
-                Input("null-default", "String", CollectionKind.Single, "elsa.json", Json("null"))
+                Input("null-default", "Int32", CollectionKind.Single, "elsa.json", Json("null"))
             ],
             [],
             []);
@@ -56,7 +56,6 @@ public sealed class ActivityContractAuthoringCapabilityTests
         Assert.Equal([
             "activity.contract.collection-kind-unavailable",
             "activity.contract.null-default-not-allowed",
-            "activity.contract.nullability-unavailable",
             "activity.contract.storage-driver-unavailable",
             "activity.contract.type-unavailable"
         ], diagnostics.Select(x => x.Code).Order(StringComparer.Ordinal));

@@ -89,7 +89,10 @@ internal sealed class StepScriptVariables : IScriptVariableSession
                 ? "The script writes a variable that is not declared in any scope visible to it; a script never creates a variable. " +
                   "The name is withheld because a value it read is protected."
                 : $"The script writes variable '{name}', which is not declared in any scope visible to it; a script never creates a variable.");
-        _session.WriteJson(target, value is { ValueKind: not JsonValueKind.Null } json ? JsonNode.Parse(json.GetRawText()) : null);
+        if (value is null || value.Value.ValueKind == JsonValueKind.Undefined)
+            _session.WriteUndefined(target);
+        else
+            _session.WriteJson(target, value is { ValueKind: not JsonValueKind.Null } json ? JsonNode.Parse(json.GetRawText()) : null);
     }
 
     private bool TryTarget(string name, out StepVariableTarget target)

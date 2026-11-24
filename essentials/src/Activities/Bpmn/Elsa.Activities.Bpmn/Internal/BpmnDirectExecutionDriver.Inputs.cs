@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Services;
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -18,7 +19,7 @@ internal sealed partial class BpmnDirectExecutionDriver
         var inputs = start.Inputs ?? new Dictionary<string, JsonElement>();
         if (context.Material.Model!.Profile == BpmnModelProtocol.InputsProfile)
         {
-            var validation = InputsValidator.Validate(context.Material.Model.InputContract, inputs);
+            var validation = ModelInputValidation.Normalize(InputsValidator, context.Material.Model.InputContract, inputs);
             BpmnInputSupport.Check(validation);
             // Accepted commands contain the normalized bag; recovery cannot invent a different default snapshot.
             if (!SameInputs(inputs, validation.NormalizedInputs)) throw new BpmnModelValidationException("The model command inputs were not normalized at admission.");

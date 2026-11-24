@@ -29,6 +29,28 @@ public sealed class GraphActivityExecutionTests : IDisposable
 {
     private readonly ServiceProvider _serviceProvider = CreateServiceProvider();
 
+    [Theory]
+    [InlineData("Int32", "0")]
+    [InlineData("Boolean", "false")]
+    [InlineData("String", "null")]
+    public async Task Unassigned_graph_variables_store_the_supported_type_default(string alias, string expected)
+    {
+        var scope = Scope();
+        var states = await scope.InitializeVariablesAsync([Variable("value", null) with { Type = Type(alias) }],
+            (_, _) => throw new InvalidOperationException("No declared initializer should be evaluated."), DateTimeOffset.UnixEpoch);
+        Assert.Equal(expected, Assert.Single(states).InlineValue!.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task Unassigned_graph_date_variable_is_refused_before_any_row_is_published()
+    {
+        var scope = Scope();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => scope.InitializeVariablesAsync(
+            [Variable("value", null) with { Type = Type("DateTime") }], (_, _) => ValueTask.FromResult<object?>(null), DateTimeOffset.UnixEpoch).AsTask());
+        Assert.Contains("VF-ACT-003", exception.Message);
+        Assert.Empty(scope.Variables);
+    }
+
     [Fact]
     public async Task ActivationStrategy_CreatesATransientActivityFromThePinnedGraphDescriptor()
     {
@@ -762,6 +784,142 @@ public sealed class GraphActivityExecutionTests : IDisposable
         Assert.Equal(42, Assert.IsType<JsonElement>(result["result"]).GetInt32());
     }
 
+    [Theory]
+    [InlineData("Acme.NullableRecord", false)]
+    [InlineData("Acme.NullableRecord", true)]
+    [InlineData("Acme.NullableStatus", false)]
+    [InlineData("Acme.NullableStatus", true)]
+    public async Task Nullable_contributed_value_types_accept_null_at_the_graph_expression_boundary(string alias, bool supplied)
+    {
+        var registry = _serviceProvider.GetRequiredService<IWellKnownTypeRegistry>();
+        registry.RegisterType(typeof(NullableRecord), "Acme.NullableRecord"); registry.RegisterType(typeof(NullableStatus), "Acme.NullableStatus");
+        var descriptor = Descriptor(inputs: [Input("optional", name: "Optional") with { Type = Type(alias) }],
+            outputs: [Output("result") with { Type = Type(alias) }],
+            outputMappings: [Mapping("result", new("Input", JsonSerializer.SerializeToElement(new { referenceKey = "optional" })))]);
+        var values = new Dictionary<string, object?>(); if (supplied) values["Optional"] = null;
+        var preparation = await PrepareGraphCompletionAsync(descriptor, values);
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result);
+        Assert.Equal(JsonValueKind.Null, Assert.IsType<JsonElement>(result["result"]).ValueKind);
+    }
+
+    [Theory]
+    [InlineData("Variable", "sensitive")]
+    [InlineData(TestExpressionHandler.Syntax, "sensitive")]
+    [InlineData(TestExpressionHandler.Syntax, "redacted")]
+    [InlineData(TestExpressionHandler.Syntax, "retained")]
+    public async Task Protected_graph_rows_keep_diagnostics_private_and_cannot_flow_into_a_public_result(string syntax, string protection)
+    {
+        const string secret = "private-key";
+        var descriptor = Descriptor(inputs: [Input("secret", name: "Secret") with { Type = Type("String") }],
+            variables: [Variable("secret-copy", new("Input", JsonSerializer.SerializeToElement(new { referenceKey = "secret" }))) with { Name = "Secret", Type = Type("String") }],
+            outputs: [Output("result")], outputMappings: [Mapping("result", syntax == "Variable" ? VariableRead("secret-copy", "activity-graph")
+                : new(TestExpressionHandler.Syntax, JsonSerializer.SerializeToElement("warn-secret")))]);
+        await using var lease = await ActivateGraphAsync(descriptor);
+        var graph = Assert.IsType<GraphActivity>(lease.Activity);
+        var snapshot = new ActivityInputSnapshot("outer-execution", "contract", "binding", new Dictionary<string, ValueEnvelope>
+            { ["secret"] = ValueEnvelope.Inline(new("String"), JsonSerializer.SerializeToElement(secret), new(DurableValueLifecycle.Instance, DurableValueStorage.Inline,
+                isSensitive: protection == "sensitive", redactionMode: protection == "redacted" ? "mask" : null, retentionPolicy: protection == "retained" ? "private" : null)) }, DateTimeOffset.UnixEpoch);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution") with { InputSnapshot = snapshot });
+        var entry = await graph.PrepareEntryCheckpointAsync(context, new Dictionary<string, object?> { ["Secret"] = secret }, DateTimeOffset.UnixEpoch);
+        var rows = entry.Select(change => change.State!).ToArray();
+        Assert.All(rows, row =>
+        {
+            var policy = Elsa.Workflows.Runtime.Core.Services.DurableValuePolicies.Read(row);
+            Assert.Equal(protection == "sensitive", policy.IsSensitive);
+            Assert.Equal(protection == "redacted" ? "mask" : null, policy.RedactionMode);
+            Assert.Equal(protection == "retained" ? "private" : null, policy.RetentionPolicy);
+        });
+        await graph.OnChildCompletedAsync(new(context, "entry-execution", "entry", [ActivityOutcomes.Done]));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => graph.PrepareCompletionCheckpointAsync(context, rows, DateTimeOffset.UnixEpoch).AsTask());
+        Assert.Contains("public result contract", error.Message);
+        if (syntax != "Variable")
+        {
+            var warning = Assert.Single(((ExecutionWarningCollector)context.Warnings!).Warnings);
+            Assert.DoesNotContain(secret, JsonSerializer.Serialize(warning), StringComparison.Ordinal);
+            Assert.Equal("result", warning.Details!["paths"]);
+        }
+    }
+
+    [Theory]
+    [InlineData("Acme.NullableStatus", "null")]
+    [InlineData("Acme.NullableRecord", "null")]
+    [InlineData("Acme.Status", "0")]
+    public async Task Retained_missing_graph_variable_rows_use_activated_nullability(string alias, string expected)
+    {
+        var registry = _serviceProvider.GetRequiredService<IWellKnownTypeRegistry>();
+        registry.RegisterType(alias == "Acme.NullableRecord" ? typeof(NullableRecord) : typeof(NullableStatus), alias);
+        var descriptor = Descriptor(variables: [new GraphActivityVariableDescriptor("status", "Status", Type(alias),
+            WellKnownRuntimeDurableValueStorageDrivers.Json, InitialValue: null)],
+            outputs: [Output("result")], outputMappings: [Mapping("result", new GraphActivityExpression(
+                TestExpressionHandler.Syntax, JsonSerializer.SerializeToElement("read-retained-status")))], requiredOutputReferenceKeys: ["result"]);
+        await using var lease = await ActivateGraphAsync(descriptor);
+        var graph = Assert.IsType<GraphActivity>(lease.Activity);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("retained-boundary"));
+        // Rehydrate without entry preparation: no newly initialized variable row can hide the retained fallback.
+        var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result);
+        Assert.Equal(expected, Assert.IsType<JsonElement>(result["result"]).GetRawText());
+        var output = Assert.Single(preparation.DurableValueChanges).State!;
+        Assert.Equal("output", output.Metadata[RuntimeMetadataKeys.BoundaryValueRole]);
+    }
+
+    private readonly record struct NullableRecord(int Value);
+    private enum NullableStatus { First = 1 }
+    private sealed class NullableRecordCatalog : IVariableTypeDescriptorCatalog, IVariableTypeDescriptorProvider
+    {
+        public IEnumerable<TypeDescriptor> GetDescriptors() => [new("Acme.NullableRecord", typeof(NullableRecord), "Record", "Test", "json",
+            new HashSet<CollectionKind>([CollectionKind.Single]), true, true, new HashSet<string> { "elsa.json" }),
+            new("Acme.NullableStatus", typeof(NullableStatus), "Status", "Test", "select", new HashSet<CollectionKind>([CollectionKind.Single]), true, true, new HashSet<string> { "elsa.json" })];
+        public IEnumerable<IGrouping<string, TypeDescriptor>> GetDescriptorsByCategory() => GetDescriptors().GroupBy(item => item.Category);
+    }
+
+    [Theory]
+    [InlineData("Input", "String")]
+    [InlineData("Input", "Int32")]
+    [InlineData(TestExpressionHandler.Syntax, "String")]
+    [InlineData(TestExpressionHandler.Syntax, "Int32")]
+    public async Task Omitted_optional_inputs_read_their_type_default_without_capturing_a_value(string syntax, string alias)
+    {
+        var input = Input("optional", name: "Optional") with { Type = Type(alias) };
+        var expression = new GraphActivityExpression(syntax, syntax == "Input" ? JsonSerializer.SerializeToElement(new { referenceKey = "optional" }) : JsonSerializer.SerializeToElement("read-optional"));
+        var descriptor = Descriptor(inputs: [input], outputs: [Output("result") with { Type = Type(alias) }],
+            outputMappings: [Mapping("result", expression)]);
+        var preparation = await PrepareGraphCompletionAsync(descriptor, new Dictionary<string, object?>());
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Result);
+        if (alias == "String") Assert.Equal(JsonValueKind.Null, Assert.IsType<JsonElement>(result["result"]).ValueKind);
+        else Assert.Equal(0, Assert.IsType<JsonElement>(result["result"]).GetInt32());
+        Assert.DoesNotContain(preparation.DurableValueChanges, change => change.State!.ValueId.Contains("input", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Retry_retains_an_intentionally_absent_optional_input_but_refuses_a_missing_present_row(bool knownAbsent)
+    {
+        var descriptor = Descriptor(inputs: [Input("optional", name: "Optional") with { Type = Type("String") }],
+            outputs: [Output("result") with { Type = Type("String") }],
+            outputMappings: [Mapping("result", new("Input", JsonSerializer.SerializeToElement(new { referenceKey = "optional" })))]);
+        await using var lease = await ActivateGraphAsync(descriptor);
+        var graph = Assert.IsType<GraphActivity>(lease.Activity);
+        var state = State("outer-execution") with { Attempt = new(2, "first", "prior"),
+            Provenance = ActivitySchedulingProvenance.From("workflow-execution", null, null, null, null, null, null, "retry",
+                new Dictionary<string, string> { [RuntimeMetadataKeys.RetryAbsentBoundaryInputs] = knownAbsent ? "[\"optional\"]" : "[]" }) };
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), state);
+        var entry = graph.PrepareEntryCheckpointAsync(context, new Dictionary<string, object?> { ["Optional"] = "fresh input must not replace retained absence" }, DateTimeOffset.UnixEpoch);
+        if (!knownAbsent)
+        {
+            Assert.Contains("captured input snapshot", (await Assert.ThrowsAsync<InvalidOperationException>(() => entry.AsTask())).Message);
+            return;
+        }
+        var changes = await entry;
+        await graph.OnChildCompletedAsync(new(context, "entry-execution", "entry", [ActivityOutcomes.Done]));
+        var completion = await graph.PrepareCompletionCheckpointAsync(context, changes.Select(change => change.State!).ToArray(), DateTimeOffset.UnixEpoch);
+        var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(Assert.IsAssignableFrom<IActivityCompletionTransition>(completion.Transition).Result);
+        Assert.Equal(JsonValueKind.Null, Assert.IsType<JsonElement>(result["result"]).ValueKind);
+    }
+
     [Fact]
     public async Task PrepareCompletion_ExposesCapturedGraphVariablesToPortableExpressions()
     {
@@ -922,10 +1080,13 @@ public sealed class GraphActivityExecutionTests : IDisposable
         services.AddWorkflowRuntime();
         new GraphActivitiesRuntimeFeature().ConfigureServices(services);
         new ExpressionsFeature().ConfigureServices(services);
+        services.AddSingleton<IVariableTypeDescriptorCatalog, NullableRecordCatalog>();
+        services.AddSingleton<IVariableTypeDescriptorProvider, NullableRecordCatalog>();
         services.AddSingleton<IPortableExpressionHandler, TestExpressionHandler>();
         new SerializationFeature().ConfigureServices(services);
         var provider = services.BuildServiceProvider();
         provider.GetRequiredService<IWellKnownTypeRegistry>().RegisterType(typeof(int), "Int32");
+        provider.GetRequiredService<IWellKnownTypeRegistry>().RegisterType(typeof(string), "String");
         return provider;
     }
 
@@ -939,14 +1100,23 @@ public sealed class GraphActivityExecutionTests : IDisposable
         {
             var parameters = request.ParameterValues;
             Assert.Equal(request.Definition.Parameters.Keys.Order(), parameters.Keys.Order());
+            if (request.Definition.Source == "warn-secret")
+            {
+                var secret = request.VariableReader!.Read("Secret").Value.GetString();
+                request.Warnings!.Report(new ExecutionWarning("VF-UNDEF-002", $"Omitted result.{secret}", Details: new Dictionary<string, string> { ["paths"] = $"result.{secret}" })
+                    { ProtectedForm = new("VF-UNDEF-002", "Omitted result member", Details: new Dictionary<string, string> { ["paths"] = "result" }) });
+                return ValueTask.FromResult(JsonSerializer.SerializeToElement(new { okay = true }));
+            }
             object result = request.Definition.Source switch
             {
                 "sum-public-inputs" => parameters["A"].GetInt32() + parameters["B"].GetInt32(),
                 "sum-reference-key-inputs" => parameters["numbers"].EnumerateArray().Sum(item => item.GetInt32()) + parameters["offset-value"].GetInt32(),
                 "count-distinct-inputs" => parameters["numbers"].GetInt32() +
                     parameters.Values.Single(value => value.ValueKind == JsonValueKind.String).GetString()!.Length + parameters.Count,
-                "constant" when parameters.Count == 0 => 42,
+                "constant" => 42,
                 "read-variable" => ReadVariable(request, "RunningTotal").GetInt32() + 2,
+                "read-optional" => request.ParameterValues["Optional"],
+                "read-retained-status" => ReadVariable(request, "Status"),
                 "wrong-type" => "not-an-int",
                 _ => throw new InvalidOperationException("Unexpected expression source.")
             };
@@ -1157,7 +1327,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
     private static GraphActivityExpression Default(string value) =>
         new("Literal", JsonSerializer.SerializeToElement(value));
 
-    private static JsonElement Type(string alias = "object") => JsonSerializer.SerializeToElement(new { alias });
+    private static JsonElement Type(string alias = "Any") => JsonSerializer.SerializeToElement(new { alias });
 
     private static ValueTask<object?> FailOnSentinel(
         GraphActivityExpression expression,

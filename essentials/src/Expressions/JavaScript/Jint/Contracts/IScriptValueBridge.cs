@@ -20,11 +20,14 @@ public interface IScriptValueBridge
 {
     /// <summary>Starts the values of one evaluation in <paramref name="engine"/>. Dispose it when the evaluation ends.</summary>
     IScriptValueEvaluation Begin(Engine engine);
+    /// <summary>Starts an evaluation with the selected executable's undefined policy.</summary>
+    IScriptValueEvaluation Begin(Engine engine, bool undefinedAsNull);
 }
 
 /// <summary>The values of one evaluation: what entered, and what leaves.</summary>
 public interface IScriptValueEvaluation : IDisposable
 {
+    IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning> Warnings { get; }
     /// <summary>
     /// Converts a value entering the evaluation into a plain, changeable JavaScript value (objects, real arrays), and
     /// records it under <paramref name="key"/> (such as <c>variables.order</c>) with the numbers it cannot hold exactly.

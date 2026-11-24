@@ -147,7 +147,7 @@ public sealed class Elsa3ReusableTerminalTests
             isReusable: true);
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        var warning = Assert.Single(result.Diagnostics);
+        var warning = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.OutcomeUnreached, warning.Code);
         Assert.Contains("'Rejected'", warning.Message, StringComparison.Ordinal);
         Assert.Equal([("done", "Done")], Outcomes(result.Value!));
@@ -171,7 +171,7 @@ public sealed class Elsa3ReusableTerminalTests
     {
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", Activity("end", "Elsa.End"))));
 
-        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, Assert.Single(result.Diagnostics).Code);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES").Code);
     }
 
     [Theory]

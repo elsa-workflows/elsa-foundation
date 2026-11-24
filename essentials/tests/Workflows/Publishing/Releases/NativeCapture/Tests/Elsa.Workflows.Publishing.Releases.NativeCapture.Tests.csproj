@@ -16,5 +16,6 @@
     <ProjectReference Include="../../../../../../src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
       <ProjectReference Include="../../../../../../src/Activities/Primitives/Releases/Elsa.Activities.Primitives.Releases.csproj" />
       <ProjectReference Include="../../../../../../src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/Elsa.Workflows.Publishing.Releases.csproj" />
+    <ProjectReference Include="../../../../../../src/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
   </ItemGroup>
 </Project>

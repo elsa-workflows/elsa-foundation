@@ -8,7 +8,7 @@ import type { ActivityOutputContract } from "../activityDefinitionTypes";
 import { useWorkflowReferenceAuthoring } from "../workflowReferenceAuthoring";
 import { sequenceActivity, sequenceNode } from "./fixtures";
 
-vi.mock("../api/activityDesign", () => ({ useWorkflowActivities: () => ({ data: { activities: [sequenceActivity] } }) }));
+vi.mock("../api/activityDesign", () => ({ useActivityAuthoringCapabilities: () => ({ data: { types: [] } }), useWorkflowActivities: () => ({ data: { activities: [sequenceActivity] } }) }));
 vi.mock("../api/expressions", () => ({ listExpressionDescriptors: async () => [
   { type: "ActivityResult", displayName: "Activity result", editingMode: "reference" },
   { type: "Liquid", displayName: "Liquid", editingMode: "code" },

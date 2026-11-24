@@ -493,7 +493,7 @@ public sealed class WorkflowExecutableInspector(
                         input.Name,
                         input.Type,
                         input.IsRequired,
-                        input.DefaultValue?.Clone()) { HasDefaultValue = input.DefaultValue.HasValue })
+                        input.DefaultValue?.Clone()) { HasDefaultValue = input.DefaultValue.HasValue, SupportsNull = input.IsNullable })
                     .ToArray());
 
     // A member read names its source and then each exact member, so it never reads as a whole-value read.

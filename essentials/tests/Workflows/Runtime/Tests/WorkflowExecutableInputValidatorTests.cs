@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class WorkflowExecutableInputValidatorTests
+public sealed partial class WorkflowExecutableInputValidatorTests
 {
     [Fact]
     public void Valid_scalar_input_is_normalized_by_ordinal_name()
@@ -96,16 +96,16 @@ public sealed class WorkflowExecutableInputValidatorTests
     }
 
     [Fact]
-    public void Missing_required_input_with_literal_default_is_materialized()
+    public void Missing_required_input_is_rejected_before_its_literal_default()
     {
         var validator = new WorkflowExecutableInputValidator(Registry(("String", typeof(string))));
         var result = validator.Validate(
             Contract(new WorkflowDeclaredInput("greeting", new TypeReference("String"), true, Json("\"hello\""))),
             Array.Empty<KeyValuePair<string, JsonElement>>());
 
-        Assert.True(result.IsValid);
-        Assert.Empty(result.Findings);
-        Assert.Equal("hello", result.NormalizedInputs["greeting"].GetString());
+        Assert.False(result.IsValid);
+        Assert.Equal(WorkflowExecutableInputValidationReasonCodes.MissingRequired, Assert.Single(result.Findings).ReasonCode);
+        Assert.Empty(result.NormalizedInputs);
     }
 
     [Theory]
@@ -128,7 +128,7 @@ public sealed class WorkflowExecutableInputValidatorTests
         }
 
         var finding = Assert.Single(result.Findings);
-        Assert.Equal(WorkflowExecutableInputValidationReasonCodes.IncompatibleValue, finding.ReasonCode);
+        Assert.Equal(WorkflowExecutableInputValidationReasonCodes.NullNotAllowed, finding.ReasonCode);
         Assert.Equal("value", finding.InputName);
         Assert.Empty(result.NormalizedInputs);
     }
@@ -220,7 +220,7 @@ public sealed class WorkflowExecutableInputValidatorTests
         var validator = new WorkflowExecutableInputValidator(Registry(("Int32", typeof(int)), ("String", typeof(string))));
         var contract = Contract(
             new WorkflowDeclaredInput("label", new TypeReference("String"), true),
-            new WorkflowDeclaredInput("count", new TypeReference("Int32"), true, Json("7")));
+            new WorkflowDeclaredInput("count", new TypeReference("Int32"), false, Json("7")));
 
         var result = validator.Validate(contract, [Pair("label", Json("\"present\""))]);
 

@@ -120,7 +120,7 @@ describe("ActivityDefinitionContractEditor", () => {
     expect(container.querySelector("[data-contract-field='storageDriverKey']")).toBeTruthy();
     expect(advanced.querySelector("[data-contract-field='type.alias']")).toBeNull();
     expect(advanced.querySelector("[data-contract-field='type.collectionKind']")).toBeNull();
-    expect(advanced.querySelector("[data-contract-field='isNullable']")).toBeTruthy();
+    expect(advanced.querySelector("[data-contract-field='isNullable']")).toBeNull();
     expect(input.textContent).not.toContain("CLR type names");
     expect(input.textContent).not.toContain("Type alias");
     expect(container.textContent).not.toContain("exact-revision draft queue");

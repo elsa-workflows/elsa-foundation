@@ -1,3 +1,5 @@
+using Elsa.Serialization.Core;
+using Elsa.Expressions.Core.Contracts;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
@@ -24,6 +26,17 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
     Elsa3ArgumentDefinitionToInputOutput argumentMapper,
     IActivityDefinitionLookup activityLookup) : IReusableActivityImportMaterializer
 {
+    private readonly IWellKnownTypeRegistry? _types;
+    private readonly IVariableTypeDescriptorCatalog? _typeDescriptors;
+    public Elsa3ReusableActivityImportMaterializer(IElsa3DefinitionConverter converter,
+        Elsa3ArgumentDefinitionToInputOutput argumentMapper, IActivityDefinitionLookup activityLookup,
+        IWellKnownTypeRegistry types, IVariableTypeDescriptorCatalog typeDescriptors)
+        : this(converter, argumentMapper, activityLookup)
+    {
+        _types = types;
+        _typeDescriptors = typeDescriptors;
+    }
+
     private const string SequenceTypeKey = "Elsa.Activities.Sequence.Activities.Sequence";
     private const string SequenceStructureKind = "elsa.sequence.structure";
     private const string StructureSchemaVersion = "1.0.0";
@@ -155,7 +168,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
     private static IReadOnlySet<string> CompletionOutcomes(Elsa3ConvertedDefinition target) =>
         target.BoundaryOutcomes.Select(outcome => outcome.Name).ToHashSet(StringComparer.Ordinal);
 
-    private static ImportedReusableActivity BuildActivity(
+    private ImportedReusableActivity BuildActivity(
         ReusableActivityImportItem item,
         Elsa3WorkflowDefinition source,
         Elsa3WorkflowDefinition lineage,
@@ -177,7 +190,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             definitionId,
             ReusableActivityImportIdentity.ImportedVersion(source.Version, item.ConverterRevision),
             item.SourceVersionId,
-            Elsa3ImportedActivityContract.Build(converted),
+            Elsa3ImportedActivityContract.Build(converted, _types, _typeDescriptors),
             // Schema 2: the contract may declare several boundary outcomes, reached through Complete nodes (D-5).
             BuildGraphManifest(converted),
             item.Dependencies.Select(dependency => dependency.TargetActivityDefinitionVersionId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),

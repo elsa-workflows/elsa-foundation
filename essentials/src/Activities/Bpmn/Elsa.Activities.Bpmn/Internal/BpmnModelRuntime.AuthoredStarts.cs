@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Services;
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -21,7 +22,7 @@ internal sealed partial class BpmnModelRuntime
             slot.Source?.IsSameOwnerAs(WorkflowActivationSource.Publishing) != true)
             throw new BpmnModelResourceMissingException();
         var supplied = submitted ?? new Dictionary<string, JsonElement>();
-        var validation = inputValidator.Validate(material.Model!.InputContract, supplied);
+        var validation = ModelInputValidation.Normalize(inputValidator, material.Model!.InputContract, supplied);
         BpmnInputSupport.Check(validation);
         var authority = CaptureNewStartAuthority(caller);
         var decision = await startPolicy.EvaluateAsync(new(material.Identity, WorkflowExecutableStartAuthorityKind.LiveReference,

@@ -800,7 +800,9 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         var applied = await Db.Service(access).ApplyAsync(upload.CollectionHandle, planId, ["warned-v1"], "warned", Scope);
         var status = await Db.Service(access).GetStatusAsync("warned", Scope);
 
-        Assert.Equal(Elsa3ActivityDiagnosticCodes.OutcomeUnreached, Assert.Single(applied.Warnings!).Code);
+        Assert.Equal(2, applied.Warnings!.Count);
+        Assert.Single(applied.Warnings, warning => warning.Code == Elsa3ActivityDiagnosticCodes.OutcomeUnreached);
+        Assert.Single(applied.Warnings, warning => warning.Code == "ELS3-NULL-POLICIES");
         Assert.Equal(applied.Warnings!.Select(warning => (warning.Code, warning.Message)), status.Warnings!.Select(warning => (warning.Code, warning.Message)));
         await using var import = Db.Import();
         var stored = (await import.Receipts.AsNoTracking().SingleAsync()).ContentJson;

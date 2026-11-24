@@ -40,7 +40,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
     {
         var options = featureOptions.Value;
         var engine = IsolatedJintEngine.Create(options, request.CancellationToken, timeProvider);
-        using var values = valueBridge.Begin(engine);
+        using var values = valueBridge.Begin(engine, request.UndefinedAsNull);
         // A host function reads variables through the body's session, as it does through an input binding's reader
         // (spec 1223 FR-003, FR-029; spec 1222 T047), and sees what the script holds for a variable it already read or
         // changed, so every read path to one variable gives the same value within the run (spec 1222 FR-034).
@@ -84,6 +84,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
         if (variables is not null)
             losses = [.. losses, .. JavaScriptValueWrites.WriteVariables(variables, request.Variables!, precisionPolicy, warnings)];
         losses = [.. losses, .. stateWriteLosses];
+        warnings.AddRange(values.Warnings);
 
         request.WorkflowState?.ThrowIfRefused();
 

@@ -98,6 +98,25 @@ public sealed class WriteLineJavaScriptInputEndToEndTests
         Assert.Null(hiddenFailure.Failure);
     }
 
+    [Fact]
+    public async Task Protected_undefined_binding_retains_safe_refusal_guidance()
+    {
+        await using var harness = NewHarness("wl-protected-undefined");
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
+            WriteLineNode("node-wl", "const privateValue = 'private-binding-canary'; undefined;", sensitive: true)),
+            allowPendingWorkOnTerminalCompletion: false,
+            allowAcceptedButFaulted: true);
+        var activity = run.State("node-wl");
+        Assert.Null(activity.InputSnapshot);
+        var inspection = await harness.Services.GetRequiredService<IActivityExecutionInspectionStore>()
+            .FindAsync(run.WorkflowState!.WorkflowExecutionId, activity.Execution.ActivityExecutionId);
+        var failure = Assert.Single(ActivityExecutionInspectionView.From(inspection!, canInspectSensitiveValues: true).ValueSnapshots).Failure!;
+        Assert.Contains("VF-UNDEF-001", failure.Message);
+        Assert.Contains("Use an expression", failure.Message);
+        Assert.Contains("return a value", failure.Message);
+        Assert.DoesNotContain("private-binding-canary", failure.Message);
+    }
+
     private static WorkflowExecutionHarness NewHarness(params string[] ids)
     {
         var harness = WorkflowExecutionHarness.Create()
@@ -121,14 +140,14 @@ public sealed class WriteLineJavaScriptInputEndToEndTests
         return harness;
     }
 
-    private static ExecutableNode WriteLineNode(string nodeId, string script)
+    private static ExecutableNode WriteLineNode(string nodeId, string script, bool sensitive = false)
     {
         // Leave the CLR contract unpinned: the harness reflects WriteLine's contract during Build and preserves
         // this Expression binding (see WorkflowExecutionHarness.NormalizeBinding).
         var binding = new RuntimeInputBinding(
             "text",
             new ValueTypeDescriptor("String"),
-            ValueProtectionPolicy.InstanceInline,
+            sensitive ? new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true) : ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding("JavaScript", script));
         return new ExecutableNode(

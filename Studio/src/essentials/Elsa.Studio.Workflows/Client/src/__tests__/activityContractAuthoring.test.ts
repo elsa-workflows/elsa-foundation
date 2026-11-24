@@ -33,7 +33,6 @@ describe("Activity contract authoring model", () => {
       name: "Customer note",
       displayName: "Customer note",
       type: { alias: "String", collectionKind: "Single" },
-      isNullable: false,
       storageDriverKey: "elsa.json",
       durability: "Required"
     });
@@ -156,7 +155,7 @@ describe("Activity contract authoring model", () => {
     expect(classifyBreakingContractTransition("input", input, { ...input, displayName: "Friendly value" })).toEqual([]);
     expect(classifyBreakingContractTransition("input", input, { ...input, name: "Renamed" })).not.toEqual([]);
     expect(classifyBreakingContractTransition("input", input, { ...input, type: { alias: "Number", collectionKind: "Single" } })).not.toEqual([]);
-    expect(classifyBreakingContractTransition("input", { ...input, isNullable: true }, { ...input, isNullable: false })).not.toEqual([]);
+    expect(classifyBreakingContractTransition("input", { ...input, isNullable: true }, { ...input, isNullable: false })).toEqual([]);
     expect(classifyBreakingContractTransition("input", { ...input, default: { syntax: "Literal", value: 1 } }, { ...input, default: null })).not.toEqual([]);
     expect(classifyBreakingContractTransition("input", input, { ...input, isRequired: true })).not.toEqual([]);
     expect(classifyBreakingContractTransition("output", { ...output, isRequired: true }, { ...output, isRequired: false })).not.toEqual([]);

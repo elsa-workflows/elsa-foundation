@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
@@ -106,6 +107,45 @@ public sealed class ActivityExecutionInspectionOutcomeTests
         await AssertProjectedOutcomeAsync(harness, run, LeafNodeId, ActivityOutcomes.Done);
         if (nested)
             await AssertProjectedOutcomeAsync(harness, run, RootNodeId, ActivityOutcomes.Done);
+    }
+
+    [Theory]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    public async Task Null_and_absent_inputs_survive_real_suspend_and_resume(PersistenceMode mode)
+    {
+        await using var harness = NewHarness(mode);
+        var target = WorkflowExecutableResumeTarget.ComposeScopedId(LeafNodeId, Event.ResumeTargetId);
+        var bindings = new Dictionary<string, RuntimeInputBinding>
+        {
+            [nameof(Event.EventName)] = NewLiteral(nameof(Event.EventName), EventName),
+            [nameof(Event.CanStartWorkflow)] = NewLiteral(nameof(Event.CanStartWorkflow), false),
+            [nameof(Event.CorrelationId)] = new(nameof(Event.CorrelationId), new("String"), ValueProtectionPolicy.InstanceInline,
+                RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Null(new("String"), ValueProtectionPolicy.InstanceInline)),
+            [nameof(Event.ExpiresAt)] = new(nameof(Event.ExpiresAt), new("System.DateTimeOffset"), ValueProtectionPolicy.InstanceInline,
+                RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Absent(new("System.DateTimeOffset"), ValueProtectionPolicy.InstanceInline))
+            // Explicit retained Absent binding: the hand-built harness otherwise supplies CLR null for omitted properties.
+        };
+        var executable = new WorkflowExecutable(WorkflowExecutionHarness.Identity, NewLeaf(typeof(Event), bindings),
+            new Dictionary<string, WorkflowExecutableResumeTarget> { [target] = new(target, LeafNodeId, "ResumeAsync", new Dictionary<string, string>(), Event.ResumeTargetId) },
+            WorkflowExecutionHarness.Timestamp, new Dictionary<string, string>(),
+            new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion,
+                [new WorkflowDeclaredInput("topic", new TypeReference("String"), true, isNullable: true)]), [], IncidentStrategyBuiltIns.FaultReference);
+        var initial = await harness.RunAsync(executable, new Dictionary<string, JsonElement> { ["topic"] = JsonSerializer.SerializeToElement<object?>(null) });
+        var suspended = initial.State(LeafNodeId);
+        Assert.Equal(ActivityExecutionStatus.Suspended, suspended.Status);
+        Assert.Equal(ValuePresence.ExplicitNull, suspended.InputSnapshot!.Values[nameof(Event.CorrelationId)].Presence);
+        Assert.Equal(ValuePresence.Absent, suspended.InputSnapshot.Values[nameof(Event.ExpiresAt)].Presence);
+        var resumed = await harness.ResumeAsync(executable.Identity, Assert.Single(suspended.BookmarkIds), suspended.InvocationId,
+            LeafNodeId, target, EventStimulus.StimulusType, EventStimulus.Hash(EventName), JsonSerializer.SerializeToElement(new { eventName = EventName }));
+        Assert.Equal(WorkflowExecutionStatus.Completed, resumed.WorkflowState!.Status);
+        var completed = resumed.State(LeafNodeId);
+        Assert.Equal(ValuePresence.ExplicitNull, completed.InputSnapshot!.Values[nameof(Event.CorrelationId)].Presence);
+        Assert.Equal(ValuePresence.Absent, completed.InputSnapshot.Values[nameof(Event.ExpiresAt)].Presence);
+        var rows = (await harness.Services.GetRequiredService<IDurableValueStateStore>()
+            .ListPageAsync(new(WorkflowExecutionHarness.WorkflowExecutionId, 100))).Items;
+        var inputs = RuntimeInputBindingStateProjection.ProjectWorkflowInputEnvelopes(rows);
+        Assert.Equal(ValuePresence.ExplicitNull, inputs["topic"].Presence);
     }
 
     /// <summary>

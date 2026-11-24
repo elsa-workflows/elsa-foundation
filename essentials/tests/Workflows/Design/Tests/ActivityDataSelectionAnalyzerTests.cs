@@ -305,6 +305,29 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.Equal("consumer/inputs/CustomerId", Assert.Single(result.Findings, finding => finding.Type == "ValueFlow/ScopeBoundary").Path);
     }
 
+    [Theory]
+    [InlineData("Literal")]
+    [InlineData("literal")]
+    [InlineData("LITERAL")]
+    public async Task SetOutput_metadata_and_conversion_use_the_declared_output_type(string syntax)
+    {
+        var previewer = new RecordingPreviewer();
+        using var provider = Provider(services => services.AddSingleton<IActivityBindingConversionPreviewer>(previewer));
+        var value = new ArgumentState("value", ScopeFreeResult("producer", "known"), null, null, null, null)
+            { Conversion = new(AuthoredValueConversionMode.None) };
+        var setter = new ActivityNode("setter", "test", [new("name", new ArgumentValue("count", syntax), null, null, null, null), value], [])
+            { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new("Int32")) };
+        var document = Document(Sequence(Node("producer"), setter)) with
+            { Outputs = [new("count-key", "count", new("String"), null, "Count", null, false)] };
+        var analyzer = Analyzer(provider);
+        var answer = await analyzer.AnalyzeAsync(document, new("setter", "value"), new() { IncludeSources = false, PreviewBindingConversion = true });
+        var draft = await analyzer.AnalyzeAsync(document with { ValidateBindingConversions = true });
+        Assert.Empty(answer.Findings); Assert.Equal("String", answer.Target!.Type.Alias); Assert.True(answer.Target.IsNullable);
+        Assert.Equal("Identity", answer.BindingConversion!.Operation); Assert.Null(answer.BindingConversion.Rejection);
+        Assert.Empty(draft.Findings); Assert.Equal(2, previewer.Calls.Count);
+        Assert.All(previewer.Calls, call => Assert.Equal(("String", ValueRepresentation.TextValue, "String", AuthoredValueConversionMode.None), call));
+    }
+
     [Fact]
     public async Task An_untouched_intrinsic_value_uses_the_actual_selected_variable_declaration()
     {
@@ -313,7 +336,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         var document = Document(Sequence(intrinsic)) with { Variables = [Variable("customer", "Customer")] };
         var result = await Analyzer(provider).AnalyzeAsync(document, new("set", "value"));
         Assert.Equal(new TypeReference("String"), result.Target!.Type);
-        Assert.False(result.Target.IsNullable);
+        Assert.True(result.Target.IsNullable); // The selected String TYPE accepts null.
         Assert.True(result.Target.IsRequired);
         Assert.Empty(result.Findings);
     }
@@ -703,7 +726,8 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
             TypeReference targetType, AuthoredValueConversionRequest? conversion)
         {
             Calls.Add((sourceType.Alias, representation, targetType.Alias, conversion!.Mode));
-            return new(sourceType, targetType, null, "NoneModeContractMismatch", "None requires matching contracts.");
+            return sourceType == targetType ? new(sourceType, targetType, "Identity")
+                : new(sourceType, targetType, null, "NoneModeContractMismatch", "None requires matching contracts.");
         }
     }
 

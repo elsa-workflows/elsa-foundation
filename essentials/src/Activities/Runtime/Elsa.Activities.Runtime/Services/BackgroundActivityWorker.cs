@@ -178,7 +178,8 @@ public sealed class BackgroundActivityWorker(
                 throw new InvalidOperationException("BG-ACT-002: Activation returned a different type than the pinned background activity.");
             var transition = await activation.Activity.ExecuteAsync(new ActivityExecutionContext(
                 request.WorkflowExecutionId, request.InvocationId, request.AttemptId, request.ExecutableNodeId, cancellationToken,
-                triggerPayload: null, triggerNodeId: null, request.OperationKey, request.TargetOperationKey));
+                triggerPayload: null, triggerNodeId: null, request.OperationKey, request.TargetOperationKey)
+                { DefaultOnNull = executable.ValuePolicies.DefaultOnNull, UndefinedAsNull = executable.ValuePolicies.UndefinedAsNull });
             // C6 is a fact about the body, so the component sees it only after the body ran.
             var stagedCoordinatorEffects =
                 dispatch?.TakeWorkflowDispatch(request.WorkflowExecutionId, request.ActivityExecutionId) is not null |

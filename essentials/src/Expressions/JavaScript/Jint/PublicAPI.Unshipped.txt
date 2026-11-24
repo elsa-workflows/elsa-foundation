@@ -72,3 +72,5 @@ const Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.MaxSafeI
 Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.Decide(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext! context) -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision!
 static Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.Diagnose(Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss! loss) -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!
 static Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.Reason(Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber! number) -> string!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge.Begin(Jint.Engine! engine, bool undefinedAsNull) -> Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Warnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>!

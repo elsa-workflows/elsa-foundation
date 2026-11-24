@@ -40,8 +40,13 @@ public class Elsa3MappingFeature : IShellFeature
     [ManifestSetting(DisplayName = "Source time zone", Description = "The IANA time zone of the Elsa 3 server, for example Europe/Amsterdam; used only with the date interpretation SourceTimeZone.", Category = "Conversion")]
     public string? SourceTimeZone { get; set; }
 
+    /// <summary>Records Elsa 3 null and undefined behavior on converted workflows.</summary>
+    [ManifestIgnore] // Engineer configuration only; Q6 adds no Studio policy control.
+    public bool ApplyElsa3NullPolicies { get; set; } = true;
+
     public virtual void ConfigureServices(IServiceCollection services)
     {
+        services.Configure<Elsa3MappingOptions>(options => options.ApplyElsa3NullPolicies = ApplyElsa3NullPolicies);
         var conversion = new Elsa3ConversionOptions { DateInterpretation = DateInterpretation, SourceTimeZone = SourceTimeZone };
         // A setting that cannot be applied fails shell activation, not the first conversion.
         conversion.Validate();

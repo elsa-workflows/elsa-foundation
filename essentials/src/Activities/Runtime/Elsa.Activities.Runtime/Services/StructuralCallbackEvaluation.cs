@@ -189,7 +189,7 @@ internal static class StructuralCallbackEvaluation
                     parentState,
                     variableScope: null,
                     liveChildActivities: liveChildActivities,
-                    scopedVariableEnvelopes: scopedVariableEnvelopes);
+                    scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies);
                 history?.SetAttempt(context.AttemptId);
 
                 continuation = await ActivityHistory.ObserveAsync(history, () => definition.InvokeAsync(parentActivity, context), result => result?.Kind.ToString() ?? "Unknown");
@@ -389,7 +389,7 @@ internal static class StructuralCallbackEvaluation
                                        ?? ActivityTransition.Complete(ActivityUnit.Value, resolvedContinuation.Selection!);
             var completionProjection = await serviceProvider.GetRequiredService<ActivityCompletionProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId, currentParentState.InvocationId, openAttempt, contract, completionTransition, completedAt, cancellationToken);
-            var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
+            var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().WithValuePolicies(executable.ValuePolicies, resolvedContext.Warnings).ProjectAsync(
                 workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode,
                 (IActivityCompletionTransition)completionTransition, completionProjection, completedAt, cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
@@ -449,6 +449,7 @@ internal static class StructuralCallbackEvaluation
                     .ToArray();
             }
 
+            currentParentState = currentParentState.WithWarnings((resolvedContext.Warnings as ExecutionWarningCollector)?.Warnings ?? []);
             containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
                 payloadCapturePolicy, scopeService, parentExecutableNode, currentParentState,
                 workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, timeProvider.GetUtcNow());

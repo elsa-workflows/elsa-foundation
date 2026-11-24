@@ -37,7 +37,7 @@ public sealed class Elsa3ReplacedActivityTypeTests
 
         var result = await ConversionServices.ConvertAsync(catalog, ConversionServices.Definition(Sequence("root", Activity("shared", "Acme.Shared"))));
 
-        var diagnostic = Assert.Single(result.Diagnostics);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.AmbiguousAlias, diagnostic.Code);
         Assert.Contains(Elsa.Activities.Design.Core.Reconciliation.ActivityCatalogStableIds.DefinitionId(typeof(FirstSharedClaimActivity).FullName!)!, diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains(Elsa.Activities.Design.Core.Reconciliation.ActivityCatalogStableIds.DefinitionId(typeof(SecondSharedClaimActivity).FullName!)!, diagnostic.Message, StringComparison.Ordinal);
@@ -63,7 +63,7 @@ public sealed class Elsa3ReplacedActivityTypeTests
 
         var result = await ConversionServices.ConvertAsync(catalog, ConversionServices.Definition(Sequence("root", Activity("invoice", "Acme.SendInvoice"))));
 
-        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnmappedType, Assert.Single(result.Diagnostics).Code);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnmappedType, Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES").Code);
     }
 
     [Fact]

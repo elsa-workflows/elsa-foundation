@@ -18,6 +18,9 @@ public interface IJavaScriptScriptOutcomeAnalyzer
 /// <summary>What a script's source says about its outcome selection, as far as literals decide it.</summary>
 public sealed class JavaScriptScriptOutcomeAnalysis
 {
+    /// <summary>Whether the parsed function body contains any return statement. Runtime still checks the path taken.</summary>
+    public bool HasReturnStatement { get; init; }
+
     public JavaScriptScriptOutcomeAnalysis(
         IReadOnlyList<string> literalOutcomes,
         IReadOnlyList<string> returnedStrings,

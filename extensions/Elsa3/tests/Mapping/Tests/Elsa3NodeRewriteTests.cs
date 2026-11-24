@@ -56,7 +56,7 @@ public sealed class Elsa3NodeRewriteTests
     {
         var result = await ConvertForkAsync(JsonDocument.Parse(joinMode).RootElement);
 
-        var diagnostic = Assert.Single(result.Diagnostics);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
         Assert.Contains($"'{joinMode}'", diagnostic.Message, StringComparison.Ordinal);
     }
@@ -70,7 +70,7 @@ public sealed class Elsa3NodeRewriteTests
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", fork)));
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Empty(result.Diagnostics);
+        Assert.Empty(result.Diagnostics.Where(diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES"));
         // No threshold (absent or null) means the Parallel waits for every branch.
         var payload = Node(result.Value!.State, "fork").Structure!.Payload;
         Assert.True(!payload.TryGetProperty("threshold", out var threshold) || threshold.ValueKind == JsonValueKind.Null);
@@ -113,7 +113,7 @@ public sealed class Elsa3NodeRewriteTests
     {
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", Activity("end", type))));
 
-        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, Assert.Single(result.Diagnostics).Code);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES").Code);
     }
 
     [Theory]
@@ -125,7 +125,7 @@ public sealed class Elsa3NodeRewriteTests
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", complete)));
 
-        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, Assert.Single(result.Diagnostics).Code);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES").Code);
     }
 
     /// <summary>Spec 1208 FR-029: several outcomes convert only in a reusable workflow; Elsa 4 'finish' names one.</summary>
@@ -137,7 +137,7 @@ public sealed class Elsa3NodeRewriteTests
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
 
-        var diagnostic = Assert.Single(result.Diagnostics);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
         Assert.Contains("'finish'", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("usable as an activity", diagnostic.Guidance, StringComparison.Ordinal);
@@ -155,7 +155,7 @@ public sealed class Elsa3NodeRewriteTests
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", @switch)));
 
-        var diagnostic = Assert.Single(result.Diagnostics);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
         Assert.Contains("'same'", diagnostic.Message, StringComparison.Ordinal);
         Assert.Equal("$.root.activities[0].cases[1]", diagnostic.Path);
@@ -195,7 +195,7 @@ public sealed class Elsa3NodeRewriteTests
     {
         var result = await ConvertSwitchAsync("true", "var a = 1; a > 0");
 
-        var diagnostic = Assert.Single(result.Diagnostics);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
         Assert.Contains("'case1'", diagnostic.Message, StringComparison.Ordinal);
         Assert.Equal("$.root.activities[0].cases[1].condition", diagnostic.Path);
@@ -584,7 +584,7 @@ public sealed class Elsa3NodeRewriteTests
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", @switch)));
 
-        var diagnostic = Assert.Single(result.Diagnostics);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
         Assert.Contains("MatchAny", diagnostic.Message, StringComparison.Ordinal);
     }

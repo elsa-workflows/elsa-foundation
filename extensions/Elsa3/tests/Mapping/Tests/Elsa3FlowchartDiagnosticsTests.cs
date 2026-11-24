@@ -95,7 +95,7 @@ public sealed class Elsa3FlowchartDiagnosticsTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         Assert.Equal(["first:Done->left"], Connections(result.Value!.State.RootActivity!));
-        var warning = Assert.Single(result.Diagnostics);
+        var warning = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved, warning.Code);
         Assert.Equal("$.root.connections[2]", warning.Path);
     }
@@ -132,7 +132,7 @@ public sealed class Elsa3FlowchartDiagnosticsTests
                 ("$.root.connections[0]", Elsa3ActivityDiagnosticCodes.GraphOutcomeUnmapped),
                 ("$.root.connections[1]", Elsa3ActivityDiagnosticCodes.GraphConnectionInvalid)
             ],
-            result.Diagnostics.Select(diagnostic => (diagnostic.Path!, diagnostic.Code)));
+            result.Diagnostics.Where(diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES").Select(diagnostic => (diagnostic.Path!, diagnostic.Code)));
     }
 
     private static Elsa3WorkflowDefinition Definition(string @case)

@@ -12,6 +12,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+      <ProjectReference Include="..\..\..\..\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
 	  <ProjectReference Include="..\..\..\..\essentials\src\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
 	  <ProjectReference Include="..\..\..\..\essentials\src\Expressions\JavaScript\Core\Elsa.Expressions.JavaScript.Core.csproj" />
 	  <ProjectReference Include="..\..\..\..\essentials\src\Serialization\Core\Elsa.Serialization.Core.csproj" />

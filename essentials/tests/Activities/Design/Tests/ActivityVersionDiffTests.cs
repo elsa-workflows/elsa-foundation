@@ -9,6 +9,16 @@ namespace Elsa.Activities.Design.Tests;
 public sealed class ActivityVersionDiffTests
 {
     [Fact]
+    public async Task Authored_contracts_ignore_retired_nullability_flags_when_the_type_is_unchanged()
+    {
+        var result = await new ActivityVersionDiffer().DiffAsync(Request(
+            Contract(inputs: [Input("value", nullable: true)], outputs: [Output("result", nullable: true)]),
+            Contract(inputs: [Input("value", nullable: false)], outputs: [Output("result", nullable: false)])));
+        Assert.Empty(result.Changes);
+        Assert.Equal(ActivityVersionBump.None, result.RequiredBump);
+    }
+
+    [Fact]
     public async Task Node_name_only_change_is_visible_patch_and_nonbehavioral()
     {
         var request = Request(Contract(), Contract()) with
@@ -27,7 +37,7 @@ public sealed class ActivityVersionDiffTests
     {
         { "no change", Contract(), Contract(), ActivityVersionCompatibility.Identical, ActivityVersionBump.None },
         { "optional input added", Contract(), Contract(inputs: [Input("added")]), ActivityVersionCompatibility.Compatible, ActivityVersionBump.Minor },
-        { "required input with default added", Contract(), Contract(inputs: [Input("added", required: true, @default: Default("1"))]), ActivityVersionCompatibility.Compatible, ActivityVersionBump.Minor },
+        { "required input with default added", Contract(), Contract(inputs: [Input("added", required: true, @default: Default("1"))]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
         { "required input without default added", Contract(), Contract(inputs: [Input("added", required: true)]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
         { "optional output added", Contract(), Contract(outputs: [Output("added")]), ActivityVersionCompatibility.Compatible, ActivityVersionBump.Minor },
         { "required output added", Contract(), Contract(outputs: [Output("added", required: true)]), ActivityVersionCompatibility.Breaking, ActivityVersionBump.Major },
@@ -58,7 +68,9 @@ public sealed class ActivityVersionDiffTests
         ActivityVersionCompatibility compatibility,
         ActivityVersionBump bump)
     {
-        var result = await new ActivityVersionDiffer().DiffAsync(Request(before, after));
+        var result = await new ActivityVersionDiffer().DiffAsync(Request(before, after,
+            fromProvider: _.Contains("nullability") ? new("elsa.clr-activity", "1", Json("{}")) : null,
+            toProvider: _.Contains("nullability") ? new("elsa.clr-activity", "1", Json("{}")) : null));
 
         Assert.Equal(compatibility, result.Compatibility);
         Assert.Equal(bump, result.RequiredBump);
@@ -94,7 +106,9 @@ public sealed class ActivityVersionDiffTests
 
         var result = await new ActivityVersionDiffer().DiffAsync(Request(
             Contract(inputs: [ValueMember.Baseline.ToInput()], outputs: [ValueMember.Baseline.ToOutput()]),
-            Contract(inputs: [changed.ToInput()], outputs: [changed.ToOutput()])));
+            Contract(inputs: [changed.ToInput()], outputs: [changed.ToOutput()]),
+            fromProvider: field == "IsNullable" ? new("elsa.clr-activity", "1", Json("{}")) : null,
+            toProvider: field == "IsNullable" ? new("elsa.clr-activity", "1", Json("{}")) : null));
 
         Assert.Equal(
             [$"{area}:input:value:{kind}", $"{area}:output:value:{kind}"],
@@ -102,11 +116,11 @@ public sealed class ActivityVersionDiffTests
     }
 
     [Fact]
-    public async Task Nullability_changes_include_exact_member_projections()
+    public async Task CLR_nullability_changes_include_exact_member_projections()
     {
         var result = await new ActivityVersionDiffer().DiffAsync(Request(
             Contract(inputs: [Input("value", nullable: true)]),
-            Contract(inputs: [Input("value")])));
+            Contract(inputs: [Input("value")]), fromProvider: new("elsa.clr-activity", "1", Json("{}")), toProvider: new("elsa.clr-activity", "1", Json("{}"))));
 
         var change = Assert.Single(result.Changes);
         Assert.Equal("NullabilityChanged", change.Kind);

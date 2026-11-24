@@ -20,7 +20,7 @@ public sealed class WriteLine : Activity<ActivityUnit>
     /// <summary>The text to write.</summary>
     [ActivityInput(Key = "text")]
     [Required]
-    public string Text { get; set; } = null!;
+    public string? Text { get; set; }
 
     /// <summary>Writes the hydrated text to the console and completes with a unit result.</summary>
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)

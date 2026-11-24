@@ -46,8 +46,10 @@ internal sealed class JavaScriptScriptOutcomeAnalyzer(IEnumerable<JavaScriptHost
             returnedStrings,
             JavaScriptReservedNames.CollectCompleteDeclarations(parsed).Select(JavaScriptReservedNames.RangeOf).ToArray(),
             DeclaredNames(parsed, name => StringComparer.Ordinal.Equals(name, VariablesRoot)),
-            DeclaredNames(parsed, _shadowable.Contains));
+            DeclaredNames(parsed, _shadowable.Contains)) { HasReturnStatement = HasReturn(parsed) };
     }
+
+    private static bool HasReturn(Node node) => node is not IFunction && (node is ReturnStatement || node.ChildNodes.Any(HasReturn));
 
     private static string[] DeclaredNames(Node parsed, Func<string, bool> matches) =>
         JavaScriptReservedNames.CollectDeclarations(parsed, matches)

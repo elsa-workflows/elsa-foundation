@@ -14,9 +14,11 @@ namespace Elsa.Workflows.Publishing.Releases.NativeCapture.Tests;
 public sealed class NativePrimitiveOwnerVerificationTests
 {
     [Theory]
-    [InlineData("1")]
-    [InlineData("2")]
-    public async Task Actual_Graph_and_WriteLine_publications_build_and_reverify_a_complete_frozen_bundle(string schema)
+    [InlineData("1", false)]
+    [InlineData("2", false)]
+    [InlineData("1", true)]
+    [InlineData("2", true)]
+    public async Task Actual_Graph_and_WriteLine_publications_build_and_reverify_a_complete_frozen_bundle(string schema, bool currentScannerInputs)
     {
         await WithCaptured(schema, true, async (f, content, roots) =>
         {
@@ -33,7 +35,7 @@ public sealed class NativePrimitiveOwnerVerificationTests
             var verdict = await f.Service<IReleaseSemanticVerifier>().VerifyAsync(reopened, new() { ExpectedDigest = bundle.Digest });
             Assert.Equal(ReleaseSemanticStatus.Verified, verdict.Status); Assert.Empty(verdict.Diagnostics);
             // Complete captured closure and transport round trip only; owner import/start admission is separate.
-        });
+        }, currentScannerInputs: currentScannerInputs);
     }
 
     [Fact]
@@ -100,10 +102,10 @@ public sealed class NativePrimitiveOwnerVerificationTests
     }
 
     private static async Task WithCaptured(string schema, bool primitiveOwner,
-        Func<PublishedNativeFixture, IReleaseContentReader, IReadOnlyList<ReleaseBundleRoot>, Task> check, bool placementOwner = true)
+        Func<PublishedNativeFixture, IReleaseContentReader, IReadOnlyList<ReleaseBundleRoot>, Task> check, bool placementOwner = true, bool currentScannerInputs = false)
     {
         await using var f = await PublishedNativeFixture.Create(graphOwner: true, primitiveOwner: primitiveOwner, releaseVerification: true, placementOwner: placementOwner);
-        var child = await f.PublishClrCatalog(); var graph = await f.PublishReusableGraph(child, schema);
+        var child = await f.PublishClrCatalog(currentScannerInputs); var graph = await f.PublishReusableGraph(child, schema);
         await f.SeedClrWorkflow(graph); await f.Publish("actual-clr-workflow-version");
         await f.Source().ExecuteAsync([new(NativeReleaseCaptureSelections.WorkflowDefinitionVersion, "actual-clr-workflow-version", null, ReleaseRootAction.ActivateServing)], new(), async (root, token) =>
         {

@@ -52,7 +52,7 @@ internal sealed class StandaloneTriggerTargetDiscovery(TriggerTargetResolver res
             target.Available ? TriggerTargetState.Available : target.Slot?.ActiveActivationId is null ? TriggerTargetState.Unpublished : TriggerTargetState.Unavailable,
             target.InputContract, target.InputContract is null ? null : RuntimeIngressAdmission.ComputeInputContractFingerprint(target.InputContract),
             target.Source?.DefinitionVersionId, target.Source?.ArtifactVersion, target.Source?.ActivationId, target.Slot?.Revision,
-            target.Model?.SupportsWorkflowOwnedHttpResponse ?? false, target.Findings);
+            target.Model?.SupportsWorkflowOwnedHttpResponse ?? false, target.Findings) { ValuePolicies = target.Native?.ValuePolicies ?? WorkflowValuePolicies.Off, InputSemantics = target.Native is null ? TriggerInputSemantics.ModelOwned : TriggerInputSemantics.Native };
 
     private static string SlotName(WorkflowExecutableSourceReference source)
     {

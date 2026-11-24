@@ -269,7 +269,7 @@ internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader 
             else if (input.Type.Alias != "String" || input.Type.CollectionKind != CollectionKind.Single || value.GetProperty("value").ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
                 throw Refuse("graph_literal_type_unsupported");
         }
-        if (child.Inputs.Values.Any(input => input.IsRequired && !input.HasDefault && !seen.Contains(input.Key))) throw Refuse("graph_required_input_missing");
+        if (child.Inputs.Values.Any(input => input.IsRequired && !seen.Contains(input.Key))) throw Refuse("graph_required_input_missing");
     }
     private static void PlacedInputs(ExecutableNode node, ExecutableActivityTemplateOccurrenceOverlay overlay)
     {

@@ -154,7 +154,7 @@ internal sealed class RuntimeCatalogReleaseInspector(RuntimeCapturedContentCache
             Fields(input, "referenceKey", "name", "type", "isRequired", "isNullable", "default", "storageDriverKey", "durability", "displayName", "description", "category", "order", "uiHint", "uiSpecifications");
             var key = Text(input, "referenceKey"); var type = Type(input.GetProperty("type")); Presentation(input); Durability(input); drivers.Add(Text(input, "storageDriverKey"));
             if (!runtime.Inputs.TryGetValue(key, out var actual) || actual.Name != Text(input, "name") || actual.Type != type ||
-                actual.IsRequired != Boolean(input, "isRequired") || actual.IsNullable != Boolean(input, "isNullable")) throw Refuse("public_input_template_mismatch");
+                actual.IsRequired != Boolean(input, "isRequired") || version.ProviderKey == ClrProvider && actual.IsNullable != Boolean(input, "isNullable")) throw Refuse("public_input_template_mismatch");
             var hasDefault = input.TryGetProperty("default", out var value) && value.ValueKind != JsonValueKind.Null;
             if (hasDefault)
             {
@@ -171,7 +171,7 @@ internal sealed class RuntimeCatalogReleaseInspector(RuntimeCapturedContentCache
         {
             Fields(output, "referenceKey", "name", "type", "isRequired", "isNullable", "storageDriverKey", "durability", "displayName", "description", "category", "order", "uiHint", "uiSpecifications", "sourceRepresentation");
             var key = Text(output, "referenceKey"); var type = Type(output.GetProperty("type")); Presentation(output); Durability(output); drivers.Add(Text(output, "storageDriverKey"));
-            _ = Text(output, "name"); _ = Boolean(output, "isNullable");
+            _ = Text(output, "name"); if (version.ProviderKey == ClrProvider) _ = Boolean(output, "isNullable");
             if (!runtime.Result.Projections.TryGetValue(key, out var actual) || actual.Type != type || actual.IsRequired != Boolean(output, "isRequired"))
                 throw Refuse("public_output_template_mismatch");
             ValueRepresentation? representation = null;

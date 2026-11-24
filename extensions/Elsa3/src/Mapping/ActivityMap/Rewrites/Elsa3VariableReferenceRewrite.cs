@@ -44,7 +44,7 @@ internal sealed class Elsa3VariableReferenceRewrite : IElsa3NodeRewrite
 
         if (context.Plan.Definition.Variables.FirstOrDefault(declared => StringComparer.Ordinal.Equals(declared.Id, id)) is { } workflowVariable)
         {
-            Pin(context, new VariableReference(id, VariableReference.WorkflowScopeId), context.ResolveType(workflowVariable.TypeName ?? "Object"));
+            Pin(context, new VariableReference(id, VariableReference.WorkflowScopeId), context.Plan.WorkflowVariableTypes.GetValueOrDefault(workflowVariable) ?? context.ResolveType(workflowVariable.TypeName ?? "Object"));
             return ValueTask.CompletedTask;
         }
 

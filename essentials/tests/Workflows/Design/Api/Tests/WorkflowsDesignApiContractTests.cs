@@ -84,6 +84,30 @@ public sealed class WorkflowsDesignApiContractTests
         }
         """;
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Definition_API_round_trip_preserves_engineer_null_policies_without_authored_nullable_flags(bool defaultOnNull, bool undefinedAsNull)
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+        var body = JsonSerializer.Serialize(new { name = "Null policies", state = new {
+            variables = Array.Empty<object>(), rootActivity = new { nodeId = "root", activityVersionId = "activity-version", inputs = Array.Empty<object>(), outputs = Array.Empty<object>() },
+            inputs = new[] { new { referenceKey = "value", name = "Value", type = new { alias = "String", collectionKind = "Single" }, displayName = "Value", isNullable = true, isRequired = false } },
+            outputs = Array.Empty<object>(), strategyOptions = new { nullHandling = new { defaultOnNull, undefinedAsNull } }
+        }});
+        using var request = LifecycleRequest(HttpMethod.Post, "/design/workflows/definitions/submit", body);
+        using var response = await host.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(defaultOnNull, host.Domain.LastSubmittedState!.StrategyOptions!.NullHandling!.DefaultOnNull);
+        Assert.Equal(undefinedAsNull, host.Domain.LastSubmittedState.StrategyOptions.NullHandling.UndefinedAsNull);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var state = json.RootElement.GetProperty("version").GetProperty("state");
+        Assert.Equal(defaultOnNull, state.GetProperty("strategyOptions").GetProperty("nullHandling").GetProperty("defaultOnNull").GetBoolean());
+        Assert.Equal(undefinedAsNull, state.GetProperty("strategyOptions").GetProperty("nullHandling").GetProperty("undefinedAsNull").GetBoolean());
+        Assert.False(state.GetProperty("inputs")[0].TryGetProperty("isNullable", out _));
+    }
+
     [Fact]
     public void Mapper_retains_the_57_owned_operations_and_two_additive_candidate_validation_routes()
     {

@@ -29,7 +29,7 @@ A script reads a workflow variable by name:
 4. For an expression with computed or opaque reads, add the fallback marker with the conservative read report (the
    variables visible at that point). Publish succeeds.
 5. Refuse (publish diagnostic) when:
-   - a literal name resolves to no visible declaration (spec 1216 FR-027);
+   - a literal name resolves to no visible declaration (spec 1232 FR-027);
    - a literal name resolves to a transient (non-durable) variable (retained rule).
 6. Warn when a literal name now resolves to a different declaration than in the previously published version; warn
    when a computed read's candidates include a protected or a transient variable.
@@ -44,7 +44,7 @@ A script reads a workflow variable by name:
   read then resolves the name nearest-scope-first over the candidates, is protection-checked for the variable actually
   read, and is recorded (name, declaring scope, present/absent).
 - A computed name that matches no visible variable reads `undefined` in JavaScript and nil in Liquid, records a warning,
-  and is recorded as absent (spec 1216 FR-025/FR-026).
+  and is recorded as absent (spec 1232 FR-025/FR-026).
 - A withheld (no-permission) value is not provided; the step faults with the protection diagnostic.
 - A computed name that resolves to a transient variable faults the step; the fault names the node and the variable
   (ADR 0089 R3).

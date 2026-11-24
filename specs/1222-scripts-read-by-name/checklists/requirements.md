@@ -31,7 +31,7 @@
 
 ## Notes
 
-- The ADRs it applies are accepted and merged: ADR 0089 (`0a381a812a`), ADR 0092 and ADR 0090. It keeps spec 1216
+- The ADRs it applies are accepted and merged: ADR 0089 (`0a381a812a`), ADR 0092 and ADR 0090. It keeps spec 1232
   FR-025–FR-027. Approval is the coordinator's; Q1–Q6 are answered (2026-11-17).
 - Some technical nouns (`variables` root, `args`, pinned parameter) are domain terms from ADR 0089 / spec 095 and the
   initiative board, retained deliberately for architect reviewers; they are not new implementation choices.

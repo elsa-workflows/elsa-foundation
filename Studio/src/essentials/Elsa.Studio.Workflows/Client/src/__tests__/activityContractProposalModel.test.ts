@@ -63,7 +63,7 @@ describe("activity contract proposal model", () => {
     expect(addition).toMatchObject({ supported: true, destructive: false, impact: "Additive" });
     expect(removal).toMatchObject({ supported: true, destructive: true, impact: "Breaking" });
     expect(tightening).toMatchObject({ supported: true, destructive: true, impact: "Breaking" });
-    expect(tightening.impactReasons.join(" ")).toContain("Tightening nullability");
+    expect(tightening.impactReasons.join(" ")).toContain("Requiring a supplied value");
   });
 
   it("degrades unknown or malformed kinds without reading opaque provider payloads", () => {

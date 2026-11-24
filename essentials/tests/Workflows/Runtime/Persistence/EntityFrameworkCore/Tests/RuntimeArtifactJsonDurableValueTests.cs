@@ -1,3 +1,6 @@
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Primitives.Models;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -9,6 +12,26 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class RuntimeArtifactJsonDurableValueTests
 {
+    [Theory]
+    [InlineData("External", true, DurableValueStorage.External)]
+    [InlineData("Custom", true, DurableValueStorage.Custom)]
+    [InlineData("external", true, DurableValueStorage.Inline)]
+    [InlineData("Unknown", true, DurableValueStorage.Inline)]
+    [InlineData("External", false, DurableValueStorage.Inline)]
+    public void Minimum_storage_metadata_only_applies_to_a_materialized_JSON_null(string marker, bool isNull, DurableValueStorage expected)
+    {
+        var state = new DurableValueState("id", "workflow", "output:result", new("String", null, null), DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline, isNull ? JsonSerializer.SerializeToElement<object?>(null) : JsonSerializer.SerializeToElement(42), null, null,
+            DateTimeOffset.UnixEpoch, new Dictionary<string, string> { [RuntimeMetadataKeys.InputName] = "result", [RuntimeMetadataKeys.NullMinimumStorage] = marker });
+        foreach (var bounded in new[] { false, true })
+        {
+            var reloaded = Read(RuntimeArtifactJson.Serialize(state), bounded);
+            var envelope = RuntimeInputBindingStateProjection.ProjectWorkflowInputEnvelopes([reloaded])["result"];
+            Assert.Equal(expected, envelope.Policy.Storage);
+            Assert.Equal(isNull ? ValuePresence.ExplicitNull : ValuePresence.Present, envelope.Presence);
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

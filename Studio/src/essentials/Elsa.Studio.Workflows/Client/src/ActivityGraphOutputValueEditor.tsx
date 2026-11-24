@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { StudioActivityDefinitionImplementationEditorProps, StudioActivityDiagnosticFocusResult } from "@elsa-workflows/studio-sdk";
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { ActivityOutputContract } from "./activityDefinitionTypes";
-import { useWorkflowActivities } from "./api/activityDesign";
+import { useActivityAuthoringCapabilities, useWorkflowActivities } from "./api/activityDesign";
 import { activityGraphDocumentAdapter } from "./activityGraphDocumentAdapter";
 import { getActivityGraphOutputSetters } from "./activityGraphOutputSources";
 import { ActivityGraphOutputMappingEditor, normalizeActivityGraphPayload, useActivityGraphExpressionDescriptors, toWorkflowInput, toVisibleGraphVariable, toWorkflowVariables } from "./ActivityGraphImplementationEditor";
@@ -15,6 +15,7 @@ export function ActivityGraphOutputValueEditor({ output, onRevealStep, ...props 
 }) {
   const { context, contract, value, expressionEditors = [], readOnly, onChange } = props;
   const catalogQuery = useWorkflowActivities(context);
+  const capabilities = useActivityAuthoringCapabilities(context);
   const catalog = useMemo(() => new Map((catalogQuery.data?.activities ?? []).map(item => [item.activityVersionId, item])), [catalogQuery.data?.activities]);
   const root = activityGraphDocumentAdapter.readRoot(value);
   const payload = normalizeActivityGraphPayload(value.payload);
@@ -29,7 +30,7 @@ export function ActivityGraphOutputValueEditor({ output, onRevealStep, ...props 
     const name = resolveActivityLabel(presentation.get(nodeId), undefined, "Set Output");
     return assigned.length + orphaned.length > 1 ? `${name} ${setters.findIndex(setter => setter.nodeId === nodeId) + 1}` : name;
   };
-  const workflowInputs = (contract?.inputs ?? []).map(toWorkflowInput);
+  const workflowInputs = (contract?.inputs ?? []).map(input => toWorkflowInput(input, capabilities.data?.types ?? []));
   const visibleVariables = payload.variables.flatMap(toVisibleGraphVariable);
   const workflowState = { inputs: workflowInputs, outputs: contract?.outputs ?? [], rootActivity: root, variables: toWorkflowVariables(payload.variables) };
   const stepList = (steps: typeof assigned) => <ul className="ad-output-setters">{steps.map(setter => <li key={setter.nodeId}>
