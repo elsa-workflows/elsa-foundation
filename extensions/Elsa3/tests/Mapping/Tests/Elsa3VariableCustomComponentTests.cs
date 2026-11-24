@@ -13,8 +13,9 @@ namespace Elsa3.Mapping.Tests;
 
 /// <summary>
 /// #5666: a variable whose Elsa 3 type or storage driver is a custom component Elsa 4 does not register gets a diagnostic
-/// code, so a migrator can see it. An unregistered type converts as Any with an info; an unregistered storage driver is
-/// refused. Registered types and drivers, and Elsa 3's default driver, convert as before, without a diagnostic.
+/// code, so a migrator can see it. An unregistered type converts as Any with an info; a storage driver other than Elsa 3's
+/// default is refused, since Elsa 4 cannot store a variable outside the instance yet. Registered types and the default
+/// driver convert as before, without a diagnostic.
 /// </summary>
 public sealed class Elsa3VariableCustomComponentTests
 {
@@ -36,7 +37,8 @@ public sealed class Elsa3VariableCustomComponentTests
         Assert.Contains("Variable 'order'", info.Message);
         Assert.Contains("'Acme.Orders.OrderDto, Acme.Orders'", info.Message);
         Assert.Contains("its Elsa 4 type is Any", info.Message);
-        Assert.Contains("until an Elsa 4 feature registers the type under a dotted alias and the workflow is converted again", info.Message);
+        Assert.Contains("until an Elsa 4 feature registers the type and the workflow is converted again", info.Message);
+        Assert.Contains("register its CLR type", info.Guidance);
     }
 
     [Fact]
@@ -62,6 +64,10 @@ public sealed class Elsa3VariableCustomComponentTests
     [InlineData("System.DayOfWeek", false, "System.DayOfWeek")]
     [InlineData("OrderDto", false, "OrderDto")]
     [InlineData("List<List<String>>", false, null)]
+    [InlineData("JsonElement", false, null)]
+    [InlineData("JsonObject", false, null)]
+    [InlineData("List<JsonNode>", false, null)]
+    [InlineData("ExpandoObject", false, null)]
     [InlineData("ObjectDictionary[]", false, null)]
     [InlineData("Object", false, null)]
     [InlineData("ObjectDictionary", false, null)]
@@ -82,22 +88,7 @@ public sealed class Elsa3VariableCustomComponentTests
         }
     }
 
-    /// <summary>
-    /// The guidance matches how the converter finds a type: an assembly-qualified name by loading it, a dotted name by that
-    /// exact alias, and a bare name not at all, since Elsa 4 refuses bare aliases for module types.
-    /// </summary>
-    [Theory]
-    [InlineData("Acme.Orders.OrderDto, Acme.Orders", "with its assembly loaded in the host that converts")]
-    [InlineData("Acme.Orders.OrderDto", "under the alias 'Acme.Orders.OrderDto'")]
-    [InlineData("OrderDto", "cannot register the bare name 'OrderDto'")]
-    public void The_guidance_says_how_this_name_can_keep_its_type(string typeName, string guidance)
-    {
-        var notice = Elsa3VariableMapper.DescribeUnregisteredType(ConversionServices.TypeRegistry(), new Elsa3Variable { Id = "v", Name = "v", TypeName = typeName });
-
-        Assert.Contains(guidance, notice!.Guidance);
-    }
-
-    /// <summary>A dotted Elsa 3 name without an assembly keeps its type once a feature registers it under that exact alias, as the guidance says.</summary>
+    /// <summary>A dotted Elsa 3 name without an assembly keeps its type once a feature registers it under that alias.</summary>
     [Fact]
     public void A_dotted_name_registered_under_that_alias_keeps_its_type()
     {
@@ -145,8 +136,8 @@ public sealed class Elsa3VariableCustomComponentTests
         Assert.Equal("blob", refusal.Metadata["VariableName"]);
         Assert.Contains("Variable 'blob'", refusal.Message);
         Assert.Contains($"'{CustomDriver}'", refusal.Message);
+        Assert.Contains("cannot store a variable outside the workflow instance yet", refusal.Message);
         Assert.Contains("default (the workflow instance)", refusal.Guidance);
-        Assert.Contains("register the driver type", refusal.Guidance);
     }
 
     [Fact]
@@ -163,15 +154,16 @@ public sealed class Elsa3VariableCustomComponentTests
         Assert.Contains("Variable 'local'", refusal.Message);
     }
 
+    /// <summary>Registering the driver's type does not help: Elsa 4 refuses every storage driver for a variable at publication (VF-ACT-005).</summary>
     [Fact]
-    public void A_storage_driver_registered_in_Elsa_4_maps_to_its_alias_as_before()
+    public void A_storage_driver_registered_in_Elsa_4_is_refused_too()
     {
         var registry = ConversionServices.TypeRegistry();
         registry.RegisterType(typeof(BlobStorageDriver), "acme.blobStorageDriver");
         var source = new Elsa3Variable { Id = "v", Name = "v", TypeName = "String", StorageDriverTypeName = typeof(BlobStorageDriver).AssemblyQualifiedName };
 
-        Assert.True(Elsa3VariableMapper.TryMap(registry, ObjectConverter, source, out var variable, out var refusal), refusal?.Message);
-        Assert.Equal("acme.blobStorageDriver", variable.StorageDriverType);
+        Assert.False(Elsa3VariableMapper.TryMap(registry, ObjectConverter, source, out _, out var refusal));
+        Assert.Equal(Elsa3ImportDiagnosticCodes.VariableStorageDriverUnmapped, refusal!.Code);
     }
 
     private static Task<Elsa3MigrationResult<Elsa3ConvertedDefinition>> ConvertAsync(params Elsa3Variable[] variables) =>
