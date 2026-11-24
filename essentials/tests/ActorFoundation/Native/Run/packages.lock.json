@@ -293,6 +293,12 @@
           "Elsa.Workflows.Runtime.Native.Activities": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.runtime.native.retentionfixture": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime.statecharts.orderfixture": {
         "type": "Project",
         "dependencies": {

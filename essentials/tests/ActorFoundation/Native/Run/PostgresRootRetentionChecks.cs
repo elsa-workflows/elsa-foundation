@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.ActorFoundation.TestSupport;
+using Elsa.Workflows.Runtime.Native.RetentionFixture;
 using Kernel.EntityFramework;
 using Kernel.Native.Preview;
 using Kernel.WorkflowActor;
@@ -50,7 +51,7 @@ internal static class PostgresRootRetentionChecks
         var extended = false;
         TimeSpan? Window(Contract.ActorHeader header) => header.Ref == indefinite || header.Tenant != blue.Tenant ? null
             : extended && header.Ref == later ? TimeSpan.FromHours(2) : TimeSpan.Zero;
-        var retention = new RetentionPass(reads, PublicActor.ActorType, Window, admission.AdmitRetentionDeleteAsync);
+        var retention = new RetentionFixture(reads, Window, admission.AdmitRetentionDeleteAsync);
         EfStore.RootImage expiredBefore;
         EfStore.RootImage laterBefore;
         EfStore.RootImage protectedBefore;
@@ -140,7 +141,7 @@ internal static class PostgresRootRetentionChecks
         {
             using var interrupted = CancellationTokenSource.CreateLinkedTokenSource(stop);
             var admissions = 0;
-            var pass = new RetentionPass(reads, PublicActor.ActorType, Window, async (scope, actor, selection, token) =>
+            var pass = new RetentionFixture(reads, Window, async (scope, actor, selection, token) =>
             {
                 var result = await admission.AdmitRetentionDeleteAsync(scope, actor, selection, token);
                 if (result.Outcome == Contract.AdmissionOutcome.Accepted)
@@ -157,6 +158,8 @@ internal static class PostgresRootRetentionChecks
                 do
                 {
                     var page = await pass.RunAsync(blue, from, interrupted.Token);
+                    if (interrupted.IsCancellationRequested)
+                        throw new InvalidOperationException("The cancelled page returned a continuation.");
                     from = page.Next;
                 } while (from is not null);
             }
