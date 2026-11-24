@@ -3,6 +3,8 @@
 	<PropertyGroup>
 		<!-- Deployable host, not a NuGet library: exclude it from `dotnet pack` over the solution. -->
 		<IsPackable>false</IsPackable>
+		<!-- The project is named for its folder; the code keeps the Elsa.Workbench namespaces. -->
+		<RootNamespace>Elsa.Workbench</RootNamespace>
 	</PropertyGroup>
 
 	<!-- Finite host-recovery fault cuts. Standard builds contain no probe feature or control-file ports. -->

@@ -12,13 +12,13 @@ case "${PG_PREVIEW_PROFILE:-}" in
 esac
 root=$(git -c core.fsmonitor=false rev-parse --show-toplevel)
 cd "$root"
-app=apps/Elsa.Workbench
+app=apps/Elsa.Workbench.Host
 runner=essentials/tests/ActorFoundation/Native/Run
 dotnet restore --locked-mode "$app"
 dotnet restore --locked-mode "$runner"
 dotnet build -c "$configuration" --no-restore "$app"
 dotnet build -c "$configuration" --no-restore "$runner"
-KERNEL_PREVIEW_WORKBENCH="$root/$app/bin/$configuration/net10.0/Elsa.Workbench"
+KERNEL_PREVIEW_WORKBENCH="$root/$app/bin/$configuration/net10.0/Elsa.Workbench.Host"
 export KERNEL_PREVIEW_WORKBENCH
 client="$runner/bin/$configuration/net10.0/Kernel.Native.Run"
 

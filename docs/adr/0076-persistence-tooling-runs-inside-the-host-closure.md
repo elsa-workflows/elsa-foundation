@@ -442,11 +442,11 @@ fallback to a different provider.
 
 The check reads the same layered configuration a host would: `shells.json`, then
 `shells.<environment>.json` when that file exists, the same overlay `Elsa.Workbench` applies
-(`src/apps/Elsa.Workbench/Program.cs:85,91`). `--environment` defaults to `Production`, because
+(`src/apps/Elsa.Workbench.Host/Program.cs:85,91`). `--environment` defaults to `Production`, because
 ASP.NET Core's own default `EnvironmentName` is `Production` whenever no environment variable sets
 it, and a host started with no configuration at all — the ordinary case — therefore reads
 `shells.Production.json` when the host ships one, as `Elsa.Workbench` does
-(`src/apps/Elsa.Workbench/shells.Production.json`). The tool never reads `ASPNETCORE_ENVIRONMENT`
+(`src/apps/Elsa.Workbench.Host/shells.Production.json`). The tool never reads `ASPNETCORE_ENVIRONMENT`
 from its own process: the tool's environment is not the host's, and inferring one from the other
 would be exactly the kind of silent cross-process assumption D10 refuses to make for packages. The
 manifest records the environment the check actually used.

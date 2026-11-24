@@ -101,8 +101,8 @@ public sealed class OpenIddictPersistenceArchitectureTests
         var project = XDocument.Load(Path.Combine(
             RepoRoot,
             "apps",
-            "Elsa.Workbench",
-            "Elsa.Workbench.csproj"));
+            "Elsa.Workbench.Host",
+            "Elsa.Workbench.Host.csproj"));
 
         Assert.Contains(
             project.Descendants("PackageReference"),

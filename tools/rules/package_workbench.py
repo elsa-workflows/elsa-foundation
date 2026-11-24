@@ -39,7 +39,7 @@ def verify_workbench_package_host(receipt, evidence, source, feed, run, environm
 def _verify_workbench_package_host(receipt, evidence, source, feed, run, environment, probe_deployment,
                                    workbench_source) -> dict:
     evidence, source, feed, probe_deployment = map(Path, (evidence, source, feed, probe_deployment))
-    original_project = source / 'apps/Elsa.Workbench/Elsa.Workbench.csproj'
+    original_project = source / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
     if not original_project.is_file():
         raise ValueError('Immutable source does not contain the expected Workbench project: ' + str(original_project))
     module_roots = receipt.get('modules')
@@ -155,9 +155,9 @@ def _verify_workbench_package_host(receipt, evidence, source, feed, run, environ
          *property_args], cwd=source, env=env)
     run(['dotnet', 'publish', workbench_project, '-c', 'Release', '--no-restore',
          '--output', deployment, *property_args], cwd=source, env=env)
-    deps_path = deployment / 'Elsa.Workbench.deps.json'
+    deps_path = deployment / 'Elsa.Workbench.Host.deps.json'
     if not deps_path.is_file():
-        raise ValueError('Workbench publish did not produce Elsa.Workbench.deps.json.')
+        raise ValueError('Workbench publish did not produce Elsa.Workbench.Host.deps.json.')
     deps = json.loads(deps_path.read_text())
     deps_target_name, deps_target = _active_target(deps, 'published Workbench deps.json')
     deps_libraries = deps.get('libraries')

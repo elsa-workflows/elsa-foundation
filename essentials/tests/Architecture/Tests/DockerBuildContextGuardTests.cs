@@ -129,7 +129,7 @@ public sealed class DockerBuildContextGuardTests
     /// true of both hosts that carry computed versions, Elsa.Workbench and Elsa.Foundation.Host.
     /// </summary>
     [Theory]
-    [InlineData("Elsa.Workbench")]
+    [InlineData("Elsa.Workbench.Host")]
     [InlineData("Elsa.Foundation.Host")]
     public void The_host_publish_restores_with_every_property_it_publishes_with(string host)
     {

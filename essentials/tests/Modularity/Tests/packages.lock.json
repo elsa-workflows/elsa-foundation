@@ -2490,7 +2490,7 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
-      "elsa.workbench": {
+      "elsa.workbench.host": {
         "type": "Project",
         "dependencies": {
           "CShells.Management.Api": "[0.0.31, )",

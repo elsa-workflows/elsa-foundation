@@ -59,7 +59,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
 
     [Theory]
     [InlineData("Elsa.Foundation.Host")]
-    [InlineData("Elsa.Workbench")]
+    [InlineData("Elsa.Workbench.Host")]
     public async Task The_real_host_resolves_one_runner_that_is_excluded_from_its_shells(string host)
     {
         using var content = ContentRoot.For(host);
@@ -196,9 +196,9 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     {
         { "Elsa.Foundation.Host", false, false },
         { "Elsa.Foundation.Host", true, false },
-        { "Elsa.Workbench", false, false },
-        { "Elsa.Workbench", true, false },
-        { "Elsa.Workbench", false, true }
+        { "Elsa.Workbench.Host", false, false },
+        { "Elsa.Workbench.Host", true, false },
+        { "Elsa.Workbench.Host", false, true }
     };
 
     [Theory]
@@ -218,7 +218,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         var compared = SingletonServiceTypes(root).Select(type => (Type: type, Difference: Difference(type, root, shell.ServiceProvider))).ToArray();
         var rootOnly = RootOnly;
 #if ELSA_DASHBOARD_QUALIFICATION
-        if (host == "Elsa.Workbench")
+        if (host == "Elsa.Workbench.Host")
         {
             rootOnly = new Dictionary<Type, string>(RootOnly)
             {
@@ -267,7 +267,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     /// </summary>
     [Theory]
     [InlineData("Elsa.Foundation.Host")]
-    [InlineData("Elsa.Workbench")]
+    [InlineData("Elsa.Workbench.Host")]
     public async Task A_shell_of_the_real_composition_protects_with_the_hosts_key_ring(string host)
     {
         using var content = ContentRoot.For(host);
@@ -299,7 +299,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     // Kept beside the composition test: ordering, startup validation runs ahead of every host initializer.
     [Theory]
     [InlineData("Elsa.Foundation.Host")]
-    [InlineData("Elsa.Workbench")]
+    [InlineData("Elsa.Workbench.Host")]
     public async Task A_shell_of_the_real_composition_runs_its_startup_validation_ahead_of_every_initializer_the_host_registers(string host)
     {
         using var content = ContentRoot.For(host);
@@ -326,8 +326,8 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     [Fact]
     public void Workbench_registers_the_openiddict_migration_policy_after_the_vendor_initializer()
     {
-        using var content = ContentRoot.For("Elsa.Workbench");
-        using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench"), content.Arguments(durableMembership: false));
+        using var content = ContentRoot.For("Elsa.Workbench.Host");
+        using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench.Host"), content.Arguments(durableMembership: false));
 
         var hosted = built.Host.Services.GetServices<IHostedService>().Select(service => service.GetType()).ToList();
 
@@ -345,7 +345,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     // Kept beside the composition test: discovery follows the package auto-loader.
     [Theory(DisplayName = "Both host compositions register and borrow one root-owned Nuplane coordinator")]
     [InlineData("Elsa.Foundation.Host")]
-    [InlineData("Elsa.Workbench")]
+    [InlineData("Elsa.Workbench.Host")]
     public async Task Each_host_registers_feature_discovery_after_the_package_auto_loader_and_shares_its_coordinator(string host)
     {
         const string AutoLoader = "Nuplane.Loading.PackageAutoLoadingObserver";
@@ -399,7 +399,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     public void Workbench_selects_the_openiddict_store_engine_and_prunes_the_store_after_it_is_migrated()
     {
         const string Settings = "--CShells:Shells:default:Features:FoundationIdentityOpenIddict:";
-        using var content = ContentRoot.For("Elsa.Workbench");
+        using var content = ContentRoot.For("Elsa.Workbench.Host");
         string[] arguments =
         [
             .. content.Arguments(durableMembership: false),
@@ -407,7 +407,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             $"{Settings}Provider", "PostgreSql",
             "--ConnectionStrings:Elsa", "Host=wiring-test;Database=elsa;Username=elsa;Password=x"
         ];
-        using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench"), arguments);
+        using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench.Host"), arguments);
 
         var hosted = built.Host.Services.GetServices<IHostedService>().Select(service => service.GetType()).ToList();
         using var scope = built.Host.Services.CreateScope();
@@ -459,7 +459,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         ? $"{type.Namespace}.{type.Name[..type.Name.IndexOf('`')]}<{string.Join(", ", type.GetGenericArguments().Select(Describe))}>"
         : $"{type.Namespace}.{type.Name}";
 
-    private static Assembly EntryAssembly(string host) => host == "Elsa.Workbench"
+    private static Assembly EntryAssembly(string host) => host == "Elsa.Workbench.Host"
         ? typeof(WorkbenchOpenIddictMigrator).Assembly
         : typeof(ModuleManagementOptions).Assembly;
 

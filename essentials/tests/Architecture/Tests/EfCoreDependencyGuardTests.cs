@@ -18,7 +18,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class EfCoreDependencyGuardTests
 {
     private static readonly string[] RestoreConfigurations = ["Release", "Debug"];
-    private static readonly string[] AllowedEfConsumers = ["Elsa.Foundation.Host", "Elsa.Workbench"];
+    private static readonly string[] AllowedEfConsumers = ["Elsa.Foundation.Host", "Elsa.Workbench.Host"];
 
     /// <summary>
     /// <c>Elsa.Foundation.Host</c> carries EF Core (#2151, #2191) for its opt-in
@@ -123,7 +123,7 @@ public sealed class EfCoreDependencyGuardTests
     private static string[] ReviewedEfPackages(string host) => host switch
     {
         "Elsa.Foundation.Host" => AllowedFoundationHostEfPackages,
-        "Elsa.Workbench" => AllowedWorkbenchEfPackages,
+        "Elsa.Workbench.Host" => AllowedWorkbenchEfPackages,
         _ => throw new ArgumentOutOfRangeException(nameof(host), host, "An admitted EF consumer needs a reviewed EF closure of its own.")
     };
 

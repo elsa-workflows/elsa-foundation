@@ -110,7 +110,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
             if ! changed=$(git diff --name-only "$GITHUB_SHA^1" "$GITHUB_SHA"); then
               kernel=true
-            elif grep -Eq '^(prototypes/kernel-model/|apps/Elsa\.Workbench/CorePreview/|tools/ci/actor-foundation/WorkbenchPostgresPreview\.cs$|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts|WorkflowActor)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|tools/architecture/check-kernel-model-references\.targets$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+            elif grep -Eq '^(prototypes/kernel-model/|apps/Elsa\.Workbench\.Host/CorePreview/|tools/ci/actor-foundation/WorkbenchPostgresPreview\.cs$|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts|WorkflowActor)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|tools/architecture/check-kernel-model-references\.targets$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
               kernel=true
             fi
           fi
@@ -1482,12 +1482,12 @@ jobs:
       - name: Restore Workbench and the focused test project from committed public feeds
         shell: bash
         run: |
-          dotnet restore apps/Elsa.Workbench/Elsa.Workbench.csproj --locked-mode
+          dotnet restore apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --locked-mode
           dotnet restore essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
 
       - name: Build Workbench with the documented command
         shell: bash
-        run: dotnet build apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
+        run: dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
 
       - name: Verify the documented build left tracked lock files unchanged
         shell: bash
