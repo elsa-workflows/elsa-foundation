@@ -76,10 +76,23 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             var held = Enumerable.Range(0, partitions).Select(Activation).OfType<IScopeActivation>().ToArray();
             if (held.Length > 1)
             {
-                var release = ReleaseSetAsync(setHost, held, cancellationToken).AsTask();
-                _stopSet = release;
-                try { await release; }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+                var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _stopSet = completion.Task;
+                try
+                {
+                    await ReleaseSetAsync(setHost, held, cancellationToken);
+                    completion.SetResult();
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    completion.SetCanceled(cancellationToken);
+                }
+                catch (Exception error)
+                {
+                    completion.SetException(error);
+                    _ = completion.Task.Exception;
+                    throw;
+                }
                 finally { _stopSet = null; }
                 return;
             }

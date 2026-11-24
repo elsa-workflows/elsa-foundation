@@ -44,9 +44,18 @@ public static class SetReleaseChecks
         await runtime.StopAsync(new CancellationToken(canceled: true));
         var keptAfterCancelledStop = heldAfter.SequenceEqual(Enumerable.Range(0, Count).Where(runtime.Owns)) &&
             wire.SetReleases == beforeStop && store.Partitions.Take(4).All(partition => partition.Owner == "first");
+        Task? joined = null;
+        var waitedForRelease = false;
+        wire.OnSetRelease = () =>
+        {
+            joined = runtime.StopAsync().AsTask();
+            waitedForRelease = !joined.IsCompleted;
+        };
         await runtime.StopAsync();
+        if (joined is not null) await joined.WaitAsync(TimeSpan.FromSeconds(5));
         var stopCalls = wire.SetReleases - beforeStop;
         var stopped = keptAfterCancelledStop && stopCalls == (ownedSets ? 1 : 0) &&
+            waitedForRelease == ownedSets &&
             !Enumerable.Range(0, Count).Any(runtime.Owns) &&
             store.Partitions.All(partition => partition.Owner is null) &&
             store.Partitions.Select(partition => partition.Epoch).SequenceEqual(epochs);
