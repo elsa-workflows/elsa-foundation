@@ -791,7 +791,6 @@
     <Project Path="essentials/tests/Locking/Database/ProviderTests/Elsa.Locking.Database.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Modularity/">
-    <Project Path="essentials/tests/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj" />
     <Project Path="essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Modularity/EntityFramework/">

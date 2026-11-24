@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup><ElsaTrackPublicApi>true</ElsaTrackPublicApi></PropertyGroup>
+
   <PropertyGroup>
     <Description>
       Opt-in, host-composed Entity Framework Core token store for Elsa's OpenIddict feature: OpenIddict's own EF Core
@@ -28,6 +30,12 @@
   <ItemGroup>
     <ProjectReference Include="..\Behavior\Elsa.Foundation.Identity.OpenIddict.Behavior.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+
+  <!-- The store's registrations, initializer, migrator, pruner and notices are internal; the Foundation domain's tests reach them. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Foundation.Identity.Tests" />
+    <InternalsVisibleTo Include="Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests" />
   </ItemGroup>
 
 </Project>

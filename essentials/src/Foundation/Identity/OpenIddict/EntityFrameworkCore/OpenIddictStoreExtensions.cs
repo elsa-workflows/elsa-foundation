@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 
 /// <summary>Composes the OpenIddict token store on a host's root container.</summary>
-public static class OpenIddictEntityFrameworkCoreStoreExtensions
+public static class OpenIddictStoreExtensions
 {
     /// <summary>
     /// Registers the OpenIddict vendor EF Core store, its engine selection, Elsa's migration policy and token pruning, in the
@@ -20,7 +20,7 @@ public static class OpenIddictEntityFrameworkCoreStoreExtensions
 
         return services
             .AddOpenIddictVendorStore(configuration)
-            .AddOpenIddictStoreProvider(configuration)
+            .AddOpenIddictStoreEngines(configuration)
             .AddOpenIddictMigrationPolicy(configuration)
             .AddOpenIddictPruning(configuration);
     }

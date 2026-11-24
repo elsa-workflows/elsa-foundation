@@ -15,7 +15,7 @@ namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 /// start with the way to clear it, or, with nothing pending, goes on past it, instead of hanging it (#2196). The vendor
 /// initializer is left to create the demo in-memory store and nothing else.
 /// </summary>
-public static class OpenIddictMigrationPolicy
+internal static class OpenIddictMigrationPolicy
 {
     /// <summary>
     /// Registered right after <c>AddOpenIddictVendorStore</c>, so the store is migrated at the same point in the host's start
@@ -23,7 +23,7 @@ public static class OpenIddictMigrationPolicy
     /// the vendor initializer's: CShells copies root descriptors into shell providers, so a shell initializer would migrate again
     /// on activation.
     /// </summary>
-    public static IServiceCollection AddOpenIddictMigrationPolicy(this IServiceCollection services, IConfiguration configuration)
+    internal static IServiceCollection AddOpenIddictMigrationPolicy(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<OpenIddictMigrationSwitch>();
         services.AddSingleton<IPostConfigureOptions<OpenIddictIdentityOptions>, TakeOverAutoMigrate>();
@@ -38,7 +38,7 @@ public static class OpenIddictMigrationPolicy
 }
 
 /// <summary>Whether the store's <c>AutoMigrate</c> asked for migration, as the options pipeline resolved it before the vendor was told otherwise.</summary>
-public sealed class OpenIddictMigrationSwitch
+internal sealed class OpenIddictMigrationSwitch
 {
     public bool AutoMigrate { get; set; } = true;
 }
@@ -58,7 +58,7 @@ internal sealed class TakeOverAutoMigrate(OpenIddictMigrationSwitch migration) :
 }
 
 /// <summary>Migrates the durable OpenIddict store at the host's start, as the store's own <c>AutoMigrate</c> asked.</summary>
-public sealed class OpenIddictStoreMigrator : IHostedService
+internal sealed class OpenIddictStoreMigrator : IHostedService
 {
     private readonly OpenIddictMigrationSwitch _migration;
     private readonly IServiceProvider _services;

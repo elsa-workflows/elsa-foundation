@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
-namespace Elsa.Modularity.Tests;
+namespace Elsa.Foundation.Identity.Tests.OpenIddict.Store;
 
 /// <summary>
 /// Tokens and authorizations of every kind the prune distinguishes, seeded into the store a provider runs and inspected afterwards,

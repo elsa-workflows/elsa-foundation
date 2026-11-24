@@ -20,9 +20,9 @@ namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 /// enables the feature. A prune is idempotent, so every node runs it and none claims it: a row a sibling has already deleted is
 /// not an error to this node, and the next interval prunes whatever a failed one left.
 /// </remarks>
-public static class OpenIddictPruning
+internal static class OpenIddictPruning
 {
-    public static IServiceCollection AddOpenIddictPruning(this IServiceCollection services, IConfiguration configuration)
+    internal static IServiceCollection AddOpenIddictPruning(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<OpenIddictPruningOptions>()
             .Bind(configuration.GetSection(OpenIddictPruningOptions.SectionPath))
@@ -31,7 +31,7 @@ public static class OpenIddictPruning
             .Validate(options => options.Timeout > TimeSpan.Zero, "The OpenIddict prune timeout must be greater than zero.")
             .ValidateOnStart();
         services.TryAddSingleton(TimeProvider.System);
-        services.AddHostedService<OpenIddictPruningService>();
+        services.AddHostedService<OpenIddictTokenPruner>();
         return services;
     }
 }
@@ -64,11 +64,11 @@ public sealed class OpenIddictPruningOptions
 }
 
 /// <summary>Prunes the OpenIddict tokens and then the authorizations on the configured interval, for as long as the host runs.</summary>
-public sealed class OpenIddictPruningService(
+internal sealed class OpenIddictTokenPruner(
     IServiceProvider services,
     IOptions<OpenIddictPruningOptions> options,
     TimeProvider time,
-    ILogger<OpenIddictPruningService> logger) : BackgroundService
+    ILogger<OpenIddictTokenPruner> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

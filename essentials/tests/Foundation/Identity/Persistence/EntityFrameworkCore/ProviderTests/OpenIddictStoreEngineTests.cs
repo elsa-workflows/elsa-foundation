@@ -1,5 +1,4 @@
-using Elsa.Modularity.Tests;
-using Elsa.Workbench;
+using Elsa.Foundation.Identity.Tests.OpenIddict.Store;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -9,13 +8,13 @@ using Microsoft.Extensions.Time.Testing;
 using OpenIddict.Abstractions;
 using Xunit;
 
-namespace Elsa.Modularity.ProviderTests;
+namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests;
 
 /// <summary>
-/// Workbench's OpenIddict store on a native database engine, run once per engine below. The scenario that makes the engine matter:
+/// The OpenIddict store on a native database engine, run once per engine below. The scenario that makes the engine matter:
 /// access-token validation reads the token's row, so a token one node issued is only valid on another when the nodes share a store.
 /// </summary>
-public abstract class WorkbenchOpenIddictEngineTests(OpenIddictEngineDatabase engine) : IAsyncLifetime
+public abstract class OpenIddictStoreEngineTests(OpenIddictEngineDatabase engine) : IAsyncLifetime
 {
     private const string Section = "CShells:Shells:default:Features:FoundationIdentityOpenIddict";
 
@@ -48,7 +47,7 @@ public abstract class WorkbenchOpenIddictEngineTests(OpenIddictEngineDatabase en
             var database = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database;
             Assert.Equal(1, (await database.GetAppliedMigrationsAsync()).Count());
             Assert.Empty(await database.GetPendingMigrationsAsync());
-            id = await WorkbenchOpenIddictTestHost.CreateTokenAsync(scope.ServiceProvider, "issued-on-one-node");
+            id = await OpenIddictStoreTestHost.CreateTokenAsync(scope.ServiceProvider, "issued-on-one-node");
         }
 
         await using var other = validator.CreateAsyncScope();
@@ -62,7 +61,7 @@ public abstract class WorkbenchOpenIddictEngineTests(OpenIddictEngineDatabase en
         Skip.If(engine.SkipReason is not null, engine.SkipReason);
         var nodes = new[] { Node(), Node(), Node() };
 
-        await Task.WhenAll(nodes.Select(WorkbenchOpenIddictTestHost.StartAsync));
+        await Task.WhenAll(nodes.Select(OpenIddictStoreTestHost.StartAsync));
 
         await using var scope = nodes[0].CreateAsyncScope();
         Assert.Equal(1, (await scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database.GetAppliedMigrationsAsync()).Count());
@@ -76,7 +75,7 @@ public abstract class WorkbenchOpenIddictEngineTests(OpenIddictEngineDatabase en
         var scenario = new OpenIddictPruneScenario(node, _time);
         var entries = await scenario.SeedAsync(extraExpired: 20);
 
-        await node.GetServices<IHostedService>().OfType<OpenIddictPruningService>().Single().PruneAsync(CancellationToken.None);
+        await node.GetServices<IHostedService>().OfType<OpenIddictTokenPruner>().Single().PruneAsync(CancellationToken.None);
 
         Assert.Equal(entries.Kept, await scenario.RemainingAsync(entries.All));
     }
@@ -84,11 +83,11 @@ public abstract class WorkbenchOpenIddictEngineTests(OpenIddictEngineDatabase en
     private async Task<ServiceProvider> StartNodeAsync()
     {
         var node = Node();
-        await WorkbenchOpenIddictTestHost.StartAsync(node);
+        await OpenIddictStoreTestHost.StartAsync(node);
         return node;
     }
 
-    /// <summary>A node of the deployment: the store on the engine's database, as Workbench's settings name it, and the prune beside it.</summary>
+    /// <summary>A node of the deployment: the store on the engine's database, as the default shell's settings name it, and the prune beside it.</summary>
     private ServiceProvider Node()
     {
         var configuration = new ConfigurationBuilder()
@@ -99,7 +98,7 @@ public abstract class WorkbenchOpenIddictEngineTests(OpenIddictEngineDatabase en
                 [$"{Section}:ConnectionString"] = _connectionString
             })
             .Build();
-        var node = WorkbenchOpenIddictTestHost.CreateProvider(configuration, withMigrationPolicy: true, services =>
+        var node = OpenIddictStoreTestHost.CreateProvider(configuration, withMigrationPolicy: true, services =>
         {
             services.AddSingleton<TimeProvider>(_time);
             services.AddOpenIddictPruning(configuration);
@@ -110,7 +109,7 @@ public abstract class WorkbenchOpenIddictEngineTests(OpenIddictEngineDatabase en
 }
 
 [Collection(PostgreSqlOpenIddictDatabase.Collection)]
-public sealed class PostgreSqlWorkbenchOpenIddictEngineTests(PostgreSqlOpenIddictDatabase engine) : WorkbenchOpenIddictEngineTests(engine);
+public sealed class PostgreSqlOpenIddictStoreEngineTests(PostgreSqlOpenIddictDatabase engine) : OpenIddictStoreEngineTests(engine);
 
 [Collection(SqlServerOpenIddictDatabase.Collection)]
-public sealed class SqlServerWorkbenchOpenIddictEngineTests(SqlServerOpenIddictDatabase engine) : WorkbenchOpenIddictEngineTests(engine);
+public sealed class SqlServerOpenIddictStoreEngineTests(SqlServerOpenIddictDatabase engine) : OpenIddictStoreEngineTests(engine);

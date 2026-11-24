@@ -1,15 +1,15 @@
-using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenIddict.EntityFrameworkCore;
 
-namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
+namespace Elsa.Foundation.Identity.Tests.OpenIddict.VendorStore;
 
 /// <summary>
-/// Test-only host wiring for OpenIddict's vendor EF store. Production ownership lives in Elsa.Workbench; keeping
-/// the test context here lets the behavior and contract suites exercise an explicit vendor choice without teaching
-/// the provider-neutral Elsa composition extension about EF.
+/// Test-only host wiring for OpenIddict's vendor EF store. Production ownership lives in
+/// Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore; keeping the test context here lets the behavior and contract suites
+/// exercise an explicit vendor choice without teaching the provider-neutral Elsa composition extension about EF. Its own namespace
+/// keeps these test types apart from the store package's types of the same names.
 /// </summary>
 internal static class OpenIddictVendorTestRegistration
 {

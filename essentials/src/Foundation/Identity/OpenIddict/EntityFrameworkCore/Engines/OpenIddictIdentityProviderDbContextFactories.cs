@@ -39,7 +39,7 @@ file static class DesignTime
             builder,
             provider,
             ConnectionString(args) ?? fallbackConnectionString,
-            EfMigrationsHistory.TableName(OpenIddictStoreProvider.Module),
+            EfMigrationsHistory.TableName(OpenIddictStoreEngines.Module),
             typeof(TContext).Assembly,
             OpenIddictIdentityDbContext.Schema);
         return create(builder.Options);

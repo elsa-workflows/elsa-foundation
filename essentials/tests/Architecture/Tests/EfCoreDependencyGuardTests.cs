@@ -1341,12 +1341,19 @@ public sealed class EfCoreDependencyGuardTests
                 ["essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
                 ["essentials/tests/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                // The OpenIddict token store's native-engine suites run here too, so the store package's closure
+                // (OpenIddictTokenStoreEf: its SQLite, in-memory and OpenIddict EF packages) comes with them.
                 ["essentials/tests/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [
                     .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.InMemory",
+                    "Microsoft.EntityFrameworkCore.Sqlite",
+                    "Microsoft.EntityFrameworkCore.Sqlite.Core",
                     "Microsoft.EntityFrameworkCore.SqlServer",
                     "MySql.EntityFrameworkCore",
-                    "Npgsql.EntityFrameworkCore.PostgreSQL"
+                    "Npgsql.EntityFrameworkCore.PostgreSQL",
+                    "OpenIddict.EntityFrameworkCore",
+                    "OpenIddict.EntityFrameworkCore.Models"
                 ],
                 ["essentials/tests/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]

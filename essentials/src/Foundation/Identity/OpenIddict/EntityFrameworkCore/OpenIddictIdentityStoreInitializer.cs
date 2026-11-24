@@ -18,7 +18,7 @@ namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 /// either lifecycle. The store registration wires the initializer as a root <see cref="IHostedService"/> because CShells copies root descriptors into shell providers; registering the
 /// same initializer again as an <see cref="IShellInitializer"/> would run durable migrations twice on activation.
 /// </remarks>
-public sealed class OpenIddictIdentityStoreInitializer(
+internal sealed class OpenIddictIdentityStoreInitializer(
     IServiceProvider services,
     IOptions<OpenIddictEntityFrameworkCoreOptions> options) : IHostedService, IShellInitializer
 {

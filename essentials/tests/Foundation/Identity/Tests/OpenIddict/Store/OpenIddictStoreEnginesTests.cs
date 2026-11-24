@@ -1,6 +1,7 @@
+using CShells.Configuration;
+using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tooling;
-using Elsa.Workbench;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Engines;
 using Microsoft.EntityFrameworkCore;
@@ -11,14 +12,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
 
-namespace Elsa.Modularity.Tests;
+namespace Elsa.Foundation.Identity.Tests.OpenIddict.Store;
 
 /// <summary>
-/// The engine under Workbench's OpenIddict store is the one the default shell's OpenIddict settings name, SQLite unless they name
+/// The engine under the OpenIddict store is the one the default shell's OpenIddict settings name, SQLite unless they name
 /// another, so a deployment of several nodes can put the token store where they all read it: access-token validation reads the
 /// token's row, so a token issued on one node is only valid on another when both read one store. Nothing here opens a connection.
 /// </summary>
-public sealed class WorkbenchOpenIddictStoreProviderTests
+public sealed class OpenIddictStoreEnginesTests
 {
     private const string Section = "CShells:Shells:default:Features:FoundationIdentityOpenIddict";
 
@@ -146,9 +147,12 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
         Assert.Contains($"{Section}:Provider to {platform}", warning.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>MySQL cannot be the store's engine, so the notice does not send the operator to a setting that would fail the start.</summary>
+    /// <summary>
+    /// MySQL cannot be the store's engine, so the notice does not send the operator to a setting that would fail the start. Only the
+    /// legacy <c>Provider</c> route is run here: a resource on MySQL resolves only where the MySQL provider package is loaded, which
+    /// this project's EF closure leaves out; the resource routes are held by the theory above.
+    /// </summary>
     [Theory]
-    [InlineData(PlatformSelection.RootDefaultResource)]
     [InlineData(PlatformSelection.LegacyFeatureProvider)]
     public void A_platform_on_mysql_is_told_the_store_needs_another_engine_to_be_shared(PlatformSelection selection)
     {
@@ -226,7 +230,7 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
     [Fact]
     public void The_migrations_history_table_is_named_for_the_module_as_the_sqlite_stores_always_was()
     {
-        Assert.Equal(OpenIddictEntityFrameworkCoreDefaults.MigrationsHistoryTable, EfMigrationsHistory.TableName(OpenIddictStoreProvider.Module));
+        Assert.Equal(OpenIddictEntityFrameworkCoreDefaults.MigrationsHistoryTable, EfMigrationsHistory.TableName(OpenIddictStoreEngines.Module));
     }
 
     private static async Task StartNoticesAsync(IServiceProvider services) =>
@@ -237,13 +241,14 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
 
     /// <summary>
     /// The notice reads the features the process has loaded, as the host's CShells catalog has by the time the host has started; a test
-    /// process has loaded only what its tests touched, so this loads what Workbench references, to the depth the feature graph needs.
+    /// process has loaded only what its tests touched, so this loads the platform feature the cases select and what it references, to
+    /// the depth the feature graph needs.
     /// </summary>
-    private static class LoadedHostAssemblies
+    private static class LoadedFeatureAssemblies
     {
         private static readonly Lazy<bool> Loaded = new(() =>
         {
-            var pending = new Stack<System.Reflection.Assembly>([typeof(WorkbenchEfToolingShellDefaults).Assembly]);
+            var pending = new Stack<System.Reflection.Assembly>([typeof(StructuredLogsEntityFrameworkCoreFeature).Assembly]);
             var seen = new HashSet<string>(StringComparer.Ordinal);
             while (pending.TryPop(out var assembly))
             {
@@ -258,6 +263,14 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
         });
 
         public static void Force() => _ = Loaded.Value;
+    }
+
+    /// <summary>A host that adds no shell defaults: the notice reads only the platform's settings and the features it finds loaded.</summary>
+    private sealed class NoShellDefaults : IEfToolingShellDefaults
+    {
+        public void Configure(ShellBuilder builder, IConfiguration configuration)
+        {
+        }
     }
 
     /// <summary>The ways the platform selects the persistence provider of a feature, which the notice reads as the platform does.</summary>
@@ -287,10 +300,10 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
         if (platform is { } selected)
         {
             // A feature of the platform's that takes a provider, enabled in the default shell, selected as the case says.
-            const string Feature = "WorkflowsRuntimeEntityFrameworkCore";
+            const string Feature = "DiagnosticsStructuredLogsEntityFrameworkCore";
             var shell = "CShells:Shells:default";
-            LoadedHostAssemblies.Force();
-            settings[$"{shell}:Features:{Feature}:CacheWorkflowExecutables"] = "true";
+            LoadedFeatureAssemblies.Force();
+            settings[$"{shell}:Features:{Feature}:Pooling"] = "false";
             settings["Elsa:Persistence:Resources:primary:Provider"] = selected.Provider;
             settings["Elsa:Persistence:Resources:primary:ConnectionName"] = "Elsa";
             settings["ConnectionStrings:Elsa"] = "Data Source=platform-notice.db";
@@ -313,12 +326,12 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
             }
         }
 
-        return WorkbenchOpenIddictTestHost.CreateProvider(
+        return OpenIddictStoreTestHost.CreateProvider(
             new ConfigurationBuilder().AddInMemoryCollection(settings).Build(),
             configure: log is null ? null : services =>
             {
                 services.AddSingleton<ILoggerFactory>(log);
-                services.AddSingleton<IEfToolingShellDefaults, WorkbenchEfToolingShellDefaults>();
+                services.AddSingleton<IEfToolingShellDefaults, NoShellDefaults>();
             });
     }
 }
