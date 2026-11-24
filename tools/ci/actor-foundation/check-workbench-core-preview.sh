@@ -5,6 +5,11 @@ case "$configuration" in
   Debug|Release) ;;
   *) echo "Choose Debug or Release." >&2; exit 2 ;;
 esac
+case "${PG_PREVIEW_PROFILE:-}" in
+  "") profiles=(ordinary jobs timed timeout takeover) ;;
+  ordinary|jobs|timed|timeout|takeover) profiles=("$PG_PREVIEW_PROFILE") ;;
+  *) echo "Choose ordinary, jobs, timed, timeout or takeover." >&2; exit 2 ;;
+esac
 root=$(git -c core.fsmonitor=false rev-parse --show-toplevel)
 cd "$root"
 app=apps/Elsa.Workbench
@@ -39,7 +44,7 @@ port=${port##*:}
 sentinel="$scratch/caller-identity.sqlite"
 export CShells__Shells__default__Features__FoundationIdentityOpenIddict__IsDevelopmentOrDemo=false
 export CShells__Shells__default__Features__FoundationIdentityOpenIddict__ConnectionString="Data Source=$sentinel"
-for profile in ordinary jobs timed timeout; do
+for profile in "${profiles[@]}"; do
   database="workbench_core_preview_$profile"
   docker exec "$container" createdb -U postgres "$database"
   export KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=$port;Username=postgres;Password=$POSTGRES_PASSWORD;Database=$database;SSL Mode=Disable;GSS Encryption Mode=Disable"

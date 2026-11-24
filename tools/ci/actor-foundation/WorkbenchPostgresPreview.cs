@@ -28,20 +28,23 @@ internal static class WorkbenchPostgresPreview
 
     private sealed record Receipt(string Actor, string Bookmark, string Frame, string StateHash, string JournalHash, long Epoch, int Process);
     private sealed record Checkpoint(long Revision, string State, long Epoch, string? Owner);
+    private sealed record ActiveJob(long Epoch, string Owner, string State, string TicketId, string DeadlineId,
+        long Deadline, long Now);
 
     internal static async Task RunAsync(string[] arguments, string? executable = null)
     {
         if (arguments is not [var phase and ("birth" or "restart" or "disabled"), var receiptPath, .. var profileArguments] ||
-            profileArguments is not ([] or ["jobs" or "timed" or "timeout"]))
-            throw new ArgumentException("Expected birth, restart or disabled, a receipt file and optional jobs, timed or timeout profile.");
+            profileArguments is not ([] or ["jobs" or "timed" or "timeout" or "takeover"]))
+            throw new ArgumentException("Expected birth, restart or disabled, a receipt file and optional jobs, timed, timeout or takeover profile.");
         var profile = profileArguments.SingleOrDefault();
-        var timed = profile is "timed" or "timeout";
-        var timesOut = profile == "timeout";
+        var takeover = profile == "takeover";
+        var timed = profile is "timed" or "timeout" or "takeover";
+        var timesOut = profile is "timeout" or "takeover";
         var nativeJobs = profile is not null;
         var ticketScope = timed ? TimedJobScope : JobTicketScope;
 
-        if (phase == "disabled" && executable is null)
-            throw new ArgumentException("The disabled check requires a Workbench executable.");
+        if ((phase == "disabled" || takeover) && executable is null)
+            throw new ArgumentException("The disabled and takeover checks require a Workbench executable.");
 
         PrintVersion(typeof(DbContext).Assembly);
         PrintVersion(typeof(NpgsqlDbContextOptionsBuilderExtensions).Assembly);
@@ -110,7 +113,8 @@ internal static class WorkbenchPostgresPreview
         var store = new EfStore(Open, postgres: true);
         var ingress = await store.OpenPreviewRootIngressAsync(WorkflowActorType.ActorType, TimeSpan.FromHours(1), token);
         var reads = await store.OpenPreviewRootReadsAsync(64, token);
-        var definition = timed ? DirectApprovalWorkflow.BuildWithTimedJob(timesOut) :
+        var definition = takeover ? DirectApprovalWorkflow.BuildWithTimedTakeover() :
+            timed ? DirectApprovalWorkflow.BuildWithTimedJob(timesOut) :
             nativeJobs ? DirectApprovalWorkflow.BuildWithJob() : DirectApprovalWorkflow.Build();
         var registry = new WorkflowRegistry().Add(definition);
         if (timed) registry.Add(DirectApprovalWorkflow.Build());
@@ -134,7 +138,7 @@ internal static class WorkbenchPostgresPreview
         }
         var node = $"workbench-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
         using var host = executable is null ? CreateFixtureHost() : null;
-        using var workbench = executable is null ? null : WorkbenchProcess.Start(executable, settings.ConnectionString, enabled: true, profile);
+        var workbench = executable is null ? null : WorkbenchProcess.Start(executable, settings.ConnectionString, enabled: true, profile);
         var ownerPid = workbench?.Id ?? Environment.ProcessId;
         var nodePrefix = workbench is null ? node : $"workbench-core-preview-{ownerPid}-";
         Receipt? receipt = null;
@@ -186,9 +190,36 @@ internal static class WorkbenchPostgresPreview
                     "the replay leaves checkpoint bytes and the full journal unchanged");
                 Require(await Approve(actor, "approval-2", "Grace", previous.Frame) == Contract.AdmissionOutcome.Accepted,
                     "a new approval was admitted");
+                ActiveJob? cut = null;
+                if (takeover)
+                {
+                    // This profile requires the real Workbench executable. The old process is the only owner until killed.
+                    var former = workbench!;
+                    workbench = null;
+                    using (former)
+                    {
+                        Require(await former.WaitForJobEntryAsync(token) == actor.Id,
+                            "the original Workbench entered the selected actor's timed job");
+                        cut = await ReadActiveJob(actor) ?? throw new InvalidOperationException("The entered job has no preserved ticket and deadline.");
+                        Require(cut.Owner == waiting.Owner && cut.Epoch == waiting.Epoch && cut.Deadline > cut.Now,
+                            "revision three contains the active job on the original epoch with time left");
+                        await former.CrashAsync(token);
+                        var interrupted = await ReadActiveJob(actor);
+                        Require(interrupted is not null && (interrupted with { Now = cut.Now }) == cut && interrupted.Now < cut.Deadline,
+                            "abrupt exit leaves the original fence, checkpoint, ticket and deadline intact before timeout");
+                    }
+
+                    workbench = WorkbenchProcess.Start(executable!, settings.ConnectionString, enabled: true, profile);
+                    Require(workbench.Id != ownerPid, "a different Workbench process starts after the owner exits");
+                    ownerPid = workbench.Id;
+                    nodePrefix = $"workbench-core-preview-{ownerPid}-";
+                    await workbench.WaitReadyAsync(token);
+                }
                 var chained = timed && !timesOut;
                 var finalRevision = chained ? 7L : timed ? 5L : nativeJobs ? 4L : 3L;
                 var completion = await WaitFor(actor, finalRevision);
+                if (cut is not null)
+                    Require(completion.Epoch > cut.Epoch, "the replacement Workbench applied the outcome at a higher epoch");
                 var native = Native(completion, timed);
                 Require(await reads.GetAsync(scope, actor, token) is { Header.Status: Contract.ActorStatus.Finished } &&
                     native.Results["approve"]!.AsArray().Select(item => item!.GetValue<string>()).SequenceEqual(["Ada", "Grace"]),
@@ -246,6 +277,7 @@ internal static class WorkbenchPostgresPreview
                             SELECT count(*) = {jobCount} AND count(DISTINCT w."Generation") = {jobCount} AND bool_and(
                                 w."Generation" >= 0 AND w."Generation" < {jobCount} AND w."Due" = 0
                                 AND c."Revision" = 4 + 2 * w."Generation" AND c."Status" = 0
+                                AND c."Epoch" = {completion.Epoch} AND c."At" >= {cut?.Deadline ?? 0}
                                 AND (w."Payload"::jsonb ->> 'Error') IS NOT DISTINCT FROM {error}
                                 AND CASE WHEN {timesOut} THEN (w."Payload"::jsonb ->> 'Result') IS NULL
                                     ELSE ((w."Payload"::jsonb ->> 'Result')::jsonb ->> 'Result') IS NOT DISTINCT FROM {DirectApprovalWorkflow.JobResult}
@@ -255,8 +287,29 @@ internal static class WorkbenchPostgresPreview
                                 AND c."Transaction" = w."Transaction"
                             WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id} AND w."Kind" = 'job-finished'
                             """).SingleAsync(token);
-                        Require(result, "each timed generation recorded the expected result in its own running checkpoint");
+                        Require(result, cut is null ? "each timed generation recorded the expected result in its own running checkpoint"
+                            : "only the new owner recorded a timeout at or after the original database deadline");
+                        if (cut is not null)
+                        {
+                            var exactPair = await observation.Database.SqlQuery<bool>($"""
+                                SELECT count(*) = 2 AND
+                                    count(*) FILTER (WHERE d."Id" = {cut.TicketId} AND d."Due" = 0) = 1 AND
+                                    count(*) FILTER (WHERE d."Id" = {cut.DeadlineId} AND d."Due" = {cut.Deadline}) = 1 AS "Value"
+                                FROM "WorkbenchJobRemovalWitness" d JOIN "WorkbenchCheckpointWitness" c ON c."Partition" = d."Partition"
+                                    AND c."Target" = d."Target" AND c."Transaction" = d."Transaction"
+                                JOIN "Instances" i ON i."Partition" = d."Partition" AND i."Id" = d."Target"
+                                WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
+                                    AND c."Revision" = 4 AND c."Epoch" = {completion.Epoch}
+                                """).SingleAsync(token);
+                            Require(exactPair, "settlement consumes the original ticket and unchanged deadline in the timeout transaction");
+                        }
                     }
+                }
+                if (cut is not null)
+                {
+                    Require(await Approve(actor, "approval-2", "changed again", previous.Frame) == Contract.AdmissionOutcome.Duplicate &&
+                        await Read(actor) == completion && JournalHash(await reads.TailAsync(scope, actor, bookmark, token)) == JournalHash(suffix),
+                        "replaying the job-starting approval after takeover leaves completion unchanged");
                 }
                 last = completion;
             }
@@ -264,7 +317,7 @@ internal static class WorkbenchPostgresPreview
         finally
         {
             if (workbench is not null)
-                await workbench.StopAsync();
+                using (workbench) await workbench.StopAsync();
             if (host is not null)
             {
                 using var shutdown = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -321,6 +374,24 @@ internal static class WorkbenchPostgresPreview
                 """).SingleOrDefaultAsync(token);
         }
 
+        async Task<ActiveJob?> ReadActiveJob(Contract.ActorRef actor)
+        {
+            await using var db = OpenObservation();
+            return await db.Database.SqlQuery<ActiveJob>($"""
+                SELECT p."Epoch", p."Owner", i."State", j."Id" AS "TicketId", d."Id" AS "DeadlineId", d."Due" AS "Deadline",
+                    floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Now"
+                FROM "Instances" i JOIN "Partitions" p ON p."Id" = i."Partition"
+                JOIN "Messages" j ON j."Partition" = i."Partition" AND j."Target" = i."Id"
+                JOIN "Messages" d ON d."Partition" = i."Partition" AND d."Target" = i."Id"
+                WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
+                    AND p."Owner" IS NOT NULL AND i."Status" = 0 AND i."Revision" = 3 AND i."Jobs" IS NOT NULL AND i."NextJobGeneration" = 1
+                    AND j."InboxScope" = {TimedJobScope} AND j."Kind" = 'kernel.job' AND j."JobGeneration" = 0 AND NOT j."Done"
+                    AND d."InboxScope" = {TimedJobScope} AND d."Kind" = 'kernel.job-deadline' AND d."JobGeneration" = 0 AND NOT d."Done"
+                    AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Partition" = i."Partition" AND m."Target" = i."Id"
+                        AND m."InboxScope" = {TimedJobScope} AND m."Kind" = 'job-finished')
+                """).SingleOrDefaultAsync(token);
+        }
+
         async Task<Checkpoint> WaitFor(Contract.ActorRef actor, long revision)
         {
             while (true)
@@ -338,7 +409,10 @@ internal static class WorkbenchPostgresPreview
 
     private sealed class WorkbenchProcess(Process process, DirectoryInfo workspace, Task<string> log) : IDisposable
     {
+        private readonly TaskCompletionSource<string> jobEntry = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         internal int Id => process.Id;
+        internal Task<string> WaitForJobEntryAsync(CancellationToken token) => jobEntry.Task.WaitAsync(token);
 
         internal static WorkbenchProcess Start(string executable, string connection, bool enabled, string? profile)
         {
@@ -372,7 +446,7 @@ internal static class WorkbenchPostgresPreview
                 start.Environment["Elsa__CorePreview__Enabled"] = "true";
             if (profile == "jobs")
                 start.Environment["Elsa__CorePreview__NativeJobs"] = "true";
-            if (profile is "timed" or "timeout")
+            if (profile is "timed" or "timeout" or "takeover")
                 start.Environment["Elsa__CorePreview__TimedNativeJobs"] = "true";
             start.Environment["ConnectionStrings__KernelCorePreview"] = connection;
             var process = Process.Start(start) ?? throw new InvalidOperationException("Workbench did not start.");
@@ -389,13 +463,28 @@ internal static class WorkbenchPostgresPreview
                 if (offset < 0)
                     continue;
 
-                _ = process.StandardOutput.ReadToEndAsync();
+                _ = ReadRuntimeOutputAsync();
                 using var client = new HttpClient();
                 using var response = await client.GetAsync(line[(offset + listening.Length)..], token);
                 Require(response.IsSuccessStatusCode, "the normal Workbench root responds");
                 return;
             }
             throw new InvalidOperationException($"Workbench exited before listening. {await log.WaitAsync(token)}");
+        }
+
+        private async Task ReadRuntimeOutputAsync()
+        {
+            while (await process.StandardOutput.ReadLineAsync() is { } line)
+                if (line.StartsWith(DirectApprovalWorkflow.ActiveJobEntry, StringComparison.Ordinal))
+                    jobEntry.TrySetResult(line[DirectApprovalWorkflow.ActiveJobEntry.Length..]);
+        }
+
+        internal async Task CrashAsync(CancellationToken token)
+        {
+            Require(!process.HasExited, "the entered Workbench process is still running before abrupt exit");
+            process.Kill();
+            await process.WaitForExitAsync(token);
+            Require(process.ExitCode != 0, "the entered owner exited abruptly");
         }
 
         internal async Task StopAsync()
@@ -428,7 +517,8 @@ internal static class WorkbenchPostgresPreview
     {
         var sql = FormattableString.Invariant($"""
             CREATE TABLE "WorkbenchJobWitness" ("Partition" int, "Target" text, "Generation" bigint, "Transaction" xid, "Kind" text, "Due" bigint, "Payload" text);
-            CREATE TABLE "WorkbenchCheckpointWitness" ("Partition" int, "Target" text, "Revision" bigint, "Status" integer, "Transaction" xid);
+            CREATE TABLE "WorkbenchJobRemovalWitness" ("Partition" int, "Target" text, "Id" text, "Due" bigint, "Transaction" xid);
+            CREATE TABLE "WorkbenchCheckpointWitness" ("Partition" int, "Target" text, "Revision" bigint, "Status" integer, "Transaction" xid, "Epoch" bigint, "At" bigint);
             CREATE FUNCTION capture_workbench_job() RETURNS trigger LANGUAGE plpgsql AS $fn$
             BEGIN
                 IF NEW."InboxScope" = {ticketScope} THEN
@@ -438,9 +528,22 @@ internal static class WorkbenchPostgresPreview
             END;
             $fn$;
             CREATE TRIGGER capture_workbench_job AFTER INSERT ON "Messages" FOR EACH ROW EXECUTE FUNCTION capture_workbench_job();
+            CREATE FUNCTION capture_workbench_job_removal() RETURNS trigger LANGUAGE plpgsql AS $fn$
+            BEGIN
+                IF OLD."InboxScope" = {ticketScope} THEN
+                    INSERT INTO "WorkbenchJobRemovalWitness" VALUES (OLD."Partition", OLD."Target", OLD."Id", OLD."Due", pg_current_xact_id()::xid);
+                END IF;
+                RETURN OLD;
+            END;
+            $fn$;
+            CREATE TRIGGER capture_workbench_job_removal AFTER DELETE ON "Messages" FOR EACH ROW
+                EXECUTE FUNCTION capture_workbench_job_removal();
             CREATE FUNCTION capture_workbench_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $fn$
             BEGIN
-                INSERT INTO "WorkbenchCheckpointWitness" VALUES (NEW."Partition", NEW."Id", NEW."Revision", NEW."Status", NEW.xmin);
+                INSERT INTO "WorkbenchCheckpointWitness"
+                    SELECT NEW."Partition", NEW."Id", NEW."Revision", NEW."Status", NEW.xmin, p."Epoch",
+                        floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                    FROM "Partitions" p WHERE p."Id" = NEW."Partition";
                 RETURN NEW;
             END;
             $fn$;
@@ -452,7 +555,7 @@ internal static class WorkbenchPostgresPreview
 
     private static KernelDb OpenProfile(DbContextOptions<KernelDb> options, string? profile) => profile switch
     {
-        "timed" or "timeout" => PostgresPreviewHosting.CreateTimedNativeJobContext(options),
+        "timed" or "timeout" or "takeover" => PostgresPreviewHosting.CreateTimedNativeJobContext(options),
         "jobs" => PostgresPreviewHosting.CreateNativeJobContext(options),
         _ => new(options)
     };

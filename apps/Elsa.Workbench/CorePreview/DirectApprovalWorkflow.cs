@@ -9,6 +9,8 @@ internal sealed class DirectApprovalWorkflow : CompositeActivity, ISignalledComp
     internal const string JobDefinition = "direct-approval-with-job";
     internal const string TimedDefinition = "direct-approval-with-timed-job";
     internal const string TimeoutDefinition = "direct-approval-with-timeout";
+    internal const string TakeoverDefinition = "direct-approval-with-timed-takeover";
+    internal const string ActiveJobEntry = "core-preview-timed-job-entered: ";
     internal const string TimeoutBoundary = "catch-timeout";
     internal const string JobNode = "approval-job";
     internal const string SuccessorJobNode = "approval-follow-up";
@@ -33,6 +35,24 @@ internal sealed class DirectApprovalWorkflow : CompositeActivity, ISignalledComp
 
         var followUp = new Node(SuccessorJobNode, typeof(ProcessApproval)) { JobTimeout = TimeSpan.FromSeconds(20) };
         return Wf.Workflow(TimedDefinition, Wf.Sequence("main", approve, work, followUp));
+    }
+
+    internal static Workflow BuildWithTimedTakeover()
+    {
+        var work = new Node(JobNode, typeof(WaitForTakeover)) { JobTimeout = TimeSpan.FromSeconds(15) };
+        return Wf.Workflow(TakeoverDefinition, Wf.Sequence("main", Wf.Node<DirectApprovalWorkflow>("approve"),
+            Wf.Node<CatchTimeout>(TimeoutBoundary).With(work)));
+    }
+
+    [Background]
+    public sealed class WaitForTakeover : Activity<string>
+    {
+        protected override async ValueTask<Transition> ExecuteAsync(ActivityContext context)
+        {
+            Console.WriteLine(ActiveJobEntry + context.Instance.Id);
+            await Task.Delay(Timeout.InfiniteTimeSpan, context.CancellationToken);
+            return Complete(JobResult);
+        }
     }
 
     [Background]

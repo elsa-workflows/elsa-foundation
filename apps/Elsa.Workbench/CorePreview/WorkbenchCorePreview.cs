@@ -26,7 +26,8 @@ internal static class WorkbenchCorePreview
         var workflows = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
         if (nativeJobs) workflows.Add(DirectApprovalWorkflow.BuildWithJob());
         if (timedJobs)
-            workflows.Add(DirectApprovalWorkflow.BuildWithTimedJob()).Add(DirectApprovalWorkflow.BuildWithTimedJob(timesOut: true));
+            workflows.Add(DirectApprovalWorkflow.BuildWithTimedJob()).Add(DirectApprovalWorkflow.BuildWithTimedJob(timesOut: true))
+                .Add(DirectApprovalWorkflow.BuildWithTimedTakeover());
         var model = new NativeExecutionModel(workflows);
         var actor = new WorkflowActor([model]);
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
