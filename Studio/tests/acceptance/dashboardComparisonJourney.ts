@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { expectedStudioDate, selectStudioTimeZone } from "./studioDateAssertions";
+import { openQuestionSection } from "./questionNavigation";
 import type { QuestionDefinition, QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
 import { attachDashboardJson, canonicalDashboardDefinition, dashboardBackend, observeNativeWeaverBoundary, registerDashboardCleanup, seedDashboardRuns, tag, type Capture, type Resource } from "./dashboardJourneySupport";
 
@@ -73,6 +74,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     await source.getByRole("button", { name: "Add condition", exact: true }).click();
     await source.getByRole("combobox", { name: "Field", exact: true }).selectOption("definitionId");
     await source.getByLabel("Comparison value", { exact: true }).fill(seeded.definitionId);
+    await openQuestionSection(page, "query.time");
     await page.getByRole("combobox", { name: "Time field", exact: true }).selectOption("startedAt");
     await page.getByRole("combobox", { name: "Time range", exact: true }).selectOption("absolute");
     await page.getByLabel("Start time (UTC, inclusive)", { exact: true }).fill(periods.from);
@@ -81,13 +83,13 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     await page.getByRole("combobox", { name: "Compare with", exact: true }).selectOption("absolute");
     await page.getByLabel("Baseline from", { exact: true }).fill(periods.baselineFrom);
     await page.getByLabel("Baseline to", { exact: true }).fill(periods.baselineTo);
-    const having = page.getByRole("group", { name: "Result conditions", exact: true });
+    const having = await openQuestionSection(page, "query.having");
     await having.getByRole("button", { name: "Add condition", exact: true }).click();
     await having.getByRole("combobox", { name: "Result metric", exact: true }).selectOption("delta.total");
     await having.getByLabel("Comparison value", { exact: true }).fill(String(delta));
     const preview = async () => {
       const pending = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/dashboard-queries/preview"));
-      await page.getByRole("button", { name: "Preview question", exact: true }).click();
+      await page.getByRole("button", { name: "Preview", exact: true }).click();
       const response = await pending; expect(response.ok()).toBe(true);
       const result = await response.json() as QueryResult;
       expect(result.outcome).toBe("succeeded"); expect(result.coverage?.status).toBe("unknown");
@@ -96,6 +98,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     const excluded = await preview(); expect(excluded.result.rows).toEqual([]);
     await capture(page, info, "comparison-excluded");
     await captureTarget("comparison-excluded-empty", page.getByRole("status").filter({ hasText: "No authorized records matched this question" }));
+    await openQuestionSection(page, "query.having");
     await having.getByLabel("Comparison value", { exact: true }).fill("0");
     const included = await preview();
     const check = (result: QueryResult) => {
@@ -131,7 +134,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     await page.reload();
     await expect(page.getByRole("combobox", { name: "Compare with", exact: true })).toHaveValue("absolute");
     const refresh = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/questions/${saved!.id}/execute`));
-    await page.getByRole("button", { name: "Refresh results", exact: true }).click();
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
     const refreshed = await refresh; expect(refreshed.ok()).toBe(true); check(await refreshed.json() as QueryResult);
     await capture(page, info, "comparison-saved-reopened");
     await captureValues("comparison-reopened");

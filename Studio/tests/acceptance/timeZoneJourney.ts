@@ -62,7 +62,10 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
   const publication = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${submitted.version.id}/publish`, "POST", {});
   const executePath = `/runtime/workflows/executables/${publication.artifactId}/execute`;
   const executeUrl = `${base}${executePath}`;
-  const inspectorUrl = `/workflows/executables/${publication.artifactId}?backend=legacy&ref=${publication.sourceReferenceId}`;
+  const inspectorQuery = new URLSearchParams({ ref: publication.sourceReferenceId });
+  const selectedBackend = new URL(page.url()).searchParams.get("backend");
+  if (selectedBackend) inspectorQuery.set("backend", selectedBackend);
+  const inspectorUrl = `/workflows/executables/${publication.artifactId}?${inspectorQuery}`;
   const starts: string[] = [];
   page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === executePath) starts.push(request.postData() ?? ""); });
 

@@ -419,6 +419,11 @@ export async function playbackTransportJourney(page: Page, info: TestInfo, captu
   const branches = observed.activities.filter(item => ["left", "right"].includes(item.authoredActivityId)); expect(branches).toHaveLength(2);
   expect(sequence.items.filter(item => branches.some(row => row.activityExecutionId === item.activityExecutionId)).every(item => item.parentActivityExecutionId)).toBe(true);
   const clockStart = new Date(Date.parse(sequence.readAt) + 60_000);
+  // Clock installation affects future pages too. Mount Settings before pausing the shared browser clock.
+  const mountedSettings = await page.context().newPage();
+  register(async () => { await mountedSettings.close(); });
+  await mountedSettings.goto(new URL("/settings/appearance", page.url()).toString());
+  await expect(mountedSettings.getByLabel("Time zone", { exact: true })).toHaveValue("Europe/Amsterdam");
   await page.clock.install({ time: new Date(clockStart.getTime() - 60_000) }); await h.open(run.id, 9); await page.clock.pauseAt(clockStart);
   await h.position(0, 9, sequence.items[0].activityExecutionId);
   const first = sequence.items[0];
@@ -428,12 +433,12 @@ export async function playbackTransportJourney(page: Page, info: TestInfo, captu
   await expect(moment).toContainText((await expectedStudioDate(page, instant!, "Europe/Amsterdam")).full);
   await h.snap("playback-time-zone-amsterdam");
   const readsBeforeZoneChange = h.observedRequests.length;
-  await selectStudioTimeZone(page, "UTC");
+  await selectStudioTimeZone(page, "UTC", mountedSettings);
   await expect(moment).toContainText((await expectedStudioDate(page, instant!, "UTC")).full);
   await h.position(0, 9, first.activityExecutionId);
   expect(h.observedRequests).toHaveLength(readsBeforeZoneChange);
   await h.snap("playback-time-zone-utc");
-  await selectStudioTimeZone(page, "Europe/Amsterdam");
+  await selectStudioTimeZone(page, "Europe/Amsterdam", mountedSettings);
   const next = h.controls.getByRole("button", { name: "Next", exact: true });
   await next.focus(); await next.press("Enter"); await h.position(1, 9, sequence.items[1].activityExecutionId); await expect(next).toBeFocused();
   await h.controls.getByText("Playback options", { exact: true }).click();

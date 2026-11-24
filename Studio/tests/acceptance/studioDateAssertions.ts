@@ -13,12 +13,12 @@ export async function expectedStudioDate(page: Page, instant: string, zone: stri
 }
 
 /** Changes the actual preference through Settings, preserving the inspected page and its mounted components. */
-export async function selectStudioTimeZone(page: Page, zone: string) {
-  const settings = await page.context().newPage();
+export async function selectStudioTimeZone(page: Page, zone: string, mountedSettings?: Page) {
+  const settings = mountedSettings ?? await page.context().newPage();
   try {
-    await settings.goto(new URL("/settings/appearance", page.url()).toString());
+    if (!mountedSettings) await settings.goto(new URL("/settings/appearance", page.url()).toString());
     const picker = settings.getByLabel("Time zone", { exact: true });
     await picker.selectOption(zone);
     await expect(picker).toHaveValue(zone);
-  } finally { await settings.close(); }
+  } finally { if (!mountedSettings) await settings.close(); }
 }

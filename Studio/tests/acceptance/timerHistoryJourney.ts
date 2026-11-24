@@ -70,6 +70,10 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
   await waitCapturedPlaybackReady(page);
   const summary = await (await summaryRead).json() as RuntimeHistoryBookmarkPage;
   await expect(page.locator(".wf-history-run-summary")).toContainText((await expectedStudioDate(page, summary.readAt, "Europe/Amsterdam")).full);
+  const waitingObservation = page.locator(".wf-history-run-summary p").filter({ hasText: "Waiting handles observed" });
+  await waitingObservation.scrollIntoViewIfNeeded();
+  await expect(waitingObservation).toBeInViewport();
+  await capture(page, info, "timer-waiting-summary");
   expect(waiting.instance.completedAt, "A waiting run has no invented completion instant").toBeNull();
   const details = page.getByRole("region", { name: "History event details", exact: true });
   await expect(details.getByRole("heading", { name: "Timer scheduled", exact: true })).toBeVisible();
@@ -123,6 +127,10 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
   await dispatchHeading.scrollIntoViewIfNeeded();
   await expect(dispatchHeading).toBeInViewport();
   await capture(page, info, "timer-dispatched");
+  const dispatchedTime = details.getByText(`${(await expectedStudioDate(page, dispatched.occurredAt!, "Europe/Amsterdam")).full} · ${dispatched.occurredAt}`, { exact: true });
+  await dispatchedTime.scrollIntoViewIfNeeded();
+  await expect(dispatchedTime).toBeInViewport();
+  await capture(page, info, "timer-dispatched-time");
   await details.getByRole("button", { name: "Inspect causal event →", exact: true }).click();
   await expect(details.getByRole("heading", { name: "Timer scheduled", exact: true })).toBeVisible();
   await details.getByText("Technical details", { exact: true }).click();
