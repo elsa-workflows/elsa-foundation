@@ -23,14 +23,16 @@ public sealed partial class BpmnDirectExecutionTests
         var sourceSha = await GitAsync("rev-parse", "HEAD");
         Assert.Equal(string.Empty, await GitAsync("status", "--porcelain"));
         var names = new HashSet<string>(["Elsa.Activities.Bpmn.Tests", "Elsa.Activities.Bpmn", "Elsa.Workflows.Runtime.Core",
-            "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "Bpmn.Model", "Bpmn.Semantics"], StringComparer.Ordinal);
+            "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "Elsa.Serialization.Core",
+            "Elsa.Activities.Runtime.Core", "Bpmn.Model", "Bpmn.Semantics"], StringComparer.Ordinal);
         var assemblies = AppDomain.CurrentDomain.GetAssemblies().Where(assembly => names.Contains(assembly.GetName().Name!)).ToArray();
         Assert.Equal(names.Count, assemblies.Length);
         var binaryHashes = assemblies.ToDictionary(assembly => Path.GetFileName(assembly.Location),
             assembly => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(assembly.Location))));
         var binaryVersions = assemblies.ToDictionary(assembly => Path.GetFileName(assembly.Location),
             assembly => assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? string.Empty);
-        Assert.EndsWith("+" + sourceSha, binaryVersions["Elsa.Activities.Bpmn.Tests.dll"]);
+        foreach (var (name, version) in binaryVersions.Where(pair => pair.Key.StartsWith("Elsa.", StringComparison.Ordinal)))
+            Assert.True(version.EndsWith("+" + sourceSha, StringComparison.Ordinal), "Capture binary differs from the clean writer source: " + name);
         var snapshot = Path.Combine(output, stage + ".sqlite");
         Assert.False(File.Exists(snapshot), "Use a new fixture capture directory.");
         await using (var source = new SqliteConnection($"Data Source={database};Pooling=False"))
