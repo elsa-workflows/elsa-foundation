@@ -45,6 +45,11 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal static async Task<FoundationReadCursor> OpenJournalCursorAsync(KernelDb db, CancellationToken cancellationToken)
     {
         await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
+        return await ReadJournalCursorAsync(db, cancellationToken);
+    }
+
+    private static async Task<FoundationReadCursor> ReadJournalCursorAsync(KernelDb db, CancellationToken cancellationToken)
+    {
         var issuerKey = await db.Database.SqlQueryRaw<byte[]>("""SELECT "Key" AS "Value" FROM "FoundationRootIssuer" """)
             .SingleAsync(cancellationToken);
         return new(HMACSHA256.HashData(issuerKey, "elsa-preview/journal-cursor/1"u8));

@@ -680,6 +680,16 @@ from committed checkpoints. Its first-checkpoint and takeover fixture runs with
 still need their own qualification. The ordinary Core Preview keeps its existing
 read layout.
 
+Format 13 also issues a running selection for the committed generated creation.
+A host can open the selected ingress with permission for the exact actor. The
+public workflow runtime submits that selection with Terminate. PostgreSQL checks
+permission, selection, format and the current running checkpoint before writing
+the operator occurrence and receipt together. A duplicate to the same actor
+returns its original receipt. Using that operation ID with another actor under
+the same tenant is refused. The fixture submits through the public contract, then
+delivers under a later epoch. The command path supports a one-way Terminate.
+Reason text, ThenDelete, held replies and cascades keep their own qualification.
+
 ## 10. Private durable lexical-resource probe
 
 The [lexical runner](../../essentials/tests/Workflows/Runtime/Native/Scopes/Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.

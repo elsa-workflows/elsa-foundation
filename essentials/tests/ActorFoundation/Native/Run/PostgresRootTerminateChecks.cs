@@ -52,6 +52,18 @@ internal static class PostgresRootTerminateChecks
         var reader = new ObservedNative(native, native.StateVersion, fallback ? 400_000 : 0);
         var upgradedActor = new PublicActor([reader]);
         var actor = (await runtime.StartAsync(tenant, "start", NativeExecutionModel.Start(definition), cancellationToken: stop)).Actor!.Value;
+        var authorized = actor;
+        var allowSelected = true;
+        var selectedIngress = terminalSelection
+            ? await cold.OpenSelectedRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1),
+                (scope, target) => ReferenceEquals(scope, tenant) && allowSelected && target == authorized, stop)
+            : null;
+        var selectedRuntime = selectedIngress is null ? null : new WorkflowRuntime(selectedIngress, reads);
+        Contract.ActorView? chosen = null;
+        Contract.ActorView? competing = null;
+        var secondActor = terminalSelection
+            ? (await runtime.StartAsync(tenant, "other-selection", NativeExecutionModel.Start(definition), cancellationToken: stop)).Actor
+            : null;
         Contract.ActorRef? neighbor = fallback
             ? (await runtime.StartAsync(tenant, "neighbor", NativeExecutionModel.Start(definition), cancellationToken: stop)).Actor!.Value
             : null;
@@ -80,8 +92,12 @@ internal static class PostgresRootTerminateChecks
                 Check(Enumerable.Range(1, 3).All(revision => declaredGrowth.GetValueOrDefault(revision) > 0),
                     "the actual Native adapter carries its nonzero growth declaration on birth, update and Suspend");
             if (stableBody)
-                Check(await reads.GetAsync(tenant, actor, stop) is { Selection: null, Header.EndedAt: null },
-                    "a running actor has no terminal selection");
+            {
+                chosen = await reads.GetAsync(tenant, actor, stop);
+                Check(chosen is { Header.EndedAt: null } && (terminalSelection
+                    ? PostgresRootSelection.MatchesRunning(cursor, chosen.Selection, tenant.Tenant, actor.Id)
+                    : chosen.Selection is null), "the running projection uses its profile's selection contract");
+            }
             before = await ReadEncodedContent(prior.Actor.Id);
             var previousInbox = Json.Read<NativeState>(prior.State!).Inboxes!.Single();
             inbox = previousInbox.Key;
@@ -100,6 +116,11 @@ internal static class PostgresRootTerminateChecks
                 Check((await basic.SendAsync(tenant, new Contract.Target.Ref(other), "neighbor-input", CompositeSignal.Kind,
                     Json.Write(new CompositeSignal(otherFrame, "approve", neighborApproval)), cancellationToken: stop)).Outcome ==
                     Contract.AdmissionOutcome.Accepted, "the neighboring actor has its own pending input");
+            }
+            if (secondActor is { } second)
+            {
+                await Drive(owner, image => image is { Revision: 1 }, second);
+                competing = await reads.GetAsync(tenant, second, stop);
             }
         }
 
@@ -136,8 +157,52 @@ internal static class PostgresRootTerminateChecks
             (await basic.SendAsync(tenant, new Contract.Target.Ref(actor), operation, Contract.Kinds.Terminate,
                 cancellationToken: stop)).Outcome == Contract.AdmissionOutcome.Refused,
             "the termination requires matching scope and operator permission");
-        Check((await Control(tenant, operation, Contract.Kinds.Terminate)).Outcome == Contract.AdmissionOutcome.Accepted,
-            "the authorized exact creation admits one Terminate");
+        if (selectedIngress is not null)
+        {
+            var selected = chosen!;
+            var other = secondActor!.Value;
+            var destination = new Contract.Target.Ref(actor);
+            string Wire(Contract.OperatorCommand command) => JsonSerializer.Serialize(command);
+            ValueTask<Contract.Admission> Propose(string? payload, Contract.ActorRef? target = null) =>
+                selectedIngress.SendAsync(tenant, target is { } exact ? new Contract.Target.Ref(exact) : destination,
+                    operation, Contract.Kinds.Terminate, payload, cancellationToken: stop);
+
+            allowSelected = false;
+            Check((await Control(tenant, operation, Contract.Kinds.Terminate)).Outcome == Contract.AdmissionOutcome.Refused,
+                "a selected actor still requires the host's operator permission");
+            allowSelected = true;
+            authorized = other;
+            Check((await Propose(Wire(new(selected.Selection)), other)) is
+                    { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
+                "even an authorized second actor cannot use the first actor's selection");
+            authorized = actor;
+            Check((await Propose(null)).Outcome == Contract.AdmissionOutcome.Refused &&
+                  (await Propose(Wire(new(selected.Selection, ThenDelete: true, ExpectedTarget: actor)))).Outcome == Contract.AdmissionOutcome.Refused &&
+                  (await Propose(Wire(new(selected.Selection, ExpectedTarget: other)))).Outcome == Contract.AdmissionOutcome.Refused &&
+                  (await Propose(Wire(new(PostgresRootSelection.SealRunning(cursor, "other", actor.Id))))).Outcome == Contract.AdmissionOutcome.Refused &&
+                  await admission.AdmitRootOperatorAsync(tenant.Tenant, actor.Id, operation, Contract.Kinds.Terminate, null, null, stop) is null &&
+                  await admission.ReadDueRootOperatorAsync(tenant.Tenant, actor.Id, stop) is null &&
+                  await admission.ReadDueRootOperatorAsync(tenant.Tenant, other.Id, stop) is null,
+                "missing, mismatched and unsupported selections leave both command queues untouched");
+
+            var attempts = await Task.WhenAll(Control(tenant, operation, Contract.Kinds.Terminate).AsTask(),
+                Control(tenant, operation, Contract.Kinds.Terminate).AsTask());
+            await using var db = Open();
+            Check(attempts.All(attempt => attempt.Actor == actor) &&
+                  attempts.Count(attempt => attempt.Outcome == Contract.AdmissionOutcome.Accepted) == 1 &&
+                  attempts.Count(attempt => attempt.Outcome == Contract.AdmissionOutcome.Duplicate) == 1 &&
+                  await db.Messages.CountAsync(row => row.Target == prior.Actor.Id && row.Kind == Kinds.Terminate && !row.Done, stop) == 1,
+                "concurrent authorized selection replay creates one durable command for the exact creation");
+            authorized = other;
+            Check((await selectedRuntime!.TerminateAsync(tenant, operation, competing!, cancellationToken: stop)) is
+                    { Outcome: Contract.AdmissionOutcome.Refused, Actor: null } &&
+                  await admission.ReadDueRootOperatorAsync(tenant.Tenant, other.Id, stop) is null,
+                "a reused operation id cannot disclose a receipt from an actor outside the current permission");
+            authorized = actor;
+        }
+        else
+            Check((await Control(tenant, operation, Contract.Kinds.Terminate)).Outcome == Contract.AdmissionOutcome.Accepted,
+                "the authorized exact creation admits one Terminate");
         var command = (await admission.ReadDueRootOperatorAsync(tenant.Tenant, actor.Id, stop))!;
         if (fallback) priorEpoch = await ProveExpandedWriteRefused();
         var successor = fallback ? new PublicActor([]) : upgradedActor;
@@ -171,6 +236,19 @@ internal static class PostgresRootTerminateChecks
             var replay = await Control(tenant, operation, Contract.Kinds.Terminate);
             Check(replay is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var original } && original == actor,
                 "replaying the operator id returns the original creation after completion");
+            if (selectedRuntime is not null)
+            {
+                allowSelected = false;
+                Check((await Control(tenant, operation, Contract.Kinds.Terminate)).Outcome == Contract.AdmissionOutcome.Refused,
+                    "operator replay still requires authorization after completion");
+                allowSelected = true;
+                var terminal = (await reads.GetAsync(tenant, actor, stop))!;
+                Check((await selectedRuntime.TerminateAsync(tenant, "terminal-mark", terminal, cancellationToken: stop)) is
+                        { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection } &&
+                      (await Control(tenant, "another-run", Contract.Kinds.Terminate)) is
+                        { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
+                    "a terminal selection and a new operation on an ended actor cannot admit Terminate");
+            }
             Check(!(await HeldRow(held.InboxKey)).Done, "the withheld input is still pending at the terminal checkpoint");
             await CheckDirectReplay("before the withheld approval is disposed");
             await owner.WokenAsync(null, stop);
@@ -231,13 +309,13 @@ internal static class PostgresRootTerminateChecks
             var point = (await reads.GetAsync(tenant, actor, stop))!;
             var listed = (await reads.ListAsync(tenant, new(Status: Contract.ActorStatus.Cancelled), cancellationToken: stop)).Items.Single();
             Check(point.Header.EndedAt == endedAt && listed.Header.EndedAt == endedAt &&
-                  PostgresRootTerminalSelection.Matches(cursor, point.Selection, tenant.Tenant, actor.Id, revision, endedAt) &&
-                  PostgresRootTerminalSelection.Matches(cursor, listed.Selection, tenant.Tenant, actor.Id, revision, endedAt),
+                  PostgresRootSelection.MatchesTerminal(cursor, point.Selection, tenant.Tenant, actor.Id, revision, endedAt) &&
+                  PostgresRootSelection.MatchesTerminal(cursor, listed.Selection, tenant.Tenant, actor.Id, revision, endedAt),
                 "point and list select the exact committed terminal mark");
-            Check(!PostgresRootTerminalSelection.Matches(cursor, point.Selection, tenant.Tenant, actor.Id, revision + 1, endedAt) &&
-                  !PostgresRootTerminalSelection.Matches(cursor, point.Selection, tenant.Tenant, actor.Id, revision, endedAt + 1) &&
-                  !PostgresRootTerminalSelection.Matches(cursor, point.Selection, "other", actor.Id, revision, endedAt) &&
-                  !PostgresRootTerminalSelection.Matches(cursor, point.Selection, tenant.Tenant, actor.Id + "-other", revision, endedAt) &&
+            Check(!PostgresRootSelection.MatchesTerminal(cursor, point.Selection, tenant.Tenant, actor.Id, revision + 1, endedAt) &&
+                  !PostgresRootSelection.MatchesTerminal(cursor, point.Selection, tenant.Tenant, actor.Id, revision, endedAt + 1) &&
+                  !PostgresRootSelection.MatchesTerminal(cursor, point.Selection, "other", actor.Id, revision, endedAt) &&
+                  !PostgresRootSelection.MatchesTerminal(cursor, point.Selection, tenant.Tenant, actor.Id + "-other", revision, endedAt) &&
                   await cold.ReadRootActorAsync("other", actor.Id, stop) is null,
                 "the selection is qualified to the actor, scope and complete terminal mark");
 
@@ -266,7 +344,7 @@ internal static class PostgresRootTerminateChecks
             var restored = (await reopened.GetAsync(tenant, actor, stop))!;
             var rebuilt = (await reopened.ListAsync(tenant, new(Status: Contract.ActorStatus.Cancelled), cancellationToken: stop)).Items.Single();
             Check(restored.Header.Status == Contract.ActorStatus.Cancelled && rebuilt.Header.Ref == actor &&
-                  PostgresRootTerminalSelection.Matches(cursor, restored.Selection, tenant.Tenant, actor.Id, revision, endedAt) &&
+                  PostgresRootSelection.MatchesTerminal(cursor, restored.Selection, tenant.Tenant, actor.Id, revision, endedAt) &&
                   await reopened.GetAsync(tenant, new(new string('0', 64)), stop) is null,
                 "exclusive reinstall restores the full projection and removes rows without a source");
 
@@ -303,8 +381,8 @@ internal static class PostgresRootTerminateChecks
                 var first = (await reads.GetAsync(tenant, instant, stop))!;
                 var firstListed = (await reads.ListAsync(tenant, new(Status: Contract.ActorStatus.Finished), cancellationToken: stop)).Items.Single();
                 Check(ended is { Revision: 1, TerminalRevision: 1, TerminalAt: { } at } &&
-                      PostgresRootTerminalSelection.Matches(cursor, first.Selection, tenant.Tenant, instant.Id, 1, at) &&
-                      PostgresRootTerminalSelection.Matches(cursor, firstListed.Selection, tenant.Tenant, instant.Id, 1, at),
+                      PostgresRootSelection.MatchesTerminal(cursor, first.Selection, tenant.Tenant, instant.Id, 1, at) &&
+                      PostgresRootSelection.MatchesTerminal(cursor, firstListed.Selection, tenant.Tenant, instant.Id, 1, at),
                     "first-checkpoint completion selects revision one in the source schema");
             }
             await using (var db = Open())
@@ -437,8 +515,10 @@ internal static class PostgresRootTerminateChecks
                 $"replay keeps its receipt and fresh input is refused {phase}");
         }
 
-        async Task<Contract.Admission> Control(Contract.BoundScope scope, string id, string kind) =>
-            await api.SendAsync(scope, new Contract.Target.Ref(actor), id, kind, cancellationToken: stop);
+        ValueTask<Contract.Admission> Control(Contract.BoundScope scope, string id, string kind) =>
+            kind == Contract.Kinds.Terminate && selectedRuntime is not null
+                ? selectedRuntime.TerminateAsync(scope, id, chosen!, cancellationToken: stop)
+                : api.SendAsync(scope, new Contract.Target.Ref(actor), id, kind, cancellationToken: stop);
 
         async Task<IScopeActivation> Own(string node, PublicActor model, EfStore? existingStore = null, bool selected = false)
         {

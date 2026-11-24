@@ -27,7 +27,7 @@ internal sealed partial class PostgresRootAdmission
             """, token);
 
     internal async Task<Receipt?> AdmitRootOperatorAsync(string tenant, string reference, string operation, string kind, long? due,
-        TimeSpan? keepFor, CancellationToken token)
+        TimeSpan? keepFor, CancellationToken token, string? runningSelection = null)
     {
         if (kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate) || !FoundationMetadataLimits.IsOutsideMessageId(operation))
             throw new ArgumentException("Expected a one-way exact-root operator command.");
@@ -37,8 +37,19 @@ internal sealed partial class PostgresRootAdmission
         var digest = FoundationRootCreator.OperationDigest(operation);
         await using var db = create();
         if (!db.UsesRootOperatorProtocol || kind == Kinds.Terminate && !db.UsesRootTermination) return null;
+        var selectedTermination = db.UsesRootTerminalSelection && kind == Kinds.Terminate;
+        if (selectedTermination != (runningSelection is not null)) return null;
+
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
-        await EfStore.RequireStoreVersionsAsync(db, token);
+        if (selectedTermination)
+        {
+            await EfStore.LockCompatibleStoreFormatAsync(db, token);
+            await RequireSelectedOperatorSchemaAsync(db, token);
+            if (!PostgresRootSelection.MatchesRunning(await ReadJournalCursorAsync(db, token), runningSelection, tenant, reference))
+                return null;
+        }
+        else
+            await EfStore.RequireStoreVersionsAsync(db, token);
         var address = await RootAddressAsync(db, tenant, reference, token);
         if (address is null)
         {
@@ -52,9 +63,9 @@ internal sealed partial class PostgresRootAdmission
         if (prior is not null)
         {
             await tx.CommitAsync(token);
-            return new(prior, true);
+            return selectedTermination && prior != reference ? null : new(prior, true);
         }
-        if (await AdmissionStatusAsync(db, address, tenant, reference, token) != InstanceStatus.Running)
+        if (await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: selectedTermination) != InstanceStatus.Running)
         {
             await tx.RollbackAsync(token);
             return null;
@@ -73,7 +84,7 @@ internal sealed partial class PostgresRootAdmission
                 SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
                 """).SingleAsync(token);
             await tx.CommitAsync(token);
-            return new(prior, true);
+            return selectedTermination && prior != reference ? null : new(prior, true);
         }
         var actor = new InstanceRef(address.Id);
         var id = $"{OperatorOccurrencePrefix}{reference}/{digest}/{Guid.NewGuid():N}";
@@ -84,6 +95,18 @@ internal sealed partial class PostgresRootAdmission
             """, token);
         await tx.CommitAsync(token);
         return new(reference, false);
+    }
+
+    private static async Task RequireSelectedOperatorSchemaAsync(KernelDb db, CancellationToken token)
+    {
+        var sameSchema = await db.Database.SqlQueryRaw<bool>("""
+            SELECT count(*) = 6 AND count(DISTINCT c.relnamespace) = 1 AS "Value"
+            FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
+                ('"Instances"'), ('"FoundationOperatorReceipts"'), ('"Messages"')) required(name)
+            JOIN pg_catalog.pg_class c ON c.oid = to_regclass(required.name)
+            """).SingleAsync(token);
+        if (!sameSchema)
+            throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");
     }
 
     // A candidate read. A subsequent owner must recheck the command and checkpoint at its fence before applying it.

@@ -47,8 +47,14 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
     {
         var header = new ActorHeader(new(row.Reference), row.Type, scope.Tenant, (ActorStatus)row.Status, null, null,
             row.EndedAt, row.TypeData, row.Labels);
-        var selection = row.Status != InstanceStatus.Running && row.TerminalRevision is > 0 and var revision && row.EndedAt is { } at
-            ? PostgresRootTerminalSelection.Seal(cursor, scope.Tenant, row.Reference, revision, at) : null;
+        var selection = row switch
+        {
+            { SupportsSelection: true, Status: InstanceStatus.Running } =>
+                PostgresRootSelection.SealRunning(cursor, scope.Tenant, row.Reference),
+            { TerminalRevision: > 0 and var revision, EndedAt: { } at } =>
+                PostgresRootSelection.SealTerminal(cursor, scope.Tenant, row.Reference, revision, at),
+            _ => null
+        };
         return new(header, selection, null, asOf);
     }
 
