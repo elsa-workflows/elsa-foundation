@@ -9,7 +9,7 @@ public sealed partial class EfStore
         string TypeData, IReadOnlyDictionary<string, string> Labels);
     internal sealed record RootListPage(IReadOnlyList<RootListItem> Items, long AsOf);
 
-    private sealed record RootListRow(string? Reference, int? Status, long? EndedAt, string? Header, long AsOf,
+    private sealed record RootListRow(string? Reference, int? Status, long? EndedAt, string? Header, long AsOf, bool SourceReady,
         int? StoreSchema, int? MessageProtocol, int? JournalCodec);
     private sealed record RootPointRow(string? Reference, int? Status, long? EndedAt, string? Header, long AsOf, bool SourceReady,
         int? StoreSchema, int? MessageProtocol, int? JournalCodec);
@@ -107,8 +107,7 @@ public sealed partial class EfStore
             throw;
         }
         RequireSnapshotFormat(expected, row.StoreSchema, row.MessageProtocol, row.JournalCodec);
-        if (!row.SourceReady)
-            throw new StoreFormatException("The root actor projection source or a required trigger is missing or disabled.");
+        RequireRootActorListSource(row.SourceReady);
         return row.Reference is null ? null : (ToRootListItem(row.Reference, row.Status!.Value, row.EndedAt, row.Header!), row.AsOf);
     }
 
@@ -127,10 +126,19 @@ public sealed partial class EfStore
                 WITH marker AS (
                     SELECT "StoreSchema", "MessageProtocol", "JournalCodec"
                     FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
+                ), readiness AS (
+                    SELECT EXISTS (
+                        SELECT 1 FROM pg_catalog.pg_trigger source
+                        WHERE source.tgrelid = to_regclass('"Instances"')
+                            AND source.tgname::text = ANY({RootListSourceTriggers}) AND source.tgenabled IN ('O', 'A')
+                            AND source.tgfoid = to_regprocedure(source.tgname::text || '()')
+                        GROUP BY source.tgrelid HAVING count(*) = {RootListSourceTriggers.Length}
+                    ) AS "SourceReady"
                 ), page AS (
                     SELECT l."Reference", l."Status", l."EndedAt", l."Header"
                     FROM "FoundationActorList" l
                     WHERE l."Tenant" = {tenant} AND l."Reference" > {after}
+                        AND (SELECT "SourceReady" FROM readiness)
                         AND EXISTS (SELECT 1 FROM marker WHERE "StoreSchema" = {expected.StoreSchema}
                             AND "MessageProtocol" = {expected.MessageProtocol} AND "JournalCodec" = {expected.JournalCodec})
                         AND ({encodedType}::text IS NULL OR l."Type" = kernel_actor_list_filter({encodedType}::text))
@@ -143,6 +151,7 @@ public sealed partial class EfStore
                 )
                 SELECT page."Reference", page."Status", page."EndedAt", page."Header",
                     marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec",
+                    (SELECT "SourceReady" FROM readiness) AS "SourceReady",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
                 FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN marker ON true
                 ORDER BY page."Reference" COLLATE "C"
@@ -160,8 +169,14 @@ public sealed partial class EfStore
         }
         var first = rows[0];
         RequireSnapshotFormat(expected, first.StoreSchema, first.MessageProtocol, first.JournalCodec);
+        RequireRootActorListSource(first.SourceReady);
         var items = rows.Where(row => row.Reference is not null).Select(row => ToRootListItem(row.Reference!, row.Status!.Value, row.EndedAt, row.Header!)).ToArray();
         return new(items, first.AsOf);
+    }
+
+    private static void RequireRootActorListSource(bool ready)
+    {
+        if (!ready) throw new StoreFormatException("The root actor projection source or a required trigger is missing or disabled.");
     }
 
     private static RootListItem ToRootListItem(string reference, int status, long? endedAt, string encodedHeader)
