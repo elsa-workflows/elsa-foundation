@@ -1,0 +1,24 @@
+{
+  "status": "passed",
+  "definitions": 36,
+  "baseline": {
+    "converted": 16,
+    "published": 11,
+    "completed": 8
+  },
+  "measured": {
+    "converted": 16,
+    "published": 11,
+    "completed": 8
+  },
+  "regressions": {
+    "converted": 0,
+    "published": 0,
+    "completed": 0
+  },
+  "corpus_unchanged": true,
+  "clean_head_preserved": true,
+  "probe_preserved": true,
+  "restore_exit": 0,
+  "test_exit": 0
+}
